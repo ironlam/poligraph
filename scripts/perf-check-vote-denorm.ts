@@ -48,7 +48,7 @@ async function showIndexUsage() {
     ORDER BY idx_scan DESC
   `;
 
-  const header = ["Index", "scans", "tup_read", "size"];
+  const header = ["Index", "scans", "tup_read", "size"] as const;
   console.log(
     `  ${header[0].padEnd(50)} ${header[1].padStart(12)} ${header[2].padStart(14)} ${header[3].padStart(10)}`
   );
@@ -124,8 +124,8 @@ async function pickPolitician(): Promise<{ id: string; slug: string; fullName: s
     ORDER BY COUNT(v.id) DESC
     LIMIT 1
   `;
-  if (result.length === 0) return null;
-  const r = result[0];
+  const [r] = result;
+  if (!r) return null;
   console.log(`\n  Auto-picked: ${r.fullName} (${fmt(r.voteCount)} votes)`);
   return { id: r.id, slug: r.slug, fullName: r.fullName };
 }
