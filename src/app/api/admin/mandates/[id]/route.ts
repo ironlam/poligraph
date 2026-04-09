@@ -71,7 +71,7 @@ export const PATCH = withAdminAuth(
       },
     });
 
-    invalidateEntity("mandate");
+    invalidateEntity("mandate", undefined, { affectsListings: false });
 
     return NextResponse.json(mandate);
   })
