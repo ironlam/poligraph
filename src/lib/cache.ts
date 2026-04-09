@@ -34,11 +34,26 @@ export type EntityType =
   | "election"
   | "election-2026";
 
+export interface InvalidateOptions {
+  /**
+   * For type="mandate" only.
+   * - true (default): also purges the "politicians" tag and deputy-by-X paths.
+   *   Use for CREATE/DELETE mandates and for PUT on isCurrent transitions.
+   * - false: only invalidates the mandate-specific routes. Use for URL-only
+   *   PATCH operations and other no-op-for-listings updates.
+   */
+  affectsListings?: boolean;
+}
+
 /**
  * Invalidate CDN cache and data cache for a given entity.
  * Call after admin mutations or sync operations.
  */
-export function invalidateEntity(type: EntityType, slug?: string): void {
+export function invalidateEntity(
+  type: EntityType,
+  slug?: string,
+  options: InvalidateOptions = {}
+): void {
   switch (type) {
     case "politician":
       revalidatePath("/api/politiques", "layout");
@@ -70,12 +85,18 @@ export function invalidateEntity(type: EntityType, slug?: string): void {
       updateTag("affairs");
       break;
 
-    case "mandate":
-      revalidatePath("/api/mandats", "layout");
-      revalidatePath("/api/deputies/by-department", "layout");
-      revalidatePath("/api/deputies/by-commune", "layout");
-      updateTag("politicians");
+    case "mandate": {
+      const affectsListings = options.affectsListings ?? true;
+      if (affectsListings) {
+        revalidatePath("/api/mandats", "layout");
+        revalidatePath("/api/deputies/by-department", "layout");
+        revalidatePath("/api/deputies/by-commune", "layout");
+        updateTag("politicians");
+      }
+      // No-listings path: nothing to invalidate beyond the audit log row.
+      // Mandate URL/title/dates are not surfaced on any cached listing.
       break;
+    }
 
     case "vote":
       revalidatePath("/api/votes", "layout");
