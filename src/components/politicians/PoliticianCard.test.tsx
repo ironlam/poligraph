@@ -36,6 +36,7 @@ const mockPolitician = {
   currentParty: {
     id: "party-1",
     slug: "lr",
+    publicId: null,
     name: "Les Républicains",
     shortName: "LR",
     description: null,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
@@ -33,6 +34,12 @@ export const POST = withAdminAuth(
       }),
     ]);
 
+    // Capture identifiers before mutation so we can build a redirect row
+    // after the secondary affair is deleted. Any external citation pointing
+    // at the retired poligraphId must keep resolving to the survivor.
+    const secondaryPublicId = secondary?.publicId ?? null;
+    const primaryPublicId = primary?.publicId ?? null;
+
     if (!primary || !secondary) {
       return NextResponse.json({ error: "Affaire(s) non trouvée(s)" }, { status: 404 });
     }
@@ -63,7 +70,7 @@ export const POST = withAdminAuth(
     });
 
     // Merge judicial identifiers if primary is missing them
-    const updates: Record<string, unknown> = {};
+    const updates: Prisma.AffairUpdateInput = {};
     if (!primary.ecli && secondary.ecli) updates.ecli = secondary.ecli;
     if (!primary.pourvoiNumber && secondary.pourvoiNumber)
       updates.pourvoiNumber = secondary.pourvoiNumber;
@@ -82,6 +89,24 @@ export const POST = withAdminAuth(
 
     // Delete secondary affair (remaining sources will cascade)
     await db.affair.delete({ where: { id: secondaryId } });
+
+    // Preserve the retired poligraphId as a redirect so external citations
+    // keep resolving. Only write the redirect if both IDs exist and differ.
+    if (secondaryPublicId && primaryPublicId && secondaryPublicId !== primaryPublicId) {
+      await db.publicIdRedirect.upsert({
+        where: { fromPublicId: secondaryPublicId },
+        create: {
+          fromPublicId: secondaryPublicId,
+          toPublicId: primaryPublicId,
+          entityType: "affair",
+          reason: "merged",
+        },
+        update: {
+          toPublicId: primaryPublicId,
+          reason: "merged",
+        },
+      });
+    }
 
     // Audit log
     const meta = getRequestMeta(request);
