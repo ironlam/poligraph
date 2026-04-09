@@ -877,17 +877,18 @@ model Vote {
 
   position VotePosition // POUR, CONTRE, ABSTENTION, ABSENT
 
-  // Phase 5a expand-contract: denormalized from Scrutin.votingDate and
-  // Scrutin.chamber to avoid forced JOINs on hot queries (sort by date,
-  // filter by chamber). Backfilled in Phase 5a, made NOT NULL + indexed
-  // in Phase 5b. Maintained by Postgres trigger (Phase 5b) for the rare
-  // case where Scrutin.votingDate or Scrutin.chamber is updated.
-  votingDate DateTime?
-  chamber    Chamber?
+  // Denormalized from Scrutin to avoid forced JOIN on every "votes for politician"
+  // sort and chamber filter. Maintained by Postgres trigger
+  // sync_vote_denorm_from_scrutin_trigger when Scrutin.votingDate or Scrutin.chamber
+  // is updated. See docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md.
+  votingDate DateTime
+  chamber    Chamber
 
   @@unique([scrutinId, politicianId])
   @@index([politicianId])
   @@index([politicianId, position])
+  @@index([politicianId, votingDate(sort: Desc)], map: "Vote_politicianId_votingDate_idx")
+  @@index([politicianId, chamber, votingDate(sort: Desc)], map: "Vote_politicianId_chamber_votingDate_idx")
 }
 
 model ScrutinImportance {

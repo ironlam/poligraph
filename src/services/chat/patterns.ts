@@ -705,7 +705,7 @@ async function fetchPoliticianVotes(
         select: { title: true, votingDate: true, slug: true, id: true },
       },
     },
-    orderBy: { scrutin: { votingDate: "desc" } },
+    orderBy: { votingDate: "desc" },
     take: 10,
   });
 

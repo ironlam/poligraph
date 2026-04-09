@@ -80,7 +80,7 @@ async function getVotes(
     db.vote.findMany({
       where,
       include: { scrutin: true },
-      orderBy: { scrutin: { votingDate: "desc" } },
+      orderBy: { votingDate: "desc" },
       skip,
       take: limit,
     }),

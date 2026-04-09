@@ -97,7 +97,8 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
     });
     const voteCount = await db.vote.count({
       where: {
-        scrutin: { legislature: config.scrutinLegislature, chamber: config.chamber },
+        chamber: config.chamber,
+        scrutin: { legislature: config.scrutinLegislature },
         politician: {
           mandates: {
             some: {

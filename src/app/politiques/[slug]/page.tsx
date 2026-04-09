@@ -75,7 +75,7 @@ async function getVoteStats(politicianId: string) {
           },
         },
       },
-      orderBy: { scrutin: { votingDate: "desc" } },
+      orderBy: { votingDate: "desc" },
       take: 5,
     }),
     voteStatsService.getPoliticianThemeDistribution(politicianId),

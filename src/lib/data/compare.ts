@@ -289,7 +289,7 @@ const POLITICIAN_COMPARISON_SELECT = {
   },
   votes: {
     take: 500,
-    orderBy: { scrutin: { votingDate: "desc" as const } },
+    orderBy: { votingDate: "desc" as const },
     select: {
       position: true,
       scrutinId: true,
@@ -670,7 +670,7 @@ async function getGroupForComparison(idOrCode: string) {
           id: true,
           votes: {
             take: 500,
-            orderBy: { scrutin: { votingDate: "desc" } },
+            orderBy: { votingDate: "desc" },
             select: {
               position: true,
               scrutinId: true,

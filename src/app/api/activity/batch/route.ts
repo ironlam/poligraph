@@ -74,7 +74,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
           db.vote.findMany({
             where: {
               politicianId: { in: politicianIds },
-              scrutin: { votingDate: { gte: since } },
+              votingDate: { gte: since },
             },
             select: {
               politicianId: true,
@@ -83,7 +83,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
                 select: { slug: true, title: true, votingDate: true, result: true },
               },
             },
-            orderBy: { scrutin: { votingDate: "desc" } },
+            orderBy: { votingDate: "desc" },
             take: MAX_ITEMS_PER_TYPE,
           }),
           db.affair.findMany({
@@ -151,7 +151,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
     const recentVoteCount = await db.vote.count({
       where: {
         politician: { currentPartyId: party.id },
-        scrutin: { votingDate: { gte: since } },
+        votingDate: { gte: since },
       },
     });
     if (recentVoteCount > 0) {
