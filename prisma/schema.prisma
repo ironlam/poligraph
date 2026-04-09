@@ -877,6 +877,14 @@ model Vote {
 
   position VotePosition // POUR, CONTRE, ABSTENTION, ABSENT
 
+  // Phase 5a expand-contract: denormalized from Scrutin.votingDate and
+  // Scrutin.chamber to avoid forced JOINs on hot queries (sort by date,
+  // filter by chamber). Backfilled in Phase 5a, made NOT NULL + indexed
+  // in Phase 5b. Maintained by Postgres trigger (Phase 5b) for the rare
+  // case where Scrutin.votingDate or Scrutin.chamber is updated.
+  votingDate DateTime?
+  chamber    Chamber?
+
   @@unique([scrutinId, politicianId])
   @@index([politicianId])
   @@index([politicianId, position])

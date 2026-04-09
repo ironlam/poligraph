@@ -9,6 +9,7 @@
 import { db } from "@/lib/db";
 import { syncMetadata, hashVotes, ProgressTracker } from "@/lib/sync";
 import { computeGroupPositionsForScrutin } from "@/services/sync/compute-group-positions";
+import { writeVotesForScrutin } from "@/services/sync/scrutins-vote-writer";
 import { HTTPClient } from "@/lib/api/http-client";
 import { decodeHtmlEntities, parseFrenchDate } from "@/lib/parsing";
 import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
@@ -435,17 +436,11 @@ export async function syncScrutinsSenat(
               if (scrutin.votesHash === newHash) {
                 stats.votesSkipped += votesToCreate.length;
               } else {
-                await db.vote.deleteMany({
-                  where: { scrutinId: scrutin.id },
-                });
-
-                await db.vote.createMany({
-                  data: votesToCreate.map((v) => ({
-                    scrutinId: scrutin.id,
-                    politicianId: v.politicianId,
-                    position: v.position,
-                  })),
-                  skipDuplicates: true,
+                await writeVotesForScrutin({
+                  scrutinId: scrutin.id,
+                  votingDate: scrutin.votingDate,
+                  chamber: scrutin.chamber,
+                  votes: votesToCreate,
                 });
 
                 await db.scrutin.update({

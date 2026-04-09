@@ -593,6 +593,11 @@ async function seed() {
       p.mandates.some((m) => m.type === "DEPUTE" && m.isCurrent && s.chamber === "AN")
     );
     const positions = ["POUR", "CONTRE", "ABSTENTION", "POUR", "CONTRE"] as const;
+    // Phase 5a denormalization: must populate votingDate + chamber on every
+    // Vote row. This is the SECOND write surface for these denorm fields —
+    // the canonical helper is `writeVotesForScrutin()` in
+    // `src/services/sync/scrutins-vote-writer.ts`. If you change the shape
+    // of denormalized fields, update BOTH this seed loop AND the helper.
     for (let i = 0; i < deputies.length; i++) {
       const polId = politicianMap.get(deputies[i]!.lastName)!;
       await db.vote.create({
@@ -600,6 +605,8 @@ async function seed() {
           scrutinId: scrutin.id,
           politicianId: polId,
           position: positions[i % positions.length]!,
+          votingDate: scrutin.votingDate,
+          chamber: scrutin.chamber,
         },
       });
     }
