@@ -36,6 +36,7 @@ describeIfDb("Vote denormalization parity with Scrutin", () => {
 
   it("new sort matches old JOIN sort for the same politician", async () => {
     if (!politicianId) {
+      // eslint-disable-next-line no-console
       console.warn("No politician with votes in dev DB — skipping parity test");
       return;
     }
