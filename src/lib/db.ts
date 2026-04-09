@@ -1,14 +1,17 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { createPoligraphIdExtension } from "@/lib/public-ids/prisma-extension";
+
+type ExtendedPrismaClient = ReturnType<typeof buildExtendedClient>;
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: ExtendedPrismaClient | undefined;
   pool: Pool | undefined;
   shutdownRegistered: boolean | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
+function buildExtendedClient() {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
@@ -31,14 +34,18 @@ function createPrismaClient(): PrismaClient {
   // Create the Prisma adapter
   const adapter = new PrismaPg(pool);
 
-  // Create Prisma client with adapter
-  return new PrismaClient({
+  // Create the raw Prisma client (used both directly and as the base for
+  // the publicId extension, which needs a non-extended client to avoid
+  // recursive query hooks when allocating sequence values).
+  const rawClient = new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
+
+  return rawClient.$extends(createPoligraphIdExtension(rawClient));
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+export const db = globalForPrisma.prisma ?? buildExtendedClient();
 
 // Cache in all environments — prevents duplicate pools in serverless (Vercel)
 // and avoids hot-reload duplication in dev

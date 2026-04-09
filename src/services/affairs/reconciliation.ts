@@ -6,7 +6,7 @@
  */
 
 import { db } from "@/lib/db";
-import type { SourceType } from "@/generated/prisma";
+import { Prisma, type SourceType } from "@/generated/prisma";
 import { findMatchingAffairs, type MatchConfidence } from "./matching";
 
 // ============================================
@@ -141,10 +141,16 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
  */
 export async function mergeAffairs(keepId: string, removeId: string): Promise<void> {
   await db.$transaction(async (tx) => {
-    // Verify both affairs exist
+    // Verify both affairs exist and capture publicIds for redirect bookkeeping.
     const [keep, remove] = await Promise.all([
-      tx.affair.findUnique({ where: { id: keepId }, select: { id: true } }),
-      tx.affair.findUnique({ where: { id: removeId }, select: { id: true } }),
+      tx.affair.findUnique({
+        where: { id: keepId },
+        select: { id: true, publicId: true },
+      }),
+      tx.affair.findUnique({
+        where: { id: removeId },
+        select: { id: true, publicId: true },
+      }),
     ]);
     if (!keep) throw new Error(`Affair to keep not found: ${keepId}`);
     if (!remove) throw new Error(`Affair to remove not found: ${removeId}`);
@@ -203,7 +209,7 @@ export async function mergeAffairs(keepId: string, removeId: string): Promise<vo
       select: { ecli: true, pourvoiNumber: true, caseNumbers: true },
     });
     if (removeAffair && keepAffair) {
-      const updates: Record<string, unknown> = {};
+      const updates: Prisma.AffairUpdateInput = {};
       if (!keepAffair.ecli && removeAffair.ecli) {
         updates.ecli = removeAffair.ecli;
       }
@@ -221,6 +227,25 @@ export async function mergeAffairs(keepId: string, removeId: string): Promise<vo
 
     // Delete the merged affair (cascades sources, events, press links that weren't transferred)
     await tx.affair.delete({ where: { id: removeId } });
+
+    // Preserve the retired poligraphId as a redirect so external citations
+    // keep resolving to the survivor. Written inside the transaction so the
+    // redirect and deletion commit or roll back together.
+    if (remove.publicId && keep.publicId && remove.publicId !== keep.publicId) {
+      await tx.publicIdRedirect.upsert({
+        where: { fromPublicId: remove.publicId },
+        create: {
+          fromPublicId: remove.publicId,
+          toPublicId: keep.publicId,
+          entityType: "affair",
+          reason: "merged",
+        },
+        update: {
+          toPublicId: keep.publicId,
+          reason: "merged",
+        },
+      });
+    }
 
     // Clean up any dismissed duplicates referencing the removed affair
     await tx.dismissedDuplicate.deleteMany({

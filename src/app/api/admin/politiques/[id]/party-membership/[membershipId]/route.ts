@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
@@ -21,7 +22,7 @@ export const PATCH = withAdminAuth(
       return NextResponse.json({ error: "Membership non trouvé" }, { status: 404 });
     }
 
-    const updateData: Record<string, unknown> = {};
+    const updateData: Prisma.PartyMembershipUpdateInput = {};
 
     if (body.startDate !== undefined) {
       updateData.startDate = body.startDate ? new Date(body.startDate) : null;

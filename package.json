@@ -111,6 +111,7 @@
     "audit:parties:stats": "tsx scripts/audit-parties.ts --stats",
     "audit:careers": "tsx scripts/audit-careers.ts",
     "audit:careers:export": "tsx scripts/audit-careers.ts --export",
+    "perf:check": "dotenv -e .env -- tsx scripts/perf-check-vote-denorm.ts",
     "sync:press": "tsx scripts/sync-press.ts",
     "sync:press:stats": "tsx scripts/sync-press.ts --stats",
     "sync:factchecks": "tsx scripts/sync-factchecks.ts",

@@ -63,8 +63,16 @@ Merci de faire un usage raisonnable de l'API.
         description: "Élections et candidatures",
       },
       {
+        name: "Élus locaux",
+        description: "Élus locaux (maires, conseillers municipaux, etc.)",
+      },
+      {
         name: "Affaires",
         description: "Affaires judiciaires documentées avec sources",
+      },
+      {
+        name: "Fact-checks",
+        description: "Fact-checks des déclarations publiques",
       },
       {
         name: "Votes",
@@ -73,6 +81,10 @@ Merci de faire un usage raisonnable de l'API.
       {
         name: "Relations",
         description: "Relations entre représentants politiques",
+      },
+      {
+        name: "Exports",
+        description: "Exports CSV en masse pour l'analyse statistique",
       },
     ],
   },
@@ -83,13 +95,23 @@ Merci de faire un usage raisonnable de l'API.
     "./src/app/api/politiques/[slug]/affaires/route.ts",
     "./src/app/api/politiques/[slug]/votes/route.ts",
     "./src/app/api/politiques/[slug]/relations/route.ts",
+    "./src/app/api/politiques/[slug]/factchecks/route.ts",
     "./src/app/api/affaires/route.ts",
+    "./src/app/api/factchecks/route.ts",
     "./src/app/api/votes/route.ts",
     "./src/app/api/partis/route.ts",
     "./src/app/api/partis/[slug]/route.ts",
     "./src/app/api/mandats/route.ts",
     "./src/app/api/elections/route.ts",
     "./src/app/api/elections/[slug]/route.ts",
+    "./src/app/api/export/affaires/route.ts",
+    "./src/app/api/export/politiques/route.ts",
+    "./src/app/api/export/factchecks/route.ts",
+    "./src/app/api/export/votes/route.ts",
+    "./src/app/api/v1/elus/route.ts",
+    "./src/app/api/v1/elus/[id]/route.ts",
+    "./src/app/api/v1/elus/search/route.ts",
+    "./src/app/api/v1/communes/[codeInsee]/route.ts",
   ],
 };
 

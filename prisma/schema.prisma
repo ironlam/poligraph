@@ -28,7 +28,7 @@ enum ModerationRecommendation {
 model Politician {
   id           String    @id @default(cuid())
   slug         String    @unique
-  publicId     String?   @unique // "PG-000542" — stable public identifier
+  publicId     String?   @unique // "PG-000542" — stable public identifier (poligraphId, see /docs/api)
   civility     String? // M. ou Mme
   firstName    String
   lastName     String
@@ -190,6 +190,7 @@ enum Judgement {
 model Party {
   id          String  @id @default(cuid())
   slug        String? @unique // URL-friendly identifier
+  publicId    String? @unique // "PT-000042" — stable public identifier (poligraphId, see /docs/api)
   name        String  @unique
   shortName   String  @unique // Ex: "RN", "LFI", "PS"
   description String? // Brief description for the party page
@@ -270,6 +271,7 @@ model PartyMembership {
 
 model Mandate {
   id           String     @id @default(cuid())
+  publicId     String?    @unique // "MA-000542" — stable public identifier (poligraphId, see /docs/api)
   politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
   politicianId String
 
@@ -408,6 +410,7 @@ model ParliamentaryGroup {
   id        String  @id @default(cuid())
   code      String // "SOC", "EPR", "DR", "LR", "RN"...
   slug      String?  @unique // e.g. "epr-17", "soc-17"
+  publicId  String? @unique // "GP-000042" — stable public identifier (poligraphId, see /docs/api)
   name      String // Full official name
   shortName String? // Display short name if different from code
   color     String? // Hex color for UI
@@ -477,6 +480,7 @@ model Affair {
 
   title       String // Ex: "Affaire des emplois fictifs du MoDem"
   slug        String   @unique
+  publicId    String?  @unique // "AF-000542" — stable public identifier (poligraphId, see /docs/api)
   oldSlugs    String[] @default([])
   description           String    @db.Text
   originalDescription   String?   @db.Text // Pre-enrichment description (for rollback)
@@ -813,6 +817,7 @@ model Scrutin {
   id          String   @id @default(cuid())
   externalId  String   @unique // ID NosDéputés/NosSénateurs (ex: "VTANR5L17V1234" ou "2024-63")
   slug        String?  @unique // SEO-friendly URL slug (e.g., "2025-01-15-projet-loi-finances")
+  publicId    String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
   title       String   @db.Text
   description String?  @db.Text
   votingDate  DateTime
@@ -1029,6 +1034,7 @@ model LegislativeDossier {
   id         String         @id @default(cuid())
   externalId String         @unique // DLR5L17N12345
   slug       String?        @unique // SEO-friendly URL slug (e.g., "2024-12-03-reforme-retraites")
+  publicId   String?        @unique // "DO-000542" — stable public identifier (poligraphId, see /docs/api)
   title      String         @db.Text
   shortTitle String? // Titre court pour affichage
   number     String? // PJL 1234, PPL 5678
@@ -1319,6 +1325,7 @@ model PressAnalysisRejection {
 model FactCheck {
   id            String          @id @default(cuid())
   slug          String?         @unique // SEO-friendly URL slug
+  publicId      String?         @unique // "FC-000542" — stable public identifier (poligraphId, see /docs/api)
   claimText     String          @db.Text // La déclaration vérifiée
   claimant      String? // Qui a fait la déclaration
   title         String          @db.Text // Titre de l'article de fact-check
@@ -1434,6 +1441,7 @@ enum ElectionStatus {
 model Election {
   id          String       @id @default(cuid())
   slug        String       @unique
+  publicId    String?      @unique // "EL-000042" — stable public identifier (poligraphId, see /docs/api)
   type        ElectionType
   title       String
   shortTitle  String?
@@ -1538,6 +1546,7 @@ model Candidacy {
 
 model ElectoralList {
   id         String   @id @default(cuid())
+  publicId   String?  @unique // "LM-000542" — stable public identifier (poligraphId, see /docs/api)
   election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
   electionId String
   commune    Commune @relation(fields: [communeId], references: [id])
@@ -1951,4 +1960,22 @@ model ProfessionDeFoi {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// PUBLIC ID REDIRECTS (poligraphId infrastructure)
+// ============================================
+// When entities are merged or deprecated, the old publicId must keep resolving
+// to the canonical entity so that external citations (research papers, Wikidata,
+// etc.) never break. Write one row here per merge/deprecation event.
+// See /docs/api (section "poligraphId") for the full specification.
+model PublicIdRedirect {
+  fromPublicId String   @id // "AF-000542" — the retired identifier
+  toPublicId   String // "AF-000789" — the canonical identifier it now points to
+  entityType   String // "affair" | "politician" | "factcheck" | "scrutin" | "party" | "election" | "mandate" | "dossier" | "group" | "electoralList"
+  reason       String // "merged" | "deprecated" | "corrected" — free text for the audit trail
+  createdAt    DateTime @default(now())
+
+  @@index([toPublicId])
+  @@index([entityType])
 }
