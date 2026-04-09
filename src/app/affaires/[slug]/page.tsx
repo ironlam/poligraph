@@ -36,6 +36,7 @@ import type { AffairCategory, Involvement } from "@/types";
 import type { Prisma } from "@/generated/prisma";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
+import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
@@ -62,12 +63,25 @@ const affairInclude = {
       photoUrl: true,
       civility: true,
       currentParty: {
-        select: { id: true, shortName: true, name: true, color: true },
+        select: {
+          id: true,
+          shortName: true,
+          name: true,
+          color: true,
+          foundedDate: true,
+        },
       },
     },
   },
   partyAtTime: {
-    select: { id: true, slug: true, shortName: true, name: true, color: true },
+    select: {
+      id: true,
+      slug: true,
+      shortName: true,
+      name: true,
+      color: true,
+      foundedDate: true,
+    },
   },
   sources: {
     orderBy: { publishedAt: "desc" as const },
@@ -155,7 +169,11 @@ export default async function AffairDetailPage({ params }: PageProps) {
 
   const superCategory = CATEGORY_TO_SUPER[affair.category as AffairCategory];
   const certainty = getCertaintyLevel(affair.status);
-  const partyToShow = affair.partyAtTime || affair.politician.currentParty;
+  const partyDisplay = getAffairPartyDisplay({
+    factsDate: affair.factsDate,
+    partyAtTime: affair.partyAtTime,
+    currentParty: affair.politician.currentParty,
+  });
   const linked = affair.linkedAffair || affair.linkedBy?.[0];
 
   return (
@@ -224,24 +242,33 @@ export default async function AffairDetailPage({ params }: PageProps) {
                 <p className="font-semibold">{affair.politician.fullName}</p>
               </div>
             </Link>
-            {partyToShow && (
+            {partyDisplay.kind === "at-time" && (
               <p className="text-sm text-muted-foreground">
-                {affair.partyAtTime?.slug ? (
+                {partyDisplay.party.slug ? (
                   <Link
-                    href={`/affaires/parti/${affair.partyAtTime.slug}`}
+                    href={`/affaires/parti/${partyDisplay.party.slug}`}
                     className="hover:underline hover:text-foreground"
                   >
-                    {partyToShow.name}
+                    {partyDisplay.party.name}
                   </Link>
                 ) : (
-                  partyToShow.name
+                  partyDisplay.party.name
                 )}
-                {affair.partyAtTime &&
-                  affair.partyAtTime.id !== affair.politician.currentParty?.id && (
-                    <span className="text-xs"> (à l&apos;époque)</span>
-                  )}
+                {!partyDisplay.sameAsCurrent && <span className="text-xs"> (à l&apos;époque)</span>}
               </p>
             )}
+            {partyDisplay.kind === "current" && (
+              <p className="text-sm text-muted-foreground">{partyDisplay.party.name}</p>
+            )}
+            {partyDisplay.kind === "unknown" &&
+              partyDisplay.reason === "pre-dates-current-party" && (
+                <p
+                  className="text-sm text-muted-foreground italic"
+                  title={`Parti actuel (${partyDisplay.currentPartyName}) fondé en ${partyDisplay.currentPartyFoundedDate?.getFullYear()}, soit après la date des faits.`}
+                >
+                  Parti à l&apos;époque : non renseigné
+                </p>
+              )}
           </div>
         </div>
 
