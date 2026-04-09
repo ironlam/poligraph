@@ -25,8 +25,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (body.all) {
+      // Deprecated: { all: true } purges every cache tag, including politicians
+      // and stats which sync only a few times per day. Prefer { tags: [...] }
+      // with the specific tags your sync touched. See plan
+      // docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md (Phase 4).
+      console.warn("[/api/cron/revalidate] { all: true } is deprecated; use scoped tags instead");
       revalidateAll();
-      return NextResponse.json({ revalidated: "all" });
+      return NextResponse.json({ revalidated: "all", deprecated: true });
     }
 
     if (Array.isArray(body.tags) && body.tags.length > 0) {

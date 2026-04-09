@@ -104,6 +104,11 @@ const steps: SyncStep[] = [
   ...(CRON_SECRET
     ? [
         {
+          // Scoped tags only — never use { all: true }. See Phase 4 of
+          // docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md.
+          // The four tags below match the four data domains touched by the
+          // daily sync. Adding "elections" or "factchecks" here would purge
+          // caches that the daily sync did NOT update.
           name: "Cache revalidation",
           command: `curl -s -X POST "${BASE_URL}/api/cron/revalidate" -H "Authorization: Bearer ${CRON_SECRET}" -H "Content-Type: application/json" -d '{"tags":["votes","dossiers","stats","politicians"]}'`,
         },

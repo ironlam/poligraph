@@ -347,7 +347,8 @@ async function getParties() {
 async function getFilterCounts() {
   "use cache";
   cacheTag("politicians");
-  cacheLife("minutes");
+  cacheTag("filter-counts");
+  cacheLife("hours");
 
   // Single SQL query replaces 9 parallel Prisma count queries (1 connection instead of 9)
   const [counts] = await db.$queryRaw<
