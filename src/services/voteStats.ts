@@ -369,12 +369,10 @@ export async function getPoliticianVotingStats(
   const voteWhere = {
     politicianId,
     ...(mandate && {
-      scrutin: {
-        chamber,
-        votingDate: {
-          gte: mandate.startDate!,
-          ...(mandate.endDate ? { lte: mandate.endDate } : {}),
-        },
+      chamber,
+      votingDate: {
+        gte: mandate.startDate!,
+        ...(mandate.endDate ? { lte: mandate.endDate } : {}),
       },
     }),
   };

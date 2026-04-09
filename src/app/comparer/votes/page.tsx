@@ -79,7 +79,7 @@ async function getPoliticianVoteComparison(leftSlug: string, rightSlug: string) 
         fullName: true,
         votes: {
           include: { scrutin: true },
-          orderBy: { scrutin: { votingDate: "desc" } },
+          orderBy: { votingDate: "desc" },
         },
       },
     }),
@@ -91,7 +91,7 @@ async function getPoliticianVoteComparison(leftSlug: string, rightSlug: string) 
         fullName: true,
         votes: {
           include: { scrutin: true },
-          orderBy: { scrutin: { votingDate: "desc" } },
+          orderBy: { votingDate: "desc" },
         },
       },
     }),

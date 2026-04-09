@@ -141,9 +141,7 @@ export async function getPoliticianForComparison(slug: string) {
         include: {
           scrutin: true,
         },
-        orderBy: {
-          scrutin: { votingDate: "desc" },
-        },
+        orderBy: { votingDate: "desc" },
         take: 500,
       },
       factCheckMentions: {

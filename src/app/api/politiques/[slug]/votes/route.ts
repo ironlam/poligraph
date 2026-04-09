@@ -103,7 +103,7 @@ export const GET = withPublicRoute(async (request, context) => {
           },
         },
       },
-      orderBy: { scrutin: { votingDate: "desc" } },
+      orderBy: { votingDate: "desc" },
       skip,
       take: limit,
     }),

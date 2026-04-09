@@ -514,7 +514,7 @@ export async function getScrutinsSenatStats(): Promise<{
     where: { chamber: Chamber.SENAT },
   });
   const votesCount = await db.vote.count({
-    where: { scrutin: { chamber: Chamber.SENAT } },
+    where: { chamber: Chamber.SENAT },
   });
   const sessions = await db.scrutin.groupBy({
     by: ["legislature"],
