@@ -1,23 +1,60 @@
 import { db } from "@/lib/db";
-import { toCSV, formatDateForCSV, createCSVResponse } from "@/lib/csv";
-import { MANDATE_TYPE_LABELS } from "@/config/labels";
+import { toCSV, formatDateForCSV, formatDateTimeForCSV, createCSVResponse } from "@/lib/csv";
+import { MANDATE_TYPE_LABELS, POLITICAL_POSITION_LABELS } from "@/config/labels";
 import type { MandateType } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * @openapi
+ * /api/export/politiques:
+ *   get:
+ *     summary: Export CSV des politiques
+ *     description: >
+ *       Retourne les politiques publiés au format CSV, avec leur poligraphId
+ *       (identifiant stable pour citation), parti actuel, mandat en cours,
+ *       département, score de prominence et Q-ID Wikidata pour croisement
+ *       avec d'autres jeux de données.
+ *     tags: [Exports]
+ *     parameters:
+ *       - in: query
+ *         name: partyId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: mandateType
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: hasAffairs
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: activeOnly
+ *         schema:
+ *           type: boolean
+ *           default: true
+ *     responses:
+ *       200:
+ *         description: Fichier CSV UTF-8 avec BOM
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ */
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
-  // Optional filters
   const partyId = searchParams.get("partyId");
   const mandateType = searchParams.get("mandateType") as MandateType | null;
   const hasAffairs = searchParams.get("hasAffairs") === "true";
-  const activeOnly = searchParams.get("activeOnly") !== "false"; // Default true
+  const activeOnly = searchParams.get("activeOnly") !== "false";
 
-  // Build where clause
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    publicationStatus: "PUBLISHED",
+  };
 
   if (partyId) {
     where.currentPartyId = partyId;
@@ -40,58 +77,112 @@ export const GET = withPublicRoute(async (request) => {
     where.affairs = { some: { publicationStatus: "PUBLISHED" } };
   }
 
-  // Fetch politicians with current mandate and party
   const politicians = await db.politician.findMany({
     where,
     include: {
-      currentParty: true,
+      currentParty: {
+        select: {
+          publicId: true,
+          slug: true,
+          shortName: true,
+          name: true,
+          politicalPosition: true,
+        },
+      },
       mandates: {
         where: activeOnly ? { isCurrent: true } : undefined,
         orderBy: { startDate: "desc" },
         take: 1,
+        select: {
+          type: true,
+          title: true,
+          constituency: true,
+          departmentCode: true,
+          startDate: true,
+          endDate: true,
+        },
       },
-      _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" } } } },
+      externalIds: {
+        where: { source: "WIKIDATA" },
+        select: { externalId: true },
+        take: 1,
+      },
+      _count: {
+        select: {
+          affairs: { where: { publicationStatus: "PUBLISHED" } },
+          factCheckMentions: true,
+        },
+      },
     },
     orderBy: { lastName: "asc" },
   });
 
-  // Transform to flat structure for CSV
-  const data = politicians.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    civility: p.civility || "",
-    firstName: p.firstName,
-    lastName: p.lastName,
-    fullName: p.fullName,
-    birthDate: formatDateForCSV(p.birthDate),
-    birthPlace: p.birthPlace || "",
-    deathDate: formatDateForCSV(p.deathDate),
-    partyName: p.currentParty?.name || "",
-    partyShortName: p.currentParty?.shortName || "",
-    currentMandate: p.mandates[0] ? MANDATE_TYPE_LABELS[p.mandates[0].type] : "",
-    constituency: p.mandates[0]?.constituency || "",
-    affairsCount: p._count.affairs,
-    photoUrl: p.photoUrl || "",
-    profileUrl: `${SITE_URL}/politiques/${p.slug}`,
-  }));
+  const data = politicians.map((p) => {
+    const mandate = p.mandates[0];
+    const gender = p.civility === "M." ? "M" : p.civility === "Mme" ? "F" : "";
+    return {
+      poligraphId: p.publicId ?? "",
+      slug: p.slug,
+      civility: p.civility ?? "",
+      firstName: p.firstName,
+      lastName: p.lastName,
+      fullName: p.fullName,
+      gender,
+      birthDate: formatDateForCSV(p.birthDate),
+      birthPlace: p.birthPlace ?? "",
+      deathDate: formatDateForCSV(p.deathDate),
+      partyPoligraphId: p.currentParty?.publicId ?? "",
+      partyShort: p.currentParty?.shortName ?? "",
+      partyLong: p.currentParty?.name ?? "",
+      partyPosition: p.currentParty?.politicalPosition
+        ? POLITICAL_POSITION_LABELS[p.currentParty.politicalPosition]
+        : "",
+      currentMandateType: mandate ? MANDATE_TYPE_LABELS[mandate.type] : "",
+      currentMandateTitle: mandate?.title ?? "",
+      currentMandateStart: formatDateForCSV(mandate?.startDate),
+      currentMandateEnd: formatDateForCSV(mandate?.endDate),
+      constituency: mandate?.constituency ?? "",
+      departmentCode: mandate?.departmentCode ?? "",
+      affairsCount: p._count.affairs,
+      factcheckMentionsCount: p._count.factCheckMentions,
+      prominenceScore: p.prominenceScore,
+      wikidataId: p.externalIds[0]?.externalId ?? "",
+      photoUrl: p.blobPhotoUrl ?? p.photoUrl ?? "",
+      profileUrl: `${SITE_URL}/politiques/${p.slug}`,
+      createdAt: formatDateTimeForCSV(p.createdAt),
+      updatedAt: formatDateTimeForCSV(p.updatedAt),
+    };
+  });
 
   const columns = [
-    { key: "id" as const, header: "ID" },
+    { key: "poligraphId" as const, header: "poligraphId" },
     { key: "slug" as const, header: "Slug" },
-    { key: "civility" as const, header: "Civilite" },
-    { key: "firstName" as const, header: "Prenom" },
+    { key: "civility" as const, header: "Civilité" },
+    { key: "firstName" as const, header: "Prénom" },
     { key: "lastName" as const, header: "Nom" },
-    { key: "fullName" as const, header: "Nom Complet" },
-    { key: "birthDate" as const, header: "Date Naissance" },
-    { key: "birthPlace" as const, header: "Lieu Naissance" },
-    { key: "deathDate" as const, header: "Date Deces" },
-    { key: "partyName" as const, header: "Parti" },
-    { key: "partyShortName" as const, header: "Parti (abrege)" },
-    { key: "currentMandate" as const, header: "Mandat Actuel" },
+    { key: "fullName" as const, header: "Nom complet" },
+    { key: "gender" as const, header: "Genre" },
+    { key: "birthDate" as const, header: "Date de naissance" },
+    { key: "birthPlace" as const, header: "Lieu de naissance" },
+    { key: "deathDate" as const, header: "Date de décès" },
+    { key: "partyPoligraphId" as const, header: "poligraphId parti" },
+    { key: "partyShort" as const, header: "Parti (abrégé)" },
+    { key: "partyLong" as const, header: "Parti" },
+    { key: "partyPosition" as const, header: "Position politique" },
+    { key: "currentMandateType" as const, header: "Mandat actuel" },
+    { key: "currentMandateTitle" as const, header: "Titre du mandat" },
+    { key: "currentMandateStart" as const, header: "Début du mandat" },
+    { key: "currentMandateEnd" as const, header: "Fin du mandat" },
     { key: "constituency" as const, header: "Circonscription" },
-    { key: "affairsCount" as const, header: "Nombre Affaires" },
-    { key: "photoUrl" as const, header: "Photo URL" },
-    { key: "profileUrl" as const, header: "Profil URL" },
+    { key: "departmentCode" as const, header: "Code département" },
+    { key: "affairsCount" as const, header: "Nombre d'affaires" },
+    { key: "factcheckMentionsCount" as const, header: "Fact-checks (mentions)" },
+    { key: "prominenceScore" as const, header: "Score de prominence" },
+    { key: "wikidataId" as const, header: "Wikidata Q-ID" },
+    { key: "photoUrl" as const, header: "Photo" },
+    { key: "profileUrl" as const, header: "Profil Poligraph" },
+    { key: "createdAt" as const, header: "Créé le" },
+    { key: "updatedAt" as const, header: "Mis à jour le" },
   ];
 
   const csv = toCSV(data, columns);

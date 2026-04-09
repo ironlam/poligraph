@@ -147,6 +147,13 @@ export const INVOLVEMENT_LABELS: Record<Involvement, string> = {
   PLAINTIFF: "Plaignant",
 };
 
+// Affair severity (Sapin II inspired gravity scale)
+export const AFFAIR_SEVERITY_LABELS: Record<AffairSeverity, string> = {
+  CRITIQUE: "Critique",
+  GRAVE: "Grave",
+  SIGNIFICATIF: "Significatif",
+};
+
 export const INVOLVEMENT_COLORS: Record<Involvement, string> = {
   DIRECT:
     "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
