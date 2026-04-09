@@ -14,6 +14,7 @@ import {
   getCertaintyCounts,
   getPartiesWithAffairs,
 } from "@/lib/data/affairs";
+import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import {
   AFFAIR_STATUS_LABELS,
   AFFAIR_CATEGORY_LABELS,
@@ -378,27 +379,57 @@ export default async function AffairesPage({ searchParams }: PageProps) {
                           >
                             {affair.politician.fullName}
                           </Link>
-                          {(affair.partyAtTime || affair.politician.currentParty) && (
-                            <span className="text-sm text-muted-foreground">
-                              {" ("}
-                              {affair.partyAtTime?.slug ? (
-                                <Link
-                                  href={`/affaires/parti/${affair.partyAtTime.slug}`}
-                                  className="hover:underline hover:text-foreground"
+                          {(() => {
+                            const display = getAffairPartyDisplay({
+                              factsDate: affair.factsDate,
+                              partyAtTime: affair.partyAtTime,
+                              currentParty: affair.politician.currentParty,
+                            });
+                            if (display.kind === "at-time") {
+                              return (
+                                <span className="text-sm text-muted-foreground">
+                                  {" ("}
+                                  {display.party.slug ? (
+                                    <Link
+                                      href={`/affaires/parti/${display.party.slug}`}
+                                      className="hover:underline hover:text-foreground"
+                                    >
+                                      {display.party.shortName}
+                                    </Link>
+                                  ) : (
+                                    display.party.shortName
+                                  )}
+                                  {!display.sameAsCurrent && (
+                                    <span className="text-xs"> à l&apos;époque</span>
+                                  )}
+                                  {")"}
+                                </span>
+                              );
+                            }
+                            if (display.kind === "current") {
+                              return (
+                                <span className="text-sm text-muted-foreground">
+                                  {" ("}
+                                  {display.party.shortName}
+                                  {")"}
+                                </span>
+                              );
+                            }
+                            if (
+                              display.kind === "unknown" &&
+                              display.reason === "pre-dates-current-party"
+                            ) {
+                              return (
+                                <span
+                                  className="text-sm text-muted-foreground italic"
+                                  title={`Parti actuel (${display.currentPartyName}) fondé en ${display.currentPartyFoundedDate?.getFullYear()}, soit après la date des faits.`}
                                 >
-                                  {affair.partyAtTime.shortName}
-                                </Link>
-                              ) : (
-                                affair.partyAtTime?.shortName ||
-                                affair.politician.currentParty?.shortName
-                              )}
-                              {affair.partyAtTime &&
-                                affair.partyAtTime.id !== affair.politician.currentParty?.id && (
-                                  <span className="text-xs"> à l&apos;époque</span>
-                                )}
-                              {")"}
-                            </span>
-                          )}
+                                  {" (parti à l'époque non renseigné)"}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
 
                           <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
                             {stripMarkdown(affair.description)}
