@@ -51,14 +51,13 @@ function extractScrutinNumber(externalId: string): string | null {
 
 export const revalidate = 3600; // ISR: revalidate every hour
 
-export async function generateStaticParams() {
-  const scrutins = await db.scrutin.findMany({
-    select: { slug: true },
-    orderBy: { votingDate: "desc" },
-    take: 50,
-  });
-  return scrutins.map((s) => ({ slug: s.slug }));
-}
+// NOTE: Do NOT add `generateStaticParams` here.
+// This page reads `searchParams.type` (date-archive branch) and downstream
+// calls `"use cache"` functions in `@/lib/data/scrutins`. Combining all three
+// (generateStaticParams + searchParams + "use cache") triggers
+// DYNAMIC_SERVER_USAGE on date-archive URLs like /parlement/votes/2026-04-08.
+// Rely on `revalidate = 3600` ISR alone, the same pattern used by the
+// sibling `parlement/votes/aujourd-hui/page.tsx`.
 
 interface PageProps {
   params: Promise<{ slug: string }>;
