@@ -12,7 +12,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *   get:
  *     summary: Liste des fact-checks
  *     description: Retourne la liste paginée des fact-checks avec filtres
- *     tags: [FactChecks]
+ *     tags: [Fact-checks]
  *     parameters:
  *       - in: query
  *         name: search
