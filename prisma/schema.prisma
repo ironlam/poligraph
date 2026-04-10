@@ -890,7 +890,6 @@ model Vote {
   chamber    Chamber
 
   @@unique([scrutinId, politicianId])
-  @@index([politicianId])
   @@index([politicianId, position])
   @@index([politicianId, votingDate(sort: Desc)], map: "Vote_politicianId_votingDate_idx")
   @@index([politicianId, chamber, votingDate(sort: Desc)], map: "Vote_politicianId_chamber_votingDate_idx")
