@@ -25,7 +25,7 @@ export function CodeBlock({ code, language = "bash", label }: CodeBlockProps) {
   return (
     <div className="relative group">
       {label && <div className="text-xs font-mono text-muted-foreground mb-1">{label}</div>}
-      <pre className="bg-muted rounded-lg p-4 pr-12 text-sm overflow-x-auto font-mono">
+      <pre className="bg-muted text-foreground rounded-lg p-4 pr-12 text-sm overflow-x-auto font-mono">
         <code className={`language-${language}`}>{code}</code>
       </pre>
       <button
