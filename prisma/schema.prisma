@@ -80,6 +80,7 @@ model Politician {
   candidates        Candidate[] // Local election candidates linked to this politician
   participation       PoliticianParticipation? // Pre-computed participation stats
   identityDecisions   IdentityDecision[] // Identity resolution audit trail
+  affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
   newsletterEditions  NewsletterEdition[] // Weeks featured as "politician of the week"
   dossierAuthors      DossierAuthor[] // Dossiers authored/initiated by this politician
 
@@ -145,6 +146,47 @@ model IdentityDecision {
   @@index([sourceType, sourceId])
   @@index([politicianId])
   @@index([judgement])
+}
+
+// Affair-to-politician resolver decisions (deterministic matching, audit trail)
+model AffairPoliticianDecision {
+  id                 String   @id @default(cuid())
+
+  // Input identity (for idempotency)
+  textHash           String   // SHA256 of the input text
+  candidateText      String   @db.Text // first 2000 chars for audit
+  metadata           Json     // source, refs, dates, court
+
+  // Resolver output
+  judgment           AffairPoliticianJudgment
+  topCandidates      Json     // top 3 with full signal breakdown
+  topScore           Float
+  gap                Float
+  resolverVersion    String   @default("v1")
+
+  // Final destination (nullable until linked)
+  affairId           String?
+  affair             Affair?     @relation("AffairDecisionAffair", fields: [affairId], references: [id])
+  chosenPoliticianId String?
+  chosenPolitician   Politician? @relation("AffairDecisionPolitician", fields: [chosenPoliticianId], references: [id])
+
+  // Provenance (reuses existing SourceType enum)
+  source             SourceType
+  sourceRef          String?
+
+  // Review workflow
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  reviewAction       AffairReviewAction?
+  reviewNotes        String?  @db.Text
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([textHash, source, sourceRef])
+  @@index([judgment, reviewedAt])
+  @@index([source, createdAt])
+  @@index([chosenPoliticianId])
 }
 
 enum DataSource {
@@ -548,6 +590,8 @@ model Affair {
   linkedAffair   Affair?  @relation("LinkedAffairs", fields: [linkedAffairId], references: [id])
   linkedAffairId String?
   linkedBy       Affair[] @relation("LinkedAffairs")
+
+  affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionAffair")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1747,6 +1791,21 @@ enum SocialPostStatus {
   POSTED
   REJECTED
   FAILED
+}
+
+enum AffairPoliticianJudgment {
+  SAME
+  UNDECIDED
+  NO_MATCH
+  NOT_SAME
+  MANUAL_OVERRIDE
+}
+
+enum AffairReviewAction {
+  CONFIRMED
+  REASSIGNED
+  REJECTED_OUT_OF_SCOPE
+  CREATED_POLITICIAN
 }
 
 model SocialPost {
