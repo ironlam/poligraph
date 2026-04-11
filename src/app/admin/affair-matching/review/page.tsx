@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, LinkIcon, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, LinkIcon, Loader2, Search } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -33,6 +33,14 @@ interface DecisionRow {
   source: string;
   sourceRef: string | null;
   createdAt: string;
+}
+
+interface PoliticianSearchResult {
+  id: string;
+  fullName: string;
+  slug: string;
+  party: string | null;
+  mandate: string | null;
 }
 
 interface ReviewResponse {
@@ -107,6 +115,30 @@ export default function AffairMatchingReviewPage() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  const noMatchResolve = async (
+    decisionId: string,
+    action: "OUT_OF_SCOPE" | "CREATE_POLITICIAN" | "MANUAL_PICK",
+    chosenPoliticianId?: string
+  ) => {
+    setActionInProgress(`no-match-${decisionId}-${action}`);
+    try {
+      const res = await fetch("/api/admin/affair-matching/no-match-resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decisionId, action, chosenPoliticianId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? `Erreur ${res.status}`);
+      }
+      await fetchData();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
 
   const confirmCandidate = async (decisionId: string, chosenPoliticianId: string) => {
     setActionInProgress(`confirm-${decisionId}-${chosenPoliticianId}`);
@@ -251,6 +283,7 @@ export default function AffairMatchingReviewPage() {
               actionInProgress={actionInProgress}
               onConfirm={confirmCandidate}
               onRejectAll={rejectAll}
+              onNoMatchResolve={noMatchResolve}
             />
           ))}
         </div>
@@ -299,12 +332,18 @@ function DecisionCard({
   actionInProgress,
   onConfirm,
   onRejectAll,
+  onNoMatchResolve,
 }: {
   row: DecisionRow;
   tab: TabValue;
   actionInProgress: string | null;
   onConfirm: (decisionId: string, candidateId: string) => Promise<void>;
   onRejectAll: (decisionId: string, blocklistCandidateIds: string[]) => Promise<void>;
+  onNoMatchResolve: (
+    decisionId: string,
+    action: "OUT_OF_SCOPE" | "CREATE_POLITICIAN" | "MANUAL_PICK",
+    chosenPoliticianId?: string
+  ) => Promise<void>;
 }) {
   const sourceLabel = SOURCE_LABELS[row.source] ?? row.source;
 
@@ -449,13 +488,171 @@ function DecisionCard({
           </div>
         )}
 
-        {/* NO_MATCH tab: read-only display */}
+        {/* NO_MATCH tab: triage actions */}
         {tab === "NO_MATCH" && (
-          <p className="text-xs text-muted-foreground italic">
-            Aucun candidat plausible identifié. Les actions seront disponibles prochainement.
-          </p>
+          <NoMatchActions
+            decisionId={row.id}
+            actionInProgress={actionInProgress}
+            onResolve={onNoMatchResolve}
+          />
         )}
       </div>
     </article>
+  );
+}
+
+// ─── NoMatchActions ──────────────────────────────────────────────
+
+function NoMatchActions({
+  decisionId,
+  actionInProgress,
+  onResolve,
+}: {
+  decisionId: string;
+  actionInProgress: string | null;
+  onResolve: (
+    decisionId: string,
+    action: "OUT_OF_SCOPE" | "CREATE_POLITICIAN" | "MANUAL_PICK",
+    chosenPoliticianId?: string
+  ) => Promise<void>;
+}) {
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PoliticianSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isOutOfScopeLoading = actionInProgress === `no-match-${decisionId}-OUT_OF_SCOPE`;
+  const isManualPickLoading = actionInProgress === `no-match-${decisionId}-MANUAL_PICK`;
+  const isCreatingLoading = actionInProgress === `no-match-${decisionId}-CREATE_POLITICIAN`;
+  const anyLoading = actionInProgress !== null;
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (value.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/search/politicians?q=${encodeURIComponent(value)}`);
+        if (res.ok) {
+          const data = (await res.json()) as PoliticianSearchResult[];
+          setSearchResults(data);
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  const handlePickPolitician = (politicianId: string) => {
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    void onResolve(decisionId, "MANUAL_PICK", politicianId);
+  };
+
+  return (
+    <div className="space-y-3 pt-1">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</p>
+
+      <div className="flex flex-wrap gap-2">
+        {/* Out of scope */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void onResolve(decisionId, "OUT_OF_SCOPE")}
+          disabled={anyLoading}
+          aria-label="Marquer hors champ - politicien étranger ou hors périmètre"
+        >
+          {isOutOfScopeLoading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" aria-hidden="true" />
+          ) : null}
+          Hors champ
+        </Button>
+
+        {/* Manual pick toggle */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowSearch((v) => !v)}
+          disabled={anyLoading}
+          aria-label="Choisir manuellement un politicien dans la base"
+          aria-expanded={showSearch}
+        >
+          {isManualPickLoading || isCreatingLoading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" aria-hidden="true" />
+          ) : (
+            <Search className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
+          )}
+          Choisir manuellement
+        </Button>
+
+        {/* TODO: add a /admin/politiques/nouveau creation form, then link here
+            so moderators can create a new politician and link it in one flow.
+            For now, tell moderators to create via /admin/politiques, then
+            use "Choisir manuellement" to pick the newly-created politician. */}
+      </div>
+
+      {/* Inline politician search */}
+      {showSearch && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              placeholder="Rechercher un politicien..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-input bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Rechercher un politicien par nom"
+              autoFocus
+            />
+            {searchLoading && (
+              <Loader2
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+
+          {searchResults.length > 0 && (
+            <ul
+              className="rounded-md border border-border bg-popover shadow-sm divide-y divide-border overflow-hidden"
+              role="listbox"
+              aria-label="Résultats de recherche"
+            >
+              {searchResults.map((p) => (
+                <li key={p.id} role="option" aria-selected={false}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-muted transition-colors"
+                    onClick={() => handlePickPolitician(p.id)}
+                    aria-label={`Sélectionner ${p.fullName}`}
+                  >
+                    <span className="text-sm font-medium">{p.fullName}</span>
+                    {(p.party || p.mandate) && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {[p.party, p.mandate].filter(Boolean).join(" - ")}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {searchQuery.length >= 2 && !searchLoading && searchResults.length === 0 && (
+            <p className="text-xs text-muted-foreground px-1">Aucun résultat.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
