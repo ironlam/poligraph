@@ -122,7 +122,7 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
   const mandateRelated = data.isRelatedToMandate ?? isInherentlyMandateCategory(data.category);
   const severity = computeSeverity(data.category, mandateRelated);
 
-  // Resolver sanity check — soft warning only, never blocks creation.
+  // Resolver sanity check: soft warning only, never blocks creation.
   // Records a MANUAL_OVERRIDE decision when the resolver confidently identifies
   // a different politician than the moderator's choice.
   let resolverWarning: string | null = null;
@@ -148,7 +148,7 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
         resolveResult.topCandidateId !== null &&
         resolveResult.topCandidateId !== data.politicianId
       ) {
-        // Resolver is confident but disagrees — mark override in the audit trail.
+        // Resolver is confident but disagrees: mark override in the audit trail.
         await db.affairPoliticianDecision.update({
           where: { id: resolveResult.decisionId },
           data: {
