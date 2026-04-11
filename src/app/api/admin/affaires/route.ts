@@ -7,6 +7,7 @@ import { createAffairSchema } from "@/lib/validations/affairs";
 import { AffairCategory, PublicationStatus, AffairStatus } from "@/generated/prisma";
 import { computeSeverity, isInherentlyMandateCategory } from "@/config/labels";
 import { parsePagination } from "@/lib/api/pagination";
+import { resolveAffairPolitician } from "@/lib/affair-matching";
 
 const VALID_PUB_STATUSES = new Set(Object.values(PublicationStatus));
 const VALID_CATEGORIES = new Set(Object.values(AffairCategory));
@@ -121,6 +122,49 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
   const mandateRelated = data.isRelatedToMandate ?? isInherentlyMandateCategory(data.category);
   const severity = computeSeverity(data.category, mandateRelated);
 
+  // Resolver sanity check: soft warning only, never blocks creation.
+  // Records a MANUAL_OVERRIDE decision when the resolver confidently identifies
+  // a different politician than the moderator's choice.
+  let resolverWarning: string | null = null;
+  let resolverDecisionId: string | null = null;
+
+  try {
+    const resolverText = [data.title, data.description].filter(Boolean).join("\n\n");
+
+    if (resolverText.length > 0) {
+      const resolveResult = await resolveAffairPolitician({
+        text: resolverText,
+        metadata: {
+          source: "MANUAL",
+          sourceRef: "admin:manual",
+          factsDate: data.factsDate ? new Date(data.factsDate) : null,
+        },
+      });
+
+      resolverDecisionId = resolveResult.decisionId;
+
+      if (
+        resolveResult.judgment === "SAME" &&
+        resolveResult.topCandidateId !== null &&
+        resolveResult.topCandidateId !== data.politicianId
+      ) {
+        // Resolver is confident but disagrees: mark override in the audit trail.
+        await db.affairPoliticianDecision.update({
+          where: { id: resolveResult.decisionId },
+          data: {
+            judgment: "MANUAL_OVERRIDE",
+            chosenPoliticianId: data.politicianId,
+          },
+        });
+        resolverWarning =
+          `Le resolver a détecté un politicien différent (${resolveResult.topCandidateId}) ` +
+          `que celui choisi manuellement (${data.politicianId}). Veuillez vérifier.`;
+      }
+    }
+  } catch (err) {
+    console.error("[admin/affaires] resolver sanity check failed:", err);
+  }
+
   // Create affair with sources
   const affair = await db.affair.create({
     data: {
@@ -184,5 +228,5 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
   invalidateEntity("affair");
   invalidateEntity("politician", politician.slug);
 
-  return NextResponse.json(affair, { status: 201 });
+  return NextResponse.json({ affair, resolverWarning, resolverDecisionId }, { status: 201 });
 });

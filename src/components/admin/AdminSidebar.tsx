@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Crown,
   Share2,
+  Fingerprint,
+  BarChart3,
 } from "lucide-react";
 
 const STORAGE_KEY = "admin-sidebar-collapsed";
@@ -42,6 +44,8 @@ const contentItems: NavItem[] = [
   { href: "/admin/partis", label: "Partis", icon: Building2 },
   { href: "/admin/maires", label: "Maires", icon: Crown },
   { href: "/admin/dossiers", label: "Dossiers", icon: FileText },
+  { href: "/admin/affair-matching/review", label: "Liaison affaires", icon: Fingerprint },
+  { href: "/admin/affair-matching/dashboard", label: "Stats liaison", icon: BarChart3 },
 ];
 
 const mediaItems: NavItem[] = [

@@ -19,7 +19,10 @@ import { extractAffairsFromWikipedia } from "@/services/wikipedia-affair-extract
 import { findMatchingAffairs } from "@/services/affairs/matching";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
-import type { AffairCategory, AffairStatus, Involvement } from "@/generated/prisma";
+import type { AffairCategory, AffairStatus, Involvement, SourceType } from "@/generated/prisma";
+import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
+import { loadCandidatePool } from "@/lib/affair-matching/persistence";
+import type { AffairCandidateRecord } from "@/lib/affair-matching";
 
 interface DiscoveredAffair {
   politicianId: string;
@@ -240,7 +243,11 @@ export async function discoverAffairs(options?: {
   // Phase 2: Wikipedia
   let phase2Affairs: DiscoveredAffair[] = [];
   if (!wikidataOnly) {
-    phase2Affairs = await runPhase2Wikipedia(politicians, phase1Affairs, stats);
+    // Load the candidate pool once for the entire Wikipedia pass.
+    // Building a Map avoids repeated array scans during per-politician lookups.
+    const candidatePool = await loadCandidatePool();
+    const poolById = new Map<string, AffairCandidateRecord>(candidatePool.map((c) => [c.id, c]));
+    phase2Affairs = await runPhase2Wikipedia(politicians, phase1Affairs, stats, poolById);
   }
 
   // Phase 3: Reconciliation
@@ -306,6 +313,26 @@ async function runPhase1Wikidata(
           const titlePrefix = isConviction ? "" : "[\u00c0 V\u00c9RIFIER] ";
           const title = `${titlePrefix}${label} \u2014 ${politician.fullName}`;
 
+          // Call the resolver for audit-trail uniformity. The external-id signal
+          // fires at +10.0 via the Q-ID match, so this is a no-op confirmation.
+          // Non-blocking: resolver failure must not prevent affair creation.
+          try {
+            await resolveAffairPolitician({
+              text: `${politician.fullName}: ${label}`,
+              metadata: {
+                source: "WIKIDATA" as SourceType,
+                sourceRef: qid,
+                factsDate: penaltyData.verdictDate ?? null,
+                externalIds: { wikidataQId: qid },
+              },
+            });
+          } catch (resolveErr) {
+            console.warn(
+              `[discover-affairs] Wikidata resolver call failed for ${politician.fullName} (${qid}):`,
+              resolveErr instanceof Error ? resolveErr.message : resolveErr
+            );
+          }
+
           discovered.push({
             politicianId: politician.id,
             politicianName: politician.fullName,
@@ -369,7 +396,8 @@ async function runPhase2Wikipedia(
     externalIds: Array<{ externalId: string }>;
   }>,
   phase1Affairs: DiscoveredAffair[],
-  stats: DiscoverAffairsResult
+  stats: DiscoverAffairsResult,
+  poolById: Map<string, AffairCandidateRecord>
 ): Promise<DiscoveredAffair[]> {
   const discovered: DiscoveredAffair[] = [];
   const phase1Keys = new Set(phase1Affairs.map((a) => `${a.politicianId}:${a.category}`));
@@ -377,6 +405,12 @@ async function runPhase2Wikipedia(
   console.log(`Phase 2: Wikipedia - ${politicians.length} politicians`);
 
   for (const politician of politicians) {
+    const candidate = poolById.get(politician.id);
+    if (!candidate) {
+      console.warn(`[discover-affairs] Politician ${politician.id} not in candidate pool`);
+      continue;
+    }
+
     try {
       const sections = await wikipediaService.findJudicialSections(politician.fullName);
       if (sections.length === 0) continue;
@@ -403,6 +437,31 @@ async function runPhase2Wikipedia(
 
           const dedupKey = `${politician.id}:${extracted.category}`;
           if (phase1Keys.has(dedupKey)) continue;
+
+          // Sanity check: verify the extracted affair is plausibly about this politician,
+          // not a third party mentioned in their Wikipedia article.
+          const affairText = [extracted.title, extracted.description].filter(Boolean).join("\n\n");
+
+          const sanityCheck = scoreAffairAgainstCandidates(
+            {
+              text: affairText,
+              metadata: {
+                source: "WIKIPEDIA" as SourceType,
+                sourceRef: pageUrl,
+                factsDate: extracted.factsDate ? new Date(extracted.factsDate) : null,
+              },
+            },
+            [candidate]
+          );
+
+          if (sanityCheck.judgment !== "SAME") {
+            console.log(
+              `[discover-affairs] Wikipedia sanity check failed for ${politician.fullName} ` +
+                `(${sanityCheck.judgment}, score ${sanityCheck.topScore.toFixed(1)}): ` +
+                `"${extracted.title}" may be about another politician mentioned in the article`
+            );
+            continue;
+          }
 
           const sources: DiscoveredAffair["sources"] = [
             {
