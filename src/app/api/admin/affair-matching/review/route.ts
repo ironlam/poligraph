@@ -5,12 +5,8 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { parsePagination } from "@/lib/api/pagination";
 import { AffairPoliticianJudgment } from "@/generated/prisma";
 
-const REVIEWABLE_TABS = new Set<AffairPoliticianJudgment>(["UNDECIDED", "NO_MATCH"]);
-
 const querySchema = z.object({
   tab: z.enum(["UNDECIDED", "NO_MATCH"]),
-  page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export const GET = withAdminAuth(async (request: NextRequest) => {
@@ -18,8 +14,6 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
 
   const parsed = querySchema.safeParse({
     tab: searchParams.get("tab"),
-    page: searchParams.get("page") ?? undefined,
-    limit: searchParams.get("limit") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -33,11 +27,6 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   }
 
   const { tab } = parsed.data;
-
-  if (!REVIEWABLE_TABS.has(tab as AffairPoliticianJudgment)) {
-    return NextResponse.json({ error: "Invalid tab value" }, { status: 400 });
-  }
-
   const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20, maxLimit: 100 });
 
   const where = {
@@ -74,5 +63,6 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
     total,
     page,
     limit,
+    totalPages: Math.ceil(total / limit),
   });
 });

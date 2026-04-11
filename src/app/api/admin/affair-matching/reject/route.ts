@@ -45,21 +45,23 @@ export const POST = withAdminAuth(
       action === "MOVE_TO_NO_MATCH" ? "NO_MATCH" : "NOT_SAME";
     const newReviewAction = action === "REJECT_OUT_OF_SCOPE" ? "REJECTED_OUT_OF_SCOPE" : null;
 
-    await db.affairPoliticianDecision.update({
-      where: { id: decisionId },
-      data: {
-        judgment: newJudgment,
-        reviewedAt: new Date(),
-        reviewedBy: "admin",
-        reviewAction: newReviewAction ?? undefined,
-      },
-    });
-
     // Write blocklist NOT_SAME entries for each excluded candidate.
     // sourceRef is prefixed with "blocklist:" + candidateId so the unique constraint
     // @@unique([textHash, source, sourceRef]) is satisfied per-candidate.
     // loadBlocklist() in persistence.ts queries only by textHash + judgment=NOT_SAME,
     // so the modified sourceRef does not affect blocklist lookups.
+    const ops: Prisma.PrismaPromise<unknown>[] = [
+      db.affairPoliticianDecision.update({
+        where: { id: decisionId },
+        data: {
+          judgment: newJudgment,
+          reviewedAt: new Date(),
+          reviewedBy: "admin",
+          reviewAction: newReviewAction,
+        },
+      }),
+    ];
+
     if (blocklistCandidateIds && blocklistCandidateIds.length > 0) {
       const blocklistData = blocklistCandidateIds.map((candidateId) => ({
         textHash: decision.textHash,
@@ -77,11 +79,15 @@ export const POST = withAdminAuth(
         reviewedBy: "admin",
       }));
 
-      await db.affairPoliticianDecision.createMany({
-        data: blocklistData,
-        skipDuplicates: true,
-      });
+      ops.push(
+        db.affairPoliticianDecision.createMany({
+          data: blocklistData,
+          skipDuplicates: true,
+        })
+      );
     }
+
+    await db.$transaction(ops);
 
     const meta = getRequestMeta(request);
     await db.auditLog.create({
