@@ -1,4 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/lib/db", () => ({
+  db: {
+    politician: { findMany: vi.fn() },
+    affairPoliticianDecision: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+  },
+}));
+
 import { scoreAffairAgainstCandidates } from "../resolver";
 import type { AffairCandidateRecord, AffairScoringInput } from "../signals/types";
 import { SourceType } from "@/generated/prisma";

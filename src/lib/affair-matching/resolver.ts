@@ -4,6 +4,8 @@ import type {
   AffairScoringInput,
   AffairSignalContext,
 } from "./signals/types";
+import { computeTextHash, loadCandidatePool, loadBlocklist, persistDecision } from "./persistence";
+import { CandidatePrefilter } from "./candidate-prefilter";
 import { RESOLVER_VERSION } from "./signals/constants";
 import { ExternalIdSignal } from "./signals/external-id";
 import { NameQualitySignal } from "./signals/name-quality";
@@ -47,4 +49,48 @@ export function scoreAffairAgainstCandidates(
   }));
 
   return combiner.judge(candidateSignals);
+}
+
+export interface ResolveResult {
+  judgment: CombinerDecision["judgment"];
+  topCandidateId: string | null;
+  topScore: number;
+  gap: number;
+  topCandidates: CombinerDecision["topCandidates"];
+  decisionId: string;
+}
+
+/**
+ * Full resolver entry point. Loads politicians, prefilters, scores, judges,
+ * persists, and returns the decision id.
+ */
+export async function resolveAffairPolitician(input: AffairScoringInput): Promise<ResolveResult> {
+  if (input.text.length > 100_000) {
+    throw new Error("Affair text exceeds 100KB limit");
+  }
+
+  const pool = await loadCandidatePool();
+  const prefilter = new CandidatePrefilter(pool);
+  const prefiltered = prefilter.filter(input.text);
+
+  const textHash = computeTextHash(input.text);
+  const blocklist = await loadBlocklist(textHash);
+  const candidates = prefiltered.filter((p) => !blocklist.has(p.id));
+
+  const decision = scoreAffairAgainstCandidates(input, candidates);
+
+  const { decisionId } = await persistDecision({
+    text: input.text,
+    metadata: input.metadata,
+    decision,
+  });
+
+  return {
+    judgment: decision.judgment,
+    topCandidateId: decision.topCandidateId,
+    topScore: decision.topScore,
+    gap: decision.gap,
+    topCandidates: decision.topCandidates,
+    decisionId,
+  };
 }
