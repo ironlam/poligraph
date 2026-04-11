@@ -35,7 +35,6 @@ export interface ArticleAnalysisInput {
   publishedAt: Date;
   mentionedPoliticians?: string[];
   tier?: "TIER_1" | "TIER_2";
-  politicianContext?: string;
 }
 
 export interface ArticleAnalysisResult {
@@ -57,6 +56,8 @@ export interface DetectedAffair {
   excerpts: string[];
   isNewRevelation: boolean;
   confidenceScore: number;
+  /** Names extracted from the article text (hint for the resolver, no DB lookup) */
+  mentionedNames: string[];
 }
 
 // ============================================
@@ -141,6 +142,9 @@ EXEMPLES DE FAUX POSITIFS À ÉVITER :
 - Un article sur une affaire judiciaire qui cite un politicien comme source ou commentateur → MENTIONED_ONLY
 - Un article politique mentionnant en passant un procès en cours d'un autre politicien → seul le politicien poursuivi est DIRECT
 
+RÈGLE — NOMS MENTIONNÉS :
+12. Dans chaque affaire, le champ "mentioned_names" doit contenir les noms complets (prénom + nom) des personnes citées dans l'article en lien avec cette affaire. Liste les noms tels qu'ils apparaissent dans le texte, sans tenter de les associer à des identifiants. Exemples : ["Jean Dupont", "Marie Martin"]. Si aucun nom complet n'est lisible, retourner [].
+
 RÉPONSE : Tu DOIS répondre en JSON avec exactement ces champs :
 {
   "is_affair_related": boolean,
@@ -158,7 +162,8 @@ RÉPONSE : Tu DOIS répondre en JSON avec exactement ces champs :
       "charges": ["chef d'accusation 1", "..."],
       "excerpts": ["citation exacte 1", "citation exacte 2"],
       "is_new_revelation": boolean,
-      "confidence_score": 0-100
+      "confidence_score": 0-100,
+      "mentioned_names": ["Prénom Nom", "..."]
     }
   ]
 }
@@ -179,10 +184,6 @@ export async function analyzeArticle(input: ArticleAnalysisInput): Promise<Artic
 
   if (input.mentionedPoliticians && input.mentionedPoliticians.length > 0) {
     userContent += `\n\nPoliticiens mentionnés (pré-détectés) : ${input.mentionedPoliticians.join(", ")}`;
-  }
-
-  if (input.politicianContext) {
-    userContent += `\n\n--- CONTEXTE POLITICIENS CONNUS ---\n${input.politicianContext}\n\nSi un nom correspond à un politicien connu mais que l'article ne mentionne pas de fonction politique (député, sénateur, ministre, maire, etc.), retourner confidence_score < 30 et involvement: MENTIONED_ONLY.`;
   }
 
   const data = await callMistral([{ role: "user", content: userContent }], {
@@ -225,6 +226,7 @@ export async function analyzeArticle(input: ArticleAnalysisInput): Promise<Artic
         confidenceScore: clampConfidenceScore(
           typeof a.confidence_score === "number" ? a.confidence_score : 50
         ),
+        mentionedNames: Array.isArray(a.mentioned_names) ? a.mentioned_names.map(String) : [],
       };
     }
   );

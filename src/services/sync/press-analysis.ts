@@ -13,7 +13,7 @@
  */
 
 import { db } from "@/lib/db";
-import type { AffairCategory, AffairStatus } from "@/generated/prisma";
+import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
 import { generateSlug, sleep } from "@/lib/utils";
 import { getArticleScraper } from "@/lib/api/article-scraper";
 import {
@@ -23,10 +23,10 @@ import {
   type DetectedAffair,
 } from "@/services/press-analysis";
 import { findMatchingAffairs } from "@/services/affairs/matching";
-import { buildPoliticianIndex, findMentions, type PoliticianName } from "@/lib/name-matching";
 import { syncMetadata } from "@/lib/sync";
 import { classifyArticleTier, type ArticleTier } from "@/config/press-keywords";
 import { MIN_CONFIDENCE_THRESHOLD } from "@/config/press-analysis";
+import { resolveAffairPolitician } from "@/lib/affair-matching";
 
 // ============================================
 // TYPES
@@ -60,44 +60,6 @@ export interface PressAnalysisStats {
 
 const SYNC_SOURCE_KEY = "press-analysis";
 const MIN_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
-// ============================================
-// POLITICIAN CONTEXT (Tier 1 anti-homonym)
-// ============================================
-
-/**
- * Build politician context string for Tier 1 anti-homonym protection.
- * Format: "Prénom Nom (Parti, Mandat actuel)" per politician.
- * Limited to ~200 politicians to keep token count reasonable (~2000 tokens).
- */
-async function buildPoliticianContext(): Promise<string> {
-  const politicians = await db.politician.findMany({
-    where: {
-      mandates: { some: { isCurrent: true } },
-    },
-    select: {
-      fullName: true,
-      currentParty: { select: { shortName: true } },
-      mandates: {
-        where: { isCurrent: true },
-        select: { title: true },
-        take: 1,
-      },
-    },
-    take: 200,
-    orderBy: { lastName: "asc" },
-  });
-
-  return politicians
-    .map((p) => {
-      // Sanitize: strip control chars, limit length (defense-in-depth vs prompt injection)
-      const name = p.fullName.replace(/[\x00-\x1f]/g, "").slice(0, 80);
-      const party = (p.currentParty?.shortName || "?").replace(/[\x00-\x1f]/g, "").slice(0, 30);
-      const mandate = (p.mandates[0]?.title || "?").replace(/[\x00-\x1f]/g, "").slice(0, 80);
-      return `${name} (${party}, ${mandate})`;
-    })
-    .join("\n");
-}
 
 // ============================================
 // MAIN SYNC
@@ -172,12 +134,6 @@ export async function syncPressAnalysis(
   console.log(`  Tier 1 (Sonnet, mots-clés judiciaires): ${tier1Count}`);
   console.log(`  Tier 2 (Haiku, couverture large): ${classifiedArticles.length - tier1Count}\n`);
 
-  // Build politician context for Tier 1 (only if there are Tier 1 articles)
-  const politicianContext = tier1Count > 0 ? await buildPoliticianContext() : "";
-
-  // Build politician index for name matching
-  const politicianIndex = await buildPoliticianIndex();
-
   const scraper = getArticleScraper();
 
   for (const article of classifiedArticles) {
@@ -228,7 +184,6 @@ export async function syncPressAnalysis(
         publishedAt: article.publishedAt,
         mentionedPoliticians: mentionedNames,
         tier: article.tier,
-        politicianContext: article.tier === "TIER_1" ? politicianContext : undefined,
       });
 
       stats.articlesAnalyzed++;
@@ -277,15 +232,28 @@ export async function syncPressAnalysis(
           continue;
         }
 
-        // Resolve politician name to ID
-        const politicianId = resolvePolitician(detected.politicianName, politicianIndex);
+        // Resolve politician via the deterministic resolver (full DB, no context window)
+        const resolveResult = await resolveAffairPolitician({
+          text: analysisContent,
+          candidateNames: detected.mentionedNames,
+          metadata: {
+            source: "PRESSE" as SourceType,
+            sourceRef: article.url ?? null,
+            factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
+            court: detected.court ?? null,
+          },
+        });
 
-        if (!politicianId) {
+        if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
           if (verbose) {
-            console.log(`  - Politicien non trouvé: ${detected.politicianName}, ignoré`);
+            console.log(
+              `  - Résolution ${resolveResult.judgment} (decisionId=${resolveResult.decisionId}) pour "${detected.politicianName}" → ignoré`
+            );
           }
           continue;
         }
+
+        const politicianId = resolveResult.topCandidateId;
 
         // Try to match with existing affairs
         const matches = await findMatchingAffairs({
@@ -624,18 +592,6 @@ async function rejectLowConfidenceAffair(
       confidenceScore: detected.confidenceScore,
     },
   });
-}
-
-// ============================================
-// NAME RESOLUTION
-// ============================================
-
-/**
- * Resolve a politician name (from AI output) to a politician ID
- */
-function resolvePolitician(name: string, index: PoliticianName[]): string | null {
-  const matches = findMentions(name, index);
-  return matches.length > 0 ? matches[0]!.politicianId : null;
 }
 
 // ============================================
