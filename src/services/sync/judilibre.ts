@@ -2,14 +2,14 @@
  * Judilibre Sync Service
  *
  * Searches Cour de cassation criminal decisions for politicians:
- * - Scored matching via Name Quality x Context Signal matrix
+ * - Signal-based resolver (affair-matching) for politician identification
  * - IdentityDecision persistence (blocklist, admin review, short-circuit)
  * - Enriches existing affairs with ECLI/pourvoi identifiers
  * - Creates new affairs for confirmed convictions
  */
 
 import { db } from "@/lib/db";
-import { AffairStatus, DataSource, Judgement } from "@/generated/prisma";
+import { AffairStatus, DataSource } from "@/generated/prisma";
 import { generateSlug } from "@/lib/utils";
 import {
   JudilibreClient,
@@ -26,14 +26,8 @@ import {
 import { syncMetadata } from "@/lib/sync";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import { findCourtDepartments, extractJurisdictionName } from "@/config/judilibre-courts";
-import {
-  detectNameQuality,
-  determineContextSignal,
-  scoreJudilibreMatch,
-  JUDILIBRE_THRESHOLDS,
-  type JudilibreMatchEvidence,
-} from "./judilibre-scoring";
-import { loadJudilibreDecisionCache, persistJudilibreDecision } from "./judilibre-decisions";
+import { resolveAffairPolitician } from "@/lib/affair-matching";
+import { loadJudilibreDecisionCache } from "./judilibre-decisions";
 
 // ============================================
 // TYPES
@@ -100,33 +94,6 @@ async function searchPoliticianDecisions(
   }
 
   return results.results;
-}
-
-// ============================================
-// EXTERNAL ID PRE-FILTER
-// ============================================
-
-async function checkExternalIdMatch(
-  politicianId: string,
-  decision: JudilibreDecisionSummary
-): Promise<{ hasEcliMatch: boolean; hasPourvoiMatch: boolean }> {
-  if (!decision.ecli && !decision.number) {
-    return { hasEcliMatch: false, hasPourvoiMatch: false };
-  }
-
-  const conditions = [];
-  if (decision.ecli) conditions.push({ ecli: decision.ecli, politicianId });
-  if (decision.number) conditions.push({ pourvoiNumber: decision.number, politicianId });
-
-  const match = await db.affair.findFirst({
-    where: { OR: conditions },
-    select: { ecli: true, pourvoiNumber: true },
-  });
-
-  return {
-    hasEcliMatch: !!match?.ecli && match.ecli === decision.ecli,
-    hasPourvoiMatch: !!match?.pourvoiNumber && match.pourvoiNumber === decision.number,
-  };
 }
 
 // ============================================
@@ -531,58 +498,39 @@ export async function syncJudilibre(
           if (ageAtDecision < MIN_AGE_AT_DECISION) continue;
         }
 
-        // Step d: ExternalId pre-filter
-        const externalIdMatch = await checkExternalIdMatch(politician.id, decision);
-
-        // Step e: Name quality on summary
+        // Steps d-h replaced: resolve via signal-based affair-matching resolver.
+        // ExternalId pre-filter, name detection, jurisdiction context, scoring, and
+        // persistence (AffairPoliticianDecision) are handled inside the resolver.
+        // The resolver handles name detection, jurisdiction context, scoring, and
+        // persistence (AffairPoliticianDecision) in a single pass.
         const summary = decision.summary || "";
-        const nameQuality = detectNameQuality(summary, politician.fullName);
-
-        // No name match and no ExternalId -> skip
-        if (!nameQuality && !externalIdMatch.hasEcliMatch && !externalIdMatch.hasPourvoiMatch) {
+        let resolveResult;
+        try {
+          resolveResult = await resolveAffairPolitician({
+            text: summary,
+            metadata: {
+              source: DataSource.JUDILIBRE,
+              sourceRef: decision.ecli ?? null,
+              verdictDate: new Date(decision.decision_date),
+              externalIds: {
+                ecli: decision.ecli ?? null,
+                pourvoiNumber: decision.number ?? null,
+              },
+            },
+          });
+        } catch (resolveError) {
+          console.error(`  Erreur résolution ${decision.id}:`, resolveError);
+          stats.errors++;
           continue;
         }
 
-        // Step f: Context signal
-        const { signal: contextSignal, jurisdictionCity } = determineContextSignal(
-          summary,
-          politician.departments,
-          externalIdMatch
-        );
-
-        // Step g: Score matrix
-        const matchResult = scoreJudilibreMatch(nameQuality, contextSignal);
         stats.decisionsRelevant++;
 
-        // Step h: Persist IdentityDecision
-        if (
-          matchResult.judgement &&
-          matchResult.score >= JUDILIBRE_THRESHOLDS.UNDECIDED &&
-          !dryRun
-        ) {
-          const evidence: JudilibreMatchEvidence = {
-            nameQuality,
-            contextSignal,
-            score: matchResult.score,
-            fullNameFound: nameQuality === "STRONG",
-            legalTitleFound: false,
-            proximityFound: nameQuality === "MODERATE",
-            jurisdictionCity,
-          };
-          await persistJudilibreDecision({
-            decisionId: decision.id,
-            politicianId: politician.id,
-            judgement: matchResult.judgement as Judgement,
-            confidence: matchResult.score,
-            method: matchResult.method,
-            evidence,
-          });
-        }
-
-        // Step i: Action
-        if (matchResult.judgement === "SAME") {
+        // Step i: Action based on resolver judgment
+        if (resolveResult.judgment === "SAME" && resolveResult.topCandidateId) {
+          const resolvedPoliticianId = resolveResult.topCandidateId;
           const matches = await findMatchingAffairs({
-            politicianId: politician.id,
+            politicianId: resolvedPoliticianId,
             title: buildTitleFromDecision(decision),
             ecli: decision.ecli,
             pourvoiNumber: decision.number,
@@ -605,12 +553,23 @@ export async function syncJudilibre(
             );
             if (enriched) stats.affairsEnriched++;
           } else if (analyzeIfConviction(decision)) {
-            // Full-text gate before creating affair
+            // Full-text gate: re-resolve on the full decision text to confirm identity
             let shouldCreate = true;
             try {
               const fullDecision = await client.getDecision(decision.id);
-              const fullTextQuality = detectNameQuality(fullDecision.text, politician.fullName);
-              if (!fullTextQuality) {
+              const fullTextResult = await resolveAffairPolitician({
+                text: fullDecision.text,
+                metadata: {
+                  source: DataSource.JUDILIBRE,
+                  sourceRef: decision.ecli ?? null,
+                  verdictDate: new Date(decision.decision_date),
+                  externalIds: {
+                    ecli: decision.ecli ?? null,
+                    pourvoiNumber: decision.number ?? null,
+                  },
+                },
+              });
+              if (fullTextResult.judgment === "NO_MATCH") {
                 if (verbose) {
                   console.log(`  - ${decision.ecli} : nom absent du texte integral, ignoree`);
                 }
@@ -625,7 +584,7 @@ export async function syncJudilibre(
 
             if (shouldCreate) {
               const created = await createAffairFromJudilibre(
-                politician.id,
+                resolvedPoliticianId,
                 decision,
                 politician.departments,
                 dryRun,
@@ -639,15 +598,18 @@ export async function syncJudilibre(
               console.log(`  - ${decision.ecli || decision.id} : procedurale, ignoree`);
             }
           }
-        } else if (matchResult.judgement === "UNDECIDED") {
+        } else if (resolveResult.judgment === "UNDECIDED") {
           stats.decisionsUndecided++;
           if (verbose) {
             console.log(
-              `  ? ${decision.id} : UNDECIDED (score=${matchResult.score}, name=${nameQuality}, ctx=${contextSignal})`
+              `  ? ${decision.id} : UNDECIDED (decisionId=${resolveResult.decisionId}, score=${resolveResult.topScore})`
             );
           }
         } else {
           stats.decisionsSkipped++;
+          if (verbose && resolveResult.judgment === "NO_MATCH") {
+            console.log(`  - ${decision.id} : NO_MATCH pour ${politician.fullName}`);
+          }
         }
       }
     } catch (error) {
