@@ -20,7 +20,7 @@ import { findMatchingAffairs } from "@/services/affairs/matching";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import type { AffairCategory, AffairStatus, Involvement, SourceType } from "@/generated/prisma";
-import { scoreAffairAgainstCandidates } from "@/lib/affair-matching";
+import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadCandidatePool } from "@/lib/affair-matching/persistence";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
 
@@ -312,6 +312,26 @@ async function runPhase1Wikidata(
           const confidence = isConviction ? 95 : 75;
           const titlePrefix = isConviction ? "" : "[\u00c0 V\u00c9RIFIER] ";
           const title = `${titlePrefix}${label} \u2014 ${politician.fullName}`;
+
+          // Call the resolver for audit-trail uniformity. The external-id signal
+          // fires at +10.0 via the Q-ID match, so this is a no-op confirmation.
+          // Non-blocking: resolver failure must not prevent affair creation.
+          try {
+            await resolveAffairPolitician({
+              text: `${politician.fullName}: ${label}`,
+              metadata: {
+                source: "WIKIDATA" as SourceType,
+                sourceRef: qid,
+                factsDate: penaltyData.verdictDate ?? null,
+                externalIds: { wikidataQId: qid },
+              },
+            });
+          } catch (resolveErr) {
+            console.warn(
+              `[discover-affairs] Wikidata resolver call failed for ${politician.fullName} (${qid}):`,
+              resolveErr instanceof Error ? resolveErr.message : resolveErr
+            );
+          }
 
           discovered.push({
             politicianId: politician.id,
