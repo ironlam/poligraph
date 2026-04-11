@@ -166,13 +166,13 @@ model AffairPoliticianDecision {
 
   // Final destination (nullable until linked)
   affairId           String?
-  affair             Affair?     @relation("AffairDecisionAffair", fields: [affairId], references: [id])
+  affair             Affair?     @relation("AffairDecisionAffair", fields: [affairId], references: [id], onDelete: SetNull)
   chosenPoliticianId String?
-  chosenPolitician   Politician? @relation("AffairDecisionPolitician", fields: [chosenPoliticianId], references: [id])
+  chosenPolitician   Politician? @relation("AffairDecisionPolitician", fields: [chosenPoliticianId], references: [id], onDelete: SetNull)
 
   // Provenance (reuses existing SourceType enum)
   source             SourceType
-  sourceRef          String?
+  sourceRef          String   @default("")
 
   // Review workflow
   reviewedAt         DateTime?
