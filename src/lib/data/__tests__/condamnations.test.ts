@@ -7,16 +7,18 @@ vi.mock("@/lib/db", () => ({
       findMany: vi.fn(),
       count: vi.fn(),
     },
+    $queryRaw: vi.fn(),
   },
 }));
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { getCondamnations } from "../condamnations";
+import { getCondamnations, getCondamnationsStatsByParty } from "../condamnations";
 import { db } from "@/lib/db";
 import type { Mock } from "vitest";
 
 const mockFindMany = db.affair.findMany as Mock;
 const mockCount = db.affair.count as Mock;
+const mockQueryRaw = db.$queryRaw as Mock;
 
 describe("getCondamnations", () => {
   beforeEach(() => {
@@ -87,5 +89,70 @@ describe("getCondamnations", () => {
     await getCondamnations({ sort: "nom" });
     const args = mockFindMany.mock.calls[0]![0];
     expect(args.orderBy[0]).toEqual({ politician: { lastName: "asc" } });
+  });
+});
+
+describe("getCondamnationsStatsByParty", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns stats with calculated tauxDefinitif from DB counts", async () => {
+    mockQueryRaw.mockResolvedValue([
+      {
+        partyId: "p1",
+        partySlug: "rn",
+        partyShortName: "RN",
+        partyName: "Rassemblement National",
+        nSuivis: 100n,
+        nCondamnesDefinitifs: 10n,
+        nCondamnesPrononces: 3n,
+      },
+      {
+        partyId: "p2",
+        partySlug: "lr",
+        partyShortName: "LR",
+        partyName: "Les Républicains",
+        nSuivis: 50n,
+        nCondamnesDefinitifs: 0n,
+        nCondamnesPrononces: 1n,
+      },
+    ]);
+    const rows = await getCondamnationsStatsByParty();
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      partyId: "p1",
+      partySlug: "rn",
+      partyShortName: "RN",
+      nSuivis: 100,
+      nCondamnesDefinitifs: 10,
+      nCondamnesPrononces: 3,
+      tauxDefinitif: 0.1,
+    });
+    expect(rows[1].tauxDefinitif).toBe(0);
+  });
+
+  it("handles empty result", async () => {
+    mockQueryRaw.mockResolvedValue([]);
+    const rows = await getCondamnationsStatsByParty();
+    expect(rows).toEqual([]);
+  });
+
+  it("converts bigint DB counts to number safely", async () => {
+    mockQueryRaw.mockResolvedValue([
+      {
+        partyId: "p1",
+        partySlug: "x",
+        partyShortName: "X",
+        partyName: "X Party",
+        nSuivis: 0n,
+        nCondamnesDefinitifs: 0n,
+        nCondamnesPrononces: 0n,
+      },
+    ]);
+    const rows = await getCondamnationsStatsByParty();
+    expect(rows[0].nSuivis).toBe(0);
+    expect(rows[0].nCondamnesDefinitifs).toBe(0);
+    expect(rows[0].tauxDefinitif).toBe(0); // division by zero guard
   });
 });

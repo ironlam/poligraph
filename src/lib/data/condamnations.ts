@@ -134,3 +134,69 @@ function orderByForSort(
       return [{ verdictDate: "desc" }, { startDate: "desc" }, { createdAt: "desc" }];
   }
 }
+
+export interface CondamnationsPartyStats {
+  partyId: string;
+  partySlug: string;
+  partyShortName: string;
+  partyName: string;
+  nSuivis: number;
+  nCondamnesDefinitifs: number;
+  nCondamnesPrononces: number;
+  tauxDefinitif: number;
+}
+
+export async function getCondamnationsStatsByParty(
+  mandat?: MandatBucket
+): Promise<CondamnationsPartyStats[]> {
+  "use cache";
+  cacheTag("affairs");
+
+  const mandateTypes = mandat ? MANDAT_BUCKETS[mandat] : undefined;
+
+  const rows = await db.$queryRaw<
+    Array<{
+      partyId: string;
+      partySlug: string;
+      partyShortName: string;
+      partyName: string;
+      nSuivis: bigint;
+      nCondamnesDefinitifs: bigint;
+      nCondamnesPrononces: bigint;
+    }>
+  >`
+    SELECT
+      pt.id AS "partyId",
+      pt.slug AS "partySlug",
+      pt."shortName" AS "partyShortName",
+      pt.name AS "partyName",
+      COUNT(DISTINCT p.id) AS "nSuivis",
+      COUNT(DISTINCT CASE WHEN a.status = 'CONDAMNATION_DEFINITIVE' THEN a."politicianId" END) AS "nCondamnesDefinitifs",
+      COUNT(DISTINCT CASE WHEN a.status IN ('CONDAMNATION_PREMIERE_INSTANCE','APPEL_EN_COURS') THEN a."politicianId" END) AS "nCondamnesPrononces"
+    FROM "Politician" p
+    JOIN "Party" pt ON pt.id = p."currentPartyId"
+    LEFT JOIN "Affair" a ON a."politicianId" = p.id
+      AND a."publicationStatus" = 'PUBLISHED'
+      AND a.involvement IN ('DIRECT','INDIRECT')
+    ${
+      mandateTypes
+        ? Prisma.sql`WHERE EXISTS (SELECT 1 FROM "Mandate" m WHERE m."politicianId" = p.id AND m.type = ANY(${mandateTypes}::"MandateType"[]))`
+        : Prisma.empty
+    }
+    GROUP BY pt.id, pt.slug, pt."shortName", pt.name
+    HAVING COUNT(DISTINCT p.id) >= 3
+        OR COUNT(DISTINCT CASE WHEN a.status = 'CONDAMNATION_DEFINITIVE' THEN a."politicianId" END) >= 1
+    ORDER BY "nCondamnesDefinitifs" DESC, "nSuivis" DESC
+  `;
+
+  return rows.map((r) => ({
+    partyId: r.partyId,
+    partySlug: r.partySlug,
+    partyShortName: r.partyShortName,
+    partyName: r.partyName,
+    nSuivis: Number(r.nSuivis),
+    nCondamnesDefinitifs: Number(r.nCondamnesDefinitifs),
+    nCondamnesPrononces: Number(r.nCondamnesPrononces),
+    tauxDefinitif: Number(r.nSuivis) > 0 ? Number(r.nCondamnesDefinitifs) / Number(r.nSuivis) : 0,
+  }));
+}
