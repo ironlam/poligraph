@@ -274,15 +274,15 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
             vérifiable ou une décision de justice publiée. Les données proviennent de Wikidata, de
             la presse, de Judilibre et de contributions modérées. Une personne citée peut demander
             correction via{" "}
-            <a href="mailto:contact@poligraph.fr" className="text-primary hover:underline">
+            <a href="mailto:contact@poligraph.fr" className="text-primary underline">
               contact@poligraph.fr
             </a>
             . Voir la{" "}
-            <a href="/sources" className="text-primary hover:underline">
+            <a href="/sources" className="text-primary underline">
               page Sources
             </a>{" "}
             pour la méthodologie complète et la{" "}
-            <a href="/docs/api" className="text-primary hover:underline">
+            <a href="/docs/api" className="text-primary underline">
               documentation API
             </a>{" "}
             pour la reproduction des données.

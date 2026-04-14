@@ -114,7 +114,10 @@ export async function getCondamnations(filters: CondamnationsFilters) {
   ]);
 
   return {
-    affairs,
+    affairs: affairs.map((a) => ({
+      ...a,
+      fineAmount: a.fineAmount !== null ? Number(a.fineAmount) : null,
+    })),
     total,
     totalPages: Math.ceil(total / PAGE_SIZE) || 1,
     page,

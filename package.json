@@ -199,6 +199,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.58.1",
     "@prisma/client": "^7.2.0",
     "@storybook/nextjs-vite": "^10.2.19",
