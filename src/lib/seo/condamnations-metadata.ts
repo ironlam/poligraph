@@ -42,7 +42,7 @@ export function buildDescription(input: DescriptionInput): string {
   }
 
   if (input.mandat) {
-    const label = MANDAT_LABEL[input.mandat].toLowerCase();
+    const label = (MANDAT_LABEL[input.mandat as MandatBucket] as string).toLowerCase();
     return `Liste sourcée des ${label} condamnés définitivement ou en cours de procédure. ${input.totalDefinitif} condamnations définitives documentées, présomption d'innocence respectée.`;
   }
 

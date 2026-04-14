@@ -104,23 +104,23 @@ describe("getCondamnationsStatsByParty", () => {
         partySlug: "rn",
         partyShortName: "RN",
         partyName: "Rassemblement National",
-        nSuivis: 100n,
-        nCondamnesDefinitifs: 10n,
-        nCondamnesPrononces: 3n,
+        nSuivis: BigInt(100),
+        nCondamnesDefinitifs: BigInt(10),
+        nCondamnesPrononces: BigInt(3),
       },
       {
         partyId: "p2",
         partySlug: "lr",
         partyShortName: "LR",
         partyName: "Les Républicains",
-        nSuivis: 50n,
-        nCondamnesDefinitifs: 0n,
-        nCondamnesPrononces: 1n,
+        nSuivis: BigInt(50),
+        nCondamnesDefinitifs: BigInt(0),
+        nCondamnesPrononces: BigInt(1),
       },
     ]);
     const rows = await getCondamnationsStatsByParty();
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({
+    expect(rows[0]!).toMatchObject({
       partyId: "p1",
       partySlug: "rn",
       partyShortName: "RN",
@@ -129,7 +129,7 @@ describe("getCondamnationsStatsByParty", () => {
       nCondamnesPrononces: 3,
       tauxDefinitif: 0.1,
     });
-    expect(rows[1].tauxDefinitif).toBe(0);
+    expect(rows[1]!.tauxDefinitif).toBe(0);
   });
 
   it("handles empty result", async () => {
@@ -145,14 +145,14 @@ describe("getCondamnationsStatsByParty", () => {
         partySlug: "x",
         partyShortName: "X",
         partyName: "X Party",
-        nSuivis: 0n,
-        nCondamnesDefinitifs: 0n,
-        nCondamnesPrononces: 0n,
+        nSuivis: BigInt(0),
+        nCondamnesDefinitifs: BigInt(0),
+        nCondamnesPrononces: BigInt(0),
       },
     ]);
     const rows = await getCondamnationsStatsByParty();
-    expect(rows[0].nSuivis).toBe(0);
-    expect(rows[0].nCondamnesDefinitifs).toBe(0);
-    expect(rows[0].tauxDefinitif).toBe(0); // division by zero guard
+    expect(rows[0]!.nSuivis).toBe(0);
+    expect(rows[0]!.nCondamnesDefinitifs).toBe(0);
+    expect(rows[0]!.tauxDefinitif).toBe(0); // division by zero guard
   });
 });
