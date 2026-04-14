@@ -207,6 +207,63 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
 
 // Sitemap 1: Affairs + parties + elections + departments (priority 0.6-0.7)
 async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<MetadataRoute.Sitemap> {
+  const lastAffairUpdate = await db.affair.findFirst({
+    where: {
+      publicationStatus: "PUBLISHED",
+      status: {
+        in: ["CONDAMNATION_DEFINITIVE", "CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"],
+      },
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { updatedAt: true },
+  });
+  const condamnationsLastmod = lastAffairUpdate?.updatedAt ?? new Date();
+
+  const condamnationsEntries: MetadataRoute.Sitemap = [
+    {
+      url: `${SITE_URL}/affaires/condamnations`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?mandat=depute`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?mandat=senateur`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?mandat=gouvernement`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?mandat=locaux`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?certainty=etabli`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/affaires/condamnations?view=stats`,
+      lastModified: condamnationsLastmod,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    },
+  ];
+
   const [affairs, parties, partiesWithAffairs, elections] = await Promise.all([
     db.affair.findMany({
       where: { publicationStatus: "PUBLISHED" },
@@ -285,6 +342,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
   ];
 
   return [
+    ...condamnationsEntries,
     ...affairPages,
     ...partyPages,
     ...partyAffairPages,
