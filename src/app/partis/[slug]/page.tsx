@@ -99,14 +99,31 @@ export default async function PartyPage({ params }: PageProps) {
     notFound();
   }
 
-  const [leadershipMandates, partyRoles, pressEnabled, programmeEnabled, partyPlatform] =
-    await Promise.all([
-      getPartyLeadership(party.id, party.name),
-      getPartyRoles(party.id),
-      isFeatureEnabled("PRESS_SECTION"),
-      isFeatureEnabled("PROGRAMMES_ENABLED"),
-      getPartyPlatform(slug),
-    ]);
+  const [
+    leadershipMandates,
+    partyRoles,
+    pressEnabled,
+    programmeEnabled,
+    partyPlatform,
+    nCondamnesDef,
+  ] = await Promise.all([
+    getPartyLeadership(party.id, party.name),
+    getPartyRoles(party.id),
+    isFeatureEnabled("PRESS_SECTION"),
+    isFeatureEnabled("PROGRAMMES_ENABLED"),
+    getPartyPlatform(slug),
+    db.affair.count({
+      where: {
+        publicationStatus: "PUBLISHED",
+        involvement: { in: ["DIRECT", "INDIRECT"] },
+        status: "CONDAMNATION_DEFINITIVE",
+        OR: [
+          { partyAtTime: { slug: party.slug } },
+          { politician: { currentParty: { slug: party.slug } } },
+        ],
+      },
+    }),
+  ]);
   const currentLeaders = leadershipMandates.filter((m) => m.isCurrent);
   const pastLeaders = leadershipMandates.filter((m) => !m.isCurrent);
 
@@ -594,6 +611,20 @@ export default async function PartyPage({ params }: PageProps) {
                             />
                           </svg>
                         </Link>
+                      )}
+
+                      {nCondamnesDef > 0 && party.slug && (
+                        <p className="text-sm mt-2">
+                          <Link
+                            href={`/affaires/condamnations?parti=${party.slug}&certainty=etabli`}
+                            className="text-primary hover:underline"
+                            prefetch={false}
+                          >
+                            {nCondamnesDef} condamnation
+                            {nCondamnesDef !== 1 ? "s" : ""} définitive
+                            {nCondamnesDef !== 1 ? "s" : ""} →
+                          </Link>
+                        </p>
                       )}
                     </CardContent>
                   </Card>
