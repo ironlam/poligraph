@@ -9,6 +9,8 @@ import { CondamnationsPresumptionBanner } from "@/components/affairs/Condamnatio
 import { getCondamnations, getCondamnationsStatsByParty } from "@/lib/data/condamnations";
 import { getPartiesWithAffairs } from "@/lib/data/affairs";
 import { buildListTitle, buildDescription, buildCanonical } from "@/lib/seo/condamnations-metadata";
+import { CollectionPageJsonLd, AffairItemListJsonLd, DatasetJsonLd } from "@/components/seo/JsonLd";
+import { SITE_URL } from "@/config/site";
 
 export const revalidate = 300;
 
@@ -121,28 +123,35 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
   if (params.view === "stats") {
     const stats = await getCondamnationsStatsByParty(params.mandat);
     return (
-      <div className="container mx-auto px-4 pt-4 pb-8">
-        <Breadcrumb items={breadcrumbItems} />
-        <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
-        <p className="text-muted-foreground mb-6">
-          Répartition des responsables politiques condamnés définitivement par leur parti d{"'"}
-          appartenance. Sources vérifiables.
-        </p>
-        <CondamnationsFilters
-          current={{
-            mandat: params.mandat,
-            certainty: params.certainty,
-            parti: params.parti,
-            view: params.view,
-          }}
-          parties={parties.map((p) => ({
-            slug: p.slug as string,
-            shortName: p.shortName,
-            name: p.name,
-          }))}
+      <>
+        <DatasetJsonLd
+          name="Taux de condamnation par parti politique en France"
+          description="Agrégation du nombre et du taux de responsables politiques condamnés définitivement par parti d'appartenance"
+          url={`${SITE_URL}/affaires/condamnations?view=stats`}
         />
-        <CondamnationsStatsTable rows={stats} currentMandat={params.mandat} />
-      </div>
+        <div className="container mx-auto px-4 pt-4 pb-8">
+          <Breadcrumb items={breadcrumbItems} />
+          <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
+          <p className="text-muted-foreground mb-6">
+            Répartition des responsables politiques condamnés définitivement par leur parti d{"'"}
+            appartenance. Sources vérifiables.
+          </p>
+          <CondamnationsFilters
+            current={{
+              mandat: params.mandat,
+              certainty: params.certainty,
+              parti: params.parti,
+              view: params.view,
+            }}
+            parties={parties.map((p) => ({
+              slug: p.slug as string,
+              shortName: p.shortName,
+              name: p.name,
+            }))}
+          />
+          <CondamnationsStatsTable rows={stats} currentMandat={params.mandat} />
+        </div>
+      </>
     );
   }
 
@@ -171,91 +180,115 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
   const totalDefinitif = listDef?.total ?? 0;
   const totalPrononce = listNonDef?.total ?? 0;
 
-  return (
-    <div className="container mx-auto px-4 pt-4 pb-8">
-      <Breadcrumb items={breadcrumbItems} />
-      <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
-      <p className="text-muted-foreground mb-6">
-        {totalDefinitif > 0 &&
-          `${totalDefinitif} condamnation${totalDefinitif !== 1 ? "s" : ""} définitive${totalDefinitif !== 1 ? "s" : ""}`}
-        {totalDefinitif > 0 && totalPrononce > 0 && " · "}
-        {totalPrononce > 0 && `${totalPrononce} en première instance ou en appel`}
-        {totalDefinitif === 0 &&
-          totalPrononce === 0 &&
-          "Aucune décision ne correspond à ces filtres."}
-      </p>
+  const allAffairs = [...(listDef?.affairs ?? []), ...(listNonDef?.affairs ?? [])];
 
-      <CondamnationsFilters
-        current={{
+  return (
+    <>
+      <CollectionPageJsonLd
+        name={h1}
+        description=""
+        url={`${SITE_URL}${buildCanonical({
           mandat: params.mandat,
           certainty: params.certainty,
-          parti: params.parti,
-          view: params.view,
-        }}
-        parties={parties.map((p) => ({
-          slug: p.slug as string,
-          shortName: p.shortName,
-          name: p.name,
-        }))}
+          partiSlug: params.parti,
+          view: "list",
+        })}`}
+        numberOfItems={totalDefinitif + totalPrononce}
       />
-
-      {listDef && listDef.affairs.length > 0 && (
-        <section aria-labelledby="heading-definitives" className="mb-10">
-          <h2 id="heading-definitives" className="text-2xl font-display font-bold mb-4">
-            Condamnations définitives
-          </h2>
-          <div className="space-y-3">
-            {listDef.affairs.map((a) => (
-              <CondamnationCard
-                key={a.id}
-                affair={a as Parameters<typeof CondamnationCard>[0]["affair"]}
-                definitif
-              />
-            ))}
-          </div>
-        </section>
+      {allAffairs.length > 0 && (
+        <AffairItemListJsonLd
+          name={h1}
+          items={allAffairs.map((a) => ({
+            url: `${SITE_URL}/affaires/${a.slug}`,
+            name: a.title,
+          }))}
+        />
       )}
-
-      {listNonDef && listNonDef.affairs.length > 0 && (
-        <section aria-labelledby="heading-non-definitives" className="mb-10">
-          <h2 id="heading-non-definitives" className="text-2xl font-display font-bold mb-2">
-            Condamnations non définitives
-          </h2>
-          <CondamnationsPresumptionBanner />
-          <div className="space-y-3">
-            {listNonDef.affairs.map((a) => (
-              <CondamnationCard
-                key={a.id}
-                affair={a as Parameters<typeof CondamnationCard>[0]["affair"]}
-                definitif={false}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Methodology footer */}
-      <section className="mt-12 border-t border-border pt-6">
-        <h2 className="text-xl font-semibold mb-2">Méthodologie</h2>
-        <p className="text-sm text-muted-foreground">
-          Chaque condamnation listée est documentée avec au moins une source journalistique
-          vérifiable ou une décision de justice publiée. Les données proviennent de Wikidata, de la
-          presse, de Judilibre et de contributions modérées. Une personne citée peut demander
-          correction via{" "}
-          <a href="mailto:contact@poligraph.fr" className="text-primary hover:underline">
-            contact@poligraph.fr
-          </a>
-          . Voir la{" "}
-          <a href="/sources" className="text-primary hover:underline">
-            page Sources
-          </a>{" "}
-          pour la méthodologie complète et la{" "}
-          <a href="/docs/api" className="text-primary hover:underline">
-            documentation API
-          </a>{" "}
-          pour la reproduction des données.
+      <div className="container mx-auto px-4 pt-4 pb-8">
+        <Breadcrumb items={breadcrumbItems} />
+        <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
+        <p className="text-muted-foreground mb-6">
+          {totalDefinitif > 0 &&
+            `${totalDefinitif} condamnation${totalDefinitif !== 1 ? "s" : ""} définitive${totalDefinitif !== 1 ? "s" : ""}`}
+          {totalDefinitif > 0 && totalPrononce > 0 && " · "}
+          {totalPrononce > 0 && `${totalPrononce} en première instance ou en appel`}
+          {totalDefinitif === 0 &&
+            totalPrononce === 0 &&
+            "Aucune décision ne correspond à ces filtres."}
         </p>
-      </section>
-    </div>
+
+        <CondamnationsFilters
+          current={{
+            mandat: params.mandat,
+            certainty: params.certainty,
+            parti: params.parti,
+            view: params.view,
+          }}
+          parties={parties.map((p) => ({
+            slug: p.slug as string,
+            shortName: p.shortName,
+            name: p.name,
+          }))}
+        />
+
+        {listDef && listDef.affairs.length > 0 && (
+          <section aria-labelledby="heading-definitives" className="mb-10">
+            <h2 id="heading-definitives" className="text-2xl font-display font-bold mb-4">
+              Condamnations définitives
+            </h2>
+            <div className="space-y-3">
+              {listDef.affairs.map((a) => (
+                <CondamnationCard
+                  key={a.id}
+                  affair={a as Parameters<typeof CondamnationCard>[0]["affair"]}
+                  definitif
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {listNonDef && listNonDef.affairs.length > 0 && (
+          <section aria-labelledby="heading-non-definitives" className="mb-10">
+            <h2 id="heading-non-definitives" className="text-2xl font-display font-bold mb-2">
+              Condamnations non définitives
+            </h2>
+            <CondamnationsPresumptionBanner />
+            <div className="space-y-3">
+              {listNonDef.affairs.map((a) => (
+                <CondamnationCard
+                  key={a.id}
+                  affair={a as Parameters<typeof CondamnationCard>[0]["affair"]}
+                  definitif={false}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Methodology footer */}
+        <section className="mt-12 border-t border-border pt-6">
+          <h2 className="text-xl font-semibold mb-2">Méthodologie</h2>
+          <p className="text-sm text-muted-foreground">
+            Chaque condamnation listée est documentée avec au moins une source journalistique
+            vérifiable ou une décision de justice publiée. Les données proviennent de Wikidata, de
+            la presse, de Judilibre et de contributions modérées. Une personne citée peut demander
+            correction via{" "}
+            <a href="mailto:contact@poligraph.fr" className="text-primary hover:underline">
+              contact@poligraph.fr
+            </a>
+            . Voir la{" "}
+            <a href="/sources" className="text-primary hover:underline">
+              page Sources
+            </a>{" "}
+            pour la méthodologie complète et la{" "}
+            <a href="/docs/api" className="text-primary hover:underline">
+              documentation API
+            </a>{" "}
+            pour la reproduction des données.
+          </p>
+        </section>
+      </div>
+    </>
   );
 }
