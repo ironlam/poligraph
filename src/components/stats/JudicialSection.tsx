@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AFFAIR_SUPER_CATEGORY_LABELS,
@@ -83,6 +84,23 @@ export function JudicialSection({
 
   return (
     <section aria-labelledby="judicial-heading" className="py-8 overflow-x-hidden">
+      <div className="flex flex-wrap gap-3 mb-6 text-sm">
+        <Link
+          href="/affaires/condamnations?view=stats"
+          className="inline-flex items-center gap-1 text-primary hover:underline"
+          prefetch={false}
+        >
+          Voir le taux de condamnation par parti →
+        </Link>
+        <Link
+          href="/affaires/condamnations?certainty=etabli"
+          className="inline-flex items-center gap-1 text-primary hover:underline"
+          prefetch={false}
+        >
+          Liste complète des condamnés définitifs →
+        </Link>
+      </div>
+
       {/* Hemicycle visualization */}
       {hemicycleGroups.length > 0 && (
         <Card className="mb-8">

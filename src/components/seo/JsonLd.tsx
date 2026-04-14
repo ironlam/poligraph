@@ -479,6 +479,53 @@ interface CollectionPageJsonLdProps {
   };
 }
 
+export function DatasetJsonLd({
+  name,
+  description,
+  url,
+}: {
+  name: string;
+  description: string;
+  url: string;
+}) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name,
+    description,
+    creator: { "@type": "Organization", name: "Poligraph", url: "https://poligraph.fr" },
+    license: "https://creativecommons.org/licenses/by-sa/4.0/",
+    distribution: [{ "@type": "DataDownload", encodingFormat: "text/html", contentUrl: url }],
+  };
+  return (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
+  );
+}
+
+export function AffairItemListJsonLd({
+  name,
+  items,
+}: {
+  name: string;
+  items: Array<{ url: string; name: string }>;
+}) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    numberOfItems: items.length,
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: it.url,
+      name: it.name,
+    })),
+  };
+  return (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
+  );
+}
+
 export function CollectionPageJsonLd({
   name,
   description,

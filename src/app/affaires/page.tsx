@@ -278,6 +278,23 @@ export default async function AffairesPage({ searchParams }: PageProps) {
           superCounts={superCounts}
         />
 
+        {/* Condamnations hub callout when ETABLI certainty is active */}
+        {certaintyFilter === "ETABLI" && (
+          <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm">
+              Une page dédiée aux condamnations est désormais disponible, avec vue par mandat et
+              taux par parti.
+            </p>
+            <Link
+              href="/affaires/condamnations?certainty=etabli"
+              className="text-sm font-medium text-primary hover:underline"
+              prefetch={false}
+            >
+              Voir le hub Condamnations →
+            </Link>
+          </div>
+        )}
+
         {/* Active filters summary */}
         {(searchFilter || superCatFilter || certaintyFilter || categoryFilter || partiFilter) && (
           <div className="mb-6 flex items-center gap-2 text-sm flex-wrap">
