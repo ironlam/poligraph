@@ -1,4 +1,7 @@
-import type { MandateType, AffairStatus } from "@/generated/prisma";
+import { cacheTag, cacheLife } from "next/cache";
+import { db } from "@/lib/db";
+import { Prisma } from "@/generated/prisma";
+import type { MandateType, AffairStatus, Involvement } from "@/generated/prisma";
 
 export const MANDAT_BUCKETS: Record<string, MandateType[]> = {
   depute: ["DEPUTE", "DEPUTE_EUROPEEN"],
@@ -40,4 +43,94 @@ export interface CondamnationsFilters {
   partiSlug?: string;
   page?: number;
   sort?: "date" | "nom" | "severity";
+}
+
+const PAGE_SIZE = 30;
+
+export async function getCondamnations(filters: CondamnationsFilters) {
+  "use cache";
+  cacheTag("affairs");
+  cacheLife("minutes");
+
+  const { mandat, certainty = "tous", partiSlug, page = 1, sort = "date" } = filters;
+
+  const mandateTypes = mandat ? MANDAT_BUCKETS[mandat] : undefined;
+  const statuses = CERTAINTY_STATUS[certainty];
+
+  const where: Prisma.AffairWhereInput = {
+    publicationStatus: "PUBLISHED",
+    involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
+    ...(statuses !== "all" && { status: { in: statuses } }),
+    ...(mandateTypes && {
+      politician: {
+        mandates: { some: { type: { in: mandateTypes } } },
+      },
+    }),
+    ...(partiSlug && {
+      OR: [
+        { partyAtTime: { slug: partiSlug } },
+        { politician: { currentParty: { slug: partiSlug } } },
+      ],
+    }),
+  };
+
+  const orderBy = orderByForSort(sort);
+
+  const [affairs, total] = await Promise.all([
+    db.affair.findMany({
+      where,
+      include: {
+        politician: {
+          include: {
+            currentParty: {
+              select: {
+                id: true,
+                slug: true,
+                shortName: true,
+                name: true,
+                publicId: true,
+                foundedDate: true,
+              },
+            },
+          },
+        },
+        partyAtTime: {
+          select: {
+            id: true,
+            slug: true,
+            shortName: true,
+            name: true,
+            publicId: true,
+            foundedDate: true,
+          },
+        },
+        sources: { select: { id: true } },
+      },
+      orderBy,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    db.affair.count({ where }),
+  ]);
+
+  return {
+    affairs,
+    total,
+    totalPages: Math.ceil(total / PAGE_SIZE) || 1,
+    page,
+  };
+}
+
+function orderByForSort(
+  sort: "date" | "nom" | "severity"
+): Prisma.AffairOrderByWithRelationInput[] {
+  switch (sort) {
+    case "nom":
+      return [{ politician: { lastName: "asc" } }, { politician: { firstName: "asc" } }];
+    case "severity":
+      return [{ severity: "asc" }, { verdictDate: "desc" }];
+    case "date":
+    default:
+      return [{ verdictDate: "desc" }, { startDate: "desc" }, { createdAt: "desc" }];
+  }
 }
