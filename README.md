@@ -232,14 +232,15 @@ docs/                        # Documentation technique
 
 ## Documentation
 
-| Document                                    | Description                       |
-| ------------------------------------------- | --------------------------------- |
-| [ARCHITECTURE.md](./docs/ARCHITECTURE.md)   | Architecture technique            |
-| [DATASOURCES.md](./docs/DATASOURCES.md)     | Sources de données et pipeline    |
-| [DATA-MATCHING.md](./docs/DATA-MATCHING.md) | Croisement de données et matching |
-| [LEGAL.md](./docs/LEGAL.md)                 | Cadre juridique                   |
-| [CONTRIBUTING.md](./CONTRIBUTING.md)        | Guide de contribution             |
-| [SECURITY.md](./SECURITY.md)                | Politique de sécurité             |
+| Document                                    | Description                                |
+| ------------------------------------------- | ------------------------------------------ |
+| [AGENTS.md](./AGENTS.md)                    | Guide pour les assistants IA contributeurs |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md)   | Architecture technique                     |
+| [DATASOURCES.md](./docs/DATASOURCES.md)     | Sources de données et pipeline             |
+| [DATA-MATCHING.md](./docs/DATA-MATCHING.md) | Croisement de données et matching          |
+| [LEGAL.md](./docs/LEGAL.md)                 | Cadre juridique                            |
+| [CONTRIBUTING.md](./CONTRIBUTING.md)        | Guide de contribution                      |
+| [SECURITY.md](./SECURITY.md)                | Politique de sécurité                      |
 
 ## Écosystème
 
@@ -252,6 +253,10 @@ docs/                        # Documentation technique
 ## Contribuer
 
 Les contributions sont les bienvenues ! Consultez le guide [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+### Contribuer avec un assistant IA
+
+Les assistants IA (Claude Code, Cursor, Codex, Aider, etc.) sont utilisés pour contribuer à Poligraph. Les règles qu'ils doivent suivre sont codifiées dans [AGENTS.md](./AGENTS.md) : principes éditoriaux opposables (présomption d'innocence, non-partisanerie, sources vérifiées), architecture, conventions de code, et la liste explicite de ce qu'un assistant ne doit jamais générer (biographies libres, faits chiffrés dans les bios, logique asymétrique par parti). Lisez ce fichier avant de lancer un agent sur le repo.
 
 ## Licence
 
