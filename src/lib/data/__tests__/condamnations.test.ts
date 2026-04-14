@@ -35,4 +35,57 @@ describe("getCondamnations", () => {
     expect(result.affairs.length).toBeLessThanOrEqual(30);
     expect(result.page).toBe(1);
   });
+
+  it("passes mandat=depute as mandates.some.type filter", async () => {
+    await getCondamnations({ mandat: "depute" });
+    expect(mockFindMany).toHaveBeenCalledOnce();
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.where.politician.mandates.some.type.in).toEqual(["DEPUTE", "DEPUTE_EUROPEEN"]);
+  });
+
+  it("passes certainty=etabli as status filter (single status)", async () => {
+    await getCondamnations({ certainty: "etabli" });
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.where.status.in).toEqual(["CONDAMNATION_DEFINITIVE"]);
+  });
+
+  it("passes certainty=prononcee as status filter (two statuses)", async () => {
+    await getCondamnations({ certainty: "prononcee" });
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.where.status.in).toEqual(["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"]);
+  });
+
+  it("omits status filter when certainty=tous (default)", async () => {
+    await getCondamnations({});
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.where.status).toBeUndefined();
+  });
+
+  it("applies partiSlug as OR clause on partyAtTime and currentParty", async () => {
+    await getCondamnations({ partiSlug: "rn" });
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.where.OR).toEqual([
+      { partyAtTime: { slug: "rn" } },
+      { politician: { currentParty: { slug: "rn" } } },
+    ]);
+  });
+
+  it("applies pagination correctly (page 2 skips 30)", async () => {
+    await getCondamnations({ page: 2 });
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.skip).toBe(30);
+    expect(args.take).toBe(30);
+  });
+
+  it("default sort uses verdictDate desc then startDate desc", async () => {
+    await getCondamnations({});
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.orderBy[0]).toEqual({ verdictDate: "desc" });
+  });
+
+  it("sort=nom uses politician lastName asc", async () => {
+    await getCondamnations({ sort: "nom" });
+    const args = mockFindMany.mock.calls[0]![0];
+    expect(args.orderBy[0]).toEqual({ politician: { lastName: "asc" } });
+  });
 });
