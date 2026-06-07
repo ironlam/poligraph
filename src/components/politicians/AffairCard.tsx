@@ -3,13 +3,13 @@ import { formatDate, stripMarkdown } from "@/lib/utils";
 import {
   AFFAIR_STATUS_LABELS,
   AFFAIR_STATUS_COLORS,
-  AFFAIR_STATUS_NEEDS_PRESUMPTION,
   AFFAIR_CATEGORY_LABELS,
 } from "@/config/labels";
 import type { AffairStatus, AffairCategory } from "@/types";
 import { ensureContrast } from "@/lib/contrast";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { AffairTimeline } from "@/components/affairs/AffairTimeline";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 
 interface AffairCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,6 +76,14 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
         </div>
       </div>
 
+      {/* Encart de prudence juridique — avant toute lecture à charge
+          (RGPD art. 10 : issues favorables dominantes) */}
+      <AffairStatusNotice
+        status={affair.status as AffairStatus}
+        involvement={affair.involvement}
+        className="mb-3"
+      />
+
       {/* Description */}
       <p className="text-sm text-muted-foreground mb-3">{stripMarkdown(affair.description)}</p>
 
@@ -130,15 +138,6 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
           <AffairTimeline events={affair.events} />
         </div>
       )}
-
-      {/* Presumption of innocence */}
-      {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status as AffairStatus] &&
-        (affair.involvement === "DIRECT" || affair.involvement === "INDIRECT") && (
-          <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded mb-3">
-            Présomption d&apos;innocence : cette affaire est en cours, la personne est présumée
-            innocente jusqu&apos;à condamnation définitive.
-          </p>
-        )}
 
       {/* Sources */}
       {affair.sources.length > 0 && (

@@ -66,6 +66,10 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
       <Card id="affaires">
         <CardHeader>
           <h2 className="leading-none font-semibold">Affaires judiciaires</h2>
+          <p className="text-xs text-muted-foreground">
+            Les procédures closes sans condamnation sont distinguées des condamnations. La
+            présomption d&apos;innocence s&apos;applique aux procédures en cours.
+          </p>
         </CardHeader>
         <CardContent>
           {directAffairs.length > 0 ? (
