@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPoliticianBySlug } from "@/services/politicians";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { computeAffairCounts } from "@/lib/affairs/affair-counts";
 
 /**
  * @openapi
@@ -100,6 +101,7 @@ export const GET = withPublicRoute(async (request, context) => {
         details: d.details,
       })),
       affairsCount: politician.affairs.length,
+      ...computeAffairCounts(politician.affairs),
       factchecksCount:
         (politician as unknown as { _count: { factCheckMentions: number } })._count
           ?.factCheckMentions ?? 0,

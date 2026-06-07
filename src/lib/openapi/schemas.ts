@@ -181,7 +181,19 @@
  *             $ref: '#/components/schemas/Declaration'
  *         affairsCount:
  *           type: integer
- *           description: Nombre d'affaires judiciaires
+ *           description: Nombre d'affaires publiées impliquant la personne, tous rôles confondus.
+ *         adverseAffairsCount:
+ *           type: integer
+ *           description: Affaires où la personne est mise en cause (procédures validées par un juge).
+ *         affairsMentionedCount:
+ *           type: integer
+ *           description: Affaires où la personne est simplement mentionnée.
+ *         affairsVictimOrPlaintiffCount:
+ *           type: integer
+ *           description: Affaires où la personne est victime ou plaignante.
+ *         favorableOutcomeCount:
+ *           type: integer
+ *           description: Affaires closes sans condamnation (relaxe, acquittement, non-lieu, classement, prescription).
  *
  *     Source:
  *       type: object
