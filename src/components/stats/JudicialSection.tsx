@@ -5,7 +5,7 @@ import {
   AFFAIR_STATUS_LABELS,
   type AffairSuperCategory,
 } from "@/config/labels";
-import type { JudicialMaturity } from "@/config/judicial-maturity";
+import { CLOSE_STATUSES, type JudicialMaturity } from "@/config/judicial-maturity";
 import type { AffairCategory, AffairStatus } from "@/types";
 import { DonutChart } from "./DonutChart";
 import { HorizontalBars } from "./HorizontalBars";
@@ -55,6 +55,8 @@ interface JudicialSectionProps {
   hemicycleGroups: HemicycleGroup[];
   victimStats: ViolenceStats;
 }
+
+const CLOSE_SANS_CONDAMNATION_SET = new Set<AffairStatus>(CLOSE_STATUSES);
 
 const ONGOING_STATUSES = new Set<AffairStatus>([
   "ENQUETE_PRELIMINAIRE",
@@ -232,7 +234,11 @@ export function JudicialSection({
                 .map((s) => ({
                   label: AFFAIR_STATUS_LABELS[s.status],
                   value: s.count,
-                  color: ONGOING_STATUSES.has(s.status) ? "#d97706" : "#2563eb",
+                  color: ONGOING_STATUSES.has(s.status)
+                    ? "#d97706"
+                    : CLOSE_SANS_CONDAMNATION_SET.has(s.status)
+                      ? "#6b7280"
+                      : "#2563eb",
                 }))}
             />
           </CardContent>
