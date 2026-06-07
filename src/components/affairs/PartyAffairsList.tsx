@@ -8,7 +8,6 @@ import { stripMarkdown } from "@/lib/utils";
 import {
   AFFAIR_STATUS_LABELS,
   AFFAIR_STATUS_COLORS,
-  AFFAIR_STATUS_NEEDS_PRESUMPTION,
   AFFAIR_SUPER_CATEGORY_LABELS,
   AFFAIR_SUPER_CATEGORY_COLORS,
   CATEGORY_TO_SUPER,
@@ -16,10 +15,9 @@ import {
   INVOLVEMENT_COLORS,
   type AffairSuperCategory,
 } from "@/config/labels";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import type { AffairCategory, AffairStatus, Involvement } from "@/types";
-
-const MIS_EN_CAUSE: Involvement[] = ["DIRECT", "INDIRECT"];
 
 const MATURITY_TAB_LABELS: Record<string, string> = {
   ALL: "Toutes",
@@ -197,12 +195,11 @@ export function PartyAffairsList({ affairs }: PartyAffairsListProps) {
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                     {stripMarkdown(affair.description)}
                   </p>
-                  {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status as AffairStatus] &&
-                    MIS_EN_CAUSE.includes(affair.involvement as Involvement) && (
-                      <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded mt-2 inline-block dark:bg-amber-900/30 dark:text-amber-300">
-                        Présomption d&apos;innocence : affaire en cours
-                      </p>
-                    )}
+                  <AffairStatusNotice
+                    status={affair.status as AffairStatus}
+                    involvement={affair.involvement as Involvement}
+                    className="mt-2"
+                  />
                 </div>
               );
             })
