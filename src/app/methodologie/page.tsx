@@ -28,7 +28,13 @@ const CERTAINTY_STATUSES: Record<CertaintyLevel, string[]> = {
     "Renvoi devant le tribunal",
     "Procès en cours",
   ],
-  CLOS_FAVORABLE: ["Relaxe", "Acquittement", "Non-lieu", "Prescription", "Classement sans suite"],
+  CLOS_FAVORABLE: [
+    "Relaxe",
+    "Acquittement",
+    "Non-lieu",
+    "Action publique éteinte par prescription",
+    "Classement sans suite",
+  ],
 };
 
 const SUPER_CATEGORIES: { key: AffairSuperCategory; description: string }[] = [

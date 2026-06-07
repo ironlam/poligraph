@@ -520,10 +520,12 @@ export default async function AffairesPage({ searchParams }: PageProps) {
           <CardContent className="pt-6">
             <h3 className="font-semibold text-blue-900 mb-2">À propos des données</h3>
             <p className="text-sm text-blue-800">
-              Chaque affaire est documentée avec au minimum une source vérifiable (article de
-              presse, décision de justice). La présomption d&apos;innocence est systématiquement
-              rappelée pour les affaires en cours. Les informations proviennent de sources publiques
-              : Wikidata, articles de presse, décisions de justice publiées.
+              Les affaires listées sont issues de sources publiques vérifiables (articles de presse,
+              décisions de justice) et font l&apos;objet d&apos;une validation éditoriale avant
+              publication. Les procédures en cours sont présentées avec rappel de la présomption
+              d&apos;innocence. Les issues favorables (relaxe, acquittement, non-lieu, classement
+              sans suite) sont distinguées des condamnations ; l&apos;action publique éteinte par
+              prescription est signalée comme telle.
             </p>
           </CardContent>
         </Card>
