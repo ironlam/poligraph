@@ -44,7 +44,7 @@ export const AFFAIR_STATUS_LABELS: Record<AffairStatus, string> = {
   RELAXE: "Relaxe",
   ACQUITTEMENT: "Acquittement",
   NON_LIEU: "Non-lieu",
-  PRESCRIPTION: "Prescription",
+  PRESCRIPTION: "Action publique éteinte par prescription",
   CLASSEMENT_SANS_SUITE: "Classement sans suite",
 };
 
@@ -81,7 +81,8 @@ export const AFFAIR_STATUS_DESCRIPTIONS: Record<AffairStatus, string> = {
   RELAXE: "Le tribunal correctionnel a déclaré la personne non coupable.",
   ACQUITTEMENT: "La cour d'assises a déclaré la personne non coupable.",
   NON_LIEU: "Le juge d'instruction a conclu que les charges étaient insuffisantes pour un procès.",
-  PRESCRIPTION: "Le délai légal pour engager des poursuites est dépassé.",
+  PRESCRIPTION:
+    "La prescription clôt la procédure sans condamnation, mais ne constitue pas une décision sur le fond.",
   CLASSEMENT_SANS_SUITE: "Le procureur a décidé de ne pas poursuivre l'affaire.",
 };
 

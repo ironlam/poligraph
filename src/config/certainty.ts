@@ -30,7 +30,7 @@ export const CERTAINTY_LABELS: Record<CertaintyLevel, string> = {
   ETABLI: "Condamnation définitive",
   PRONONCE: "Condamnation non définitive",
   EN_COURS: "Procédure en cours",
-  CLOS_FAVORABLE: "Procédure close",
+  CLOS_FAVORABLE: "Procédure close sans condamnation",
 };
 
 export const CERTAINTY_COLORS: Record<CertaintyLevel, string> = {

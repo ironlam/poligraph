@@ -19,7 +19,7 @@ const STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
   RELAXE: "Relaxe",
   ACQUITTEMENT: "Acquittement",
   NON_LIEU: "Non-lieu",
-  PRESCRIPTION: "Prescription",
+  PRESCRIPTION: "Action publique éteinte par prescription",
   CLASSEMENT_SANS_SUITE: "Classement sans suite",
 };
 
