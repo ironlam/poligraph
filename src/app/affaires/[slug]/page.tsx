@@ -25,6 +25,7 @@ import {
   CERTAINTY_COLORS,
   CERTAINTY_DESCRIPTIONS,
 } from "@/config/certainty";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { LinkedAffairBanner } from "@/components/affairs/LinkedAffairBanner";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { StatusTooltip } from "@/components/affairs/StatusTooltip";
@@ -290,16 +291,13 @@ export default async function AffairDetailPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Presumption of innocence — only for accused, not victims */}
-        {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status] &&
-          (affair.involvement === "DIRECT" || affair.involvement === "INDIRECT") && (
-            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                <strong>Présomption d&apos;innocence :</strong> Cette affaire est en cours. La
-                personne concernée est présumée innocente jusqu&apos;à condamnation définitive.
-              </p>
-            </div>
-          )}
+        {/* Encart de prudence juridique : présomption, recours, issue favorable
+            ou prescription selon le statut (RGPD art. 10, invariant I5) */}
+        <AffairStatusNotice
+          status={affair.status}
+          involvement={affair.involvement}
+          className="mb-6"
+        />
 
         {/* Linked affair cross-reference */}
         {linked && (
