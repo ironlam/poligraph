@@ -573,7 +573,7 @@ export async function syncCandidaturesMunicipales(
   if (!dryRun && (candidaciesCreated > 0 || candidaciesUpdated > 0)) {
     try {
       console.log(`\nRunning VACUUM (ANALYZE) on "Candidacy"...`);
-      await db.$executeRawUnsafe(`VACUUM (ANALYZE) "Candidacy"`);
+      await db.$executeRaw(Prisma.sql`VACUUM (ANALYZE) "Candidacy"`);
       console.log(`  VACUUM ANALYZE done`);
     } catch (error) {
       console.warn(`  VACUUM ANALYZE skipped: ${error}`);
