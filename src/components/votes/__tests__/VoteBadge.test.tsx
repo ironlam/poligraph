@@ -15,11 +15,16 @@ describe("VotePositionBadge", () => {
   });
 
   it("rend toutes les positions de l'enum sans crash", () => {
-    const positions: VotePosition[] = ["POUR", "CONTRE", "ABSTENTION", "NON_VOTANT", "ABSENT"];
-    const labels = ["Pour", "Contre", "Abstention", "Non-votant", "Absent"];
-    positions.forEach((pos, i) => {
-      const { unmount } = render(<VotePositionBadge position={pos} />);
-      expect(screen.getByText(labels[i])).toBeInTheDocument();
+    const cases: [VotePosition, string][] = [
+      ["POUR", "Pour"],
+      ["CONTRE", "Contre"],
+      ["ABSTENTION", "Abstention"],
+      ["NON_VOTANT", "Non-votant"],
+      ["ABSENT", "Absent"],
+    ];
+    cases.forEach(([position, label]) => {
+      const { unmount } = render(<VotePositionBadge position={position} />);
+      expect(screen.getByText(label)).toBeInTheDocument();
       unmount();
     });
   });
@@ -27,11 +32,13 @@ describe("VotePositionBadge", () => {
 
 describe("VotingResultBadge", () => {
   it("affiche le résultat adopté ou rejeté", () => {
-    const results: VotingResult[] = ["ADOPTED", "REJECTED"];
-    const labels = ["Adopté", "Rejeté"];
-    results.forEach((result, i) => {
+    const cases: [VotingResult, string][] = [
+      ["ADOPTED", "Adopté"],
+      ["REJECTED", "Rejeté"],
+    ];
+    cases.forEach(([result, label]) => {
       const { unmount } = render(<VotingResultBadge result={result} />);
-      expect(screen.getByText(labels[i])).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
       unmount();
     });
   });
