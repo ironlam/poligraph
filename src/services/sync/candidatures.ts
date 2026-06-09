@@ -566,6 +566,20 @@ export async function syncCandidaturesMunicipales(
     console.log(`\nElection status updated to CANDIDACIES`);
   }
 
+  // ─── Maintenance : VACUUM ANALYZE après l'import massif ──────────────
+  // Met à jour la visibility map (sinon les index-only scans, ex. parité,
+  // retombent sur le heap) et les stats du planner. Non bloquant : une
+  // erreur de maintenance ne doit pas faire échouer le sync.
+  if (!dryRun && (candidaciesCreated > 0 || candidaciesUpdated > 0)) {
+    try {
+      console.log(`\nRunning VACUUM (ANALYZE) on "Candidacy"...`);
+      await db.$executeRawUnsafe(`VACUUM (ANALYZE) "Candidacy"`);
+      console.log(`  VACUUM ANALYZE done`);
+    } catch (error) {
+      console.warn(`  VACUUM ANALYZE skipped: ${error}`);
+    }
+  }
+
   console.log(`\nResults:`);
   console.log(`  Candidacies created: ${candidaciesCreated}`);
   console.log(`  Candidacies updated: ${candidaciesUpdated}`);
