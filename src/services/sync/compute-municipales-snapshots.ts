@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   MUNICIPALES_SNAPSHOT_KEYS,
   type ParityOutliers,
+  type ParityListRow,
   type ParityBySize,
   type DeptPartyData,
 } from "@/types/stats-snapshots";
@@ -77,8 +78,13 @@ async function runAndUpsert<T>(
 // ─── Live computers (also exported for fallback in src/lib/data/municipales.ts) ──
 
 export async function computeParityOutliersLive(electionId: string): Promise<ParityOutliers> {
-  const best = await db.$queryRaw<
+  // Une seule passe d'agrégation (CTE `agg`, référencée deux fois → matérialisée
+  // une seule fois par Postgres) au lieu de deux scans complets. La jointure
+  // `Commune` (nom + département) est différée aux 20 lignes finales seulement,
+  // ce qui la sort du hot path. Voir EXPLAIN dans la PR pour les gains.
+  const rows = await db.$queryRaw<
     Array<{
+      bucket: "best" | "worst";
       listName: string;
       communeId: string;
       communeName: string;
@@ -87,40 +93,60 @@ export async function computeParityOutliersLive(electionId: string): Promise<Par
       candidateCount: number;
     }>
   >(Prisma.sql`
+    WITH agg AS (
+      SELECT
+        c."listName" AS list_name,
+        c."communeId" AS commune_id,
+        COUNT(*) FILTER (WHERE ca."gender" = 'F')::float / NULLIF(COUNT(*)::float, 0) AS female_rate,
+        COUNT(*)::int AS candidate_count
+      FROM "Candidacy" c
+      JOIN "Candidate" ca ON c."candidateId" = ca.id
+      WHERE c."electionId" = ${electionId}
+        AND ca."gender" IS NOT NULL
+        AND c."listName" IS NOT NULL
+        AND c."communeId" IS NOT NULL
+      GROUP BY c."listName", c."communeId"
+      HAVING COUNT(*) >= 10
+    ),
+    best AS (
+      SELECT list_name, commune_id, female_rate, candidate_count, 'best'::text AS bucket
+      FROM agg ORDER BY ABS(0.5 - female_rate) ASC LIMIT 10
+    ),
+    worst AS (
+      SELECT list_name, commune_id, female_rate, candidate_count, 'worst'::text AS bucket
+      FROM agg ORDER BY ABS(0.5 - female_rate) DESC LIMIT 10
+    )
     SELECT
-      c."listName",
-      co.id as "communeId",
-      co.name as "communeName",
-      co."departmentCode",
-      COUNT(*) FILTER (WHERE ca."gender" = 'F')::float / NULLIF(COUNT(*)::float, 0) as "femaleRate",
-      COUNT(*)::int as "candidateCount"
-    FROM "Candidacy" c
-    JOIN "Commune" co ON c."communeId" = co.id
-    JOIN "Candidate" ca ON c."candidateId" = ca.id
-    WHERE c."electionId" = ${electionId} AND ca."gender" IS NOT NULL AND c."listName" IS NOT NULL
-    GROUP BY c."listName", co.id, co.name, co."departmentCode"
-    HAVING COUNT(*) >= 10
-    ORDER BY ABS(0.5 - COUNT(*) FILTER (WHERE ca."gender" = 'F')::float / NULLIF(COUNT(*)::float, 0)) ASC
-    LIMIT 10
+      picked.bucket,
+      picked.list_name AS "listName",
+      co.id AS "communeId",
+      co.name AS "communeName",
+      co."departmentCode" AS "departmentCode",
+      picked.female_rate AS "femaleRate",
+      picked.candidate_count AS "candidateCount"
+    FROM (SELECT * FROM best UNION ALL SELECT * FROM worst) picked
+    JOIN "Commune" co ON picked.commune_id = co.id
+    ORDER BY
+      picked.bucket,
+      (CASE WHEN picked.bucket = 'best'
+            THEN ABS(0.5 - picked.female_rate)
+            ELSE -ABS(0.5 - picked.female_rate) END) ASC
   `);
 
-  const worst = await db.$queryRaw<typeof best>(Prisma.sql`
-    SELECT
-      c."listName",
-      co.id as "communeId",
-      co.name as "communeName",
-      co."departmentCode",
-      COUNT(*) FILTER (WHERE ca."gender" = 'F')::float / NULLIF(COUNT(*)::float, 0) as "femaleRate",
-      COUNT(*)::int as "candidateCount"
-    FROM "Candidacy" c
-    JOIN "Commune" co ON c."communeId" = co.id
-    JOIN "Candidate" ca ON c."candidateId" = ca.id
-    WHERE c."electionId" = ${electionId} AND ca."gender" IS NOT NULL AND c."listName" IS NOT NULL
-    GROUP BY c."listName", co.id, co.name, co."departmentCode"
-    HAVING COUNT(*) >= 10
-    ORDER BY ABS(0.5 - COUNT(*) FILTER (WHERE ca."gender" = 'F')::float / NULLIF(COUNT(*)::float, 0)) DESC
-    LIMIT 10
-  `);
+  const best: ParityListRow[] = [];
+  const worst: ParityListRow[] = [];
+  for (const r of rows) {
+    const row: ParityListRow = {
+      listName: r.listName,
+      communeId: r.communeId,
+      communeName: r.communeName,
+      departmentCode: r.departmentCode,
+      femaleRate: r.femaleRate,
+      candidateCount: r.candidateCount,
+    };
+    if (r.bucket === "best") best.push(row);
+    else worst.push(row);
+  }
 
   return { best, worst };
 }

@@ -1762,7 +1762,10 @@ model Candidacy {
   @@index([electionId, communeId])
   @@index([electionId, listName])
   @@index([electionId, partyLabel])
-  @@index([electionId, candidateId])
+  // Covering index for parity-outliers aggregation (index-only scan, no heap fetch).
+  // Created in prod via CREATE INDEX CONCURRENTLY; declared here so db:push keeps it.
+  // Superset of the former [electionId, candidateId] index (dropped as redundant).
+  @@index([electionId, candidateId, communeId, listName])
   @@index([politicianId])
   @@index([constituencyCode])
   @@index([candidateId])

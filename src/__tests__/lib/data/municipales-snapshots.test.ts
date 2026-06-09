@@ -72,33 +72,33 @@ describe("municipales snapshot fallback", () => {
 
   it("getParityOutliers falls back to live SQL when snapshot is missing", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
-    queryRawMock
-      .mockResolvedValueOnce([
-        {
-          listName: "Live A",
-          communeId: "x",
-          communeName: "X",
-          departmentCode: "01",
-          femaleRate: 0.5,
-          candidateCount: 30,
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          listName: "Live B",
-          communeId: "y",
-          communeName: "Y",
-          departmentCode: "02",
-          femaleRate: 0.0,
-          candidateCount: 30,
-        },
-      ]);
+    // Single-pass query: one $queryRaw returns both buckets, tagged by `bucket`.
+    queryRawMock.mockResolvedValueOnce([
+      {
+        bucket: "best",
+        listName: "Live A",
+        communeId: "x",
+        communeName: "X",
+        departmentCode: "01",
+        femaleRate: 0.5,
+        candidateCount: 30,
+      },
+      {
+        bucket: "worst",
+        listName: "Live B",
+        communeId: "y",
+        communeName: "Y",
+        departmentCode: "02",
+        femaleRate: 0.0,
+        candidateCount: 30,
+      },
+    ]);
 
     const result = await getParityOutliers();
 
     expect(result.best[0]?.listName).toBe("Live A");
     expect(result.worst[0]?.listName).toBe("Live B");
-    expect(queryRawMock).toHaveBeenCalledTimes(2); // fell back to live
+    expect(queryRawMock).toHaveBeenCalledTimes(1); // single-pass live fallback
   });
 
   it("getParityBySize falls back to live when snapshot missing", async () => {
