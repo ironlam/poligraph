@@ -5,7 +5,8 @@
  *   /votes/<slug>      ->  /parlement/votes/<slug>
  *   /assemblee/<slug>  ->  /parlement/dossiers/<slug>
  *
- * Dry-run by default. Pass --apply to write (wrapped in a single transaction).
+ * Dry-run by default. Pass --apply to write (per-row atomic updates, idempotent
+ * and resumable — no long-held transaction, so it is safe alongside other writers).
  *
  *   Dry-run:  npx dotenv -e .env -- npx tsx scripts/cleanup-citizen-impact-legacy-links.ts
  *   Apply:    npx dotenv -e .env -- npx tsx scripts/cleanup-citizen-impact-legacy-links.ts --apply
@@ -50,7 +51,7 @@ async function main() {
   let assembleeTotal = 0;
   const ambiguous: Array<{ id: string; leftover: string }> = [];
   const samples: Array<{ slug: string | null; before: string; after: string }> = [];
-  const updates: Array<ReturnType<typeof db.scrutin.update>> = [];
+  const updates: Array<{ id: string; citizenImpact: string }> = [];
 
   for (const row of rows) {
     scanned++;
@@ -76,12 +77,11 @@ async function main() {
       samples.push({ slug: row.slug, before: win(text), after: win(next) });
     }
 
-    if (apply)
-      updates.push(db.scrutin.update({ where: { id: row.id }, data: { citizenImpact: next } }));
+    if (apply) updates.push({ id: row.id, citizenImpact: next });
   }
 
   console.log("===== SUMMARY =====");
-  console.log(`1. Rows scanned (contain a legacy path) : ${scanned}`);
+  console.log(`1. Candidate rows (broad prefilter)     : ${scanned}`);
   console.log(`2. Rows affected (would change)         : ${affected}`);
   console.log(`3. Replacements by type:`);
   console.log(`     /votes/      -> /parlement/votes/     : ${votesTotal}`);
@@ -100,13 +100,30 @@ async function main() {
     if (ambiguous.length) {
       throw new Error("Ambiguous occurrences detected — aborting APPLY. Review before writing.");
     }
-    console.log(`\nApplying ${updates.length} updates in a single transaction…`);
-    await db.$transaction(updates); // 6. transaction-safe: all-or-nothing
-    console.log("Done. Updates committed atomically.");
+    // Individual row updates (no wrapping transaction): each update is its own
+    // atomic statement, so locks are held only for that single row and only
+    // momentarily — gentle on the shared connection pool and any concurrent
+    // writer. A small concurrency keeps it reasonably fast without starving the
+    // pool (max: 2). Safe to interrupt/resume: the rewrite is idempotent, so
+    // re-running only touches rows that still hold a legacy path.
+    const CONCURRENCY = 4;
+    let done = 0;
+    console.log(`\nApplying ${updates.length} per-row updates (concurrency ${CONCURRENCY})…`);
+    for (let i = 0; i < updates.length; i += CONCURRENCY) {
+      const slice = updates.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        slice.map((u) =>
+          db.scrutin.update({ where: { id: u.id }, data: { citizenImpact: u.citizenImpact } })
+        )
+      );
+      done += slice.length;
+      if (done % 200 === 0 || done === updates.length) {
+        console.log(`  updated ${done}/${updates.length}`);
+      }
+    }
+    console.log("Done. All rows updated (idempotent — safe to re-run).");
   } else {
-    console.log(
-      `\n(DRY-RUN) No write performed. Re-run with --apply to commit (atomic transaction).`
-    );
+    console.log(`\n(DRY-RUN) No write performed. Re-run with --apply to commit.`);
   }
 
   await db.$disconnect();
