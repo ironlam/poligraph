@@ -9,10 +9,10 @@ import {
 } from "../dissidence";
 
 describe("CURRENT_GROUP_VOTES_FROM (shared dissidence scan)", () => {
-  // Régression : la majorité de groupe et les votes individuels DOIVENT venir de
-  // la même population. Le filtre de date du mandat doit rester dans le fragment
-  // partagé, sinon la majorité est calculée sur des votes hors mandat (bug passé :
-  // 333 majorités basculées, ~140 politiciens jugés contre une majorité fausse).
+  // Regression: the group majority and the individual votes MUST come from the
+  // same population. The mandate date filter has to stay in the shared fragment,
+  // otherwise the majority is computed on out-of-mandate votes (past bug: 333
+  // majorities flipped, ~140 politicians judged against a wrong majority).
   const sql = CURRENT_GROUP_VOTES_FROM.sql;
 
   it("filters votes to the current mandate date range", () => {

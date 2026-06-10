@@ -214,9 +214,9 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
 async function computeDissidenceData(verbose = false): Promise<Map<string, DissidenceRow>> {
   if (verbose) console.log("  Computing dissidence rates...");
 
-  // Rafraîchit la visibility map de "Vote" pour que les deux agrégations
-  // ci-dessous restent en Index Only Scan (sinon elles retombent sur le heap,
-  // ~1,5M fetches). Non bloquant : un échec de maintenance ne doit pas tuer le calcul.
+  // Refresh "Vote"'s visibility map so the two aggregations below stay on an
+  // Index Only Scan (otherwise they fall back to the heap, ~1.5M fetches).
+  // Non-blocking: a maintenance failure must not kill the stats computation.
   try {
     await db.$executeRaw(Prisma.sql`VACUUM (ANALYZE) "Vote"`);
   } catch (error) {
