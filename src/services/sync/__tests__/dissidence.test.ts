@@ -3,9 +3,29 @@ import {
   findGroupMajority,
   computePoliticianDissidence,
   aggregateDissidenceByGroup,
+  CURRENT_GROUP_VOTES_FROM,
   type GroupVoteEntry,
   type PoliticianVoteWithGroup,
 } from "../dissidence";
+
+describe("CURRENT_GROUP_VOTES_FROM (shared dissidence scan)", () => {
+  // Régression : la majorité de groupe et les votes individuels DOIVENT venir de
+  // la même population. Le filtre de date du mandat doit rester dans le fragment
+  // partagé, sinon la majorité est calculée sur des votes hors mandat (bug passé :
+  // 333 majorités basculées, ~140 politiciens jugés contre une majorité fausse).
+  const sql = CURRENT_GROUP_VOTES_FROM.sql;
+
+  it("filters votes to the current mandate date range", () => {
+    expect(sql).toContain('v."votingDate" >= m."startDate"');
+    expect(sql).toContain('m."endDate" IS NULL OR v."votingDate" <= m."endDate"');
+  });
+
+  it("scopes to current DEPUTE/SENATEUR mandates and real positions", () => {
+    expect(sql).toContain('m."isCurrent" = true');
+    expect(sql).toContain("'DEPUTE'::\"MandateType\", 'SENATEUR'::\"MandateType\"");
+    expect(sql).toContain("v.position IN ('POUR', 'CONTRE', 'ABSTENTION')");
+  });
+});
 
 describe("findGroupMajority", () => {
   it("returns the position with most votes per scrutin+group", () => {

@@ -24,6 +24,7 @@ import {
   findGroupMajority,
   computePoliticianDissidence,
   aggregateDissidenceByGroup,
+  CURRENT_GROUP_VOTES_FROM,
   type GroupVoteEntry,
   type PoliticianVoteWithGroup,
 } from "./dissidence";
@@ -213,18 +214,22 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
 async function computeDissidenceData(verbose = false): Promise<Map<string, DissidenceRow>> {
   if (verbose) console.log("  Computing dissidence rates...");
 
+  // Rafraîchit la visibility map de "Vote" pour que les deux agrégations
+  // ci-dessous restent en Index Only Scan (sinon elles retombent sur le heap,
+  // ~1,5M fetches). Non bloquant : un échec de maintenance ne doit pas tuer le calcul.
+  try {
+    await db.$executeRaw(Prisma.sql`VACUUM (ANALYZE) "Vote"`);
+  } catch (error) {
+    if (verbose) console.warn(`  VACUUM "Vote" skipped: ${error}`);
+  }
+
   const groupVoteCounts = await db.$queryRaw<GroupVoteEntry[]>`
     SELECT
       v."scrutinId" as "scrutinId",
       mp."parliamentaryGroupId" as "groupId",
       v.position,
       COUNT(*)::int as count
-    FROM "Vote" v
-    JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-      AND m."isCurrent" = true
-      AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
-    JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
-    WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+    ${CURRENT_GROUP_VOTES_FROM}
     GROUP BY v."scrutinId", mp."parliamentaryGroupId", v.position
   `;
 
@@ -237,14 +242,7 @@ async function computeDissidenceData(verbose = false): Promise<Map<string, Dissi
       v."scrutinId" as "scrutinId",
       mp."parliamentaryGroupId" as "groupId",
       v.position
-    FROM "Vote" v
-    JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-      AND m."isCurrent" = true
-      AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
-    JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
-    WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
-      AND v."votingDate" >= m."startDate"
-      AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
+    ${CURRENT_GROUP_VOTES_FROM}
   `;
 
   const dissidenceMap = computePoliticianDissidence(politicianVotes, groupMajority);
