@@ -88,7 +88,7 @@ export async function generateScrutinCitizenImpacts(options?: {
       };
 
       if (context.dossierSlug) {
-        links.dossierUrl = `/assemblee/${context.dossierSlug}`;
+        links.dossierUrl = `/parlement/dossiers/${context.dossierSlug}`;
         links.dossierLabel = context.dossierTitle ?? "Dossier legislatif";
       }
 
@@ -105,7 +105,7 @@ export async function generateScrutinCitizenImpacts(options?: {
         });
         for (const related of relatedScrutins) {
           links.relatedVotes.push({
-            url: `/votes/${related.slug}`,
+            url: `/parlement/votes/${related.slug}`,
             label: related.title.slice(0, 80),
           });
         }

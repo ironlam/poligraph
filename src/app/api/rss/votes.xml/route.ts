@@ -32,7 +32,7 @@ export const GET = withPublicRoute(async () => {
         link: `${SITE_URL}/parlement/votes/${s.slug}`,
         description: `${resultLabel} — ${desc}`,
         pubDate: s.votingDate,
-        guid: `${SITE_URL}/votes/${s.slug}`,
+        guid: `${SITE_URL}/parlement/votes/${s.slug}`,
         category: CHAMBER_LABELS[s.chamber as Chamber],
       };
     });
