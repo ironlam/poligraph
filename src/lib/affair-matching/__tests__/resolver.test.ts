@@ -82,7 +82,31 @@ describe("scoreAffairAgainstCandidates", () => {
     expect(decision.judgment).toBe("NO_MATCH");
   });
 
-  it("returns UNDECIDED when two candidates have close scores", () => {
+  it("returns UNDECIDED when two corroborated candidates have close scores", () => {
+    const input: AffairScoringInput = {
+      text: "Le maire de Lyon Jean Dupont aurait reçu des fonds non déclarés selon l'enquête.",
+      metadata: { source: SourceType.PRESSE },
+    };
+
+    const lyonMayor = {
+      type: "MAIRE",
+      roleLabel: "Maire",
+      location: "Lyon",
+      startDate: new Date("2014-01-01"),
+      endDate: null,
+    };
+    const candidates: AffairCandidateRecord[] = [
+      politician({ id: "pol1", mandates: [lyonMayor] }),
+      politician({ id: "pol2", mandates: [lyonMayor] }),
+    ];
+
+    const decision = scoreAffairAgainstCandidates(input, candidates);
+    expect(decision.judgment).toBe("UNDECIDED");
+  });
+
+  it("returns NO_MATCH for a name-only mention with no corroboration", () => {
+    // Two homonyms, nothing ties either to the affair (no mandate, party, or
+    // jurisdiction). Name alone must not reach the SAME/UNDECIDED queues.
     const input: AffairScoringInput = {
       text: "Jean Dupont aurait reçu des fonds non déclarés selon l'enquête.",
       metadata: { source: SourceType.PRESSE },
@@ -94,6 +118,6 @@ describe("scoreAffairAgainstCandidates", () => {
     ];
 
     const decision = scoreAffairAgainstCandidates(input, candidates);
-    expect(decision.judgment).toBe("UNDECIDED");
+    expect(decision.judgment).toBe("NO_MATCH");
   });
 });

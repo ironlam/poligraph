@@ -3,6 +3,28 @@ import { FLOOR_SCORE, SAME_THRESHOLD, MIN_GAP } from "./signals/constants";
 
 export type AffairJudgment = "SAME" | "UNDECIDED" | "NO_MATCH";
 
+/**
+ * Signals that tie a *specific* candidate to the *specific* affair, beyond the
+ * name itself. A name match alone (even NAME_FULL_EXACT at 5.2, which clears
+ * SAME_THRESHOLD on its own) must not reach SAME/UNDECIDED without at least one
+ * of these firing positive. Otherwise incidental mentions ("X a réagi à
+ * l'affaire Y", "selon le maire X…") flood the SAME/UNDECIDED review queues.
+ *
+ * `name-quality` and `first-name` are identity-only; `context-plausibility` is
+ * a global French/foreign anchor, not a per-candidate tie. None corroborate.
+ */
+const CORROBORATING_SIGNAL_IDS = new Set([
+  "external-id",
+  "jurisdiction",
+  "party-context",
+  "role-context",
+  "temporal-mandate",
+]);
+
+function hasCorroboration(signals: AffairSignalResult[]): boolean {
+  return signals.some((s) => CORROBORATING_SIGNAL_IDS.has(s.signalId) && s.logLikelihoodRatio > 0);
+}
+
 export interface CandidateSignals {
   candidateId: string;
   signals: AffairSignalResult[];
@@ -59,6 +81,20 @@ export class AffairCombiner {
         judgment: "NO_MATCH",
         topCandidateId: top?.candidateId ?? null,
         topScore: top?.totalScore ?? 0,
+        gap,
+        topCandidates,
+      };
+    }
+
+    // Name-only gate: a candidate can only enter the SAME/UNDECIDED review
+    // queues if a non-name signal ties it to this affair. Without corroboration
+    // it is an incidental mention — keep the candidate for inspection but push
+    // it out of the review queues as NO_MATCH.
+    if (!hasCorroboration(top.signals)) {
+      return {
+        judgment: "NO_MATCH",
+        topCandidateId: top.candidateId,
+        topScore: top.totalScore,
         gap,
         topCandidates,
       };
