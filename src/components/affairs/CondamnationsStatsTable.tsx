@@ -2,12 +2,11 @@ import Link from "next/link";
 import type { CondamnationsPartyStats } from "@/lib/data/condamnations";
 
 /**
- * En dessous de ce nombre d'élus suivis, un taux de condamnation n'est pas
- * statistiquement significatif (un parti à 1 élu condamné afficherait 100 %).
- * On affiche alors « n.s. » plutôt qu'un pourcentage trompeur. Seuil d'affichage,
- * sans impact sur les données renvoyées par la requête.
+ * Nombre minimal d'élus suivis pour afficher un taux de condamnation. En dessous,
+ * le taux n'est pas significatif (un parti à 1 élu condamné afficherait 100 %) et
+ * on montre « n.s. ». Seuil d'affichage, sans impact sur les données de la requête.
  */
-export const MIN_SUIVIS_FOR_RATE = 10;
+export const SEUIL_SUIVIS_TAUX = 10;
 
 function formatPct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
@@ -27,7 +26,7 @@ export function CondamnationsStatsTable({
         suivis&nbsp;» désigne les responsables du parti présents dans notre base avec un mandat
         concerné, pas le nombre de sièges. Un parti à l{"'"}effectif plus large compte mécaniquement
         plus de condamnés en valeur absolue&nbsp;; le taux ramène ce nombre à l{"'"}effectif. Ni l
-        {"'"}un ni l{"'"}autre ne suffit seul, et un taux calculé sur moins de {MIN_SUIVIS_FOR_RATE}{" "}
+        {"'"}un ni l{"'"}autre ne suffit seul, et un taux calculé sur moins de {SEUIL_SUIVIS_TAUX}{" "}
         élus suivis n{"'"}est pas jugé significatif («&nbsp;n.s.&nbsp;»).
       </div>
       <div className="overflow-x-auto">
@@ -72,7 +71,7 @@ export function CondamnationsStatsTable({
                   <td className="text-right py-3 px-2 tabular-nums">{r.nSuivis}</td>
                   <td className="text-right py-3 px-2 tabular-nums">{r.nCondamnesDefinitifs}</td>
                   <td className="text-right py-3 px-2 tabular-nums">
-                    {r.nSuivis >= MIN_SUIVIS_FOR_RATE ? (
+                    {r.nSuivis >= SEUIL_SUIVIS_TAUX ? (
                       formatPct(r.tauxDefinitif)
                     ) : (
                       <span

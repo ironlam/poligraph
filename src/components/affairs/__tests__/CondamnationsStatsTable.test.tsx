@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import {
   CondamnationsStatsTable,
-  MIN_SUIVIS_FOR_RATE,
+  SEUIL_SUIVIS_TAUX,
 } from "@/components/affairs/CondamnationsStatsTable";
 import type { CondamnationsPartyStats } from "@/lib/data/condamnations";
 
@@ -32,10 +32,10 @@ const rows: CondamnationsPartyStats[] = [
     partySlug: "parti-au-seuil",
     partyShortName: "SEU",
     partyName: "Parti au seuil",
-    nSuivis: MIN_SUIVIS_FOR_RATE,
+    nSuivis: SEUIL_SUIVIS_TAUX,
     nCondamnesDefinitifs: 1,
     nCondamnesPrononces: 0,
-    tauxDefinitif: 1 / MIN_SUIVIS_FOR_RATE,
+    tauxDefinitif: 1 / SEUIL_SUIVIS_TAUX,
   },
 ];
 
