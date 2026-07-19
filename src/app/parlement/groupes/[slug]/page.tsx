@@ -8,7 +8,10 @@ import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { getGroupeDetail, getGroupKeyVotes } from "@/lib/data/groupes";
 import { VoteCard } from "@/components/votes";
 import { CHAMBER_SHORT_LABELS } from "@/config/labels";
-import { Users, TrendingUp, Target, Activity } from "lucide-react";
+import { GLOSSARY } from "@/config/glossary";
+import { GOVERNMENT_GROUP_CODE, SENATE_GOVERNMENT_GROUP_CODE } from "@/config/scrutin-importance";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { Users, TrendingUp, Target, Activity, FileCheck2 } from "lucide-react";
 import { ParliamentaryGroupJsonLd } from "@/components/seo/JsonLd";
 
 export const revalidate = 3600;
@@ -39,6 +42,10 @@ export default async function GroupeDetailPage({ params }: PageProps) {
   const stats = group.stats[0];
 
   const chamberLabel = group.chamber === "AN" ? "Assemblée nationale" : "Sénat";
+  const referenceGroupCode =
+    group.chamber === "AN" ? GOVERNMENT_GROUP_CODE : SENATE_GOVERNMENT_GROUP_CODE;
+  const concordanceVotesTooltip = `${GLOSSARY.concordanceVotesGroupes} Groupe de référence pour cette chambre : ${referenceGroupCode}.`;
+  const concordanceTextesTooltip = `${GLOSSARY.concordanceTextesLoi} Groupe de référence pour cette chambre : ${referenceGroupCode}.`;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -85,24 +92,43 @@ export default async function GroupeDetailPage({ params }: PageProps) {
 
       {/* Stats row */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-4 text-center">
-              <TrendingUp className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+              <TrendingUp
+                className="h-5 w-5 mx-auto mb-1 text-muted-foreground"
+                aria-hidden="true"
+              />
               <p className="text-2xl font-bold">{Math.round(stats.cohesionPct)}%</p>
               <p className="text-xs text-muted-foreground">Cohésion</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <Target className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+              <Target className="h-5 w-5 mx-auto mb-1 text-muted-foreground" aria-hidden="true" />
               <p className="text-2xl font-bold">{Math.round(stats.governmentAlignmentPct)}%</p>
-              <p className="text-xs text-muted-foreground">Alignement gouvernemental</p>
+              <div className="flex items-center justify-center gap-1">
+                <p className="text-xs text-muted-foreground">Concordance des votes</p>
+                <InfoTooltip text={concordanceVotesTooltip} side="bottom" />
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
-              <Activity className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+              <FileCheck2
+                className="h-5 w-5 mx-auto mb-1 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <p className="text-2xl font-bold">{Math.round(stats.finalVoteAlignmentPct)}%</p>
+              <div className="flex items-center justify-center gap-1">
+                <p className="text-xs text-muted-foreground">Concordance sur les textes de loi</p>
+                <InfoTooltip text={concordanceTextesTooltip} side="bottom" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <Activity className="h-5 w-5 mx-auto mb-1 text-muted-foreground" aria-hidden="true" />
               <p className="text-2xl font-bold">{Math.round(stats.averageParticipationPct)}%</p>
               <p className="text-xs text-muted-foreground">Participation</p>
             </CardContent>

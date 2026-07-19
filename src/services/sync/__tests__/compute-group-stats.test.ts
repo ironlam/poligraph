@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { computeAverageCohesion, computeGovernmentAlignment } from "../compute-group-stats";
+import {
+  computeAlignmentRates,
+  computeAverageCohesion,
+  computeGovernmentAlignment,
+} from "../compute-group-stats";
 
 describe("computeAverageCohesion", () => {
   it("averages cohesion across all group positions", () => {
@@ -42,5 +46,27 @@ describe("computeGovernmentAlignment", () => {
       govGroupPositions: [],
     });
     expect(result).toBe(0);
+  });
+});
+
+describe("computeAlignmentRates", () => {
+  it("separates all scrutin types from final votes", () => {
+    const result = computeAlignmentRates({
+      groupPositions: [
+        { scrutinId: "final-1", position: "POUR", scrutin: { type: "FINAL" } },
+        { scrutinId: "final-2", position: "CONTRE", scrutin: { type: "FINAL" } },
+        { scrutinId: "amendement-1", position: "POUR", scrutin: { type: "AMENDEMENT" } },
+        { scrutinId: "amendement-2", position: "POUR", scrutin: { type: "AMENDEMENT" } },
+      ],
+      govGroupPositions: [
+        { scrutinId: "final-1", position: "POUR", scrutin: { type: "FINAL" } },
+        { scrutinId: "final-2", position: "POUR", scrutin: { type: "FINAL" } },
+        { scrutinId: "amendement-1", position: "POUR", scrutin: { type: "AMENDEMENT" } },
+        { scrutinId: "amendement-2", position: "POUR", scrutin: { type: "AMENDEMENT" } },
+      ],
+    });
+
+    expect(result.governmentAlignmentPct).toBe(75);
+    expect(result.finalVoteAlignmentPct).toBe(50);
   });
 });

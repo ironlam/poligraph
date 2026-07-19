@@ -56,7 +56,7 @@ export function GroupCard({ group }: GroupCardProps) {
                 <p className="text-lg font-bold">
                   {Math.round(group.stats.governmentAlignmentPct)}%
                 </p>
-                <p className="text-xs text-muted-foreground">Alignement</p>
+                <p className="text-xs text-muted-foreground">Concordance</p>
               </div>
               <div>
                 <p className="text-lg font-bold">

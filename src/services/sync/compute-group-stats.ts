@@ -5,7 +5,7 @@ import {
   CURRENT_LEGISLATURE,
   CURRENT_SENATE_SESSION,
 } from "@/config/scrutin-importance";
-import type { Chamber } from "@/generated/prisma";
+import type { Chamber, ScrutinType } from "@/generated/prisma";
 
 export function computeAverageCohesion(positions: Array<{ cohesionPct: number }>): number {
   if (positions.length === 0) return 0;
@@ -32,6 +32,39 @@ export function computeGovernmentAlignment(params: {
   }
 
   return total > 0 ? Math.round((matching / total) * 1000) / 10 : 0;
+}
+
+interface TypedAlignmentPosition {
+  scrutinId: string;
+  position: string;
+  scrutin: { type: ScrutinType | null };
+}
+
+export function computeAlignmentRates(params: {
+  groupPositions: TypedAlignmentPosition[];
+  govGroupPositions: TypedAlignmentPosition[];
+}): {
+  governmentAlignmentPct: number;
+  finalVoteAlignmentPct: number;
+} {
+  const { groupPositions, govGroupPositions } = params;
+  const finalGroupPositions = groupPositions.filter(
+    (position) => position.scrutin.type === "FINAL"
+  );
+  const finalGovGroupPositions = govGroupPositions.filter(
+    (position) => position.scrutin.type === "FINAL"
+  );
+
+  return {
+    governmentAlignmentPct: computeGovernmentAlignment({
+      groupPositions,
+      govGroupPositions,
+    }),
+    finalVoteAlignmentPct: computeGovernmentAlignment({
+      groupPositions: finalGroupPositions,
+      govGroupPositions: finalGovGroupPositions,
+    }),
+  };
 }
 
 interface ChamberConfig {
@@ -69,18 +102,27 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
   const govPositions = govGroup
     ? await db.scrutinGroupPosition.findMany({
         where: { groupId: govGroup.id },
-        select: { scrutinId: true, position: true },
+        select: {
+          scrutinId: true,
+          position: true,
+          scrutin: { select: { type: true } },
+        },
       })
     : [];
 
   for (const group of groups) {
     const positions = await db.scrutinGroupPosition.findMany({
       where: { groupId: group.id },
-      select: { scrutinId: true, position: true, cohesionPct: true },
+      select: {
+        scrutinId: true,
+        position: true,
+        cohesionPct: true,
+        scrutin: { select: { type: true } },
+      },
     });
 
     const cohesionPct = computeAverageCohesion(positions);
-    const governmentAlignmentPct = computeGovernmentAlignment({
+    const { governmentAlignmentPct, finalVoteAlignmentPct } = computeAlignmentRates({
       groupPositions: positions,
       govGroupPositions: govPositions,
     });
@@ -122,11 +164,13 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
         legislature: config.statsLegislature,
         cohesionPct,
         governmentAlignmentPct,
+        finalVoteAlignmentPct,
         averageParticipationPct,
       },
       update: {
         cohesionPct,
         governmentAlignmentPct,
+        finalVoteAlignmentPct,
         averageParticipationPct,
       },
     });

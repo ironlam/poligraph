@@ -1051,6 +1051,7 @@ model ParliamentaryGroupStats {
   legislature             Int
   cohesionPct             Float
   governmentAlignmentPct  Float
+  finalVoteAlignmentPct   Float              @default(0)
   averageParticipationPct Float
   computedAt              DateTime           @default(now())
   updatedAt               DateTime           @updatedAt

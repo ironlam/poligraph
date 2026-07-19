@@ -44,6 +44,10 @@ export const PARLIAMENTARY_TERMS = {
     "Les représentants sont élus par des grands électeurs, eux-mêmes élus (ex : sénatoriales).",
   concordance:
     "Pourcentage de votes identiques entre deux parlementaires sur les scrutins auxquels ils ont tous les deux participé.",
+  concordanceVotesGroupes:
+    "Pourcentage de scrutins où la position majoritaire du groupe correspond à celle du groupe de référence de sa chambre. Tous les types de scrutins sont inclus. Le groupe de référence sert d'indicateur de la position gouvernementale, sans constituer une position officielle du gouvernement.",
+  concordanceTextesLoi:
+    "Pourcentage de votes finaux sur les projets et propositions de loi où la position majoritaire du groupe correspond à celle du groupe de référence de sa chambre. Les amendements, les votes par article et les motions sont exclus. Le groupe de référence sert d'indicateur de la position gouvernementale, sans constituer une position officielle du gouvernement.",
 } as const;
 
 // ============================================

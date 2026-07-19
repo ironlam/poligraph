@@ -54,6 +54,7 @@ export function InfoTooltip({
             className
           )}
           aria-label={`Aide : ${term || "information"}`}
+          title={`Aide : ${term || "information"}`}
         >
           <Info className={iconSize} aria-hidden="true" />
         </button>

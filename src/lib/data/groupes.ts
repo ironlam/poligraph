@@ -80,6 +80,7 @@ export interface GroupListingItem {
   stats: {
     cohesionPct: number;
     governmentAlignmentPct: number;
+    finalVoteAlignmentPct: number;
     averageParticipationPct: number;
   } | null;
 }
@@ -134,6 +135,7 @@ export async function getGroupesListing(
       ? {
           cohesionPct: g.stats[0].cohesionPct,
           governmentAlignmentPct: g.stats[0].governmentAlignmentPct,
+          finalVoteAlignmentPct: g.stats[0].finalVoteAlignmentPct,
           averageParticipationPct: g.stats[0].averageParticipationPct,
         }
       : null,
