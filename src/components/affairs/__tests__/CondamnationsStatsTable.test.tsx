@@ -27,11 +27,12 @@ const rows: CondamnationsPartyStats[] = [
     nCondamnesPrononces: 1,
     tauxDefinitif: 1 / 5,
   },
+  // Effectif exactement au seuil : le taux doit s'afficher (comparaison >=).
   {
     partyId: "3",
-    partySlug: "parti-au-seuil",
-    partyShortName: "SEU",
-    partyName: "Parti au seuil",
+    partySlug: "parti-fictif",
+    partyShortName: "PF",
+    partyName: "Parti fictif",
     nSuivis: SEUIL_SUIVIS_TAUX,
     nCondamnesDefinitifs: 1,
     nCondamnesPrononces: 0,
