@@ -21,6 +21,7 @@ import {
   isSensitiveCategory,
   getAIRateLimitMs,
   type DetectedAffair,
+  type ArticleAnalysisResult,
 } from "@/services/press-analysis";
 import { findMatchingAffairs } from "@/services/affairs/matching";
 import { syncMetadata } from "@/lib/sync";
@@ -209,171 +210,10 @@ export async function syncPressAnalysis(
         tier: article.tier,
       });
 
-      stats.articlesAnalyzed++;
-
-      // Step 3: Update article with analysis results
-      if (!dryRun) {
-        await db.pressArticle.update({
-          where: { id: article.id },
-          data: {
-            aiSummary: result.summary,
-            aiAnalyzedAt: new Date(),
-            isAffairRelated: result.isAffairRelated,
-            aiAnalysisError: null,
-          },
-        });
-      }
-
-      if (verbose) {
-        console.log(`  Résumé: ${result.summary.slice(0, 100)}...`);
-        console.log(`  Affaire(s) détectée(s): ${result.affairs.length}`);
-      }
-
-      if (!result.isAffairRelated || result.affairs.length === 0) {
-        continue;
-      }
-
-      stats.articlesAffairRelated++;
-
-      // Step 4: Process each detected affair
-      for (const detected of result.affairs) {
-        // Check sensitive categories
-        if (isSensitiveCategory(detected.category)) {
-          stats.sensitiveWarnings++;
-          console.warn(
-            `  ⚠ CATÉGORIE SENSIBLE: ${detected.category} pour ${detected.politicianName} — ${detected.title}`
-          );
-        }
-
-        // Skip politicians only mentioned but not involved in the affair
-        if (detected.involvement === "MENTIONED_ONLY") {
-          if (verbose) {
-            console.log(
-              `  - ${detected.politicianName} simplement mentionné, pas impliqué → ignoré`
-            );
-          }
-          continue;
-        }
-
-        // Resolve politician via the deterministic resolver (full DB, no context window)
-        const resolveResult = await resolveAffairPolitician({
-          text: analysisContent,
-          candidateNames: detected.mentionedNames,
-          metadata: {
-            source: "PRESSE" as SourceType,
-            sourceRef: article.url ?? null,
-            factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
-            court: detected.court ?? null,
-          },
-        });
-
-        if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
-          if (verbose) {
-            console.log(
-              `  - Résolution ${resolveResult.judgment} (decisionId=${resolveResult.decisionId}) pour "${detected.politicianName}" → ignoré`
-            );
-          }
-          continue;
-        }
-
-        const politicianId = resolveResult.topCandidateId;
-
-        // Attribution guard (issue #376): the resolver only confirms the name is
-        // in the article, not that this politician is a party to the procedure.
-        // Block attachments to commenters, the local mayor, reacting ministers
-        // and homonyms before any DB write, independently of the LLM-reported
-        // involvement.
-        const resolvedPolitician = await db.politician.findUnique({
-          where: { id: politicianId },
-          select: { firstName: true, lastName: true, fullName: true },
-        });
-        if (resolvedPolitician) {
-          const attribution = assessPressAttribution({
-            text: analysisContent,
-            firstName: resolvedPolitician.firstName,
-            lastName: resolvedPolitician.lastName,
-            involvement: detected.involvement,
-          });
-          if (!attribution.attach) {
-            if (verbose) {
-              console.log(
-                `  - Attribution bloquée (${attribution.verdict}) : ${resolvedPolitician.fullName} → "${detected.title}" ignoré`
-              );
-            }
-            await rejectWeakAttribution(
-              article.id,
-              politicianId,
-              detected,
-              attribution.verdict,
-              dryRun
-            );
-            stats.affairsRejected++;
-            continue;
-          }
-        }
-
-        // Try to match with existing affairs
-        const matches = await findMatchingAffairs({
-          politicianId,
-          title: detected.title,
-          category: detected.category as AffairCategory,
-        });
-
-        const bestMatch = matches[0];
-
-        if (bestMatch && (bestMatch.confidence === "CERTAIN" || bestMatch.confidence === "HIGH")) {
-          // Enrich existing affair
-          const enriched = await enrichAffairFromPress(
-            bestMatch.affairId,
-            article.id,
-            article.url,
-            article.title,
-            article.feedSource,
-            article.publishedAt,
-            detected,
-            dryRun,
-            verbose
-          );
-          if (enriched) {
-            stats.affairsEnriched++;
-            if (!dryRun) {
-              await db.affairPoliticianDecision.update({
-                where: { id: resolveResult.decisionId },
-                data: { affairId: bestMatch.affairId },
-              });
-            }
-          }
-        } else if (detected.isNewRevelation) {
-          // Reject low-confidence detections before creating
-          if (detected.confidenceScore < MIN_CONFIDENCE_THRESHOLD) {
-            await rejectLowConfidenceAffair(article.id, politicianId, detected, dryRun, verbose);
-            stats.affairsRejected++;
-            continue;
-          }
-          // New revelation — create affair as DRAFT (no title prefix)
-          const created = await createAffairFromPress(
-            politicianId,
-            article.id,
-            article.url,
-            article.title,
-            article.feedSource,
-            article.publishedAt,
-            detected,
-            resolveResult.decisionId,
-            dryRun,
-            verbose
-          );
-          if (created) stats.affairsCreated++;
-        } else if (bestMatch) {
-          // Possible match — link article to affair
-          if (!dryRun) {
-            await linkArticleToAffair(article.id, bestMatch.affairId, "MENTION");
-          }
-          if (verbose) {
-            console.log(`  → Lien MENTION créé: article ↔ affaire ${bestMatch.affairId}`);
-          }
-        }
-      }
+      await processAnalyzedArticle(article, analysisContent, result, stats, {
+        dryRun,
+        verbose,
+      });
     } catch (error) {
       stats.analysisErrors++;
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -413,6 +253,198 @@ export async function syncPressAnalysis(
   }
 
   return stats;
+}
+
+/** Article fields needed to persist an analysis result. */
+export interface AnalyzedArticleRef {
+  id: string;
+  url: string;
+  title: string;
+  feedSource: string;
+  publishedAt: Date;
+}
+
+/**
+ * Persist one article's analysis result: mark it analyzed, then resolve, guard,
+ * match and create/enrich/link affairs for each detected affair. Mutates `stats`.
+ *
+ * Split out of syncPressAnalysis so the exact same deterministic post-analysis
+ * pipeline (resolver + attribution guard + matching + writes, no AI cost) can be
+ * reused by the manual API-free catch-up, where `result` comes from a Claude Code
+ * session instead of analyzeArticle().
+ */
+export async function processAnalyzedArticle(
+  article: AnalyzedArticleRef,
+  analysisContent: string,
+  result: ArticleAnalysisResult,
+  stats: PressAnalysisStats,
+  options: { dryRun: boolean; verbose: boolean }
+): Promise<void> {
+  const { dryRun, verbose } = options;
+
+  stats.articlesAnalyzed++;
+
+  // Step 3: Update article with analysis results
+  if (!dryRun) {
+    await db.pressArticle.update({
+      where: { id: article.id },
+      data: {
+        aiSummary: result.summary,
+        aiAnalyzedAt: new Date(),
+        isAffairRelated: result.isAffairRelated,
+        aiAnalysisError: null,
+      },
+    });
+  }
+
+  if (verbose) {
+    console.log(`  Résumé: ${result.summary.slice(0, 100)}...`);
+    console.log(`  Affaire(s) détectée(s): ${result.affairs.length}`);
+  }
+
+  if (!result.isAffairRelated || result.affairs.length === 0) {
+    return;
+  }
+
+  stats.articlesAffairRelated++;
+
+  // Step 4: Process each detected affair
+  for (const detected of result.affairs) {
+    // Check sensitive categories
+    if (isSensitiveCategory(detected.category)) {
+      stats.sensitiveWarnings++;
+      console.warn(
+        `  ⚠ CATÉGORIE SENSIBLE: ${detected.category} pour ${detected.politicianName} — ${detected.title}`
+      );
+    }
+
+    // Skip politicians only mentioned but not involved in the affair
+    if (detected.involvement === "MENTIONED_ONLY") {
+      if (verbose) {
+        console.log(`  - ${detected.politicianName} simplement mentionné, pas impliqué → ignoré`);
+      }
+      continue;
+    }
+
+    // Resolve politician via the deterministic resolver (full DB, no context window)
+    const resolveResult = await resolveAffairPolitician({
+      text: analysisContent,
+      candidateNames: detected.mentionedNames,
+      metadata: {
+        source: "PRESSE" as SourceType,
+        sourceRef: article.url ?? null,
+        factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
+        court: detected.court ?? null,
+      },
+    });
+
+    if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
+      if (verbose) {
+        console.log(
+          `  - Résolution ${resolveResult.judgment} (decisionId=${resolveResult.decisionId}) pour "${detected.politicianName}" → ignoré`
+        );
+      }
+      continue;
+    }
+
+    const politicianId = resolveResult.topCandidateId;
+
+    // Attribution guard (issue #376): the resolver only confirms the name is
+    // in the article, not that this politician is a party to the procedure.
+    // Block attachments to commenters, the local mayor, reacting ministers
+    // and homonyms before any DB write, independently of the LLM-reported
+    // involvement.
+    const resolvedPolitician = await db.politician.findUnique({
+      where: { id: politicianId },
+      select: { firstName: true, lastName: true, fullName: true },
+    });
+    if (resolvedPolitician) {
+      const attribution = assessPressAttribution({
+        text: analysisContent,
+        firstName: resolvedPolitician.firstName,
+        lastName: resolvedPolitician.lastName,
+        involvement: detected.involvement,
+      });
+      if (!attribution.attach) {
+        if (verbose) {
+          console.log(
+            `  - Attribution bloquée (${attribution.verdict}) : ${resolvedPolitician.fullName} → "${detected.title}" ignoré`
+          );
+        }
+        await rejectWeakAttribution(
+          article.id,
+          politicianId,
+          detected,
+          attribution.verdict,
+          dryRun
+        );
+        stats.affairsRejected++;
+        continue;
+      }
+    }
+
+    // Try to match with existing affairs
+    const matches = await findMatchingAffairs({
+      politicianId,
+      title: detected.title,
+      category: detected.category as AffairCategory,
+    });
+
+    const bestMatch = matches[0];
+
+    if (bestMatch && (bestMatch.confidence === "CERTAIN" || bestMatch.confidence === "HIGH")) {
+      // Enrich existing affair
+      const enriched = await enrichAffairFromPress(
+        bestMatch.affairId,
+        article.id,
+        article.url,
+        article.title,
+        article.feedSource,
+        article.publishedAt,
+        detected,
+        dryRun,
+        verbose
+      );
+      if (enriched) {
+        stats.affairsEnriched++;
+        if (!dryRun) {
+          await db.affairPoliticianDecision.update({
+            where: { id: resolveResult.decisionId },
+            data: { affairId: bestMatch.affairId },
+          });
+        }
+      }
+    } else if (detected.isNewRevelation) {
+      // Reject low-confidence detections before creating
+      if (detected.confidenceScore < MIN_CONFIDENCE_THRESHOLD) {
+        await rejectLowConfidenceAffair(article.id, politicianId, detected, dryRun, verbose);
+        stats.affairsRejected++;
+        continue;
+      }
+      // New revelation — create affair as DRAFT (no title prefix)
+      const created = await createAffairFromPress(
+        politicianId,
+        article.id,
+        article.url,
+        article.title,
+        article.feedSource,
+        article.publishedAt,
+        detected,
+        resolveResult.decisionId,
+        dryRun,
+        verbose
+      );
+      if (created) stats.affairsCreated++;
+    } else if (bestMatch) {
+      // Possible match — link article to affair
+      if (!dryRun) {
+        await linkArticleToAffair(article.id, bestMatch.affairId, "MENTION");
+      }
+      if (verbose) {
+        console.log(`  → Lien MENTION créé: article ↔ affaire ${bestMatch.affairId}`);
+      }
+    }
+  }
 }
 
 // ============================================
