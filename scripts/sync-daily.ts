@@ -23,6 +23,12 @@ const BASE_URL =
     : "http://localhost:3000";
 const CRON_SECRET = process.env.CRON_SECRET;
 
+// Pause between retry attempts so a still-ongoing transient blip (e.g. a
+// Supabase connection drop) has time to clear instead of the retry hitting it
+// back-to-back.
+const RETRY_BACKOFF_MS = 20 * 1000;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface SyncStep {
   name: string;
   command: string;
@@ -116,13 +122,23 @@ const steps: SyncStep[] = [
   {
     name: "Compute participation stats",
     command: `npx tsx scripts/compute-stats.ts${dryRunFlag}`,
-    // Blocking step killed once by a transient Supabase connection drop (#442);
-    // the very next run succeeded without any change. One retry absorbs the blip.
-    retries: 1,
+    // Blocking step recurrently killed by transient Supabase connection drops
+    // (#442). One retry (6587772) was not enough on 2026-07-16: both back-to-back
+    // attempts hit the same ongoing drop. Two retries + the RETRY_BACKOFF_MS pause
+    // between attempts give the blip time to clear.
+    retries: 2,
   },
   {
     name: "IndexNow",
     command: `npx tsx scripts/submit-indexnow.ts`,
+  },
+  {
+    // Non-blocking: emails a catch-up nudge when press articles pile up
+    // unanalyzed (dry credits, upstream slowness, volume). The manual
+    // /analyse-presse skill drains the backlog without spending API credits.
+    name: "Notification backlog presse",
+    command: `npx tsx scripts/notify-press-backlog.ts${dryRunFlag}`,
+    allowFailure: true,
   },
   ...(CRON_SECRET
     ? [
@@ -194,6 +210,10 @@ async function main() {
             `  skipping retry: attempt ran ${(attemptDuration / 1000).toFixed(0)}s (not a transient blip)`
           );
           break;
+        }
+        if (attempt < maxAttempts) {
+          console.error(`  ↻ backing off ${(RETRY_BACKOFF_MS / 1000).toFixed(0)}s before retry`);
+          await sleep(RETRY_BACKOFF_MS);
         }
       }
     }

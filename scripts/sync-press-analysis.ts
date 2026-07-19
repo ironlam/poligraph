@@ -17,7 +17,11 @@
 
 import "dotenv/config";
 import { createCLI, type SyncHandler, type SyncResult } from "../src/lib/sync";
-import { syncPressAnalysis, getPressAnalysisStats } from "../src/services/sync/press-analysis";
+import {
+  syncPressAnalysis,
+  getPressAnalysisStats,
+  isPressAnalysisSuccessful,
+} from "../src/services/sync/press-analysis";
 
 const handler: SyncHandler = {
   name: "Poligraph - Analyse IA Presse (affaires judiciaires)",
@@ -109,7 +113,7 @@ Environment:
     });
 
     return {
-      success: stats.analysisErrors === 0,
+      success: isPressAnalysisSuccessful(stats),
       duration: 0,
       stats: {
         articlesProcessed: stats.articlesProcessed,
@@ -121,6 +125,7 @@ Environment:
         scrapeErrors: stats.scrapeErrors,
         analysisErrors: stats.analysisErrors,
         sensitiveWarnings: stats.sensitiveWarnings,
+        quotaStopped: stats.quotaStopped ? 1 : 0,
       },
       errors: [],
     };

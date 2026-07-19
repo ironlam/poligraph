@@ -63,8 +63,12 @@ export class ArticleScraper {
   constructor() {
     this.httpClient = new HTTPClient({
       rateLimitMs: SCRAPE_RATE_LIMIT_MS,
-      timeout: 30_000,
-      retries: 2,
+      // Tight budget on purpose: press analysis has an RSS title+description
+      // fallback for every scrapable source, so a slow/hanging fetch should
+      // fail fast rather than burn the daily-sync 10 min per-step timeout.
+      // Worst case per slow source drops from 30s×3 to 12s×2.
+      timeout: 12_000,
+      retries: 1,
       headers: {
         Accept: "text/html,application/xhtml+xml",
       },

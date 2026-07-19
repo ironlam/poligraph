@@ -23,6 +23,12 @@ env:
   JUDILIBRE_CLIENT_ID: ${{ secrets.JUDILIBRE_CLIENT_ID }}
   JUDILIBRE_CLIENT_SECRET: ${{ secrets.JUDILIBRE_CLIENT_SECRET }}
   JUDILIBRE_API_KEY: ${{ secrets.JUDILIBRE_API_KEY }}
+  # Press backlog notifier (scripts/notify-press-backlog.ts)
+  MAILJET_API_KEY: ${{ secrets.MAILJET_API_KEY }}
+  MAILJET_SECRET_KEY: ${{ secrets.MAILJET_SECRET_KEY }}
+  MAILJET_SENDER_EMAIL: ${{ secrets.MAILJET_SENDER_EMAIL }}
+  MAILJET_SENDER_NAME: ${{ secrets.MAILJET_SENDER_NAME }}
+  PRESS_BACKLOG_NOTIFY_EMAIL: ${{ secrets.PRESS_BACKLOG_NOTIFY_EMAIL }}
 
 jobs:
   daily-sync:

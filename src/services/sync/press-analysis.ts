@@ -52,6 +52,28 @@ export interface PressAnalysisStats {
   scrapeErrors: number;
   analysisErrors: number;
   sensitiveWarnings: number;
+  /**
+   * True when analysis stopped early because the AI provider throttled us
+   * (quota / rate limit / payment required). Distinguishes an expected
+   * cost/credit stop (leaves a backlog for the manual catch-up) from a real
+   * code/infra breakage.
+   */
+  quotaStopped: boolean;
+}
+
+/**
+ * Whether a press-analysis run should count as successful for the daily sync.
+ *
+ * A run only fails when it had articles to analyze but got none through for a
+ * non-quota reason (e.g. DB down, a code bug) — that is a real breakage worth
+ * paging. Isolated per-article errors (analyzed > 0) and an early quota/credit
+ * stop are tolerated: the leftover backlog is drained via the email notifier
+ * plus the manual `/analyse-presse` catch-up.
+ */
+export function isPressAnalysisSuccessful(
+  stats: Pick<PressAnalysisStats, "articlesProcessed" | "articlesAnalyzed" | "quotaStopped">
+): boolean {
+  return !(stats.articlesProcessed > 0 && stats.articlesAnalyzed === 0 && !stats.quotaStopped);
 }
 
 // ============================================
@@ -91,6 +113,7 @@ export async function syncPressAnalysis(
     scrapeErrors: 0,
     analysisErrors: 0,
     sensitiveWarnings: 0,
+    quotaStopped: false,
   };
 
   // Check sync interval
@@ -370,6 +393,7 @@ export async function syncPressAnalysis(
       }
 
       if (isQuotaError) {
+        stats.quotaStopped = true;
         console.error(`\n✗ API quota/rate limit error, stopping early: ${errorMsg}`);
         break;
       }
