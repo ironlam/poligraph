@@ -76,11 +76,12 @@ describe("donation config v2", () => {
   it("toutes les url présentes sont en https", () => {
     for (const p of SUPPORT_PLATFORMS) if (p.url) expect(p.url.startsWith("https://")).toBe(true);
   });
-  it("activeSecondaryPlatforms exclut les plateformes désactivées ou sans url", () => {
+  it("activeSecondaryPlatforms inclut les plateformes activées avec url, exclut le reste", () => {
     const ids = activeSecondaryPlatforms().map((p) => p.id);
-    expect(ids).not.toContain("github-sponsors");
-    expect(ids).not.toContain("kofi");
-    expect(ids).not.toContain("helloasso");
+    expect(ids).toContain("tipeee");
+    expect(ids).toContain("kofi");
+    expect(ids).not.toContain("github-sponsors"); // désactivée, sans url
+    expect(ids).not.toContain("helloasso"); // plateforme primaire
   });
   it("DONATION_PREFILL_MODE est une valeur autorisée", () => {
     expect(["unsupported", "verified"]).toContain(DONATION_PREFILL_MODE);

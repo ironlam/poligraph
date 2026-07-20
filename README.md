@@ -256,6 +256,7 @@ Poligraph est maintenu par l'association Sankofa (loi 1901). Vous pouvez souteni
 
 - [HelloAsso](https://www.helloasso.com/associations/association-sankofa/formulaires/1) : don ponctuel ou mensuel à l'association Sankofa
 - [Tipeee](https://fr.tipeee.com/poligraph) : soutien récurrent, versé à l'association
+- [Ko-fi](https://ko-fi.com/ironlam) : don ponctuel, versé à l'association
 
 ## Contribuer
 
