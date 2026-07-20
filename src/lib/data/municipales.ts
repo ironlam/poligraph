@@ -11,11 +11,7 @@ import {
   DeptPartyDataSchema,
   parseSnapshot,
 } from "@/types/stats-snapshots";
-import {
-  computeParityOutliersLive,
-  computeParityBySizeLive,
-  computeDepartmentPartyDataLive,
-} from "@/services/sync/compute-municipales-snapshots";
+import { computeDepartmentPartyDataLive } from "@/services/sync/compute-municipales-snapshots";
 
 // ============================================
 // Incumbent maire helper
@@ -462,12 +458,12 @@ export const getParityBySize = cache(async function getParityBySize() {
     return parseSnapshot(ParityBySizeSchema, snapshot.data);
   }
 
-  const election = await db.election.findUnique({
-    where: { slug: "municipales-2026" },
-    select: { id: true },
-  });
-  if (!election) return [];
-  return computeParityBySizeLive(election.id);
+  // Snapshot missing (cold start / failed sync): return empty rather than
+  // scanning ~1.28M Candidacy rows in the request path. The daily sync step
+  // compute-municipales-snapshots recomputes it.
+  // eslint-disable-next-line no-console -- deliberate ops signal (missing snapshot)
+  console.warn("[municipales] parityBySize snapshot missing — returning empty");
+  return [];
 });
 
 export const getCumulCandidates = cache(async function getCumulCandidates() {
@@ -540,6 +536,10 @@ export const getCumulCandidates = cache(async function getCumulCandidates() {
 });
 
 export const getMissingMaires = cache(async function getMissingMaires() {
+  "use cache";
+  cacheTag("elections-municipales-2026");
+  cacheLife("synced");
+
   const election = await db.election.findUnique({
     where: { slug: "municipales-2026" },
     select: { id: true },
@@ -585,12 +585,12 @@ export const getParityOutliers = cache(async function getParityOutliers() {
     return parseSnapshot(ParityOutliersSchema, snapshot.data);
   }
 
-  const election = await db.election.findUnique({
-    where: { slug: "municipales-2026" },
-    select: { id: true },
-  });
-  if (!election) return { best: [], worst: [] };
-  return computeParityOutliersLive(election.id);
+  // Snapshot missing (cold start / failed sync): return empty rather than
+  // scanning ~1.28M Candidacy rows in the request path. The daily sync step
+  // compute-municipales-snapshots recomputes it.
+  // eslint-disable-next-line no-console -- deliberate ops signal (missing snapshot)
+  console.warn("[municipales] parityOutliers snapshot missing — returning empty");
+  return { best: [], worst: [] };
 });
 
 // ============================================

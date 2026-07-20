@@ -70,47 +70,24 @@ describe("municipales snapshot fallback", () => {
     expect(queryRawMock).not.toHaveBeenCalled(); // didn't fall back to live
   });
 
-  it("getParityOutliers falls back to live SQL when snapshot is missing", async () => {
+  it("getParityOutliers returns empty without a live scan when snapshot missing", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
-    // Single-pass query: one $queryRaw returns both buckets, tagged by `bucket`.
-    queryRawMock.mockResolvedValueOnce([
-      {
-        bucket: "best",
-        listName: "Live A",
-        communeId: "x",
-        communeName: "X",
-        departmentCode: "01",
-        femaleRate: 0.5,
-        candidateCount: 30,
-      },
-      {
-        bucket: "worst",
-        listName: "Live B",
-        communeId: "y",
-        communeName: "Y",
-        departmentCode: "02",
-        femaleRate: 0.0,
-        candidateCount: 30,
-      },
-    ]);
 
     const result = await getParityOutliers();
 
-    expect(result.best[0]?.listName).toBe("Live A");
-    expect(result.worst[0]?.listName).toBe("Live B");
-    expect(queryRawMock).toHaveBeenCalledTimes(1); // single-pass live fallback
+    // No live fallback in the request path (perf: avoids scanning ~1.28M rows).
+    // The daily sync recomputes the snapshot.
+    expect(result).toEqual({ best: [], worst: [] });
+    expect(queryRawMock).not.toHaveBeenCalled();
   });
 
-  it("getParityBySize falls back to live when snapshot missing", async () => {
+  it("getParityBySize returns empty without a live scan when snapshot missing", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
-    queryRawMock.mockResolvedValueOnce([
-      { bracket: "< 1 000 hab.", femaleCount: 5, totalCount: 10 },
-    ]);
 
     const result = await getParityBySize();
 
-    expect(result).toHaveLength(1);
-    expect(result[0]?.femaleRate).toBe(0.5);
+    expect(result).toEqual([]);
+    expect(queryRawMock).not.toHaveBeenCalled();
   });
 
   it("getDepartmentPartyData falls back to live when snapshot missing", async () => {
@@ -124,16 +101,6 @@ describe("municipales snapshot fallback", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.dominantParty).toBe("EELV");
-  });
-
-  it("getParityOutliers returns empty fallback when snapshot missing AND election not found", async () => {
-    findUniqueMock.mockResolvedValueOnce(null);
-    electionFindUniqueMock.mockResolvedValueOnce(null);
-
-    const result = await getParityOutliers();
-
-    expect(result).toEqual({ best: [], worst: [] });
-    expect(queryRawMock).not.toHaveBeenCalled();
   });
 
   it("getDepartmentPartyData returns empty array when snapshot missing AND election not found", async () => {

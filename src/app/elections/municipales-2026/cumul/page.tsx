@@ -5,7 +5,7 @@ import { getCumulCandidates, getMissingMaires } from "@/lib/data/municipales";
 import { CumulTable } from "@/components/elections/municipales/CumulTable";
 import { MissingMairesTable } from "@/components/elections/municipales/MissingMairesTable";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Cumul des mandats — Municipales 2026 | Poligraph",
