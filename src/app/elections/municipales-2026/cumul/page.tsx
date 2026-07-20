@@ -1,9 +1,8 @@
 import { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { getCumulCandidates, getMissingMaires } from "@/lib/data/municipales";
+import { getCumulCandidates } from "@/lib/data/municipales";
 import { CumulTable } from "@/components/elections/municipales/CumulTable";
-import { MissingMairesTable } from "@/components/elections/municipales/MissingMairesTable";
 
 export const revalidate = 300;
 
@@ -27,9 +26,7 @@ const MANDATE_STATS_LABELS: Record<string, string> = {
 };
 
 export default async function CumulPage() {
-  // Sequential queries to respect DB pool limit of 2
   const candidates = await getCumulCandidates();
-  const missingMaires = await getMissingMaires();
 
   // Compute stats by mandate type
   const statsByType = new Map<string, number>();
@@ -111,28 +108,6 @@ export default async function CumulPage() {
           <CumulTable candidates={candidates} />
         </section>
       )}
-
-      {/* Missing mayors */}
-      <section className="py-8 border-t">
-        <h2 className="text-2xl font-bold mb-2">Qui manque à l&apos;appel ?</h2>
-        <p className="text-muted-foreground mb-6">
-          Ces maires en exercice ne se représentent pas (ou n&apos;ont pas encore déclaré leur
-          candidature).
-        </p>
-        {missingMaires.length > 0 ? (
-          <>
-            <p className="text-sm text-muted-foreground mb-4">
-              {missingMaires.length} maire{missingMaires.length > 1 ? "s" : ""} absent
-              {missingMaires.length > 1 ? "s" : ""} des listes
-            </p>
-            <MissingMairesTable maires={missingMaires} />
-          </>
-        ) : (
-          <p className="text-muted-foreground text-center py-8">
-            Tous les maires en exercice se représentent.
-          </p>
-        )}
-      </section>
     </div>
   );
 }

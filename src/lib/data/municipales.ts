@@ -535,6 +535,9 @@ export const getCumulCandidates = cache(async function getCumulCandidates() {
   );
 });
 
+// Currently unused: the "Qui manque à l'appel ?" section on /cumul was hidden
+// because candidacy-politician linking is still sparse (nearly every maire shows
+// as "missing"). Kept for when linking is fuller; re-add the section to restore.
 export const getMissingMaires = cache(async function getMissingMaires() {
   "use cache";
   cacheTag("elections-municipales-2026");
