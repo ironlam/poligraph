@@ -25,7 +25,7 @@ function AlignmentSpectrum({
   return (
     <div
       role="img"
-      aria-label={`Alignement gouvernemental - ${chamberLabel}`}
+      aria-label={`Concordance des votes - ${chamberLabel}`}
       aria-describedby={descId}
     >
       {/* Zone labels */}
@@ -56,8 +56,8 @@ function AlignmentSpectrum({
               prefetch={false}
               className="absolute -translate-x-1/2 transition-transform hover:scale-110 hover:z-10"
               style={{ left: `${leftPct}%`, top: `${topPx}px` }}
-              title={`${g.groupName}: ${g.governmentAlignmentPct.toFixed(0)}% d'alignement`}
-              aria-label={`${g.groupName}: ${g.governmentAlignmentPct.toFixed(0)}% d'alignement gouvernemental`}
+              title={`${g.groupName}: ${g.governmentAlignmentPct.toFixed(0)}% de concordance`}
+              aria-label={`${g.groupName}: ${g.governmentAlignmentPct.toFixed(0)}% de concordance des votes`}
             >
               <div
                 className="px-1.5 py-0.5 rounded-full text-[11px] font-bold leading-tight whitespace-nowrap shadow-sm border border-background/50"
@@ -82,11 +82,11 @@ function AlignmentSpectrum({
 
       {/* Screen reader table */}
       <table className="sr-only" id={descId}>
-        <caption>Alignement gouvernemental par groupe - {chamberLabel}</caption>
+        <caption>Concordance des votes par groupe - {chamberLabel}</caption>
         <thead>
           <tr>
             <th>Groupe</th>
-            <th>Alignement</th>
+            <th>Concordance</th>
             <th>Cohésion</th>
             <th>Participation</th>
           </tr>
@@ -141,7 +141,7 @@ function MetricsList({
             </Link>
             <span
               className={`tabular-nums shrink-0 ${alignmentColor(g.governmentAlignmentPct)}`}
-              title="Alignement gouvernemental"
+              title="Concordance des votes"
             >
               {g.governmentAlignmentPct.toFixed(0)}%
             </span>
