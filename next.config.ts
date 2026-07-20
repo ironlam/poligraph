@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { SITE_URL, SITE_HOSTNAME } from "./src/config/site";
 import { OG_IMAGE_NOINDEX_HEADERS } from "./src/lib/seo/og-image-robots";
+import { buildSecurityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["jsdom"],
@@ -54,43 +55,7 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    const securityHeaders = [
-      {
-        key: "Strict-Transport-Security",
-        value: "max-age=63072000; includeSubDomains; preload",
-      },
-      {
-        key: "X-Frame-Options",
-        value: "DENY",
-      },
-      {
-        key: "X-Content-Type-Options",
-        value: "nosniff",
-      },
-      {
-        key: "Referrer-Policy",
-        value: "strict-origin-when-cross-origin",
-      },
-      {
-        key: "Permissions-Policy",
-        value: "camera=(), microphone=(), geolocation=(self)",
-      },
-      {
-        key: "Content-Security-Policy",
-        value: [
-          "default-src 'self'",
-          // unsafe-inline required: Next.js inline scripts (chunks, RSC), JSON-LD, Umami
-          // TODO: migrate to nonce-based CSP when Next.js supports it natively
-          `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""} https://cloud.umami.is https://vercel.live`,
-          "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' https: data:",
-          "font-src 'self'",
-          "worker-src 'self'",
-          "connect-src 'self' https://cloud.umami.is https://api-gateway.umami.dev https://vercel.live https://api.anthropic.com https://geo.api.gouv.fr",
-          "frame-ancestors 'none'",
-        ].join(" https://gateway.umami.is; "),
-      },
-    ];
+    const securityHeaders = buildSecurityHeaders(process.env.NODE_ENV === "development");
 
     return [
       {
