@@ -12,7 +12,7 @@ function CampaignInner() {
   const { open } = useDonationDialog();
   return (
     <section className="overflow-hidden rounded-2xl border border-primary/70 bg-primary p-8 text-primary-foreground">
-      <p className="font-display text-xs font-bold uppercase tracking-widest text-brand-foreground/90">
+      <p className="font-display text-xs font-bold uppercase tracking-widest text-primary-foreground/90">
         Soutenir Poligraph
       </p>
       <h2 className="mt-2 font-display text-2xl font-extrabold md:text-3xl">

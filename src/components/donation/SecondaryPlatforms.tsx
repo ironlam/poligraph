@@ -1,4 +1,9 @@
 import { activeSecondaryPlatforms } from "@/config/donation";
+import { SecondaryPlatformLink } from "@/components/donation/SecondaryPlatformLink";
+
+// activeSecondaryPlatforms() always excludes "helloasso" (primary: true),
+// so the remaining ids are safely narrowed here.
+type NonPrimaryPlatformId = "tipeee" | "github-sponsors" | "kofi";
 
 export function SecondaryPlatforms() {
   const platforms = activeSecondaryPlatforms();
@@ -10,15 +15,11 @@ export function SecondaryPlatforms() {
         <div key={platform.id} className="rounded-xl border bg-card p-4">
           <h3 className="font-display text-base font-bold">{platform.displayName}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{platform.description}</p>
-          <a
-            href={platform.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-block text-sm text-primary hover:underline"
-          >
-            Soutenir sur {platform.displayName}
-            <span className="sr-only"> (ouvre un nouvel onglet)</span>
-          </a>
+          <SecondaryPlatformLink
+            platformId={platform.id as NonPrimaryPlatformId}
+            url={platform.url!}
+            displayName={platform.displayName}
+          />
         </div>
       ))}
     </div>

@@ -3,6 +3,7 @@ export function buildContentSecurityPolicy(isDev: boolean): string {
   const directives = [
     "default-src 'self'",
     // unsafe-inline required: Next.js inline scripts (chunks, RSC), JSON-LD, Umami.
+    // TODO: migrate to nonce-based CSP when Next.js supports it natively
     `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://cloud.umami.is https://vercel.live`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
