@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DonationDialogProvider } from "./DonationDialogProvider";
 import { DonationTiers } from "./DonationTiers";
-import { DONATION_PREFILL_MODE, MONTHLY_TIERS } from "@/config/donation";
+import { MONTHLY_TIERS } from "@/config/donation";
 
 function renderTiers() {
   return render(
@@ -17,6 +18,7 @@ describe("DonationTiers", () => {
     renderTiers();
     expect(screen.getByText("Recommandé")).toBeInTheDocument();
   });
+
   it("affiche tous les montants mensuels", () => {
     renderTiers();
     for (const t of MONTHLY_TIERS) {
@@ -24,13 +26,17 @@ describe("DonationTiers", () => {
       expect(screen.getByText(new RegExp(`(?<!\\d)${t.monthlyEuros}€`))).toBeInTheDocument();
     }
   });
-  it("en mode unsupported, aucun bouton ne prétend présélectionner un montant", () => {
+
+  it("n'affiche aucun bouton prétendant présélectionner un montant", () => {
     renderTiers();
-    if (DONATION_PREFILL_MODE === "unsupported") {
-      expect(screen.queryByRole("button", { name: /soutenir 10 € par mois/i })).toBeNull();
-      expect(
-        screen.getAllByRole("button", { name: /choisir mon montant/i }).length
-      ).toBeGreaterThan(0);
-    }
+    expect(screen.queryByRole("button", { name: /soutenir \d+ € par mois/i })).toBeNull();
+  });
+
+  it("un unique CTA « Je soutiens » ouvre le formulaire sécurisé", async () => {
+    renderTiers();
+    const ctas = screen.getAllByRole("button", { name: /je soutiens/i });
+    expect(ctas).toHaveLength(1);
+    await userEvent.click(ctas[0]!);
+    expect(screen.getByTitle(/formulaire de don helloasso/i)).toBeInTheDocument();
   });
 });
