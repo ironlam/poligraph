@@ -12,6 +12,7 @@ import {
   activeSecondaryPlatforms,
   DONATION_PREFILL_MODE,
   HELLOASSO_ORIGIN,
+  HELLOASSO_FORM_URL,
   buildDonationWidgetUrl,
   taxReceiptMessage,
 } from "./donation";
@@ -135,6 +136,10 @@ describe("donation config v2", () => {
   });
   it("HELLOASSO_ORIGIN est l'origine https attendue", () => {
     expect(HELLOASSO_ORIGIN).toBe("https://www.helloasso.com");
+  });
+  it("HELLOASSO_FORM_URL est défini et pointe vers helloasso.com", () => {
+    expect(HELLOASSO_FORM_URL).toBeDefined();
+    expect(HELLOASSO_FORM_URL.startsWith("https://www.helloasso.com/")).toBe(true);
   });
   it("taxReceiptMessage en in_review ne promet pas de reçu à venir", () => {
     expect(taxReceiptMessage()).toContain("rescrit");

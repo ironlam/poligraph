@@ -1,10 +1,8 @@
 "use client";
 
-import { buildDonationWidgetUrl, SUPPORT_PLATFORMS } from "@/config/donation";
+import { buildDonationWidgetUrl, HELLOASSO_FORM_URL } from "@/config/donation";
 import { trackUmami } from "@/lib/umami";
 import { HelloAssoFormFrame } from "./HelloAssoFormFrame";
-
-const HELLOASSO_FORM_URL = SUPPORT_PLATFORMS.find((p) => p.id === "helloasso")!.url!;
 
 export function HelloAssoInlineForm() {
   return (

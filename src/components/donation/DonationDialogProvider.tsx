@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { buildDonationWidgetUrl, SUPPORT_PLATFORMS } from "@/config/donation";
+import { buildDonationWidgetUrl, HELLOASSO_FORM_URL } from "@/config/donation";
 import { trackUmami } from "@/lib/umami";
 import { cn } from "@/lib/utils";
 import { HelloAssoFormFrame } from "./HelloAssoFormFrame";
@@ -20,8 +20,6 @@ export function useDonationDialog(): DonationDialogContextValue {
   if (!ctx) throw new Error("useDonationDialog must be used within DonationDialogProvider");
   return ctx;
 }
-
-const HELLOASSO_FORM_URL = SUPPORT_PLATFORMS.find((p) => p.id === "helloasso")!.url!;
 
 export function DonationDialogProvider({
   source,

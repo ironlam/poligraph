@@ -205,6 +205,13 @@ export const SUPPORT_PLATFORMS = [
   },
 ] as const satisfies readonly SupportPlatform[];
 
+const helloassoPlatform = SUPPORT_PLATFORMS.find((p) => p.id === "helloasso");
+if (!helloassoPlatform?.url) {
+  throw new Error("SUPPORT_PLATFORMS must include a HelloAsso platform with a url");
+}
+// Resolved once at module load so consumers do not repeat the lookup + non-null assertions.
+export const HELLOASSO_FORM_URL: string = helloassoPlatform.url;
+
 export function activeSecondaryPlatforms(): readonly SupportPlatform[] {
   return SUPPORT_PLATFORMS.filter((p) => !p.primary && p.enabled && Boolean(p.url));
 }
