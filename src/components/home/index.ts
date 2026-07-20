@@ -5,7 +5,7 @@ export { HomeIntentGrid } from "./HomeIntentGrid";
 export { PopularData } from "./PopularData";
 export { ActivityFeed } from "./ActivityFeed";
 export { TrustStrip } from "./TrustStrip";
-export { SupportBar } from "./SupportBar";
+export { SupportCampaign } from "./SupportCampaign";
 
 // Legacy exports - kept for any remaining consumers
 export { HomeRecapSection } from "./HomeRecapSection";

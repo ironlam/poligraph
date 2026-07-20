@@ -10,7 +10,7 @@ import { HomeIntentGrid } from "@/components/home/HomeIntentGrid";
 import { PopularData } from "@/components/home/PopularData";
 import { ActivityFeed } from "@/components/home/ActivityFeed";
 import { TrustStrip } from "@/components/home/TrustStrip";
-import { SupportBar } from "@/components/home/SupportBar";
+import { SupportCampaign } from "@/components/home/SupportCampaign";
 
 export const revalidate = 300;
 
@@ -50,11 +50,11 @@ export default async function HomePage() {
 
       <PopularData />
 
+      <SupportCampaign />
+
       <ActivityFeed recap={weeklyRecap} />
 
       <TrustStrip />
-
-      <SupportBar />
     </div>
   );
 }
