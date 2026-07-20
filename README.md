@@ -250,6 +250,13 @@ docs/                        # Documentation technique
 | [poligraph-mcp](https://github.com/ironlam/poligraph-mcp)         | Serveur MCP pour agents IA            |
 | [poligraph-wikibot](https://github.com/ironlam/poligraph-wikibot) | Bot Wikidata (contribution open data) |
 
+## Soutenir le projet
+
+Poligraph est maintenu par l'association Sankofa (loi 1901). Vous pouvez soutenir le projet financièrement :
+
+- [HelloAsso](https://www.helloasso.com/associations/association-sankofa/formulaires/1) : don ponctuel ou mensuel à l'association Sankofa
+- [Tipeee](https://fr.tipeee.com/poligraph) : soutien récurrent, versé à l'association
+
 ## Contribuer
 
 Les contributions sont les bienvenues ! Consultez le guide [CONTRIBUTING.md](./CONTRIBUTING.md).

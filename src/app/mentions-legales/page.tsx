@@ -261,6 +261,18 @@ export default function MentionsLegalesPage() {
           </div>
         </section>
 
+        <section id="don">
+          <h2 className="text-xl font-semibold mb-4">Don en ligne</h2>
+          <p className="text-muted-foreground">
+            Lorsque vous choisissez de faire un don, un formulaire HelloAsso peut être chargé sur le
+            site, à votre demande uniquement. HelloAsso traite alors les données nécessaires au
+            paiement et à l&apos;émission du don. Les finalités, les bases juridiques et le rôle
+            respectif de l&apos;association Sankofa et de HelloAsso sont régis par les conditions
+            applicables de HelloAsso. Aucun formulaire de don n&apos;est chargé tant que vous
+            n&apos;avez pas cliqué pour l&apos;ouvrir.
+          </p>
+        </section>
+
         <section>
           <h2 className="text-xl font-semibold mb-4">Politique de confidentialité</h2>
           <p className="text-muted-foreground">
