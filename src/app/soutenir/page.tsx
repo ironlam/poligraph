@@ -34,7 +34,8 @@ export default function SoutenirPage() {
       <section className="mt-12">
         <h2 className="mb-1 text-2xl font-bold">À quoi sert votre don</h2>
         <p className="mb-6 text-muted-foreground">
-          Poligraph tourne d&apos;abord sur du temps. Vos dons permettent d&apos;en dégager plus.
+          Le projet repose d&apos;abord sur du temps bénévole. Vos dons financent les outils,
+          l&apos;infrastructure et les nouvelles données qui le font vivre.
         </p>
         <ul className="grid list-none gap-3 p-0 sm:grid-cols-2">
           {MISSION_ITEMS.map((item) => (
