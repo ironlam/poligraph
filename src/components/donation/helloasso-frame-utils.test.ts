@@ -24,4 +24,16 @@ describe("parseHelloAssoHeight", () => {
   it("rejette un data null", () => {
     expect(parseHelloAssoHeight({ ...ok, data: null }, WIN)).toBeNull();
   });
+  it("rejette une hauteur NaN", () => {
+    expect(parseHelloAssoHeight({ ...ok, data: { height: NaN } }, WIN)).toBeNull();
+  });
+  it("rejette une hauteur Infinity", () => {
+    expect(parseHelloAssoHeight({ ...ok, data: { height: Infinity } }, WIN)).toBeNull();
+  });
+  it("rejette un data qui est une chaîne", () => {
+    expect(parseHelloAssoHeight({ ...ok, data: "not-an-object" }, WIN)).toBeNull();
+  });
+  it("rejette un data qui est un nombre", () => {
+    expect(parseHelloAssoHeight({ ...ok, data: 42 }, WIN)).toBeNull();
+  });
 });
