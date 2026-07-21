@@ -64,7 +64,12 @@ const DAILY_STEPS: DailyStep[] = [
     name: "reconcile-scrutin-dossier",
     run: async () => {
       const { reconcileScrutinDossier } = await import("@/services/sync/reconcile-scrutin-dossier");
-      return reconcileScrutinDossier();
+      // TODO(#477 Task 9): wire Phase A remediation + regen drain
+      const result = await reconcileScrutinDossier({
+        applyClears: false,
+        repairRunId: `daily-${new Date().toISOString().slice(0, 10)}`,
+      });
+      return { evaluated: result.evaluatedCount, applied: result.appliedTransitions.length };
     },
   },
   // Policy-title pipeline: import new amendments → link them to scrutins →
