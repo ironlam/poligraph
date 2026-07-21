@@ -141,6 +141,7 @@ export function computeTransitions(
       bestScore: r.bestScore,
       margin: r.margin,
       candidateExternalIds: r.candidateExternalIds,
+      candidateScores: r.candidateScores,
     });
   }
   return out;

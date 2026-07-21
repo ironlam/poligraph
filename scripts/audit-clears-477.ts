@@ -6,10 +6,19 @@
  * not confidently pick one candidate among several (AMBIGUOUS). That is a
  * destructive, hard-to-reverse decision, so before ever running the backfill
  * with --apply-clears, an operator should be able to see, per scrutin: the
- * currently-linked dossier, every candidate dossier with a recomputed
- * title-similarity score, the current public policy title, and its
- * amendment links. This script assembles exactly that from the DB and a
- * prior report file, and does not write anything.
+ * currently-linked dossier, every candidate dossier with its score, the
+ * current public policy title, and its amendment links. This script
+ * assembles exactly that from the DB and a prior report file, and does not
+ * write anything.
+ *
+ * Per-candidate scores come from `transition.candidateScores`, the actual
+ * resolver output (src/services/sync/reconcile-scrutin-dossier/resolve.ts),
+ * not a recompute. The resolver scores each candidate as the max of three
+ * alias token-sets (titre, titreChemin, senatChemin; see maps.ts), and only
+ * `titre` is persisted on LegislativeDossier. A recompute from the DB title
+ * alone would silently disagree with the resolver whenever titreChemin or
+ * senatChemin drove the real score, so this script carries the resolver's
+ * own scores through the report instead of re-deriving them.
  *
  * Read-only by design: no writes, no $executeRawUnsafe. Safe to run against
  * production at any time.
@@ -61,7 +70,14 @@ function loadClearTransitions(path: string): ScrutinDossierTransition[] {
 interface CandidateAuditEntry {
   externalId: string;
   dossierTitle: string | null;
-  recomputedScore: number;
+  /** The resolver's authoritative alias-max score for this candidate
+   *  (transition.candidateScores), null if the report predates that field. */
+  score: number | null;
+  /** Secondary signal only: jaccard(bill-phrase tokens, dossier's persisted
+   *  `title` alone). NOT the resolver's score, since it ignores the
+   *  titreChemin/senatChemin aliases the resolver also considers. Kept for
+   *  eyeballing, never used for the pass/fail decision. */
+  titleOnlyScore: number;
 }
 
 interface ClearAuditEntry {
@@ -73,6 +89,17 @@ interface ClearAuditEntry {
   currentDossierId: string | null;
   currentDossierTitle: string | null;
   candidates: CandidateAuditEntry[];
+  /** True when this transition predates `candidateScores` (older report):
+   *  candidates[].score is null and recomputedMargin is null. Regenerate the
+   *  report with the updated resolver to get real scores. */
+  scoreUnavailable: boolean;
+  /** candidateScores[0].score - candidateScores[1].score, the resolver's own
+   *  margin recomputed from the same field bestScore/margin came from. null
+   *  if scoreUnavailable or fewer than two candidates. */
+  recomputedMargin: number | null;
+  /** The transition's recorded bestScore/margin, kept alongside for cross-check
+   *  against candidates[0].score / recomputedMargin. Should always agree; a
+   *  mismatch would indicate a resolver/report drift bug. */
   recordedBestScore: number | null;
   recordedMargin: number | null;
   currentPolicyTitle: string | null;
@@ -81,10 +108,9 @@ interface ClearAuditEntry {
   amendmentNumbers: string[];
 }
 
-/** Recomputes a per-candidate title-similarity score using the shipped resolver
- *  primitives, so the audit does not have to trust the recorded bestScore/margin
- *  blind: it can be re-derived from the current scrutin/dossier titles. */
-function scoreCandidate(scrutinTokens: Set<string>, dossierTitle: string | null): number {
+/** Secondary signal only (see CandidateAuditEntry.titleOnlyScore doc comment):
+ *  NOT the resolver's score. */
+function titleOnlyScore(scrutinTokens: Set<string>, dossierTitle: string | null): number {
   if (!dossierTitle) return 0;
   return jaccard(scrutinTokens, tokenize(dossierTitle));
 }
@@ -135,16 +161,29 @@ async function main() {
 
     const phrase = billPhrase(scrutin.title) ?? scrutin.title;
     const scrutinTokens = tokenize(phrase);
+
+    const scoreUnavailable = t.candidateScores === undefined;
+    const resolverScoreByExternalId = new Map(
+      (t.candidateScores ?? []).map((c) => [c.externalId, c.score])
+    );
+
     const candidates: CandidateAuditEntry[] = t.candidateExternalIds
       .map((ext) => {
         const dossierTitle = titleByExternalId.get(ext) ?? null;
         return {
           externalId: ext,
           dossierTitle,
-          recomputedScore: scoreCandidate(scrutinTokens, dossierTitle),
+          score: scoreUnavailable ? null : (resolverScoreByExternalId.get(ext) ?? null),
+          titleOnlyScore: titleOnlyScore(scrutinTokens, dossierTitle),
         };
       })
-      .sort((a, b) => b.recomputedScore - a.recomputedScore);
+      .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+
+    // t.candidateScores is already sorted desc by the resolver (see resolve.ts).
+    const recomputedMargin =
+      t.candidateScores && t.candidateScores.length >= 2
+        ? t.candidateScores[0]!.score - t.candidateScores[1]!.score
+        : null;
 
     enriched.push({
       scrutinId: t.scrutinId,
@@ -155,6 +194,8 @@ async function main() {
       currentDossierId: scrutin.dossierLegislatifId,
       currentDossierTitle: currentDossier?.title ?? null,
       candidates,
+      scoreUnavailable,
+      recomputedMargin,
       recordedBestScore: t.bestScore ?? null,
       recordedMargin: t.margin ?? null,
       currentPolicyTitle: scrutin.policyTitle?.policyTitle ?? null,
@@ -176,15 +217,24 @@ async function main() {
     console.log(
       `  current dossier: ${e.currentDossierId ?? "(none)"}  ${e.currentDossierTitle ?? ""}`
     );
-    for (const c of e.candidates.slice(0, 2)) {
+    if (e.scoreUnavailable) {
       console.log(
-        `  candidate ${c.externalId}  score=${c.recomputedScore.toFixed(3)}  ${
-          c.dossierTitle ?? "(dossier not found)"
-        }`
+        "  score unavailable (regenerate report with the updated resolver): showing the title-only signal below, which is NOT the resolver's real score."
+      );
+    }
+    for (const c of e.candidates.slice(0, 2)) {
+      const scoreLabel = e.scoreUnavailable
+        ? `titleOnlyScore=${c.titleOnlyScore.toFixed(3)} (secondary signal only)`
+        : `score=${(c.score ?? 0).toFixed(3)} (resolver, authoritative)`;
+      console.log(
+        `  candidate ${c.externalId}  ${scoreLabel}  ${c.dossierTitle ?? "(dossier not found)"}`
       );
     }
     console.log(
-      `  recorded bestScore=${e.recordedBestScore ?? "n/a"} margin=${e.recordedMargin ?? "n/a"}`
+      `  recorded bestScore=${e.recordedBestScore ?? "n/a"} margin=${e.recordedMargin ?? "n/a"}` +
+        (e.recomputedMargin !== null
+          ? `  (recomputed margin=${e.recomputedMargin.toFixed(3)})`
+          : "")
     );
     console.log(
       `  current public title: ${e.currentPolicyTitle ?? "(none)"}  [${

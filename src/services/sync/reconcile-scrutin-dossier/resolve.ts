@@ -14,6 +14,14 @@ export interface ResolveOutcome {
   bestScore?: number;
   margin?: number;
   candidateExternalIds: string[];
+  /** Per-candidate alias-max scores (the same `scored` this resolver picks
+   *  bestScore/margin from), sorted desc. Only populated for the multi-candidate
+   *  TITLE_MATCH and AMBIGUOUS paths: VOTE_REF/SINGLE_SESSION/UNMATCHED have no
+   *  meaningful multi-candidate scoring. Callers (e.g. the #477 clears audit)
+   *  should use this instead of recomputing a score from the persisted dossier
+   *  title alone, since the resolver's real score is a max over three aliases
+   *  (titre, titreChemin, senatChemin), not the plain title. */
+  candidateScores?: { externalId: string; score: number }[];
 }
 
 export function resolveScrutinDossier(input: ResolveInput, maps: ResolverMaps): ResolveOutcome {
@@ -58,6 +66,7 @@ export function resolveScrutinDossier(input: ResolveInput, maps: ResolverMaps): 
   const best = scored[0]!;
   const second = scored[1] ?? { score: 0 };
   const margin = best.score - second.score;
+  const candidateScores = scored.map((s) => ({ externalId: s.ext, score: s.score }));
   if (best.score >= TITLE_MATCH_MIN_SCORE && margin >= TITLE_MATCH_MIN_MARGIN) {
     return {
       resolvedDossierExternalId: best.ext,
@@ -65,6 +74,7 @@ export function resolveScrutinDossier(input: ResolveInput, maps: ResolverMaps): 
       bestScore: best.score,
       margin,
       candidateExternalIds: candidates,
+      candidateScores,
     };
   }
   return {
@@ -73,5 +83,6 @@ export function resolveScrutinDossier(input: ResolveInput, maps: ResolverMaps): 
     bestScore: best.score,
     margin,
     candidateExternalIds: candidates,
+    candidateScores,
   };
 }

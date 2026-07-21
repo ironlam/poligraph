@@ -13,6 +13,10 @@ export interface ScrutinDossierTransition {
   bestScore?: number;
   margin?: number;
   candidateExternalIds: string[];
+  /** Resolver's per-candidate alias-max scores, sorted desc. See
+   *  ResolveOutcome.candidateScores (./resolve). Only present for TITLE_MATCH
+   *  and AMBIGUOUS transitions. */
+  candidateScores?: { externalId: string; score: number }[];
 }
 
 export interface ReconciliationResult {

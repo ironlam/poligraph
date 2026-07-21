@@ -30,6 +30,11 @@ describe("resolveScrutinDossier", () => {
     );
     expect(r.resolution).toBe("TITLE_MATCH");
     expect(r.resolvedDossierExternalId).toBe("FRAUDES");
+    expect(r.candidateScores).toBeDefined();
+    const scores = r.candidateScores!;
+    expect(scores.map((c) => c.externalId)).toEqual(["FRAUDES", "DRONE"]);
+    expect(scores[0]!.score).toBe(r.bestScore);
+    expect(scores[0]!.score).toBeGreaterThanOrEqual(scores[1]!.score);
   });
 
   it("VOTE_REF overrides a misleading lexical title", () => {
@@ -89,6 +94,11 @@ describe("resolveScrutinDossier", () => {
     );
     expect(r.resolution).toBe("AMBIGUOUS");
     expect(r.resolvedDossierExternalId).toBeNull();
+    expect(r.candidateScores).toBeDefined();
+    const scores = r.candidateScores!;
+    expect(scores.map((c) => c.externalId).sort()).toEqual(["A", "B"]);
+    expect(scores[0]!.score).toBe(r.bestScore);
+    expect(scores[0]!.score).toBeGreaterThanOrEqual(scores[1]!.score);
   });
 
   it("no séance candidate is UNMATCHED", () => {

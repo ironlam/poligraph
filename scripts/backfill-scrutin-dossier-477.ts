@@ -202,6 +202,24 @@ async function runRegenOnly(args: BackfillArgs): Promise<void> {
   const { reclaimAbandonedRegen, drainDossierRepointRegen } =
     await import("@/services/sync/reconcile-scrutin-dossier/remediate");
 
+  // Presence-only mutual-exclusion check BEFORE any file read: if both
+  // --only-external-ids and --from-report are given (or neither is), abort
+  // now with resolveRegenScope's clear error, rather than letting
+  // loadFromReportScrutinIds below fail first with a file read/parse error
+  // when a --from-report path happens to be invalid.
+  const hasIds = args.onlyExternalIds !== undefined;
+  const hasReport = args.fromReport !== undefined;
+  if ((hasIds && hasReport) || (!hasIds && !hasReport)) {
+    const presenceCheck = resolveRegenScope({
+      onlyExternalIds: args.onlyExternalIds,
+      fromReportTransitions: hasReport ? [] : undefined,
+    });
+    console.error("[backfill] --regen-only scope resolution failed, aborting before any write:");
+    for (const e of presenceCheck.errors) console.error(`  - ${e}`);
+    await db.$disconnect();
+    throw new Error("[backfill] --regen-only scope resolution errors; see log above");
+  }
+
   const fromReportScrutinIds = args.fromReport
     ? loadFromReportScrutinIds(args.fromReport)
     : undefined;
@@ -247,8 +265,16 @@ async function runRegenOnly(args: BackfillArgs): Promise<void> {
   const regenBatch = resolveRegenBatchSize(process.argv.slice(2), args.limit);
 
   if (!args.apply) {
+    // Same has-links condition as drainDossierRepointRegen's selector
+    // (remediate.ts), so this preview count matches what --apply would
+    // actually drain.
     const eligible = await db.scrutinPolicyTitle.count({
-      where: { status: "STALE", regenerationStatus: "queued", scrutinId: { in: scrutinIds } },
+      where: {
+        status: "STALE",
+        regenerationStatus: "queued",
+        scrutin: { amendmentLinks: { some: {} } },
+        scrutinId: { in: scrutinIds },
+      },
     });
     console.log(
       `[backfill] --regen-only dry-run: ${eligible} title(s) in scope are STALE and queued (drain-eligible). Re-run with --apply --confirm-production to regenerate.`
@@ -257,6 +283,9 @@ async function runRegenOnly(args: BackfillArgs): Promise<void> {
     return;
   }
 
+  // Global by design: reclaimAbandonedRegen only resets stuck "running" rows
+  // back to "queued" (no regeneration happens here), so running it unscoped
+  // does not violate the scoped guarantee of the drain step below.
   await reclaimAbandonedRegen();
   let drained = { claimed: 0, regenerated: 0, failed: 0 };
   for (;;) {
