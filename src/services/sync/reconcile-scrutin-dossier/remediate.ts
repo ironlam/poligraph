@@ -25,6 +25,7 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { linkScrutinsToAmendments } from "@/services/sync/link-scrutins-to-amendments";
+import { generateScrutinPolicyTitles } from "@/services/sync/generate-scrutin-policy-titles";
 import type { ScrutinDossierTransition } from "./types";
 
 export const LINKLESS_WARNING = "DOSSIER_RECONCILIATION_LINKLESS";
@@ -201,4 +202,93 @@ export async function requeueLinklessTitlesWithLinks(limit = 500): Promise<numbe
     n++;
   }
   return n;
+}
+
+/**
+ * Phase B: regeneration drain for the STALE ∧ queued rows Phase A produces
+ * (repairScrutinDossier, requeueLinklessTitlesWithLinks). "STALE" is what tells
+ * this drain apart from the substance-drift regeneration queue: that queue only
+ * ever moves DRAFT/NEEDS_REVIEW rows to "queued" (see
+ * policy-title-substance-drift-plan.ts), never STALE, so the two selectors can
+ * never pick up the same row. No extra guard is needed for that.
+ *
+ * A worker can crash or be killed mid-regeneration, leaving a row stuck at
+ * regenerationStatus "running" forever. reclaimAbandonedRegen resets any such
+ * row back to "queued" once it has been running longer than the timeout, so
+ * the next drain pass picks it up again. It only ever touches rows that are
+ * still STALE: a row that finished regenerating is no longer STALE (the
+ * generator's write moves status to DRAFT/NEEDS_REVIEW), so a successful run
+ * can never be clobbered by this reclaim.
+ */
+export const REGEN_RUNNING_TIMEOUT_MS = 15 * 60 * 1000;
+
+export async function reclaimAbandonedRegen(): Promise<number> {
+  const cutoff = new Date(Date.now() - REGEN_RUNNING_TIMEOUT_MS);
+  const { count } = await db.scrutinPolicyTitle.updateMany({
+    where: { status: "STALE", regenerationStatus: "running", updatedAt: { lt: cutoff } },
+    data: { regenerationStatus: "queued" },
+  });
+  return count;
+}
+
+/**
+ * Drains up to `limit` STALE ∧ queued ∧ has-links rows through the real
+ * generator, oldest first. The daily drain and a manual backfill run can
+ * overlap, so each row is claimed atomically before being processed: the
+ * claim update's WHERE re-checks { id, status: "STALE", regenerationStatus:
+ * "queued" }, and if `updateMany`'s count comes back 0 another worker already
+ * flipped it to "running" between the select above and this claim, so this
+ * worker skips it rather than double-processing it. `claimed` only counts rows
+ * this worker actually won.
+ *
+ * On success the row's regenerationStatus is NOT re-set here: force + the
+ * generator's own write already sets it to "idle" atomically as part of the
+ * same persist that writes the new DRAFT/NEEDS_REVIEW row (see
+ * writePolicyTitleRow in @/services/scrutin-policy-title). createRevision is
+ * false because Phase A already snapshotted the prior APPROVED state as a
+ * "dossier_reconciliation_invalidated" revision; a second "regenerated"
+ * revision here would be redundant.
+ */
+export async function drainDossierRepointRegen(
+  opts: { limit?: number } = {}
+): Promise<{ claimed: number; regenerated: number; failed: number }> {
+  const limit = opts.limit ?? 10;
+  const queue = await db.scrutinPolicyTitle.findMany({
+    where: {
+      status: "STALE",
+      regenerationStatus: "queued",
+      scrutin: { amendmentLinks: { some: {} } },
+    },
+    select: { id: true, scrutinId: true },
+    orderBy: { updatedAt: "asc" },
+    take: limit,
+  });
+
+  let claimed = 0;
+  let regenerated = 0;
+  let failed = 0;
+  for (const row of queue) {
+    const claim = await db.scrutinPolicyTitle.updateMany({
+      where: { id: row.id, status: "STALE", regenerationStatus: "queued" },
+      data: { regenerationStatus: "running", regenerationError: null },
+    });
+    if (claim.count === 0) continue; // another worker already claimed this row
+    claimed++;
+
+    try {
+      await generateScrutinPolicyTitles({
+        scrutinIds: [row.scrutinId],
+        force: true,
+        createRevision: false,
+      });
+      regenerated++;
+    } catch (err) {
+      failed++;
+      await db.scrutinPolicyTitle.update({
+        where: { id: row.id },
+        data: { regenerationStatus: "failed", regenerationError: String(err) },
+      });
+    }
+  }
+  return { claimed, regenerated, failed };
 }
