@@ -25,7 +25,7 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { linkScrutinsToAmendments } from "@/services/sync/link-scrutins-to-amendments";
-import { generateScrutinPolicyTitles } from "@/services/sync/generate-scrutin-policy-titles";
+import { generateScrutinPolicyTitle } from "@/services/scrutin-policy-title";
 import type { ScrutinDossierTransition } from "./types";
 
 export const LINKLESS_WARNING = "DOSSIER_RECONCILIATION_LINKLESS";
@@ -232,6 +232,26 @@ export async function reclaimAbandonedRegen(): Promise<number> {
 }
 
 /**
+ * Marks a claimed row "failed" so reclaimAbandonedRegen (which only requeues
+ * rows still "running") does not loop it forever. Guarded on its own: a
+ * transient DB error here must not abort the rest of the drain pass, so it
+ * try/catches and logs rather than throwing.
+ */
+async function markRegenFailed(policyTitleId: string, message: string): Promise<void> {
+  try {
+    await db.scrutinPolicyTitle.update({
+      where: { id: policyTitleId },
+      data: { regenerationStatus: "failed", regenerationError: message },
+    });
+  } catch (err) {
+    console.error(
+      `drainDossierRepointRegen: failed to mark policy title ${policyTitleId} as failed`,
+      err
+    );
+  }
+}
+
+/**
  * Drains up to `limit` STALE ∧ queued ∧ has-links rows through the real
  * generator, oldest first. The daily drain and a manual backfill run can
  * overlap, so each row is claimed atomically before being processed: the
@@ -241,13 +261,25 @@ export async function reclaimAbandonedRegen(): Promise<number> {
  * worker skips it rather than double-processing it. `claimed` only counts rows
  * this worker actually won.
  *
- * On success the row's regenerationStatus is NOT re-set here: force + the
- * generator's own write already sets it to "idle" atomically as part of the
- * same persist that writes the new DRAFT/NEEDS_REVIEW row (see
- * writePolicyTitleRow in @/services/scrutin-policy-title). createRevision is
- * false because Phase A already snapshotted the prior APPROVED state as a
- * "dossier_reconciliation_invalidated" revision; a second "regenerated"
- * revision here would be redundant.
+ * Uses the SINGULAR generator (@/services/scrutin-policy-title), not the batch
+ * wrapper (@/services/sync/generate-scrutin-policy-titles): the batch wrapper
+ * ANDs an unconditional `legislature: 17, chamber: "AN"` into its own query, so
+ * a SENAT or non-legislature-17 row would silently match zero scrutins and
+ * never reach the generator at all. The singular generator does a plain
+ * findUnique by id, with no such filter.
+ *
+ * A clean (non-throwing) return from the generator is not proof a write
+ * happened: the link gate can return `outcome: "skipped", written: false` if
+ * the links vanished between the select above and this call. Only a truthy
+ * `result.written` counts as regenerated; on success the row's
+ * regenerationStatus is NOT re-set here, because force + the generator's own
+ * write already sets it to "idle" atomically as part of the same persist that
+ * writes the new DRAFT/NEEDS_REVIEW row (see writePolicyTitleRow in
+ * @/services/scrutin-policy-title). A no-write outcome is treated the same as
+ * a throw: the row is marked "failed" so it does not stay stuck at "running"
+ * forever. createRevision is false because Phase A already snapshotted the
+ * prior APPROVED state as a "dossier_reconciliation_invalidated" revision; a
+ * second "regenerated" revision here would be redundant.
  */
 export async function drainDossierRepointRegen(
   opts: { limit?: number } = {}
@@ -276,18 +308,24 @@ export async function drainDossierRepointRegen(
     claimed++;
 
     try {
-      await generateScrutinPolicyTitles({
-        scrutinIds: [row.scrutinId],
+      const result = await generateScrutinPolicyTitle(row.scrutinId, {
         force: true,
         createRevision: false,
       });
-      regenerated++;
+      if (result.written) {
+        regenerated++;
+      } else {
+        failed++;
+        await markRegenFailed(
+          row.id,
+          `regeneration produced no write (outcome=${result.outcome}${
+            result.skipReason ? `, ${result.skipReason}` : ""
+          })`
+        );
+      }
     } catch (err) {
       failed++;
-      await db.scrutinPolicyTitle.update({
-        where: { id: row.id },
-        data: { regenerationStatus: "failed", regenerationError: String(err) },
-      });
+      await markRegenFailed(row.id, String(err));
     }
   }
   return { claimed, regenerated, failed };

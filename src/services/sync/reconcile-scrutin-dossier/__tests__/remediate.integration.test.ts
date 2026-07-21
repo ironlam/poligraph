@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { ScrutinDossierTransition } from "../types";
 
-// Mock BEFORE anything imports remediate.ts, which pulls in generateScrutinPolicyTitles,
+// Mock BEFORE anything imports remediate.ts, which pulls in generateScrutinPolicyTitle,
 // which pulls in the real Mistral client. Only the Phase B describe block below drives
 // the LLM path; the Phase A blocks above never reach it, so this mock is a no-op for them.
 const mockCall = vi.fn();
@@ -16,6 +16,8 @@ let db: typeof import("@/lib/db").db;
 let repairScrutinDossier: typeof import("../remediate").repairScrutinDossier;
 let requeueLinklessTitlesWithLinks: typeof import("../remediate").requeueLinklessTitlesWithLinks;
 let drainDossierRepointRegen: typeof import("../remediate").drainDossierRepointRegen;
+let reclaimAbandonedRegen: typeof import("../remediate").reclaimAbandonedRegen;
+let REGEN_RUNNING_TIMEOUT_MS: number;
 let LINKLESS_WARNING: string;
 
 const PFX = "TEST_RMD_";
@@ -805,5 +807,103 @@ describeIfDb("drainDossierRepointRegen (Phase B)", () => {
     // The newest of the three is the leftover a limit of 2 must not touch.
     expect(newestAfter.status).toBe("STALE");
     expect(newestAfter.regenerationStatus).toBe("queued");
+  });
+});
+
+describeIfDb("reclaimAbandonedRegen", () => {
+  const PFX4 = "TEST_RMD_RECLAIM_";
+
+  /** Seeds a bare scrutin + ScrutinPolicyTitle row in the requested state. No
+   *  amendment link is needed: reclaimAbandonedRegen's WHERE only looks at the
+   *  title's own status/regenerationStatus/updatedAt. */
+  async function seedReclaimFixture(opts: {
+    suffix: string;
+    status: "STALE" | "DRAFT";
+    regenerationStatus: "queued" | "running" | "idle" | "failed";
+    updatedAt: Date;
+  }): Promise<string> {
+    const { suffix, status, regenerationStatus, updatedAt } = opts;
+
+    const scrutin = await db.scrutin.create({
+      data: {
+        externalId: `${PFX4}S_${suffix}`,
+        title: `Scrutin de test reclaim ${suffix}`,
+        sourceUrl: `https://www.assemblee-nationale.fr/dyn/17/scrutins/test-rmd-reclaim-s-${suffix.toLowerCase()}`,
+        votingDate: new Date(),
+        legislature: 17,
+        chamber: "AN",
+        votesFor: 1,
+        votesAgainst: 0,
+        votesAbstain: 0,
+        result: "ADOPTED",
+      },
+    });
+
+    const policyTitle = await db.scrutinPolicyTitle.create({
+      data: {
+        scrutinId: scrutin.id,
+        officialTitleSnapshot: scrutin.title,
+        officialSourceUrl: scrutin.sourceUrl,
+        inputHash: "0".repeat(64),
+        policyTitle: `Titre test reclaim ${suffix}`,
+        policySubtitle: null,
+        proceduralLabel: "Amendement n°1",
+        confidence: "HIGH",
+        qualitySignals: {},
+        generationSource: "LLM",
+        status,
+        regenerationStatus,
+        updatedAt,
+      },
+    });
+
+    return policyTitle.id;
+  }
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ reclaimAbandonedRegen, REGEN_RUNNING_TIMEOUT_MS } = await import("../remediate"));
+
+    await db.scrutinPolicyTitle.deleteMany({
+      where: { scrutin: { externalId: { startsWith: PFX4 } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX4 } } });
+  });
+
+  afterAll(async () => {
+    await db.scrutinPolicyTitle.deleteMany({
+      where: { scrutin: { externalId: { startsWith: PFX4 } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX4 } } });
+  });
+
+  it("resets a STALE + running + abandoned row back to queued", async () => {
+    const ancient = new Date(Date.now() - REGEN_RUNNING_TIMEOUT_MS - 60_000);
+    const id = await seedReclaimFixture({
+      suffix: "A",
+      status: "STALE",
+      regenerationStatus: "running",
+      updatedAt: ancient,
+    });
+
+    await reclaimAbandonedRegen();
+
+    const after = await db.scrutinPolicyTitle.findUniqueOrThrow({ where: { id } });
+    expect(after.regenerationStatus).toBe("queued");
+  });
+
+  it("leaves a non-STALE running abandoned row untouched", async () => {
+    const ancient = new Date(Date.now() - REGEN_RUNNING_TIMEOUT_MS - 60_000);
+    const id = await seedReclaimFixture({
+      suffix: "B",
+      status: "DRAFT",
+      regenerationStatus: "running",
+      updatedAt: ancient,
+    });
+
+    await reclaimAbandonedRegen();
+
+    const after = await db.scrutinPolicyTitle.findUniqueOrThrow({ where: { id } });
+    expect(after.regenerationStatus).toBe("running");
   });
 });
