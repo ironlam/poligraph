@@ -262,8 +262,11 @@ export async function reconcileScrutinDossier(
       (t) => t.action === "NEW_LINK" || t.action === "REPOINT" || t.action === "CLEAR"
     );
 
-    // 8. Apply mutations
-    await applyTransitions(transitions, db);
+    // 8. Apply mutations, unless the caller's Phase A owns the write
+    // (applyMutations: false, see ReconcileOptions).
+    if ((opts.applyMutations ?? true) && appliedTransitions.length > 0) {
+      await applyTransitions(transitions, db);
+    }
 
     console.log(
       `[reconcile] Evaluated ${transitions.length} scrutins, applied ${appliedTransitions.length} transitions`

@@ -64,12 +64,27 @@ const DAILY_STEPS: DailyStep[] = [
     name: "reconcile-scrutin-dossier",
     run: async () => {
       const { reconcileScrutinDossier } = await import("@/services/sync/reconcile-scrutin-dossier");
-      // TODO(#477 Task 9): wire Phase A remediation + regen drain
+      const { repairScrutinDossier } =
+        await import("@/services/sync/reconcile-scrutin-dossier/remediate");
+      const repairRunId = `daily-${new Date().toISOString().slice(0, 10)}`;
       const result = await reconcileScrutinDossier({
         applyClears: false,
-        repairRunId: `daily-${new Date().toISOString().slice(0, 10)}`,
+        applyMutations: false,
+        repairRunId,
       });
-      return { evaluated: result.evaluatedCount, applied: result.appliedTransitions.length };
+      const repairs: Record<string, number> = {};
+      for (const t of result.appliedTransitions) {
+        const r = await repairScrutinDossier(t, repairRunId);
+        repairs[r.repairStatus] = (repairs[r.repairStatus] ?? 0) + 1;
+      }
+      const byAction: Record<string, number> = {};
+      for (const t of result.appliedTransitions) byAction[t.action] = (byAction[t.action] ?? 0) + 1;
+      return {
+        evaluated: result.evaluatedCount,
+        applied: result.appliedTransitions.length,
+        byAction,
+        repairs,
+      };
     },
   },
   // Policy-title pipeline: import new amendments → link them to scrutins →
@@ -118,6 +133,17 @@ const DAILY_STEPS: DailyStep[] = [
       });
       console.info("[sync-daily] link-scrutins-amendments", stats);
       return stats;
+    },
+  },
+  {
+    name: "dossier-repoint-regen",
+    run: async () => {
+      const { requeueLinklessTitlesWithLinks, reclaimAbandonedRegen, drainDossierRepointRegen } =
+        await import("@/services/sync/reconcile-scrutin-dossier/remediate");
+      const requeued = await requeueLinklessTitlesWithLinks();
+      const reclaimed = await reclaimAbandonedRegen();
+      const drained = await drainDossierRepointRegen({ limit: 10 });
+      return { requeued, reclaimed, ...drained };
     },
   },
   {
