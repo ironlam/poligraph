@@ -76,6 +76,9 @@ export interface GenerateOptions {
   dryRun?: boolean; // resolve + prompt + (optionally) LLM, but NEVER write. Writes gated ONLY by dryRun.
   skipLlm?: boolean; // resolve + build prompt only, no LLM call (implies no write)
   force?: boolean; // regenerate even if a row exists (overwrite in place + revision)
+  /** When false, a forced overwrite does NOT create a revision snapshot
+   *  (the caller already recorded the authoritative one). Default true. */
+  createRevision?: boolean;
   allowUnlinkedFallback?: boolean; // explicit unlinked scrutinId → FALLBACK row instead of skip (default false → skip NO_LINKED_AMENDMENT)
   promptVersion?: string; // default "policy-title-v1"
   modelVersionDate?: string; // ISO date; modelVersion = `${MISTRAL_MODEL}@${modelVersionDate}`

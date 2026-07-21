@@ -142,6 +142,7 @@ interface WriteArgs {
   blocks: SubstanceTextBlock[];
   status: "DRAFT" | "NEEDS_REVIEW";
   force: boolean;
+  createRevision: boolean;
 }
 
 async function writePolicyTitleRow(args: WriteArgs): Promise<void> {
@@ -153,6 +154,7 @@ async function writePolicyTitleRow(args: WriteArgs): Promise<void> {
     amendmentIds: args.scrutin.amendmentLinks.map((l) => l.amendment.id),
     dossierId: args.scrutin.dossierLegislatifId,
   };
+  const now = new Date();
 
   const data = {
     officialTitleSnapshot: args.scrutin.title,
@@ -172,6 +174,16 @@ async function writePolicyTitleRow(args: WriteArgs): Promise<void> {
     currentWarnings: warningsJson,
     inputs: inputsJson,
     status: args.status,
+    // A (re)generation is a fresh draft: reset the age/review bookkeeping so a
+    // forced regen of an old row is not immediately auto-approvable (the veto
+    // window in autoApproveBatchEligible keys off generatedAt) and so it does
+    // not carry over a stale human review or a mid-flight regeneration state.
+    generatedAt: now,
+    reviewedAt: null,
+    reviewedBy: null,
+    editedFromGenerated: false,
+    regenerationStatus: "idle" as const,
+    regenerationError: null,
   };
 
   await db.$transaction(async (tx) => {
@@ -180,7 +192,7 @@ async function writePolicyTitleRow(args: WriteArgs): Promise<void> {
     });
 
     if (existing) {
-      if (args.force) {
+      if (args.force && args.createRevision) {
         await tx.scrutinPolicyTitleRevision.create({
           data: {
             policyTitleId: existing.id,
@@ -209,6 +221,7 @@ export async function generateScrutinPolicyTitle(
   opts: GenerateOptions = {}
 ): Promise<GenerateResult> {
   const force = opts.force ?? false;
+  const createRevision = opts.createRevision ?? true;
   const dryRun = opts.dryRun ?? false;
   const promptVersion = opts.promptVersion ?? PROMPT_VERSION;
   const modelVersion = modelVersionString(opts);
@@ -270,6 +283,7 @@ export async function generateScrutinPolicyTitle(
       warnings: [warning],
       dryRun,
       force,
+      createRevision,
       verbose: opts.verbose,
     });
   }
@@ -318,6 +332,7 @@ export async function generateScrutinPolicyTitle(
       warnings,
       dryRun,
       force,
+      createRevision,
       verbose: opts.verbose,
     });
   }
@@ -400,6 +415,7 @@ export async function generateScrutinPolicyTitle(
       ],
       dryRun,
       force,
+      createRevision,
       verbose: opts.verbose,
     });
   }
@@ -455,6 +471,7 @@ export async function generateScrutinPolicyTitle(
       blocks: resolved.blocks,
       status,
       force,
+      createRevision,
     });
   }
 
@@ -499,6 +516,7 @@ interface FallbackArgs {
   warnings: GenerationWarning[];
   dryRun: boolean;
   force: boolean;
+  createRevision: boolean;
   verbose?: boolean;
 }
 
@@ -532,6 +550,7 @@ async function fallbackResult(args: FallbackArgs): Promise<GenerateResult> {
       blocks: args.blocks,
       status,
       force: args.force,
+      createRevision: args.createRevision,
     });
   }
 

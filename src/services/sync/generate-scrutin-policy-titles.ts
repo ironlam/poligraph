@@ -24,6 +24,7 @@ export interface GeneratePolicyTitlesOptions {
   chamber?: "AN" | "SENAT";
   limit?: number;
   force?: boolean;
+  createRevision?: boolean;
   scrutinIds?: string[];
   dryRun?: boolean;
   skipLlm?: boolean;
@@ -40,6 +41,7 @@ export async function generateScrutinPolicyTitles(
     chamber = "AN",
     limit,
     force = false,
+    createRevision,
     scrutinIds,
     dryRun = false,
     skipLlm = false,
@@ -79,6 +81,7 @@ export async function generateScrutinPolicyTitles(
         dryRun,
         skipLlm,
         verbose,
+        ...(createRevision !== undefined ? { createRevision } : {}),
         ...(modelVersionDate ? { modelVersionDate } : {}),
       });
 
