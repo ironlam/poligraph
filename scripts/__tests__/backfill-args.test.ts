@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseBackfillArgs, selectBackfillScope } from "../backfill-scrutin-dossier-477";
+import {
+  parseBackfillArgs,
+  selectBackfillScope,
+  resolveRegenScope,
+  resolveRegenBatchSize,
+} from "../backfill-scrutin-dossier-477";
 import type { ScrutinDossierTransition } from "@/services/sync/reconcile-scrutin-dossier/types";
 
 describe("parseBackfillArgs", () => {
@@ -33,6 +38,64 @@ describe("parseBackfillArgs", () => {
   });
   it("parses --limit", () => {
     expect(parseBackfillArgs(["--limit=4"]).limit).toBe(4);
+  });
+  it("defaults regenOnly to false and fromReport to undefined", () => {
+    const a = parseBackfillArgs([]);
+    expect(a.regenOnly).toBe(false);
+    expect(a.fromReport).toBeUndefined();
+  });
+  it("parses --regen-only", () => {
+    expect(parseBackfillArgs(["--regen-only"]).regenOnly).toBe(true);
+  });
+  it("parses --from-report=<path>", () => {
+    expect(parseBackfillArgs(["--from-report=scripts/.local/report.json"]).fromReport).toBe(
+      "scripts/.local/report.json"
+    );
+  });
+  it("--regen-only with --apply still requires --confirm-production", () => {
+    expect(() => parseBackfillArgs(["--regen-only", "--apply"])).toThrow(/confirm-production/);
+  });
+});
+
+describe("resolveRegenScope", () => {
+  it("errors when neither scope source is given", () => {
+    const { errors } = resolveRegenScope({});
+    expect(errors.some((e) => e.includes("scope source"))).toBe(true);
+  });
+  it("errors when both scope sources are given", () => {
+    const { errors } = resolveRegenScope({
+      onlyExternalIds: ["a"],
+      fromReportTransitions: ["scrutin-1"],
+    });
+    expect(errors.some((e) => e.includes("mutually exclusive"))).toBe(true);
+  });
+  it("accepts onlyExternalIds alone", () => {
+    const { errors } = resolveRegenScope({ onlyExternalIds: ["a", "b"] });
+    expect(errors).toEqual([]);
+  });
+  it("accepts fromReportTransitions alone", () => {
+    const { errors } = resolveRegenScope({ fromReportTransitions: ["scrutin-1"] });
+    expect(errors).toEqual([]);
+  });
+  it("errors on an empty onlyExternalIds scope", () => {
+    const { errors } = resolveRegenScope({ onlyExternalIds: [] });
+    expect(errors.some((e) => e.includes("empty"))).toBe(true);
+  });
+  it("errors on an empty fromReportTransitions scope", () => {
+    const { errors } = resolveRegenScope({ fromReportTransitions: [] });
+    expect(errors.some((e) => e.includes("empty"))).toBe(true);
+  });
+});
+
+describe("resolveRegenBatchSize", () => {
+  it("prefers an explicit --regen-batch over --limit", () => {
+    expect(resolveRegenBatchSize(["--regen-batch=25", "--limit=20"], 20)).toBe(25);
+  });
+  it("falls back to --limit when --regen-batch is absent", () => {
+    expect(resolveRegenBatchSize(["--limit=20"], 20)).toBe(20);
+  });
+  it("defaults to 25 when neither is given", () => {
+    expect(resolveRegenBatchSize([], undefined)).toBe(25);
   });
 });
 
