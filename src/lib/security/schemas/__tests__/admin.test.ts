@@ -7,6 +7,11 @@ describe("revalidateVotesSchema", () => {
     expect(r.success).toBe(false);
   });
 
+  it("rejects a scrutinIds array containing an empty string", () => {
+    const r = revalidateVotesSchema.safeParse({ scrutinIds: [""] });
+    expect(r.success).toBe(false);
+  });
+
   it("rejects more than 200 scrutinIds", () => {
     const scrutinIds = Array.from({ length: 201 }, (_, i) => `sc-${i}`);
     const r = revalidateVotesSchema.safeParse({ scrutinIds });

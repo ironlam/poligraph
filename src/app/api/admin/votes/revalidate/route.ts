@@ -20,13 +20,15 @@ import { partitionRevalidatable } from "./partition";
  */
 export const POST = withAdminAuth(
   withValidation(revalidateVotesSchema, async (_request, _context, body) => {
+    const ids = Array.from(new Set(body.scrutinIds));
+
     const rows = await db.scrutin.findMany({
-      where: { id: { in: body.scrutinIds } },
+      where: { id: { in: ids } },
       select: { id: true, policyTitle: { select: { status: true } } },
     });
 
     const { toRevalidate, skipped } = partitionRevalidatable(
-      body.scrutinIds,
+      ids,
       rows.map((row) => ({ id: row.id, status: row.policyTitle?.status ?? null }))
     );
 
@@ -39,7 +41,7 @@ export const POST = withAdminAuth(
         action: "INVALIDATE",
         entityType: "Scrutin",
         entityId: `${toRevalidate.length} scrutins`,
-        changes: { revalidated: toRevalidate.length, skipped: skipped.length },
+        changes: { revalidated: toRevalidate, skipped },
       },
     });
 
