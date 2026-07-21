@@ -20,12 +20,17 @@ function buildExtendedClient() {
 
   // Create a connection pool (SSL required by Supabase, rejectUnauthorized: false for pooler certs)
   // Serverless-friendly: small pool per lambda, but enough to handle parallel queries within a request
+  //
+  // SSL: on by default (production/staging on Supabase are unchanged). Set
+  // DATABASE_SSL=false ONLY for a local, non-TLS Postgres such as the disposable
+  // Docker test database. The variable must be the exact string "false" to disable.
+  const useSsl = process.env.DATABASE_SSL !== "false";
   const pool = new Pool({
     connectionString,
     max: 2, // Serverless: each Vercel lambda gets its own pool — keep low to avoid exhausting Supabase pooler
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
-    ssl: { rejectUnauthorized: false },
+    ssl: useSsl ? { rejectUnauthorized: false } : false,
     allowExitOnIdle: true, // Release idle connections faster in serverless
     statement_timeout: 30_000, // Kill queries after 30s to prevent pool starvation
   });

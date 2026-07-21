@@ -1,0 +1,22 @@
+# Disposable PostgreSQL for the #477 DB integration tests ONLY.
+# NEVER for production or shared data. Torn down with `down -v` by scripts/test-db-477.sh.
+name: poligraph-test-477
+services:
+  db-test:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: poligraph_test
+      POSTGRES_PASSWORD: poligraph_test
+      POSTGRES_DB: poligraph_test
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poligraph_test -d poligraph_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata_test:
