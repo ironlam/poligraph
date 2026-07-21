@@ -179,13 +179,22 @@ export async function repairScrutinDossier(
  * usage of JSON-path filtering here to fall back on. The candidate set
  * (STALE + idle titles) is bounded by `limit`, so loading currentWarnings and
  * checking/pruning the code in JS carries no meaningful cost.
+ *
+ * `scrutinIds` is optional scoping for the #477 staged backfill (see
+ * scripts/backfill-scrutin-dossier-477.ts): when provided, only titles for
+ * those scrutins are considered. The daily sync caller never passes it, so
+ * its behavior (global scan) is unchanged.
  */
-export async function requeueLinklessTitlesWithLinks(limit = 500): Promise<number> {
+export async function requeueLinklessTitlesWithLinks(
+  limit = 500,
+  scrutinIds?: string[]
+): Promise<number> {
   const candidates = await db.scrutinPolicyTitle.findMany({
     where: {
       status: "STALE",
       regenerationStatus: "idle",
       scrutin: { amendmentLinks: { some: {} } },
+      ...(scrutinIds ? { scrutinId: { in: scrutinIds } } : {}),
     },
     select: { id: true, currentWarnings: true },
     take: limit,
@@ -291,9 +300,15 @@ async function markRegenFailed(policyTitleId: string, message: string): Promise<
  * forever. createRevision is false because Phase A already snapshotted the
  * prior APPROVED state as a "dossier_reconciliation_invalidated" revision; a
  * second "regenerated" revision here would be redundant.
+ *
+ * `opts.scrutinIds` is optional scoping for the #477 staged backfill (see
+ * scripts/backfill-scrutin-dossier-477.ts): when provided, only rows for
+ * those scrutins are drained, so a scoped Stage-1 run never touches
+ * out-of-scope rows. The daily sync caller never passes it, so its behavior
+ * (global drain) is unchanged.
  */
 export async function drainDossierRepointRegen(
-  opts: { limit?: number } = {}
+  opts: { limit?: number; scrutinIds?: string[] } = {}
 ): Promise<{ claimed: number; regenerated: number; failed: number }> {
   const limit = opts.limit ?? 10;
   const queue = await db.scrutinPolicyTitle.findMany({
@@ -301,6 +316,7 @@ export async function drainDossierRepointRegen(
       status: "STALE",
       regenerationStatus: "queued",
       scrutin: { amendmentLinks: { some: {} } },
+      ...(opts.scrutinIds ? { scrutinId: { in: opts.scrutinIds } } : {}),
     },
     select: { id: true, scrutinId: true },
     orderBy: { updatedAt: "asc" },
