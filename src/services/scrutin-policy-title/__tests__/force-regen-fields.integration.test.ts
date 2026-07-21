@@ -208,7 +208,7 @@ describeIfDb("forced regeneration resets age/review fields", () => {
       where: { policyTitleId: before.id, action: "regenerated" },
     });
     expect(revisions).toHaveLength(1);
-    const snapshot = revisions[0].snapshot as { status?: string; policyTitle?: string | null };
+    const snapshot = revisions[0]!.snapshot as { status?: string; policyTitle?: string | null };
     expect(snapshot.status).toBe("APPROVED");
     expect(snapshot.policyTitle).toBe("Ancien titre déjà approuvé");
   });

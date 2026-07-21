@@ -39,8 +39,8 @@ describe("computeTransitions", () => {
       dossierIdByExt,
       { applyClears: false, repairRunId: "run1" }
     );
-    expect(t[0].action).toBe("REPOINT");
-    expect(t[0].appliedDossierId).toBe("d-fraudes");
+    expect(t[0]!.action).toBe("REPOINT");
+    expect(t[0]!.appliedDossierId).toBe("d-fraudes");
   });
 
   it("creates a NEW_LINK when a scrutin has no previous dossier and resolves to one", () => {
@@ -58,8 +58,8 @@ describe("computeTransitions", () => {
       dossierIdByExt,
       { applyClears: false, repairRunId: "run1" }
     );
-    expect(t[0].action).toBe("NEW_LINK");
-    expect(t[0].appliedDossierId).toBe("d-fraudes");
+    expect(t[0]!.action).toBe("NEW_LINK");
+    expect(t[0]!.appliedDossierId).toBe("d-fraudes");
   });
 
   it("keeps (does not clear) an ambiguous currently-linked scrutin when applyClears=false", () => {
@@ -94,9 +94,9 @@ describe("computeTransitions", () => {
       ]),
       { applyClears: false, repairRunId: "run1" }
     );
-    expect(t[0].resolution).toBe("AMBIGUOUS");
-    expect(t[0].action).toBe("KEEP");
-    expect(t[0].appliedDossierId).toBe("d-a");
+    expect(t[0]!.resolution).toBe("AMBIGUOUS");
+    expect(t[0]!.action).toBe("KEEP");
+    expect(t[0]!.appliedDossierId).toBe("d-a");
   });
 
   it("clears the same scrutin under applyClears=true", () => {
@@ -131,8 +131,8 @@ describe("computeTransitions", () => {
       ]),
       { applyClears: true, repairRunId: "run1" }
     );
-    expect(t[0].action).toBe("CLEAR");
-    expect(t[0].appliedDossierId).toBeNull();
+    expect(t[0]!.action).toBe("CLEAR");
+    expect(t[0]!.appliedDossierId).toBeNull();
   });
 
   it("second identical pass yields no applied transitions (idempotent)", () => {
@@ -150,6 +150,6 @@ describe("computeTransitions", () => {
       dossierIdByExt,
       { applyClears: false, repairRunId: "run1" }
     );
-    expect(t[0].action).toBe("NOOP");
+    expect(t[0]!.action).toBe("NOOP");
   });
 });

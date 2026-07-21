@@ -36,7 +36,10 @@ export function billPhrase(title: string): string | null {
     /(?:proposition de loi|projet de loi|proposition de r[eé]solution)\s+(.+)$/i
   );
   if (!m) return null;
-  return m[1]
+  // The regex has exactly one capture group, matched whenever `m` is non-null.
+  const captured = m[1];
+  if (captured === undefined) return null;
+  return captured
     .replace(/\s*\([^)]*lecture[^)]*\)\s*\.?\s*$/i, "")
     .replace(/\s*\.\s*$/, "")
     .trim();

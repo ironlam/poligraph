@@ -331,7 +331,7 @@ describeIfDb("repairScrutinDossier (Phase A)", () => {
       },
     });
     expect(revisions).toHaveLength(1);
-    const snapshot = revisions[0].snapshot as { status?: string; repairRunId?: string };
+    const snapshot = revisions[0]!.snapshot as { status?: string; repairRunId?: string };
     expect(snapshot.status).toBe("APPROVED");
     expect(snapshot.repairRunId).toBe("repair-run-A");
   });
@@ -428,7 +428,7 @@ describeIfDb("repairScrutinDossier (Phase A)", () => {
       },
     });
     expect(revisionsAfterSecond).toHaveLength(1);
-    expect(revisionsAfterSecond[0].id).toBe(revisionsAfterFirst[0].id);
+    expect(revisionsAfterSecond[0]!.id).toBe(revisionsAfterFirst[0]!.id);
   });
 });
 
