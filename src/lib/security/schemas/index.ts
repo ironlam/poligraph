@@ -17,6 +17,7 @@ export { updateDossierSchema } from "./dossier";
 export { createFeatureFlagSchema, updateFeatureFlagSchema } from "./feature-flag";
 export {
   revalidateCacheSchema,
+  revalidateVotesSchema,
   createSyncSchema,
   resolveIdentitySchema,
   deleteRejectionsSchema,

@@ -16,6 +16,12 @@ export const revalidateCacheSchema = z.union([
   z.object({ tags: z.array(z.enum(VALID_CACHE_TAGS)).min(1) }),
 ]);
 
+// Cap at 200: this endpoint revalidates paths inline in the request, so an
+// unbounded batch would mean an unbounded number of revalidatePath calls.
+export const revalidateVotesSchema = z.object({
+  scrutinIds: z.array(z.string().min(1)).min(1).max(200),
+});
+
 export const createSyncSchema = z.object({
   script: z.string().min(1).max(200),
 });
