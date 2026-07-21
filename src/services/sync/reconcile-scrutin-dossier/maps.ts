@@ -1,5 +1,11 @@
 import { tokenize } from "./text";
 
+// Legislature 17 is baked into the AN voteRef format (VTANR5L{legislature}V{n}).
+// Kept as a derived regex rather than a bare literal so the legislature coupling
+// is visible in one place if a future legislature needs this reconciler again.
+const LEGISLATURE = 17;
+const VOTE_REF_RE = new RegExp(`VTANR5L${LEGISLATURE}V\\d+`, "g");
+
 export interface ParsedDossier {
   externalId: string;
   titre: string;
@@ -63,7 +69,7 @@ function walk(
   for (const a of nodes) {
     if (a.reunionRef) reunions.add(a.reunionRef);
     if (a.voteRefs) {
-      for (const m of JSON.stringify(a.voteRefs).match(/VTANR5L17V\d+/g) ?? []) votes.add(m);
+      for (const m of JSON.stringify(a.voteRefs).match(VOTE_REF_RE) ?? []) votes.add(m);
     }
     if (a.actesLegislatifs?.acteLegislatif)
       walk(a.actesLegislatifs.acteLegislatif, reunions, votes);

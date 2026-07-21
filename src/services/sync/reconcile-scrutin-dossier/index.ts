@@ -8,12 +8,13 @@
  *
  * This service downloads both ZIPs, builds the resolver maps (Task 2/3), then
  * computes a per-scrutin transition (NEW_LINK/REPOINT/CLEAR/KEEP/NOOP) and
- * applies it. This is self-healing: previously-wrong links (REPOINT) are
- * corrected, not just missing links (NEW_LINK) filled in.
+ * returns it. This is self-healing: previously-wrong links (REPOINT) are
+ * corrected, not just missing links (NEW_LINK) filled in. Plan-only: this
+ * module writes nothing to dossierLegislatifId itself. The caller's Phase A
+ * (repairScrutinDossier, see ./remediate) is the sole writer, atomically with
+ * the title STALE transition.
  */
 
-import type { db as Db } from "@/lib/db";
-import { Prisma } from "@/generated/prisma";
 import * as fs from "fs";
 import * as https from "https";
 import { createWriteStream, mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
@@ -32,8 +33,6 @@ const TEMP_DIR = "/tmp/reconcile-scrutin-dossier";
 
 const DOSSIER_ZIP_URL = `https://data.assemblee-nationale.fr/static/openData/repository/${LEGISLATURE}/loi/dossiers_legislatifs/Dossiers_Legislatifs.json.zip`;
 const SCRUTIN_ZIP_URL = `https://data.assemblee-nationale.fr/static/openData/repository/${LEGISLATURE}/loi/scrutins/Scrutins.json.zip`;
-
-const UPDATE_CHUNK_SIZE = 500;
 
 // ---------------------------------------------------------------------------
 // AN JSON types (minimal, just what we need)
@@ -148,30 +147,6 @@ export function computeTransitions(
 }
 
 // ---------------------------------------------------------------------------
-// Apply mutations
-// ---------------------------------------------------------------------------
-
-async function applyTransitions(
-  transitions: ScrutinDossierTransition[],
-  db: typeof Db
-): Promise<void> {
-  const applied = transitions.filter(
-    (t) => t.action === "NEW_LINK" || t.action === "REPOINT" || t.action === "CLEAR"
-  );
-  for (let i = 0; i < applied.length; i += UPDATE_CHUNK_SIZE) {
-    const chunk = applied.slice(i, i + UPDATE_CHUNK_SIZE);
-    const values = Prisma.join(
-      chunk.map((t) => Prisma.sql`(${t.scrutinId}::text, ${t.appliedDossierId}::text)`)
-    );
-    await db.$executeRaw`
-      UPDATE "Scrutin" AS s
-      SET "dossierLegislatifId" = v.dossier_id
-      FROM (VALUES ${values}) AS v(scrutin_id, dossier_id)
-      WHERE s.id = v.scrutin_id`;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -261,12 +236,6 @@ export async function reconcileScrutinDossier(
     const appliedTransitions = transitions.filter(
       (t) => t.action === "NEW_LINK" || t.action === "REPOINT" || t.action === "CLEAR"
     );
-
-    // 8. Apply mutations, unless the caller's Phase A owns the write
-    // (applyMutations: false, see ReconcileOptions).
-    if ((opts.applyMutations ?? true) && appliedTransitions.length > 0) {
-      await applyTransitions(transitions, db);
-    }
 
     console.log(
       `[reconcile] Evaluated ${transitions.length} scrutins, applied ${appliedTransitions.length} transitions`

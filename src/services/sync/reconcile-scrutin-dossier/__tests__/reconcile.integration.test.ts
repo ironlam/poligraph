@@ -43,6 +43,25 @@ describe("computeTransitions", () => {
     expect(t[0].appliedDossierId).toBe("d-fraudes");
   });
 
+  it("creates a NEW_LINK when a scrutin has no previous dossier and resolves to one", () => {
+    const t = computeTransitions(
+      [
+        {
+          scrutinId: "s3",
+          externalId: "V621",
+          seanceRef: "RU",
+          title: "proposition de loi contre toutes les fraudes aux aides publiques",
+          previousDossierId: null,
+        },
+      ],
+      maps,
+      dossierIdByExt,
+      { applyClears: false, repairRunId: "run1" }
+    );
+    expect(t[0].action).toBe("NEW_LINK");
+    expect(t[0].appliedDossierId).toBe("d-fraudes");
+  });
+
   it("keeps (does not clear) an ambiguous currently-linked scrutin when applyClears=false", () => {
     const ambiguous = buildDossierMaps([
       {

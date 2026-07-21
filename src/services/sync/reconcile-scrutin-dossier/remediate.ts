@@ -127,9 +127,16 @@ export async function repairScrutinDossier(
     return { scrutinId: t.scrutinId, repairStatus: "BLOCKED_MANUAL_LINK", linkless: false };
 
   // --- Re-link OUTSIDE the transaction: linkScrutinsToAmendments uses the global
-  //     `db` client internally and cannot be handed a transaction client. ---
+  //     `db` client internally and cannot be handed a transaction client. Guarded:
+  //     if it throws, A2 below must still run so a failed re-link (0 links) is
+  //     converted into the self-healing linkless case instead of leaving the
+  //     title STALE + idle with no LINKLESS_WARNING (invisible to the requeue scan). ---
   if (t.appliedDossierId !== null) {
-    await linkScrutinsToAmendments({ scrutinIds: [t.scrutinId] });
+    try {
+      await linkScrutinsToAmendments({ scrutinIds: [t.scrutinId] });
+    } catch (err) {
+      console.error(`repairScrutinDossier: re-link failed for ${t.externalId}`, err);
+    }
   }
 
   // --- Transaction A2: title lifecycle from the links that resulted from the re-link ---
@@ -221,6 +228,10 @@ export async function requeueLinklessTitlesWithLinks(limit = 500): Promise<numbe
  * can never be clobbered by this reclaim.
  */
 export const REGEN_RUNNING_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** Bound on the daily sync's regen drain step, so one cron run cannot burn
+ *  through the whole backlog of Mistral calls in one pass. */
+export const DAILY_DOSSIER_REGEN_LIMIT = 10;
 
 export async function reclaimAbandonedRegen(): Promise<number> {
   const cutoff = new Date(Date.now() - REGEN_RUNNING_TIMEOUT_MS);

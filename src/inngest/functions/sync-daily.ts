@@ -69,13 +69,17 @@ const DAILY_STEPS: DailyStep[] = [
       const repairRunId = `daily-${new Date().toISOString().slice(0, 10)}`;
       const result = await reconcileScrutinDossier({
         applyClears: false,
-        applyMutations: false,
         repairRunId,
       });
       const repairs: Record<string, number> = {};
       for (const t of result.appliedTransitions) {
-        const r = await repairScrutinDossier(t, repairRunId);
-        repairs[r.repairStatus] = (repairs[r.repairStatus] ?? 0) + 1;
+        try {
+          const r = await repairScrutinDossier(t, repairRunId);
+          repairs[r.repairStatus] = (repairs[r.repairStatus] ?? 0) + 1;
+        } catch (err) {
+          repairs.THREW = (repairs.THREW ?? 0) + 1;
+          console.error(`[sync-daily] repair threw for ${t.externalId}: ${String(err)}`);
+        }
       }
       const byAction: Record<string, number> = {};
       for (const t of result.appliedTransitions) byAction[t.action] = (byAction[t.action] ?? 0) + 1;
@@ -138,11 +142,15 @@ const DAILY_STEPS: DailyStep[] = [
   {
     name: "dossier-repoint-regen",
     run: async () => {
-      const { requeueLinklessTitlesWithLinks, reclaimAbandonedRegen, drainDossierRepointRegen } =
-        await import("@/services/sync/reconcile-scrutin-dossier/remediate");
+      const {
+        requeueLinklessTitlesWithLinks,
+        reclaimAbandonedRegen,
+        drainDossierRepointRegen,
+        DAILY_DOSSIER_REGEN_LIMIT,
+      } = await import("@/services/sync/reconcile-scrutin-dossier/remediate");
       const requeued = await requeueLinklessTitlesWithLinks();
       const reclaimed = await reclaimAbandonedRegen();
-      const drained = await drainDossierRepointRegen({ limit: 10 });
+      const drained = await drainDossierRepointRegen({ limit: DAILY_DOSSIER_REGEN_LIMIT });
       return { requeued, reclaimed, ...drained };
     },
   },

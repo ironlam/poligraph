@@ -5,10 +5,10 @@
  * - Defaults to dry-run (read-only). Writing requires BOTH --apply and
  *   --confirm-production, because .env / .env.prod point at the same database
  *   (see CLAUDE.local.md): there is no separate dev DB to rehearse against.
- * - reconcileScrutinDossier is called with applyMutations:false, so it only
- *   PLANS transitions; it writes nothing itself. Phase A (repairScrutinDossier)
- *   is the only thing that performs the dossierLegislatifId write, atomically
- *   with the title STALE transition. A dry-run therefore makes zero writes.
+ * - reconcileScrutinDossier is plan-only: it computes transitions but writes
+ *   nothing itself. Phase A (repairScrutinDossier) is the only thing that
+ *   performs the dossierLegislatifId write, atomically with the title STALE
+ *   transition. A dry-run therefore makes zero writes.
  * - Expectation guards (--expected-repoints/new-links/clears) abort before any
  *   write if the planned counts do not match what the operator expects from
  *   the pre-run dry-run numbers.
@@ -16,15 +16,16 @@
  *   skipped rather than aborting the whole backfill. Because the reconciler
  *   recomputes transitions fresh against live DB state each run, a repaired
  *   scrutin becomes NOOP on the next run and drops out of appliedTransitions
- *   on its own; the backfill is naturally resumable by re-running it.
+ *   on its own; the backfill is naturally resumable by re-running it (no
+ *   separate --retry-failed flag needed).
  */
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 
 export interface BackfillArgs {
   apply: boolean;
   applyClears: boolean;
   regenerate: boolean;
-  retryFailed: boolean;
   regenBatch: number;
   expectedRepoints?: number;
   expectedNewLinks?: number;
@@ -46,7 +47,6 @@ export function parseBackfillArgs(argv: string[]): BackfillArgs {
     apply,
     applyClears: has("--apply-clears"),
     regenerate: has("--regenerate"),
-    retryFailed: has("--retry-failed"),
     regenBatch: num("--regen-batch") ?? 25,
     expectedRepoints: num("--expected-repoints"),
     expectedNewLinks: num("--expected-new-links"),
@@ -71,12 +71,11 @@ async function main() {
   );
 
   const repairRunId = "backfill-477";
-  // applyMutations:false -> the reconciler only PLANS (writes nothing). Phase A
-  // (repairScrutinDossier) performs the dossierLegislatifId write atomically with
-  // the title STALE. So a dry-run (no --apply) is fully read-only.
+  // The reconciler is plan-only (writes nothing). Phase A (repairScrutinDossier)
+  // performs the dossierLegislatifId write atomically with the title STALE. So a
+  // dry-run (no --apply) is fully read-only.
   const result = await reconcileScrutinDossier({
     applyClears: args.applyClears,
-    applyMutations: false,
     repairRunId,
   });
 
@@ -101,6 +100,7 @@ async function main() {
     repairStatus: "PENDING",
     attempts: 0,
   }));
+  mkdirSync(dirname(args.reportPath), { recursive: true });
   writeFileSync(args.reportPath, JSON.stringify({ repairRunId, report }, null, 2));
 
   if (!args.apply) {

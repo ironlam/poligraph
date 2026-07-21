@@ -27,10 +27,6 @@ export interface ReconcileOptions {
   applyClears?: boolean;
   /** Stamps revision/report rows for idempotent resume. Caller-supplied (deterministic). */
   repairRunId: string;
-  /** When false, the reconciler computes transitions but does NOT write
-   *  dossierLegislatifId: the caller's Phase A (repairScrutinDossier) owns the
-   *  write, atomically with the title STALE. Default true (self-contained). */
-  applyMutations?: boolean;
 }
 
 export const TITLE_MATCH_MIN_SCORE = 0.3; // tuned on the 2026-07-21 simulation

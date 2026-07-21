@@ -24,8 +24,12 @@ export function resolveScrutinDossier(input: ResolveInput, maps: ResolverMaps): 
     return { resolvedDossierExternalId: ext, resolution: "VOTE_REF", candidateExternalIds: [ext] };
   }
   if (voteHit && voteHit.size > 1) {
-    // Duplicate voteRef: fail closed.
-    return { resolvedDossierExternalId: null, resolution: "UNMATCHED", candidateExternalIds: [] };
+    // Duplicate voteRef: fail closed, but surface the colliding dossier ids for audit.
+    return {
+      resolvedDossierExternalId: null,
+      resolution: "UNMATCHED",
+      candidateExternalIds: [...voteHit],
+    };
   }
 
   const candidates = input.seanceRef ? (maps.reunionToDossiers.get(input.seanceRef) ?? []) : [];
