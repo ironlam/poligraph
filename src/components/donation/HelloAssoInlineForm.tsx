@@ -7,9 +7,10 @@ import { HelloAssoFormFrame } from "./HelloAssoFormFrame";
 export function HelloAssoInlineForm() {
   return (
     <div className="rounded-xl border bg-card p-5">
-      <p className="mb-1 font-display font-bold">Faire mon don ici, sans quitter la page</p>
+      <p className="mb-1 font-display font-bold">Faire mon don</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        Le formulaire HelloAsso n&apos;est chargé qu&apos;après votre action.
+        Choisissez le montant et la fréquence (mensuel ou ponctuel) dans le formulaire sécurisé. Il
+        n&apos;est chargé qu&apos;après votre clic, vous restez sur la page.
       </p>
       <HelloAssoFormFrame
         src={buildDonationWidgetUrl()}
