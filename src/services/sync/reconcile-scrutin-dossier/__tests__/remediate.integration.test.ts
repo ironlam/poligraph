@@ -5,6 +5,7 @@ const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 
 let db: typeof import("@/lib/db").db;
 let repairScrutinDossier: typeof import("../remediate").repairScrutinDossier;
+let requeueLinklessTitlesWithLinks: typeof import("../remediate").requeueLinklessTitlesWithLinks;
 let LINKLESS_WARNING: string;
 
 const PFX = "TEST_RMD_";
@@ -152,7 +153,8 @@ describeIfDb("repairScrutinDossier (Phase A)", () => {
 
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
-    ({ repairScrutinDossier, LINKLESS_WARNING } = await import("../remediate"));
+    ({ repairScrutinDossier, requeueLinklessTitlesWithLinks, LINKLESS_WARNING } =
+      await import("../remediate"));
 
     await db.scrutinAmendment.deleteMany({
       where: { amendment: { externalId: { startsWith: PFX } } },
@@ -415,5 +417,103 @@ describeIfDb("repairScrutinDossier (Phase A)", () => {
     });
     expect(revisionsAfterSecond).toHaveLength(1);
     expect(revisionsAfterSecond[0].id).toBe(revisionsAfterFirst[0].id);
+  });
+});
+
+describeIfDb("requeueLinklessTitlesWithLinks", () => {
+  const PFX2 = "TEST_RMD_LATE_";
+  let policyTitleId: string;
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ requeueLinklessTitlesWithLinks, LINKLESS_WARNING } = await import("../remediate"));
+
+    await db.scrutinAmendment.deleteMany({
+      where: { amendment: { externalId: { startsWith: PFX2 } } },
+    });
+    await db.scrutinPolicyTitle.deleteMany({
+      where: { scrutin: { externalId: { startsWith: PFX2 } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX2 } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: PFX2 } } });
+
+    // Mirrors the post-repair linkless state left by repairScrutinDossier: STALE,
+    // idle, LINKLESS_WARNING plus an unrelated warning that must survive pruning.
+    // The amendment link below stands in for the normal amendment linker having
+    // since created a link for this scrutin, which is the trigger for requeueing.
+    const amendment = await db.amendment.create({
+      data: {
+        externalId: `${PFX2}AMD_1`,
+        number: "1",
+        status: "ADOPTE",
+        legislature: 17,
+        chamber: "AN",
+      },
+    });
+
+    const scrutin = await db.scrutin.create({
+      data: {
+        externalId: `${PFX2}S_1`,
+        title: "Scrutin de test requeue",
+        sourceUrl: "https://www.assemblee-nationale.fr/dyn/17/scrutins/test-rmd-late-s-1",
+        votingDate: new Date(),
+        legislature: 17,
+        chamber: "AN",
+        votesFor: 1,
+        votesAgainst: 0,
+        votesAbstain: 0,
+        result: "ADOPTED",
+        amendmentLinks: {
+          create: [{ amendmentId: amendment.id, role: "PRINCIPAL", source: "TITLE_REGEX" }],
+        },
+      },
+    });
+
+    const policyTitle = await db.scrutinPolicyTitle.create({
+      data: {
+        scrutinId: scrutin.id,
+        officialTitleSnapshot: scrutin.title,
+        officialSourceUrl: scrutin.sourceUrl,
+        inputHash: "0".repeat(64),
+        policyTitle: "Titre test requeue",
+        policySubtitle: null,
+        proceduralLabel: "Amendement n°1",
+        confidence: "HIGH",
+        qualitySignals: {},
+        generationSource: "LLM",
+        status: "STALE",
+        regenerationStatus: "idle",
+        currentWarnings: [{ code: LINKLESS_WARNING }, { code: "OTHER_WARNING" }],
+      },
+    });
+
+    policyTitleId = policyTitle.id;
+  });
+
+  afterAll(async () => {
+    await db.scrutinAmendment.deleteMany({
+      where: { amendment: { externalId: { startsWith: PFX2 } } },
+    });
+    await db.scrutinPolicyTitle.deleteMany({
+      where: { scrutin: { externalId: { startsWith: PFX2 } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX2 } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: PFX2 } } });
+  });
+
+  it("requeues a previously linkless STALE title once its amendment link appears", async () => {
+    // Assert count >= 1 rather than === 1: this scan is unscoped by design (it
+    // finds every STALE+idle+linkless title in the table), so a shared
+    // non-test DB could legitimately have other rows requeued in the same call.
+    const count = await requeueLinklessTitlesWithLinks();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    const title = await db.scrutinPolicyTitle.findUniqueOrThrow({ where: { id: policyTitleId } });
+    expect(title.regenerationStatus).toBe("queued");
+
+    const warnings = title.currentWarnings as { code: string }[];
+    expect(warnings.some((w) => w.code === LINKLESS_WARNING)).toBe(false);
+    expect(warnings.some((w) => w.code === "OTHER_WARNING")).toBe(true);
+    expect(warnings).toHaveLength(1);
   });
 });

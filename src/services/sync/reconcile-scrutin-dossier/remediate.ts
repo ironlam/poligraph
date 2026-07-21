@@ -153,3 +153,52 @@ export async function repairScrutinDossier(
   }
   return { scrutinId: t.scrutinId, repairStatus: "DB_REPAIRED", linkless: linkCount === 0 };
 }
+
+/**
+ * Durable recovery for the linkless case above: a scrutin repaired while its
+ * amendment was not yet imported is left STALE + idle + LINKLESS_WARNING,
+ * with no link. When the normal amendment linker later creates that link,
+ * dossier reconciliation returns NOOP for this scrutin (nothing changed on
+ * its dossier pointer), so nothing requeues the title on its own. This scan
+ * finds those now-linked titles, queues regeneration, and prunes the warning.
+ *
+ * Same JS-filter choice as repairScrutinDossier's idempotency check above: we
+ * select on { status, regenerationStatus, scrutin.amendmentLinks.some } only
+ * and filter/prune the LINKLESS_WARNING code in JS, rather than a Postgres
+ * JSON-path WHERE filter (currentWarnings: { array_contains: [...] }). That
+ * filter is unverified against this codebase's Prisma 7 driver-adapter
+ * (adapter-pg) without a DATABASE_URL to confirm it, and there is no prior
+ * usage of JSON-path filtering here to fall back on. The candidate set
+ * (STALE + idle titles) is bounded by `limit`, so loading currentWarnings and
+ * checking/pruning the code in JS carries no meaningful cost.
+ */
+export async function requeueLinklessTitlesWithLinks(limit = 500): Promise<number> {
+  const candidates = await db.scrutinPolicyTitle.findMany({
+    where: {
+      status: "STALE",
+      regenerationStatus: "idle",
+      scrutin: { amendmentLinks: { some: {} } },
+    },
+    select: { id: true, currentWarnings: true },
+    take: limit,
+  });
+
+  let n = 0;
+  for (const c of candidates) {
+    const warnings = Array.isArray(c.currentWarnings)
+      ? (c.currentWarnings as { code?: string }[])
+      : [];
+    if (!warnings.some((w) => w?.code === LINKLESS_WARNING)) continue;
+
+    const pruned = warnings.filter((w) => w?.code !== LINKLESS_WARNING);
+    await db.scrutinPolicyTitle.update({
+      where: { id: c.id },
+      data: {
+        regenerationStatus: "queued",
+        currentWarnings: pruned as unknown as Prisma.InputJsonValue,
+      },
+    });
+    n++;
+  }
+  return n;
+}
