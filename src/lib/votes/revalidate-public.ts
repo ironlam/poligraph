@@ -7,8 +7,10 @@ import { themeToSlug } from "@/lib/theme-utils";
  * a status/title change, so an approval becomes visible and a reject/regenerate
  * hides it. Covers vote detail + list + theme + (when spotlight-eligible) home.
  * Politician vote tabs intentionally refresh on their own ISR interval (V1).
+ * Paths only — callers are responsible for their own votes tag invalidation
+ * (updateTags for manual Server Actions, revalidateTags for automated batches).
  */
-export async function revalidatePublicForScrutin(scrutinId: string): Promise<void> {
+export async function revalidatePublicPathsForScrutin(scrutinId: string): Promise<void> {
   const scrutin = await db.scrutin.findUnique({
     where: { id: scrutinId },
     select: { slug: true, theme: true, importance: { select: { isKeyVote: true } } },

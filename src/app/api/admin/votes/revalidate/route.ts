@@ -3,7 +3,8 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation } from "@/lib/security/validate";
 import { revalidateVotesSchema } from "@/lib/security/schemas";
 import { db } from "@/lib/db";
-import { revalidatePublicForScrutin } from "@/lib/votes/revalidate-public";
+import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
+import { revalidateTags } from "@/lib/cache";
 import { partitionRevalidatable } from "./partition";
 
 /**
@@ -33,8 +34,9 @@ export const POST = withAdminAuth(
     );
 
     for (const scrutinId of toRevalidate) {
-      await revalidatePublicForScrutin(scrutinId);
+      await revalidatePublicPathsForScrutin(scrutinId);
     }
+    if (toRevalidate.length > 0) revalidateTags(["votes"], "max");
 
     await db.auditLog.create({
       data: {

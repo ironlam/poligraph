@@ -20,7 +20,8 @@ import {
   type ApprovalContext,
 } from "@/services/scrutin-policy-title/approval";
 import { queryQueue, type QueueFilters } from "@/app/admin/policy-titles/_data/queue-query";
-import { revalidatePublicForScrutin } from "@/lib/votes/revalidate-public";
+import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
+import { updateTags } from "@/lib/cache";
 import { ApproveBlockedError } from "@/app/admin/policy-titles/errors";
 import type { Prisma, ScrutinPolicyTitle } from "@/generated/prisma";
 
@@ -87,7 +88,10 @@ export async function editScrutinPolicyTitle(
 
   revalidate(scrutinId);
   // An edit to an APPROVED row changes what the public sees.
-  if (row.status === "APPROVED") await revalidatePublicForScrutin(scrutinId);
+  if (row.status === "APPROVED") {
+    await revalidatePublicPathsForScrutin(scrutinId);
+    updateTags(["votes"]);
+  }
 }
 
 /**
@@ -119,7 +123,8 @@ export async function approveScrutinPolicyTitle(scrutinId: string): Promise<void
 
   await persistApproval(ctx, { actor: ACTOR });
   revalidate(scrutinId);
-  await revalidatePublicForScrutin(scrutinId);
+  await revalidatePublicPathsForScrutin(scrutinId);
+  updateTags(["votes"]);
 }
 
 /**
@@ -157,7 +162,8 @@ export async function approveWithOverrideScrutinPolicyTitle(
 
   await persistApproval(ctx, { actor: ACTOR, approvalOverride: { reason: trimmed, actor: ACTOR } });
   revalidate(scrutinId);
-  await revalidatePublicForScrutin(scrutinId);
+  await revalidatePublicPathsForScrutin(scrutinId);
+  updateTags(["votes"]);
 }
 
 /**
@@ -224,7 +230,10 @@ export async function rejectScrutinPolicyTitle(scrutinId: string, reason: string
 
   revalidate(scrutinId);
   // A reject can hide a previously-approved title.
-  if (row.status === "APPROVED") await revalidatePublicForScrutin(scrutinId);
+  if (row.status === "APPROVED") {
+    await revalidatePublicPathsForScrutin(scrutinId);
+    updateTags(["votes"]);
+  }
 }
 
 /**
@@ -274,7 +283,10 @@ export async function regenerateScrutinPolicyTitle(scrutinId: string): Promise<v
   }
 
   revalidate(scrutinId);
-  if (wasApproved) await revalidatePublicForScrutin(scrutinId);
+  if (wasApproved) {
+    await revalidatePublicPathsForScrutin(scrutinId);
+    updateTags(["votes"]);
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -327,7 +339,8 @@ export async function batchApprove(scrutinIds: string[]): Promise<BatchApproveRe
   for (const ctx of contexts) {
     await persistApproval(ctx, { actor: ACTOR });
     revalidate(ctx.scrutin.id);
-    await revalidatePublicForScrutin(ctx.scrutin.id);
+    await revalidatePublicPathsForScrutin(ctx.scrutin.id);
+    updateTags(["votes"]);
   }
 
   return { approved: contexts.length, failures: [] };

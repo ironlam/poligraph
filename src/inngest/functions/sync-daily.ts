@@ -1,6 +1,7 @@
 import { inngest } from "../client";
 import { POLICY_TITLE_CRON } from "@/config/policy-titles";
 import { syncMetadata } from "@/lib/sync/sync-metadata";
+import { revalidateTags } from "@/lib/cache";
 
 interface DailyStep {
   name: string;
@@ -193,6 +194,7 @@ const DAILY_STEPS: DailyStep[] = [
           byReason: stats.byReason,
         },
       });
+      if (stats.approved > 0) revalidateTags(["votes"], "max");
       console.info("[sync-daily] approve-policy-titles", stats);
       return stats;
     },
