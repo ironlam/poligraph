@@ -25,11 +25,29 @@ const SCRUTIN_FIXTURES: Array<{
 const SCRUTIN_IDS = SCRUTIN_FIXTURES.map((s) => s.id);
 
 /**
+ * Allowlist guard: only the disposable local harness DB may be touched by
+ * these fixtures. A denylist would silently miss any future non-matching
+ * remote host, so we require the URL to look like the local harness instead
+ * of merely not looking like a known remote provider.
+ */
+function assertLocalTestDb(): void {
+  const url = process.env.DATABASE_URL ?? "";
+  if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) {
+    throw new Error(
+      "Explained fixtures refuse to run: DATABASE_URL is not a local test DB. " +
+        "Run explained integration tests only via the disposable harness (npm run test:db:477)."
+    );
+  }
+}
+
+/**
  * Deletes the shared fixtures above, children before parents, using the same
  * explicit id sets the seed uses. Exported so integration tests can call it
  * from an afterAll and leave no residue behind, even against a real DB.
  */
 export async function cleanupExplainedFixtures(db: typeof import("@/lib/db").db): Promise<void> {
+  assertLocalTestDb();
+
   await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
   await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
   await db.scrutin.deleteMany({ where: { id: { in: SCRUTIN_IDS } } });
@@ -42,13 +60,7 @@ export async function cleanupExplainedFixtures(db: typeof import("@/lib/db").db)
  * an FK conflict).
  */
 export async function seedExplainedFixtures(db: typeof import("@/lib/db").db): Promise<void> {
-  const dbUrl = process.env.DATABASE_URL ?? "";
-  if (/supabase|pooler|amazonaws|neon/i.test(dbUrl)) {
-    throw new Error(
-      "seedExplainedFixtures refuses to run against a remote/prod-looking DATABASE_URL. " +
-        "Run explained integration tests only via the disposable local harness (npm run test:db:477)."
-    );
-  }
+  assertLocalTestDb();
 
   await cleanupExplainedFixtures(db);
 

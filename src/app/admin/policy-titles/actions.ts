@@ -340,6 +340,8 @@ export async function batchApprove(scrutinIds: string[]): Promise<BatchApproveRe
     await persistApproval(ctx, { actor: ACTOR });
     revalidate(ctx.scrutin.id);
     await revalidatePublicPathsForScrutin(ctx.scrutin.id);
+  }
+  if (contexts.length > 0) {
     updateTags(["votes"]);
   }
 

@@ -34,14 +34,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // Task 9: the bare ?filter=expliques view is its own indexable surface (own
   // title/canonical); any other param alongside it still falls back to noindex.
   const isBareExplainedView =
-    params.filter === "expliques" &&
-    !params.page &&
-    !params.type &&
-    !params.theme &&
-    !params.legislature &&
-    !params.chamber &&
-    !params.result &&
-    !params.search;
+    params.filter === "expliques" && !hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
 
   const noindex = !isBareExplainedView && hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
 
