@@ -4,7 +4,7 @@ const updateTag = vi.fn();
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
   revalidatePath: vi.fn(),
-  updateTag: (t: string) => updateTag(t),
+  updateTag: (...args: unknown[]) => updateTag(...args),
 }));
 
 import { updateTags } from "@/lib/cache";
