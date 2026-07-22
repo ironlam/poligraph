@@ -59,7 +59,12 @@ npx prisma db push --url "$DATABASE_URL" --accept-data-loss
 echo "[test:db:477] creating poligraphId sequences (publicId generator backing)"
 npx tsx scripts/create-public-id-sequences.ts
 
-echo "[test:db:477] running the two #477 integration test files"
-npx vitest run \
-  src/services/sync/reconcile-scrutin-dossier/__tests__/remediate.integration.test.ts \
-  src/services/scrutin-policy-title/__tests__/force-regen-fields.integration.test.ts
+if [ "$#" -gt 0 ]; then
+  echo "[test:db:477] running requested test files: $*"
+  npx vitest run "$@"
+else
+  echo "[test:db:477] running the two #477 integration test files"
+  npx vitest run \
+    src/services/sync/reconcile-scrutin-dossier/__tests__/remediate.integration.test.ts \
+    src/services/scrutin-policy-title/__tests__/force-regen-fields.integration.test.ts
+fi
