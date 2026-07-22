@@ -39,3 +39,100 @@ describeIfDb("getExplainedShowcase", () => {
     expect(out.filter((s) => s.dossierLegislatifId === "A").length).toBe(1);
   });
 });
+
+// Own fixtures (FB_* ids/dossiers, isolated via excludeScrutinIds) proving the
+// all-time fallback fires when the widest (365-day) window's DIVERSIFIED
+// output is short of `count` — even though the raw fetched row count is not.
+describeIfDb("getExplainedShowcase — all-time fallback", () => {
+  const FB_DOSSIER_IDS = ["FB_X", "FB_Y", "FB_Z"] as const;
+  const FB_SCRUTIN_IDS = ["FB_x1", "FB_x2", "FB_x3", "FB_y1", "FB_z1"];
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ getExplainedShowcase } = await import("@/lib/data/scrutins"));
+
+    // Idempotent: delete-first by these explicit ids, children before parents.
+    await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
+    await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
+    await db.scrutin.deleteMany({ where: { id: { in: FB_SCRUTIN_IDS } } });
+    await db.legislativeDossier.deleteMany({ where: { id: { in: [...FB_DOSSIER_IDS] } } });
+
+    await db.legislativeDossier.createMany({
+      data: FB_DOSSIER_IDS.map((id) => ({
+        id,
+        externalId: `TEST_EXPL_DLR_${id}`,
+        title: `Dossier test ${id}`,
+        status: "EN_COURS",
+      })),
+    });
+
+    const today = new Date();
+    const old = new Date();
+    old.setDate(old.getDate() - 400);
+
+    const fixtures: Array<{
+      id: string;
+      dossierId: (typeof FB_DOSSIER_IDS)[number];
+      votingDate: Date;
+    }> = [
+      { id: "FB_x1", dossierId: "FB_X", votingDate: today },
+      { id: "FB_x2", dossierId: "FB_X", votingDate: today },
+      { id: "FB_x3", dossierId: "FB_X", votingDate: today },
+      { id: "FB_y1", dossierId: "FB_Y", votingDate: old },
+      { id: "FB_z1", dossierId: "FB_Z", votingDate: old },
+    ];
+
+    for (const f of fixtures) {
+      await db.scrutin.create({
+        data: {
+          id: f.id,
+          externalId: `TEST_EXPL_${f.id}`,
+          title: `Scrutin test ${f.id}`,
+          votingDate: f.votingDate,
+          legislature: 17,
+          chamber: "AN",
+          votesFor: 100,
+          votesAgainst: 50,
+          votesAbstain: 5,
+          result: "ADOPTED",
+          dossierLegislatifId: f.dossierId,
+          policyTitle: {
+            create: {
+              officialTitleSnapshot: `Snapshot ${f.id}`,
+              inputHash: "0".repeat(64),
+              policyTitle: `Titre politique ${f.id}`,
+              proceduralLabel: "Scrutin solennel",
+              confidence: "HIGH",
+              qualitySignals: {},
+              generationSource: "LLM",
+              status: "APPROVED",
+            },
+          },
+          importance: {
+            create: {
+              score: 10,
+              isKeyVote: false,
+              signals: {},
+            },
+          },
+        },
+      });
+    }
+  });
+
+  it("widens to all-time when the 365-day window's diversified output is short", async () => {
+    // Only 3 FB_X rows fall inside the 365-day window; maxPerDossier:1
+    // diversifies them down to 1 — short of count:3. FB_Y/FB_Z sit ~400 days
+    // back, outside every adaptive window, so they can only appear via the
+    // bounded all-time fallback. Exclude the shared standard fixtures so only
+    // FB_* rows compete.
+    const out = await getExplainedShowcase({
+      count: 3,
+      maxPerDossier: 1,
+      excludeScrutinIds: ["dA1", "dA2", "dB1", "low1"],
+    });
+    expect(out.length).toBe(3);
+    const ids = out.map((s) => s.id);
+    expect(ids.some((id) => id === "FB_y1" || id === "FB_z1")).toBe(true);
+  });
+});

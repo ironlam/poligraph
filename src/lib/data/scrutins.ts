@@ -573,7 +573,7 @@ function toExplainedCandidate(s: ExplainedRow) {
     policyTitle: s.policyTitle!.policyTitle as string,
     votingDate: s.votingDate,
     dossierLegislatifId: s.dossierLegislatifId ?? null,
-    confidence: s.policyTitle!.confidence!,
+    confidence: s.policyTitle!.confidence,
     importance: s.importance,
     _row: s,
   };
@@ -613,16 +613,19 @@ export async function getExplainedShowcase(opts: {
   };
 
   // 2. progressively wider in-memory sub-windows
+  let diversified: ExplainedRow[] = [];
   for (const days of EXPLAINED_WINDOWS_DAYS) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     const sub = rows.filter((r) => r.votingDate >= cutoff);
-    const out = pick(sub);
-    if (out.length >= opts.count) return out.slice(0, opts.count);
+    diversified = pick(sub);
+    if (diversified.length >= opts.count) return diversified.slice(0, opts.count);
   }
 
-  // 3. bounded all-time fallback
-  if (rows.length < opts.count) {
+  // 3. bounded all-time fallback — gate on the last window's diversified
+  // output, not the raw row count (rows.length stays ~400 regardless of
+  // whether diversify() shrank the result below opts.count).
+  if (diversified.length < opts.count) {
     rows = await db.scrutin.findMany({
       where: EXPLAINED_BASE_WHERE,
       orderBy: { votingDate: "desc" },
