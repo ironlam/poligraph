@@ -12,6 +12,8 @@ vi.mock("@/lib/auth", () => ({
 // revalidatePath throws outside a Next request context; no-op it under vitest.
 vi.mock("next/cache", () => ({
   revalidatePath: () => {},
+  revalidateTag: () => {},
+  updateTag: () => {},
 }));
 
 // Mock ONLY generateScrutinPolicyTitle; keep buildInputHashInput real (actions

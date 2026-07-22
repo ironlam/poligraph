@@ -14,6 +14,8 @@ vi.mock("@/lib/auth", () => ({
 // can assert public revalidation (Plan 6).
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  updateTag: vi.fn(),
 }));
 
 // Mock ONLY generateScrutinPolicyTitle; keep buildInputHashInput real (actions
