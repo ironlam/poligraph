@@ -1,4 +1,4 @@
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 
 // ─── Cache tiers for API responses ────────────────────────────────
 
@@ -168,4 +168,10 @@ export function revalidateTags(tags: string[], profile: string = DEFAULT_PROFILE
   for (const tag of tags) {
     revalidateTag(tag, profile);
   }
+}
+
+/** Immediate, read-your-write tag refresh. Server-Action context only.
+ *  updateTag takes ONLY a tag (no cacheLife profile), unlike revalidateTag. */
+export function updateTags(tags: string[]): void {
+  for (const tag of tags) updateTag(tag);
 }
