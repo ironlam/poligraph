@@ -1,8 +1,9 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import type { Chamber, VotingResult, ThemeCategory, ScrutinType } from "@/generated/prisma";
+import type { Chamber, VotingResult, ThemeCategory, ScrutinType, Prisma } from "@/generated/prisma";
 import { KEY_VOTES_HUB_WINDOW_DAYS, KEY_VOTES_GRID_COUNT } from "@/config/scrutin-importance";
 import type { PolicyForView } from "@/lib/votes/to-public-title-view";
+import { scoreExplainedVote, diversify } from "@/lib/votes/explained-scoring";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -526,4 +527,108 @@ export async function getKeyVotes(): Promise<{
   }));
 
   return { hero: mapped[0] ?? null, grid: mapped.slice(1) };
+}
+
+// ---------------------------------------------------------------------------
+// Votes expliqués showcase
+// ---------------------------------------------------------------------------
+
+const EXPLAINED_WINDOWS_DAYS = [90, 180, 365] as const;
+const ALL_TIME_FALLBACK_POOL_SIZE = 200;
+
+const EXPLAINED_SELECT = {
+  ...DAILY_SELECT,
+  dossierLegislatifId: true, // scalar FK — scoring/diversify read s.dossierLegislatifId
+  dossierLegislatif: { select: { title: true, slug: true } },
+  importance: { select: { score: true, isKeyVote: true } },
+  // Override DAILY_SELECT's policyTitle to add `confidence` (needed for scoring),
+  // keeping the other fields so VoteCard behaves identically.
+  policyTitle: {
+    select: {
+      status: true,
+      policyTitle: true,
+      policySubtitle: true,
+      officialSourceUrl: true,
+      proceduralLabel: true,
+      confidence: true,
+    },
+  },
+} satisfies Prisma.ScrutinSelect;
+
+type ExplainedRow = Prisma.ScrutinGetPayload<{ select: typeof EXPLAINED_SELECT }>;
+
+const EXPLAINED_BASE_WHERE = {
+  policyTitle: {
+    is: {
+      status: "APPROVED" as const,
+      policyTitle: { not: null },
+      confidence: { in: ["HIGH", "MEDIUM"] as const },
+    },
+  },
+} satisfies Prisma.ScrutinWhereInput;
+
+function toExplainedCandidate(s: ExplainedRow) {
+  return {
+    id: s.id,
+    policyTitle: s.policyTitle!.policyTitle as string,
+    votingDate: s.votingDate,
+    dossierLegislatifId: s.dossierLegislatifId ?? null,
+    confidence: s.policyTitle!.confidence!,
+    importance: s.importance,
+    _row: s,
+  };
+}
+
+/**
+ * Curated "Votes expliqués" showcase: best APPROVED HIGH/MEDIUM policy titles,
+ * ranked by scoreExplainedVote and de-duplicated by diversify. Uses an adaptive
+ * window (90/180/365 days, widening only if needed) and falls back to a
+ * bounded all-time pool when recent windows can't fill `count`.
+ */
+export async function getExplainedShowcase(opts: {
+  count: number;
+  maxPerDossier: number;
+  excludeScrutinIds?: string[];
+}) {
+  "use cache";
+  cacheTag("votes", "votes-explained");
+  cacheLife("synced");
+
+  // 1. one 365-day query, newest first
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() - 365);
+  let rows = await db.scrutin.findMany({
+    where: { ...EXPLAINED_BASE_WHERE, votingDate: { gte: windowStart } },
+    orderBy: { votingDate: "desc" },
+    select: EXPLAINED_SELECT,
+    take: 400,
+  });
+
+  const now = new Date();
+  const pick = (pool: ExplainedRow[]) => {
+    const cands = pool
+      .map(toExplainedCandidate)
+      .sort((a, b) => scoreExplainedVote(b, now) - scoreExplainedVote(a, now));
+    return diversify(cands, opts).map((c) => c._row);
+  };
+
+  // 2. progressively wider in-memory sub-windows
+  for (const days of EXPLAINED_WINDOWS_DAYS) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const sub = rows.filter((r) => r.votingDate >= cutoff);
+    const out = pick(sub);
+    if (out.length >= opts.count) return out.slice(0, opts.count);
+  }
+
+  // 3. bounded all-time fallback
+  if (rows.length < opts.count) {
+    rows = await db.scrutin.findMany({
+      where: EXPLAINED_BASE_WHERE,
+      orderBy: { votingDate: "desc" },
+      select: EXPLAINED_SELECT,
+      take: ALL_TIME_FALLBACK_POOL_SIZE,
+    });
+  }
+  return pick(rows).slice(0, opts.count);
 }
