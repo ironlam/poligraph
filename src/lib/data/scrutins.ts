@@ -192,8 +192,20 @@ async function queryScrutins(params: {
   type?: ScrutinType;
   excludeType?: ScrutinType;
   search?: string;
+  explainedOnly?: boolean;
 }) {
-  const { page, limit, result, legislature, chamber, theme, type, excludeType, search } = params;
+  const {
+    page,
+    limit,
+    result,
+    legislature,
+    chamber,
+    theme,
+    type,
+    excludeType,
+    search,
+    explainedOnly,
+  } = params;
   const skip = (page - 1) * limit;
 
   const where = {
@@ -202,7 +214,12 @@ async function queryScrutins(params: {
     ...(chamber && { chamber }),
     ...(theme && { theme }),
     ...(type && { type }),
-    ...(excludeType && { type: { not: excludeType } }),
+    // explainedOnly includes amendments: requested `type` still applies, but
+    // `excludeType` (e.g. hiding amendments by default) is ignored.
+    ...(!explainedOnly && excludeType && { type: { not: excludeType } }),
+    ...(explainedOnly && {
+      policyTitle: { is: { status: "APPROVED" as const, policyTitle: { not: null } } },
+    }),
     ...(search && {
       OR: [
         { title: { contains: search, mode: "insensitive" as const } },
@@ -213,6 +230,21 @@ async function queryScrutins(params: {
             title: { contains: search, mode: "insensitive" as const },
           },
         },
+        ...(explainedOnly
+          ? [
+              {
+                policyTitle: {
+                  is: {
+                    status: "APPROVED" as const,
+                    OR: [
+                      { policyTitle: { contains: search, mode: "insensitive" as const } },
+                      { policySubtitle: { contains: search, mode: "insensitive" as const } },
+                    ],
+                  },
+                },
+              },
+            ]
+          : []),
       ],
     }),
   };
@@ -260,6 +292,7 @@ async function getScrutinsFiltered(params: {
   theme?: ThemeCategory;
   type?: ScrutinType;
   excludeType?: ScrutinType;
+  explainedOnly?: boolean;
 }) {
   "use cache";
   cacheTag("votes");
@@ -278,6 +311,7 @@ export async function getScrutins(params: {
   type?: ScrutinType;
   excludeType?: ScrutinType;
   search?: string;
+  explainedOnly?: boolean;
 }) {
   if (params.search) {
     return queryScrutins(params);
