@@ -1,0 +1,1 @@
+export const EXPLAINED_LISTING_SHOWCASE_COUNT = 8;

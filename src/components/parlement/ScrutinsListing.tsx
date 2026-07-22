@@ -3,6 +3,7 @@ import { SimplePagination } from "@/components/ui/SimplePagination";
 import { VoteCard, ScrutinTypeTabs } from "@/components/votes";
 import { VotesSearchInput } from "@/components/votes/VotesSearchInput";
 import { ThemeGrid } from "@/components/votes/ThemeGrid";
+import { ExplainedVotesModule } from "./ExplainedVotesModule";
 
 import {
   VOTING_RESULT_LABELS,
@@ -57,6 +58,7 @@ interface ScrutinsListingProps {
     theme?: string;
     type?: string;
     search?: string;
+    filter?: string;
   };
 }
 
@@ -69,13 +71,25 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
   const theme = (params.theme || undefined) as ThemeCategory | undefined;
   const search = params.search || undefined;
   const typeTab = params.type || "votes"; // default to "votes" (non-amendments)
+  const filter = params.filter;
+  const explainedOnly = filter === "expliques";
 
   // Resolve type/excludeType from tab param
   const typeFilter = TYPE_TAB_MAP[typeTab] ?? {};
 
   const [{ scrutins, total, totalPages, stats }, legislatures, chambers, themeCounts, typeCounts] =
     await Promise.all([
-      getScrutins({ page, limit, result, legislature, chamber, theme, search, ...typeFilter }),
+      getScrutins({
+        page,
+        limit,
+        result,
+        legislature,
+        chamber,
+        theme,
+        search,
+        explainedOnly,
+        ...typeFilter,
+      }),
       getLegislatures(),
       getChambers(),
       getThemeCounts(),
@@ -96,6 +110,7 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
     if (chamber) current.set("chamber", chamber);
     if (theme) current.set("theme", theme);
     if (typeTab && typeTab !== "votes") current.set("type", typeTab);
+    if (filter) current.set("filter", filter);
 
     for (const [key, value] of Object.entries(newParams)) {
       if (value) {
@@ -148,16 +163,34 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
     },
   ];
 
-  // Dynamic title based on chamber
-  const pageTitle = chamber
-    ? `Votes ${chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}`
-    : "Votes parlementaires";
+  // Dynamic title based on chamber (or the explained-votes filter, which takes priority)
+  const pageTitle = explainedOnly
+    ? "Votes expliqués"
+    : chamber
+      ? `Votes ${chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}`
+      : "Votes parlementaires";
+  const pageSubtitle = explainedOnly
+    ? "Les votes de l'Assemblée nationale et du Sénat traduits en titres clairs."
+    : "Scrutins publics en séance - résultats, thèmes et positions des groupes";
 
   // Adoption rate for results summary
   const adoptedPct = total > 0 && stats.ADOPTED ? Math.round((stats.ADOPTED / total) * 100) : 0;
 
   // Active non-chamber/non-type filters for display
   const hasActiveFilters = !!(result || legislature || theme || search);
+
+  // Showcase renders only on the default, unfiltered "votes" view (not paginated,
+  // not the explained-only listing) so it doesn't duplicate results the user
+  // already filtered for.
+  const showShowcase =
+    !explainedOnly &&
+    !search &&
+    !result &&
+    !legislature &&
+    !chamber &&
+    !theme &&
+    page === 1 &&
+    typeTab === "votes";
 
   return (
     <>
@@ -174,9 +207,7 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
             <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
               {pageTitle}
             </h1>
-            <p className="text-muted-foreground text-sm">
-              Scrutins publics en séance - résultats, thèmes et positions des groupes
-            </p>
+            <p className="text-muted-foreground text-sm">{pageSubtitle}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
@@ -315,6 +346,8 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
             </Link>
           )}
         </div>
+
+        {showShowcase && <ExplainedVotesModule />}
 
         {/* List */}
         {scrutins.length > 0 ? (
