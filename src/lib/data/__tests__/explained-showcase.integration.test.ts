@@ -5,7 +5,7 @@ import { vi } from "vitest";
 // other data-function tests in this directory do (e.g. condamnations.test.ts).
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -16,12 +16,13 @@ const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 let db: typeof import("@/lib/db").db;
 let getExplainedShowcase: typeof import("@/lib/data/scrutins").getExplainedShowcase;
 let seedExplainedFixtures: typeof import("./_seed-explained").seedExplainedFixtures;
+let cleanupExplainedFixtures: typeof import("./_seed-explained").cleanupExplainedFixtures;
 
 describeIfDb("getExplainedShowcase", () => {
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
     ({ getExplainedShowcase } = await import("@/lib/data/scrutins"));
-    ({ seedExplainedFixtures } = await import("./_seed-explained"));
+    ({ seedExplainedFixtures, cleanupExplainedFixtures } = await import("./_seed-explained"));
     await seedExplainedFixtures(db);
   });
 
@@ -50,6 +51,7 @@ describeIfDb("getExplainedShowcase — all-time fallback", () => {
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
     ({ getExplainedShowcase } = await import("@/lib/data/scrutins"));
+    ({ cleanupExplainedFixtures } = await import("./_seed-explained"));
 
     // Idempotent: delete-first by these explicit ids, children before parents.
     await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
@@ -118,6 +120,14 @@ describeIfDb("getExplainedShowcase — all-time fallback", () => {
         },
       });
     }
+  });
+
+  afterAll(async () => {
+    await cleanupExplainedFixtures(db);
+    await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
+    await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
+    await db.scrutin.deleteMany({ where: { id: { in: FB_SCRUTIN_IDS } } });
+    await db.legislativeDossier.deleteMany({ where: { id: { in: [...FB_DOSSIER_IDS] } } });
   });
 
   it("widens to all-time when the 365-day window's diversified output is short", async () => {

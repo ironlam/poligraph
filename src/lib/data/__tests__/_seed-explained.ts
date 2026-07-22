@@ -25,15 +25,32 @@ const SCRUTIN_FIXTURES: Array<{
 const SCRUTIN_IDS = SCRUTIN_FIXTURES.map((s) => s.id);
 
 /**
+ * Deletes the shared fixtures above, children before parents, using the same
+ * explicit id sets the seed uses. Exported so integration tests can call it
+ * from an afterAll and leave no residue behind, even against a real DB.
+ */
+export async function cleanupExplainedFixtures(db: typeof import("@/lib/db").db): Promise<void> {
+  await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
+  await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
+  await db.scrutin.deleteMany({ where: { id: { in: SCRUTIN_IDS } } });
+  await db.legislativeDossier.deleteMany({ where: { id: { in: [...DOSSIER_IDS] } } });
+}
+
+/**
  * Seeds the fixtures above (idempotent: deletes any existing rows with these
  * explicit ids first, children before parents, so re-running never throws on
  * an FK conflict).
  */
 export async function seedExplainedFixtures(db: typeof import("@/lib/db").db): Promise<void> {
-  await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
-  await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: SCRUTIN_IDS } } });
-  await db.scrutin.deleteMany({ where: { id: { in: SCRUTIN_IDS } } });
-  await db.legislativeDossier.deleteMany({ where: { id: { in: [...DOSSIER_IDS] } } });
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  if (/supabase|pooler|amazonaws|neon/i.test(dbUrl)) {
+    throw new Error(
+      "seedExplainedFixtures refuses to run against a remote/prod-looking DATABASE_URL. " +
+        "Run explained integration tests only via the disposable local harness (npm run test:db:477)."
+    );
+  }
+
+  await cleanupExplainedFixtures(db);
 
   await db.legislativeDossier.createMany({
     data: DOSSIER_IDS.map((id) => ({
