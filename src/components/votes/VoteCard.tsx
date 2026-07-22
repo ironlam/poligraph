@@ -39,6 +39,7 @@ interface VoteCardProps {
   /** Plan 6: the joined policy-title row. When APPROVED + valid, the card shows
    *  the policy title + "Titre explicatif" badge; otherwise the official title. */
   policy?: PolicyForView | null;
+  compact?: boolean;
 }
 
 function extractScrutinNumber(externalId: string): string | null {
@@ -67,6 +68,7 @@ export function VoteCard({
   type,
   dossier,
   policy,
+  compact = false,
 }: VoteCardProps) {
   // Use slug for URL if available, fallback to id
   const href = `/parlement/votes/${slug || id}`;
@@ -137,10 +139,12 @@ export function VoteCard({
                 <Calendar className="h-3 w-3" />
                 {formatDate(new Date(votingDate))}
               </span>
-              <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                {total} votants
-              </span>
+              {!compact && (
+                <span className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {total} votants
+                </span>
+              )}
               <span className="text-muted-foreground/60">{legislature}e législature</span>
             </div>
             {dossier?.slug && (
@@ -170,31 +174,35 @@ export function VoteCard({
           </div>
         </div>
 
-        {/* Vote bar */}
-        <div className="space-y-1">
-          <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
-            <div
-              className="bg-green-500 transition-all"
-              style={{ width: `${forPercent}%` }}
-              title={`Pour: ${votesFor}`}
-            />
-            <div
-              className="bg-red-500 transition-all"
-              style={{ width: `${againstPercent}%` }}
-              title={`Contre: ${votesAgainst}`}
-            />
-            <div
-              className="bg-yellow-500 transition-all"
-              style={{ width: `${abstainPercent}%` }}
-              title={`Abstention: ${votesAbstain}`}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span className="text-green-600">Pour: {votesFor}</span>
-            <span className="text-red-600">Contre: {votesAgainst}</span>
-            <span className="text-yellow-600">Abstention: {votesAbstain}</span>
-          </div>
-        </div>
+        {!compact && (
+          <>
+            {/* Vote bar */}
+            <div className="space-y-1">
+              <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+                <div
+                  className="bg-green-500 transition-all"
+                  style={{ width: `${forPercent}%` }}
+                  title={`Pour: ${votesFor}`}
+                />
+                <div
+                  className="bg-red-500 transition-all"
+                  style={{ width: `${againstPercent}%` }}
+                  title={`Contre: ${votesAgainst}`}
+                />
+                <div
+                  className="bg-yellow-500 transition-all"
+                  style={{ width: `${abstainPercent}%` }}
+                  title={`Abstention: ${votesAbstain}`}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className="text-green-600">Pour: {votesFor}</span>
+                <span className="text-red-600">Contre: {votesAgainst}</span>
+                <span className="text-yellow-600">Abstention: {votesAbstain}</span>
+              </div>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
