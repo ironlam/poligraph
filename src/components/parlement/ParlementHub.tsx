@@ -4,6 +4,9 @@ import { KeyVoteCard } from "@/components/votes/KeyVoteCard";
 import { DossierCard } from "@/components/legislation";
 import { CompositionHemicycle } from "./CompositionHemicycle";
 import { ParlementEntryCards } from "./ParlementEntryCards";
+// Direct import (not the barrel) to avoid a self-referential cycle: the
+// parlement barrel also re-exports ParlementHub.
+import { ExplainedVotesTeaser } from "./ExplainedVotesTeaser";
 import { FAQJsonLd } from "@/components/seo/JsonLd";
 import { getFeatureValue } from "@/lib/feature-flags";
 import {
@@ -85,6 +88,10 @@ export async function ParlementHub() {
 
   const anGroups = allGroups.filter((g) => g.chamber === "AN" && g.seatCount > 0);
   const senatGroups = allGroups.filter((g) => g.chamber === "SENAT" && g.seatCount > 0);
+
+  const keyVoteIds = [keyVotes.hero?.id, ...keyVotes.grid.map((s) => s.id)].filter(
+    Boolean
+  ) as string[];
 
   return (
     <div className="container mx-auto px-4">
@@ -261,6 +268,9 @@ export async function ParlementHub() {
           </Link>
         </div>
       </section>
+
+      {/* Votes expliqués: teaser deduped against the key votes shown above */}
+      <ExplainedVotesTeaser excludeScrutinIds={keyVoteIds} />
 
       {/* Aujourd'hui au Parlement */}
       <section className="mb-8">
