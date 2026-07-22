@@ -15,6 +15,7 @@ interface PageProps {
     theme?: string;
     type?: string;
     search?: string;
+    filter?: string;
   }>;
 }
 
@@ -30,7 +31,19 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   // Lot 3a: de-index utility-filtered/paginated variants (noindex,follow); the
   // bare /parlement/votes stays indexable. GSC: these facet URLs get 0 clicks.
-  const noindex = hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
+  // Task 9: the bare ?filter=expliques view is its own indexable surface (own
+  // title/canonical); any other param alongside it still falls back to noindex.
+  const isBareExplainedView =
+    params.filter === "expliques" &&
+    !params.page &&
+    !params.type &&
+    !params.theme &&
+    !params.legislature &&
+    !params.chamber &&
+    !params.result &&
+    !params.search;
+
+  const noindex = !isBareExplainedView && hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
 
   const chamberTitle =
     params.chamber === "AN"
@@ -39,11 +52,16 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
         ? "Votes du Sénat"
         : "Votes parlementaires";
   return {
-    title: chamberTitle,
-    description:
-      "Suivez les votes de l'Assemblée nationale et du Sénat. Consultez les scrutins et découvrez comment votent vos représentants.",
+    title: isBareExplainedView ? "Votes expliqués" : chamberTitle,
+    description: isBareExplainedView
+      ? "Les votes de l'Assemblée nationale et du Sénat traduits en titres clairs et vérifiés."
+      : "Suivez les votes de l'Assemblée nationale et du Sénat. Consultez les scrutins et découvrez comment votent vos représentants.",
     ...listingRobotsMetadata(noindex),
-    alternates: { canonical: `/parlement/votes${qs ? `?${qs}` : ""}` },
+    alternates: {
+      canonical: isBareExplainedView
+        ? "/parlement/votes?filter=expliques"
+        : `/parlement/votes${qs ? `?${qs}` : ""}`,
+    },
   };
 }
 
