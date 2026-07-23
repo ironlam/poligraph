@@ -426,6 +426,7 @@ export async function generateScrutinPolicyTitle(
     policySubtitle: output.policySubtitle,
     evidenceQuotes: output.evidenceQuotes,
     blocks: resolved.blocks,
+    officialTitle: scrutin.title,
   });
   const hasBlocker = flags.some((f) => f.severity === "blocker");
   const flagCodes = flags.map((f) => f.code);

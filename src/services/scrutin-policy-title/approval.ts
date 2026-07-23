@@ -99,7 +99,8 @@ export async function recomputeApprovalContext(scrutinId: string): Promise<Appro
     row.policyTitle,
     row.policySubtitle,
     evidenceQuotes,
-    resolved.blocks
+    resolved.blocks,
+    scrutin.title
   );
   const evidenceDrift = detectEvidenceDrift(evidenceQuotes, resolved.blocks);
 

@@ -5,6 +5,10 @@ export interface ValidatorInput {
   policySubtitle: string | null;
   evidenceQuotes: EvidenceQuote[];
   blocks: SubstanceTextBlock[];
+  /** The scrutin's official (procedural) title. Optional: enables suppression +
+   *  budgetary detection for the polarity validator. When absent, suppression is
+   *  inferred from the amendment dispositif in `blocks`. */
+  officialTitle?: string;
 }
 
 /** Lowercase + strip diacritics. */
@@ -389,6 +393,93 @@ function validateAccents(title: string): GenerationWarning[] {
   return [];
 }
 
+/** Leading verb stems (accent-normalized) that assert a CREATED / EXTENDED /
+ *  REINFORCED policy. When a "de suppression" scrutin's title opens on one of
+ *  these, it restates the suppressed article's content in positive polarity —
+ *  i.e. the vote's meaning is inverted (voting to suppress ≠ enacting the
+ *  article). Removal / negation / status-quo leads (supprimer, ne pas…,
+ *  maintenir, rétablir) are deliberately absent: they are the correct framing. */
+const CREATIVE_LEAD_STEMS = [
+  "autoris",
+  "creer",
+  "cree",
+  "prolong",
+  "etend",
+  "elargi",
+  "instaur",
+  "rendre",
+  "augment",
+  "oblig",
+  "impos",
+  "aggrav",
+  "doubl",
+  "renforc",
+  "generalis",
+  "facilit",
+  "acceler",
+  "octroi",
+  "octroy",
+  "attribu",
+  "permett",
+  "ajout",
+  "consacr",
+  "assujetti",
+  "soumett",
+] as const;
+
+/** Full-article suppression dispositif ("Supprimer cet article." / "…l'article") —
+ *  the AN-uniform content of a suppression amendment. Alinéa/word-level removals
+ *  inside a modifying amendment do NOT match (they are not article suppressions). */
+const SUPPRESSION_DISPOSITIF = /^\s*supprimer\s+(cet\s+article|l['’]?\s*article|les\s+articles)\b/i;
+
+/** Official-title marker of a suppression scrutin ("… de suppression de l'article X …"). */
+const SUPPRESSION_TITLE = /\bde suppression\b/i;
+
+/** Budgetary bills (PLF / PLFSS): suppressing a credit-cutting article legitimately
+ *  restores or raises credits, so a "creative" verb there is a valid double
+ *  negative, not an inversion. */
+const BUDGETARY_TITLE =
+  /\b(projet de loi de finances|loi de finances|financement de la s[eé]curit[eé] sociale|plf(ss)?)\b/i;
+
+function titleLeadsCreative(title: string): boolean {
+  const n = stripDiacritics(title)
+    .replace(/^[\s"«»'’()-]+/, "")
+    .trim();
+  if (/^ne\s+(pas|plus)\b/.test(n)) return false; // explicit negation → not inverted
+  const first = n.split(/\s+/)[0] ?? "";
+  return CREATIVE_LEAD_STEMS.some((stem) => first.startsWith(stem));
+}
+
+function isSuppressionScrutin(input: ValidatorInput): boolean {
+  if (input.officialTitle && SUPPRESSION_TITLE.test(input.officialTitle)) return true;
+  return input.blocks.some(
+    (b) => b.field === "Amendment.content" && SUPPRESSION_DISPOSITIF.test(b.text)
+  );
+}
+
+/**
+ * Suppression-polarity guard. A "de suppression" amendment removes an article, so
+ * a faithful title describes what the removal DOES (a removal / negation /
+ * status-quo framing). When the title instead opens on a creation or extension
+ * verb, it restates the suppressed article's content in positive polarity and
+ * inverts the vote's meaning — the systemic bug that mislabelled 9 published
+ * titles. Budgetary (PLF/PLFSS) suppressions are excluded: restoring cut credits
+ * with a "creative" verb is a legitimate double negative.
+ */
+function validateSuppressionPolarity(input: ValidatorInput): GenerationWarning[] {
+  if (!isSuppressionScrutin(input)) return [];
+  if (input.officialTitle && BUDGETARY_TITLE.test(input.officialTitle)) return [];
+  if (!titleLeadsCreative(input.policyTitle)) return [];
+  return [
+    {
+      code: "SUPPRESSION_POLARITY",
+      severity: "blocker",
+      message:
+        "Le titre décrit le contenu de l'article en polarité positive alors que l'amendement le supprime : le sens du vote est inversé.",
+    },
+  ];
+}
+
 /**
  * Runs every rule-based validator on a candidate policy title and its grounding
  * evidence. Pure function: concatenates all flags, no side effects.
@@ -404,6 +495,7 @@ export function runValidators(input: ValidatorInput): GenerationWarning[] {
     ...validateEvidenceTrust(input),
     ...validateEvidenceGrounding(input),
     ...validateSubTarget(input),
+    ...validateSuppressionPolarity(input),
     ...validateToneNeutrality(policyTitle),
     ...validateNoDash(policyTitle),
     ...validateAccents(policyTitle),

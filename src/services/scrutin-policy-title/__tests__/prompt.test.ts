@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPrompt } from "@/services/scrutin-policy-title/prompt";
+import { buildPrompt, PROMPT_VERSION } from "@/services/scrutin-policy-title/prompt";
 import type { SubstanceTextBlock, EvidenceCandidate } from "@/services/scrutin-policy-title/types";
 
 const block: SubstanceTextBlock = {
@@ -59,5 +59,18 @@ describe("buildPrompt", () => {
   });
   it("requests JSON-only output", () => {
     expect(out.user.toLowerCase()).toContain("json");
+  });
+
+  it("carries a direction/polarity rule for suppression amendments", () => {
+    const sys = out.system.toLowerCase();
+    expect(sys).toContain("suppression");
+    // Must instruct to describe what the vote REMOVES, and forbid restating the
+    // suppressed article's content in positive polarity.
+    expect(sys).toMatch(/supprim|retir|ce que le vote|sens du vote/);
+  });
+
+  it("bumps PROMPT_VERSION past the polarity-blind v2", () => {
+    expect(PROMPT_VERSION).not.toBe("policy-title-v2");
+    expect(PROMPT_VERSION).toMatch(/^policy-title-v\d+$/);
   });
 });

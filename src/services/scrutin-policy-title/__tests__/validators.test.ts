@@ -188,6 +188,111 @@ describe("runValidators — SubTargetGrounding", () => {
   });
 });
 
+describe("runValidators — suppression polarity", () => {
+  // A grounded suppression input: the official title carries "de suppression",
+  // the amendment dispositif is the uniform "Supprimer cet article.", and the
+  // summary block + quote keep the other validators satisfied.
+  const contentBlock = officialBlock({
+    sourceType: "amendment",
+    sourceId: "amd1",
+    field: "Amendment.content",
+    text: "Supprimer cet article.",
+  });
+  function suppInput(title: string, over: { officialTitle?: string; withContent?: boolean } = {}) {
+    const withContent = over.withContent ?? false;
+    return {
+      policyTitle: title,
+      policySubtitle: null,
+      evidenceQuotes: [quote()],
+      blocks: withContent ? [officialBlock(), contentBlock] : [officialBlock()],
+      officialTitle:
+        over.officialTitle ??
+        "l'amendement n° 937 de Mme Cathala de suppression de l'article 11 bis du projet de loi relatif à la protection des enfants (première lecture).",
+    };
+  }
+  const hasSuppFlag = (flags: ReturnType<typeof runValidators>) =>
+    flags.some((f) => f.severity === "blocker" && f.code === "SUPPRESSION_POLARITY");
+
+  it("blocks a suppression titled with a creative verb (positive polarity)", () => {
+    expect(hasSuppFlag(runValidators(suppInput("Autoriser un examen psychiatrique forcé")))).toBe(
+      true
+    );
+  });
+
+  it("passes a suppression titled with a removal verb", () => {
+    expect(
+      hasSuppFlag(runValidators(suppInput("Supprimer le régime de garde à vue de 72 heures")))
+    ).toBe(false);
+  });
+
+  it("passes a suppression titled with a negation lead", () => {
+    expect(
+      hasSuppFlag(runValidators(suppInput("Ne pas créer la perpétuité pour viol sur mineur")))
+    ).toBe(false);
+  });
+
+  it("passes a suppression titled with a status-quo lead (Maintenir)", () => {
+    expect(
+      hasSuppFlag(runValidators(suppInput("Maintenir les règles actuelles de placement")))
+    ).toBe(false);
+  });
+
+  it("does NOT fire on a non-suppression scrutin titled with a creative verb", () => {
+    expect(
+      hasSuppFlag(
+        runValidators(
+          suppInput("Autoriser le partage d'informations", {
+            officialTitle:
+              "l'amendement n° 12 de Mme X portant sur l'article 5 du projet de loi (première lecture).",
+          })
+        )
+      )
+    ).toBe(false);
+  });
+
+  it("detects suppression from the dispositif when no official title is passed", () => {
+    const flags = runValidators({
+      policyTitle: "Prolonger la garde à vue à 72 heures",
+      policySubtitle: null,
+      evidenceQuotes: [quote()],
+      blocks: [officialBlock(), contentBlock],
+      // officialTitle intentionally omitted → fallback on the "Supprimer cet article." dispositif
+    });
+    expect(hasSuppFlag(flags)).toBe(true);
+  });
+
+  it("does NOT block a budgetary (PLF) suppression titled with a creative verb", () => {
+    expect(
+      hasSuppFlag(
+        runValidators(
+          suppInput("Augmenter de 301 millions d'euros les dotations aux communes", {
+            officialTitle:
+              "l'amendement n° 1277 de M. Le Coq de suppression de l'article 23 du projet de loi de finances pour 2026 (première lecture).",
+          })
+        )
+      )
+    ).toBe(false);
+  });
+
+  // Regression guard: the nine titles un-published on 2026-07-23 must all be caught.
+  const DEPUBLISHED = [
+    "Autoriser un examen psychiatrique forcé sur simple soupçon de menace",
+    "Prolonger la garde à vue à 72 heures pour la criminalité organisée",
+    "Rendre automatiques les sanctions pour fraude aux aides sociales",
+    "Autoriser les agents des transports à saisir des stocks de marchandises dans leurs locaux",
+    "Autoriser la suspension de permis bateau pour des délits douaniers en bande organisée",
+    "Autoriser les agents des transports à verbaliser la vente à la sauvette en gares routières",
+    "Autoriser les MDPH à échanger des données pour traquer la fraude sociale",
+    "Élargir les avantages fiscaux pour les bailleurs privés",
+    "Autoriser le démarchage téléphonique pour la livraison de produits alimentaires",
+  ];
+  for (const title of DEPUBLISHED) {
+    it(`regression — blocks the inverted title: ${title.slice(0, 40)}…`, () => {
+      expect(hasSuppFlag(runValidators(suppInput(title)))).toBe(true);
+    });
+  }
+});
+
 describe("runValidators — style", () => {
   it("ACCENTS blocker on missing French accents", () => {
     const flags = runValidators({

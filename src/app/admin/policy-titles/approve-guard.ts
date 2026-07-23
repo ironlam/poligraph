@@ -67,9 +67,16 @@ export function computeCurrentWarnings(
   policyTitle: string | null,
   policySubtitle: string | null,
   evidenceQuotes: EvidenceQuote[],
-  blocks: SubstanceTextBlock[]
+  blocks: SubstanceTextBlock[],
+  officialTitle?: string
 ): GenerationWarning[] {
-  return runValidators({ policyTitle: policyTitle ?? "", policySubtitle, evidenceQuotes, blocks });
+  return runValidators({
+    policyTitle: policyTitle ?? "",
+    policySubtitle,
+    evidenceQuotes,
+    blocks,
+    officialTitle,
+  });
 }
 
 /**

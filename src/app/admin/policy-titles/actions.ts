@@ -60,7 +60,13 @@ export async function editScrutinPolicyTitle(
   const { row, blocks } = ctx;
 
   const evidenceQuotes = (row.evidenceQuotes ?? []) as unknown as EvidenceQuote[];
-  const newWarnings = computeCurrentWarnings(policyTitle, policySubtitle, evidenceQuotes, blocks);
+  const newWarnings = computeCurrentWarnings(
+    policyTitle,
+    policySubtitle,
+    evidenceQuotes,
+    blocks,
+    ctx.scrutin.title
+  );
 
   await db.$transaction(async (tx) => {
     await tx.scrutinPolicyTitleRevision.create({

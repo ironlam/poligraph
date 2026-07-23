@@ -113,7 +113,8 @@ export async function loadReview(scrutinId: string): Promise<ReviewData | null> 
     policyRow.policyTitle,
     policyRow.policySubtitle,
     evidenceQuotes,
-    resolved.blocks
+    resolved.blocks,
+    scrutin.title
   );
   const evidenceDrift = detectEvidenceDrift(evidenceQuotes, resolved.blocks);
   const inputDrift = currentInputHash !== policyRow.inputHash;
