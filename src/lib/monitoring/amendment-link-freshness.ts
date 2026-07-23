@@ -32,6 +32,26 @@ export function isLinkingStalled(i: LinkStallInput): boolean {
   );
 }
 
+/**
+ * Splits the past-window linkable-unlinked votes into the BLOCKING population
+ * (fed to isLinkingStalled) and the CONFIRMED-UNRESOLVABLE ones (surfaced in the
+ * detail, non-blocking). Exclusion is by explicit id membership only — never by
+ * age — so a brand-new unlinked vote always lands in `blocking` and keeps
+ * feeding the stall signal until it is either linked or explicitly classified.
+ */
+export function partitionUnlinkedVotes(
+  linkableUnlinkedExternalIds: string[],
+  unresolvableIds: ReadonlySet<string>
+): { blocking: string[]; confirmedUnresolvable: string[] } {
+  const blocking: string[] = [];
+  const confirmedUnresolvable: string[] = [];
+  for (const id of linkableUnlinkedExternalIds) {
+    if (unresolvableIds.has(id)) confirmedUnresolvable.push(id);
+    else blocking.push(id);
+  }
+  return { blocking, confirmedUnresolvable };
+}
+
 export interface IngestionAnomalyInput {
   /** Feed returned 304 / unchanged. */
   notModified: boolean;

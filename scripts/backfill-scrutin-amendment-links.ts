@@ -27,6 +27,7 @@
 import { db } from "@/lib/db";
 import { linkScrutinsToAmendments } from "@/services/sync/link-scrutins-to-amendments";
 import { evaluateLinkLoopStep } from "@/services/sync/link-scrutins-to-amendments/backfill-loop";
+import { linkableUnlinkedVoteWhere } from "@/lib/monitoring/amendment-link-query";
 
 const OUT_OF_SCOPE_TYPES = ["ARTICLE", "MOTION", "FINAL", "AUTRE"] as const;
 
@@ -79,8 +80,11 @@ async function classifyRecentUnlinked(
   };
 
   const [linkableCount, outOfScopeGroups, amendementNoDossierCount] = await Promise.all([
+    // Excludes confirmed-unresolvable votes (shared with the freshness monitor
+    // and the sync-daily guard) so the loop does not report "stuck" forever over
+    // a known-unresolvable vote.
     db.scrutin.count({
-      where: { ...recentUnlinkedWhere, type: "AMENDEMENT", dossierLegislatifId: { not: null } },
+      where: linkableUnlinkedVoteWhere({ legislature, votingDate: { gte: sinceDate } }),
     }),
     db.scrutin.groupBy({
       by: ["type"],
@@ -124,13 +128,7 @@ function printReport(report: ClassificationReport): void {
 /** Fetches the still-unlinked linkable candidates for the stuck-backlog error report. */
 async function fetchLinkableCandidates(legislature: number, sinceDate: Date, take = 50) {
   return db.scrutin.findMany({
-    where: {
-      legislature,
-      votingDate: { gte: sinceDate },
-      amendmentLinks: { none: {} },
-      type: "AMENDEMENT",
-      dossierLegislatifId: { not: null },
-    },
+    where: linkableUnlinkedVoteWhere({ legislature, votingDate: { gte: sinceDate } }),
     select: {
       externalId: true,
       title: true,
