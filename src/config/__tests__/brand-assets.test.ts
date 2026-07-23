@@ -23,7 +23,7 @@ describe("brand SVG assets", () => {
 
       it("uses only the canonical palette", () => {
         const colors = [...svg.matchAll(/(?:fill|stroke)=["']?(#[0-9a-fA-F]{3,8})/g)].map((m) =>
-          m[1].toLowerCase()
+          (m[1] ?? "").toLowerCase()
         );
         const disallowed = colors.filter((c) => !ALLOWED.has(c));
         expect(disallowed).toEqual([]);
