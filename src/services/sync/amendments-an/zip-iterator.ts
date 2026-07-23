@@ -14,6 +14,12 @@ export interface IterateOptions {
   limit?: number;
   /** Called for entries that cannot be parsed; the iterator never silently drops data. */
   onWarning?: (w: ZipEntryWarning) => void;
+  /**
+   * Pure predicate evaluated on the entry path BEFORE any decompression. When it
+   * returns false the entry is skipped without inflating its bytes — this is what
+   * lets the incremental ingest avoid parsing unchanged dossiers.
+   */
+  entryFilter?: (entryPath: string) => boolean;
 }
 
 /**
@@ -68,6 +74,8 @@ export async function* iterateZipJsonEntries(
 
       if (entry === null) break;
       if (entry.fileName.endsWith("/") || !entry.fileName.endsWith(".json")) continue;
+      // Skip filtered entries before opening a read stream: no decompression cost.
+      if (opts.entryFilter && !opts.entryFilter(entry.fileName)) continue;
 
       const buf = await new Promise<Buffer>((resolve, reject) => {
         zipfile.openReadStream(entry, (err, stream) => {
