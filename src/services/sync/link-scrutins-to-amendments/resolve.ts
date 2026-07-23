@@ -10,6 +10,57 @@ export interface ScrutinForLink {
   dossierLegislatifId: string | null;
 }
 
+/**
+ * Reads the délibération an amendment belongs to from its AN uid. The uid
+ * carries a `P0D1N`/`P0D2N` marker: D1 = première délibération, D2 = seconde.
+ * Returns null when no such marker is present (fail closed — the caller then
+ * cannot disambiguate on this candidate).
+ */
+export function amendmentDeliberation(externalId: string): 1 | 2 | null {
+  const m = /P0D([12])N/.exec(externalId);
+  if (!m) return null;
+  return m[1] === "2" ? 2 : 1;
+}
+
+/** True when the amendment is authored by the Government. */
+function isGovernmentAuthor(a: { authorType: string | null; authorName: string | null }): boolean {
+  return a.authorType?.toLowerCase() === "gouvernement" || /gouvernement/i.test(a.authorName ?? "");
+}
+
+/**
+ * Whether the title attributes THIS specific amendment number to the Government
+ * (e.g. "l'amendement n° 1 du Gouvernement"). Scoped to the number so a
+ * sous-amendement by a named MP citing a Government parent (e.g. "le
+ * sous-amendement n° 2 de Mme X à l'amendement n° 1 du Gouvernement") only
+ * flags number 1, never number 2.
+ */
+function titleAttributesNumberToGovernment(title: string, number: string): boolean {
+  const escaped = number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`n[°o]\\s*${escaped}\\s+du\\s+gouvernement`, "i").test(title);
+}
+
+/**
+ * Deterministic tie-break for a (dossier, number) match that returned more than
+ * one candidate. Keeps only candidates in the cited délibération; when the title
+ * attributes the number to the Government, additionally requires the candidate
+ * be Government-authored. Returns the single survivor or null (0 or >1 left).
+ * Never guesses — a null keeps the resolver's fail-closed AMBIGUOUS behaviour.
+ */
+function disambiguateByDeliberation<
+  T extends {
+    id: string;
+    externalId: string;
+    authorType: string | null;
+    authorName: string | null;
+  },
+>(candidates: T[], deliberation: 1 | 2, requireGovernment: boolean): T | null {
+  const inDeliberation = candidates.filter(
+    (c) => amendmentDeliberation(c.externalId) === deliberation
+  );
+  const kept = requireGovernment ? inDeliberation.filter(isGovernmentAuthor) : inDeliberation;
+  return kept.length === 1 ? kept[0]! : null;
+}
+
 export async function resolveLinks(
   scrutin: ScrutinForLink,
   parsed: ParsedTitle
@@ -47,7 +98,15 @@ export async function resolveLinks(
   const candidates = allNumbers.length
     ? await db.amendment.findMany({
         where: { dossierId: scrutin.dossierLegislatifId, number: { in: allNumbers } },
-        select: { id: true, number: true, identicalGroupKey: true, texteRef: true },
+        select: {
+          id: true,
+          number: true,
+          identicalGroupKey: true,
+          texteRef: true,
+          externalId: true,
+          authorType: true,
+          authorName: true,
+        },
       })
     : [];
   const byNumber = new Map<string, typeof candidates>();
@@ -63,7 +122,15 @@ export async function resolveLinks(
   for (const n of unmatched) {
     const variants = await db.amendment.findMany({
       where: { dossierId: scrutin.dossierLegislatifId, number: { startsWith: `${n} (` } },
-      select: { id: true, number: true, identicalGroupKey: true, texteRef: true },
+      select: {
+        id: true,
+        number: true,
+        identicalGroupKey: true,
+        texteRef: true,
+        externalId: true,
+        authorType: true,
+        authorName: true,
+      },
     });
     if (variants.length > 0) variantsByNumber.set(n, variants);
   }
@@ -83,6 +150,29 @@ export async function resolveLinks(
       continue;
     }
     if (exact.length > 1) {
+      // Ambiguous (dossier, number) match. Only resolvable when the title names
+      // a délibération: same-number amendments in D1 vs D2 are then separated by
+      // their uid marker. Everything else stays fail-closed AMBIGUOUS.
+      if (parsed.deliberation != null) {
+        const requireGovernment =
+          parsed.deliberation === 2 && titleAttributesNumberToGovernment(scrutin.title, number);
+        const picked = disambiguateByDeliberation(exact, parsed.deliberation, requireGovernment);
+        if (picked) {
+          links.push({
+            scrutinId: scrutin.id,
+            amendmentId: picked.id,
+            role,
+            parserConfidence: Math.max(PARSER_FLOOR, confidence - 0.1),
+            parserWarnings: [
+              {
+                code: "DELIBERATION_DISAMBIGUATED",
+                message: `n° ${number} (${role}) resolved to délibération ${parsed.deliberation} candidate ${picked.externalId}${requireGovernment ? " (Government-authored, per title)" : ""}`,
+              },
+            ],
+          });
+          continue;
+        }
+      }
       warnings.push({
         code: "AMBIGUOUS_CANDIDATES",
         message: `Amendment n° ${number} (${role}) has ${exact.length} exact candidates in dossier scope: ${exact.map((c) => c.id).join(", ")}.`,

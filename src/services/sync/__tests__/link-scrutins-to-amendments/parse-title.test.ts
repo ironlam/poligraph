@@ -79,6 +79,29 @@ describe("parseScrutinTitle", () => {
     expect(t.warnings.some((w) => w.code === "SUB_WITHOUT_PARENT")).toBe(true);
   });
 
+  it("reads 'seconde délibération' as deliberation 2", () => {
+    const t = parseScrutinTitle(
+      "l'amendement n° 1 du Gouvernement de rétablissement de l'article 11 (supprimé) (seconde délibération)"
+    );
+    expect(t.deliberation).toBe(2);
+    expect(t.principalNumbers).toEqual(["1"]);
+  });
+
+  it("reads 'première délibération' as deliberation 1", () => {
+    const t = parseScrutinTitle("l'amendement n° 42 du Gouvernement (première délibération)");
+    expect(t.deliberation).toBe(1);
+  });
+
+  it("leaves deliberation null when the title does not mention one", () => {
+    const t = parseScrutinTitle("l'amendement n° 1234 de M. Dupont");
+    expect(t.deliberation).toBeNull();
+  });
+
+  it("detects the délibération accent-insensitively", () => {
+    const t = parseScrutinTitle("l'amendement n° 1 du Gouvernement (seconde deliberation)");
+    expect(t.deliberation).toBe(2);
+  });
+
   it("is deterministic across repeated calls (no shared regex lastIndex bug)", () => {
     const title = "le sous-amendement n° 2368 de M. Potier à l'amendement n° 2058 du Gouvernement";
     const a = parseScrutinTitle(title);

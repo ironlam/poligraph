@@ -7,6 +7,15 @@ export interface ParsedTitle {
   parentAmendmentNumber: string | null;
   hasIdentique: boolean;
   identiqueNumbers: string[];
+  /**
+   * Délibération the vote belongs to, read from the title:
+   *   2   -> "seconde délibération"
+   *   1   -> "première délibération"
+   *   null -> unspecified (an ordinary première-délibération vote)
+   * Used to disambiguate a (dossier, number) match when the same amendment
+   * number exists in both the first and the second délibération.
+   */
+  deliberation: 1 | 2 | null;
   warnings: ParserWarning[];
   confidence: number;
 }

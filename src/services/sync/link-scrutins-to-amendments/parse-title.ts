@@ -30,6 +30,19 @@ const PRINCIPAL_RE = new RegExp(
 const IDENTIQUE_RE = /amendements?\s+identiques?|identique\s+suivant/i;
 const ENUMERATED_RE = new RegExp(String.raw`(${NUMBER_RE})\s+et\s+(?:n°?\s*)?(${NUMBER_RE})`, "i");
 
+/**
+ * Detects the délibération cited in the title. Accent-insensitive: diacritics
+ * are stripped first so "seconde délibération" and "seconde deliberation" both
+ * match. An unspecified title is an ordinary première-délibération vote (null).
+ */
+const DIACRITICS_RE = new RegExp("[\\u0300-\\u036f]", "g");
+function detectDeliberation(title: string): 1 | 2 | null {
+  const norm = title.normalize("NFD").replace(DIACRITICS_RE, "");
+  if (/seconde\s+deliberation/i.test(norm)) return 2;
+  if (/premiere\s+deliberation/i.test(norm)) return 1;
+  return null;
+}
+
 export function parseScrutinTitle(title: string): ParsedTitle {
   const warnings: ParserWarning[] = [];
   let confidence = 1.0;
@@ -91,6 +104,7 @@ export function parseScrutinTitle(title: string): ParsedTitle {
     parentAmendmentNumber,
     hasIdentique,
     identiqueNumbers,
+    deliberation: detectDeliberation(title),
     warnings,
     confidence: Math.max(0, confidence),
   };

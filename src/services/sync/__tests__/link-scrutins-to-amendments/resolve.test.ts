@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import type { ParsedTitle } from "@/services/sync/link-scrutins-to-amendments/types";
+import { parseScrutinTitle } from "@/services/sync/link-scrutins-to-amendments/parse-title";
 
 const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -15,6 +16,7 @@ const parsedPotier: ParsedTitle = {
   parentAmendmentNumber: "2058",
   hasIdentique: true,
   identiqueNumbers: [],
+  deliberation: null,
   warnings: [],
   confidence: 0.85,
 };
@@ -330,5 +332,244 @@ describeIfDb("dedupeLinks (pure)", () => {
     expect(out).toHaveLength(2);
     expect(out.find((l) => l.amendmentId === "a1")!.role).toBe("PRINCIPAL");
     expect(out.find((l) => l.amendmentId === "a2")!.role).toBe("SUB_AMENDMENT");
+  });
+});
+
+/**
+ * Délibération-aware fallback for the ambiguous same-number case: on a dossier
+ * where numbers 1 and 2 exist in BOTH première (D1) and seconde (D2)
+ * délibération, a plain (dossier, number) match is ambiguous and fails closed.
+ * The fallback disambiguates using the délibération cited in the title and the
+ * D1/D2 marker in the amendment uid. Mirrors the V8428 / V8429 shape (no
+ * externalId hardcoded — the marker is generic).
+ */
+describeIfDb("resolveLinks — délibération-aware fallback", () => {
+  const DLR_EXT = "TEST_DELIB_DLR";
+  const AMEND_PFX = "TEST_DELIB_A_";
+  const SCRUTIN_PFX = "TEST_DELIB_S_";
+
+  // externalIds carry the P0D1N / P0D2N marker the resolver reads.
+  const GOV1_D1 = `${AMEND_PFX}gov1_P0D1N`;
+  const GOV1_D2 = `${AMEND_PFX}gov1_P0D2N`;
+  const GOULET2_D1 = `${AMEND_PFX}goulet2_P0D1N`;
+  const GOULET2_D2 = `${AMEND_PFX}goulet2_P0D2N`;
+  const N8A_D1 = `${AMEND_PFX}n8a_P0D1N`;
+  const N8B_D1 = `${AMEND_PFX}n8b_P0D1N`;
+  const N9A_D2 = `${AMEND_PFX}n9a_P0D2N`;
+  const N9B_D2 = `${AMEND_PFX}n9b_P0D2N`;
+
+  let dossierId: string;
+  let idByExt: Map<string, string>;
+
+  async function makeScrutin(suffix: string, title: string) {
+    return db.scrutin.create({
+      data: {
+        externalId: `${SCRUTIN_PFX}${suffix}`,
+        title,
+        votingDate: new Date("2026-05-22T10:00:00Z"),
+        legislature: 17,
+        chamber: "AN",
+        votesFor: 1,
+        votesAgainst: 0,
+        votesAbstain: 0,
+        result: "ADOPTED",
+        dossierLegislatifId: dossierId,
+      },
+    });
+  }
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ resolveLinks } = await import("@/services/sync/link-scrutins-to-amendments/resolve"));
+
+    await db.scrutinAmendment.deleteMany({
+      where: { scrutin: { externalId: { startsWith: SCRUTIN_PFX } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: SCRUTIN_PFX } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: AMEND_PFX } } });
+    await db.legislativeDossier.deleteMany({ where: { externalId: DLR_EXT } });
+
+    const dossier = await db.legislativeDossier.create({
+      data: {
+        externalId: DLR_EXT,
+        slug: "test-delib-dossier",
+        title: "Test délibération dossier",
+        status: "EN_COURS",
+      },
+    });
+    dossierId = dossier.id;
+
+    await db.amendment.createMany({
+      data: [
+        // number 1 in D1 and D2, both Government (mirror V8429's target)
+        {
+          externalId: GOV1_D1,
+          number: "1",
+          dossierId,
+          status: "ADOPTE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Gouvernement",
+          authorName: "Gouvernement",
+        },
+        {
+          externalId: GOV1_D2,
+          number: "1",
+          dossierId,
+          status: "ADOPTE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Gouvernement",
+          authorName: "Gouvernement",
+        },
+        // number 2 in D1 and D2, both by Mme Perrine Goulet (mirror V8428's target)
+        {
+          externalId: GOULET2_D1,
+          number: "2",
+          dossierId,
+          status: "ADOPTE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "Mme Perrine Goulet",
+        },
+        {
+          externalId: GOULET2_D2,
+          number: "2",
+          dossierId,
+          status: "ADOPTE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "Mme Perrine Goulet",
+        },
+        // number 8 only in D1 (twice) — a seconde-délib vote for it must refuse
+        {
+          externalId: N8A_D1,
+          number: "8",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "M. A",
+        },
+        {
+          externalId: N8B_D1,
+          number: "8",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "M. B",
+        },
+        // number 9 twice in D2 — still ambiguous after délibération filter
+        {
+          externalId: N9A_D2,
+          number: "9",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "M. C",
+        },
+        {
+          externalId: N9B_D2,
+          number: "9",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+          authorType: "Individuel",
+          authorName: "M. D",
+        },
+      ],
+    });
+
+    const rows = await db.amendment.findMany({
+      where: { externalId: { startsWith: AMEND_PFX } },
+      select: { id: true, externalId: true },
+    });
+    idByExt = new Map(rows.map((r) => [r.externalId, r.id]));
+  });
+
+  afterAll(async () => {
+    await db.scrutinAmendment.deleteMany({
+      where: { scrutin: { externalId: { startsWith: SCRUTIN_PFX } } },
+    });
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: SCRUTIN_PFX } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: AMEND_PFX } } });
+    await db.legislativeDossier.deleteMany({ where: { externalId: DLR_EXT } });
+  });
+
+  it("POSITIVE: a seconde-délibération Government principal resolves to the D2 amendment (V8429 shape)", async () => {
+    const title =
+      "l'amendement n° 1 du Gouvernement de rétablissement de l'article 11 (supprimé) (seconde délibération)";
+    const scrutin = await makeScrutin("gov", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    expect(res.scope).toBe("dossier");
+    const principal = res.links.filter((l) => l.role === "PRINCIPAL");
+    expect(principal).toHaveLength(1);
+    expect(principal[0]!.amendmentId).toBe(idByExt.get(GOV1_D2));
+    expect(principal[0]!.parserWarnings.some((w) => w.code === "DELIBERATION_DISAMBIGUATED")).toBe(
+      true
+    );
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(false);
+  });
+
+  it("POSITIVE: a seconde-délibération sous-amendement resolves sub + Government parent to their D2 amendments (V8428 shape)", async () => {
+    const title =
+      "le sous-amendement n° 2 de Mme Perrine Goulet à l'amendement n° 1 du Gouvernement de rétablissement de l'article 11 (supprimé) (seconde délibération)";
+    const scrutin = await makeScrutin("sub", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    expect(res.scope).toBe("dossier");
+    const sub = res.links.find((l) => l.role === "SUB_AMENDMENT");
+    const parent = res.links.find((l) => l.role === "PARENT_AMENDMENT");
+    expect(sub?.amendmentId).toBe(idByExt.get(GOULET2_D2));
+    expect(parent?.amendmentId).toBe(idByExt.get(GOV1_D2));
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(false);
+  });
+
+  it("NEGATIVE (a): ambiguous same-number candidates with NO délibération in the title still refuse", async () => {
+    const title = "l'amendement n° 1 du Gouvernement de rétablissement de l'article 11 (supprimé)";
+    const scrutin = await makeScrutin("nodelib", title);
+    const parsed = parseScrutinTitle(title);
+    expect(parsed.deliberation).toBeNull();
+
+    const res = await resolveLinks(scrutin, parsed);
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+  });
+
+  it("NEGATIVE (b): a seconde-délibération vote whose D2 candidate is absent refuses (no D1 fallback)", async () => {
+    const title = "l'amendement n° 8 (seconde délibération)";
+    const scrutin = await makeScrutin("d2absent", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+  });
+
+  it("NEGATIVE (c): two D2 candidates sharing the number stay ambiguous and refuse", async () => {
+    const title = "l'amendement n° 9 (seconde délibération)";
+    const scrutin = await makeScrutin("twoD2", title);
+    const res = await resolveLinks(scrutin, parseScrutinTitle(title));
+
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+  });
+});
+
+describeIfDb("amendmentDeliberation (pure)", () => {
+  it("reads D1 / D2 from the uid marker and null when absent", async () => {
+    const { amendmentDeliberation } =
+      await import("@/services/sync/link-scrutins-to-amendments/resolve");
+    expect(amendmentDeliberation("AMANR5L17PO838901B3018P0D2N000002")).toBe(2);
+    expect(amendmentDeliberation("AMANR5L17PO838901B3018P0D1N000001")).toBe(1);
+    expect(amendmentDeliberation("AMANR5L17PO838901B3018N000001")).toBeNull();
   });
 });
