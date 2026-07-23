@@ -17,18 +17,23 @@ export function AnnualRevenueSeries({ revenues }: { revenues: AnnualRevenue[] })
   const period = coveredPeriod(sorted);
   return (
     <div className="mt-2">
-      <div className="flex items-end gap-1 h-12" aria-hidden={true}>
-        {sorted.map((r) => (
-          <div key={r.year} className="flex flex-1 flex-col items-center justify-end">
-            <div
-              className="w-full max-w-[28px] rounded-t bg-primary/70"
-              style={{ height: `${Math.round((r.amount / max) * 100)}%` }}
-            />
-            <span className="mt-1 text-[10px] text-muted-foreground">
-              {String(r.year).slice(2)}
-            </span>
-          </div>
-        ))}
+      <div className="flex items-end gap-1" aria-hidden={true}>
+        {sorted.map((r) => {
+          // A real 0 collapses to no bar; non-zero gets a small floor so it
+          // stays visible. Percent resolves against the fixed-height track.
+          const pct = r.amount === 0 ? 0 : Math.max(8, Math.round((r.amount / max) * 100));
+          return (
+            <div key={r.year} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex h-10 w-full items-end justify-center">
+                <div
+                  className="w-full max-w-[28px] rounded-t bg-primary/70"
+                  style={{ height: `${pct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground">{String(r.year).slice(2)}</span>
+            </div>
+          );
+        })}
       </div>
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
         {sorted.map((r) => (
