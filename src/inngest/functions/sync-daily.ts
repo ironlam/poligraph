@@ -2,6 +2,7 @@ import { inngest } from "../client";
 import { POLICY_TITLE_CRON } from "@/config/policy-titles";
 import { syncMetadata } from "@/lib/sync/sync-metadata";
 import { revalidateTags } from "@/lib/cache";
+import { isIngestionAnomaly } from "@/lib/monitoring/amendment-link-freshness";
 
 interface DailyStep {
   name: string;
@@ -104,6 +105,38 @@ const DAILY_STEPS: DailyStep[] = [
         force: false,
         safetyCap: POLICY_TITLE_CRON.amendmentsSafetyCap,
       });
+
+      // In-sync anomaly guard: a 304/unchanged feed or a matched corpus is
+      // normal, but a fully-processed feed that ingests nothing while a
+      // business gap exists (ZIP ahead of the DB, or linkable votes still
+      // unlinked) means the pipeline is failing silently.
+      const { db } = await import("@/lib/db");
+      const dbAmendmentCount = await db.amendment.count();
+      const recentLinkableUnlinked = await db.scrutin.count({
+        where: {
+          legislature: 17,
+          chamber: "AN",
+          type: "AMENDEMENT",
+          dossierLegislatifId: { not: null },
+          votingDate: { gte: new Date(Date.now() - 14 * 24 * 3_600_000) },
+          amendmentLinks: { none: {} },
+        },
+      });
+      const anomaly = isIngestionAnomaly({
+        notModified: stats.notModified ?? false,
+        entriesSeen: stats.amendmentsSeen,
+        created: stats.amendmentsCreated,
+        updated: stats.amendmentsUpdated,
+        dbAmendmentCount,
+        recentLinkableUnlinked,
+      });
+      if (anomaly) {
+        console.warn(
+          "[sync-daily] amendments-an ANOMALY: feed processed but nothing ingested while a business gap exists",
+          { seen: stats.amendmentsSeen, dbAmendmentCount, recentLinkableUnlinked }
+        );
+      }
+
       await syncMetadata.markCompleted("policy-titles:amendments", {
         itemCount: stats.amendmentsCreated,
         durationS: stats.durationMs / 1000,
@@ -114,6 +147,7 @@ const DAILY_STEPS: DailyStep[] = [
           skipped: stats.amendmentsSkipped,
           writeMs: stats.writeMs,
           peakRssMb: stats.peakRssMb,
+          anomaly,
         },
       });
       console.info("[sync-daily] amendments-an", stats);

@@ -1,0 +1,112 @@
+name: Monitor Amendment Links
+
+# Data-driven watchdog for the silent amendment-linking stall (see issue #476 /
+# the July 2026 diagnosis): the daily sync marks its amendment/link steps
+# "completed" even when they process nothing, so a green sync is not proof that
+# recent votes are getting explained. This runs a read-only freshness check and
+# opens an issue when no new links have appeared for >48h while recent amendable
+# votes remain unlinked.
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # ~9-10h Paris, after the 05:00 UTC daily sync has run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  LINK_FRESHNESS_MAX_LAG_HOURS: "48"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Check amendment linking freshness
+        id: check
+        run: npx tsx scripts/check-amendment-link-freshness.ts
+
+      - name: Open issue if linking has stalled
+        if: steps.check.outputs.stalled == 'true'
+        uses: actions/github-script@v7
+        env:
+          DETAIL: ${{ steps.check.outputs.detail }}
+        with:
+          script: |
+            const label = "amendment-link-stall";
+            const title = `Amendment linking stalled - ${new Date().toISOString().split("T")[0]}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "## Amendment linking appears stalled",
+              "",
+              "The newest vote that has an amendment link has fallen more than 48h behind",
+              "the newest amendable vote, and amendable votes old enough to have been linked",
+              "remain unlinked. Recent votes will not get an explained title until this is",
+              "resolved. The daily sync can stay green while this happens (the amendment /",
+              "link steps mark themselves completed with 0 rows).",
+              "",
+              "```",
+              process.env.DETAIL || "(no detail captured)",
+              "```",
+              "",
+              `**Watchdog run**: ${runUrl}`,
+              "",
+              "### Likely cause / triage",
+              "- Amendment ingestion (`syncAmendmentsAN`) only reads the first",
+              "  `POLICY_TITLE_AMENDMENTS_LIMIT` entries of the AN ZIP in archive order,",
+              "  so new amendments deep in the feed are never reached.",
+              "- Check `scripts/check-amendment-link-freshness.ts` output above.",
+              "- See `docs/RUNBOOK.md` and the amendment-pipeline diagnosis notes.",
+              "- [ ] Re-ingest amendments (full pass) + link recent scrutins",
+              "- [ ] Close this issue once new links appear",
+            ].join("\n");
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: label,
+            });
+
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label, "automated"],
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Still stalled as of ${new Date().toISOString()}.\n\n\`\`\`\n${process.env.DETAIL || ""}\n\`\`\``,
+              });
+            }
+
+      - name: Fail the run for visibility if stalled
+        if: steps.check.outputs.stalled == 'true'
+        run: |
+          echo "Amendment linking stalled - see the issue opened above." >&2
+          exit 1
