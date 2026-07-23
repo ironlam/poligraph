@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { ProfileTabs } from "./ProfileTabs";
 
 // Radix Tabs activates triggers on mousedown (left primary button), not click.
@@ -32,7 +33,13 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/politiques/eric-coquerel",
 }));
 
-function renderTabs(initialSearch: string) {
+function renderTabs(initialSearch: string, opts: { patrimoine?: ReactNode } = {}) {
+  const patrimoine =
+    "patrimoine" in opts ? (
+      opts.patrimoine
+    ) : (
+      <div data-testid="content-patrimoine">patrimoine-content</div>
+    );
   searchParamsRef.current = new URLSearchParams(initialSearch);
   window.history.replaceState(null, "", `/politiques/eric-coquerel?${initialSearch}`);
   return render(
@@ -40,6 +47,7 @@ function renderTabs(initialSearch: string) {
       profileContent={<div data-testid="content-profil">profil-content</div>}
       careerContent={<div data-testid="content-carriere">carriere-content</div>}
       votesContent={<div data-testid="content-votes">votes-content</div>}
+      patrimoineContent={patrimoine}
       factchecksContent={<div data-testid="content-factchecks">factchecks-content</div>}
       affairsContent={<div data-testid="content-affaires">affaires-content</div>}
     />
@@ -87,6 +95,21 @@ describe("ProfileTabs", () => {
 
     clickTab(/profil/i);
 
+    expect(window.location.search).toBe("");
+    expect(routerReplace).not.toHaveBeenCalled();
+  });
+
+  it("selects the patrimoine tab from ?tab=patrimoine when available", () => {
+    renderTabs("tab=patrimoine");
+    expect(screen.getByRole("tab", { name: /patrimoine/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("falls back to Profil and clears the query when patrimoine is unavailable", () => {
+    renderTabs("tab=patrimoine", { patrimoine: null });
+    expect(screen.getByRole("tab", { name: /profil/i })).toHaveAttribute("aria-selected", "true");
     expect(window.location.search).toBe("");
     expect(routerReplace).not.toHaveBeenCalled();
   });

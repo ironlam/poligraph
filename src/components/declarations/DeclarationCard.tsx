@@ -2,8 +2,9 @@ import type { DeclarationDetails } from "@/types/hatvp";
 import { HorizontalBars } from "@/components/stats/HorizontalBars";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Info } from "lucide-react";
 import { DeclarationMetrics } from "./DeclarationMetrics";
+import { DeclarationHistory } from "./DeclarationHistory";
 
 interface DeclarationCardProps {
   id?: string;
@@ -15,7 +16,6 @@ interface DeclarationCardProps {
     pdfUrl: string | null;
     details: DeclarationDetails | null;
   }>;
-  politicianHatvpUrl: string | null;
 }
 
 function CollapsibleSection({
@@ -84,13 +84,36 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {/* Editorial integrity: declarative, not audited; DIA is not DSP. */}
+        <div className="flex gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden={true} />
+          <div>
+            <strong>Données déclaratives, non auditées.</strong> Ces montants sont déclarés par
+            l&apos;élu(e) et publiés par la Haute Autorité pour la transparence de la vie publique
+            (HATVP). Poligraph les met en forme sans les vérifier ni les estimer.
+            <details className="mt-1.5">
+              <summary className="cursor-pointer font-medium text-primary">
+                Intérêts (DIA) n&apos;est pas patrimoine (DSP)
+              </summary>
+              <p className="mt-1 text-muted-foreground">
+                Pour les parlementaires, seule la déclaration d&apos;intérêts et d&apos;activités
+                (DIA) est consultable en ligne : elle liste les activités, revenus et
+                participations. La déclaration de patrimoine (DSP), qui détaille les biens
+                immobiliers, comptes et épargne, n&apos;est consultable qu&apos;en préfecture. Les
+                montants affichés ici ne représentent donc pas une fortune nette.
+              </p>
+            </details>
+          </div>
+        </div>
+
         {/* Key metrics */}
         {details && (
           <DeclarationMetrics
             totalPortfolioValue={details.totalPortfolioValue}
             totalCompanies={details.totalCompanies}
             latestAnnualIncome={details.latestAnnualIncome}
-            totalDirectorships={details.totalDirectorships}
+            electoralMandatesCount={details.electoralMandates.length}
+            directorshipsCount={details.directorships.length}
           />
         )}
 
@@ -218,6 +241,13 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
             ))}
           </CollapsibleSection>
         )}
+
+        {/* DIA history (chronological, null-aware, no variation) */}
+        <DeclarationHistory
+          declarations={declarations
+            .filter((d) => d.type === "INTERETS")
+            .map((d) => ({ id: d.id, year: d.year, details: d.details }))}
+        />
 
         {/* All declaration links */}
         <div className="flex flex-wrap gap-2 pt-4 border-t">

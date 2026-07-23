@@ -4,9 +4,9 @@ import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { ReactNode } from "react";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { User, Briefcase, Vote, FileCheck, Scale } from "lucide-react";
+import { User, Briefcase, Vote, Wallet, FileCheck, Scale } from "lucide-react";
 
-const VALID_TABS = ["profil", "carriere", "votes", "factchecks", "affaires"] as const;
+const VALID_TABS = ["profil", "carriere", "votes", "patrimoine", "factchecks", "affaires"] as const;
 type TabValue = (typeof VALID_TABS)[number];
 const DEFAULT_TAB: TabValue = "profil";
 
@@ -14,6 +14,7 @@ interface ProfileTabsProps {
   profileContent: ReactNode;
   careerContent: ReactNode;
   votesContent: ReactNode | null;
+  patrimoineContent: ReactNode | null;
   factchecksContent: ReactNode | null;
   affairsContent: ReactNode;
   affairsCount?: number;
@@ -23,6 +24,7 @@ function ProfileTabsInner({
   profileContent,
   careerContent,
   votesContent,
+  patrimoineContent,
   factchecksContent,
   affairsContent,
   affairsCount,
@@ -33,10 +35,11 @@ function ProfileTabsInner({
     () =>
       VALID_TABS.filter((t) => {
         if (t === "votes" && !votesContent) return false;
+        if (t === "patrimoine" && !patrimoineContent) return false;
         if (t === "factchecks" && !factchecksContent) return false;
         return true;
       }),
-    [votesContent, factchecksContent]
+    [votesContent, patrimoineContent, factchecksContent]
   );
 
   const tabFromUrl = useMemo<TabValue>(() => {
@@ -51,6 +54,19 @@ function ProfileTabsInner({
   useEffect(() => {
     setTab(tabFromUrl);
   }, [tabFromUrl]);
+
+  // If the URL names a tab that isn't available (e.g. ?tab=patrimoine on a
+  // profile without declarations), drop ?tab so the URL matches the fallback
+  // tab instead of lying.
+  useEffect(() => {
+    const raw = searchParams.get("tab");
+    if (raw && !availableTabs.includes(raw as TabValue)) {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("tab");
+      const qs = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    }
+  }, [searchParams, availableTabs]);
 
   function onTabChange(value: string) {
     const next = value as TabValue;
@@ -82,6 +98,12 @@ function ProfileTabsInner({
             Votes
           </TabsTrigger>
         )}
+        {patrimoineContent && (
+          <TabsTrigger value="patrimoine">
+            <Wallet className="size-4" />
+            Patrimoine
+          </TabsTrigger>
+        )}
         {factchecksContent && (
           <TabsTrigger value="factchecks">
             <FileCheck className="size-4" />
@@ -101,6 +123,7 @@ function ProfileTabsInner({
       <TabsContent value="profil">{profileContent}</TabsContent>
       <TabsContent value="carriere">{careerContent}</TabsContent>
       {votesContent && <TabsContent value="votes">{votesContent}</TabsContent>}
+      {patrimoineContent && <TabsContent value="patrimoine">{patrimoineContent}</TabsContent>}
       {factchecksContent && <TabsContent value="factchecks">{factchecksContent}</TabsContent>}
       <TabsContent value="affaires">{affairsContent}</TabsContent>
     </Tabs>

@@ -6,7 +6,8 @@ interface DeclarationMetricsProps {
   totalPortfolioValue: number | null;
   totalCompanies: number;
   latestAnnualIncome: number | null;
-  totalDirectorships: number;
+  electoralMandatesCount: number;
+  directorshipsCount: number;
 }
 
 const HATVP_DI_URL =
@@ -16,27 +17,30 @@ export function DeclarationMetrics({
   totalPortfolioValue,
   totalCompanies,
   latestAnnualIncome,
-  totalDirectorships,
+  electoralMandatesCount,
+  directorshipsCount,
 }: DeclarationMetricsProps) {
   const metrics: { value: string; label: string; term: GlossaryKey }[] = [
     {
       value: formatCompactCurrency(totalPortfolioValue),
-      label: "Portefeuille total",
+      label: "Participations financières déclarées",
       term: "portefeuilleTotal",
     },
     {
       value: String(totalCompanies),
-      label: "Participations",
+      label: "Sociétés déclarées",
       term: "participationsHatvp",
     },
     {
       value: formatCompactCurrency(latestAnnualIncome),
-      label: "Revenus annuels",
+      label: "Revenus annuels déclarés",
       term: "revenusAnnuels",
     },
     {
-      value: String(totalDirectorships),
-      label: "Mandats & directions",
+      // Count elective mandates AND directorships (the old "totalDirectorships"
+      // counted directorships only, contradicting the label).
+      value: String(electoralMandatesCount + directorshipsCount),
+      label: "Mandats et fonctions de direction",
       term: "mandatsDirections",
     },
   ];
