@@ -40,6 +40,7 @@ export async function Header() {
             <Logo
               size={40}
               withWordmark
+              priority
               className="group-hover:scale-105 transition-transform duration-300"
             />
           </Link>

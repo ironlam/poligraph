@@ -7,7 +7,7 @@
  * - Footer with owl icon
  */
 
-import { BRAND_RED } from "@/config/brand";
+import { BRAND_NAVY, BRAND_PAGE, BRAND_RED } from "@/config/brand";
 
 // Owl SVG as base64 data URI (from public/logo-inverse.svg)
 const OWL_BASE64 =
@@ -15,8 +15,8 @@ const OWL_BASE64 =
 
 export const OWL_DATA_URI = `data:image/svg+xml;base64,${OWL_BASE64}`;
 
-// Tricolor band colors (from the owl SVG)
-const BLEU = "#002654";
+// Tricolor band colors (Poligraph brand palette)
+const BLEU = BRAND_NAVY;
 const ROUGE = BRAND_RED;
 
 // Common OG image dimensions
@@ -48,7 +48,7 @@ export function OgLayout({ children }: { children: React.ReactNode }) {
       {/* Tricolor band */}
       <div style={{ display: "flex", width: "100%", height: 6, flexShrink: 0 }}>
         <div style={{ flex: 1, background: BLEU }} />
-        <div style={{ flex: 1, background: "#FFFFFF" }} />
+        <div style={{ flex: 1, background: BRAND_PAGE }} />
         <div style={{ flex: 1, background: ROUGE }} />
       </div>
 

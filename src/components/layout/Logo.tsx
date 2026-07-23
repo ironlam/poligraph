@@ -4,12 +4,14 @@ type LogoProps = {
   size?: number;
   withWordmark?: boolean;
   className?: string;
+  /** Preload the mark. Use only for above-the-fold instances (e.g. the header). */
+  priority?: boolean;
 };
 
-export function Logo({ size = 40, withWordmark = false, className }: LogoProps) {
+export function Logo({ size = 40, withWordmark = false, className, priority = false }: LogoProps) {
   return (
-    <span className={`flex items-center gap-3 ${className ?? ""}`}>
-      <span className="relative shrink-0" style={{ width: size, height: size }}>
+    <span className={["flex items-center gap-3", className].filter(Boolean).join(" ")}>
+      <span className="shrink-0" style={{ width: size, height: size }}>
         <Image
           src="/logo.svg"
           alt=""
@@ -17,7 +19,7 @@ export function Logo({ size = 40, withWordmark = false, className }: LogoProps) 
           width={size}
           height={size}
           className="dark:hidden"
-          priority
+          priority={priority}
         />
         <Image
           src="/logo-inverse.svg"
@@ -26,7 +28,7 @@ export function Logo({ size = 40, withWordmark = false, className }: LogoProps) 
           width={size}
           height={size}
           className="hidden dark:block"
-          priority
+          priority={priority}
         />
       </span>
       {withWordmark && (
