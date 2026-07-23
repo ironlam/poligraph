@@ -9,6 +9,7 @@ import { formatDate, formatCompactCurrency } from "@/lib/utils";
 import { MANDATE_TYPE_LABELS, PARTY_ROLE_LABELS, feminizePartyRole } from "@/config/labels";
 import { ensureContrast } from "@/lib/contrast";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { MandateTimeline } from "@/components/politicians/MandateTimeline";
 import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { DeclarationCard } from "@/components/declarations/DeclarationCard";
@@ -595,13 +596,32 @@ export default async function PoliticianPage({ params }: PageProps) {
                 ) : null
               }
               careerContent={
-                <CareerTimeline
-                  mandates={politician.mandates}
-                  partyHistory={politician.partyHistory}
-                  affairs={directAffairs}
-                  birthDate={politician.birthDate}
-                  deathDate={politician.deathDate}
-                />
+                <div className="space-y-8">
+                  <CareerTimeline
+                    mandates={politician.mandates}
+                    partyHistory={politician.partyHistory}
+                    affairs={directAffairs}
+                    birthDate={politician.birthDate}
+                    deathDate={politician.deathDate}
+                  />
+                  {politician.mandates.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <h2 className="leading-none font-semibold">Mandats</h2>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Liste des mandats nationaux et européens connus. Les mandats locaux
+                          (maire, conseiller, etc.) peuvent ne pas être listés.
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <MandateTimeline
+                          mandates={politician.mandates}
+                          civility={politician.civility}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               }
               votesContent={
                 (voteData && voteData.stats.total > 0) || parliamentaryCard ? (
