@@ -14,6 +14,11 @@ import {
   resolveIdenticalGroups,
 } from "./amendments-an/writer";
 import { loadFeedState, saveFeedState } from "./amendments-an/feed-state";
+import { scanCentralDirectory } from "./amendments-an/dossier-index";
+import {
+  loadStoredDossierSignatures,
+  saveStoredDossierSignatures,
+} from "./amendments-an/signature-store";
 import { markPolicyTitlesForSubstanceDrift } from "./mark-policy-titles-substance-drift";
 import type {
   NormalizedAmendment,
@@ -25,6 +30,8 @@ import type {
 
 function emptyStats(warnings: SyncWarning[]): SyncAmendmentsANStats {
   return {
+    dossiersInspected: 0,
+    dossiersChanged: 0,
     amendmentsSeen: 0,
     amendmentsCreated: 0,
     amendmentsUpdated: 0,
@@ -54,6 +61,7 @@ export async function syncAmendmentsAN(
   const started = Date.now();
   const legislature = opts.legislature ?? 17;
   const batchSize = opts.batchSize ?? 500;
+  const mode = opts.mode ?? "incremental";
   const warnings: SyncWarning[] = [];
   const stats = emptyStats(warnings);
 
@@ -98,6 +106,40 @@ export async function syncAmendmentsAN(
     }
   }
 
+  // --- Central-directory diff (cheap: reads metadata only, no decompression) ---
+  // Signature each dossier from the ZIP central directory, then decide which to
+  // parse. The fail-loud safety cap is enforced here against the TOTAL number of
+  // entries seen during the scan — never a silent truncation.
+  const scan = await scanCentralDirectory(zipPath!);
+  const current = scan.signatures;
+  stats.dossiersInspected = current.size;
+
+  if (opts.safetyCap !== undefined && scan.entriesInspected > opts.safetyCap) {
+    throw new Error(
+      `[amendments] corpus exceeds safety cap (${opts.safetyCap} entries): refusing to ` +
+        `truncate silently. Raise POLICY_TITLE_AMENDMENTS_SAFETY_CAP or investigate feed growth.`
+    );
+  }
+
+  // Full mode parses every entry and re-baselines the signatures. Incremental
+  // mode diffs against the last successful run and parses only new/changed
+  // dossiers, skipping the rest before any decompression via `entryFilter`.
+  let entryFilter: ((entryPath: string) => boolean) | undefined;
+  if (mode === "full") {
+    stats.dossiersChanged = current.size;
+  } else {
+    const stored = opts.dryRun ? {} : await loadStoredDossierSignatures(legislature);
+    const changed = new Set<string>();
+    for (const [ref, sig] of current) {
+      if (stored[ref] !== sig) changed.add(ref);
+    }
+    stats.dossiersChanged = changed.size;
+    entryFilter = (entryPath: string): boolean => {
+      const ref = dossierRefFromEntryPath(entryPath);
+      return ref !== null && changed.has(ref);
+    };
+  }
+
   // Light projection only: the resolve passes below read just these three
   // fields, so we never retain the heavy content/summary HTML for the whole
   // ~123k-entry pass. `batch` still holds full rows but is flushed every
@@ -134,14 +176,12 @@ export async function syncAmendmentsAN(
   };
 
   try {
-    for await (const entry of iterateZipJsonEntries(zipPath!, { limit: opts.limit, onWarning })) {
+    for await (const entry of iterateZipJsonEntries(zipPath!, {
+      limit: opts.limit,
+      onWarning,
+      entryFilter,
+    })) {
       stats.amendmentsSeen++;
-      if (opts.safetyCap !== undefined && stats.amendmentsSeen > opts.safetyCap) {
-        throw new Error(
-          `[amendments] corpus exceeds safety cap (${opts.safetyCap} entries): refusing to ` +
-            `truncate silently. Raise POLICY_TITLE_AMENDMENTS_SAFETY_CAP or investigate feed growth.`
-        );
-      }
       const dossierRefFromPath = dossierRefFromEntryPath(entry.entryPath);
       const texteRefFromPath = texteRefFromEntryPath(entry.entryPath);
       const n = normalizeAmendment(entry.json, {
@@ -195,6 +235,13 @@ export async function syncAmendmentsAN(
         lastSuccessfulSyncAt: new Date().toISOString(),
       });
     }
+
+    // Re-baseline the per-dossier signatures on success (both modes). Writing
+    // only here — after the resolve passes — means an interrupted run leaves the
+    // stored baseline untouched, so the next run reprocesses the same dossiers.
+    if (!opts.dryRun) {
+      await saveStoredDossierSignatures(legislature, current);
+    }
   } finally {
     if (tmpDir && !usingProvidedZip && existsSync(tmpDir)) {
       rmSync(tmpDir, { recursive: true, force: true });
@@ -205,7 +252,9 @@ export async function syncAmendmentsAN(
   stats.writeMs = writeMs;
   stats.peakRssMb = Math.round(peakRss / 1048576);
   stats.durationMs = Date.now() - started;
-  console.info("[amendments] full pass", {
+  console.info(`[amendments] ${mode} pass`, {
+    dossiersInspected: stats.dossiersInspected,
+    dossiersChanged: stats.dossiersChanged,
     seen: stats.amendmentsSeen,
     created: stats.amendmentsCreated,
     updated: stats.amendmentsUpdated,

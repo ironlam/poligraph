@@ -1,6 +1,10 @@
 /**
  * User-accord-gated catch-up: full re-ingest of the AN amendments feed.
  *
+ * This is the manual resync tool, so it defaults to `mode: "full"` (parse every
+ * entry, re-baseline the per-dossier signatures). Pass `--full` to be explicit;
+ * omit it and it still runs full. The daily cron uses the incremental path.
+ *
  * Default = dryRun (download + parse + memory/duration report, NO DB writes).
  * `--apply` performs the real ingest (writes Amendment rows to whatever DB
  * DATABASE_URL points at — in this project that is PROD). Idempotent: the
@@ -11,17 +15,31 @@ import { syncAmendmentsAN } from "@/services/sync/amendments-an";
 import { db } from "@/lib/db";
 
 const APPLY = process.argv.includes("--apply");
+// Manual resync defaults to a full re-ingest. `--full` forces it (and is the
+// default); `--incremental` opts into the cron's diff path for manual checks.
+const MODE: "full" | "incremental" = process.argv.includes("--incremental")
+  ? "incremental"
+  : "full";
 
 (async () => {
   const before = await db.amendment.count();
-  console.log(`[ingest] mode=${APPLY ? "APPLY (writes prod)" : "dry-run (no writes)"}`);
+  console.log(
+    `[ingest] mode=${APPLY ? "APPLY (writes prod)" : "dry-run (no writes)"} ingest=${MODE}`
+  );
   console.log(`[ingest] Amendment rows before: ${before}`);
 
-  const stats = await syncAmendmentsAN({ legislature: 17, force: true, dryRun: !APPLY });
+  const stats = await syncAmendmentsAN({
+    legislature: 17,
+    mode: MODE,
+    force: true,
+    dryRun: !APPLY,
+  });
 
   console.log(
     "[ingest] stats " +
       JSON.stringify({
+        dossiersInspected: stats.dossiersInspected,
+        dossiersChanged: stats.dossiersChanged,
         seen: stats.amendmentsSeen,
         created: stats.amendmentsCreated,
         updated: stats.amendmentsUpdated,

@@ -31,6 +31,13 @@ export type AmendmentResolveRef = Pick<
 
 export interface SyncAmendmentsANOptions {
   legislature?: number; // default 17
+  /**
+   * "incremental" (default): diff the ZIP central directory against the last
+   * successful run's per-dossier signatures and parse/write only new or changed
+   * dossiers. "full": parse/write every entry (manual resync) and re-baseline
+   * the stored signatures.
+   */
+  mode?: "incremental" | "full";
   dryRun?: boolean; // parse + report, no DB writes
   limit?: number; // debug/sample only: truncates silently — not for production runs
   safetyCap?: number; // hard ceiling: throw (do NOT truncate) if entries exceed this
@@ -61,6 +68,8 @@ export interface PolicyTitleSubstanceDriftResult {
 export interface SyncAmendmentsANStats {
   notModified?: boolean; // true when feed-state returned 304 and the run short-circuited
   downloadedBytes?: number; // bytes written to disk this run (0 when notModified or zipPath used)
+  dossiersInspected?: number; // distinct dossiers found in the ZIP central directory
+  dossiersChanged?: number; // dossiers whose signature differed (parsed this run); == inspected in full mode
   amendmentsSeen: number;
   amendmentsCreated: number;
   amendmentsUpdated: number; // amendmentsSubstanceChanged + amendmentsMetadataOnly

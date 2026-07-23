@@ -102,6 +102,7 @@ const DAILY_STEPS: DailyStep[] = [
     run: async () => {
       const { syncAmendmentsAN } = await import("@/services/sync/amendments-an");
       const stats = await syncAmendmentsAN({
+        mode: "incremental",
         force: false,
         safetyCap: POLICY_TITLE_CRON.amendmentsSafetyCap,
       });
@@ -137,6 +138,8 @@ const DAILY_STEPS: DailyStep[] = [
         itemCount: stats.amendmentsCreated,
         durationS: stats.durationMs / 1000,
         extra: {
+          dossiersInspected: stats.dossiersInspected,
+          dossiersChanged: stats.dossiersChanged,
           seen: stats.amendmentsSeen,
           created: stats.amendmentsCreated,
           updated: stats.amendmentsUpdated,
