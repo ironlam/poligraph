@@ -99,11 +99,59 @@ Signal principal : l'écart entre le dernier scrutin amendable et le dernier scr
 
 1. **Confirmer l'état** en lecture seule : `npx tsx --env-file=.env scripts/check-amendment-link-freshness.ts` (ne touche rien, imprime le verdict et les compteurs).
 2. **Cause la plus fréquente** : l'ingestion des amendements ne progresse pas. Vérifier `SyncMetadata.policy-titles:amendments` (`extra.created`, `extra.anomaly`). Le feed AN (`Amendements.json.zip`, ~123k entrées) est parcouru en entier depuis le correctif `amendmentsSafetyCap` ; si `seen` explose au-delà de `POLICY_TITLE_AMENDMENTS_SAFETY_CAP` (500k), le job échoue explicitement (jamais de troncature silencieuse) → relever le plafond après vérification de la croissance du feed.
-3. **Rattrapage** (idempotent, écrit en prod, à faire en connaissance de cause) :
-   - Ingestion complète : `npx tsx --env-file=.env -e "..."` appelant `syncAmendmentsAN({ legislature: 17, force: true })` (dedup par contentHash, n'écrit que les deltas).
-   - Liaison : `npx tsx --env-file=.env scripts/backfill-scrutin-amendment-links.ts --apply --batch=600`. **`--batch` doit dépasser le nombre de candidats liables** (le service scanne les N plus récents, sans curseur) ; sans `--apply`, le script ne fait qu'un rapport de classification.
-   - Génération des titres : soumise à un échantillon de 20 + estimation de coût Mistral avant tout run de masse (voir la PR `fix-amendments-ingestion-cap`). Ne pas lancer l'auto-approbation sur tout le backlog sans contrôle qualitatif.
-4. **Critère de succès** : `recentLinkableUnlinked = 0` (les scrutins non-`AMENDEMENT` — ARTICLE/MOTION/FINAL/AUTRE — sont hors périmètre et rapportés à part, pas comptés dans le critère).
+3. **Rattrapage** : voir la procédure exacte en §3.3. Les scripts sont idempotents et par défaut en dry-run ; `--apply` écrit en prod.
+4. **Génération des titres** : hors de ce rattrapage. Soumise à un échantillon de 20 + estimation de coût Mistral avant tout run de masse, et à un contrôle qualitatif avant toute approbation en masse (voir la PR `fix-amendments-ingestion-cap`).
+
+### 3.3 Rattrapage ingestion + liaison (commandes exactes, à exécuter uniquement sur accord)
+
+Ces commandes écrivent en **production** (la base `.env` = prod). Elles ne consomment **aucun crédit API** (l'ingestion et la liaison n'appellent pas Mistral). N'exécuter le `--apply` qu'en connaissance de cause.
+
+**Variables d'environnement requises** : `DATABASE_URL` (fournie par `.env`, via `--env-file=.env`). Rien d'autre pour ces deux étapes.
+
+**Vérification AVANT (lecture seule)** :
+
+```bash
+npx tsx --env-file=.env scripts/check-amendment-link-freshness.ts
+```
+
+Sortie attendue : `verdict: STALLED`, un `linked frontier lag` de plusieurs jours, et un `recentLinkableUnlinked > 0`.
+
+**Étape 1 — ingestion** (dry-run d'abord, puis apply) :
+
+```bash
+# dry-run : télécharge + parse tout le ZIP, mesure durée/mémoire, N'ÉCRIT RIEN
+npx tsx --env-file=.env scripts/backfill-amendments-ingest.ts
+# apply : ingère réellement les amendements manquants (deltas seulement)
+npx tsx --env-file=.env scripts/backfill-amendments-ingest.ts --apply
+```
+
+Sortie attendue (apply) : `created` > 0 (le backlog depuis le 28 juin), `Amendment rows after` supérieur à `before` ; `durationS` et `peakRssMb` renseignés (à comparer au budget cron). En dry-run, `created=0` (le chemin d'écriture est sauté) : le dry-run ne valide que le parcours complet et la mémoire, pas le delta.
+
+**Étape 2 — liaison** (rapport d'abord, puis apply) :
+
+```bash
+# rapport de classification seul (aucune écriture)
+npx tsx --env-file=.env scripts/backfill-scrutin-amendment-links.ts
+# apply : crée les liens. --batch DOIT dépasser le nombre de candidats liables
+# (le service scanne les N scrutins les plus récents, sans curseur).
+npx tsx --env-file=.env scripts/backfill-scrutin-amendment-links.ts --apply --batch=600
+```
+
+Sortie attendue (apply) : lignes `iter N: scanned=.. linked=.. linksCreated=.. linkableRemaining=..`, puis un arrêt propre quand `linkableRemaining=0`.
+
+**Vérification APRÈS (lecture seule)** : re-lancer `check-amendment-link-freshness.ts`. Attendu : `verdict: ok`, lag < 48h.
+
+**Procédure d'arrêt** : `Ctrl+C` (ou `pkill -f backfill-amendments-ingest` / `pkill -f backfill-scrutin-amendment-links`). Sans danger : l'ingestion commit ses lots au fur et à mesure (deltas idempotents) et n'avance PAS le curseur feed tant que la passe n'est pas terminée ; la liaison saute les liens existants.
+
+**Procédure de reprise** : relancer exactement la même commande. Idempotent : l'ingestion re-parcourt tout mais ne réécrit que les deltas (contentHash) ; la liaison ne recrée pas les liens existants. Une passe interrompue est donc reprise intégralement sans corruption (pas de reprise à mi-parcours).
+
+**Critères de succès** : `recentLinkableUnlinked = 0` (candidats liables = type `AMENDEMENT` avec dossier), `check-amendment-link-freshness.ts` → `ok`, lag < 48h.
+
+**Critères d'échec / à investiguer** :
+
+- L'ingestion lève `corpus exceeds safety cap` → le feed dépasse `POLICY_TITLE_AMENDMENTS_SAFETY_CAP` (500k) : vérifier la croissance réelle du feed avant de relever le plafond (ne jamais tronquer en silence).
+- La liaison sort en erreur `backlog stuck: 0 new links but N linkable votes remain` → ces N scrutins `AMENDEMENT`+dossier n'ont pas d'amendement correspondant dans le feed (retiré / numéro non résolu) ou un titre non parsable : investiguer la liste imprimée, ce ne sont pas des échecs du rattrapage.
+- Les scrutins non-`AMENDEMENT` (ARTICLE/MOTION/FINAL/AUTRE) sont **hors périmètre** et ne comptent jamais dans le critère.
 
 ---
 
