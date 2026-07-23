@@ -41,6 +41,8 @@ function emptyStats(warnings: SyncWarning[]): SyncAmendmentsANStats {
     dossiersUnresolved: 0,
     warnings,
     durationMs: 0,
+    writeMs: 0,
+    peakRssMb: 0,
   };
 }
 
@@ -96,11 +98,15 @@ export async function syncAmendmentsAN(
 
   const all: NormalizedAmendment[] = [];
   let batch: NormalizedAmendment[] = [];
+  let writeMs = 0;
+  let peakRss = 0;
 
   const flush = async () => {
     if (batch.length === 0) return;
     if (!opts.dryRun) {
+      const t0 = Date.now();
       const r = await writeAmendmentBatch(batch);
+      writeMs += Date.now() - t0;
       stats.amendmentsCreated += r.created;
       stats.amendmentsUpdated += r.updated;
       stats.amendmentsContentChanged += r.contentChanged;
@@ -111,6 +117,7 @@ export async function syncAmendmentsAN(
       stats.changedSubstanceAmendmentIds.push(...r.changedSubstanceAmendmentIds);
       stats.dossiersResolved += r.dossiersResolved;
       stats.dossiersUnresolved += r.dossiersUnresolved;
+      peakRss = Math.max(peakRss, process.memoryUsage().rss);
     }
     batch = [];
   };
@@ -123,6 +130,12 @@ export async function syncAmendmentsAN(
   try {
     for await (const entry of iterateZipJsonEntries(zipPath!, { limit: opts.limit, onWarning })) {
       stats.amendmentsSeen++;
+      if (opts.safetyCap !== undefined && stats.amendmentsSeen > opts.safetyCap) {
+        throw new Error(
+          `[amendments] corpus exceeds safety cap (${opts.safetyCap} entries): refusing to ` +
+            `truncate silently. Raise POLICY_TITLE_AMENDMENTS_SAFETY_CAP or investigate feed growth.`
+        );
+      }
       const dossierRefFromPath = dossierRefFromEntryPath(entry.entryPath);
       const texteRefFromPath = texteRefFromEntryPath(entry.entryPath);
       const n = normalizeAmendment(entry.json, {
@@ -174,6 +187,18 @@ export async function syncAmendmentsAN(
   }
 
   stats.downloadedBytes = downloadedBytes;
+  stats.writeMs = writeMs;
+  stats.peakRssMb = Math.round(peakRss / 1048576);
   stats.durationMs = Date.now() - started;
+  console.info("[amendments] full pass", {
+    seen: stats.amendmentsSeen,
+    created: stats.amendmentsCreated,
+    updated: stats.amendmentsUpdated,
+    unchanged: stats.amendmentsUnchanged,
+    skipped: stats.amendmentsSkipped,
+    durationMs: stats.durationMs,
+    writeMs,
+    peakRssMb: stats.peakRssMb,
+  });
   return stats;
 }

@@ -102,7 +102,7 @@ const DAILY_STEPS: DailyStep[] = [
       const { syncAmendmentsAN } = await import("@/services/sync/amendments-an");
       const stats = await syncAmendmentsAN({
         force: false,
-        limit: POLICY_TITLE_CRON.amendmentsImportLimit,
+        safetyCap: POLICY_TITLE_CRON.amendmentsSafetyCap,
       });
       await syncMetadata.markCompleted("policy-titles:amendments", {
         itemCount: stats.amendmentsCreated,
@@ -112,6 +112,8 @@ const DAILY_STEPS: DailyStep[] = [
           created: stats.amendmentsCreated,
           updated: stats.amendmentsUpdated,
           skipped: stats.amendmentsSkipped,
+          writeMs: stats.writeMs,
+          peakRssMb: stats.peakRssMb,
         },
       });
       console.info("[sync-daily] amendments-an", stats);

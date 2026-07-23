@@ -11,8 +11,13 @@ function intEnv(name: string, fallback: number): number {
 }
 
 export const POLICY_TITLE_CRON = {
-  /** Max amendments pulled per daily delta import (feed-state bounded). */
-  amendmentsImportLimit: intEnv("POLICY_TITLE_AMENDMENTS_LIMIT", 2000),
+  /**
+   * Hard ceiling on ZIP entries processed per run. This is NOT a functional
+   * limit: the daily import streams the WHOLE feed. If the corpus ever exceeds
+   * this, the run FAILS explicitly rather than truncating silently (the old
+   * 2000 cap silently skipped every recent amendment).
+   */
+  amendmentsSafetyCap: intEnv("POLICY_TITLE_AMENDMENTS_SAFETY_CAP", 500_000),
   /** Newest-first scrutins re-scanned for amendment links each run (idempotent). */
   linkLimit: intEnv("POLICY_TITLE_LINK_LIMIT", 200),
   /** Max titles generated per run — a safety cap, not a target. */

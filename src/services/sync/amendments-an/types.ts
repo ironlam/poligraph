@@ -20,7 +20,8 @@ export interface NormalizedAmendment {
 export interface SyncAmendmentsANOptions {
   legislature?: number; // default 17
   dryRun?: boolean; // parse + report, no DB writes
-  limit?: number; // cap records processed (debug/sample)
+  limit?: number; // debug/sample only: truncates silently — not for production runs
+  safetyCap?: number; // hard ceiling: throw (do NOT truncate) if entries exceed this
   force?: boolean; // ignore etag, force re-download
   zipPath?: string; // use a local ZIP instead of downloading (debug/tests)
   batchSize?: number; // default 500
@@ -66,4 +67,6 @@ export interface SyncAmendmentsANStats {
   substanceDrift?: PolicyTitleSubstanceDriftResult; // PR B: set on non-dryRun runs
   warnings: SyncWarning[];
   durationMs: number;
+  writeMs?: number; // ms spent in writeAmendmentBatch
+  peakRssMb?: number; // peak process RSS during the run
 }
