@@ -202,7 +202,7 @@
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-react": "^5.32.9",
+    "swagger-ui-react": "^5.32.11",
     "tailwind-merge": "^3.4.0",
     "twitter-api-v2": "^1.29.0",
     "voyageai": "^0.1.0",
