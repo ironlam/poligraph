@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HexPattern } from "@/components/ui/HexPattern";
+import { Logo } from "@/components/layout/Logo";
 
 export default function Error({
   error,
@@ -22,7 +22,7 @@ export default function Error({
     <div className="relative flex flex-col items-center justify-center min-h-[70vh] px-4 text-center bg-gradient-to-br from-primary/5 via-background to-accent/10">
       <HexPattern className="absolute inset-0 text-primary opacity-[0.03] dark:opacity-[0.05] pointer-events-none" />
       <div className="relative z-10 flex flex-col items-center">
-        <Image src="/logo.svg" alt="Poligraph" width={80} height={80} className="mb-6" />
+        <Logo size={80} className="mb-6" />
         <h1 className="text-4xl font-display font-extrabold tracking-tight mb-3">
           Une erreur est survenue
         </h1>

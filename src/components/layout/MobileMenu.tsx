@@ -26,7 +26,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import Image from "next/image";
+import { Logo } from "./Logo";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   barChart: BarChart3,
@@ -172,8 +172,13 @@ export function MobileMenu({ enabledFlags }: MobileMenuProps) {
           >
             {/* Menu header */}
             <div className="flex items-center justify-between px-4 h-16 border-b border-border">
-              <Link href="/" className="flex items-center gap-3" onClick={close}>
-                <Image src="/logo.svg" alt="Poligraph" width={36} height={36} />
+              <Link
+                href="/"
+                aria-label="Poligraph, accueil"
+                className="flex items-center gap-3"
+                onClick={close}
+              >
+                <Logo size={36} />
                 <span className="text-lg font-display font-bold">Poligraph</span>
               </Link>
               <button

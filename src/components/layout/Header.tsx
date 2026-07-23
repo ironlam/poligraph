@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "./Logo";
 import { MobileMenu } from "./MobileMenu";
 import { NavIconBar } from "./NavIconBar";
 import { NAV_PRIMARY, NAV_TOOLS } from "@/config/navigation";
@@ -36,17 +36,12 @@ export async function Header() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <Image
-              src="/logo.svg"
-              alt="Poligraph"
-              width={40}
-              height={40}
-              className="rounded-xl group-hover:scale-105 transition-transform duration-300"
+          <Link href="/" aria-label="Poligraph, accueil" className="flex items-center gap-3 group">
+            <Logo
+              size={40}
+              withWordmark
+              className="group-hover:scale-105 transition-transform duration-300"
             />
-            <span className="hidden sm:inline text-xl font-display font-bold text-foreground">
-              Poligraph
-            </span>
           </Link>
 
           {/* Desktop navigation - flat links, no dropdowns */}

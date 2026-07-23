@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/layout/Logo";
 import { Send, User, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { SUGGESTED_QUESTIONS, AUTOCOMPLETE_COMPLETIONS, type Message } from "./chatConfig";
 import { ChatMessageContent } from "./ChatMessageContent";
@@ -241,13 +241,7 @@ export function ChatInterface() {
       >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
-            <Image
-              src="/logo.svg"
-              alt="Poligraph"
-              width={64}
-              height={64}
-              className="rounded-full"
-            />
+            <Logo size={64} />
             <div>
               <h2 className="text-xl font-semibold mb-2">Assistant Poligraph</h2>
               <p className="text-muted-foreground max-w-md">
@@ -278,15 +272,7 @@ export function ChatInterface() {
                   message.role === "user" ? "justify-end" : "justify-start"
                 )}
               >
-                {message.role === "assistant" && (
-                  <Image
-                    src="/logo.svg"
-                    alt="Poligraph"
-                    width={32}
-                    height={32}
-                    className="rounded-full flex-shrink-0"
-                  />
-                )}
+                {message.role === "assistant" && <Logo size={32} />}
                 <Card
                   className={cn(
                     "max-w-[80%] py-3 overflow-hidden",

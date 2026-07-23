@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { MessageSquare, X, Minimize2, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/layout/Logo";
 import { ChatInterface } from "./ChatInterface";
 
 export function ChatWidget() {
@@ -124,13 +124,7 @@ export function ChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
             <div className="flex items-center gap-2">
-              <Image
-                src="/logo.svg"
-                alt="Poligraph"
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
+              <Logo size={32} />
               <div>
                 <h3 className="font-medium text-sm">Assistant IA</h3>
                 {!isMinimized && (
