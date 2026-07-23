@@ -26,21 +26,26 @@ export function isLinkingStalled(i: LinkStallInput): boolean {
 export interface IngestionAnomalyInput {
   /** Feed returned 304 / unchanged. */
   notModified: boolean;
-  entriesSeen: number;
   created: number;
   updated: number;
-  dbAmendmentCount: number;
+  /** AMENDEMENT votes with a dossier, old enough to have been linked, still unlinked. */
   recentLinkableUnlinked: number;
 }
 
 /**
- * In-sync anomaly: a 304/unchanged feed or a matched corpus is NORMAL (no
- * anomaly). Flag only when the feed was actually processed, NOTHING was
- * ingested, AND there is an observable business consequence: the ZIP has more
- * entries than the DB reflects, or linkable recent votes remain unlinked.
+ * In-sync anomaly: a 304/unchanged feed or any ingested row is NORMAL. Flag only
+ * when the feed was actually processed yet NOTHING was ingested AND a
+ * reconciliation-backed business consequence exists: recent linkable votes
+ * (AMENDEMENT + dossier) remain unlinked.
+ *
+ * A raw "ZIP entries > DB rows" comparison is deliberately NOT used: the feed
+ * always has more raw entries than deduped/valid DB rows, so it false-positives
+ * on every steady-state full pass (created=0 because everything is unchanged).
+ * A genuine "feed grew but the base did not" signal would need per-run delta
+ * tracking of the entry count (follow-up), not a raw seen-vs-count comparison.
  */
 export function isIngestionAnomaly(i: IngestionAnomalyInput): boolean {
   if (i.notModified) return false;
   if (i.created > 0 || i.updated > 0) return false;
-  return i.entriesSeen > i.dbAmendmentCount || i.recentLinkableUnlinked > 0;
+  return i.recentLinkableUnlinked > 0;
 }

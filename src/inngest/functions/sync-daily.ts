@@ -106,12 +106,10 @@ const DAILY_STEPS: DailyStep[] = [
         safetyCap: POLICY_TITLE_CRON.amendmentsSafetyCap,
       });
 
-      // In-sync anomaly guard: a 304/unchanged feed or a matched corpus is
-      // normal, but a fully-processed feed that ingests nothing while a
-      // business gap exists (ZIP ahead of the DB, or linkable votes still
-      // unlinked) means the pipeline is failing silently.
+      // In-sync anomaly guard: a 304/unchanged feed or any ingested row is
+      // normal, but a fully-processed feed that ingests nothing while linkable
+      // recent votes remain unlinked means the pipeline is failing silently.
       const { db } = await import("@/lib/db");
-      const dbAmendmentCount = await db.amendment.count();
       const recentLinkableUnlinked = await db.scrutin.count({
         where: {
           legislature: 17,
@@ -124,16 +122,14 @@ const DAILY_STEPS: DailyStep[] = [
       });
       const anomaly = isIngestionAnomaly({
         notModified: stats.notModified ?? false,
-        entriesSeen: stats.amendmentsSeen,
         created: stats.amendmentsCreated,
         updated: stats.amendmentsUpdated,
-        dbAmendmentCount,
         recentLinkableUnlinked,
       });
       if (anomaly) {
         console.warn(
-          "[sync-daily] amendments-an ANOMALY: feed processed but nothing ingested while a business gap exists",
-          { seen: stats.amendmentsSeen, dbAmendmentCount, recentLinkableUnlinked }
+          "[sync-daily] amendments-an ANOMALY: feed processed but nothing ingested while linkable recent votes remain unlinked",
+          { seen: stats.amendmentsSeen, recentLinkableUnlinked }
         );
       }
 
