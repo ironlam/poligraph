@@ -17,6 +17,7 @@ import { loadFeedState, saveFeedState } from "./amendments-an/feed-state";
 import { markPolicyTitlesForSubstanceDrift } from "./mark-policy-titles-substance-drift";
 import type {
   NormalizedAmendment,
+  AmendmentResolveRef,
   SyncAmendmentsANOptions,
   SyncAmendmentsANStats,
   SyncWarning,
@@ -96,7 +97,11 @@ export async function syncAmendmentsAN(
     }
   }
 
-  const all: NormalizedAmendment[] = [];
+  // Light projection only: the resolve passes below read just these three
+  // fields, so we never retain the heavy content/summary HTML for the whole
+  // ~123k-entry pass. `batch` still holds full rows but is flushed every
+  // `batchSize`, so its footprint stays bounded.
+  const all: AmendmentResolveRef[] = [];
   let batch: NormalizedAmendment[] = [];
   let writeMs = 0;
   let peakRss = 0;
@@ -151,7 +156,11 @@ export async function syncAmendmentsAN(
         });
         continue;
       }
-      all.push(n);
+      all.push({
+        externalId: n.externalId,
+        parentExternalId: n.parentExternalId,
+        identicalDiscussionId: n.identicalDiscussionId,
+      });
       batch.push(n);
       if (batch.length >= batchSize) await flush();
     }

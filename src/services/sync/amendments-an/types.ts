@@ -17,6 +17,18 @@ export interface NormalizedAmendment {
   chamber: Chamber;
 }
 
+/**
+ * Minimal projection kept for the whole run so `resolveParents` /
+ * `resolveIdenticalGroups` can run after all batches are flushed. Only these
+ * three fields are read downstream, so we deliberately do NOT retain the heavy
+ * `content`/`summary` HTML across the ~123k-entry full pass (that array would
+ * otherwise dominate memory).
+ */
+export type AmendmentResolveRef = Pick<
+  NormalizedAmendment,
+  "externalId" | "parentExternalId" | "identicalDiscussionId"
+>;
+
 export interface SyncAmendmentsANOptions {
   legislature?: number; // default 17
   dryRun?: boolean; // parse + report, no DB writes

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import type { NormalizedAmendment } from "./types";
+import type { NormalizedAmendment, AmendmentResolveRef } from "./types";
 import { diffAmendmentRow } from "./change-detection";
 
 export interface BatchResult {
@@ -198,7 +198,7 @@ export async function writeAmendmentBatch(batch: NormalizedAmendment[]): Promise
  * Idempotent (skipped when already correct).
  */
 export async function resolveParents(
-  records: NormalizedAmendment[]
+  records: AmendmentResolveRef[]
 ): Promise<{ resolved: number; deferred: number }> {
   let resolved = 0;
   let deferred = 0;
@@ -242,7 +242,7 @@ export function computeIdenticalGroupKey(discussionId: string): string {
 
 /** Set identicalGroupKey for grouped amendments. Idempotent (same key on re-run). */
 export async function resolveIdenticalGroups(
-  records: NormalizedAmendment[]
+  records: AmendmentResolveRef[]
 ): Promise<{ groups: number }> {
   const byDiscussion = new Map<string, string[]>();
   for (const r of records) {
