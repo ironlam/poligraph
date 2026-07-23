@@ -1,4 +1,4 @@
-import type { AffairStatus, Involvement } from "@prisma/client";
+import type { AffairStatus, Involvement } from "@/generated/prisma";
 import { getJudicialMaturity, isJudiciallyValidated } from "@/config/judicial-maturity";
 
 export type AffairInput = { involvement: Involvement; status: AffairStatus };

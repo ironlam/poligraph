@@ -1,4 +1,4 @@
-import type { DataSource } from "@prisma/client";
+import type { DataSource } from "@/generated/prisma";
 import { DATA_SOURCE_LABELS } from "@/config/labels";
 
 export type ExternalIdInput = { source: DataSource; url: string | null };
