@@ -12,9 +12,10 @@ describe("AnnualRevenueSeries", () => {
         ]}
       />
     );
-    expect(screen.getByText("2017")).toBeInTheDocument();
-    expect(screen.getByText("2019")).toBeInTheDocument();
-    expect(screen.queryByText("2018")).toBeNull();
+    // Full year appears under the bar and in the readable list.
+    expect(screen.getAllByText("2017").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2019").length).toBeGreaterThan(0);
+    expect(screen.queryByText("2018")).toBeNull(); // absent year is never invented
   });
 
   it("shows a named period total", () => {

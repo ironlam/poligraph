@@ -30,7 +30,7 @@ export function AnnualRevenueSeries({ revenues }: { revenues: AnnualRevenue[] })
                   style={{ height: `${pct}%` }}
                 />
               </div>
-              <span className="text-[10px] text-muted-foreground">{String(r.year).slice(2)}</span>
+              <span className="text-[10px] text-muted-foreground">{r.year}</span>
             </div>
           );
         })}
