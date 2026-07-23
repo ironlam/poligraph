@@ -74,7 +74,7 @@ function ProfileTabsInner({
         </TabsTrigger>
         <TabsTrigger value="carriere">
           <Briefcase className="size-4" />
-          Carriere
+          Carrière
         </TabsTrigger>
         {votesContent && (
           <TabsTrigger value="votes">

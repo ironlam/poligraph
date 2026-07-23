@@ -55,7 +55,7 @@ const DECLARATION_LABEL: Record<string, string> = {
   INTERETS: "Intérêts",
 };
 
-export function DeclarationCard({ id, declarations, politicianHatvpUrl }: DeclarationCardProps) {
+export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
   if (declarations.length === 0) return null;
 
   // Find the latest DIA that has parsed details
@@ -80,21 +80,7 @@ export function DeclarationCard({ id, declarations, politicianHatvpUrl }: Declar
   return (
     <Card id={id}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">
-            Déclarations d&apos;intérêts et d&apos;activités
-          </h2>
-          {politicianHatvpUrl && (
-            <a
-              href={politicianHatvpUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:underline"
-            >
-              Source : HATVP ↗
-            </a>
-          )}
-        </div>
+        <h2 className="text-lg font-semibold">Déclarations d&apos;intérêts et d&apos;activités</h2>
       </CardHeader>
 
       <CardContent className="space-y-6">
