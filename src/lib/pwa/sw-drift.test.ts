@@ -13,8 +13,8 @@ describe("sw.js drift guard", () => {
   it("partage les noms de cache calculés", () => {
     expect(SW_SOURCE).toContain("const DOCUMENT_CACHE = `poligraph-docs-${SW_CACHE_VERSION}`;");
     expect(SW_SOURCE).toContain("const STATIC_CACHE = `poligraph-static-${SW_CACHE_VERSION}`;");
-    expect(DOCUMENT_CACHE).toBe("poligraph-docs-v1");
-    expect(STATIC_CACHE).toBe("poligraph-static-v1");
+    expect(DOCUMENT_CACHE).toBe("poligraph-docs-v2");
+    expect(STATIC_CACHE).toBe("poligraph-static-v2");
   });
 
   it("partage la limite LRU MAX_DOCUMENTS", () => {

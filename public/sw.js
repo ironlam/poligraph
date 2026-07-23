@@ -15,7 +15,7 @@
 // regex et constantes sont byte-identiques. Si tu modifies un pattern ici,
 // mirror dans `sw-config.ts` puis relance `npm run test:run -- src/lib/pwa/`.
 
-const SW_CACHE_VERSION = "v1";
+const SW_CACHE_VERSION = "v2";
 const DOCUMENT_CACHE = `poligraph-docs-${SW_CACHE_VERSION}`;
 const STATIC_CACHE = `poligraph-static-${SW_CACHE_VERSION}`;
 const MAX_DOCUMENTS = 50;

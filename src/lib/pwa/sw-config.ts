@@ -3,7 +3,7 @@
 // classique = pas d'import depuis /src). Le test `sw-drift.test.ts` garde les
 // deux fichiers en sync. Toute modification ici doit être mirrorée dans `sw.js`.
 
-export const SW_CACHE_VERSION = "v1";
+export const SW_CACHE_VERSION = "v2";
 
 export const DOCUMENT_CACHE = `poligraph-docs-${SW_CACHE_VERSION}`;
 export const STATIC_CACHE = `poligraph-static-${SW_CACHE_VERSION}`;
