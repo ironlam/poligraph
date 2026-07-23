@@ -20,6 +20,7 @@ import { isLinkingStalled } from "@/lib/monitoring/amendment-link-freshness";
 
 const MAX_LAG_HOURS = Number(process.env.LINK_FRESHNESS_MAX_LAG_HOURS ?? "48");
 const LEGISLATURE = Number(process.env.LINK_FRESHNESS_LEGISLATURE ?? "17");
+const ABSOLUTE_UNLINKED_THRESHOLD = Number(process.env.LINK_FRESHNESS_ABS_UNLINKED ?? "20");
 const RECENT_WINDOW_DAYS = 14;
 
 function writeOutput(key: string, value: string): void {
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
     lagHours,
     recentLinkableUnlinked,
     maxLagHours: MAX_LAG_HOURS,
+    absoluteUnlinkedThreshold: ABSOLUTE_UNLINKED_THRESHOLD,
   });
 
   const iso = (d: Date | null | undefined) => d?.toISOString() ?? "n/a";

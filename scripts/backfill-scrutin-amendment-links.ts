@@ -161,10 +161,24 @@ async function main() {
     return;
   }
 
+  // The linker has no cursor: it always re-scans the top-N most recent
+  // scrutins. A --batch below the linkable-candidate count re-scans the same
+  // rows every iteration and reports a false "backlog stuck". Floor the
+  // effective batch so a single pass can cover the whole catch-up window.
+  const effectiveBatch = Math.max(args.batch, initialReport.linkableCount + 50);
+  if (effectiveBatch !== args.batch) {
+    console.log(
+      `[backfill] raising --batch=${args.batch} to effective batch=${effectiveBatch} ` +
+        `(linkableCandidates=${initialReport.linkableCount} + 50 margin)`
+    );
+  } else {
+    console.log(`[backfill] effective batch=${effectiveBatch}`);
+  }
+
   for (let iteration = 1; ; iteration++) {
     const stats = await linkScrutinsToAmendments({
       legislature: args.legislature,
-      limit: args.batch,
+      limit: effectiveBatch,
     });
     const current = await classifyRecentUnlinked(args.legislature, sinceDate);
     console.log(

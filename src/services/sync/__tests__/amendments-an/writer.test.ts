@@ -199,6 +199,54 @@ describeIfDb("amendments-an writer", () => {
       expect(stats.resolved).toBe(0);
       expect(stats.deferred).toBe(1);
     });
+
+    it("batches two children of the same parent into one pass, and is idempotent on re-run", async () => {
+      await writeAmendmentBatch([
+        base({ externalId: "TEST_AMW_bp_parent" }),
+        base({ externalId: "TEST_AMW_bp_child1", parentExternalId: "TEST_AMW_bp_parent" }),
+        base({ externalId: "TEST_AMW_bp_child2", parentExternalId: "TEST_AMW_bp_parent" }),
+      ]);
+      const refs = [
+        base({ externalId: "TEST_AMW_bp_child1", parentExternalId: "TEST_AMW_bp_parent" }),
+        base({ externalId: "TEST_AMW_bp_child2", parentExternalId: "TEST_AMW_bp_parent" }),
+      ];
+
+      const stats = await resolveParents(refs);
+      expect(stats.resolved).toBe(2);
+      expect(stats.deferred).toBe(0);
+
+      const [child1, child2] = await Promise.all([
+        db.amendment.findUnique({
+          where: { externalId: "TEST_AMW_bp_child1" },
+          include: { parentAmendment: true },
+        }),
+        db.amendment.findUnique({
+          where: { externalId: "TEST_AMW_bp_child2" },
+          include: { parentAmendment: true },
+        }),
+      ]);
+      expect(child1?.parentAmendment?.externalId).toBe("TEST_AMW_bp_parent");
+      expect(child2?.parentAmendment?.externalId).toBe("TEST_AMW_bp_parent");
+
+      // Re-run: already-correct FKs must not error and must remain correct
+      // (the NULL-or-different OR clause makes the updateMany a no-op here).
+      const rerun = await resolveParents(refs);
+      expect(rerun.resolved).toBe(2);
+      expect(rerun.deferred).toBe(0);
+
+      const [child1Again, child2Again] = await Promise.all([
+        db.amendment.findUnique({
+          where: { externalId: "TEST_AMW_bp_child1" },
+          include: { parentAmendment: true },
+        }),
+        db.amendment.findUnique({
+          where: { externalId: "TEST_AMW_bp_child2" },
+          include: { parentAmendment: true },
+        }),
+      ]);
+      expect(child1Again?.parentAmendment?.externalId).toBe("TEST_AMW_bp_parent");
+      expect(child2Again?.parentAmendment?.externalId).toBe("TEST_AMW_bp_parent");
+    });
   });
 
   describe("resolveIdenticalGroups", () => {

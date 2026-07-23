@@ -43,6 +43,7 @@ function emptyStats(warnings: SyncWarning[]): SyncAmendmentsANStats {
     warnings,
     durationMs: 0,
     writeMs: 0,
+    resolveMs: 0,
     peakRssMb: 0,
   };
 }
@@ -167,11 +168,16 @@ export async function syncAmendmentsAN(
     await flush();
 
     if (!opts.dryRun) {
+      const resolveT0 = Date.now();
       const p = await resolveParents(all);
       stats.parentLinksResolved = p.resolved;
       stats.parentLinksDeferred = p.deferred;
       const g = await resolveIdenticalGroups(all);
       stats.identicalGroupsResolved = g.groups;
+      stats.resolveMs = Date.now() - resolveT0;
+      // Highest-memory phase (both resolve passes hold their full id maps in
+      // memory at once): sample here so peakRssMb is not understated.
+      peakRss = Math.max(peakRss, process.memoryUsage().rss);
 
       // Consume the substance-drift signal: flag policy titles linked to amendments
       // whose content/summary really changed. Marks only (STALE / queued); never
@@ -207,6 +213,7 @@ export async function syncAmendmentsAN(
     skipped: stats.amendmentsSkipped,
     durationMs: stats.durationMs,
     writeMs,
+    resolveMs: stats.resolveMs,
     peakRssMb: stats.peakRssMb,
   });
   return stats;

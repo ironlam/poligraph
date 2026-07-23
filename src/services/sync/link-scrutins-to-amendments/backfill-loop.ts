@@ -31,6 +31,8 @@ export function evaluateLinkLoopStep(i: LinkLoopStepInput): LinkLoopDecision {
   }
   return {
     action: "error",
-    reason: `backlog stuck: 0 new links but ${i.recentLinkableUnlinked} linkable votes remain unlinked`,
+    reason:
+      `backlog stuck: 0 new links but ${i.recentLinkableUnlinked} linkable votes remain unlinked ` +
+      `(if linkableRemaining is close to the initial count, raise --batch above the linkable-candidate count)`,
   };
 }

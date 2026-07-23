@@ -3,21 +3,47 @@ import { isLinkingStalled, isIngestionAnomaly } from "@/lib/monitoring/amendment
 
 describe("isLinkingStalled", () => {
   it("lag beyond threshold + linkable unlinked votes remain -> stalled", () => {
-    expect(isLinkingStalled({ lagHours: 72, recentLinkableUnlinked: 5, maxLagHours: 48 })).toBe(
-      true
-    );
+    expect(
+      isLinkingStalled({
+        lagHours: 72,
+        recentLinkableUnlinked: 5,
+        maxLagHours: 48,
+        absoluteUnlinkedThreshold: 20,
+      })
+    ).toBe(true);
   });
 
   it("lag beyond threshold but nothing linkable unlinked (recess) -> not stalled", () => {
-    expect(isLinkingStalled({ lagHours: 72, recentLinkableUnlinked: 0, maxLagHours: 48 })).toBe(
-      false
-    );
+    expect(
+      isLinkingStalled({
+        lagHours: 72,
+        recentLinkableUnlinked: 0,
+        maxLagHours: 48,
+        absoluteUnlinkedThreshold: 20,
+      })
+    ).toBe(false);
   });
 
   it("lag within threshold, even with linkable unlinked votes -> not stalled", () => {
-    expect(isLinkingStalled({ lagHours: 24, recentLinkableUnlinked: 5, maxLagHours: 48 })).toBe(
-      false
-    );
+    expect(
+      isLinkingStalled({
+        lagHours: 24,
+        recentLinkableUnlinked: 5,
+        maxLagHours: 48,
+        absoluteUnlinkedThreshold: 20,
+      })
+    ).toBe(false);
+  });
+
+  it("lag within threshold but large recentLinkableUnlinked backlog -> stalled (absolute threshold)", () => {
+    expect(
+      isLinkingStalled({
+        lagHours: 2,
+        recentLinkableUnlinked: 25,
+        maxLagHours: 48,
+        absoluteUnlinkedThreshold: 20,
+      })
+    ).toBe(true);
   });
 });
 

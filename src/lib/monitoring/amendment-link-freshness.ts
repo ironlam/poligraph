@@ -12,15 +12,24 @@ export interface LinkStallInput {
   /** AMENDEMENT votes with a dossier, old enough to have been linked, still unlinked. */
   recentLinkableUnlinked: number;
   maxLagHours: number;
+  /** Absolute unlinked-backlog floor: stalled regardless of lag once reached. */
+  absoluteUnlinkedThreshold: number;
 }
 
 /**
  * Primary watchdog signal: the linked frontier lags the amendable frontier
  * beyond the threshold AND linkable recent votes remain unlinked (the second
  * clause avoids recess false positives: no recent votes => not stalled).
+ *
+ * OR'd with an absolute backlog threshold: if only the single newest vote
+ * links while a bulk of older ones behind it does not, the lag can stay small
+ * even though the backlog is real — the lag-only gate would silence the alarm.
  */
 export function isLinkingStalled(i: LinkStallInput): boolean {
-  return i.lagHours > i.maxLagHours && i.recentLinkableUnlinked > 0;
+  return (
+    (i.lagHours > i.maxLagHours && i.recentLinkableUnlinked > 0) ||
+    i.recentLinkableUnlinked >= i.absoluteUnlinkedThreshold
+  );
 }
 
 export interface IngestionAnomalyInput {

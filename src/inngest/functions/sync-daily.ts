@@ -142,6 +142,7 @@ const DAILY_STEPS: DailyStep[] = [
           updated: stats.amendmentsUpdated,
           skipped: stats.amendmentsSkipped,
           writeMs: stats.writeMs,
+          resolveMs: stats.resolveMs,
           peakRssMb: stats.peakRssMb,
           anomaly,
         },

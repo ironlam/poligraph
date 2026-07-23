@@ -80,5 +80,6 @@ export interface SyncAmendmentsANStats {
   warnings: SyncWarning[];
   durationMs: number;
   writeMs?: number; // ms spent in writeAmendmentBatch
+  resolveMs?: number; // ms spent in resolveParents + resolveIdenticalGroups
   peakRssMb?: number; // peak process RSS during the run
 }

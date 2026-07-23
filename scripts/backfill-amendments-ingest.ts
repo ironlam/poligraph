@@ -30,6 +30,7 @@ const APPLY = process.argv.includes("--apply");
         downloadedMB: Math.round((stats.downloadedBytes ?? 0) / 1048576),
         durationS: Math.round(stats.durationMs / 1000),
         writeMs: stats.writeMs,
+        resolveMs: stats.resolveMs,
         peakRssMb: stats.peakRssMb,
       })
   );

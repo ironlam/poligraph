@@ -196,6 +196,10 @@ export async function writeAmendmentBatch(batch: NormalizedAmendment[]): Promise
 /**
  * Second pass: set parentAmendmentId from parentExternalId.
  * Idempotent (skipped when already correct).
+ *
+ * Groups children by resolved parent id and issues ONE updateMany per distinct
+ * parent, instead of one round trip per child — at the ~123k-entry full pass
+ * scale, per-child sequential updates would blow the 270s step timeout.
  */
 export async function resolveParents(
   records: AmendmentResolveRef[]
@@ -213,24 +217,29 @@ export async function resolveParents(
     : [];
   const idByRef = new Map(parents.map((p) => [p.externalId, p.id]));
 
+  const childrenByPid = new Map<string, string[]>();
   for (const r of withParent) {
     const pid = idByRef.get(r.parentExternalId as string);
     if (!pid) {
       deferred++;
       continue;
     }
+    (childrenByPid.get(pid) ?? childrenByPid.set(pid, []).get(pid)!).push(r.externalId);
+    resolved++; // pid found = link resolved (whether newly written or already correct)
+  }
+
+  for (const [pid, externalIds] of childrenByPid) {
     // Skip the write when parentAmendmentId is already correct. updateMany
     // matches only when the FK is NULL or set to a different parent — Postgres
     // three-valued logic means we spell out "NULL or != pid" rather than
     // `NOT: { parentAmendmentId: pid }` (which would silently miss NULL rows).
     await db.amendment.updateMany({
       where: {
-        externalId: r.externalId,
+        externalId: { in: externalIds },
         OR: [{ parentAmendmentId: null }, { parentAmendmentId: { not: pid } }],
       },
       data: { parentAmendmentId: pid },
     });
-    resolved++; // pid found = link resolved (whether newly written or already correct)
   }
   return { resolved, deferred };
 }
