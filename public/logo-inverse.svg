@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" fill="none">
+  <!-- Open book (white pages + red binding, reads on marine) -->
+  <path d="M450 672 L262 638 L282 722 L450 730 Z" fill="#ffffff"/>
+  <path d="M450 672 L638 638 L618 722 L450 730 Z" fill="#ffffff"/>
+  <path d="M440 660 L460 660 L460 744 L440 744 Z" fill="#ed2939"/>
+
+  <!-- Owl (white body, negative eyes: navy disc + white pupil) -->
+  <!-- Ear tufts -->
+  <path d="M330 238 L360 150 L410 233 Z" fill="#ffffff"/>
+  <path d="M570 238 L540 150 L490 233 Z" fill="#ffffff"/>
+  <!-- Head + body silhouette -->
+  <ellipse cx="450" cy="352" rx="190" ry="160" fill="#ffffff"/>
+  <ellipse cx="450" cy="490" rx="156" ry="140" fill="#ffffff"/>
+  <!-- Eyes -->
+  <circle cx="372" cy="342" r="70" fill="#002654"/>
+  <circle cx="528" cy="342" r="70" fill="#002654"/>
+  <circle cx="372" cy="350" r="30" fill="#ffffff"/>
+  <circle cx="528" cy="350" r="30" fill="#ffffff"/>
+  <!-- Beak -->
+  <path d="M450 372 L424 408 L476 408 Z" fill="#ed2939"/>
+</svg>

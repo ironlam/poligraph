@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" fill="none">
+  <!-- Open book silhouette (transparent gutter + gap keep it distinct from body) -->
+  <path d="M446 668 L235 706 L235 746 L446 720 Z" fill="#002654"/>
+  <path d="M454 668 L665 706 L665 746 L454 720 Z" fill="#002654"/>
+
+  <!-- Owl body + tufts -->
+  <path d="M330 238 L360 150 L410 233 Z" fill="#002654"/>
+  <path d="M570 238 L540 150 L490 233 Z" fill="#002654"/>
+  <ellipse cx="450" cy="525" rx="150" ry="128" fill="#002654"/>
+  <!-- Head with eye holes (evenodd) -->
+  <path fill-rule="evenodd" fill="#002654" d="M265 345 A185 150 0 1 0 635 345 A185 150 0 1 0 265 345 Z M310 332 A62 62 0 1 0 434 332 A62 62 0 1 0 310 332 Z M466 332 A62 62 0 1 0 590 332 A62 62 0 1 0 466 332 Z"/>
+</svg>

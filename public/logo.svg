@@ -1,43 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <!-- Body -->
-  <ellipse cx="100" cy="115" rx="62" ry="68" fill="#002654"/>
-  <!-- Belly -->
-  <ellipse cx="100" cy="135" rx="40" ry="40" fill="#FFFFFF"/>
-  <!-- Belly feather marks -->
-  <path d="M88 125c4 3 8 3 12 0M95 133c4 3 8 3 12 0M88 141c4 3 8 3 12 0" stroke="#D0D8E8" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-  <!-- Left wing -->
-  <path d="M38 105c-8 15-10 40 0 55c5-15 10-35 0-55z" fill="#001F3F"/>
-  <!-- Right wing -->
-  <path d="M162 105c8 15 10 40 0 55c-5-15-10-35 0-55z" fill="#001F3F"/>
-  <!-- Head -->
-  <ellipse cx="100" cy="75" rx="52" ry="40" fill="#002654"/>
-  <!-- Left ear tuft -->
-  <path d="M55 52l-12-25c8 2 18 10 22 20z" fill="#002654"/>
-  <!-- Right ear tuft -->
-  <path d="M145 52l12-25c-8 2-18 10-22 20z" fill="#002654"/>
-  <!-- Left eye white -->
-  <circle cx="78" cy="75" r="16" fill="white"/>
-  <!-- Right eye white -->
-  <circle cx="122" cy="75" r="16" fill="white"/>
-  <!-- Left iris -->
-  <circle cx="80" cy="75" r="10" fill="#4A9FD9"/>
-  <!-- Right iris -->
-  <circle cx="120" cy="75" r="10" fill="#4A9FD9"/>
-  <!-- Left pupil -->
-  <circle cx="82" cy="74" r="5" fill="#001833"/>
-  <!-- Right pupil -->
-  <circle cx="118" cy="74" r="5" fill="#001833"/>
-  <!-- Eye shine left -->
-  <circle cx="84" cy="72" r="2" fill="white"/>
-  <!-- Eye shine right -->
-  <circle cx="120" cy="72" r="2" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" fill="none">
+  <!-- Open book (drawn first, owl perches on it) -->
+  <!-- Navy covers (slightly larger, act as page edges) -->
+  <path d="M450 630 L240 592 L266 704 L450 712 Z" fill="#002654"/>
+  <path d="M450 630 L660 592 L634 704 L450 712 Z" fill="#002654"/>
+  <!-- White pages -->
+  <path d="M450 638 L258 604 L280 692 L450 700 Z" fill="#ffffff"/>
+  <path d="M450 638 L642 604 L620 692 L450 700 Z" fill="#ffffff"/>
+  <!-- Red binding -->
+  <path d="M440 626 L460 626 L460 714 L440 714 Z" fill="#ed2939"/>
+
+  <!-- Owl -->
+  <!-- Ear tufts -->
+  <path d="M330 238 L360 150 L410 233 Z" fill="#002654"/>
+  <path d="M570 238 L540 150 L490 233 Z" fill="#002654"/>
+  <!-- Head + body silhouette (same navy, unions visually) -->
+  <ellipse cx="450" cy="352" rx="190" ry="160" fill="#002654"/>
+  <ellipse cx="450" cy="498" rx="158" ry="150" fill="#002654"/>
+  <!-- Eyes -->
+  <circle cx="372" cy="342" r="70" fill="#ffffff"/>
+  <circle cx="528" cy="342" r="70" fill="#ffffff"/>
+  <circle cx="372" cy="352" r="32" fill="#002654"/>
+  <circle cx="528" cy="352" r="32" fill="#002654"/>
+  <circle cx="360" cy="340" r="10" fill="#ffffff"/>
+  <circle cx="540" cy="340" r="10" fill="#ffffff"/>
   <!-- Beak -->
-  <path d="M96 85l4 10l4-10z" fill="#ED2939"/>
-  <!-- Forehead V -->
-  <path d="M80 58l20 12l20-12" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Feet -->
-  <path d="M82 180c-3 3-8 3-12 0M88 180c-3 3-8 3-12 0" stroke="#002654" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M118 180c3 3 8 3 12 0M124 180c-3 3-8 3-12 0" stroke="#002654" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <!-- Branch -->
-  <path d="M30 182h140" stroke="#5D4E37" stroke-width="4" stroke-linecap="round"/>
+  <path d="M450 372 L424 408 L476 408 Z" fill="#ed2939"/>
 </svg>
