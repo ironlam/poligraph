@@ -65,7 +65,20 @@ export async function callMistral(
     throw new Error(`Mistral API error ${response.status}: ${errorText}`);
   }
 
-  return response.json();
+  const json = (await response.json()) as MistralResponse;
+  if (json.usage?.total_tokens) _mistralTokensUsed += json.usage.total_tokens;
+  return json;
+}
+
+// Process-wide token meter. callMistral adds each response's total_tokens here so
+// long batch jobs (e.g. the policy-title generation backfill) can track real cost
+// and enforce a budget ceiling without threading usage through every caller.
+let _mistralTokensUsed = 0;
+export function getMistralTokensUsed(): number {
+  return _mistralTokensUsed;
+}
+export function resetMistralTokensUsed(): void {
+  _mistralTokensUsed = 0;
 }
 
 export function extractMistralText(response: MistralResponse): string {
