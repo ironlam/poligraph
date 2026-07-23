@@ -6,22 +6,15 @@ import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatCompactCurrency } from "@/lib/utils";
-import {
-  MANDATE_TYPE_LABELS,
-  PARTY_ROLE_LABELS,
-  feminizePartyRole,
-  DATA_SOURCE_LABELS,
-} from "@/config/labels";
+import { MANDATE_TYPE_LABELS, PARTY_ROLE_LABELS, feminizePartyRole } from "@/config/labels";
 import { ensureContrast } from "@/lib/contrast";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import { MandateTimeline } from "@/components/politicians/MandateTimeline";
-import { InteractiveTimeline } from "@/components/politicians/InteractiveTimeline";
 import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { DeclarationCard } from "@/components/declarations/DeclarationCard";
 import { MarkdownText } from "@/components/ui/markdown";
 import type { DeclarationDetails } from "@/types/hatvp";
-import { Scale, FileText, Mail, Globe, Facebook } from "lucide-react";
+import { FileText, Mail, Globe, Facebook } from "lucide-react";
 import { StatusBadge } from "@/components/legislation";
 import { BetaDisclaimer } from "@/components/BetaDisclaimer";
 import { ProfileTabs } from "@/components/politicians/ProfileTabs";
@@ -40,7 +33,12 @@ import { FollowButton } from "@/components/politicians/FollowButton";
 import { CopyableId } from "@/components/politicians/CopyableId";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
-import { isJudiciallyValidated, getJudicialMaturity } from "@/config/judicial-maturity";
+import { computeJudicialCounts } from "@/lib/politicians/judicial-counts";
+import { buildPoliticianSignals } from "@/lib/politicians/signals";
+import { buildSourceLinks } from "@/lib/politicians/external-sources";
+import { PoliticianSignals } from "@/components/politicians/PoliticianSignals";
+import { PresumptionNotice } from "@/components/politicians/PresumptionNotice";
+import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -179,7 +177,6 @@ export default async function PoliticianPage({ params }: PageProps) {
     notFound();
   }
 
-  const hasMandates = politician.mandates.length > 0;
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
   const currentGroup = (
     currentMandate as typeof currentMandate & {
@@ -206,42 +203,13 @@ export default async function PoliticianPage({ params }: PageProps) {
       : null,
   ]);
 
-  // Split affairs by involvement for sidebar stats and timeline
+  // directAffairs still feeds the Carrière timeline.
   const directAffairs = politician.affairs.filter((a) => a.involvement === "DIRECT");
 
-  // Tab badge: only judicially-validated affairs (Tier 1 + 2, DIRECT/INDIRECT)
-  const validatedAffairsCount = politician.affairs.filter((a) => {
-    if (
-      a.involvement === "VICTIM" ||
-      a.involvement === "PLAINTIFF" ||
-      a.involvement === "MENTIONED_ONLY"
-    )
-      return false;
-    return isJudiciallyValidated(a.status);
-  }).length;
-
-  // Sidebar: condamnation and en cours counts for DIRECT + INDIRECT
-  const directAndIndirect = politician.affairs.filter(
-    (a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"
-  );
-  const condamnationsCount = directAndIndirect.filter(
-    (a) => getJudicialMaturity(a.status) === "CONDAMNATION"
-  ).length;
-  // Tier 2 strict : les enquêtes préliminaires ne comptent pas comme
-  // procédure validée par un juge (RGPD art. 10, invariant I4)
-  const proceduresEnCoursCount = directAndIndirect.filter(
-    (a) => getJudicialMaturity(a.status) === "PROCEDURE_VALIDEE"
-  ).length;
-
-  // Encart: only condamnations (Tier 1)
-  const encartAffairs = directAffairs.filter(
-    (a) => getJudicialMaturity(a.status) === "CONDAMNATION"
-  );
-  const mentionAffairs = politician.affairs.filter(
-    (a) => a.involvement === "INDIRECT" || a.involvement === "MENTIONED_ONLY"
-  );
-  const victimAffairs = politician.affairs.filter(
-    (a) => a.involvement === "VICTIM" || a.involvement === "PLAINTIFF"
+  // Judicial counters: "mis en cause" = DIRECT only (no double count with
+  // mentions; enquêtes préliminaires excluded, RGPD art. 10 invariant).
+  const judicial = computeJudicialCounts(
+    politician.affairs.map((a) => ({ involvement: a.involvement, status: a.status }))
   );
 
   // Extract companies where politician is a board member for JSON-LD
@@ -252,6 +220,37 @@ export default async function PoliticianPage({ params }: PageProps) {
       .filter((p) => p.isBoardMember)
       .map((p) => ({ name: p.company }))
       .slice(0, 10) ?? [];
+
+  // Dashboard signals + verification sources (single source of truth, passed
+  // to both PoliticianSignals and the two responsive PoliticianSummary mounts).
+  const portfolioValue = detailsForLD?.totalPortfolioValue ?? null;
+  const signals = buildPoliticianSignals({
+    slug: politician.slug,
+    mandatesCount: politician.mandates.length,
+    votesTotal: voteData ? voteData.stats.total : null,
+    hasVotesTab: Boolean((voteData && voteData.stats.total > 0) || parliamentaryCard),
+    hasFactchecksTab: politician.factCheckMentions.length > 0,
+    factchecksCount: politician.factCheckMentions.length,
+    dossiersCount: politician.dossierAuthors.length,
+    declarationsCount: politician.declarations.length,
+    portfolioValue,
+    patrimoineHref: `/politiques/${politician.slug}#declarations`, // PR B: ?tab=patrimoine
+    judicial,
+  });
+  const sourceLinks = buildSourceLinks(
+    politician.externalIds.map((e) => ({ source: e.source, url: e.url }))
+  );
+  const osEntry = politician.externalIds.find((e) => e.source === "OPENSANCTIONS");
+  const osMeta = (osEntry?.metadata ?? null) as { datasets?: string[] } | null;
+  const registres = [
+    ...new Set(
+      (osMeta?.datasets ?? [])
+        .map((d) => OS_DATASET_LABELS[d])
+        .filter((l): l is string => l != null)
+    ),
+  ];
+  const lastUpdated = formatDate(politician.updatedAt);
+  const relationsHref = `/politiques/${politician.slug}/relations`;
 
   return (
     <>
@@ -442,24 +441,30 @@ export default async function PoliticianPage({ params }: PageProps) {
           </div>
         </div>
 
+        {/* Summary before the tabbed body on mobile (DOM order matches reading order). */}
+        <div className="lg:hidden mb-8">
+          <PoliticianSummary
+            signals={signals}
+            sources={sourceLinks}
+            registres={registres}
+            relationsHref={relationsHref}
+            lastUpdated={lastUpdated}
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main content */}
           <div className="lg:col-span-2">
             <ProfileTabs
-              affairsCount={validatedAffairsCount}
+              affairsCount={judicial.badgeCount}
               profileContent={
                 <div className="space-y-8">
-                  {/* Interactive Timeline - Desktop only */}
-                  {(hasMandates || directAffairs.length > 0) && (
-                    <div className="hidden lg:block">
-                      <InteractiveTimeline
-                        mandates={politician.mandates}
-                        affairs={directAffairs}
-                        birthDate={politician.birthDate}
-                        deathDate={politician.deathDate}
-                      />
-                    </div>
-                  )}
+                  {/* Dashboard: clickable signals + computed presumption note */}
+                  <PoliticianSignals signals={signals} />
+                  <PresumptionNotice
+                    proceduresEnCours={judicial.proceduresEnCours}
+                    condamnationsNonDefinitives={judicial.condamnationsNonDefinitives}
+                  />
 
                   {/* Biography */}
                   {politician.biography && (
@@ -484,68 +489,6 @@ export default async function PoliticianPage({ params }: PageProps) {
                               ` — ${formatDate(politician.biographyGeneratedAt)}`}
                           </span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Affairs summary card — only shows condemnations (Etabli + Prononce) */}
-                  {encartAffairs.length > 0 && (
-                    <Link
-                      href={`/politiques/${politician.slug}?tab=affaires`}
-                      prefetch={false}
-                      scroll={false}
-                      className="block"
-                    >
-                      <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer group">
-                        <CardContent className="py-4 flex items-center gap-4">
-                          <div className="flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 size-10 shrink-0">
-                            <Scale className="size-5" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">
-                              {`${encartAffairs.length} condamnation${encartAffairs.length > 1 ? "s" : ""}`}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {encartAffairs
-                                .slice(0, 2)
-                                .map((a) => a.title)
-                                .join(", ")}
-                              {encartAffairs.length > 2 && "..."}
-                            </p>
-                          </div>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                            className="size-5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
-                            aria-hidden="true"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  )}
-
-                  {/* Career / Mandates */}
-                  {hasMandates && (
-                    <Card id="parcours">
-                      <CardHeader>
-                        <h2 className="leading-none font-semibold">Parcours politique</h2>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Liste des mandats nationaux et européens connus. Les mandats locaux
-                          (maire, conseiller, etc.) peuvent ne pas être listés.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <MandateTimeline
-                          mandates={politician.mandates}
-                          civility={politician.civility}
-                        />
                       </CardContent>
                     </Card>
                   )}
@@ -687,122 +630,16 @@ export default async function PoliticianPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick stats */}
-            <Card>
-              <CardHeader>
-                <h2 className="leading-none font-semibold text-lg">En bref</h2>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Mandats</span>
-                  <span className="font-semibold">{politician.mandates.length}</span>
-                </div>
-                {voteData && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Votes</span>
-                    <span className="font-semibold">{voteData.stats.total}</span>
-                  </div>
-                )}
-                {condamnationsCount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Condamnations</span>
-                    <span className="font-semibold text-red-600 dark:text-red-400">
-                      {condamnationsCount}
-                    </span>
-                  </div>
-                )}
-                {proceduresEnCoursCount > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Procédures validées en cours</span>
-                    <span className="font-semibold">{proceduresEnCoursCount}</span>
-                  </div>
-                )}
-                {mentionAffairs.length > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Mentions</span>
-                    <span className="font-semibold text-gray-500">{mentionAffairs.length}</span>
-                  </div>
-                )}
-                {victimAffairs.length > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Victime</span>
-                    <span className="font-semibold text-primary">{victimAffairs.length}</span>
-                  </div>
-                )}
-                {politician.dossierAuthors.length > 0 && (
-                  <div className="flex justify-between">
-                    <Link
-                      href={`/politiques/${politician.slug}#dossiers`}
-                      className="text-muted-foreground hover:underline"
-                    >
-                      Propositions de loi
-                    </Link>
-                    <span className="font-semibold">{politician.dossierAuthors.length}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Déclarations HATVP</span>
-                  <span className="font-semibold">{politician.declarations.length}</span>
-                </div>
-                {/* Relations link */}
-                <div className="pt-3 border-t">
-                  <Link
-                    href={`/politiques/${politician.slug}/relations`}
-                    className="flex items-center gap-2 text-sm text-primary hover:underline"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z" />
-                    </svg>
-                    Voir les relations
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-
+          {/* Sidebar (desktop): same summary component, hidden on mobile where it renders above the tabs. */}
+          <div className="hidden lg:block space-y-6">
+            <PoliticianSummary
+              signals={signals}
+              sources={sourceLinks}
+              registres={registres}
+              relationsHref={relationsHref}
+              lastUpdated={lastUpdated}
+            />
             <BetaDisclaimer variant="profile" />
-
-            {/* External links + data source */}
-            <Card className="bg-muted">
-              <CardContent className="pt-6">
-                {politician.externalIds.filter((e) => e.url).length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Liens externes</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1">
-                      {politician.externalIds
-                        .filter((e) => e.url)
-                        .map((ext) => (
-                          <a
-                            key={ext.source}
-                            href={ext.url!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline"
-                          >
-                            {DATA_SOURCE_LABELS[ext.source]} ↗
-                          </a>
-                        ))}
-                    </div>
-                    <OpenSanctionsDatasets externalIds={politician.externalIds} />
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Dernière mise à jour : {formatDate(politician.updatedAt)}
-                </p>
-                <Link
-                  href="/methodologie"
-                  className="text-xs text-primary hover:underline mt-2 inline-block"
-                >
-                  Voir notre méthodologie
-                </Link>
-              </CardContent>
-            </Card>
           </div>
         </div>
 
@@ -851,24 +688,3 @@ const OS_DATASET_LABELS: Record<string, string> = {
   ann_pep_positions: "PEPs",
   everypolitician: "EveryPolitician",
 };
-
-function OpenSanctionsDatasets({
-  externalIds,
-}: {
-  externalIds: Array<{ source: string; metadata: unknown }>;
-}) {
-  const osEntry = externalIds.find((e) => e.source === "OPENSANCTIONS");
-  if (!osEntry) return null;
-
-  const meta = osEntry.metadata as { datasets?: string[] } | null;
-  const datasets = meta?.datasets ?? [];
-  const labels = [
-    ...new Set(datasets.map((d) => OS_DATASET_LABELS[d]).filter((l): l is string => l != null)),
-  ];
-
-  if (labels.length === 0) return null;
-
-  return (
-    <p className="text-[10px] text-muted-foreground mt-1.5">Registres : {labels.join(", ")}</p>
-  );
-}

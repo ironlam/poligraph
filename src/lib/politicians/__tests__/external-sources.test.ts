@@ -9,7 +9,7 @@ describe("buildSourceLinks", () => {
       { source: "MANUAL", url: null },
     ]);
     expect(links.map((l) => l.source)).toEqual(["HATVP", "WIKIDATA"]);
-    expect(links[0].label).toBe("HATVP");
+    expect(links[0]!.label).toBe("HATVP");
   });
 
   it("dedupes only strictly identical (source, normalized url)", () => {

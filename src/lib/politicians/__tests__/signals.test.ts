@@ -40,10 +40,12 @@ describe("buildPoliticianSignals", () => {
   it("routes each signal to its destination", () => {
     const signals = buildPoliticianSignals(base);
     const byKey = Object.fromEntries(signals.map((s) => [s.key, s]));
-    expect(byKey["mandats"].href).toBe("/politiques/camille-renard?tab=carriere");
-    expect(byKey["condamnations-definitives"].href).toBe("/politiques/camille-renard?tab=affaires");
-    expect(byKey["patrimoine"].href).toBe("#declarations");
-    expect(byKey["condamnations-definitives"].tone).toBe("danger");
+    expect(byKey["mandats"]!.href).toBe("/politiques/camille-renard?tab=carriere");
+    expect(byKey["condamnations-definitives"]!.href).toBe(
+      "/politiques/camille-renard?tab=affaires"
+    );
+    expect(byKey["patrimoine"]!.href).toBe("#declarations");
+    expect(byKey["condamnations-definitives"]!.tone).toBe("danger");
   });
 
   it("carries a textual value and never relies on tone alone", () => {

@@ -40,11 +40,13 @@ const TONE: Record<SignalTone, string> = {
 export function PoliticianSummary({
   signals,
   sources,
+  registres = [],
   relationsHref,
   lastUpdated,
 }: {
   signals: Signal[];
   sources: SourceLink[];
+  registres?: string[];
   relationsHref: string;
   lastUpdated: string;
 }) {
@@ -102,6 +104,9 @@ export function PoliticianSummary({
             </li>
           ))}
         </ul>
+        {registres.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">Registres : {registres.join(", ")}</p>
+        )}
         <p className="mt-3 text-xs text-muted-foreground">
           Dernière mise à jour : {lastUpdated} ·{" "}
           <Link href="/methodologie" className="text-primary hover:underline">
