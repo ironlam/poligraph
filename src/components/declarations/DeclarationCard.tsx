@@ -1,10 +1,17 @@
 import type { DeclarationDetails } from "@/types/hatvp";
-import { HorizontalBars } from "@/components/stats/HorizontalBars";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, Info } from "lucide-react";
 import { DeclarationMetrics } from "./DeclarationMetrics";
 import { DeclarationHistory } from "./DeclarationHistory";
+import { AnnualRevenueSeries } from "./AnnualRevenueSeries";
+import { FinancialParticipations } from "./FinancialParticipations";
+import {
+  displayHatvpText,
+  isEmptyPlaceholder,
+  formatEuroExact,
+} from "@/lib/declarations/hatvp-display";
+import { groupDeclarationLinks, type DeclarationLink } from "@/lib/declarations/declaration-links";
 
 interface DeclarationCardProps {
   id?: string;
@@ -44,38 +51,55 @@ function CollapsibleSection({
   );
 }
 
-function cleanCompanyName(name: string): string {
-  return name.includes("[Données non publiées]") ? "Société (nom non publié)" : name;
+// Sum of every declared annual amount across the items of a section.
+function sectionTotal(items: Array<{ annualRevenues: { amount: number }[] }>): number {
+  return items.reduce((sum, it) => sum + it.annualRevenues.reduce((a, r) => a + r.amount, 0), 0);
 }
 
-const DECLARATION_LABEL: Record<string, string> = {
-  PATRIMOINE_DEBUT_MANDAT: "Patrimoine (début mandat)",
-  PATRIMOINE_FIN_MANDAT: "Patrimoine (fin mandat)",
-  PATRIMOINE_MODIFICATION: "Patrimoine (modification)",
-  INTERETS: "Intérêts",
-};
+function SectionTotal({ items }: { items: Array<{ annualRevenues: { amount: number }[] }> }) {
+  return (
+    <p className="pt-2 mt-1 border-t text-sm">
+      <span className="font-semibold">Total des montants déclarés dans cette section</span> :{" "}
+      <span className="font-semibold tabular-nums">{formatEuroExact(sectionTotal(items))}</span>
+    </p>
+  );
+}
+
+function DeclarationLinkGroup({ title, links }: { title: string; links: DeclarationLink[] }) {
+  if (links.length === 0) return null;
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground mb-1.5">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {links.map((l) => (
+          <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer">
+            <Badge variant="outline" className="hover:bg-accent cursor-pointer">
+              {l.label}
+              {l.isMostRecentYear ? " · année la plus récente" : ""} ↗
+              <span className="sr-only"> (ouvre un nouvel onglet)</span>
+            </Badge>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
   if (declarations.length === 0) return null;
 
-  // Find the latest DIA that has parsed details
+  // Latest DIA that has parsed details drives the metrics + detail sections.
   const latestDIA = declarations.find((d) => d.details !== null);
   const details = latestDIA?.details as DeclarationDetails | null;
 
-  // Build financial participation bars (top 5 by evaluation)
-  const allParticipations =
-    details?.financialParticipations.filter((p) => p.evaluation !== null && p.evaluation > 0) ?? [];
-  const sortedParticipations = [...allParticipations].sort(
-    (a, b) => (b.evaluation ?? 0) - (a.evaluation ?? 0)
-  );
-  const topParticipations = sortedParticipations.slice(0, 5);
-  const remainingParticipations = sortedParticipations.slice(5);
+  const links = groupDeclarationLinks(declarations);
 
-  const participationBars = topParticipations.map((p) => ({
-    label: cleanCompanyName(p.company),
-    value: p.evaluation!,
-    suffix: " €",
-  }));
+  // Collaborators: usable ones shown individually; "Néant"/empty grouped.
+  const usableCollaborators =
+    details?.collaborators.filter((c) => !isEmptyPlaceholder(c.employer)) ?? [];
+  const emptyCollaboratorsCount = (details?.collaborators.length ?? 0) - usableCollaborators.length;
+  const spouse = displayHatvpText(details?.spouseActivity);
+  const collaboratorsCount = (spouse ? 1 : 0) + usableCollaborators.length;
 
   return (
     <Card id={id}>
@@ -118,27 +142,8 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
         )}
 
         {/* Financial participations */}
-        {participationBars.length > 0 && (
-          <div>
-            <HorizontalBars bars={participationBars} title="Participations financières" />
-            {remainingParticipations.length > 0 && (
-              <details className="mt-3">
-                <summary className="cursor-pointer text-sm text-muted-foreground hover:underline">
-                  Voir les {sortedParticipations.length} participations
-                </summary>
-                <div className="pt-2 space-y-2">
-                  {remainingParticipations.map((p, i) => (
-                    <div key={`part-${i}`} className="flex items-center justify-between text-sm">
-                      <span className="mr-2">{cleanCompanyName(p.company)}</span>
-                      <span className="font-mono text-muted-foreground whitespace-nowrap">
-                        {new Intl.NumberFormat("fr-FR").format(p.evaluation!)} €
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
+        {details && details.financialParticipations.length > 0 && (
+          <FinancialParticipations participations={details.financialParticipations} />
         )}
 
         {/* Professional activities */}
@@ -149,24 +154,21 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
           >
             {details.professionalActivities.map((activity, i) => (
               <div key={`activity-${i}`} className="text-sm">
-                <div className="font-medium">{activity.description}</div>
-                <div className="text-muted-foreground">{activity.employer}</div>
+                <div className="font-medium">
+                  {displayHatvpText(activity.description) ?? "(non publié)"}
+                </div>
+                {displayHatvpText(activity.employer) && (
+                  <div className="text-muted-foreground">{displayHatvpText(activity.employer)}</div>
+                )}
                 {activity.startDate && (
                   <div className="text-xs text-muted-foreground">
                     {activity.startDate} — {activity.endDate || "en cours"}
                   </div>
                 )}
-                {activity.annualRevenues.length > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                    {activity.annualRevenues.map((r) => (
-                      <span key={r.year} className="text-xs font-mono">
-                        {r.year}: {new Intl.NumberFormat("fr-FR").format(r.amount)} €
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <AnnualRevenueSeries revenues={activity.annualRevenues} />
               </div>
             ))}
+            <SectionTotal items={details.professionalActivities} />
           </CollapsibleSection>
         )}
 
@@ -178,23 +180,18 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
           >
             {details.electoralMandates.map((mandate, i) => (
               <div key={`mandate-${i}`} className="text-sm">
-                <div className="font-medium">{mandate.mandate}</div>
+                <div className="font-medium">
+                  {displayHatvpText(mandate.mandate) ?? "(non publié)"}
+                </div>
                 {mandate.startDate && (
                   <div className="text-xs text-muted-foreground">
                     {mandate.startDate} — {mandate.endDate || "en cours"}
                   </div>
                 )}
-                {mandate.annualRevenues.length > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                    {mandate.annualRevenues.map((r) => (
-                      <span key={r.year} className="text-xs font-mono">
-                        {r.year}: {new Intl.NumberFormat("fr-FR").format(r.amount)} €
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <AnnualRevenueSeries revenues={mandate.annualRevenues} />
               </div>
             ))}
+            <SectionTotal items={details.electoralMandates} />
           </CollapsibleSection>
         )}
 
@@ -203,42 +200,41 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
           <CollapsibleSection title="Postes de direction" count={details.directorships.length}>
             {details.directorships.map((dir, i) => (
               <div key={`dir-${i}`} className="text-sm">
-                <div className="font-medium">{dir.company}</div>
-                <div className="text-muted-foreground">{dir.role}</div>
+                <div className="font-medium">{displayHatvpText(dir.company) ?? "(non publié)"}</div>
+                {displayHatvpText(dir.role) && (
+                  <div className="text-muted-foreground">{displayHatvpText(dir.role)}</div>
+                )}
                 {dir.startDate && (
                   <div className="text-xs text-muted-foreground">
                     {dir.startDate} — {dir.endDate || "en cours"}
                   </div>
                 )}
-                {dir.annualRevenues.length > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                    {dir.annualRevenues.map((r) => (
-                      <span key={r.year} className="text-xs font-mono">
-                        {r.year}: {new Intl.NumberFormat("fr-FR").format(r.amount)} €
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <AnnualRevenueSeries revenues={dir.annualRevenues} />
               </div>
             ))}
+            <SectionTotal items={details.directorships} />
           </CollapsibleSection>
         )}
 
         {/* Spouse & collaborators */}
-        {details && (details.spouseActivity || details.collaborators.length > 0) && (
-          <CollapsibleSection
-            title="Conjoint & collaborateurs"
-            count={(details.spouseActivity ? 1 : 0) + details.collaborators.length}
-          >
-            {details.spouseActivity && (
-              <p className="text-sm text-muted-foreground">{details.spouseActivity}</p>
-            )}
-            {details.collaborators.map((c, i) => (
+        {details && (collaboratorsCount > 0 || emptyCollaboratorsCount > 0) && (
+          <CollapsibleSection title="Conjoint & collaborateurs" count={collaboratorsCount}>
+            {spouse && <p className="text-sm text-muted-foreground">{spouse}</p>}
+            {usableCollaborators.map((c, i) => (
               <div key={`collab-${i}`} className="text-sm">
-                <span className="font-medium">{c.name}</span>
-                <span className="text-muted-foreground"> — {c.employer}</span>
+                <span className="font-medium">{displayHatvpText(c.name) ?? "(non publié)"}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  — {displayHatvpText(c.employer) ?? "(non publié)"}
+                </span>
               </div>
             ))}
+            {emptyCollaboratorsCount > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {emptyCollaboratorsCount} collaborateur{emptyCollaboratorsCount > 1 ? "s" : ""}{" "}
+                déclaré{emptyCollaboratorsCount > 1 ? "s" : ""} « Néant » ou sans objet
+              </p>
+            )}
           </CollapsibleSection>
         )}
 
@@ -249,15 +245,10 @@ export function DeclarationCard({ id, declarations }: DeclarationCardProps) {
             .map((d) => ({ id: d.id, year: d.year, details: d.details }))}
         />
 
-        {/* All declaration links */}
-        <div className="flex flex-wrap gap-2 pt-4 border-t">
-          {declarations.map((d) => (
-            <a key={d.id} href={d.pdfUrl ?? d.hatvpUrl} target="_blank" rel="noopener noreferrer">
-              <Badge variant="outline" className="hover:bg-accent cursor-pointer">
-                {DECLARATION_LABEL[d.type] ?? d.type} {d.year} ↗
-              </Badge>
-            </a>
-          ))}
+        {/* Declaration links, grouped by type + sorted */}
+        <div className="space-y-3 pt-4 border-t">
+          <DeclarationLinkGroup title="Intérêts (DIA)" links={links.interets} />
+          <DeclarationLinkGroup title="Patrimoine (préfecture)" links={links.patrimoine} />
         </div>
       </CardContent>
     </Card>

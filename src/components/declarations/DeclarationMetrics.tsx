@@ -37,19 +37,22 @@ export function DeclarationMetrics({
       term: "revenusAnnuels",
     },
     {
-      // Count elective mandates AND directorships (the old "totalDirectorships"
-      // counted directorships only, contradicting the label).
-      value: String(electoralMandatesCount + directorshipsCount),
-      label: "Mandats et fonctions de direction",
+      value: String(electoralMandatesCount),
+      label: "Mandats déclarés",
+      term: "mandatsDirections",
+    },
+    {
+      value: String(directorshipsCount),
+      label: "Fonctions de direction déclarées",
       term: "mandatsDirections",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       {metrics.map((metric) => (
         <div key={metric.label} className="bg-muted/50 rounded-lg p-3">
-          <div className="text-2xl font-bold font-mono">{metric.value}</div>
+          <div className="text-2xl font-bold tabular-nums">{metric.value}</div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <span>{metric.label}</span>
             <InfoTooltip term={metric.term} href={HATVP_DI_URL} size="sm" />

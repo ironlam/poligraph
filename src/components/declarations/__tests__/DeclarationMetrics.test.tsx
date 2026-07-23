@@ -26,17 +26,18 @@ describe("DeclarationMetrics", () => {
     expect(screen.queryByText("Portefeuille total")).toBeNull();
   });
 
-  it("counts mandats + directions, not directorships alone", () => {
+  it("shows separate 'Mandats déclarés' and 'Fonctions de direction déclarées' tiles", () => {
     renderMetrics({
-      totalPortfolioValue: null,
-      totalCompanies: 0,
-      latestAnnualIncome: null,
+      totalPortfolioValue: 617000,
+      totalCompanies: 1,
+      latestAnnualIncome: 124000,
       electoralMandatesCount: 2,
       directorshipsCount: 1,
     });
-    const tile = screen
-      .getByText("Mandats et fonctions de direction")
-      .closest("div")?.parentElement;
-    expect(tile).toHaveTextContent("3");
+    const mandats = screen.getByText("Mandats déclarés").closest("div")?.parentElement;
+    expect(mandats).toHaveTextContent("2");
+    const dir = screen.getByText("Fonctions de direction déclarées").closest("div")?.parentElement;
+    expect(dir).toHaveTextContent("1");
+    expect(screen.queryByText("Mandats et fonctions de direction")).toBeNull();
   });
 });

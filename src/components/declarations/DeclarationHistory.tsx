@@ -1,14 +1,9 @@
 import type { DeclarationDetails } from "@/types/hatvp";
+import { formatEuroExact } from "@/lib/declarations/hatvp-display";
 
 export type HistoryDeclaration = { id: string; year: number; details: DeclarationDetails | null };
 
 type StateKind = "value" | "none" | "unknown" | "unavailable";
-
-// Formats a REAL number of declared participations, including "0 €" for a
-// genuine zero. Deliberately NOT formatCompactCurrency (which maps 0 -> "—").
-function formatEuro(value: number): string {
-  return `${new Intl.NumberFormat("fr-FR").format(value)} €`;
-}
 
 // The model distinguishes "no usable evaluation" (totalPortfolioValue === null)
 // from a real zero sum. We never say "non déclaré" when the model can't tell.
@@ -21,7 +16,7 @@ export function declarationHistoryState(details: DeclarationDetails | null): {
   if (parts.length === 0) return { kind: "none", text: "Aucune participation financière déclarée" };
   if (details.totalPortfolioValue === null)
     return { kind: "unknown", text: "Montant non renseigné" };
-  return { kind: "value", text: formatEuro(details.totalPortfolioValue) };
+  return { kind: "value", text: formatEuroExact(details.totalPortfolioValue) };
 }
 
 export function DeclarationHistory({ declarations }: { declarations: HistoryDeclaration[] }) {
