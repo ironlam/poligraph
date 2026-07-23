@@ -93,6 +93,18 @@ Chaque issue créée par un workflow cron suit le même format (label dédié, l
 - Échec systémique sur plusieurs workflows en même temps → vérifier l'état de Supabase (https://status.supabase.com) et de Vercel (https://www.vercel-status.com).
 - Erreur Prisma `P2022` (colonne absente) → drift de schéma entre le code déployé et la base. Voir `AGENTS.md` §8 "Expand-Contract Migrations".
 
+### 3.2 Issue "Amendment linking stalled" (watchdog `monitor-amendment-links.yml`)
+
+Signal principal : l'écart entre le dernier scrutin amendable et le dernier scrutin lié dépasse 48h alors que des scrutins liables (type `AMENDEMENT` avec dossier) restent sans lien. Contrairement à un échec de workflow, ce cas est silencieux : le daily sync reste vert car ses étapes amendements/link se marquent `completed` même avec 0 ligne.
+
+1. **Confirmer l'état** en lecture seule : `npx tsx --env-file=.env scripts/check-amendment-link-freshness.ts` (ne touche rien, imprime le verdict et les compteurs).
+2. **Cause la plus fréquente** : l'ingestion des amendements ne progresse pas. Vérifier `SyncMetadata.policy-titles:amendments` (`extra.created`, `extra.anomaly`). Le feed AN (`Amendements.json.zip`, ~123k entrées) est parcouru en entier depuis le correctif `amendmentsSafetyCap` ; si `seen` explose au-delà de `POLICY_TITLE_AMENDMENTS_SAFETY_CAP` (500k), le job échoue explicitement (jamais de troncature silencieuse) → relever le plafond après vérification de la croissance du feed.
+3. **Rattrapage** (idempotent, écrit en prod, à faire en connaissance de cause) :
+   - Ingestion complète : `npx tsx --env-file=.env -e "..."` appelant `syncAmendmentsAN({ legislature: 17, force: true })` (dedup par contentHash, n'écrit que les deltas).
+   - Liaison : `npx tsx --env-file=.env scripts/backfill-scrutin-amendment-links.ts --apply --batch=600`. **`--batch` doit dépasser le nombre de candidats liables** (le service scanne les N plus récents, sans curseur) ; sans `--apply`, le script ne fait qu'un rapport de classification.
+   - Génération des titres : soumise à un échantillon de 20 + estimation de coût Mistral avant tout run de masse (voir la PR `fix-amendments-ingestion-cap`). Ne pas lancer l'auto-approbation sur tout le backlog sans contrôle qualitatif.
+4. **Critère de succès** : `recentLinkableUnlinked = 0` (les scrutins non-`AMENDEMENT` — ARTICLE/MOTION/FINAL/AUTRE — sont hors périmètre et rapportés à part, pas comptés dans le critère).
+
 ---
 
 ## 4. Triage d'une erreur Sentry
