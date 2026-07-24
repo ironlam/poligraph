@@ -11,6 +11,8 @@ import { ensureContrast } from "@/lib/contrast";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { AffairTimeline } from "@/components/affairs/AffairTimeline";
 import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
+import { CiteAnchor } from "@/components/ui/CiteAnchor";
+import { citeAnchorId } from "@/lib/cite";
 
 interface AffairCardProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,7 +34,7 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
   return (
     <div
       id={`affair-${affair.id}`}
-      className={`border rounded-lg p-4 overflow-hidden ${borderClass}`}
+      className={`group border rounded-lg p-4 overflow-hidden ${borderClass}`}
     >
       {/* Header */}
       <div className="mb-3">
@@ -57,11 +59,14 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
               </h3>
             </div>
           </div>
-          <Badge
-            className={`self-start whitespace-nowrap ${AFFAIR_STATUS_COLORS[affair.status as AffairStatus]}`}
-          >
-            {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
-          </Badge>
+          <div className="flex items-center gap-2 self-start">
+            <Badge
+              className={`whitespace-nowrap ${AFFAIR_STATUS_COLORS[affair.status as AffairStatus]}`}
+            >
+              {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
+            </Badge>
+            <CiteAnchor anchorId={citeAnchorId.affair(affair.id)} label="cette affaire" />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2">
           <Badge variant="outline" className="text-xs">
