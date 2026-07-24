@@ -235,7 +235,7 @@ textarea:focus-visible,
   }
 }
 
-/* Deep-link « Citer » : surbrillance temporaire de la cible (#483) */
+/* Deep-link "Cite": temporary highlight of the target (#483) */
 .cite-target {
   animation: cite-flash 2.5s ease-out;
 }

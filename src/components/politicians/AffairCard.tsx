@@ -33,7 +33,7 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
 
   return (
     <div
-      id={`affair-${affair.id}`}
+      id={citeAnchorId.affair(affair.id)}
       className={`group border rounded-lg p-4 overflow-hidden ${borderClass}`}
     >
       {/* Header */}

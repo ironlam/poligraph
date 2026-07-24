@@ -24,7 +24,7 @@ const victimAffair = {
   linkedBy: null,
 };
 
-describe("AffairsSection — ancre de copie sur les victimes", () => {
+describe("AffairsSection : ancre de copie sur les victimes", () => {
   it("rend l'id d'ancre et le bouton CiteAnchor pour une affaire victime", () => {
     const { container } = render(
       <AffairsSection affairs={[victimAffair] as never} civility={null} />

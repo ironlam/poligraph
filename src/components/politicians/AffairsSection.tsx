@@ -221,7 +221,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                 return (
                   <div
                     key={affair.id}
-                    id={`affair-${affair.id}`}
+                    id={citeAnchorId.affair(affair.id)}
                     className="group border rounded-lg p-4 border-blue-200 bg-blue-50/30"
                   >
                     <div className="mb-3">
