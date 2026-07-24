@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CiteAnchor } from "@/components/ui/CiteAnchor";
+import { scrutinPermalink } from "@/lib/cite";
 import { VOTE_POSITION_DOT_COLORS } from "@/config/labels";
 import { VotePositionBadge, ParliamentaryCard } from "@/components/votes";
 import {
@@ -181,7 +183,7 @@ export function VotesSection({
                       policyTitle: vote.scrutin.policyTitle,
                     });
                     return (
-                      <div key={vote.id} className="flex items-start gap-2 text-sm">
+                      <div key={vote.id} className="group flex items-start gap-2 text-sm">
                         <span
                           className={`w-2 h-2 mt-1.5 shrink-0 rounded-full ${VOTE_POSITION_DOT_COLORS[vote.position]}`}
                         />
@@ -201,6 +203,7 @@ export function VotesSection({
                           )}
                         </Link>
                         <VotePositionBadge position={vote.position} size="sm" />
+                        <CiteAnchor permalink={scrutinPermalink(vote.scrutin.id)} label="ce vote" />
                       </div>
                     );
                   })}
