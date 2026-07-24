@@ -234,3 +234,22 @@ textarea:focus-visible,
     r: 4;
   }
 }
+
+/* Deep-link « Citer » : surbrillance temporaire de la cible (#483) */
+.cite-target {
+  animation: cite-flash 2.5s ease-out;
+}
+@keyframes cite-flash {
+  from {
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cite-target {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+}
