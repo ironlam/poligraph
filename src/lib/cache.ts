@@ -138,6 +138,21 @@ export function invalidateEntity(
   }
 }
 
+/**
+ * After an affair mutation, invalidate each affected politician profile so its
+ * affairs list reflects the change (getPolitician is tagged `politician:<slug>`).
+ * De-dupes and skips falsy slugs. Pair with invalidateEntity("affair", ...).
+ */
+export function invalidateAffectedPoliticians(slugs: Array<string | null | undefined>): void {
+  const seen = new Set<string>();
+  for (const slug of slugs) {
+    if (slug && !seen.has(slug)) {
+      seen.add(slug);
+      invalidateEntity("politician", slug);
+    }
+  }
+}
+
 // ─── Global revalidation (post-sync) ─────────────────────────────
 
 export const ALL_TAGS = [

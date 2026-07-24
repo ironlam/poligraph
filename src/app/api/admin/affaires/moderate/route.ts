@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation } from "@/lib/security/validate";
 import { moderateAffairSchema } from "@/lib/security/schemas/affair";
-import { invalidateEntity } from "@/lib/cache";
+import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import {
   assertPublishable,
   PublishGuardError,
@@ -70,6 +70,14 @@ export const POST = withAdminAuth(
   withValidation(moderateAffairSchema, async (_request, _context, body: ModerateBody) => {
     const { ids, action } = body;
 
+    // Capture affected politicians before mutating, so their profiles
+    // (tagged `politician:<slug>`) are invalidated too (not just "affairs").
+    const affected = await db.affair.findMany({
+      where: { id: { in: ids } },
+      select: { politician: { select: { slug: true } } },
+    });
+    const politicianSlugs = affected.map((a) => a.politician.slug);
+
     if (action === "publish") {
       // RGPD art. 10 : la publication passe par le guard, qui exige sources
       // + rattachements validés et écrit verifiedAt/verifiedBy atomiquement.
@@ -103,6 +111,7 @@ export const POST = withAdminAuth(
           })),
         });
         invalidateEntity("affair");
+        invalidateAffectedPoliticians(politicianSlugs);
       }
 
       return NextResponse.json({ updated: published.length, failed });
@@ -125,6 +134,7 @@ export const POST = withAdminAuth(
     });
 
     invalidateEntity("affair");
+    invalidateAffectedPoliticians(politicianSlugs);
 
     return NextResponse.json({ updated: result.count });
   })

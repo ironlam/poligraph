@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { quickUpdateAffairSchema } from "@/lib/security/schemas/affair";
-import { invalidateEntity } from "@/lib/cache";
+import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import {
   assertPublishable,
@@ -29,6 +29,7 @@ export const PATCH = withAdminAuth(
         slug: true,
         politicianId: true,
         publicationStatus: true,
+        politician: { select: { slug: true } },
       },
     });
 
@@ -116,6 +117,7 @@ export const PATCH = withAdminAuth(
     });
 
     invalidateEntity("affair", affair.slug);
+    invalidateAffectedPoliticians([affair.politician?.slug]);
 
     return NextResponse.json(updated);
   })
