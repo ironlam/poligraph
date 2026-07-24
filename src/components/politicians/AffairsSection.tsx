@@ -18,6 +18,8 @@ import {
 import { formatDate, stripMarkdown } from "@/lib/utils";
 import type { AffairStatus, AffairCategory, Involvement } from "@/types";
 import { AffairCard } from "./AffairCard";
+import { CiteAnchor } from "@/components/ui/CiteAnchor";
+import { citeAnchorId } from "@/lib/cite";
 
 interface AffairsSectionProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -220,7 +222,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                   <div
                     key={affair.id}
                     id={`affair-${affair.id}`}
-                    className="border rounded-lg p-4 border-blue-200 bg-blue-50/30"
+                    className="group border rounded-lg p-4 border-blue-200 bg-blue-50/30"
                   >
                     <div className="mb-3">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
@@ -254,6 +256,10 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                           <Badge variant="outline" className="whitespace-nowrap">
                             {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
                           </Badge>
+                          <CiteAnchor
+                            anchorId={citeAnchorId.affair(affair.id)}
+                            label="cette affaire"
+                          />
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-2">
