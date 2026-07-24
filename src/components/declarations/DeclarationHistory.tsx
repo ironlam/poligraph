@@ -1,5 +1,7 @@
 import type { DeclarationDetails } from "@/types/hatvp";
 import { formatEuroExact } from "@/lib/declarations/hatvp-display";
+import { CiteAnchor } from "@/components/ui/CiteAnchor";
+import { citeAnchorId } from "@/lib/cite";
 
 export type HistoryDeclaration = { id: string; year: number; details: DeclarationDetails | null };
 
@@ -31,19 +33,26 @@ export function DeclarationHistory({ declarations }: { declarations: HistoryDecl
         {rows.map((d) => {
           const state = declarationHistoryState(d.details);
           return (
-            <li key={d.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <li
+              key={d.id}
+              id={citeAnchorId.declaration(d.id)}
+              className="group flex items-center justify-between gap-3 py-2 text-sm"
+            >
               <span className="flex items-center gap-2">
                 <span className="font-mono text-muted-foreground">{d.year}</span>
                 <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
                   DIA
                 </span>
               </span>
-              <span
-                className={
-                  state.kind === "value" ? "font-display font-semibold" : "text-muted-foreground"
-                }
-              >
-                {state.text}
+              <span className="flex items-center gap-2">
+                <span
+                  className={
+                    state.kind === "value" ? "font-display font-semibold" : "text-muted-foreground"
+                  }
+                >
+                  {state.text}
+                </span>
+                <CiteAnchor anchorId={citeAnchorId.declaration(d.id)} label="cette déclaration" />
               </span>
             </li>
           );
