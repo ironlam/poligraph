@@ -40,6 +40,7 @@ import { buildSourceLinks } from "@/lib/politicians/external-sources";
 import { PoliticianSignals } from "@/components/politicians/PoliticianSignals";
 import { PresumptionNotice } from "@/components/politicians/PresumptionNotice";
 import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
+import { DeepLinkHighlighter } from "@/components/politicians/DeepLinkHighlighter";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -280,6 +281,7 @@ export default async function PoliticianPage({ params }: PageProps) {
         memberOf={memberOfOrgs.length > 0 ? memberOfOrgs : undefined}
       />
       <div className="container mx-auto px-4 pt-4 pb-8">
+        <DeepLinkHighlighter />
         <Breadcrumb
           items={[{ label: "Politiques", href: "/politiques" }, { label: politician.fullName }]}
         />
