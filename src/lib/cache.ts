@@ -85,8 +85,10 @@ export function invalidateEntity(
 
     case "affair":
       revalidatePath("/api/affaires", "layout");
+      revalidatePath("/affaires", "layout");
       if (slug) {
         revalidatePath(`/api/affaires/${slug}`, "layout");
+        revalidatePath(`/affaires/${slug}`);
       }
       revalidateTag("affairs", DEFAULT_PROFILE);
       break;

@@ -1,5 +1,5 @@
-import { cache } from "react";
 import { Metadata } from "next";
+import { cacheTag, cacheLife } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
@@ -126,9 +126,13 @@ async function findAffair(where: Prisma.AffairWhereInput) {
 
 type AffairResult = NonNullable<Awaited<ReturnType<typeof findAffair>>>;
 
-const getAffairWithRedirect = cache(async function getAffairWithRedirect(
+async function getAffairWithRedirect(
   slugOrId: string
 ): Promise<{ affair: AffairResult | null; redirect: string | null }> {
+  "use cache";
+  cacheTag("affairs");
+  cacheLife("synced");
+
   const [bySlug, byOldSlug, byId] = buildPublicAffairLookupWheres(slugOrId);
 
   // 1. Slug canonique
@@ -144,7 +148,7 @@ const getAffairWithRedirect = cache(async function getAffairWithRedirect(
   if (affair) return { affair, redirect: affair.slug };
 
   return { affair: null, redirect: null };
-});
+}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
