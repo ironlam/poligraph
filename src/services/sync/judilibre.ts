@@ -47,7 +47,8 @@ import { syncMetadata } from "@/lib/sync";
 import { findCourtDepartments, extractJurisdictionName } from "@/config/judilibre-courts";
 import { resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadJudilibreDecisionCache } from "./judilibre-decisions";
-import { proposeAffairUpdate } from "@/services/affairs/proposals";
+import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
+import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import {
   failImportRun,
   finishImportRun,
@@ -191,6 +192,15 @@ async function enrichAffairFromJudilibre(
         source: "JUDILIBRE",
         sourceUrl: decisionUrl,
         officialId: decision.ecli ?? decision.number ?? null,
+        // A decision page can be republished with a corrected solution under the
+        // same URL, so the payload itself is part of the proposal identity.
+        sourceContentHash: hashSourceContent({
+          solution: decision.solution,
+          ecli: decision.ecli ?? null,
+          number: decision.number ?? null,
+          numbers: decision.numbers ?? [],
+          decisionDate: decision.decision_date,
+        }),
         sourceExcerpt: decision.summary?.slice(0, 500) ?? null,
         metadata: { solution: decision.solution, decisionId: decision.id },
         confidence: 90,
@@ -270,41 +280,27 @@ async function createAffairFromJudilibre(
   }
 
   try {
-    const baseSlug = generateSlug(title);
-    let slug = baseSlug;
-
-    // Ensure unique slug
-    let counter = 1;
-    while (await db.affair.findUnique({ where: { slug }, select: { id: true } })) {
-      slug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-
-    await db.affair.create({
-      data: {
-        politicianId,
-        title,
-        slug,
-        description: decision.summary || `Décision de la Cour de cassation : ${decision.solution}.`,
-        status,
-        category,
-        confidenceScore,
-        publicationStatus: "DRAFT",
-        verdictDate: new Date(decision.decision_date),
-        ecli: decision.ecli || null,
-        pourvoiNumber: decision.number || null,
-        caseNumbers: decision.numbers || [],
-        verifiedAt: null,
-        sources: {
-          create: {
-            url: `https://www.courdecassation.fr/decision/${decision.id}`,
-            title: `Cour de cassation - ${decision.solution} (${decision.number})`,
-            publisher: "Cour de cassation",
-            publishedAt: new Date(decision.decision_date),
-            sourceType: "JUDILIBRE",
-          },
+    await createDraftAffairFromDiscovery({
+      politicianId,
+      title,
+      baseSlug: generateSlug(title),
+      description: decision.summary || `Décision de la Cour de cassation : ${decision.solution}.`,
+      status,
+      category,
+      confidenceScore,
+      verdictDate: new Date(decision.decision_date),
+      ecli: decision.ecli || null,
+      pourvoiNumber: decision.number || null,
+      caseNumbers: decision.numbers || [],
+      sources: [
+        {
+          url: `https://www.courdecassation.fr/decision/${decision.id}`,
+          title: `Cour de cassation - ${decision.solution} (${decision.number})`,
+          publisher: "Cour de cassation",
+          publishedAt: new Date(decision.decision_date),
+          sourceType: "JUDILIBRE",
         },
-      },
+      ],
     });
 
     if (verbose) {

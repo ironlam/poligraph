@@ -28,6 +28,7 @@ import { syncMetadata } from "@/lib/sync";
 import { classifyArticleTier, type ArticleTier } from "@/config/press-keywords";
 import { MIN_CONFIDENCE_THRESHOLD } from "@/config/press-analysis";
 import { resolveAffairPolitician, assessPressAttribution } from "@/lib/affair-matching";
+import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 
 // ============================================
 // TYPES
@@ -595,40 +596,26 @@ async function createAffairFromPress(
   }
 
   try {
-    const baseSlug = generateSlug(cleanAffairTitle(title));
-    let slug = baseSlug;
-
-    // Ensure unique slug
-    let counter = 1;
-    while (await db.affair.findUnique({ where: { slug }, select: { id: true } })) {
-      slug = `${baseSlug}-${counter}`;
-      counter++;
-    }
-
-    const affair = await db.affair.create({
-      data: {
-        politicianId,
-        title,
-        slug,
-        description: detected.description,
-        status: detected.status as AffairStatus,
-        category: detected.category as AffairCategory,
-        publicationStatus: "DRAFT",
-        confidenceScore: detected.confidenceScore,
-        factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
-        court: detected.court,
-        verifiedAt: null,
-        sources: {
-          create: {
-            url: articleUrl,
-            title: articleTitle,
-            publisher: feedSourceToPublisher(feedSource),
-            publishedAt,
-            sourceType: "PRESSE",
-            excerpt: detected.excerpts[0] || null,
-          },
+    const affair = await createDraftAffairFromDiscovery({
+      politicianId,
+      title,
+      baseSlug: generateSlug(cleanAffairTitle(title)),
+      description: detected.description,
+      status: detected.status as AffairStatus,
+      category: detected.category as AffairCategory,
+      confidenceScore: detected.confidenceScore,
+      factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
+      court: detected.court,
+      sources: [
+        {
+          url: articleUrl,
+          title: articleTitle,
+          publisher: feedSourceToPublisher(feedSource),
+          publishedAt,
+          sourceType: "PRESSE",
+          excerpt: detected.excerpts[0] || null,
         },
-      },
+      ],
     });
 
     // Link article to affair

@@ -8,7 +8,7 @@
  */
 
 import { db } from "@/lib/db";
-import { generateAffairSlug, generateUniqueSlug } from "@/lib/utils";
+import { generateAffairSlug } from "@/lib/utils";
 import { WikidataService } from "@/lib/api/wikidata";
 import { WD_PROPS } from "@/config/wikidata";
 import { mapWikidataOffense, getOffenseLabel } from "@/config/wikidata-affairs";
@@ -30,7 +30,8 @@ import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prism
 import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadCandidatePool } from "@/lib/affair-matching/persistence";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
-import { proposeAffairUpdate } from "@/services/affairs/proposals";
+import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
+import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import {
   failImportRun,
   finishImportRun,
@@ -198,15 +199,6 @@ function extractPublisherFromUrl(url: string): string {
   } catch {
     return "Source inconnue";
   }
-}
-
-async function generateUniqueAffairSlug(politicianSlug: string, title: string): Promise<string> {
-  const baseSlug = generateAffairSlug(politicianSlug, title);
-  return generateUniqueSlug(
-    baseSlug,
-    (s) => db.affair.findUnique({ where: { slug: s } }).then(Boolean),
-    120
-  );
 }
 
 export async function discoverAffairs(options?: {
@@ -653,6 +645,14 @@ async function proposePenaltyEnrichment(
     source: "WIKIDATA",
     sourceUrl: wikidataSource?.url ?? null,
     officialId: extractQidFromUrl(wikidataSource?.url),
+    // A Wikidata claim can change under the same Q-ID, so the payload itself is
+    // part of the proposal identity.
+    sourceContentHash: hashSourceContent({
+      charges: affair.charges,
+      status: affair.status,
+      category: affair.category,
+      penalties: patch,
+    }),
     sourceExcerpt: affair.charges.join(", ").slice(0, 500),
     metadata: { phase: affair.phase, politicianName: affair.politicianName },
     confidence: affair.confidenceScore,
@@ -716,39 +716,31 @@ async function runPhase3Reconciliation(
         where: { id: affair.politicianId },
         select: { slug: true },
       });
-      const slug = await generateUniqueAffairSlug(politician?.slug ?? "", affair.title);
-
-      const createdAffair = await db.affair.create({
-        data: {
-          politicianId: affair.politicianId,
-          title: affair.title,
-          slug,
-          description: affair.description,
-          status: affair.status,
-          category: affair.category,
-          involvement: affair.involvement,
-          factsDate: affair.factsDate,
-          verdictDate: affair.verdictDate,
-          court: affair.court,
-          prisonMonths: affair.prisonMonths,
-          prisonSuspended: affair.prisonSuspended,
-          ineligibilityMonths: affair.ineligibilityMonths,
-          communityService: affair.communityService,
-          otherSentence: affair.otherSentence,
-          sentence: buildSentenceSummary(affair),
-          confidenceScore: affair.confidenceScore,
-          publicationStatus: affair.publicationStatus,
-          sources: {
-            create: affair.sources.map((s) => ({
-              url: s.url,
-              title: s.title,
-              publisher: s.publisher,
-              publishedAt: s.publishedAt ?? affair.factsDate ?? affair.verdictDate ?? new Date(),
-              sourceType: s.sourceType,
-            })),
-          },
-        },
-        select: { id: true },
+      const createdAffair = await createDraftAffairFromDiscovery({
+        politicianId: affair.politicianId,
+        title: affair.title,
+        baseSlug: generateAffairSlug(politician?.slug ?? "", affair.title),
+        description: affair.description,
+        status: affair.status,
+        category: affair.category,
+        involvement: affair.involvement,
+        confidenceScore: affair.confidenceScore,
+        factsDate: affair.factsDate,
+        verdictDate: affair.verdictDate,
+        court: affair.court,
+        prisonMonths: affair.prisonMonths,
+        prisonSuspended: affair.prisonSuspended,
+        ineligibilityMonths: affair.ineligibilityMonths,
+        communityService: affair.communityService,
+        otherSentence: affair.otherSentence,
+        sentence: buildSentenceSummary(affair),
+        sources: affair.sources.map((s) => ({
+          url: s.url,
+          title: s.title,
+          publisher: s.publisher,
+          publishedAt: s.publishedAt ?? affair.factsDate ?? affair.verdictDate ?? new Date(),
+          sourceType: s.sourceType,
+        })),
       });
 
       // Lie la décision du resolver à l'affaire créée : le publish-guard
