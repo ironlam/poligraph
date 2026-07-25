@@ -27,6 +27,7 @@ import {
   Fingerprint,
   BarChart3,
   Vote,
+  CopyCheck,
   GitPullRequestArrow,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ const contentItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/affaires", label: "Affaires", icon: Scale },
   { href: "/admin/affaires/propositions", label: "Propositions", icon: GitPullRequestArrow },
+  { href: "/admin/affaires/doublons", label: "Doublons", icon: CopyCheck },
   { href: "/admin/politiques", label: "Politiques", icon: Users },
   { href: "/admin/partis", label: "Partis", icon: Building2 },
   { href: "/admin/maires", label: "Maires", icon: Crown },
