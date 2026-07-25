@@ -21,11 +21,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import {
-  buildPairDecisionUpsert,
-  computePairPrecision,
-  loadPairExclusions,
-} from "../pair-decision";
+import { buildPairDecisionUpsert, computePairMetrics, loadPairExclusions } from "../pair-decision";
 import { canonicalPair } from "../affair-pair";
 
 const signal = { confidence: "HIGH", matchedBy: "pourvoiNumber", score: 0.95 };
@@ -183,38 +179,78 @@ describe("loadPairExclusions — ce qui exclut, ce qui revient (#525)", () => {
   });
 });
 
-describe("computePairPrecision — mesure sur tous les jugements (#525)", () => {
-  it("ne rend rien avant le premier jugement", async () => {
-    const metrics = await computePairPrecision(12);
+describe("computePairMetrics — trois taux, pas un (#525)", () => {
+  it("ne rend aucun taux avant le premier jugement", async () => {
+    const m = await computePairMetrics(12);
 
-    expect(metrics.precision).toBeNull();
-    expect(metrics.candidatePairs).toBe(12);
+    expect(m.duplicateRate).toBeNull();
+    expect(m.usefulMatchRate).toBeNull();
+    expect(m.falsePositiveRate).toBeNull();
+    expect(m.candidatePairs).toBe(12);
+    expect(m.decided).toBe(0);
   });
 
-  it("rapporte les doublons aux paires réellement tranchées", async () => {
+  it("reproduit les chiffres du premier tri réel", async () => {
+    // 3 DUPLICATE, 3 LINKED, 1 DISTINCT, 1 UNCERTAIN : 7 paires tranchées.
     h.decisionGroupBy.mockResolvedValue([
       { classification: "DUPLICATE", _count: { _all: 3 } },
+      { classification: "LINKED", _count: { _all: 3 } },
       { classification: "DISTINCT", _count: { _all: 1 } },
-      { classification: "LINKED", _count: { _all: 0 } },
+      { classification: "UNCERTAIN", _count: { _all: 1 } },
     ]);
 
-    const metrics = await computePairPrecision(10);
+    const m = await computePairMetrics(1);
 
-    expect(metrics.precision).toBe(0.75);
-    expect(metrics.byClassification.DUPLICATE).toBe(3);
+    expect(m.decided).toBe(7);
+    expect(m.ruled).toBe(8);
+    expect(m.duplicateRate).toBeCloseTo(3 / 7);
+    expect(m.usefulMatchRate).toBeCloseTo(6 / 7);
+    expect(m.falsePositiveRate).toBeCloseTo(1 / 7);
   });
 
-  it("laisse UNCERTAIN hors du calcul, des deux côtés", async () => {
+  it("distingue un doublon d'un rapprochement utile", async () => {
+    // Le point de la mesure : 43 % de doublons, mais 86 % de rapprochements utiles.
+    h.decisionGroupBy.mockResolvedValue([
+      { classification: "DUPLICATE", _count: { _all: 1 } },
+      { classification: "LINKED", _count: { _all: 3 } },
+      { classification: "DISTINCT", _count: { _all: 0 } },
+    ]);
+
+    const m = await computePairMetrics(4);
+
+    expect(m.duplicateRate).toBe(0.25);
+    expect(m.usefulMatchRate).toBe(1);
+    expect(m.falsePositiveRate).toBe(0);
+  });
+
+  it("laisse UNCERTAIN hors de tous les dénominateurs", async () => {
     h.decisionGroupBy.mockResolvedValue([
       { classification: "DUPLICATE", _count: { _all: 1 } },
       { classification: "DISTINCT", _count: { _all: 1 } },
       { classification: "UNCERTAIN", _count: { _all: 8 } },
     ]);
 
-    const metrics = await computePairPrecision(10);
+    const m = await computePairMetrics(10);
 
     // 1 / 2, pas 1 / 10 : différer n'est pas juger.
-    expect(metrics.precision).toBe(0.5);
-    expect(metrics.ruled).toBe(10);
+    expect(m.decided).toBe(2);
+    expect(m.duplicateRate).toBe(0.5);
+    expect(m.ruled).toBe(10);
+  });
+
+  it("conserve les nombres bruts par classification", async () => {
+    h.decisionGroupBy.mockResolvedValue([
+      { classification: "DUPLICATE", _count: { _all: 3 } },
+      { classification: "UNCERTAIN", _count: { _all: 1 } },
+    ]);
+
+    const m = await computePairMetrics(1);
+
+    expect(m.byClassification).toEqual({
+      DUPLICATE: 3,
+      LINKED: 0,
+      DISTINCT: 0,
+      UNCERTAIN: 1,
+    });
   });
 });

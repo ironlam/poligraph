@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
 import { decideMergeAction } from "@/services/affairs/merge-decision";
-import { computePairPrecision } from "@/services/affairs/pair-decision";
+import { computePairMetrics } from "@/services/affairs/pair-decision";
 import { canonicalPair } from "@/services/affairs/affair-pair";
+import { isOfficialJudicialIdentifierMatch } from "@/services/affairs/matching";
 
 /**
  * The duplicate review queue, grouped by politician (issue #525).
@@ -57,6 +58,9 @@ export const GET = withAdminAuth(async () => {
       confidence: pair.confidence,
       matchedBy: pair.matchedBy,
       score: pair.score,
+      // Surfaced as a reason to read the pair, never as a reason to merge it: the
+      // Carignon case shares a pourvoi number and is two counts (issue #525).
+      sharesOfficialIdentifier: isOfficialJudicialIdentifierMatch(pair.matchedBy),
       contradictions: pair.contradictions,
       unpropagatableDifferences: pair.unpropagatableDifferences,
       previousClassification: pair.previousClassification,
@@ -68,7 +72,7 @@ export const GET = withAdminAuth(async () => {
     groups.set(politicianId, group);
   }
 
-  const metrics = await computePairPrecision(pairs.length);
+  const metrics = await computePairMetrics(pairs.length);
 
   return NextResponse.json({
     total: pairs.length,
