@@ -188,28 +188,97 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
 // ============================================
 
 /**
- * Merge two affairs: keep affairA, transfer data from affairB, delete affairB.
- *
- * Transfers: sources, events, press article links.
- * Does NOT merge text fields (title, description) — admin should edit after.
+ * Fields filled on the survivor only when it does not already carry a value.
+ * Purely additive: a merge must never overwrite what the survivor states, but
+ * losing what the absorbed affair stated is data loss, since its row is deleted.
  */
-export async function mergeAffairs(keepId: string, removeId: string): Promise<void> {
-  await db.$transaction(async (tx) => {
-    // Verify both affairs exist and capture publicIds for redirect bookkeeping.
+const ADDITIVE_MERGE_FIELDS = ["ecli", "pourvoiNumber", "court", "chamber", "caseNumber"] as const;
+
+export interface MergeAffairsOptions {
+  /** Request context, when the merge is human-initiated from the admin. */
+  audit?: { ipAddress?: string | null; userAgent?: string | null };
+}
+
+export interface MergeAffairsResult {
+  sourcesMoved: number;
+  eventsMoved: number;
+  articlesMoved: number;
+  identifiersMerged: string[];
+  /** Slugs the survivor now answers to on behalf of the absorbed affair. */
+  slugsPreserved: string[];
+}
+
+/** Semantic identity of an event: it carries no unique constraint in the schema. */
+function eventKey(event: { date: Date; type: string; title: string }): string {
+  return [event.date.toISOString(), event.type, event.title].join("|");
+}
+
+/**
+ * Slugs the survivor must start answering to once the absorbed affair is deleted.
+ *
+ * Deleting the row frees its `slug`, so every URL form it served has to move to
+ * the survivor's `oldSlugs`, which `buildPublicAffairLookupWheres` resolves.
+ * Excludes the survivor's own canonical slug — listing it as a former slug would
+ * make the affair shadow itself — and anything it already answers to.
+ */
+export function computePreservedSlugs(input: {
+  keepSlug: string;
+  keepOldSlugs: string[];
+  removeSlug: string;
+  removeOldSlugs: string[];
+}): string[] {
+  const alreadyServed = new Set([input.keepSlug, ...input.keepOldSlugs]);
+  return [...new Set([input.removeSlug, ...input.removeOldSlugs])].filter(
+    (slug) => !alreadyServed.has(slug)
+  );
+}
+
+/**
+ * Merge two affairs: keep `keepId`, transfer what `removeId` holds, delete it.
+ *
+ * The single merge implementation. Everything runs in one transaction so a
+ * failure can never leave sources moved with the affair still present, nor an
+ * affair deleted without its redirects.
+ *
+ * Transfers additively: sources, events, press article links, and the judicial
+ * identifiers the survivor is missing. Never touches the survivor's editorial
+ * fields (title, description, status, dates, sentence) — those are a human
+ * decision, and for automated paths they belong in an AffairUpdateProposal.
+ *
+ * Preserves both URL forms of the absorbed affair, since deleting its row frees
+ * its slug: the retired publicId gets a redirect row, and its slug plus any slug
+ * it previously answered to move into the survivor's `oldSlugs`, which
+ * `buildPublicAffairLookupWheres` resolves (issue #525).
+ */
+export async function mergeAffairs(
+  keepId: string,
+  removeId: string,
+  options: MergeAffairsOptions = {}
+): Promise<MergeAffairsResult> {
+  return db.$transaction(async (tx) => {
+    const affairSelect = {
+      id: true,
+      title: true,
+      slug: true,
+      publicId: true,
+      oldSlugs: true,
+      politicianId: true,
+      ecli: true,
+      pourvoiNumber: true,
+      caseNumbers: true,
+      court: true,
+      chamber: true,
+      caseNumber: true,
+    } as const;
+
     const [keep, remove] = await Promise.all([
-      tx.affair.findUnique({
-        where: { id: keepId },
-        select: { id: true, publicId: true },
-      }),
-      tx.affair.findUnique({
-        where: { id: removeId },
-        select: { id: true, publicId: true },
-      }),
+      tx.affair.findUnique({ where: { id: keepId }, select: affairSelect }),
+      tx.affair.findUnique({ where: { id: removeId }, select: affairSelect }),
     ]);
     if (!keep) throw new Error(`Affair to keep not found: ${keepId}`);
     if (!remove) throw new Error(`Affair to remove not found: ${removeId}`);
 
-    // Transfer sources (skip duplicates by URL)
+    // --- Sources: unique on (affairId, url), so skip URLs already present.
     const existingSources = await tx.source.findMany({
       where: { affairId: keepId },
       select: { url: true },
@@ -218,23 +287,37 @@ export async function mergeAffairs(keepId: string, removeId: string): Promise<vo
 
     const sourcesToTransfer = await tx.source.findMany({
       where: { affairId: removeId },
+      select: { id: true, url: true },
     });
+    let sourcesMoved = 0;
     for (const source of sourcesToTransfer) {
-      if (!existingUrls.has(source.url)) {
-        await tx.source.update({
-          where: { id: source.id },
-          data: { affairId: keepId },
-        });
-      }
+      if (existingUrls.has(source.url)) continue;
+      await tx.source.update({ where: { id: source.id }, data: { affairId: keepId } });
+      existingUrls.add(source.url);
+      sourcesMoved++;
     }
 
-    // Transfer events
-    await tx.affairEvent.updateMany({
-      where: { affairId: removeId },
-      data: { affairId: keepId },
+    // --- Events: no unique constraint, so deduplicate on their semantic key.
+    const existingEvents = await tx.affairEvent.findMany({
+      where: { affairId: keepId },
+      select: { date: true, type: true, title: true },
     });
+    const existingEventKeys = new Set(existingEvents.map(eventKey));
 
-    // Transfer press article links (skip duplicates)
+    const eventsToTransfer = await tx.affairEvent.findMany({
+      where: { affairId: removeId },
+      select: { id: true, date: true, type: true, title: true },
+    });
+    let eventsMoved = 0;
+    for (const event of eventsToTransfer) {
+      const key = eventKey(event);
+      if (existingEventKeys.has(key)) continue;
+      await tx.affairEvent.update({ where: { id: event.id }, data: { affairId: keepId } });
+      existingEventKeys.add(key);
+      eventsMoved++;
+    }
+
+    // --- Press links: unique on (articleId, affairId), so a blanket move would throw.
     const existingLinks = await tx.pressArticleAffair.findMany({
       where: { affairId: keepId },
       select: { articleId: true },
@@ -243,48 +326,54 @@ export async function mergeAffairs(keepId: string, removeId: string): Promise<vo
 
     const linksToTransfer = await tx.pressArticleAffair.findMany({
       where: { affairId: removeId },
+      select: { id: true, articleId: true },
     });
+    let articlesMoved = 0;
     for (const link of linksToTransfer) {
-      if (!existingArticleIds.has(link.articleId)) {
-        await tx.pressArticleAffair.update({
-          where: { id: link.id },
-          data: { affairId: keepId },
-        });
+      if (existingArticleIds.has(link.articleId)) continue;
+      await tx.pressArticleAffair.update({
+        where: { id: link.id },
+        data: { affairId: keepId },
+      });
+      existingArticleIds.add(link.articleId);
+      articlesMoved++;
+    }
+
+    // --- Additive field fill, plus the absorbed affair's URLs.
+    const updates: Prisma.AffairUpdateInput = {};
+    const identifiersMerged: string[] = [];
+    for (const field of ADDITIVE_MERGE_FIELDS) {
+      if (!keep[field] && remove[field]) {
+        updates[field] = remove[field];
+        identifiersMerged.push(field);
+      }
+    }
+    if (remove.caseNumbers.length > 0) {
+      const merged = [...new Set([...keep.caseNumbers, ...remove.caseNumbers])];
+      if (merged.length !== keep.caseNumbers.length) {
+        updates.caseNumbers = merged;
+        identifiersMerged.push("caseNumbers");
       }
     }
 
-    // Merge judicial identifiers if the kept affair is missing them
-    const removeAffair = await tx.affair.findUnique({
-      where: { id: removeId },
-      select: { ecli: true, pourvoiNumber: true, caseNumbers: true },
+    const slugsPreserved = computePreservedSlugs({
+      keepSlug: keep.slug,
+      keepOldSlugs: keep.oldSlugs,
+      removeSlug: remove.slug,
+      removeOldSlugs: remove.oldSlugs,
     });
-    const keepAffair = await tx.affair.findUnique({
-      where: { id: keepId },
-      select: { ecli: true, pourvoiNumber: true, caseNumbers: true },
-    });
-    if (removeAffair && keepAffair) {
-      const updates: Prisma.AffairUpdateInput = {};
-      if (!keepAffair.ecli && removeAffair.ecli) {
-        updates.ecli = removeAffair.ecli;
-      }
-      if (!keepAffair.pourvoiNumber && removeAffair.pourvoiNumber) {
-        updates.pourvoiNumber = removeAffair.pourvoiNumber;
-      }
-      if (removeAffair.caseNumbers.length > 0) {
-        const merged = new Set([...keepAffair.caseNumbers, ...removeAffair.caseNumbers]);
-        updates.caseNumbers = Array.from(merged);
-      }
-      if (Object.keys(updates).length > 0) {
-        await tx.affair.update({ where: { id: keepId }, data: updates });
-      }
+    if (slugsPreserved.length > 0) {
+      updates.oldSlugs = [...keep.oldSlugs, ...slugsPreserved];
     }
 
-    // Delete the merged affair (cascades sources, events, press links that weren't transferred)
+    if (Object.keys(updates).length > 0) {
+      await tx.affair.update({ where: { id: keepId }, data: updates });
+    }
+
+    // Cascades whatever was not transferred above.
     await tx.affair.delete({ where: { id: removeId } });
 
-    // Preserve the retired poligraphId as a redirect so external citations
-    // keep resolving to the survivor. Written inside the transaction so the
-    // redirect and deletion commit or roll back together.
+    // The retired poligraphId keeps resolving for external citations.
     if (remove.publicId && keep.publicId && remove.publicId !== keep.publicId) {
       await tx.publicIdRedirect.upsert({
         where: { fromPublicId: remove.publicId },
@@ -294,29 +383,34 @@ export async function mergeAffairs(keepId: string, removeId: string): Promise<vo
           entityType: "affair",
           reason: "merged",
         },
-        update: {
-          toPublicId: keep.publicId,
-          reason: "merged",
-        },
+        update: { toPublicId: keep.publicId, reason: "merged" },
       });
     }
 
-    // Clean up any dismissed duplicates referencing the removed affair
     await tx.dismissedDuplicate.deleteMany({
-      where: {
-        OR: [{ affairIdA: removeId }, { affairIdB: removeId }],
-      },
+      where: { OR: [{ affairIdA: removeId }, { affairIdB: removeId }] },
     });
 
-    // Audit log
     await tx.auditLog.create({
       data: {
         action: "MERGE",
         entityType: "Affair",
         entityId: keepId,
-        changes: { mergedFrom: removeId },
+        changes: {
+          mergedFrom: removeId,
+          mergedFromTitle: remove.title,
+          sourcesMoved,
+          eventsMoved,
+          articlesMoved,
+          identifiersMerged,
+          slugsPreserved,
+        },
+        ipAddress: options.audit?.ipAddress ?? null,
+        userAgent: options.audit?.userAgent ?? null,
       },
     });
+
+    return { sourcesMoved, eventsMoved, articlesMoved, identifiersMerged, slugsPreserved };
   });
 }
 
