@@ -129,6 +129,7 @@
     "sync:moderate": "tsx scripts/sync-moderate-affairs.ts",
     "sync:moderate:stats": "tsx scripts/sync-moderate-affairs.ts --stats",
     "moderate:preflight": "tsx scripts/moderate-preflight.ts",
+    "proposals": "tsx --env-file=.env scripts/proposals.ts",
     "moderate:preflight:dry": "tsx scripts/moderate-preflight.ts --dry-run",
     "sync:enrich": "tsx scripts/sync-enrich-affairs.ts",
     "sync:enrich:stats": "tsx scripts/sync-enrich-affairs.ts --stats",
