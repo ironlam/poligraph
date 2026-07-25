@@ -236,13 +236,12 @@ describe("validatePatch", () => {
       { startDate: "2020-01-01" },
       { chamber: "11e chambre" },
       { caseNumber: "2023/12345" },
-      { fineAmount: "1500.50" },
     ]) {
       expect(() => validatePatch(patch), JSON.stringify(patch)).toThrow(ProposalValidationError);
     }
   });
 
-  it("accepte les 12 champs que discover-affairs et judilibre proposent", () => {
+  it("accepte les 13 champs de la whitelist du lot 1", () => {
     expect(() =>
       validatePatch({
         status: "CONDAMNATION_DEFINITIVE",
@@ -251,6 +250,7 @@ describe("validatePatch", () => {
         sentence: "2 ans avec sursis",
         prisonMonths: 24,
         prisonSuspended: true,
+        fineAmount: "1500.50",
         ineligibilityMonths: 60,
         communityService: 100,
         otherSentence: "interdiction d'exercer",
@@ -259,6 +259,13 @@ describe("validatePatch", () => {
         caseNumbers: ["A", "B"],
       })
     ).not.toThrow();
+  });
+
+  it("coerce fineAmount en Decimal, sans passer par un flottant", () => {
+    const patch = validatePatch({ fineAmount: "1500.50" });
+    expect(Prisma.Decimal.isDecimal(patch.fineAmount)).toBe(true);
+    expect(patch.fineAmount?.toFixed(2)).toBe("1500.50");
+    expect(() => validatePatch({ fineAmount: -5 })).toThrow(ProposalValidationError);
   });
 
   it("refuse un patch vide", () => {
