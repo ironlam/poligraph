@@ -22,8 +22,10 @@ faits, la même date de verdict et le même arrêt de cassation, et représenten
 pourtant deux chefs distincts : abus de biens sociaux, et subornation de témoin.
 Elles ont été classées « affaires liées », pas « doublon ».
 
-**Recommandation : créer `JudicialDecision` et une table de liaison, sans enum de
-relation, sans rien retirer d'`Affair` dans un premier temps.**
+**Recommandation : créer une entité de décision juridictionnelle et une table de
+liaison, sans enum de relation, sans rien retirer d'`Affair` dans un premier temps.
+Nom retenu pour la future PR de schéma : `CourtDecision`**, et non
+`JudicialDecision` — voir §4 bis.
 
 Trois éléments justifient d'agir maintenant plutôt que plus tard :
 
@@ -36,7 +38,13 @@ Trois éléments justifient d'agir maintenant plutôt que plus tard :
 
 L'audit a par ailleurs invalidé deux hypothèses que l'issue portait implicitement :
 `Affair.court` et `Affair.verdictDate` **ne sont pas** des attributs de décision
-aujourd'hui, et ne doivent donc pas migrer.
+aujourd'hui, et ne doivent donc pas migrer. `Affair.court` désigne en réalité
+l'organe qui traite le dossier, ce qui inclut **58 organes non juridictionnels sur
+245**, essentiellement des parquets.
+
+Le périmètre du modèle est tranché ici : il représente **toute décision rendue par
+une juridiction**, quel que soit son ordre, et **aucun acte d'une autorité non
+juridictionnelle**. Une affaire n'a aucune obligation d'être liée à une décision.
 
 ---
 
@@ -89,21 +97,36 @@ défaut de saisie structurée.
 Répartition des `sourceType` : `PRESSE` 1464, `WIKIPEDIA` 213, `MANUAL` 55,
 `WIKIDATA` 48. **Aucune source `JUDILIBRE`.**
 
-### Le champ `court` ne décrit pas une juridiction
+### Le champ `court` désigne l'organe qui traite, pas la juridiction qui juge
 
-Sur les 245 affaires où `court` est renseigné :
+Sur les 245 affaires où `court` est renseigné, en repliant accents et apostrophes.
+Aucune valeur n'est restée non classée.
 
-| Nature de l'organe            | Affaires |       Part |
-| ----------------------------- | -------: | ---------: |
-| **N'est pas une juridiction** |   **65** | **26,5 %** |
-| dont parquets                 |       55 |            |
-| dont conseils de prud'hommes  |        9 |            |
-| dont commissions              |        1 |            |
+| Nature de l'organe                             | Affaires |       Part |
+| ---------------------------------------------- | -------: | ---------: |
+| **Juridictions, tous ordres**                  |  **187** |     76,3 % |
+| dont juridictions judiciaires                  |      167 |            |
+| dont juridictions administratives              |        9 |            |
+| dont conseils de prud'hommes                   |        9 |            |
+| dont juridiction financière (Cour des comptes) |        1 |            |
+| dont juridiction européenne (CEDH)             |        1 |            |
+| **N'est pas une juridiction**                  |   **58** | **23,7 %** |
+| dont ministère public (parquets, procureurs)   |       56 |            |
+| dont organes parlementaires                    |        2 |            |
 
-Un parquet poursuit, il ne rend pas de décision. Par ailleurs **9 affaires**
-décrivent plusieurs étapes de procédure dans une seule chaîne, par exemple
-« Tribunal correctionnel de Nîmes (première instance 1995), Cour d'appel de Nîmes
-(appel 2019 et 2021) ».
+Un parquet poursuit, il ne juge pas. Ni un parquet, ni une commission d'enquête
+parlementaire, ni le Bureau du Sénat statuant en discipline ne rendent de décision
+juridictionnelle.
+
+En revanche un **conseil de prud'hommes est une juridiction de l'ordre judiciaire**
+et rend des jugements, tout comme un tribunal administratif rend des décisions.
+Les uns et les autres entrent donc dans le périmètre du modèle. Une version
+antérieure de ce document les classait à tort parmi les organes non
+juridictionnels, ce qui surestimait le chiffre à 65 sur 245.
+
+Par ailleurs **9 affaires** décrivent plusieurs étapes de procédure dans une seule
+chaîne, par exemple « Tribunal correctionnel de Nîmes (première instance 1995), Cour
+d'appel de Nîmes (appel 2019 et 2021) ».
 
 Le champ compte **90 valeurs distinctes après normalisation**, dont 4 orthographes
 de « Cour de cassation ». C'est du texte libre décrivant _où en est le dossier_,
@@ -180,7 +203,7 @@ champ, pas la fréquence du phénomène.
 | `caseNumbers`   | matching (`hasSome`), propositions                   | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | aucune, champ vide                             |
 | `caseNumber`    | page publique, fusion additive                       | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | bloc « N° dossier » sur la fiche               |
 | `chamber`       | page publique, `AffairCard`, admin                   | `IDENTITÉ_DE_DÉCISION`                                  | **oui**, coût nul (0 ligne) | bloc « Chambre » sur la fiche                  |
-| `court`         | page publique, export CSV, admin, fusion             | **`À_CLARIFIER`** : 26,5 % ne sont pas des juridictions | **non en l'état**           | bloc « Tribunal », colonne CSV « Juridiction » |
+| `court`         | page publique, export CSV, admin, fusion             | **`À_CLARIFIER`** : 23,7 % ne sont pas des juridictions | **non en l'état**           | bloc « Tribunal », colonne CSV « Juridiction » |
 | `verdictDate`   | **clé de tri**, API publique, MCP, export, affichage | `CONTENU_ÉDITORIAL_D_AFFAIRE`                           | **non**                     | tri, API, MCP, export                          |
 
 ### Détail par zone
@@ -205,6 +228,87 @@ champ, pas la fréquence du phénomène.
 **Aucun usage dans le SEO, les données structurées, la recherche interne ni les
 embeddings.** La surface de compatibilité est donc étroite : trois colonnes CSV, un
 bloc de la fiche publique, `verdictDate` dans deux API et le MCP, et le tri.
+
+---
+
+## 4 bis. Périmètre du modèle, et nom retenu
+
+### La définition
+
+> Une **décision juridictionnelle** rendue par une juridiction identifiée, quel que
+> soit son ordre ou sa matière.
+
+Le critère n'est **pas** « pénal contre non pénal ». C'est :
+
+```
+décision rendue par une juridiction
+        contre
+acte ou sanction d'une autorité non juridictionnelle
+```
+
+### Ce que le modèle représente
+
+Une décision rendue par une juridiction pénale, civile, un conseil de prud'hommes,
+une juridiction administrative, une juridiction financière, une juridiction
+européenne, ou une juridiction spécialisée dont la nature juridictionnelle est
+établie.
+
+### Ce qu'il ne représente pas
+
+- une initiative, une réquisition ou une décision du **ministère public** ;
+- une délibération, un avis ou une décision de la **HATVP**, autorité
+  administrative indépendante ;
+- une **sanction disciplinaire du Bureau du Sénat** ;
+- les travaux d'une **commission d'enquête parlementaire** ;
+- une simple **étape d'enquête ou d'instruction** ;
+- tout acte institutionnel sans nature juridictionnelle.
+
+### Une affaire sans décision liée est un état normal
+
+**Une `Affair` n'a aucune obligation d'être liée à une décision.** Ce n'est ni un
+défaut de données, ni un rattachement manquant.
+
+Une affaire reste légitimement sans décision liée quand elle porte sur une enquête
+en cours, une mise en examen, une action du parquet, une sanction parlementaire ou
+une décision administrative non juridictionnelle. C'est précisément le cas des 58
+affaires dont `court` désigne un organe non juridictionnel : elles n'attendent
+aucune décision, elles décrivent un stade ou un acte qui n'en produit pas.
+
+La liaison est donc **optionnelle par construction**, et la couverture ne constitue
+pas une métrique de qualité.
+
+### Nomenclature retenue dans ce document
+
+| Terme                                                                                                                   | Rend une décision juridictionnelle ? |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| juridiction judiciaire (tribunal judiciaire, correctionnel, cour d'appel, cour de cassation, assises, prud'hommes, CJR) | **oui**                              |
+| juridiction administrative (tribunal administratif, cour administrative d'appel, Conseil d'État)                        | **oui**                              |
+| juridiction financière (Cour des comptes, chambre régionale des comptes)                                                | **oui**                              |
+| juridiction européenne (CEDH, CJUE)                                                                                     | **oui**                              |
+| autorité administrative indépendante (HATVP, Défenseur des droits)                                                      | non                                  |
+| ministère public (parquet, procureur de la République)                                                                  | non                                  |
+| organe parlementaire disciplinaire ou d'enquête (Bureau du Sénat, commission d'enquête)                                 | non                                  |
+
+### `JudicialDecision` ou `CourtDecision` ?
+
+**Recommandation : `CourtDecision`.**
+
+| Nom                | Pour                                                                                                                                                                                   | Contre                                                                                                                                                                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `JudicialDecision` | reprend le vocabulaire de l'issue ; « judicial decision » est courant en anglais                                                                                                       | en droit français, « judiciaire » désigne **un des deux ordres**, par opposition à l'ordre administratif. Or le modèle doit couvrir les tribunaux administratifs et la Cour des comptes. Le nom encoderait la lecture étroite que cette correction vient précisément d'écarter |
+| `CourtDecision`    | « court » se lit comme « juridiction », tous ordres confondus ; plus difficile à confondre avec l'ordre judiciaire français ; cohérent avec le champ `court` déjà présent sur `Affair` | « court » traduit plutôt « cour » que « conseil de prud'hommes », mais l'usage anglais de _court_ englobe toute juridiction                                                                                                                                                    |
+
+L'argument décisif est l'ordre administratif. Le sens du modèle est qu'une décision
+de tribunal administratif ou de conseil de prud'hommes est aussi une décision : le
+nom ne doit pas suggérer le contraire.
+
+L'intégration Judilibre ne tranche pas, `judilibreId` se lit aussi bien dans les
+deux. La convention du dépôt non plus : le code est en anglais, les deux formes
+l'étant également.
+
+Le reste de ce document conserve `JudicialDecision` dans les extraits de schéma,
+pour rester lisible à côté de l'issue. **Le nom à retenir pour la PR de schéma est
+`CourtDecision`**, avec `AffairCourtDecision` pour la table de liaison.
 
 ---
 
@@ -237,11 +341,11 @@ fusionner.
 
 ### `court` ne migre pas en l'état
 
-26,5 % des valeurs ne sont pas des juridictions, et 9 empilent plusieurs étapes.
-Migrer ce champ tel quel remplirait `JudicialDecision.court` avec des parquets,
-c'est-à-dire avec des données fausses dans un champ neuf.
+23,7 % des valeurs ne sont pas des juridictions, et 9 empilent plusieurs étapes.
+Migrer ce champ tel quel remplirait le champ `court` de la décision avec des
+parquets, c'est-à-dire avec des données fausses dans un champ neuf.
 
-`JudicialDecision.court` sera renseigné **uniquement** à partir d'une source
+Le champ `court` de la décision sera renseigné **uniquement** à partir d'une source
 officielle, typiquement Judilibre. `Affair.court` reste une dénormalisation
 éditoriale, et son nettoyage est un chantier de qualité de données distinct.
 
@@ -361,7 +465,7 @@ model AffairJudicialDecision {
 | Garder les identifiants sur `Affair` et lever seulement `ecli @unique` | permettrait d'enregistrer le cas Carignon, mais dupliquerait les attributs de la décision sur chaque fiche, sans source de vérité |
 | Modéliser d'emblée décision + procédure + participant                  | c'est #516 et #517 réunis. Un chantier de cette taille sur une base à 0,6 % de couverture ne se valide sur rien                   |
 | Enum `JudicialDecisionRelation` dès la première PR                     | cinq valeurs pour un cas observé, dont trois appartiennent à d'autres issues                                                      |
-| Migrer `court` et `verdictDate` vers la décision                       | mesuré faux : 26,5 % de non-juridictions, et une date de verdict sur des procédures en cours                                      |
+| Migrer `court` et `verdictDate` vers la décision                       | mesuré faux : 23,7 % de non-juridictions, et une date de verdict sur des procédures en cours                                      |
 
 ---
 
@@ -511,15 +615,15 @@ délibérément plus petit que `AffairProceeding`.
 
 ## 12. Risques
 
-| Risque                                                 | Gravité                                         | Atténuation                                                                     |
-| ------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| Remplir `JudicialDecision.court` depuis `Affair.court` | **élevée** : 26,5 % de valeurs fausses          | ne backfiller `court` que depuis une source officielle                          |
-| Déduire un doublon d'un identifiant partagé            | **élevée** : c'est l'erreur que #525 a corrigée | interdit explicitement en phase 2, aucun code de fusion dans ce chantier        |
-| Lever `Affair.ecli @unique` trop tôt                   | moyenne                                         | phase 5 seulement, après peuplement et lecture de la décision                   |
-| Figer un enum sur un seul cas                          | moyenne                                         | pas d'enum avant cinq cas réels                                                 |
-| `metadata Json` devenant un débarras                   | moyenne                                         | borné à la charge brute, vérifié en revue                                       |
-| Casser le tri par `verdictDate`                        | moyenne                                         | le champ ne migre pas                                                           |
-| Modéliser dans le vide, 0,6 % de couverture            | faible                                          | c'est l'argument inverse : le volume nul rend la migration triviale aujourd'hui |
+| Risque                                                  | Gravité                                              | Atténuation                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Remplir le `court` de la décision depuis `Affair.court` | **élevée** : 23,7 % de valeurs non juridictionnelles | ne backfiller `court` que depuis une source officielle                          |
+| Déduire un doublon d'un identifiant partagé             | **élevée** : c'est l'erreur que #525 a corrigée      | interdit explicitement en phase 2, aucun code de fusion dans ce chantier        |
+| Lever `Affair.ecli @unique` trop tôt                    | moyenne                                              | phase 5 seulement, après peuplement et lecture de la décision                   |
+| Figer un enum sur un seul cas                           | moyenne                                              | pas d'enum avant cinq cas réels                                                 |
+| `metadata Json` devenant un débarras                    | moyenne                                              | borné à la charge brute, vérifié en revue                                       |
+| Casser le tri par `verdictDate`                         | moyenne                                              | le champ ne migre pas                                                           |
+| Modéliser dans le vide, 0,6 % de couverture             | faible                                               | c'est l'argument inverse : le volume nul rend la migration triviale aujourd'hui |
 
 ---
 
@@ -552,6 +656,11 @@ délibérément plus petit que `AffairProceeding`.
 - [ ] Le backfill est idempotent, prouvé par double exécution
 - [ ] Judilibre ne crée aucune `Affair`
 - [ ] Aucune migration destructive dans la même PR qu'un changement de lecture
+- [ ] Une décision de conseil de prud'hommes ou de tribunal administratif peut être
+      enregistrée : le modèle n'est pas restreint au pénal ni à l'ordre judiciaire
+- [ ] Aucun acte du ministère public, de la HATVP ou d'un organe parlementaire n'est
+      enregistré comme décision
+- [ ] Une affaire sans décision liée n'est jamais signalée comme incomplète
 
 ---
 
@@ -574,10 +683,10 @@ Elles n'empêchent pas la phase 1, mais doivent être tranchées avant la phase 
    suivre la même règle, avec déduplication.
 5. **Faut-il nettoyer les 30 `court = "null"` avant ou après ?** Défaut de données
    indépendant, mais qui polluerait tout backfill s'appuyant sur `court`.
-6. **Les décisions non judiciaires ont-elles leur place ici ?** Sanction du Bureau
-   du Sénat, décision HATVP, conseil de prud'hommes : ce ne sont pas des décisions
-   pénales. Les inclure élargirait le modèle ; les exclure laisserait 65 affaires
-   sans rattachement.
+   **La question du périmètre est tranchée** au §4 bis : le critère est la nature
+   juridictionnelle de l'organe, pas la matière pénale. Un conseil de prud'hommes et un
+   tribunal administratif entrent dans le modèle ; un parquet, la HATVP et un organe
+   parlementaire n'y entrent pas. Une affaire sans décision liée est un état normal.
 
-La question 6 est celle qui pèse le plus sur le périmètre. Elle mérite d'être
-tranchée avant d'écrire la première ligne.
+Aucune des cinq questions restantes ne bloque la phase 1. Elles doivent être
+tranchées avant la phase 4, quand Judilibre commencera à alimenter les décisions.
