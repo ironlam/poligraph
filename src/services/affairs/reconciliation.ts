@@ -376,6 +376,10 @@ export interface MergeAffairsOptions {
 
 export interface MergeAffairsResult {
   sourcesMoved: number;
+  /** Court decision links reattached to the survivor. */
+  decisionLinksMoved: number;
+  /** Links dropped because the survivor already cited that decision. */
+  decisionLinksDeduplicated: number;
   /** Sources whose URL already existed and whose extra fields were carried over. */
   sourcesEnriched: number;
   eventsMoved: number;
@@ -438,8 +442,9 @@ export function computePreservedSlugs(input: {
  * failure can never leave sources moved with the affair still present, nor an
  * affair deleted without its redirects.
  *
- * Transfers additively: sources, events, press article links, and the judicial
- * identifiers the survivor is missing. Never touches the survivor's editorial
+ * Transfers additively: sources, events, press article links, court decision links,
+ * and the judicial identifiers the survivor is missing. A merge never deletes a
+ * decision — only the absorbed affair's claim on it moves. Never touches the survivor's editorial
  * fields (title, description, status, dates, sentence) — those are a human
  * decision, and for automated paths they belong in an AffairUpdateProposal.
  *
@@ -607,6 +612,59 @@ export async function mergeAffairsInTransaction(
       articlesMoved++;
     }
 
+    // --- Court decision links: the composite primary key forbids a duplicate, and
+    // the cascade on the absorbed affair would delete its links along with the row.
+    // A merge of affairs must never destroy a decision, nor a decision's reach.
+    const keptDecisionLinks = await tx.affairCourtDecision.findMany({
+      where: { affairId: keepId },
+      select: { courtDecisionId: true, notes: true },
+    });
+    const keptByDecision = new Map(keptDecisionLinks.map((l) => [l.courtDecisionId, l.notes]));
+
+    const decisionLinksToTransfer = await tx.affairCourtDecision.findMany({
+      where: { affairId: removeId },
+      select: { courtDecisionId: true, notes: true },
+    });
+    let decisionLinksMoved = 0;
+    let decisionLinksDeduplicated = 0;
+    const decisionLinksMovedIds: string[] = [];
+    const decisionLinksDeduplicatedIds: string[] = [];
+    for (const link of decisionLinksToTransfer) {
+      if (keptByDecision.has(link.courtDecisionId)) {
+        // Both affairs already cite this decision. The survivor's note wins when it
+        // has one; otherwise the absorbed note is taken over. Two different texts are
+        // never concatenated silently — the audit trail below records the case.
+        const keptNote = keptByDecision.get(link.courtDecisionId) ?? null;
+        if (!keptNote && link.notes) {
+          await tx.affairCourtDecision.update({
+            where: {
+              affairId_courtDecisionId: {
+                affairId: keepId,
+                courtDecisionId: link.courtDecisionId,
+              },
+            },
+            data: { notes: link.notes },
+          });
+        }
+        decisionLinksDeduplicated++;
+        decisionLinksDeduplicatedIds.push(link.courtDecisionId);
+        continue;
+      }
+      // Moved rather than recreated, so `createdAt` keeps its original meaning.
+      await tx.affairCourtDecision.update({
+        where: {
+          affairId_courtDecisionId: {
+            affairId: removeId,
+            courtDecisionId: link.courtDecisionId,
+          },
+        },
+        data: { affairId: keepId },
+      });
+      keptByDecision.set(link.courtDecisionId, link.notes);
+      decisionLinksMoved++;
+      decisionLinksMovedIds.push(link.courtDecisionId);
+    }
+
     // --- Additive field fill, plus the absorbed affair's URLs.
     const updates: Prisma.AffairUpdateInput = {};
     const identifiersMerged: string[] = [];
@@ -671,6 +729,10 @@ export async function mergeAffairsInTransaction(
           sourcesEnriched,
           eventsMoved,
           articlesMoved,
+          decisionLinksMoved,
+          decisionLinksDeduplicated,
+          decisionLinksMovedIds,
+          decisionLinksDeduplicatedIds,
           identifiersMerged,
           slugsPreserved,
           ...(options.auditNotes ? { notes: options.auditNotes } : {}),
@@ -704,6 +766,8 @@ export async function mergeAffairsInTransaction(
       sourcesEnriched,
       eventsMoved,
       articlesMoved,
+      decisionLinksMoved,
+      decisionLinksDeduplicated,
       identifiersMerged,
       slugsPreserved,
     };

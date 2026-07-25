@@ -17,6 +17,10 @@ type TxRecorder = {
   pressArticleAffair: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   publicIdRedirect: { upsert: ReturnType<typeof vi.fn> };
   affairPairDecision: { upsert: ReturnType<typeof vi.fn> };
+  affairCourtDecision: {
+    findMany: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
   dismissedDuplicate: { deleteMany: ReturnType<typeof vi.fn> };
   auditLog: { create: ReturnType<typeof vi.fn> };
 };
@@ -28,6 +32,7 @@ const tx: TxRecorder = {
   pressArticleAffair: { findMany: vi.fn(), update: vi.fn() },
   publicIdRedirect: { upsert: vi.fn() },
   affairPairDecision: { upsert: vi.fn() },
+  affairCourtDecision: { findMany: vi.fn(), update: vi.fn() },
   dismissedDuplicate: { deleteMany: vi.fn() },
   auditLog: { create: vi.fn() },
 };
@@ -76,6 +81,7 @@ function stub(keep: Record<string, unknown>, remove: Record<string, unknown>) {
   tx.source.findMany.mockResolvedValue([]);
   tx.affairEvent.findMany.mockResolvedValue([]);
   tx.pressArticleAffair.findMany.mockResolvedValue([]);
+  tx.affairCourtDecision.findMany.mockResolvedValue([]);
 }
 
 /** The payload of the single additive update, or null when nothing was written. */
@@ -554,5 +560,176 @@ describe("mergeAffairs — refus transactionnel d'absorber une affaire publiée 
     );
 
     await expect(mergeAffairs("keep", "remove")).resolves.toBeDefined();
+  });
+});
+
+// Issue #536 — a merge deletes the absorbed affair, and the cascade on
+// AffairCourtDecision would take its links with it. A merge of affairs must never
+// destroy a decision, nor a decision's reach across fiches.
+describe("mergeAffairs — transfert des liaisons de décision (#536)", () => {
+  /** Wires the survivor's links, then the absorbed affair's. */
+  function stubDecisionLinks(
+    kept: Array<{ courtDecisionId: string; notes: string | null }>,
+    absorbed: Array<{ courtDecisionId: string; notes: string | null }>
+  ) {
+    tx.affairCourtDecision.findMany.mockResolvedValueOnce(kept).mockResolvedValueOnce(absorbed);
+  }
+
+  it("transfère une liaison unique vers le survivant", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks([], [{ courtDecisionId: "dec_1", notes: null }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.decisionLinksMoved).toBe(1);
+    expect(result.decisionLinksDeduplicated).toBe(0);
+    expect(tx.affairCourtDecision.update).toHaveBeenCalledWith({
+      where: { affairId_courtDecisionId: { affairId: "remove", courtDecisionId: "dec_1" } },
+      data: { affairId: "keep" },
+    });
+  });
+
+  it("transfère plusieurs décisions distinctes", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks(
+      [],
+      [
+        { courtDecisionId: "dec_1", notes: null },
+        { courtDecisionId: "dec_2", notes: null },
+      ]
+    );
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.decisionLinksMoved).toBe(2);
+    const moved = tx.affairCourtDecision.update.mock.calls.map(
+      (c) => c[0].where.affairId_courtDecisionId.courtDecisionId
+    );
+    expect(moved).toEqual(["dec_1", "dec_2"]);
+  });
+
+  it("déduplique quand les deux affaires citent déjà la même décision", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks(
+      [{ courtDecisionId: "dec_1", notes: "note du survivant" }],
+      [{ courtDecisionId: "dec_1", notes: "note absorbée" }]
+    );
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.decisionLinksMoved).toBe(0);
+    expect(result.decisionLinksDeduplicated).toBe(1);
+    // La note du survivant existe : rien n'est réécrit, rien n'est concaténé.
+    expect(tx.affairCourtDecision.update).not.toHaveBeenCalled();
+  });
+
+  it("reprend la note absorbée quand le survivant n'en a pas", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks(
+      [{ courtDecisionId: "dec_1", notes: null }],
+      [{ courtDecisionId: "dec_1", notes: "deux chefs d'un même arrêt" }]
+    );
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.decisionLinksDeduplicated).toBe(1);
+    expect(tx.affairCourtDecision.update).toHaveBeenCalledWith({
+      where: { affairId_courtDecisionId: { affairId: "keep", courtDecisionId: "dec_1" } },
+      data: { notes: "deux chefs d'un même arrêt" },
+    });
+  });
+
+  it("ne concatène jamais deux notes différentes en silence", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks(
+      [{ courtDecisionId: "dec_1", notes: "texte A" }],
+      [{ courtDecisionId: "dec_1", notes: "texte B" }]
+    );
+
+    await mergeAffairs("keep", "remove");
+
+    const writes = tx.affairCourtDecision.update.mock.calls.map((c) => c[0].data);
+    for (const w of writes) {
+      expect(String(w.notes ?? "")).not.toContain("texte A");
+    }
+    // Le cas est tracé dans la piste d'audit plutôt que résolu en silence.
+    const changes = tx.auditLog.create.mock.calls[0]![0].data.changes;
+    expect(changes.decisionLinksDeduplicatedIds).toEqual(["dec_1"]);
+  });
+
+  it("ne supprime aucune décision", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks([], [{ courtDecisionId: "dec_1", notes: null }]);
+
+    await mergeAffairs("keep", "remove");
+
+    // Le faux client de transaction n'expose aucune suppression de décision : si le
+    // service en tentait une, l'appel échouerait.
+    expect(tx).not.toHaveProperty("courtDecision");
+  });
+
+  it("consigne les compteurs et les identifiants dans la piste d'audit", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks(
+      [{ courtDecisionId: "dec_shared", notes: "gardée" }],
+      [
+        { courtDecisionId: "dec_shared", notes: "absorbée" },
+        { courtDecisionId: "dec_new", notes: null },
+      ]
+    );
+
+    await mergeAffairs("keep", "remove");
+
+    const changes = tx.auditLog.create.mock.calls[0]![0].data.changes;
+    expect(changes).toMatchObject({
+      decisionLinksMoved: 1,
+      decisionLinksDeduplicated: 1,
+      decisionLinksMovedIds: ["dec_new"],
+      decisionLinksDeduplicatedIds: ["dec_shared"],
+    });
+  });
+
+  it("annule tout si le transfert d'une liaison échoue", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks([], [{ courtDecisionId: "dec_1", notes: null }]);
+    tx.affairCourtDecision.update.mockRejectedValue(new Error("link transfer failed"));
+
+    await expect(mergeAffairs("keep", "remove")).rejects.toThrow("link transfer failed");
+
+    expect(tx.affair.delete).not.toHaveBeenCalled();
+    expect(tx.publicIdRedirect.upsert).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("annule le transfert si la suppression de l'affaire échoue", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks([], [{ courtDecisionId: "dec_1", notes: null }]);
+    // clearAllMocks efface les appels, pas les implémentations : le rejet posé par
+    // le test précédent doit être explicitement levé.
+    tx.affairCourtDecision.update.mockResolvedValue({});
+    tx.affair.delete.mockRejectedValue(new Error("delete failed"));
+
+    await expect(mergeAffairs("keep", "remove")).rejects.toThrow("delete failed");
+
+    // Le transfert a bien été tenté ; la transaction l'annule.
+    expect(tx.affairCourtDecision.update).toHaveBeenCalled();
+  });
+
+  it("transfère les liaisons avant la suppression de l'affaire", async () => {
+    const order: string[] = [];
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    stubDecisionLinks([], [{ courtDecisionId: "dec_1", notes: null }]);
+    tx.affairCourtDecision.update.mockImplementation(async () => {
+      order.push("transfer");
+      return {};
+    });
+    tx.affair.delete.mockImplementation(async () => {
+      order.push("delete");
+      return {};
+    });
+
+    await mergeAffairs("keep", "remove");
+
+    expect(order).toEqual(["transfer", "delete"]);
   });
 });

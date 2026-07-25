@@ -19,6 +19,9 @@ const tx = {
   publicIdRedirect: { upsert: vi.fn() },
   dismissedDuplicate: { deleteMany: vi.fn() },
   affairPairDecision: { upsert: vi.fn() },
+  // Lu par mergeAffairsInTransaction depuis #536 : les liaisons de décision sont
+  // transférées avant la suppression de l'affaire absorbée.
+  affairCourtDecision: { findMany: vi.fn(), update: vi.fn() },
   affairUpdateProposal: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   auditLog: { create: vi.fn() },
 };
@@ -105,6 +108,7 @@ beforeEach(() => {
   tx.source.findMany.mockResolvedValue([]);
   tx.affairEvent.findMany.mockResolvedValue([]);
   tx.pressArticleAffair.findMany.mockResolvedValue([]);
+  tx.affairCourtDecision.findMany.mockResolvedValue([]);
   tx.affairUpdateProposal.findFirst.mockResolvedValue(null);
   tx.affairUpdateProposal.create.mockImplementation(async () => {
     calls.push("proposal");
