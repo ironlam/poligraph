@@ -74,6 +74,108 @@ export interface MatchResult {
   matchedBy: string;
 }
 
+/**
+ * Minimum share of the longer title that the shorter one must cover for
+ * containment to count as a duplicate signal.
+ *
+ * Measured on production data (issue #520):
+ *   0.71  "violences volontaires en réunion" inside
+ *         "condamnation violences volontaires en réunion"
+ *         → same fact, two import formats. This is what containment protects.
+ *   0.17  "diffamation" inside
+ *         "condamnation definitive pour diffamation envers patrick klugman"
+ *   0.10  "injure" inside
+ *         "condamnation pour injure envers les mineurs isoles etrangers"
+ *
+ * Below the threshold, containment only means the two titles share vocabulary,
+ * which is expected within a category and is not evidence of duplication. The
+ * Wikidata offense labels are short ("Injure", "Diffamation"), so without this
+ * guard a single label matched every affair of that category in HIGH.
+ */
+export const TITLE_CONTAINMENT_MIN_RATIO = 0.6;
+
+/**
+ * Two decisions on the same offense are the same event only if they were handed
+ * down at around the same time. Beyond this window they are distinct convictions.
+ */
+export const VERDICT_DATE_TOLERANCE_DAYS = 30;
+
+/**
+ * Whether two verdict dates rule out that the affairs are the same one.
+ *
+ * Only conclusive when both dates are known: a missing date proves nothing, so it
+ * never blocks a match (issue #520).
+ */
+export function verdictDatesConflict(
+  a: Date | null | undefined,
+  b: Date | null | undefined,
+  toleranceDays: number = VERDICT_DATE_TOLERANCE_DAYS
+): boolean {
+  if (!a || !b) return false;
+  const deltaDays = Math.abs(a.getTime() - b.getTime()) / 86_400_000;
+  return deltaDays > toleranceDays;
+}
+
+/**
+ * Confidence of a bidirectional-containment title match, or null when the titles
+ * do not contain one another.
+ *
+ * Extracted from findMatchingAffairs to be testable without a database.
+ */
+export function titleContainmentMatch(
+  normalizedCandidate: string,
+  normalizedExisting: string,
+  sameCategory: boolean
+): Omit<MatchResult, "affairId"> | null {
+  // An empty normalized title contains and is contained by everything.
+  if (normalizedCandidate.length === 0 || normalizedExisting.length === 0) return null;
+
+  const contains =
+    normalizedExisting.includes(normalizedCandidate) ||
+    normalizedCandidate.includes(normalizedExisting);
+  if (!contains) return null;
+
+  const shorter = Math.min(normalizedCandidate.length, normalizedExisting.length);
+  const longer = Math.max(normalizedCandidate.length, normalizedExisting.length);
+  const substantial = shorter / longer >= TITLE_CONTAINMENT_MIN_RATIO;
+
+  if (sameCategory && substantial) {
+    return { confidence: "HIGH", score: 0.75, matchedBy: "title+category" };
+  }
+
+  // Downgraded, not dropped: reconcile-affairs counts POSSIBLE duplicates.
+  return { confidence: "POSSIBLE", score: substantial ? 0.5 : 0.3, matchedBy: "title-partial" };
+}
+
+export type ConfidentMatch =
+  | { kind: "match"; match: MatchResult }
+  | { kind: "none" }
+  | { kind: "ambiguous"; candidates: MatchResult[] };
+
+/**
+ * Picks the one match an importer may act on, or reports that there is none.
+ *
+ * Design priority for this project: a wrong match costs more than a duplicate
+ * draft to triage. A draft is not public and merge tooling can fold it in; an
+ * affair enriched from the wrong decision silently corrupts a published record.
+ *
+ * So ambiguity never resolves silently. Several affairs tied at HIGH means the
+ * evidence does not identify one, and the caller must treat it as "no match"
+ * rather than take the first row. CERTAIN is exempt from ties by construction
+ * (it comes from the unique ECLI), but is still checked.
+ */
+export function pickConfidentMatch(matches: MatchResult[]): ConfidentMatch {
+  const certain = matches.filter((m) => m.confidence === "CERTAIN");
+  if (certain.length === 1) return { kind: "match", match: certain[0]! };
+  if (certain.length > 1) return { kind: "ambiguous", candidates: certain };
+
+  const high = matches.filter((m) => m.confidence === "HIGH");
+  if (high.length === 1) return { kind: "match", match: high[0]! };
+  if (high.length > 1) return { kind: "ambiguous", candidates: high };
+
+  return { kind: "none" };
+}
+
 export interface MatchCandidate {
   politicianId: string;
   title: string;
@@ -198,7 +300,9 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
 
     const samePoliticianAffairs = await db.affair.findMany({
       where: { politicianId: candidate.politicianId },
-      select: { id: true, title: true, category: true },
+      // verdictDate discriminates repeated convictions for the same offense,
+      // which titles alone cannot (issue #520).
+      select: { id: true, title: true, category: true, verdictDate: true },
     });
 
     for (const existing of samePoliticianAffairs) {
@@ -206,29 +310,36 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
 
       const normalizedExisting = normalizeAffairTitle(existing.title, politicianName);
 
-      // Exact normalized title → HIGH
+      // Two convictions for the same offense carry the same title once the
+      // politician name is stripped, so the title alone cannot separate them.
+      // A materially different verdict date can.
+      const datesRuleOutSameAffair = verdictDatesConflict(
+        candidate.verdictDate,
+        existing.verdictDate
+      );
+
+      // Exact normalized title → HIGH, unless the verdict dates say otherwise
       if (normalizedExisting === normalizedCandidate) {
         matches.push({
           affairId: existing.id,
-          confidence: "HIGH",
-          score: 0.85,
-          matchedBy: "title-exact",
+          confidence: datesRuleOutSameAffair ? "POSSIBLE" : "HIGH",
+          score: datesRuleOutSameAffair ? 0.45 : 0.85,
+          matchedBy: datesRuleOutSameAffair ? "title-exact-date-conflict" : "title-exact",
         });
         continue;
       }
 
-      // One contains the other (bidirectional) → HIGH if same category, POSSIBLE otherwise
-      const aContainsB = normalizedExisting.includes(normalizedCandidate);
-      const bContainsA = normalizedCandidate.includes(normalizedExisting);
-
-      if (aContainsB || bContainsA) {
-        const sameCategory = candidate.category && existing.category === candidate.category;
-        matches.push({
-          affairId: existing.id,
-          confidence: sameCategory ? "HIGH" : "POSSIBLE",
-          score: sameCategory ? 0.75 : 0.5,
-          matchedBy: sameCategory ? "title+category" : "title-partial",
-        });
+      // One contains the other (bidirectional). HIGH only when the containment is
+      // substantial: a short offense label buried in a long descriptive title is
+      // shared vocabulary, not a duplicate (issue #520).
+      const containment = titleContainmentMatch(
+        normalizedCandidate,
+        normalizedExisting,
+        Boolean(candidate.category && existing.category === candidate.category) &&
+          !datesRuleOutSameAffair
+      );
+      if (containment) {
+        matches.push({ affairId: existing.id, ...containment });
       }
     }
   }

@@ -4,7 +4,12 @@ import { describe, it, expect, vi } from "vitest";
 // (sameCategoryFamily is pure, but matching.ts imports @/lib/db at module level).
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { sameCategoryFamily } from "./matching";
+import {
+  pickConfidentMatch,
+  sameCategoryFamily,
+  titleContainmentMatch,
+  verdictDatesConflict,
+} from "./matching";
 
 // We need to test the normalizeAffairTitle function indirectly since it's private.
 // Instead, we test the exported behavior by importing and calling it via a test helper.
@@ -111,5 +116,140 @@ describe("sameCategoryFamily", () => {
 
   it("rejects unknown categories that are not AUTRE", () => {
     expect(sameCategoryFamily("UNKNOWN_A", "UNKNOWN_B")).toBe(false);
+  });
+});
+
+// Issue #520 — a short Wikidata offense label is a substring of most descriptive
+// titles in the same category, so bidirectional containment used to return HIGH
+// for genuinely distinct affairs. Measured on production data: the label
+// "Diffamation" matched three separate Zemmour defamation cases (2012, 2018,
+// 2025) in HIGH, and discover-affairs took the first one arbitrarily.
+describe("titleContainmentMatch — issue #520", () => {
+  it("garde le HIGH sur une containment substantielle, même catégorie", () => {
+    // Le cas légitime que la containment protège : deux formats d'import du même
+    // fait. Ratio 32/45 = 0.71.
+    const result = titleContainmentMatch(
+      "violences volontaires en réunion",
+      "condamnation violences volontaires en réunion",
+      true
+    );
+    expect(result?.confidence).toBe("HIGH");
+    expect(result?.matchedBy).toBe("title+category");
+  });
+
+  it("rétrograde un libellé court noyé dans un titre descriptif", () => {
+    // Ratio 11/63 = 0.17 : vocabulaire partagé, pas doublon.
+    const result = titleContainmentMatch(
+      "diffamation",
+      "condamnation definitive pour diffamation envers patrick klugman",
+      true
+    );
+    expect(result?.confidence).not.toBe("HIGH");
+    expect(result?.confidence).toBe("POSSIBLE");
+  });
+
+  it("rétrograde aussi « injure » dans un titre long", () => {
+    // Ratio 6/60 = 0.10.
+    const result = titleContainmentMatch(
+      "injure",
+      "condamnation pour injure envers les mineurs isoles etrangers",
+      true
+    );
+    expect(result?.confidence).toBe("POSSIBLE");
+  });
+
+  it("ne signale rien sans containment", () => {
+    expect(titleContainmentMatch("fraude fiscale", "emploi fictif", true)).toBeNull();
+  });
+
+  it("reste POSSIBLE sur containment substantielle mais catégorie différente", () => {
+    const result = titleContainmentMatch(
+      "violences volontaires en réunion",
+      "condamnation violences volontaires en réunion",
+      false
+    );
+    expect(result?.confidence).toBe("POSSIBLE");
+    expect(result?.matchedBy).toBe("title-partial");
+  });
+
+  it("conserve le signal POSSIBLE, consommé par reconcile-affairs", () => {
+    // Rien ne doit disparaître : reconcile-affairs.ts compte les POSSIBLE.
+    for (const [a, b] of [
+      ["diffamation", "condamnation definitive pour diffamation envers patrick klugman"],
+      ["injure", "condamnation pour injure envers les mineurs isoles etrangers"],
+    ] as const) {
+      expect(titleContainmentMatch(a, b, true)).not.toBeNull();
+    }
+  });
+});
+
+// Issue #520, second mechanism: when no existing affair matches, discover-affairs
+// creates one whose title is the bare offense label. Every later claim carrying the
+// same label then matches it in title-exact, so distinct convictions collapse onto
+// one affair, each proposing its own verdict date. The verdict date is the
+// discriminator that was available but never passed to the matcher.
+describe("verdictDatesConflict — issue #520", () => {
+  it("deux dates éloignées sont un signal de condamnations distinctes", () => {
+    expect(verdictDatesConflict(new Date("2011-02-18"), new Date("2024-02-22"))).toBe(true);
+  });
+
+  it("deux dates proches ne s'opposent pas (même décision, sources divergentes)", () => {
+    expect(verdictDatesConflict(new Date("2024-02-22"), new Date("2024-03-05"))).toBe(false);
+  });
+
+  it("une date absente ne permet aucune conclusion", () => {
+    expect(verdictDatesConflict(null, new Date("2024-02-22"))).toBe(false);
+    expect(verdictDatesConflict(new Date("2024-02-22"), undefined)).toBe(false);
+    expect(verdictDatesConflict(null, null)).toBe(false);
+  });
+
+  it("dates identiques : aucun conflit", () => {
+    const d = new Date("2024-02-22");
+    expect(verdictDatesConflict(d, new Date(d))).toBe(false);
+  });
+});
+
+// Issue #520 — the three importers each took the first HIGH match without noticing
+// several affairs could tie. Under the project's priority (a false match costs more
+// than a draft to triage), ambiguity must never resolve silently: creating a
+// duplicate draft that merge tooling can fold in is strictly safer than enriching
+// possibly the wrong affair.
+describe("pickConfidentMatch — issue #520", () => {
+  const m = (affairId: string, confidence: "CERTAIN" | "HIGH" | "POSSIBLE", score: number) => ({
+    affairId,
+    confidence,
+    score,
+    matchedBy: "test",
+  });
+
+  it("un seul HIGH : on rapproche", () => {
+    const r = pickConfidentMatch([m("a", "HIGH", 0.85), m("b", "POSSIBLE", 0.3)]);
+    expect(r.kind).toBe("match");
+    expect(r.kind === "match" && r.match.affairId).toBe("a");
+  });
+
+  it("plusieurs HIGH : ambigu, on ne rapproche pas", () => {
+    const r = pickConfidentMatch([m("a", "HIGH", 0.75), m("b", "HIGH", 0.75)]);
+    expect(r.kind).toBe("ambiguous");
+    expect(r.kind === "ambiguous" && r.candidates).toHaveLength(2);
+  });
+
+  it("un CERTAIN l'emporte sur des HIGH concurrents (ECLI est unique)", () => {
+    const r = pickConfidentMatch([
+      m("a", "CERTAIN", 1),
+      m("b", "HIGH", 0.75),
+      m("c", "HIGH", 0.75),
+    ]);
+    expect(r.kind).toBe("match");
+    expect(r.kind === "match" && r.match.affairId).toBe("a");
+  });
+
+  it("aucun HIGH : rien, même avec des POSSIBLE", () => {
+    expect(pickConfidentMatch([m("a", "POSSIBLE", 0.5)]).kind).toBe("none");
+    expect(pickConfidentMatch([]).kind).toBe("none");
+  });
+
+  it("plusieurs CERTAIN : ambigu aussi, on ne devine pas", () => {
+    expect(pickConfidentMatch([m("a", "CERTAIN", 1), m("b", "CERTAIN", 1)]).kind).toBe("ambiguous");
   });
 });
