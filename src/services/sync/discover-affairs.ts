@@ -23,7 +23,7 @@ export type { ExtractedPenaltyData };
 import { wikipediaService } from "@/lib/api/wikipedia";
 import type { WikidataClaim } from "@/lib/api/wikidata";
 import { extractAffairsFromWikipedia } from "@/services/wikipedia-affair-extraction";
-import { findMatchingAffairs } from "@/services/affairs/matching";
+import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matching";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
@@ -90,6 +90,8 @@ export interface DiscoverAffairsResult {
   proposalsAutoApplied: number;
   proposalsConflicted: number;
   proposalsDeduped: number;
+  /** Several affairs tied at HIGH: no enrichment, a draft is created instead. */
+  ambiguousMatches: number;
   errors: string[];
 }
 
@@ -221,6 +223,7 @@ export async function discoverAffairs(options?: {
     proposalsAutoApplied: 0,
     proposalsConflicted: 0,
     proposalsDeduped: 0,
+    ambiguousMatches: 0,
     errors: [],
   };
 
@@ -314,6 +317,7 @@ export async function discoverAffairs(options?: {
         proposalsAutoApplied: stats.proposalsAutoApplied,
         proposalsConflicted: stats.proposalsConflicted,
         proposalsDeduped: stats.proposalsDeduped,
+        ambiguousMatches: stats.ambiguousMatches,
       });
     });
   }
@@ -680,9 +684,18 @@ async function runPhase3Reconciliation(
         politicianId: affair.politicianId,
         title: affair.title,
         category: affair.category,
+        // Without it, two convictions for the same offense are indistinguishable:
+        // the Wikidata title is the bare offense label (issue #520).
+        verdictDate: affair.verdictDate,
       });
 
-      const highMatch = matches.find((m) => m.confidence === "HIGH" || m.confidence === "CERTAIN");
+      const picked = pickConfidentMatch(matches);
+      if (picked.kind === "ambiguous") {
+        // Several affairs tie: enriching one of them would be a coin flip. Fall
+        // through to creation and let the merge tooling decide (issue #520).
+        stats.ambiguousMatches++;
+      }
+      const highMatch = picked.kind === "match" ? picked.match : null;
 
       if (highMatch) {
         // Affaires v2, lot 1: an importer never writes to an existing affair.

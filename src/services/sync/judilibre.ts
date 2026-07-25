@@ -36,7 +36,7 @@ import {
   createJudilibreClient,
   type JudilibreDecisionSummary,
 } from "@/lib/api/judilibre";
-import { findMatchingAffairs } from "@/services/affairs/matching";
+import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matching";
 import {
   mapSolutionToStatus,
   mapJudilibreToCategory,
@@ -547,11 +547,11 @@ async function runJudilibreSearch(args: JudilibreSearchArgs): Promise<void> {
             category: mapJudilibreToCategory(decision.themes, decision.summary),
             verdictDate: new Date(decision.decision_date),
           });
-          const bestMatch = matches[0];
-          if (
-            bestMatch &&
-            (bestMatch.confidence === "CERTAIN" || bestMatch.confidence === "HIGH")
-          ) {
+          // Ambiguity never resolves silently: several affairs tied at HIGH means
+          // the evidence does not identify one (issue #520).
+          const picked = pickConfidentMatch(matches);
+          const bestMatch = picked.kind === "match" ? picked.match : null;
+          if (bestMatch) {
             const enriched = await enrichAffairFromJudilibre(
               bestMatch.affairId,
               decision,
@@ -623,12 +623,11 @@ async function runJudilibreSearch(args: JudilibreSearchArgs): Promise<void> {
             verdictDate: new Date(decision.decision_date),
           });
 
-          const bestMatch = matches[0];
-
-          if (
-            bestMatch &&
-            (bestMatch.confidence === "CERTAIN" || bestMatch.confidence === "HIGH")
-          ) {
+          // Ambiguity never resolves silently: several affairs tied at HIGH means
+          // the evidence does not identify one (issue #520).
+          const picked = pickConfidentMatch(matches);
+          const bestMatch = picked.kind === "match" ? picked.match : null;
+          if (bestMatch) {
             const enriched = await enrichAffairFromJudilibre(
               bestMatch.affairId,
               decision,

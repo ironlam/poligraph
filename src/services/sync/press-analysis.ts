@@ -23,7 +23,7 @@ import {
   type DetectedAffair,
   type ArticleAnalysisResult,
 } from "@/services/press-analysis";
-import { findMatchingAffairs } from "@/services/affairs/matching";
+import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matching";
 import { syncMetadata } from "@/lib/sync";
 import { classifyArticleTier, type ArticleTier } from "@/config/press-keywords";
 import { MIN_CONFIDENCE_THRESHOLD } from "@/config/press-analysis";
@@ -391,9 +391,16 @@ export async function processAnalyzedArticle(
       category: detected.category as AffairCategory,
     });
 
-    const bestMatch = matches[0];
+    // Enrichment requires an unambiguous match: several affairs tied at HIGH means
+    // the evidence does not identify one (issue #520).
+    const picked = pickConfidentMatch(matches);
+    const bestMatch = picked.kind === "match" ? picked.match : null;
 
-    if (bestMatch && (bestMatch.confidence === "CERTAIN" || bestMatch.confidence === "HIGH")) {
+    // Weaker signal, kept for the MENTION link only. Associating an article with
+    // an affair is additive and reversible, unlike writing judicial fields.
+    const looseMatch = matches[0] ?? null;
+
+    if (bestMatch) {
       // Enrich existing affair
       const enriched = await enrichAffairFromPress(
         bestMatch.affairId,
@@ -436,13 +443,13 @@ export async function processAnalyzedArticle(
         verbose
       );
       if (created) stats.affairsCreated++;
-    } else if (bestMatch) {
-      // Possible match — link article to affair
+    } else if (looseMatch) {
+      // Weaker match — link the article as a MENTION, without touching the affair
       if (!dryRun) {
-        await linkArticleToAffair(article.id, bestMatch.affairId, "MENTION");
+        await linkArticleToAffair(article.id, looseMatch.affairId, "MENTION");
       }
       if (verbose) {
-        console.log(`  → Lien MENTION créé: article ↔ affaire ${bestMatch.affairId}`);
+        console.log(`  → Lien MENTION créé: article ↔ affaire ${looseMatch.affairId}`);
       }
     }
   }
