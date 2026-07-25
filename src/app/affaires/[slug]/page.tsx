@@ -40,6 +40,7 @@ import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import { buildPublicAffairLookupWheres, pickPublicLinkedAffair } from "@/lib/affairs/affair-lookup";
+import { resolveDecisionFields } from "@/lib/affairs/decision-fields";
 import { SlappBadge } from "@/components/slapp/SlappBadge";
 import { CriteriaList } from "@/components/slapp/CriteriaList";
 import type { SlappCriteriaPayload } from "@/config/slapp";
@@ -104,6 +105,26 @@ const affairInclude = {
       publicationStatus: true,
       politician: { select: { fullName: true, slug: true } },
     },
+  },
+  // Double lecture (#536) : la fiche sert la valeur historique de l'affaire, et ne
+  // se rabat sur la décision que si l'affaire n'en porte pas et qu'une seule est
+  // liée. Plusieurs décisions liées n'affichent aucune valeur plate.
+  courtDecisions: {
+    select: {
+      courtDecision: {
+        select: {
+          id: true,
+          ecli: true,
+          pourvoiNumber: true,
+          chamber: true,
+          decisionDate: true,
+          court: true,
+          solution: true,
+          sourceUrl: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" as const },
   },
   linkedBy: {
     where: { publicationStatus: "PUBLISHED" as const },
@@ -181,6 +202,11 @@ export default async function AffairDetailPage({ params }: PageProps) {
   if (!affair) {
     notFound();
   }
+
+  // Double lecture des identifiants déplacés vers la décision (#536). `court` et
+  // `verdictDate` restent lus depuis l'affaire : ils sont éditoriaux.
+  const linkedDecisions = affair.courtDecisions.map((link) => link.courtDecision);
+  const resolvedDecisionFields = resolveDecisionFields(affair, linkedDecisions);
 
   const superCategory = CATEGORY_TO_SUPER[affair.category as AffairCategory];
   const certainty = getCertaintyLevel(affair.status);
@@ -397,7 +423,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
               <h2 className="text-lg font-semibold">Juridiction</h2>
             </CardHeader>
             <CardContent>
-              {affair.court || affair.chamber || affair.caseNumber ? (
+              {affair.court || resolvedDecisionFields.chamber.value || affair.caseNumber ? (
                 <dl className="space-y-3">
                   {affair.court && (
                     <div className="flex justify-between">
@@ -405,10 +431,10 @@ export default async function AffairDetailPage({ params }: PageProps) {
                       <dd className="font-medium text-right">{affair.court}</dd>
                     </div>
                   )}
-                  {affair.chamber && (
+                  {resolvedDecisionFields.chamber.value && (
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Chambre</dt>
-                      <dd className="font-medium">{affair.chamber}</dd>
+                      <dd className="font-medium">{resolvedDecisionFields.chamber.value}</dd>
                     </div>
                   )}
                   {affair.caseNumber && (
@@ -420,6 +446,35 @@ export default async function AffairDetailPage({ params }: PageProps) {
                 </dl>
               ) : (
                 <p className="text-muted-foreground text-sm">Informations non renseignées</p>
+              )}
+
+              {linkedDecisions.length > 0 && (
+                <div className="mt-4 border-t pt-4">
+                  <h3 className="mb-2 text-sm font-medium">
+                    Décision{linkedDecisions.length > 1 ? "s" : ""} de justice rattachée
+                    {linkedDecisions.length > 1 ? "s" : ""}
+                  </h3>
+                  <ul className="space-y-2 text-sm">
+                    {linkedDecisions.map((decision) => (
+                      <li key={decision.id} className="text-muted-foreground">
+                        {decision.pourvoiNumber && (
+                          <span className="font-mono">{decision.pourvoiNumber}</span>
+                        )}
+                        {decision.court && <span> — {decision.court}</span>}
+                        {decision.decisionDate && (
+                          <span> — {formatDate(decision.decisionDate)}</span>
+                        )}
+                        {decision.solution && <span> — {decision.solution}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  {resolvedDecisionFields.hasMultipleDecisions && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Cette affaire est rattachée à plusieurs décisions. Les références sont listées
+                      séparément plutôt que résumées en une seule valeur.
+                    </p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

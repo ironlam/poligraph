@@ -17,6 +17,7 @@ import { parsePagination } from "@/lib/api/pagination";
 import type { AffairStatus, AffairCategory } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { resolveDecisionField } from "@/lib/affairs/decision-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,12 @@ export const GET = withPublicRoute(async (request) => {
       _count: {
         select: { sources: true },
       },
+      // Double lecture (#536) : l'export sert la valeur historique de l'affaire, et
+      // ne se rabat sur la décision que si l'affaire n'en porte pas et qu'une seule
+      // décision est liée.
+      courtDecisions: {
+        select: { courtDecision: { select: { ecli: true } } },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -151,7 +158,11 @@ export const GET = withPublicRoute(async (request) => {
     sentence: a.sentence ?? "",
     otherSentence: a.otherSentence ?? "",
     court: a.court ?? "",
-    ecli: a.ecli ?? "",
+    ecli:
+      resolveDecisionField(
+        a.ecli,
+        a.courtDecisions.map((l) => l.courtDecision.ecli)
+      ).value ?? "",
     descriptionPlain: stripMarkdownForCSV(a.description),
     sourceCount: a._count.sources,
     sourceUrl: a.sources[0]?.url ?? "",
