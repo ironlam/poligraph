@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CourtDecisionLinks } from "@/components/admin/CourtDecisionLinks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,6 +25,12 @@ async function getAffair(id: string) {
     include: {
       politician: { select: { id: true, fullName: true, slug: true } },
       sources: { orderBy: { publishedAt: "desc" } },
+      // Links only: this surface manages the affair ↔ decision relation, never the
+      // decision catalogue itself (#536).
+      courtDecisions: {
+        select: { notes: true, courtDecision: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 }
@@ -263,6 +270,25 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
               </li>
             ))}
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <CourtDecisionLinks
+            affairId={affair.id}
+            initialLinks={affair.courtDecisions.map((link) => ({
+              id: link.courtDecision.id,
+              ecli: link.courtDecision.ecli,
+              pourvoiNumber: link.courtDecision.pourvoiNumber,
+              court: link.courtDecision.court,
+              chamber: link.courtDecision.chamber,
+              decisionDate: link.courtDecision.decisionDate?.toISOString() ?? null,
+              solution: link.courtDecision.solution,
+              sourceUrl: link.courtDecision.sourceUrl,
+              linkNotes: link.notes,
+            }))}
+          />
         </CardContent>
       </Card>
 
