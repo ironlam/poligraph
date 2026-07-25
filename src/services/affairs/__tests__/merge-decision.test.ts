@@ -57,36 +57,62 @@ describe("decideMergeAction — deux brouillons (#525)", () => {
   });
 });
 
+// Issue #525 — automation used to cross the published boundary when a
+// court-assigned identifier was shared. The first real triage killed that: two
+// Carignon convictions share a pourvoi number, the facts date, the verdict date and
+// one cassation ruling, and they are still two separate counts, so two affairs.
 describe("decideMergeAction — brouillon face à une affaire publiée (#525)", () => {
   const published = side({ id: "pub", publicationStatus: "PUBLISHED" as PublicationStatus });
   const draft = side({ id: "draft" });
 
-  it("absorbe toujours le brouillon dans l'affaire publiée sur identifiant judiciaire", () => {
+  it("exige une revue même sur un identifiant judiciaire officiel commun", () => {
     for (const matchedBy of ["ecli", "pourvoiNumber", "caseNumbers"]) {
       const plan = decideMergeAction({
         affairA: published,
         affairB: draft,
-        confidence: "HIGH",
+        confidence: "CERTAIN",
         matchedBy,
       });
 
-      expect(plan.decision).toBe("AUTO_ABSORB_DRAFT_INTO_PUBLISHED");
-      expect(plan.keepId).toBe("pub");
-      expect(plan.removeId).toBe("draft");
+      expect(plan.decision).toBe("REVIEW_REQUIRED");
+      expect(plan.keepId).toBeUndefined();
+      expect(plan.removeId).toBeUndefined();
     }
   });
 
-  it("garde l'affaire publiée même quand le brouillon a plus de sources", () => {
-    // Le sens de la fusion ne dépend jamais du nombre de sources ici.
+  it("dit dans le motif qu'un identifiant commun ne prouve pas un doublon", () => {
     const plan = decideMergeAction({
-      affairA: side({ id: "pub", publicationStatus: "PUBLISHED" as PublicationStatus }),
-      affairB: side({ id: "draft", sources: ["PRESSE", "OFFICIEL"] as SourceType[] }),
+      affairA: published,
+      affairB: draft,
       confidence: "CERTAIN",
-      matchedBy: "ecli",
+      matchedBy: "pourvoiNumber",
     });
 
-    expect(plan.keepId).toBe("pub");
-    expect(plan.removeId).toBe("draft");
+    expect(plan.reason).toContain("pourvoiNumber");
+    expect(plan.reason).toContain("plusieurs chefs");
+  });
+
+  it("exige une revue en CERTAIN comme en HIGH", () => {
+    for (const confidence of ["CERTAIN", "HIGH"] as const) {
+      for (const matchedBy of ["ecli", "pourvoiNumber", "caseNumbers", "title+category"]) {
+        expect(
+          decideMergeAction({ affairA: published, affairB: draft, confidence, matchedBy }).decision
+        ).toBe("REVIEW_REQUIRED");
+      }
+    }
+  });
+
+  it("exige une revue même sans contradiction et sur un brouillon jamais vérifié", () => {
+    const plan = decideMergeAction({
+      affairA: published,
+      affairB: side({ id: "draft", verifiedAt: null }),
+      confidence: "CERTAIN",
+      matchedBy: "ecli",
+      contradictions: [],
+      unpropagatableDifferences: [],
+    });
+
+    expect(plan.decision).toBe("REVIEW_REQUIRED");
   });
 
   it("exige une revue quand seul le titre rapproche", () => {
@@ -98,31 +124,23 @@ describe("decideMergeAction — brouillon face à une affaire publiée (#525)", 
     });
 
     expect(plan.decision).toBe("REVIEW_REQUIRED");
-    expect(plan.reason).toContain("heuristique");
   });
 
-  it("exige une revue quand le brouillon affirme autre chose sur un champ non transférable", () => {
-    const plan = decideMergeAction({
+  it("ne dépend pas du sens de la paire", () => {
+    const forward = decideMergeAction({
       affairA: published,
       affairB: draft,
       confidence: "CERTAIN",
       matchedBy: "ecli",
-      unpropagatableDifferences: ["involvement"],
     });
-
-    expect(plan.decision).toBe("REVIEW_REQUIRED");
-    expect(plan.reason).toContain("involvement");
-  });
-
-  it("ne supprime jamais automatiquement un brouillon validé humainement", () => {
-    const plan = decideMergeAction({
-      affairA: published,
-      affairB: side({ id: "draft", verifiedAt: new Date("2026-01-01") }),
+    const backward = decideMergeAction({
+      affairA: draft,
+      affairB: published,
       confidence: "CERTAIN",
       matchedBy: "ecli",
     });
 
-    expect(plan.decision).toBe("REVIEW_REQUIRED");
+    expect(forward).toEqual(backward);
   });
 });
 

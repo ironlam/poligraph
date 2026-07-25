@@ -192,22 +192,31 @@ export interface MatchResult {
 }
 
 /**
- * Signals that identify a decision rather than resemble one: official numbers
+ * Signals that identify a shared court decision or proceeding: official numbers
  * assigned by a court, not words a title happens to share.
  *
- * Only these may carry a merge across the published boundary automatically
- * (issue #525). Title, category, date and politician proximity are resemblance:
- * they can be right, but they cannot prove two rows describe one decision.
+ * What they prove is narrower than it looks. Measured on real data (issue #525):
+ * two Carignon convictions share a pourvoi number, a facts date, a verdict date
+ * and one cassation ruling, yet they are two separate counts — subornation of a
+ * witness and misuse of company assets — and therefore two Poligraph affairs.
+ *
+ * So a shared identifier says "same decision or same proceeding". It does NOT say
+ * "same editorial affair", and on its own it may never authorise a merge.
  */
-export const DETERMINISTIC_MATCH_SIGNALS: ReadonlySet<string> = new Set([
+export const OFFICIAL_JUDICIAL_IDENTIFIER_SIGNALS: ReadonlySet<string> = new Set([
   "ecli",
   "pourvoiNumber",
   "caseNumbers",
 ]);
 
-/** Whether a match rests on an official identifier rather than on resemblance. */
-export function isDeterministicMatch(matchedBy: string): boolean {
-  return DETERMINISTIC_MATCH_SIGNALS.has(matchedBy);
+/**
+ * Whether a match rests on a court-assigned identifier rather than resemblance.
+ *
+ * Useful to tell a reviewer why a pair is worth reading — the two fiches cite the
+ * same decision — never to conclude that they are duplicates.
+ */
+export function isOfficialJudicialIdentifierMatch(matchedBy: string): boolean {
+  return OFFICIAL_JUDICIAL_IDENTIFIER_SIGNALS.has(matchedBy);
 }
 
 /**
