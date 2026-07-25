@@ -1,4 +1,5 @@
 import type { PolicyTitleConfidence, ScrutinType } from "@/generated/prisma";
+import { assertLocalTestDb } from "@/test/db-guard";
 
 // Shared fixtures for the getExplainedShowcase / getScrutins integration tests.
 //
@@ -23,22 +24,6 @@ const SCRUTIN_FIXTURES: Array<{
   { id: "low1", dossierId: "C", confidence: "LOW", score: 100 },
 ];
 const SCRUTIN_IDS = SCRUTIN_FIXTURES.map((s) => s.id);
-
-/**
- * Allowlist guard: only the disposable local harness DB may be touched by
- * these fixtures. A denylist would silently miss any future non-matching
- * remote host, so we require the URL to look like the local harness instead
- * of merely not looking like a known remote provider.
- */
-function assertLocalTestDb(): void {
-  const url = process.env.DATABASE_URL ?? "";
-  if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) {
-    throw new Error(
-      "Explained fixtures refuse to run: DATABASE_URL is not a local test DB. " +
-        "Run explained integration tests only via the disposable harness (npm run test:db:477)."
-    );
-  }
-}
 
 /**
  * Deletes the shared fixtures above, children before parents, using the same

@@ -5,11 +5,11 @@ import { vi } from "vitest";
 // other data-function tests in this directory do (e.g. condamnations.test.ts).
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { it, expect, beforeAll, afterAll } from "vitest";
 
-const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+import { assertLocalTestDb, describeIfLocalDb } from "@/test/db-guard";
 
-// Dynamic imports (deferred to beforeAll, inside describeIfDb): both @/lib/db
+// Dynamic imports (deferred to beforeAll, inside describeIfLocalDb): both @/lib/db
 // and @/lib/data/scrutins transitively construct the Prisma client at import
 // time, which throws when DATABASE_URL is unset. Static imports would make
 // this suite fail instead of skip when run without a database.
@@ -18,12 +18,19 @@ let getExplainedShowcase: typeof import("@/lib/data/scrutins").getExplainedShowc
 let seedExplainedFixtures: typeof import("./_seed-explained").seedExplainedFixtures;
 let cleanupExplainedFixtures: typeof import("./_seed-explained").cleanupExplainedFixtures;
 
-describeIfDb("getExplainedShowcase", () => {
+describeIfLocalDb("getExplainedShowcase", () => {
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
     ({ getExplainedShowcase } = await import("@/lib/data/scrutins"));
     ({ seedExplainedFixtures, cleanupExplainedFixtures } = await import("./_seed-explained"));
     await seedExplainedFixtures(db);
+  });
+
+  // This block seeds the shared fixtures, so this block removes them. They used to
+  // be cleaned up by the *next* block's afterAll, which coupled two independent
+  // fixture sets: anything that stopped that hook early left this set behind.
+  afterAll(async () => {
+    await cleanupExplainedFixtures(db);
   });
 
   it("excludes LOW, caps per dossier, honors count", async () => {
@@ -44,14 +51,17 @@ describeIfDb("getExplainedShowcase", () => {
 // Own fixtures (FB_* ids/dossiers, isolated via excludeScrutinIds) proving the
 // all-time fallback fires when the widest (365-day) window's DIVERSIFIED
 // output is short of `count` — even though the raw fetched row count is not.
-describeIfDb("getExplainedShowcase — all-time fallback", () => {
+describeIfLocalDb("getExplainedShowcase — all-time fallback", () => {
   const FB_DOSSIER_IDS = ["FB_X", "FB_Y", "FB_Z"] as const;
   const FB_SCRUTIN_IDS = ["FB_x1", "FB_x2", "FB_x3", "FB_y1", "FB_z1"];
 
   beforeAll(async () => {
+    // These fixtures are written inline rather than through seedExplainedFixtures(),
+    // so they need the guard the shared helper applies for its own callers.
+    assertLocalTestDb();
+
     ({ db } = await import("@/lib/db"));
     ({ getExplainedShowcase } = await import("@/lib/data/scrutins"));
-    ({ cleanupExplainedFixtures } = await import("./_seed-explained"));
 
     // Idempotent: delete-first by these explicit ids, children before parents.
     await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
@@ -123,7 +133,6 @@ describeIfDb("getExplainedShowcase — all-time fallback", () => {
   });
 
   afterAll(async () => {
-    await cleanupExplainedFixtures(db);
     await db.scrutinImportance.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
     await db.scrutinPolicyTitle.deleteMany({ where: { scrutinId: { in: FB_SCRUTIN_IDS } } });
     await db.scrutin.deleteMany({ where: { id: { in: FB_SCRUTIN_IDS } } });

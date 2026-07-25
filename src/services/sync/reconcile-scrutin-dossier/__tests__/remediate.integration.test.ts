@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { ScrutinDossierTransition } from "../types";
 
 // Mock BEFORE anything imports remediate.ts, which pulls in generateScrutinPolicyTitle,
@@ -10,7 +10,7 @@ vi.mock("@/lib/api/mistral", async (orig) => {
   return { ...actual, callMistral: (...a: unknown[]) => mockCall(...a) };
 });
 
-const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+import { describeIfLocalDb } from "@/test/db-guard";
 
 let db: typeof import("@/lib/db").db;
 let repairScrutinDossier: typeof import("../remediate").repairScrutinDossier;
@@ -151,7 +151,7 @@ function repointTransition(f: RepointFixture, externalId: string): ScrutinDossie
   };
 }
 
-describeIfDb("repairScrutinDossier (Phase A)", () => {
+describeIfLocalDb("repairScrutinDossier (Phase A)", () => {
   let fixtureA: RepointFixture; // happy-path REPOINT
   let fixtureB: RepointFixture; // linkless REPOINT
   let fixtureD: RepointFixture; // idempotent re-run
@@ -432,7 +432,7 @@ describeIfDb("repairScrutinDossier (Phase A)", () => {
   });
 });
 
-describeIfDb("requeueLinklessTitlesWithLinks", () => {
+describeIfLocalDb("requeueLinklessTitlesWithLinks", () => {
   const PFX2 = "TEST_RMD_LATE_";
   let policyTitleId: string;
 
@@ -541,7 +541,7 @@ describeIfDb("requeueLinklessTitlesWithLinks", () => {
  * CLAUDE.local.md, `.env`/`.env.prod` are the same production database). Do
  * not run this file with DATABASE_URL pointed at that database.
  */
-describeIfDb("drainDossierRepointRegen (Phase B)", () => {
+describeIfLocalDb("drainDossierRepointRegen (Phase B)", () => {
   const PFX3 = "TEST_RMD_DRAIN_";
 
   interface DrainFixture {
@@ -810,7 +810,7 @@ describeIfDb("drainDossierRepointRegen (Phase B)", () => {
   });
 });
 
-describeIfDb("reclaimAbandonedRegen", () => {
+describeIfLocalDb("reclaimAbandonedRegen", () => {
   const PFX4 = "TEST_RMD_RECLAIM_";
 
   /** Seeds a bare scrutin + ScrutinPolicyTitle row in the requested state. No

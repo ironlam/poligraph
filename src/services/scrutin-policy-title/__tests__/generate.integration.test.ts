@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll, beforeAll, beforeEach, vi } from "vitest";
+import { it, expect, afterAll, beforeAll, beforeEach, vi } from "vitest";
 
 // Mock BEFORE importing the orchestrator.
 const mockCall = vi.fn();
@@ -7,7 +7,7 @@ vi.mock("@/lib/api/mistral", async (orig) => {
   return { ...actual, callMistral: (...a: unknown[]) => mockCall(...a) };
 });
 
-const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+import { describeIfLocalDb } from "@/test/db-guard";
 
 let db: typeof import("@/lib/db").db;
 let generateScrutinPolicyTitle: typeof import("@/services/scrutin-policy-title").generateScrutinPolicyTitle;
@@ -37,7 +37,7 @@ function mistralResponse(content: string) {
   return { choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }] };
 }
 
-describeIfDb("generateScrutinPolicyTitle", () => {
+describeIfLocalDb("generateScrutinPolicyTitle", () => {
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
     ({ generateScrutinPolicyTitle } = await import("@/services/scrutin-policy-title"));
@@ -304,7 +304,7 @@ describeIfDb("generateScrutinPolicyTitle", () => {
   });
 });
 
-describeIfDb("assertNotApprovedByGenerator", () => {
+describeIfLocalDb("assertNotApprovedByGenerator", () => {
   it("throws if status APPROVED", async () => {
     const { assertNotApprovedByGenerator } = await import("@/services/scrutin-policy-title");
     expect(() => assertNotApprovedByGenerator("APPROVED")).toThrow();

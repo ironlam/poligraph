@@ -6,11 +6,11 @@ import { vi } from "vitest";
 // data-function tests in this directory do (e.g. explained-showcase).
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { it, expect, beforeAll, afterAll } from "vitest";
 
-const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+import { describeIfLocalDb } from "@/test/db-guard";
 
-// Dynamic imports (deferred to beforeAll, inside describeIfDb): both @/lib/db
+// Dynamic imports (deferred to beforeAll, inside describeIfLocalDb): both @/lib/db
 // and @/lib/data/scrutins transitively construct the Prisma client at import
 // time, which throws when DATABASE_URL is unset. Static imports would make
 // this suite fail instead of skip when run without a database.
@@ -19,7 +19,7 @@ let getScrutins: typeof import("@/lib/data/scrutins").getScrutins;
 let seedExplainedFixtures: typeof import("./_seed-explained").seedExplainedFixtures;
 let cleanupExplainedFixtures: typeof import("./_seed-explained").cleanupExplainedFixtures;
 
-describeIfDb("getScrutins explainedOnly", () => {
+describeIfLocalDb("getScrutins explainedOnly", () => {
   beforeAll(async () => {
     ({ db } = await import("@/lib/db"));
     ({ getScrutins } = await import("@/lib/data/scrutins"));
