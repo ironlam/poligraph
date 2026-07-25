@@ -52,6 +52,19 @@ function buildExtendedClient() {
 
 export const db = globalForPrisma.prisma ?? buildExtendedClient();
 
+/**
+ * The client handed to a `db.$transaction(async (tx) => …)` callback.
+ *
+ * Derived from `db` rather than written as `Prisma.TransactionClient`: this client
+ * is extended, so its transaction client is not assignable to the vanilla type.
+ * Exported so a service can hand its transaction to another service and keep one
+ * atomic unit across module boundaries.
+ */
+export type DbTransactionClient = Omit<
+  typeof db,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+
 // Cache in all environments — prevents duplicate pools in serverless (Vercel)
 // and avoids hot-reload duplication in dev
 globalForPrisma.prisma = db;

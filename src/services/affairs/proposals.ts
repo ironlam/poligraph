@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, type DbTransactionClient } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import type { ProposalRisk, SourceType } from "@/generated/prisma";
 import {
@@ -283,7 +283,7 @@ export interface ProposeAffairUpdateResult {
   deduped: boolean;
 }
 
-type LiveAffair = Record<string, unknown> & {
+export type LiveAffair = Record<string, unknown> & {
   publicId: string | null;
   slug: string;
   title: string;
@@ -429,22 +429,95 @@ async function findExisting(
   });
 }
 
+/**
+ * Everything a PENDING proposal write needs, computed without touching the DB.
+ *
+ * Pure so the same payload can be written by the plain path or inside a caller's
+ * transaction, with no risk of the two drifting (issue #525).
+ */
+export function buildPendingProposalPayload(args: {
+  input: ProposeAffairUpdateInput;
+  extractorVersion: string;
+  patch: Record<string, unknown>;
+  live: LiveAffair;
+}): { payloadHash: string; data: Prisma.AffairUpdateProposalUncheckedCreateInput } {
+  const observedValues = pickObserved(args.patch, args.live);
+  const payloadHash = computePayloadHash({
+    importer: args.input.importer,
+    extractorVersion: args.extractorVersion,
+    source: args.input.source,
+    sourceUrl: args.input.sourceUrl,
+    officialId: args.input.officialId,
+    sourceContentHash: args.input.sourceContentHash,
+    proposedPatch: args.patch,
+    observedValues,
+  });
+
+  return {
+    payloadHash,
+    data: buildProposalData(
+      {
+        input: args.input,
+        extractorVersion: args.extractorVersion,
+        patch: args.patch,
+        observedValues,
+        snapshot: buildAffairSnapshot(args.live),
+        payloadHash,
+      },
+      "PENDING"
+    ),
+  };
+}
+
+/**
+ * Records a PENDING proposal on a caller-supplied transaction.
+ *
+ * Mirrors the plain path below, including the rule that a terminal state is never
+ * resurrected: a rejected patch replayed later stays rejected.
+ */
+export async function recordPendingProposalInTransaction(
+  tx: DbTransactionClient,
+  input: ProposeAffairUpdateInput,
+  patch: Record<string, unknown>,
+  live: LiveAffair,
+  extractorVersion = "v1"
+): Promise<{ proposalId: string; deduped: boolean }> {
+  const { payloadHash, data } = buildPendingProposalPayload({
+    input,
+    extractorVersion,
+    patch,
+    live,
+  });
+
+  const existing = await tx.affairUpdateProposal.findFirst({
+    where: { affairId: input.affairId, importer: input.importer, payloadHash },
+    select: { id: true, status: true },
+  });
+  if (existing) {
+    if (existing.status === "PENDING") {
+      await tx.affairUpdateProposal.update({
+        where: { id: existing.id },
+        data: { updatedAt: new Date() },
+      });
+    }
+    return { proposalId: existing.id, deduped: true };
+  }
+
+  const created = await tx.affairUpdateProposal.create({ data, select: { id: true } });
+  return { proposalId: created.id, deduped: false };
+}
+
 async function recordPendingProposal(
   input: ProposeAffairUpdateInput,
   extractorVersion: string,
   patch: Record<string, unknown>,
   live: LiveAffair
 ): Promise<{ proposalId: string; deduped: boolean }> {
-  const observedValues = pickObserved(patch, live);
-  const payloadHash = computePayloadHash({
-    importer: input.importer,
+  const { payloadHash, data } = buildPendingProposalPayload({
+    input,
     extractorVersion,
-    source: input.source,
-    sourceUrl: input.sourceUrl,
-    officialId: input.officialId,
-    sourceContentHash: input.sourceContentHash,
-    proposedPatch: patch,
-    observedValues,
+    patch,
+    live,
   });
 
   const existing = await findExisting(input.affairId, input.importer, payloadHash);
@@ -460,20 +533,7 @@ async function recordPendingProposal(
     return { proposalId: existing.id, deduped: true };
   }
 
-  const created = await db.affairUpdateProposal.create({
-    data: buildProposalData(
-      {
-        input,
-        extractorVersion,
-        patch,
-        observedValues,
-        snapshot: buildAffairSnapshot(live),
-        payloadHash,
-      },
-      "PENDING"
-    ),
-    select: { id: true },
-  });
+  const created = await db.affairUpdateProposal.create({ data, select: { id: true } });
   return { proposalId: created.id, deduped: false };
 }
 

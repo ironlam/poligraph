@@ -5,7 +5,7 @@
  * allows merging them, and tracks dismissed false positives.
  */
 
-import { db } from "@/lib/db";
+import { db, type DbTransactionClient } from "@/lib/db";
 import { canonicalPair } from "./affair-pair";
 import { buildPairDecisionUpsert, loadPairExclusions } from "./pair-decision";
 import {
@@ -453,7 +453,24 @@ export async function mergeAffairs(
   removeId: string,
   options: MergeAffairsOptions = {}
 ): Promise<MergeAffairsResult> {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) => mergeAffairsInTransaction(tx, keepId, removeId, options));
+}
+
+/**
+ * The merge itself, on a caller-supplied transaction.
+ *
+ * Exists so a caller can widen the atomic unit. Absorbing a draft into a published
+ * affair has to create its proposals in the *same* transaction as the deletion:
+ * otherwise a failing proposal leaves the draft already gone, and whatever it
+ * stated about the judicial outcome is lost with no trace (issue #525).
+ */
+export async function mergeAffairsInTransaction(
+  tx: DbTransactionClient,
+  keepId: string,
+  removeId: string,
+  options: MergeAffairsOptions = {}
+): Promise<MergeAffairsResult> {
+  {
     const affairSelect = {
       id: true,
       title: true,
@@ -690,7 +707,7 @@ export async function mergeAffairs(
       identifiersMerged,
       slugsPreserved,
     };
-  });
+  }
 }
 
 // ============================================
