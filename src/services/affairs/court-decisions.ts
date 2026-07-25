@@ -6,10 +6,10 @@
  * carry several counts and therefore reach several Poligraph fiches, which is what
  * `Affair.ecli @unique` made impossible to record.
  *
- * Deliberately absent from this module: any lookup or upsert keyed on the pourvoi
- * number. A pourvoi can produce several decisions (rejection, partial cassation,
- * remand), so reusing a row on that basis would silently merge two decisions. The
- * only identities safe to reuse automatically are `judilibreId` and `ecli`.
+ * This module deliberately offers no lookup or upsert keyed on the pourvoi number.
+ * A pourvoi can produce several decisions (rejection, partial cassation, remand), so
+ * reusing a row on that basis would silently merge two decisions. The only identities
+ * safe to reuse automatically are `judilibreId` and `ecli`.
  */
 
 import { db, type DbTransactionClient } from "@/lib/db";
