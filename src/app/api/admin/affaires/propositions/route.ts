@@ -43,9 +43,13 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
         extractorVersion: true,
         proposedPatch: true,
         observedValues: true,
+        // Read when the affair was deleted: the relation is null, the snapshot
+        // is what keeps the row readable.
+        affairSnapshot: true,
         source: true,
         sourceUrl: true,
         officialId: true,
+        sourceContentHash: true,
         sourceExcerpt: true,
         confidence: true,
         riskLevel: true,

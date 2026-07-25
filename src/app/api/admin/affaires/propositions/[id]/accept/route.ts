@@ -33,6 +33,14 @@ export const POST = withAdminAuth(
       switch (result.reason) {
         case "not_found":
           return NextResponse.json({ error: "Proposition introuvable" }, { status: 404 });
+        case "orphaned":
+          return NextResponse.json(
+            {
+              error:
+                "L'affaire visée a été supprimée. La proposition est conservée comme historique mais ne peut plus être appliquée.",
+            },
+            { status: 409 }
+          );
         case "not_pending":
           return NextResponse.json(
             { error: "Proposition déjà traitée", status: result.status },

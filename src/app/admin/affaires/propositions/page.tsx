@@ -14,15 +14,25 @@ import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
 type ProposalStatus = "PENDING" | "APPROVED" | "REJECTED" | "AUTO_APPLIED" | "CONFLICT";
 type ProposalRisk = "LOW" | "MEDIUM" | "HIGH";
 
+interface AffairSnapshot {
+  publicId: string | null;
+  slug: string;
+  title: string;
+  politicianSlug: string | null;
+  politicianName: string | null;
+}
+
 interface ProposalRow {
   id: string;
   importer: string;
   extractorVersion: string;
   proposedPatch: Record<string, unknown>;
   observedValues: Record<string, unknown>;
+  affairSnapshot: AffairSnapshot;
   source: string;
   sourceUrl: string | null;
   officialId: string | null;
+  sourceContentHash: string | null;
   sourceExcerpt: string | null;
   confidence: number;
   riskLevel: ProposalRisk;
@@ -33,13 +43,14 @@ interface ProposalRow {
   reviewedBy: string | null;
   reviewNotes: string | null;
   createdAt: string;
+  /** Null once the affair has been deleted; fall back to affairSnapshot. */
   affair: {
     id: string;
     title: string;
     slug: string;
     publicationStatus: string;
     politician: { fullName: string; slug: string };
-  };
+  } | null;
 }
 
 interface ListResponse {
@@ -251,14 +262,22 @@ export default function PropositionsPage() {
                 <CardContent className="space-y-4 pt-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <Link
-                        href={`/admin/affaires/${row.affair.id}/edit`}
-                        className="font-semibold hover:underline"
-                      >
-                        {row.affair.title}
-                      </Link>
+                      {row.affair ? (
+                        <Link
+                          href={`/admin/affaires/${row.affair.id}/edit`}
+                          className="font-semibold hover:underline"
+                        >
+                          {row.affair.title}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold">{row.affairSnapshot.title}</span>
+                      )}
                       <p className="text-muted-foreground text-sm">
-                        {row.affair.politician.fullName} · {row.affair.publicationStatus}
+                        {row.affair
+                          ? `${row.affair.politician.fullName} · ${row.affair.publicationStatus}`
+                          : `${row.affairSnapshot.politicianName ?? "personnalité inconnue"} · affaire supprimée${
+                              row.affairSnapshot.publicId ? ` (${row.affairSnapshot.publicId})` : ""
+                            }`}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +294,7 @@ export default function PropositionsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <caption className="sr-only">
-                        Valeurs actuelles et valeurs proposées pour {row.affair.title}
+                        Valeurs actuelles et valeurs proposées pour {row.affairSnapshot.title}
                       </caption>
                       <thead>
                         <tr className="text-muted-foreground text-left text-xs uppercase">
