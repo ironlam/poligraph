@@ -24,10 +24,8 @@ vi.mock("@/services/affairs/reconciliation", () => ({
 vi.mock("@/services/affairs/absorb-draft", () => ({
   absorbDraftIntoPublished: h.absorbDraftIntoPublished,
 }));
-vi.mock("@/services/affairs/import-run", () => ({
-  withImportRun: h.withImportRun,
-  IMPORTER_RECONCILE: "reconcile-affairs",
-}));
+// Mocked only to prove the cron never opens a run: the service no longer imports it.
+vi.mock("@/services/affairs/import-run", () => ({ withImportRun: h.withImportRun }));
 vi.mock("@/lib/db", () => ({ db: { affair: { findMany: h.affairFindMany } } }));
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: h.invalidateEntity,

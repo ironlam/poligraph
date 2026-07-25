@@ -90,6 +90,7 @@ function stub(published: Record<string, unknown>, draft: Record<string, unknown>
 
 const base = {
   importRunId: "run_1",
+  importer: "manual-admin",
   reason: "Fusion confirmée en revue",
   pairDecision: {
     reviewedBy: "admin",
@@ -373,5 +374,90 @@ describe("absorbDraftIntoPublished — refuse de se tromper de sens (#525)", () 
       absorbDraftIntoPublished({ publishedId: "pub", draftId: "draft", ...base })
     ).rejects.toThrow("introuvable");
     expect(tx.affair.delete).not.toHaveBeenCalled();
+  });
+});
+
+// Review of #533 — the service hard-coded `importer: "reconcile-affairs"` while the
+// route opened its run as `manual-admin`. A confirmed admin merge was therefore
+// filed under an automatic importer, and since the importer is part of payloadHash,
+// it could also dedupe against an old automatic proposal.
+describe("absorbDraftIntoPublished — provenance de la proposition (#525)", () => {
+  it("enregistre la proposition sous l'importer fourni", async () => {
+    stub(publishedAffair(), draftAffair());
+
+    await absorbDraftIntoPublished({ publishedId: "pub", draftId: "draft", ...base });
+
+    const data = tx.affairUpdateProposal.create.mock.calls[0]![0].data;
+    expect(data.importer).toBe("manual-admin");
+    expect(data.importer).not.toBe("reconcile-affairs");
+  });
+
+  it("porte le même importer que le run qui l'entoure", async () => {
+    // La route ouvre withImportRun(IMPORTER_MANUAL_ADMIN) et passe le même ici :
+    // le run et la proposition doivent être attribuables au même acteur.
+    stub(publishedAffair(), draftAffair());
+
+    await absorbDraftIntoPublished({
+      publishedId: "pub",
+      draftId: "draft",
+      ...base,
+      importRunId: "run_manual",
+      importer: "manual-admin",
+    });
+
+    const data = tx.affairUpdateProposal.create.mock.calls[0]![0].data;
+    expect(data.importRunId).toBe("run_manual");
+    expect(data.importer).toBe("manual-admin");
+  });
+
+  it("cherche un doublon de proposition dans le périmètre du seul importer courant", async () => {
+    stub(publishedAffair(), draftAffair());
+
+    await absorbDraftIntoPublished({ publishedId: "pub", draftId: "draft", ...base });
+
+    expect(tx.affairUpdateProposal.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ importer: "manual-admin" }),
+      })
+    );
+  });
+
+  it("ne se déduplique pas avec une proposition automatique antérieure", async () => {
+    // L'importer entre dans payloadHash : deux acteurs différents ne peuvent pas
+    // produire la même empreinte, donc une proposition manuelle ne peut pas être
+    // absorbée par une ancienne proposition automatique.
+    stub(publishedAffair(), draftAffair());
+    await absorbDraftIntoPublished({ publishedId: "pub", draftId: "draft", ...base });
+    const manualHash = tx.affairUpdateProposal.create.mock.calls[0]![0].data.payloadHash;
+
+    vi.clearAllMocks();
+    tx.affairUpdateProposal.findFirst.mockResolvedValue(null);
+    tx.affairUpdateProposal.create.mockResolvedValue({ id: "prop_2" });
+    tx.source.findMany.mockResolvedValue([]);
+    tx.affairEvent.findMany.mockResolvedValue([]);
+    tx.pressArticleAffair.findMany.mockResolvedValue([]);
+    stub(publishedAffair(), draftAffair());
+    await absorbDraftIntoPublished({
+      publishedId: "pub",
+      draftId: "draft",
+      ...base,
+      importer: "reconcile-affairs",
+    });
+    const autoHash = tx.affairUpdateProposal.create.mock.calls[0]![0].data.payloadHash;
+
+    expect(manualHash).not.toBe(autoHash);
+  });
+
+  it("ne change ni l'atomicité ni le rollback", async () => {
+    stub(publishedAffair(), draftAffair());
+    tx.affairUpdateProposal.create.mockRejectedValue(new Error("proposal write failed"));
+
+    await expect(
+      absorbDraftIntoPublished({ publishedId: "pub", draftId: "draft", ...base })
+    ).rejects.toThrow("proposal write failed");
+
+    expect(rolledBack).toBe(true);
+    expect(tx.affair.delete).not.toHaveBeenCalled();
+    expect(tx.affairPairDecision.upsert).not.toHaveBeenCalled();
   });
 });

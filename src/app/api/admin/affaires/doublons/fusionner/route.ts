@@ -80,6 +80,9 @@ export const POST = withAdminAuth(
           publishedId: keepId,
           draftId: removeId,
           importRunId,
+          // Same importer as the run above: the proposal must be attributable to
+          // the confirmed admin action, not to an automatic pipeline.
+          importer: IMPORTER_MANUAL_ADMIN,
           reason: `Fusion confirmée en revue des doublons (${body.signal.matchedBy}/${body.signal.confidence})`,
           pairDecision: ruling,
           audit: { ipAddress: meta.ip, userAgent: meta.userAgent },

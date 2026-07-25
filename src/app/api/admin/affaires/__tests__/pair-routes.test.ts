@@ -218,6 +218,10 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
         pairDecision: expect.objectContaining({ reviewedBy: "admin" }),
       })
     );
+    // Le run et la proposition doivent être attribuables au même acteur.
+    expect(h.withImportRun.mock.calls[0]![0]).toBe("manual-admin");
+    expect(h.absorbDraftIntoPublished.mock.calls[0]![0].importer).toBe("manual-admin");
+    expect(h.absorbDraftIntoPublished.mock.calls[0]![0].importRunId).toBe("run_1");
     await expect(res.json()).resolves.toMatchObject({ proposalsCreated: 1 });
   });
 

@@ -68,6 +68,15 @@ export interface AbsorbDraftInput {
   publishedId: string;
   draftId: string;
   importRunId: string;
+  /**
+   * Who is absorbing. Recorded on the proposal, and it must match the importer the
+   * surrounding ImportRun was opened with: a confirmed admin merge filed under an
+   * automatic importer would misattribute the write and, worse, could dedupe
+   * against an old automatic proposal, since the importer is part of payloadHash.
+   *
+   * Required rather than defaulted: the previous hard-coded value was the bug.
+   */
+  importer: string;
   /** The merge plan's reason, kept verbatim in the audit trail and rationale. */
   reason: string;
   additiveFields?: readonly AdditiveMergeField[];
@@ -157,7 +166,7 @@ export async function absorbDraftIntoPublished(
         tx,
         {
           affairId: input.publishedId,
-          importer: "reconcile-affairs",
+          importer: input.importer,
           importRunId: input.importRunId,
           patch,
           source: (source?.sourceType ?? "PRESSE") as SourceType,
