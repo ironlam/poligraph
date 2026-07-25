@@ -30,8 +30,22 @@ import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prism
 import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadCandidatePool } from "@/lib/affair-matching/persistence";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
+import { proposeAffairUpdate } from "@/services/affairs/proposals";
+import {
+  failImportRun,
+  finishImportRun,
+  IMPORTER_DISCOVER_AFFAIRS,
+  startImportRun,
+} from "@/services/affairs/import-run";
 
 export const DISCOVER_AFFAIRS_CURSOR_KEY = "discover-affairs:cursor:lastName";
+
+/**
+ * Bump when the Wikidata penalty extraction changes shape or semantics. It is
+ * part of the proposal payload hash, so a fixed extractor can re-propose a value
+ * that a previous version got rejected on.
+ */
+export const WIKIDATA_EXTRACTOR_VERSION = "wikidata-penalty-v2";
 
 /**
  * Read the persisted lastName cursor for the discover-affairs sync.
@@ -75,6 +89,11 @@ export interface DiscoverAffairsResult {
   wikipediaAffairsFound: number;
   duplicatesSkipped: number;
   affairsCreated: number;
+  /** Affaires v2, lot 1: enrichment of existing affairs is now proposal-based. */
+  proposalsPending: number;
+  proposalsAutoApplied: number;
+  proposalsConflicted: number;
+  proposalsDeduped: number;
   errors: string[];
 }
 
@@ -211,6 +230,10 @@ export async function discoverAffairs(options?: {
     wikipediaAffairsFound: 0,
     duplicatesSkipped: 0,
     affairsCreated: 0,
+    proposalsPending: 0,
+    proposalsAutoApplied: 0,
+    proposalsConflicted: 0,
+    proposalsDeduped: 0,
     errors: [],
   };
 
@@ -292,7 +315,23 @@ export async function discoverAffairs(options?: {
   const allAffairs = [...phase1Affairs, ...phase2Affairs];
 
   if (allAffairs.length > 0) {
-    await runPhase3Reconciliation(allAffairs, stats);
+    // Reconciliation is the only phase that touches existing affairs, so it is
+    // the only one that needs an ImportRun to anchor its proposals.
+    const importRunId = await startImportRun(IMPORTER_DISCOVER_AFFAIRS);
+    try {
+      await runPhase3Reconciliation(allAffairs, stats, importRunId);
+      await finishImportRun(importRunId, {
+        duplicatesSkipped: stats.duplicatesSkipped,
+        affairsCreated: stats.affairsCreated,
+        proposalsPending: stats.proposalsPending,
+        proposalsAutoApplied: stats.proposalsAutoApplied,
+        proposalsConflicted: stats.proposalsConflicted,
+        proposalsDeduped: stats.proposalsDeduped,
+      });
+    } catch (error) {
+      await failImportRun(importRunId, error);
+      throw error;
+    }
   }
 
   return stats;
@@ -504,7 +543,10 @@ async function runPhase2Wikipedia(
             category: extracted.category as AffairCategory,
             status: extracted.status as AffairStatus,
             involvement: extracted.involvement,
+            // Wikipedia extraction yields a genuine facts date; it carries no
+            // decision date.
             factsDate: extracted.factsDate ? new Date(extracted.factsDate) : null,
+            verdictDate: null,
             court: extracted.court,
             prisonMonths: null,
             prisonSuspended: null,
@@ -575,9 +617,68 @@ function buildSentenceSummary(affair: DiscoveredAffair): string | null {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+/**
+ * Files the Wikidata penalty payload as a proposal on an existing affair.
+ *
+ * Replaces the previous direct `db.affair.update`, which silently overwrote
+ * sentence fields, court and verdictDate on published affairs.
+ */
+async function proposePenaltyEnrichment(
+  affair: DiscoveredAffair,
+  affairId: string,
+  stats: DiscoverAffairsResult,
+  importRunId: string
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (affair.prisonMonths !== null) patch.prisonMonths = affair.prisonMonths;
+  if (affair.prisonSuspended !== null) patch.prisonSuspended = affair.prisonSuspended;
+  if (affair.ineligibilityMonths !== null) patch.ineligibilityMonths = affair.ineligibilityMonths;
+  if (affair.communityService !== null) patch.communityService = affair.communityService;
+  if (affair.otherSentence !== null) patch.otherSentence = affair.otherSentence;
+  if (affair.verdictDate) patch.verdictDate = affair.verdictDate;
+  if (affair.court) patch.court = affair.court;
+
+  const sentence = buildSentenceSummary(affair);
+  if (sentence) patch.sentence = sentence;
+
+  if (Object.keys(patch).length === 0) return;
+
+  const wikidataSource = affair.sources.find((s) => s.sourceType === "WIKIDATA");
+
+  const result = await proposeAffairUpdate({
+    affairId,
+    importer: IMPORTER_DISCOVER_AFFAIRS,
+    importRunId,
+    patch,
+    source: "WIKIDATA",
+    sourceUrl: wikidataSource?.url ?? null,
+    officialId: extractQidFromUrl(wikidataSource?.url),
+    sourceExcerpt: affair.charges.join(", ").slice(0, 500),
+    metadata: { phase: affair.phase, politicianName: affair.politicianName },
+    confidence: affair.confidenceScore,
+    rationale:
+      `Rapprochement HIGH/CERTAIN avec une affaire existante du même politique ` +
+      `et de la même catégorie (${affair.category}). Peines et date de décision ` +
+      `extraites des qualificatifs Wikidata de « ${affair.title} ».`,
+    extractorVersion: WIKIDATA_EXTRACTOR_VERSION,
+  });
+
+  if (result.pendingProposalId) stats.proposalsPending++;
+  if (result.autoProposalId) stats.proposalsAutoApplied++;
+  if (result.conflictProposalId) stats.proposalsConflicted++;
+  if (result.deduped) stats.proposalsDeduped++;
+}
+
+function extractQidFromUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const match = /\/(Q\d+)$/.exec(url);
+  return match ? match[1]! : null;
+}
+
 async function runPhase3Reconciliation(
   allAffairs: DiscoveredAffair[],
-  stats: DiscoverAffairsResult
+  stats: DiscoverAffairsResult,
+  importRunId: string
 ): Promise<void> {
   console.log(`Phase 3: Reconciliation - ${allAffairs.length} affairs`);
 
@@ -592,28 +693,10 @@ async function runPhase3Reconciliation(
       const highMatch = matches.find((m) => m.confidence === "HIGH" || m.confidence === "CERTAIN");
 
       if (highMatch) {
-        // Enrich existing affair with penalty data if fields are NULL
+        // Affaires v2, lot 1: an importer never writes to an existing affair.
+        // Penalty data, dates and jurisdiction go through the proposal queue.
         if (affair.phase === "wikidata") {
-          const updateData: Record<string, unknown> = {};
-          if (affair.prisonMonths !== null) updateData.prisonMonths = affair.prisonMonths;
-          if (affair.prisonSuspended !== null) updateData.prisonSuspended = affair.prisonSuspended;
-          if (affair.ineligibilityMonths !== null)
-            updateData.ineligibilityMonths = affair.ineligibilityMonths;
-          if (affair.communityService !== null)
-            updateData.communityService = affair.communityService;
-          if (affair.otherSentence !== null) updateData.otherSentence = affair.otherSentence;
-          if (affair.factsDate) updateData.verdictDate = affair.factsDate;
-          if (affair.court) updateData.court = affair.court;
-
-          const sentence = buildSentenceSummary(affair);
-          if (sentence) updateData.sentence = sentence;
-
-          if (Object.keys(updateData).length > 0) {
-            await db.affair.update({
-              where: { id: highMatch.affairId },
-              data: updateData,
-            });
-          }
+          await proposePenaltyEnrichment(affair, highMatch.affairId, stats, importRunId);
         }
 
         // Même en cas de doublon enrichi, la décision resolver est rattachée
@@ -645,6 +728,7 @@ async function runPhase3Reconciliation(
           category: affair.category,
           involvement: affair.involvement,
           factsDate: affair.factsDate,
+          verdictDate: affair.verdictDate,
           court: affair.court,
           prisonMonths: affair.prisonMonths,
           prisonSuspended: affair.prisonSuspended,
@@ -659,7 +743,7 @@ async function runPhase3Reconciliation(
               url: s.url,
               title: s.title,
               publisher: s.publisher,
-              publishedAt: s.publishedAt ?? affair.factsDate ?? new Date(),
+              publishedAt: s.publishedAt ?? affair.factsDate ?? affair.verdictDate ?? new Date(),
               sourceType: s.sourceType,
             })),
           },

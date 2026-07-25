@@ -44,10 +44,22 @@ import {
   buildTitleFromDecision,
 } from "@/services/affairs/judilibre-mapping";
 import { syncMetadata } from "@/lib/sync";
-import { trackStatusChange } from "@/services/affairs/status-tracking";
 import { findCourtDepartments, extractJurisdictionName } from "@/config/judilibre-courts";
 import { resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadJudilibreDecisionCache } from "./judilibre-decisions";
+import { proposeAffairUpdate } from "@/services/affairs/proposals";
+import {
+  failImportRun,
+  finishImportRun,
+  IMPORTER_JUDILIBRE,
+  startImportRun,
+} from "@/services/affairs/import-run";
+
+/**
+ * Bump when the Judilibre mapping changes shape or semantics. Part of the
+ * proposal payload hash.
+ */
+export const JUDILIBRE_EXTRACTOR_VERSION = "judilibre-v1";
 
 // ============================================
 // TYPES
@@ -121,64 +133,72 @@ async function searchPoliticianDecisions(
 // ============================================
 
 /**
- * Enrich an existing affair with Judilibre data (ECLI, pourvoi, source)
+ * Enrich an existing affair with Judilibre data (ECLI, pourvoi, source).
+ *
+ * Affaires v2, lot 1: no direct write. Judicial identifiers are auto-applied only
+ * when absent and non-contradictory (proposeAffairUpdate enforces that, including
+ * the Affair.ecli unique collision that used to raise P2002). A status change is
+ * always filed as a proposal, and the timeline event moves to acceptance time.
  */
 async function enrichAffairFromJudilibre(
   affairId: string,
   decision: JudilibreDecisionSummary,
   dryRun: boolean,
-  verbose?: boolean
+  verbose?: boolean,
+  importRunId?: string | null
 ): Promise<boolean> {
   if (dryRun) {
     if (verbose) {
-      console.log(`  [DRY-RUN] Enrichirait affaire ${affairId} avec ECLI ${decision.ecli}`);
+      console.log(`  [DRY-RUN] Proposerait sur l'affaire ${affairId} l'ECLI ${decision.ecli}`);
     }
     return true;
   }
 
+  const decisionUrl = `https://www.courdecassation.fr/decision/${decision.id}`;
+
   try {
-    // Update affair with judicial identifiers
-    const updateData: Record<string, unknown> = {};
+    const patch: Record<string, unknown> = {};
 
     if (decision.ecli) {
-      updateData.ecli = decision.ecli;
+      patch.ecli = decision.ecli;
     }
     if (decision.number) {
-      updateData.pourvoiNumber = decision.number;
+      patch.pourvoiNumber = decision.number;
     }
     if (decision.numbers && decision.numbers.length > 0) {
-      // Merge with existing caseNumbers
-      const existing = await db.affair.findUnique({
-        where: { id: affairId },
-        select: { caseNumbers: true },
-      });
-      const existingNumbers = new Set(existing?.caseNumbers ?? []);
-      for (const num of decision.numbers) {
-        existingNumbers.add(num);
-      }
-      updateData.caseNumbers = Array.from(existingNumbers);
+      // proposeAffairUpdate merges additively with the stored array.
+      patch.caseNumbers = decision.numbers;
     }
 
-    // Map solution to status (upgrade or terminal transition)
+    // Map solution to status (upgrade or terminal transition). The monotonic
+    // guard stays here so we do not file proposals for regressions a reviewer
+    // would only reject.
     const newStatus = mapSolutionToStatus(decision.solution);
     const currentAffair = await db.affair.findUnique({
       where: { id: affairId },
       select: { status: true },
     });
     if (currentAffair && shouldUpdateStatus(currentAffair.status, newStatus)) {
-      updateData.status = newStatus;
-      // Track status change in affair timeline
-      await trackStatusChange(affairId, currentAffair.status, newStatus, {
-        type: "JUDILIBRE",
-        url: `https://www.courdecassation.fr/decision/${decision.id}`,
-        title: `Cour de cassation - ${decision.solution} (${decision.number})`,
-      });
+      patch.status = newStatus;
     }
 
-    if (Object.keys(updateData).length > 0) {
-      await db.affair.update({
-        where: { id: affairId },
-        data: updateData,
+    if (Object.keys(patch).length > 0) {
+      await proposeAffairUpdate({
+        affairId,
+        importer: IMPORTER_JUDILIBRE,
+        importRunId: importRunId ?? null,
+        patch,
+        source: "JUDILIBRE",
+        sourceUrl: decisionUrl,
+        officialId: decision.ecli ?? decision.number ?? null,
+        sourceExcerpt: decision.summary?.slice(0, 500) ?? null,
+        metadata: { solution: decision.solution, decisionId: decision.id },
+        confidence: 90,
+        rationale:
+          `Décision Cour de cassation ${decision.number ?? "(sans n°)"} ` +
+          `(${decision.solution}) rapprochée de cette affaire. ` +
+          `Identifiants judiciaires et, le cas échéant, progression du statut.`,
+        extractorVersion: JUDILIBRE_EXTRACTOR_VERSION,
       });
     }
 
@@ -465,6 +485,53 @@ export async function syncJudilibre(
   const politicians = await getPoliticiansToSearch(politicianSlug, limit);
   console.log(`${politicians.length} politicien(s) a rechercher\n`);
 
+  // Anchors every proposal this pass files. Skipped on dry runs, which write nothing.
+  const importRunId = dryRun ? null : await startImportRun(IMPORTER_JUDILIBRE);
+
+  try {
+    await runJudilibreSearch({
+      politicians,
+      client,
+      decisionCache,
+      stats,
+      dryRun,
+      verbose,
+      importRunId,
+    });
+  } catch (error) {
+    if (importRunId) await failImportRun(importRunId, error);
+    throw error;
+  }
+
+  if (importRunId) {
+    await finishImportRun(importRunId, {
+      affairsEnriched: stats.affairsEnriched,
+      affairsCreated: stats.affairsCreated,
+      decisionsRelevant: stats.decisionsRelevant,
+      errors: stats.errors,
+    });
+  }
+
+  return stats;
+}
+
+interface JudilibreSearchArgs {
+  politicians: PoliticianForSearch[];
+  client: JudilibreClient;
+  decisionCache: Awaited<ReturnType<typeof loadJudilibreDecisionCache>>;
+  stats: JudilibreSyncStats;
+  dryRun: boolean;
+  verbose?: boolean;
+  importRunId: string | null;
+}
+
+/**
+ * Extracted from syncJudilibre so the ImportRun lifecycle (start, finish, fail)
+ * wraps the whole pass in one place.
+ */
+async function runJudilibreSearch(args: JudilibreSearchArgs): Promise<void> {
+  const { politicians, client, decisionCache, stats, dryRun, verbose, importRunId } = args;
+
   for (const politician of politicians) {
     stats.politiciansSearched++;
 
@@ -496,7 +563,8 @@ export async function syncJudilibre(
               bestMatch.affairId,
               decision,
               dryRun,
-              verbose
+              verbose,
+              importRunId
             );
             if (enriched) stats.affairsEnriched++;
           }
@@ -572,7 +640,8 @@ export async function syncJudilibre(
               bestMatch.affairId,
               decision,
               dryRun,
-              verbose
+              verbose,
+              importRunId
             );
             if (enriched) stats.affairsEnriched++;
           } else if (analyzeIfConviction(decision)) {
@@ -647,8 +716,6 @@ export async function syncJudilibre(
       itemCount: stats.affairsEnriched + stats.affairsCreated,
     });
   }
-
-  return stats;
 }
 
 // ============================================

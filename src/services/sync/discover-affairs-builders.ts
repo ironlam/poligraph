@@ -31,7 +31,10 @@ export interface DiscoveredAffair {
   category: AffairCategory;
   status: AffairStatus;
   involvement: Involvement;
+  /** Date of the alleged facts. Never a decision date. */
   factsDate: Date | null;
+  /** Date of the court decision. Wikidata P1399 qualifiers carry this, not factsDate. */
+  verdictDate: Date | null;
   court: string | null;
   prisonMonths: number | null;
   prisonSuspended: boolean | null;
@@ -81,7 +84,11 @@ export function buildWikidataDiscoveredAffair(
     category: input.category,
     status: input.status,
     involvement: isConviction ? "DIRECT" : "MENTIONED_ONLY",
-    factsDate: input.penaltyData.verdictDate ?? null,
+    // Wikidata gives us a decision date, not a facts date. Storing it in
+    // factsDate is what made the reconciliation path read it back out into
+    // verdictDate, and made every created affair carry a wrong factsDate.
+    factsDate: null,
+    verdictDate: input.penaltyData.verdictDate ?? null,
     court: null,
     prisonMonths: input.penaltyData.prisonMonths ?? null,
     prisonSuspended: input.penaltyData.prisonSuspended ?? null,
