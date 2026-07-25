@@ -17,6 +17,7 @@ vi.mock("./matching", async (importOriginal) => {
 import { findPotentialDuplicates } from "./reconciliation";
 import { db } from "@/lib/db";
 import { findMatchingAffairs } from "./matching";
+import { decideMergeAction } from "./merge-decision";
 
 const mockedAffairFindMany = db.affair.findMany as ReturnType<typeof vi.fn>;
 const mockedDismissedFindMany = db.dismissedDuplicate.findMany as ReturnType<typeof vi.fn>;
@@ -87,7 +88,12 @@ describe("findPotentialDuplicates — draft window clustering", () => {
 
     const duplicates = await findPotentialDuplicates();
 
-    expect(duplicates).toHaveLength(3); // a1-a2, a1-a3, a2-a3
+    // a1-a2 pair on the probity family. a1-a3 rests on the AUTRE wildcard but both
+    // titles name Le Havre. a2-a3 rests on the wildcard and shares no vocabulary,
+    // so it is dropped (issue #521) — the cluster stays reachable because a3 is
+    // still connected through a1.
+    const pairs = duplicates.map((d) => [d.affairA.id, d.affairB.id].sort().join("-")).sort();
+    expect(pairs).toEqual(["a1-a2", "a1-a3"]);
     for (const pair of duplicates) {
       expect(pair.matchedBy).toBe("politician+category+window");
       expect(pair.confidence).toBe("POSSIBLE");
@@ -411,5 +417,131 @@ describe("findPotentialDuplicates — jugements humains (#525)", () => {
     ]);
 
     expect(await findPotentialDuplicates()).toHaveLength(0);
+  });
+});
+
+// Issue #521 — the AUTRE wildcard pairs categories that share no family, so on its
+// own it says nothing about the facts. The guard is scoped to the second pass:
+// POSSIBLE only, no automatic merge, no data touched.
+describe("findPotentialDuplicates — garde lexical du joker AUTRE (#521)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDismissedFindMany.mockResolvedValue([]);
+    mockedDecisionFindMany.mockResolvedValue([]);
+    mockedFindMatchingAffairs.mockResolvedValue([]);
+  });
+
+  it("écarte une paire joker dont les titres ne partagent rien", async () => {
+    // Forme du faux positif relevé au tri de #525 : une personnalité citée dans
+    // deux couvertures sans rapport, dont l'une n'a pas de qualification.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        title: "Ordonnance du juge des référés sur les conditions de détention",
+        category: "AUTRE",
+      }),
+      makeDraft("a2", { title: "Enlèvement suivi de meurtre", category: "AGRESSION_SEXUELLE" }),
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(0);
+  });
+
+  it("garde une paire joker dont les titres partagent un mot porteur", async () => {
+    // Ce que rien d'autre n'attrape : catégories de familles différentes, mêmes
+    // faits, donc ni identifiant ni inclusion de titre ne les rapprochent.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        title: "Soupçons de tentative d'étouffement d'une procédure",
+        category: "RECEL",
+      }),
+      makeDraft("a2", {
+        title: "Tentative présumée d'étouffement d'une procédure",
+        category: "AUTRE",
+      }),
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.confidence).toBe("POSSIBLE");
+    expect(duplicates[0]!.score).toBe(0.45);
+    expect(duplicates[0]!.matchedBy).toBe("politician+category+window");
+  });
+
+  it("ne demande rien aux titres quand les catégories sont identiques", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { title: "Menaces reçues au domicile", category: "MENACE" }),
+      makeDraft("a2", { title: "Colis suspect découvert au bureau", category: "MENACE" }),
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(1);
+  });
+
+  it("ne demande rien aux titres quand une famille nommée les rapproche", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { title: "Emplois familiaux au Parlement", category: "EMPLOI_FICTIF" }),
+      makeDraft("a2", {
+        title: "Marché public attribué sans mise en concurrence",
+        category: "FAVORITISME",
+      }),
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(1);
+  });
+
+  it("conserve le comportement de AUTRE contre AUTRE", async () => {
+    // Catégories égales : le joker n'est pas la raison du rapprochement.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { title: "Cyberattaques contre un parti", category: "AUTRE" }),
+      makeDraft("a2", { title: "Signalement de violences psychologiques", category: "AUTRE" }),
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(1);
+  });
+
+  it("n'écarte rien sur un rapprochement du premier passage", async () => {
+    // Le garde est borné au 2e passage : un identifiant partagé n'est pas concerné.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { title: "Ordonnance de référé", category: "AUTRE" }),
+      makeDraft("a2", { title: "Enlèvement suivi de meurtre", category: "AGRESSION_SEXUELLE" }),
+    ]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.matchedBy).toBe("pourvoiNumber");
+  });
+
+  it("n'introduit aucune paire auto-fusionnable", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        title: "Soupçons de tentative d'étouffement d'une procédure",
+        category: "RECEL",
+      }),
+      makeDraft("a2", {
+        title: "Tentative présumée d'étouffement d'une procédure",
+        category: "AUTRE",
+      }),
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+    const plans = duplicates.map((d) => decideMergeAction(d).decision);
+
+    expect(plans).toEqual(["REVIEW_REQUIRED"]);
+  });
+
+  it("ne change pas une décision AUTO_MERGE_DRAFTS existante", async () => {
+    // Deux brouillons rapprochés en HIGH par un identifiant : le plan reste le même.
+    mockedAffairFindMany.mockResolvedValue([makeDraft("a1"), makeDraft("a2")]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(decideMergeAction(duplicates[0]!).decision).toBe("AUTO_MERGE_DRAFTS");
   });
 });

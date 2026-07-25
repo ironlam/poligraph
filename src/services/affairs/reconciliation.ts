@@ -17,7 +17,9 @@ import {
 } from "@/generated/prisma";
 import {
   findMatchingAffairs,
+  pairingRestsOnWildcard,
   sameCategoryFamily,
+  titlesShareVocabulary,
   verdictDatesConflict,
   type MatchConfidence,
   type MatchResult,
@@ -273,6 +275,19 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
         const { key } = canonicalPair(a.id, b.id);
         if (exclusions.excluded.has(key) || best.has(key)) continue;
         if (!sameCategoryFamily(a.category, b.category)) continue;
+
+        // When only the AUTRE wildcard brings the categories together, the pair
+        // rests on the absence of a qualification rather than on evidence. Ask the
+        // titles for a second signal (issue #521): a person cited in unrelated
+        // coverage otherwise pairs with every other draft about them. Measured on
+        // the real base, this is exactly the one false positive the #525 triage
+        // found. Downgrade only — the result stays POSSIBLE and nothing is merged.
+        if (
+          pairingRestsOnWildcard(a.category, b.category) &&
+          !titlesShareVocabulary(a.title, b.title)
+        ) {
+          continue;
+        }
 
         const daysApart =
           Math.abs(a.createdAt.getTime() - b.createdAt.getTime()) / (1000 * 60 * 60 * 24);
