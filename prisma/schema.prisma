@@ -1968,9 +1968,17 @@ model ImportRun {
 
 /// An immutable, reviewable patch to an existing Affair, produced by an importer.
 model AffairUpdateProposal {
-  id       String @id @default(cuid())
-  affair   Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
-  affairId String
+  id String @id @default(cuid())
+
+  /// Nullable on purpose: deleting an affair must NOT erase the history of what
+  /// was proposed about it and how a human ruled on it. The row survives as an
+  /// orphan, identified by affairSnapshot.
+  affair   Affair? @relation(fields: [affairId], references: [id], onDelete: SetNull)
+  affairId String?
+
+  /// Denormalized identity of the affair at proposal time, so an orphaned row
+  /// stays readable: { publicId, slug, title, politicianSlug, politicianName }.
+  affairSnapshot Json
 
   importer    String
   importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
@@ -1988,14 +1996,20 @@ model AffairUpdateProposal {
   sourceExcerpt String?    @db.Text
   metadata      Json?
 
+  /// Hash of the source payload itself. A URL and an official id are not enough:
+  /// a Wikidata claim or a decision page can change under the same address, and
+  /// the new content must be able to produce a fresh proposal.
+  sourceContentHash String?
+
   confidence       Int // 0-100
   riskLevel        ProposalRisk
   rationale        String       @db.Text // why this affair, why this value
   extractorVersion String       @default("v1")
 
-  /// SHA-256 over importer + extractorVersion + source fingerprint +
-  /// proposedPatch + observedValues. Makes re-runs idempotent while still
-  /// allowing a re-proposal once the affair, the source or the extractor moves.
+  /// SHA-256 over importer + extractorVersion + source fingerprint (including
+  /// sourceContentHash) + proposedPatch + observedValues. Makes re-runs
+  /// idempotent while still allowing a re-proposal once the affair, the source
+  /// content or the extractor moves.
   payloadHash String
 
   status         ProposalStatus @default(PENDING)

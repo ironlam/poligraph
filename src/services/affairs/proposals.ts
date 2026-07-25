@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
-import type { ProposalRisk, ProposalStatus, SourceType } from "@/generated/prisma";
+import type { ProposalRisk, SourceType } from "@/generated/prisma";
 import {
   affairPatchSchema,
   PROPOSABLE_FIELDS,
@@ -22,8 +22,12 @@ export const AUTO_APPLICABLE_FIELDS = Object.freeze([
   "caseNumbers",
 ] as const);
 
-/** Changing any of these is HIGH risk regardless of the previous value. */
-const HIGH_RISK_FIELDS = Object.freeze(["status", "involvement", "category", "severity"] as const);
+/**
+ * Changing any of these is HIGH risk regardless of the previous value.
+ * Only `status` in lot 1: involvement, category and severity are not proposable
+ * because no importer emits them.
+ */
+const HIGH_RISK_FIELDS = Object.freeze(["status"] as const);
 
 const AUTO_SET: ReadonlySet<string> = new Set(AUTO_APPLICABLE_FIELDS);
 const HIGH_RISK_SET: ReadonlySet<string> = new Set(HIGH_RISK_FIELDS);
@@ -35,13 +39,64 @@ export class ProposalValidationError extends Error {
   }
 }
 
+/**
+ * Every field a proposal can touch, plus the identity needed for affairSnapshot.
+ *
+ * A select object built from the patch keys at runtime makes Prisma's generated
+ * types recurse ("Excessive stack depth comparing types"), so the shape stays
+ * static and callers read only the keys they need.
+ */
+export const AFFAIR_PROPOSABLE_SELECT = {
+  id: true,
+  slug: true,
+  publicId: true,
+  title: true,
+  politician: { select: { slug: true, fullName: true } },
+  status: true,
+  verdictDate: true,
+  court: true,
+  sentence: true,
+  prisonMonths: true,
+  prisonSuspended: true,
+  ineligibilityMonths: true,
+  communityService: true,
+  otherSentence: true,
+  ecli: true,
+  pourvoiNumber: true,
+  caseNumbers: true,
+} as const;
+
+export interface AffairSnapshot {
+  publicId: string | null;
+  slug: string;
+  title: string;
+  politicianSlug: string | null;
+  politicianName: string | null;
+}
+
+/** Keeps an orphaned proposal readable after its affair is deleted. */
+export function buildAffairSnapshot(affair: {
+  publicId: string | null;
+  slug: string;
+  title: string;
+  politician?: { slug: string; fullName: string } | null;
+}): AffairSnapshot {
+  return {
+    publicId: affair.publicId,
+    slug: affair.slug,
+    title: affair.title,
+    politicianSlug: affair.politician?.slug ?? null,
+    politicianName: affair.politician?.fullName ?? null,
+  };
+}
+
 // ─── Normalization ───────────────────────────────────────────────
 
 /**
  * Marker for an absent value in normalized comparisons.
  *
  * Not a control character: these strings reach the conflictDetail JSONB column,
- * and Postgres rejects \u0000 inside a JSON string.
+ * and Postgres rejects U+0000 inside a JSON string.
  */
 export const EMPTY_VALUE = "∅";
 
@@ -87,6 +142,11 @@ function normalizeRecord(record: Record<string, unknown>): Record<string, string
   return out;
 }
 
+/** Stable hash of a raw source payload, for sourceContentHash. */
+export function hashSourceContent(payload: unknown): string {
+  return createHash("sha256").update(canonicalJson(payload)).digest("hex");
+}
+
 // ─── Hashing ─────────────────────────────────────────────────────
 
 export interface PayloadHashInput {
@@ -95,6 +155,7 @@ export interface PayloadHashInput {
   source: SourceType;
   sourceUrl?: string | null;
   officialId?: string | null;
+  sourceContentHash?: string | null;
   proposedPatch: Record<string, unknown>;
   observedValues: Record<string, unknown>;
 }
@@ -104,7 +165,9 @@ export interface PayloadHashInput {
  * - observedValues: a CONFLICT must become re-proposable once the affair moves.
  * - extractorVersion: a fixed extractor must be able to re-propose a value that
  *   an earlier, buggy version got rejected on.
- * - source fingerprint: two distinct decisions carrying the same value stay two
+ * - sourceContentHash: a claim or decision page that changes under the same URL
+ *   must be able to produce a fresh proposal.
+ * - source + officialId: two distinct decisions carrying the same value stay two
  *   proposals, so the second source is not silently dropped.
  */
 export function computePayloadHash(input: PayloadHashInput): string {
@@ -114,6 +177,7 @@ export function computePayloadHash(input: PayloadHashInput): string {
     source: input.source,
     sourceUrl: input.sourceUrl ?? null,
     officialId: input.officialId ?? null,
+    sourceContentHash: input.sourceContentHash ?? null,
     proposedPatch: normalizeRecord(input.proposedPatch),
     observedValues: normalizeRecord(input.observedValues),
   });
@@ -159,7 +223,7 @@ export function detectDrift(
 
 /**
  * The only door between importer JSON and Prisma. Rejects unknown keys, coerces
- * dates and decimals, validates enums against the generated client.
+ * dates, validates enums against the generated client.
  */
 export function validatePatch(raw: unknown): AffairPatch {
   const parsed = affairPatchSchema.safeParse(raw);
@@ -177,6 +241,14 @@ function patchFields(patch: AffairPatch): ProposableField[] {
   );
 }
 
+/**
+ * Turns a validated patch into a Prisma update payload. Only whitelisted keys
+ * survive validatePatch(), so this cannot widen the write surface.
+ */
+export function buildPrismaData(patch: AffairPatch): Prisma.AffairUpdateInput {
+  return { ...patch } as Prisma.AffairUpdateInput;
+}
+
 // ─── Proposal creation ───────────────────────────────────────────
 
 export interface ProposeAffairUpdateInput {
@@ -188,6 +260,8 @@ export interface ProposeAffairUpdateInput {
   source: SourceType;
   sourceUrl?: string | null;
   officialId?: string | null;
+  /** Hash of the raw source payload. See hashSourceContent(). */
+  sourceContentHash?: string | null;
   sourceExcerpt?: string | null;
   metadata?: Prisma.InputJsonValue | null;
   confidence: number;
@@ -202,11 +276,18 @@ export interface ProposeAffairUpdateResult {
   autoProposalId: string | null;
   /** Proposal awaiting review, if any field required one. */
   pendingProposalId: string | null;
-  /** Set when a unique identifier already belongs to another affair. */
+  /** Set when an identifier is contradicted or already taken elsewhere. */
   conflictProposalId: string | null;
   /** True when an identical payload had already been recorded. */
   deduped: boolean;
 }
+
+type LiveAffair = Record<string, unknown> & {
+  publicId: string | null;
+  slug: string;
+  title: string;
+  politician?: { slug: string; fullName: string } | null;
+};
 
 /**
  * Entry point for importers. Splits the patch into what may be auto-applied and
@@ -227,11 +308,12 @@ export async function proposeAffairUpdate(
   if (!affair) {
     throw new Error(`Affaire introuvable : ${input.affairId}`);
   }
-  const live = affair as unknown as Record<string, unknown>;
+  const live = affair as unknown as LiveAffair;
 
-  const autoPatch: Record<string, unknown> = {};
+  // Classification only. The auto path recomputes eligibility inside its own
+  // transaction, because the row can move between this read and the write.
+  const autoCandidates: Record<string, unknown> = {};
   const reviewPatch: Record<string, unknown> = {};
-  const conflictPatch: Record<string, unknown> = {};
 
   for (const field of fields) {
     const proposed = (patch as Record<string, unknown>)[field];
@@ -239,37 +321,13 @@ export async function proposeAffairUpdate(
       reviewPatch[field] = proposed;
       continue;
     }
-
-    if (field === "caseNumbers") {
-      const current = Array.isArray(live.caseNumbers) ? (live.caseNumbers as string[]) : [];
-      const incoming = Array.isArray(proposed) ? (proposed as string[]) : [];
-      const merged = mergeCaseNumbers(current, incoming);
-      // Additive only: nothing new means nothing to do.
-      if (merged.length > current.length) autoPatch.caseNumbers = merged;
-      continue;
-    }
-
-    const isAbsent = normalizeForCompare(live[field]) === EMPTY_VALUE;
-    if (!isAbsent) {
+    if (field !== "caseNumbers" && normalizeForCompare(live[field]) !== EMPTY_VALUE) {
       // Contradicts a stored identifier: that is a review decision, not a fill.
       reviewPatch[field] = proposed;
       continue;
     }
     if (proposed === null || proposed === undefined) continue;
-
-    if (field === "ecli") {
-      const taken = await db.affair.findFirst({
-        where: { ecli: String(proposed), id: { not: input.affairId } },
-        select: { id: true },
-      });
-      if (taken) {
-        // "Absent" but not "non-contradictory": Affair.ecli is @unique, so a
-        // blind write would raise P2002. Surface it instead.
-        conflictPatch[field] = proposed;
-        continue;
-      }
-    }
-    autoPatch[field] = proposed;
+    autoCandidates[field] = proposed;
   }
 
   const result: ProposeAffairUpdateResult = {
@@ -280,46 +338,20 @@ export async function proposeAffairUpdate(
     deduped: false,
   };
 
-  if (Object.keys(autoPatch).length > 0) {
-    const outcome = await recordProposal({
-      input,
-      extractorVersion,
-      patch: autoPatch,
-      live,
-      status: "AUTO_APPLIED",
-      applyNow: true,
-    });
-    result.autoApplied = Object.keys(autoPatch) as ProposableField[];
-    result.autoProposalId = outcome.proposalId;
+  if (Object.keys(autoCandidates).length > 0) {
+    const outcome = await applyAutoCandidates(input, extractorVersion, autoCandidates, live);
     result.deduped = result.deduped || outcome.deduped;
+    if (outcome.kind === "applied") {
+      result.autoApplied = outcome.appliedFields;
+      result.autoProposalId = outcome.proposalId;
+    } else if (outcome.kind === "conflict") {
+      result.conflictProposalId = outcome.proposalId;
+    }
   }
 
   if (Object.keys(reviewPatch).length > 0) {
-    const outcome = await recordProposal({
-      input,
-      extractorVersion,
-      patch: reviewPatch,
-      live,
-      status: "PENDING",
-      applyNow: false,
-    });
+    const outcome = await recordPendingProposal(input, extractorVersion, reviewPatch, live);
     result.pendingProposalId = outcome.proposalId;
-    result.deduped = result.deduped || outcome.deduped;
-  }
-
-  if (Object.keys(conflictPatch).length > 0) {
-    const outcome = await recordProposal({
-      input,
-      extractorVersion,
-      patch: conflictPatch,
-      live,
-      status: "CONFLICT",
-      applyNow: false,
-      conflictDetail: {
-        ecli: { expected: "libre", actual: "déjà rattaché à une autre affaire" },
-      },
-    });
-    result.conflictProposalId = outcome.proposalId;
     result.deduped = result.deduped || outcome.deduped;
   }
 
@@ -334,77 +366,87 @@ function mergeCaseNumbers(current: string[], incoming: string[]): string[] {
   return Array.from(seen);
 }
 
-/**
- * Every field a proposal can touch, selected as a constant.
- *
- * A select object built from the patch keys at runtime makes Prisma's generated
- * types recurse ("Excessive stack depth comparing types"), so the shape stays
- * static and the caller reads only the keys it needs.
- */
-export const AFFAIR_PROPOSABLE_SELECT = {
-  id: true,
-  slug: true,
-  status: true,
-  involvement: true,
-  category: true,
-  severity: true,
-  factsDate: true,
-  startDate: true,
-  verdictDate: true,
-  court: true,
-  chamber: true,
-  caseNumber: true,
-  sentence: true,
-  prisonMonths: true,
-  prisonSuspended: true,
-  fineAmount: true,
-  ineligibilityMonths: true,
-  communityService: true,
-  otherSentence: true,
-  ecli: true,
-  pourvoiNumber: true,
-  caseNumbers: true,
-} as const;
+function pickObserved(
+  patch: Record<string, unknown>,
+  live: Record<string, unknown>
+): Record<string, unknown> {
+  const observed: Record<string, unknown> = {};
+  for (const key of Object.keys(patch)) observed[key] = live[key] ?? null;
+  return observed;
+}
 
-interface RecordProposalArgs {
+interface ProposalRowArgs {
   input: ProposeAffairUpdateInput;
   extractorVersion: string;
   patch: Record<string, unknown>;
-  live: Record<string, unknown>;
-  status: ProposalStatus;
-  applyNow: boolean;
-  conflictDetail?: ConflictDetail;
+  observedValues: Record<string, unknown>;
+  snapshot: AffairSnapshot;
+  payloadHash: string;
 }
 
-async function recordProposal(
-  args: RecordProposalArgs
-): Promise<{ proposalId: string; deduped: boolean }> {
-  const { input, extractorVersion, patch, live, status, applyNow } = args;
-  const keys = Object.keys(patch);
-  const observedValues: Record<string, unknown> = {};
-  for (const key of keys) observedValues[key] = live[key] ?? null;
+function buildProposalData(
+  args: ProposalRowArgs,
+  status: "PENDING" | "AUTO_APPLIED" | "CONFLICT",
+  extras: { appliedAt?: Date | null; conflictDetail?: ConflictDetail } = {}
+): Prisma.AffairUpdateProposalUncheckedCreateInput {
+  return {
+    affairId: args.input.affairId,
+    affairSnapshot: toJson(args.snapshot),
+    importer: args.input.importer,
+    importRunId: args.input.importRunId ?? null,
+    proposedPatch: toJson(args.patch),
+    observedValues: toJson(args.observedValues),
+    source: args.input.source,
+    sourceUrl: args.input.sourceUrl ?? null,
+    officialId: args.input.officialId ?? null,
+    sourceContentHash: args.input.sourceContentHash ?? null,
+    sourceExcerpt: args.input.sourceExcerpt ?? null,
+    metadata: args.input.metadata ?? undefined,
+    confidence: clampConfidence(args.input.confidence),
+    riskLevel: deriveRiskLevel(Object.keys(args.patch), args.observedValues),
+    rationale: args.input.rationale,
+    extractorVersion: args.extractorVersion,
+    payloadHash: args.payloadHash,
+    status,
+    appliedAt: extras.appliedAt ?? null,
+    conflictDetail: extras.conflictDetail ? toJson(extras.conflictDetail) : undefined,
+  };
+}
 
+/**
+ * Idempotency lookup. A findFirst rather than findUnique because affairId is
+ * nullable now; the unique index still serves the query.
+ */
+async function findExisting(
+  affairId: string,
+  importer: string,
+  payloadHash: string
+): Promise<{ id: string; status: string } | null> {
+  return db.affairUpdateProposal.findFirst({
+    where: { affairId, importer, payloadHash },
+    select: { id: true, status: true },
+  });
+}
+
+async function recordPendingProposal(
+  input: ProposeAffairUpdateInput,
+  extractorVersion: string,
+  patch: Record<string, unknown>,
+  live: LiveAffair
+): Promise<{ proposalId: string; deduped: boolean }> {
+  const observedValues = pickObserved(patch, live);
   const payloadHash = computePayloadHash({
     importer: input.importer,
     extractorVersion,
     source: input.source,
     sourceUrl: input.sourceUrl,
     officialId: input.officialId,
+    sourceContentHash: input.sourceContentHash,
     proposedPatch: patch,
     observedValues,
   });
 
-  const existing = await db.affairUpdateProposal.findUnique({
-    where: {
-      affairId_importer_payloadHash: {
-        affairId: input.affairId,
-        importer: input.importer,
-        payloadHash,
-      },
-    },
-    select: { id: true, status: true },
-  });
-
+  const existing = await findExisting(input.affairId, input.importer, payloadHash);
   if (existing) {
     // Never resurrect a terminal state. A rejected patch replayed by the next
     // cron run must stay rejected instead of climbing back into the queue.
@@ -417,39 +459,130 @@ async function recordProposal(
     return { proposalId: existing.id, deduped: true };
   }
 
-  const data: Prisma.AffairUpdateProposalUncheckedCreateInput = {
-    affairId: input.affairId,
+  const created = await db.affairUpdateProposal.create({
+    data: buildProposalData(
+      {
+        input,
+        extractorVersion,
+        patch,
+        observedValues,
+        snapshot: buildAffairSnapshot(live),
+        payloadHash,
+      },
+      "PENDING"
+    ),
+    select: { id: true },
+  });
+  return { proposalId: created.id, deduped: false };
+}
+
+type AutoOutcome =
+  | { kind: "applied"; proposalId: string; appliedFields: ProposableField[]; deduped: boolean }
+  | { kind: "conflict"; proposalId: string; deduped: boolean }
+  | { kind: "skipped"; deduped: boolean };
+
+/**
+ * Auto-applies absent, non-contradictory machine identifiers.
+ *
+ * Eligibility is re-checked INSIDE the transaction: between the classification
+ * read and this write, another run or an editor may have filled the field or
+ * claimed the ECLI. Proposal row, affair write, audit entry and terminal state
+ * commit together or not at all.
+ */
+async function applyAutoCandidates(
+  input: ProposeAffairUpdateInput,
+  extractorVersion: string,
+  candidates: Record<string, unknown>,
+  liveAtRead: LiveAffair
+): Promise<AutoOutcome> {
+  const payloadHash = computePayloadHash({
     importer: input.importer,
-    importRunId: input.importRunId ?? null,
-    proposedPatch: toJson(patch),
-    observedValues: toJson(observedValues),
-    source: input.source,
-    sourceUrl: input.sourceUrl ?? null,
-    officialId: input.officialId ?? null,
-    sourceExcerpt: input.sourceExcerpt ?? null,
-    metadata: input.metadata ?? undefined,
-    confidence: clampConfidence(input.confidence),
-    riskLevel: deriveRiskLevel(keys, observedValues),
-    rationale: input.rationale,
     extractorVersion,
-    payloadHash,
-    status,
-    conflictDetail: args.conflictDetail ? toJson(args.conflictDetail) : undefined,
-    appliedAt: applyNow ? new Date() : null,
-  };
+    source: input.source,
+    sourceUrl: input.sourceUrl,
+    officialId: input.officialId,
+    sourceContentHash: input.sourceContentHash,
+    proposedPatch: candidates,
+    observedValues: pickObserved(candidates, liveAtRead),
+  });
 
-  if (!applyNow) {
-    const created = await db.affairUpdateProposal.create({ data, select: { id: true } });
-    return { proposalId: created.id, deduped: false };
-  }
+  const existing = await findExisting(input.affairId, input.importer, payloadHash);
+  if (existing) return { kind: "skipped", deduped: true };
 
-  // Auto-applied: the affair write and its trace commit together.
-  const created = await db.$transaction(async (tx) => {
-    const row = await tx.affairUpdateProposal.create({ data, select: { id: true } });
+  return db.$transaction(async (tx) => {
+    const live = (await tx.affair.findUnique({
+      where: { id: input.affairId },
+      select: AFFAIR_PROPOSABLE_SELECT,
+    })) as unknown as LiveAffair | null;
+    if (!live) return { kind: "skipped" as const, deduped: false };
+
+    const writePatch: Record<string, unknown> = {};
+    const conflicts: ConflictDetail = {};
+
+    for (const [field, proposed] of Object.entries(candidates)) {
+      if (field === "caseNumbers") {
+        const current = Array.isArray(live.caseNumbers) ? (live.caseNumbers as string[]) : [];
+        const merged = mergeCaseNumbers(current, Array.isArray(proposed) ? proposed : []);
+        // Additive only: nothing new means nothing to do.
+        if (merged.length > current.length) writePatch.caseNumbers = merged;
+        continue;
+      }
+
+      const actual = normalizeForCompare(live[field]);
+      if (actual !== EMPTY_VALUE) {
+        conflicts[field] = { expected: EMPTY_VALUE, actual };
+        continue;
+      }
+
+      if (field === "ecli") {
+        const taken = await tx.affair.findFirst({
+          where: { ecli: String(proposed), id: { not: input.affairId } },
+          select: { id: true },
+        });
+        if (taken) {
+          // "Absent" but not "non-contradictory": Affair.ecli is @unique, so a
+          // blind write would raise P2002. Surface it instead.
+          conflicts[field] = { expected: EMPTY_VALUE, actual: "déjà rattaché à une autre affaire" };
+          continue;
+        }
+      }
+
+      writePatch[field] = proposed;
+    }
+
+    const rowArgs: ProposalRowArgs = {
+      input,
+      extractorVersion,
+      patch: candidates,
+      observedValues: pickObserved(candidates, live),
+      snapshot: buildAffairSnapshot(live),
+      payloadHash,
+    };
+
+    if (Object.keys(conflicts).length > 0) {
+      const row = await tx.affairUpdateProposal.create({
+        data: buildProposalData(rowArgs, "CONFLICT", { conflictDetail: conflicts }),
+        select: { id: true },
+      });
+      return { kind: "conflict" as const, proposalId: row.id, deduped: false };
+    }
+
+    if (Object.keys(writePatch).length === 0) {
+      return { kind: "skipped" as const, deduped: false };
+    }
+
+    const row = await tx.affairUpdateProposal.create({
+      data: buildProposalData({ ...rowArgs, patch: writePatch }, "AUTO_APPLIED", {
+        appliedAt: new Date(),
+      }),
+      select: { id: true },
+    });
+
     await tx.affair.update({
       where: { id: input.affairId },
-      data: buildPrismaData(validatePatch(patch)),
+      data: buildPrismaData(validatePatch(writePatch)),
     });
+
     await tx.auditLog.create({
       data: {
         action: "UPDATE",
@@ -460,15 +593,19 @@ async function recordProposal(
           importer: input.importer,
           extractorVersion,
           proposalId: row.id,
-          before: observedValues,
-          after: patch,
+          before: pickObserved(writePatch, live),
+          after: writePatch,
         }),
       },
     });
-    return row;
-  });
 
-  return { proposalId: created.id, deduped: false };
+    return {
+      kind: "applied" as const,
+      proposalId: row.id,
+      appliedFields: Object.keys(writePatch) as ProposableField[],
+      deduped: false,
+    };
+  });
 }
 
 function clampConfidence(value: number): number {
@@ -478,12 +615,4 @@ function clampConfidence(value: number): number {
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-/**
- * Turns a validated patch into a Prisma update payload. Only whitelisted keys
- * survive validatePatch(), so this cannot widen the write surface.
- */
-export function buildPrismaData(patch: AffairPatch): Prisma.AffairUpdateInput {
-  return { ...patch } as Prisma.AffairUpdateInput;
 }

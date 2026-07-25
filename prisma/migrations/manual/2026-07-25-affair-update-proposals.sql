@@ -30,7 +30,10 @@ CREATE INDEX "ImportRun_status_idx" ON "ImportRun" ("status");
 
 CREATE TABLE "AffairUpdateProposal" (
   "id"               TEXT NOT NULL,
-  "affairId"         TEXT NOT NULL,
+  -- Nullable on purpose: deleting an affair must not erase the history of what
+  -- was proposed about it and how a human ruled on it.
+  "affairId"         TEXT,
+  "affairSnapshot"   JSONB NOT NULL,
   "importer"         TEXT NOT NULL,
   "importRunId"      TEXT,
   "proposedPatch"    JSONB NOT NULL,
@@ -38,6 +41,7 @@ CREATE TABLE "AffairUpdateProposal" (
   "source"           "SourceType" NOT NULL,
   "sourceUrl"        TEXT,
   "officialId"       TEXT,
+  "sourceContentHash" TEXT,
   "sourceExcerpt"    TEXT,
   "metadata"         JSONB,
   "confidence"       INTEGER NOT NULL,
@@ -56,9 +60,10 @@ CREATE TABLE "AffairUpdateProposal" (
   CONSTRAINT "AffairUpdateProposal_pkey" PRIMARY KEY ("id")
 );
 
+-- SET NULL, not CASCADE: the proposal and its review decision outlive the affair.
 ALTER TABLE "AffairUpdateProposal"
   ADD CONSTRAINT "AffairUpdateProposal_affairId_fkey"
-  FOREIGN KEY ("affairId") REFERENCES "Affair" ("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("affairId") REFERENCES "Affair" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "AffairUpdateProposal"
   ADD CONSTRAINT "AffairUpdateProposal_importRunId_fkey"
