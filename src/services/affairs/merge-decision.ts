@@ -9,12 +9,18 @@
  * The asymmetry is deliberate: a wrong merge between drafts costs a re-split of
  * material nobody has read, while a wrong merge involving a published affair
  * deletes a page, mixes two sets of judicial facts about a named person, and
- * retires a URL. So automation stops at the published boundary unless an official
- * identifier proves the two rows describe one decision.
+ * retires a URL. So automation stops at the published boundary, full stop.
+ *
+ * It used to stop there *unless* a court-assigned identifier was shared. The first
+ * real triage killed that exception (issue #525): two Carignon convictions share a
+ * pourvoi number, the facts date, the verdict date and one cassation ruling, and
+ * they are still two separate counts, so two affairs. A shared identifier means a
+ * shared decision or proceeding, never a shared editorial affair. Nothing crosses
+ * the published boundary without a person now.
  */
 
 import type { PublicationStatus, SourceType } from "@/generated/prisma";
-import { isDeterministicMatch, type MatchConfidence } from "./matching";
+import { isOfficialJudicialIdentifierMatch, type MatchConfidence } from "./matching";
 
 /** Statuses this lot handles. See the issue for ARCHIVED/EXCLUDED/REJECTED. */
 const MERGEABLE_STATUSES: ReadonlySet<PublicationStatus> = new Set([
@@ -22,11 +28,14 @@ const MERGEABLE_STATUSES: ReadonlySet<PublicationStatus> = new Set([
   "PUBLISHED",
 ] as PublicationStatus[]);
 
-export type MergeDecision =
-  | "AUTO_MERGE_DRAFTS"
-  | "AUTO_ABSORB_DRAFT_INTO_PUBLISHED"
-  | "REVIEW_REQUIRED"
-  | "NOT_ELIGIBLE";
+/**
+ * What the automatic planner may conclude.
+ *
+ * There is no automatic absorption into a published affair: that path exists as a
+ * service (`absorbDraftIntoPublished`) but is only reachable from a confirmed
+ * admin action, never from a cron (issue #525).
+ */
+export type MergeDecision = "AUTO_MERGE_DRAFTS" | "REVIEW_REQUIRED" | "NOT_ELIGIBLE";
 
 export interface MergeDecisionAffair {
   id: string;
@@ -47,7 +56,11 @@ export interface MergeDecisionInput {
   contradictions?: string[];
   /**
    * Sensitive fields the two rows state differently that a merge could neither
-   * write nor turn into a proposal, so absorbing would drop a claim in silence.
+   * write nor turn into a proposal.
+   *
+   * Informational since automation stopped crossing the published boundary: it is
+   * shown to the reviewer rather than gating a decision. Draft merges keep their
+   * previous behaviour and do not consult it.
    */
   unpropagatableDifferences?: string[];
 }
@@ -81,7 +94,6 @@ function pickDraftSurvivor(
 export function decideMergeAction(input: MergeDecisionInput): MergePlan {
   const { affairA: a, affairB: b, confidence, matchedBy } = input;
   const contradictions = input.contradictions ?? [];
-  const unpropagatable = input.unpropagatableDifferences ?? [];
 
   if (a.id === b.id) {
     return { decision: "NOT_ELIGIBLE", reason: "Une affaire ne peut pas fusionner avec elle-même" };
@@ -117,42 +129,21 @@ export function decideMergeAction(input: MergeDecisionInput): MergePlan {
     };
   }
 
-  // One of each: absorption is directed, the published affair always survives.
+  // One draft, one published: never automatic, whatever the evidence.
+  //
+  // A shared identifier is reported in the reason rather than acted on: it is the
+  // strongest reason to *read* the pair, and the Carignon case is exactly why it
+  // cannot be a reason to merge it.
   if (aPublished !== bPublished) {
-    const published = aPublished ? a : b;
-    const draft = aPublished ? b : a;
-
-    if (!confident) {
+    if (isOfficialJudicialIdentifierMatch(matchedBy)) {
       return {
         decision: "REVIEW_REQUIRED",
-        reason: `Rapprochement non concluant (${confidence}) face à une affaire publiée`,
+        reason: `Identifiant de décision commun (${matchedBy}) entre un brouillon et une affaire publiée : une même décision peut porter plusieurs chefs, donc plusieurs fiches`,
       };
     }
-    if (!isDeterministicMatch(matchedBy)) {
-      return {
-        decision: "REVIEW_REQUIRED",
-        reason: `Rapprochement heuristique (${matchedBy}) : pas d'identifiant judiciaire commun`,
-      };
-    }
-    if (unpropagatable.length > 0) {
-      return {
-        decision: "REVIEW_REQUIRED",
-        reason: `Le brouillon affirme autre chose sur : ${unpropagatable.join(", ")}`,
-      };
-    }
-    // A human already validated this draft; deciding it is a duplicate is theirs.
-    if (draft.verifiedAt !== null) {
-      return {
-        decision: "REVIEW_REQUIRED",
-        reason: "Le brouillon a déjà été validé par une relecture humaine",
-      };
-    }
-
     return {
-      decision: "AUTO_ABSORB_DRAFT_INTO_PUBLISHED",
-      keepId: published.id,
-      removeId: draft.id,
-      reason: `Identifiant judiciaire commun (${matchedBy}) : le brouillon est absorbé par l'affaire publiée`,
+      decision: "REVIEW_REQUIRED",
+      reason: `Brouillon rapproché d'une affaire publiée (${matchedBy}/${confidence}) : la fusion retire une page publique`,
     };
   }
 
