@@ -7,17 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, ExternalLink, Link2, Loader2 } from "lucide-react";
+// Type-only, so no service or database code reaches the client bundle. Imported
+// rather than redeclared: the local copy still listed an automatic absorption
+// months after the planner stopped being able to return one (issue #525).
+import type { MergeDecision } from "@/services/affairs/merge-decision";
 
 // Issue #525: review queue for detected duplicate pairs, grouped by politician.
 // Detection now covers published affairs, so most pairs land here rather than in
 // the cron. Nothing on this page moves data without an explicit click.
 
 type Classification = "DUPLICATE" | "LINKED" | "DISTINCT" | "UNCERTAIN";
-type MergeDecision =
-  | "AUTO_MERGE_DRAFTS"
-  | "AUTO_ABSORB_DRAFT_INTO_PUBLISHED"
-  | "REVIEW_REQUIRED"
-  | "NOT_ELIGIBLE";
 
 interface PairSide {
   id: string;
