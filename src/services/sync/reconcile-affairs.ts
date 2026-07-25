@@ -2,20 +2,21 @@
  * Affair reconciliation service.
  *
  * Detects potential duplicate affairs and folds the ones automation is allowed to
- * fold. Since detection was widened to published affairs (issue #525), the queue
- * mixes pairs a cron may merge with pairs that must never move without a human, so
- * every pair goes through decideMergeAction() first.
+ * fold: draft pairs, and nothing else. Since detection was widened to published
+ * affairs (issue #525), the queue mixes those with pairs that must never move
+ * without a human, so every pair goes through decideMergeAction() first.
+ *
+ * Nothing crosses the published boundary here. Absorbing a draft into a published
+ * fiche is still supported, by `absorbDraftIntoPublished()`, but only from a
+ * confirmed admin action.
  */
 
 import {
   findPotentialDuplicates,
   mergeAffairs,
-  ABSORPTION_ADDITIVE_FIELDS,
   type PotentialDuplicate,
 } from "@/services/affairs/reconciliation";
 import { decideMergeAction, type MergeDecision } from "@/services/affairs/merge-decision";
-import { absorbDraftIntoPublished } from "@/services/affairs/absorb-draft";
-import { withImportRun, IMPORTER_RECONCILE } from "@/services/affairs/import-run";
 import { db } from "@/lib/db";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 
@@ -30,10 +31,8 @@ export interface ReconcileAffairsOptions {
 
 export interface ReconcileAffairsStats {
   duplicatesFound: number;
-  /** Draft pairs folded together. */
+  /** Draft pairs folded together. The only merge this path performs. */
   merged: number;
-  /** Drafts absorbed by a published affair on a court-assigned identifier. */
-  absorbed: number;
   /** Pairs left for a human, by reason. */
   reviewRequired: number;
   notEligible: number;
@@ -85,7 +84,6 @@ export async function reconcileAffairs(
   const empty: ReconcileAffairsStats = {
     duplicatesFound: 0,
     merged: 0,
-    absorbed: 0,
     reviewRequired: 0,
     notEligible: 0,
     proposalsCreated: 0,
@@ -110,7 +108,6 @@ export async function reconcileAffairs(
   if (!autoMerge) return stats;
 
   const draftMerges = planned.filter((p) => p.decision === "AUTO_MERGE_DRAFTS");
-  const absorptions = planned.filter((p) => p.decision === "AUTO_ABSORB_DRAFT_INTO_PUBLISHED");
 
   // Survivors of every merge that actually landed, for one invalidation pass.
   const survivors: string[] = [];
@@ -131,40 +128,8 @@ export async function reconcileAffairs(
     }
   }
 
-  if (absorptions.length === 0) {
-    await invalidateAfterMerges(survivors);
-    return stats;
-  }
-
-  if (dryRun) {
-    stats.absorbed += absorptions.length;
-    return stats;
-  }
-
-  // Proposals must belong to a run, so one is opened only when an absorption
-  // actually has to write something (issue #513 invariant).
-  await withImportRun(IMPORTER_RECONCILE, async ({ importRunId, setStats }) => {
-    for (const plan of absorptions) {
-      try {
-        const result = await absorbDraftIntoPublished({
-          publishedId: plan.keepId!,
-          draftId: plan.removeId!,
-          importRunId,
-          reason: plan.reason,
-          additiveFields: ABSORPTION_ADDITIVE_FIELDS,
-        });
-        stats.absorbed++;
-        stats.proposalsCreated += result.proposalsCreated;
-        survivors.push(plan.keepId!);
-      } catch {
-        stats.errors++;
-      }
-    }
-    setStats({ absorbed: stats.absorbed, proposalsCreated: stats.proposalsCreated });
-  });
-
-  // After the run committed, never during it.
-  await invalidateAfterMerges(survivors);
+  // After every merge committed, never during.
+  if (!dryRun) await invalidateAfterMerges(survivors);
 
   return stats;
 }

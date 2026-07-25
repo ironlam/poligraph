@@ -104,19 +104,111 @@ describe("reconcileAffairs — invalidation du chemin cron (#525)", () => {
     expect(h.invalidateAffectedPoliticians).toHaveBeenCalledWith(["jean-dupont"]);
   });
 
-  it("invalide aussi après une absorption dans une affaire publiée", async () => {
+  it("n'appelle jamais l'absorption sur une paire traversant le publié", async () => {
+    // Le chemin automatique s'arrête à la frontière du publié, quelle que soit la
+    // force du signal : un identifiant judiciaire commun désigne une décision
+    // partagée, pas une même affaire éditoriale (#525).
     h.findPotentialDuplicates.mockResolvedValue([
-      pair({ id: "pub", publicationStatus: "PUBLISHED" }, { id: "draft" }),
+      pair(
+        { id: "pub", publicationStatus: "PUBLISHED" },
+        { id: "draft" },
+        {
+          confidence: "CERTAIN",
+          matchedBy: "ecli",
+          score: 1,
+        }
+      ),
     ]);
-    h.absorbDraftIntoPublished.mockImplementation(async () => {
-      order.push("absorb");
-      return { proposalsCreated: 1, proposedFields: ["court"], recordedDifferences: [] };
-    });
 
     const stats = await reconcileAffairs({ autoMerge: true });
 
-    expect(stats.absorbed).toBe(1);
-    expect(order).toEqual(["absorb", "invalidate", "invalidate-politicians"]);
+    expect(h.absorbDraftIntoPublished).not.toHaveBeenCalled();
+    expect(h.mergeAffairs).not.toHaveBeenCalled();
+    expect(stats.reviewRequired).toBe(1);
+    expect(h.invalidateEntity).not.toHaveBeenCalled();
+  });
+
+  it("n'ouvre aucun run d'import quand rien n'est à absorber", async () => {
+    h.findPotentialDuplicates.mockResolvedValue([
+      pair(
+        { id: "pub", publicationStatus: "PUBLISHED" },
+        { id: "draft" },
+        {
+          matchedBy: "pourvoiNumber",
+        }
+      ),
+    ]);
+
+    await reconcileAffairs({ autoMerge: true });
+
+    expect(h.withImportRun).not.toHaveBeenCalled();
+  });
+
+  it("ne rapporte aucune absorption : la statistique n'existe plus", async () => {
+    h.findPotentialDuplicates.mockResolvedValue([
+      pair({ id: "pub", publicationStatus: "PUBLISHED" }, { id: "draft" }),
+    ]);
+
+    const stats = await reconcileAffairs({ autoMerge: true });
+
+    expect(stats).not.toHaveProperty("absorbed");
+  });
+
+  it("ne compte aucune absorption en essai à blanc", async () => {
+    h.findPotentialDuplicates.mockResolvedValue([
+      pair(
+        { id: "pub", publicationStatus: "PUBLISHED" },
+        { id: "draft" },
+        {
+          confidence: "CERTAIN",
+          matchedBy: "ecli",
+        }
+      ),
+      pair({ id: "d1" }, { id: "d2" }),
+    ]);
+
+    const stats = await reconcileAffairs({ autoMerge: true, dryRun: true });
+
+    expect(stats).not.toHaveProperty("absorbed");
+    // Seule la paire de brouillons est planifiée comme fusionnable.
+    expect(stats.merged).toBe(1);
+    expect(stats.reviewRequired).toBe(1);
+    expect(h.absorbDraftIntoPublished).not.toHaveBeenCalled();
+    expect(h.mergeAffairs).not.toHaveBeenCalled();
+    expect(h.invalidateEntity).not.toHaveBeenCalled();
+  });
+
+  it("laisse une paire publiée + publiée en revue", async () => {
+    h.findPotentialDuplicates.mockResolvedValue([
+      pair(
+        { id: "a", publicationStatus: "PUBLISHED" },
+        { id: "b", publicationStatus: "PUBLISHED" },
+        { confidence: "CERTAIN", matchedBy: "ecli" }
+      ),
+    ]);
+
+    const stats = await reconcileAffairs({ autoMerge: true });
+
+    expect(stats.reviewRequired).toBe(1);
+    expect(h.mergeAffairs).not.toHaveBeenCalled();
+  });
+
+  it("ne supprime jamais automatiquement un brouillon vérifié", async () => {
+    h.findPotentialDuplicates.mockResolvedValue([
+      pair(
+        { id: "a" },
+        { id: "b", verifiedAt: new Date("2026-01-01") },
+        {
+          confidence: "CERTAIN",
+          matchedBy: "ecli",
+        }
+      ),
+    ]);
+
+    const stats = await reconcileAffairs({ autoMerge: true });
+
+    expect(stats.reviewRequired).toBe(1);
+    expect(h.mergeAffairs).not.toHaveBeenCalled();
   });
 
   it("n'invalide rien quand aucune fusion n'a eu lieu", async () => {

@@ -8,8 +8,10 @@
  * proposal queue instead, so a human decides whether a published record changes
  * (issue #525, §4).
  *
- * Only reached when an official identifier already proved the two rows describe
- * one decision. See decideMergeAction().
+ * Only reached from a confirmed admin action. The automatic planner never chooses
+ * this path: a shared court identifier means a shared decision, not a shared
+ * editorial affair, so nothing crosses the published boundary without a person
+ * (issue #525).
  */
 
 import { db } from "@/lib/db";
@@ -57,6 +59,14 @@ export interface AbsorbDraftInput {
   /** The merge plan's reason, kept verbatim in the audit trail and rationale. */
   reason: string;
   additiveFields?: readonly AdditiveMergeField[];
+  /** Forwarded to the merge so the ruling commits with it. */
+  pairDecision?: {
+    reviewedBy: string;
+    notes?: string | null;
+    signal: { confidence: string; matchedBy: string; score: number };
+    keepUpdatedAt: Date;
+    removeUpdatedAt: Date;
+  };
 }
 
 export interface AbsorbDraftResult {
@@ -123,6 +133,19 @@ export async function absorbDraftIntoPublished(
   // on a pair that failed to merge would be unactionable.
   await mergeAffairs(input.publishedId, input.draftId, {
     additiveFields: input.additiveFields ?? ABSORPTION_ADDITIVE_FIELDS,
+    removeMustNotBePublished: true,
+    ...(input.pairDecision
+      ? {
+          pairDecision: {
+            otherAffairId: input.draftId,
+            reviewedBy: input.pairDecision.reviewedBy,
+            notes: input.pairDecision.notes,
+            signal: input.pairDecision.signal,
+            keepUpdatedAt: input.pairDecision.keepUpdatedAt,
+            removeUpdatedAt: input.pairDecision.removeUpdatedAt,
+          },
+        }
+      : {}),
     auditNotes: {
       absorbedDraft: input.draftId,
       reason: input.reason,
