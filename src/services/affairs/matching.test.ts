@@ -5,9 +5,12 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import {
+  pairingRestsOnWildcard,
   pickConfidentMatch,
   sameCategoryFamily,
+  significantTitleWords,
   titleContainmentMatch,
+  titlesShareVocabulary,
   verdictDatesConflict,
 } from "./matching";
 
@@ -251,5 +254,107 @@ describe("pickConfidentMatch — issue #520", () => {
 
   it("plusieurs CERTAIN : ambigu aussi, on ne devine pas", () => {
     expect(pickConfidentMatch([m("a", "CERTAIN", 1), m("b", "CERTAIN", 1)]).kind).toBe("ambiguous");
+  });
+});
+
+// Issue #521 — AUTRE pairs with every family, so on its own it carries no
+// information about the facts. Fixtures use generic legal phrasings rather than
+// real titles: the pair that motivated this guard is a pair of unpublished drafts.
+describe("pairingRestsOnWildcard — issue #521", () => {
+  it("est vrai quand seul AUTRE rapproche les deux catégories", () => {
+    expect(pairingRestsOnWildcard("AUTRE", "AGRESSION_SEXUELLE")).toBe(true);
+    expect(pairingRestsOnWildcard("RECEL", "AUTRE")).toBe(true);
+  });
+
+  it("est faux pour AUTRE contre AUTRE : l'égalité suffit", () => {
+    expect(pairingRestsOnWildcard("AUTRE", "AUTRE")).toBe(false);
+  });
+
+  it("est faux pour deux catégories identiques", () => {
+    expect(pairingRestsOnWildcard("MENACE", "MENACE")).toBe(false);
+  });
+
+  it("est faux quand une famille nommée les rapproche déjà", () => {
+    expect(pairingRestsOnWildcard("DETOURNEMENT_FONDS_PUBLICS", "FAVORITISME")).toBe(false);
+    expect(pairingRestsOnWildcard("VIOLENCE", "MENACE")).toBe(false);
+    expect(pairingRestsOnWildcard("DIFFAMATION", "INJURE")).toBe(false);
+  });
+
+  it("est faux quand rien ne les rapproche", () => {
+    expect(pairingRestsOnWildcard("MENACE", "FRAUDE_FISCALE")).toBe(false);
+  });
+});
+
+describe("significantTitleWords — issue #521", () => {
+  it("replie les accents", () => {
+    expect(significantTitleWords("Étouffement")).toEqual(new Set(["etouffement"]));
+    expect(significantTitleWords("referes")).toEqual(significantTitleWords("référés"));
+    expect(significantTitleWords("Détention")).toEqual(significantTitleWords("detention"));
+  });
+
+  it("écarte les mots trop courts pour identifier quoi que ce soit", () => {
+    expect(significantTitleWords("Vol de la clé")).toEqual(new Set([]));
+  });
+
+  it("écarte le vocabulaire judiciaire et éditorial générique", () => {
+    for (const filler of ["Affaire", "Enquête", "Procédure", "Plainte", "Soupçons", "Accusation"]) {
+      expect(significantTitleWords(`${filler} Untel`)).toEqual(new Set(["untel"]));
+    }
+  });
+
+  it("garde les mots qui nomment les faits", () => {
+    expect(significantTitleWords("Tentative d'étouffement judiciaire")).toEqual(
+      new Set(["tentative", "etouffement", "judiciaire"])
+    );
+  });
+});
+
+describe("titlesShareVocabulary — issue #521", () => {
+  it("reconnaît deux formulations des mêmes faits", () => {
+    expect(
+      titlesShareVocabulary(
+        "Soupçons de tentative d'étouffement d'une procédure",
+        "Tentative présumée d'étouffement d'une procédure"
+      )
+    ).toBe(true);
+  });
+
+  it("rejette deux faits qui ne partagent aucun vocabulaire", () => {
+    // Forme du faux positif relevé au tri de #525 : une ordonnance de référé sur
+    // des conditions de détention face à une affaire criminelle sans rapport.
+    expect(
+      titlesShareVocabulary(
+        "Ordonnance du juge des référés sur les conditions de détention",
+        "Enlèvement suivi de meurtre"
+      )
+    ).toBe(false);
+  });
+
+  it("ne se laisse pas prendre par le seul mot « affaire »", () => {
+    expect(titlesShareVocabulary("Affaire Untel", "Affaire Machin")).toBe(false);
+  });
+
+  it("ne se laisse pas prendre par une accumulation de mots génériques", () => {
+    expect(
+      titlesShareVocabulary(
+        "Enquête préliminaire ouverte dans une procédure",
+        "Plainte déposée dans une procédure, enquête en cours"
+      )
+    ).toBe(false);
+  });
+
+  it("accepte un seul nom partagé, qui suffit comme piste de relecture", () => {
+    expect(
+      titlesShareVocabulary(
+        "Gestion présumée illégale au Havre",
+        "Soupçons de favoritisme au Havre"
+      )
+    ).toBe(true);
+  });
+
+  it("rapproche malgré une orthographe accentuée différente", () => {
+    expect(
+      titlesShareVocabulary("Ordonnance de référé", "Décision rendue en refere sur le fond")
+    ).toBe(true);
   });
 });

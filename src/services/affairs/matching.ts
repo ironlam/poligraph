@@ -59,12 +59,129 @@ function categoryFamily(category: string): string | null {
  * AUTRE matches any family (imports frequently fall back to AUTRE
  * when the legal qualification is unclear).
  */
-export function sameCategoryFamily(a: string, b: string): boolean {
-  if (a === b) return true;
-  if (a === "AUTRE" || b === "AUTRE") return true;
+/** Whether a named family pairs these two categories, wildcard aside. */
+function sameNamedFamily(a: string, b: string): boolean {
   const familyA = categoryFamily(a);
   const familyB = categoryFamily(b);
   return familyA !== null && familyA === familyB;
+}
+
+export function sameCategoryFamily(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a === "AUTRE" || b === "AUTRE") return true;
+  return sameNamedFamily(a, b);
+}
+
+/**
+ * Whether the AUTRE wildcard is the only reason these categories pair up.
+ *
+ * A shared family is evidence about the facts; the wildcard is not, since AUTRE
+ * means "no legal qualification was established". Callers ask for a second signal
+ * before pairing on it (issue #521). Two AUTRE categories are equal, not paired by
+ * the wildcard, so they are excluded here.
+ */
+export function pairingRestsOnWildcard(a: string, b: string): boolean {
+  if (a === b) return false;
+  if (a !== "AUTRE" && b !== "AUTRE") return false;
+  return !sameNamedFamily(a, b);
+}
+
+/**
+ * Words that appear in affair titles regardless of which facts they describe:
+ * French function words of four letters or more (shorter ones are already dropped
+ * by the length filter) and judicial or editorial boilerplate.
+ *
+ * They must not count as shared vocabulary. "Affaire X" and "Affaire Y" have
+ * nothing in common but the word "affaire", and the procedural stage is carried by
+ * the status field, not by the title.
+ */
+const TITLE_NOISE_WORDS = new Set([
+  // Function words
+  "pour",
+  "dans",
+  "avec",
+  "sans",
+  "sous",
+  "mais",
+  "leur",
+  "leurs",
+  "cette",
+  "entre",
+  "contre",
+  "apres",
+  "avant",
+  "chez",
+  "meme",
+  "aussi",
+  "donc",
+  "ainsi",
+  "plus",
+  "tout",
+  "tous",
+  "toute",
+  "toutes",
+  // Judicial and editorial boilerplate
+  "affaire",
+  "affaires",
+  "dossier",
+  "dossiers",
+  "enquete",
+  "enquetes",
+  "preliminaire",
+  "procedure",
+  "procedures",
+  "plainte",
+  "plaintes",
+  "plainte",
+  "proces",
+  "examen",
+  "soupcon",
+  "soupcons",
+  "suspicion",
+  "suspicions",
+  "accusation",
+  "accusations",
+  "presume",
+  "presumee",
+  "presumes",
+  "presumees",
+  "ouverte",
+  "cours",
+  "deposee",
+  "rendue",
+]);
+
+/**
+ * The words of a title that can identify which facts it describes.
+ *
+ * Accents are folded so the same word matches across import spellings.
+ */
+export function significantTitleWords(title: string): Set<string> {
+  return new Set(
+    title
+      .normalize("NFD")
+      // \p{Mn} keeps this ASCII-only: a literal combining-mark range is invisible in source.
+      .replace(/\p{Mn}/gu, "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 4 && !TITLE_NOISE_WORDS.has(word))
+  );
+}
+
+/**
+ * Whether two titles share at least one word that names the facts.
+ *
+ * Deliberately a single shared word rather than a ratio: measured on production
+ * data, the pairs worth keeping shared several words and the ones worth dropping
+ * shared none, so any threshold in between would be an unmeasurable knob. One
+ * shared word is a lead a reviewer can follow; zero is not.
+ */
+export function titlesShareVocabulary(a: string, b: string): boolean {
+  const wordsA = significantTitleWords(a);
+  for (const word of significantTitleWords(b)) {
+    if (wordsA.has(word)) return true;
+  }
+  return false;
 }
 
 export interface MatchResult {
