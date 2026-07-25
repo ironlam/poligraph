@@ -41,6 +41,10 @@ import { ShareBar } from "@/components/ui/ShareBar";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import { buildPublicAffairLookupWheres, pickPublicLinkedAffair } from "@/lib/affairs/affair-lookup";
 import { resolveDecisionFields } from "@/lib/affairs/decision-fields";
+import {
+  buildCourtDecisionDisplay,
+  sortCourtDecisionsForDisplay,
+} from "@/lib/affairs/court-decision-display";
 import { SlappBadge } from "@/components/slapp/SlappBadge";
 import { CriteriaList } from "@/components/slapp/CriteriaList";
 import type { SlappCriteriaPayload } from "@/config/slapp";
@@ -205,7 +209,9 @@ export default async function AffairDetailPage({ params }: PageProps) {
 
   // Double lecture des identifiants déplacés vers la décision (#536). `court` et
   // `verdictDate` restent lus depuis l'affaire : ils sont éditoriaux.
-  const linkedDecisions = affair.courtDecisions.map((link) => link.courtDecision);
+  const linkedDecisions = sortCourtDecisionsForDisplay(
+    affair.courtDecisions.map((link) => link.courtDecision)
+  );
   const resolvedDecisionFields = resolveDecisionFields(affair, linkedDecisions);
 
   const superCategory = CATEGORY_TO_SUPER[affair.category as AffairCategory];
@@ -455,18 +461,27 @@ export default async function AffairDetailPage({ params }: PageProps) {
                     {linkedDecisions.length > 1 ? "s" : ""}
                   </h3>
                   <ul className="space-y-2 text-sm">
-                    {linkedDecisions.map((decision) => (
-                      <li key={decision.id} className="text-muted-foreground">
-                        {decision.pourvoiNumber && (
-                          <span className="font-mono">{decision.pourvoiNumber}</span>
-                        )}
-                        {decision.court && <span> — {decision.court}</span>}
-                        {decision.decisionDate && (
-                          <span> — {formatDate(decision.decisionDate)}</span>
-                        )}
-                        {decision.solution && <span> — {decision.solution}</span>}
-                      </li>
-                    ))}
+                    {linkedDecisions.map((decision) => {
+                      const display = buildCourtDecisionDisplay(decision, formatDate);
+                      return (
+                        <li key={decision.id} className="text-muted-foreground">
+                          <span>{display.parts.join(" — ")}</span>
+                          {display.link && (
+                            <>
+                              {" "}
+                              <a
+                                href={display.link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline underline-offset-4 hover:text-foreground"
+                              >
+                                {display.link.label}
+                              </a>
+                            </>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                   {resolvedDecisionFields.hasMultipleDecisions && (
                     <p className="mt-2 text-xs text-muted-foreground">
