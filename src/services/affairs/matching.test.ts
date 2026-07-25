@@ -5,9 +5,12 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import {
+  pairingRestsOnWildcard,
   pickConfidentMatch,
   sameCategoryFamily,
+  significantTitleWords,
   titleContainmentMatch,
+  titlesShareVocabulary,
   verdictDatesConflict,
 } from "./matching";
 
@@ -251,5 +254,86 @@ describe("pickConfidentMatch — issue #520", () => {
 
   it("plusieurs CERTAIN : ambigu aussi, on ne devine pas", () => {
     expect(pickConfidentMatch([m("a", "CERTAIN", 1), m("b", "CERTAIN", 1)]).kind).toBe("ambiguous");
+  });
+});
+
+// Issue #521 — AUTRE pairs with every family, so on its own it says nothing
+// about the facts. Fixtures below use generic legal phrasings rather than real
+// affair titles: the cases that motivated this guard are unpublished drafts.
+describe("significantTitleWords — issue #521", () => {
+  it("strips accents so the same word matches across spellings", () => {
+    expect(significantTitleWords("Étouffement")).toEqual(new Set(["etouffement"]));
+    expect(significantTitleWords("referes")).toEqual(significantTitleWords("référés"));
+  });
+
+  it("drops words too short to identify anything", () => {
+    expect(significantTitleWords("Vol de la clé")).toEqual(new Set([]));
+  });
+
+  it("drops judicial filler that every title carries", () => {
+    // Two unrelated cases both start with "Affaire": the word is not evidence.
+    expect(significantTitleWords("Affaire Untel")).toEqual(new Set(["untel"]));
+    expect(significantTitleWords("Enquête préliminaire pour recel")).toEqual(new Set(["recel"]));
+  });
+
+  it("keeps the words that name the facts", () => {
+    expect(significantTitleWords("Tentative d'étouffement judiciaire")).toEqual(
+      new Set(["tentative", "etouffement", "judiciaire"])
+    );
+  });
+});
+
+describe("titlesShareVocabulary — issue #521", () => {
+  it("recognises two wordings of the same facts", () => {
+    expect(
+      titlesShareVocabulary(
+        "Soupçons de tentative d'étouffement d'une procédure",
+        "Tentative présumée d'étouffement d'une procédure"
+      )
+    ).toBe(true);
+  });
+
+  it("rejects two sets of facts that share no vocabulary", () => {
+    expect(
+      titlesShareVocabulary(
+        "Ordonnance du juge des référés sur les conditions de détention",
+        "Enlèvement suivi de meurtre"
+      )
+    ).toBe(false);
+  });
+
+  it("is not fooled by filler alone", () => {
+    // Both are "Affaire X" and share nothing else.
+    expect(titlesShareVocabulary("Affaire Untel", "Affaire Machin")).toBe(false);
+  });
+
+  it("accepts a single shared name, which is enough of a lead to review", () => {
+    expect(
+      titlesShareVocabulary(
+        "Gestion présumée illégale au Havre",
+        "Soupçons de favoritisme au Havre"
+      )
+    ).toBe(true);
+  });
+});
+
+describe("pairingRestsOnWildcard — issue #521", () => {
+  it("is true when only AUTRE brings the two categories together", () => {
+    expect(pairingRestsOnWildcard("AUTRE", "AGRESSION_SEXUELLE")).toBe(true);
+    expect(pairingRestsOnWildcard("RECEL", "AUTRE")).toBe(true);
+  });
+
+  it("is false for identical categories, AUTRE included", () => {
+    expect(pairingRestsOnWildcard("AUTRE", "AUTRE")).toBe(false);
+    expect(pairingRestsOnWildcard("MENACE", "MENACE")).toBe(false);
+  });
+
+  it("is false when a named family already pairs them", () => {
+    expect(pairingRestsOnWildcard("DETOURNEMENT_FONDS_PUBLICS", "FAVORITISME")).toBe(false);
+    expect(pairingRestsOnWildcard("VIOLENCE", "MENACE")).toBe(false);
+  });
+
+  it("is false when nothing pairs them at all", () => {
+    expect(pairingRestsOnWildcard("MENACE", "FRAUDE_FISCALE")).toBe(false);
   });
 });
