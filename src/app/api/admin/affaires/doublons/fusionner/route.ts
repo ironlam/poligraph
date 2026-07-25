@@ -60,18 +60,21 @@ export const POST = withAdminAuth(
     }
 
     const meta = getRequestMeta(request);
+    // The plain merge needs the timestamps here; the absorption path re-reads them
+    // inside its own transaction, so it takes only the reviewer and the signal.
     const ruling = {
       reviewedBy: "admin",
       notes: body.notes ?? null,
       signal: body.signal,
-      keepUpdatedAt: keep.updatedAt,
-      removeUpdatedAt: remove.updatedAt,
     };
+    const timestamps = { keepUpdatedAt: keep.updatedAt, removeUpdatedAt: remove.updatedAt };
 
     let result;
     let proposalsCreated = 0;
     if (keep.publicationStatus === "PUBLISHED") {
-      // Proposals belong to a run (issue #513 invariant).
+      // The run is opened around the transaction, not inside it: its own state is
+      // bookkeeping, and withImportRun() guarantees it never stays RUNNING. The
+      // business atomicity is the transaction inside absorbDraftIntoPublished().
       const absorbed = await withImportRun(IMPORTER_MANUAL_ADMIN, ({ importRunId }) =>
         absorbDraftIntoPublished({
           publishedId: keepId,
@@ -79,17 +82,21 @@ export const POST = withAdminAuth(
           importRunId,
           reason: `Fusion confirmée en revue des doublons (${body.signal.matchedBy}/${body.signal.confidence})`,
           pairDecision: ruling,
+          audit: { ipAddress: meta.ip, userAgent: meta.userAgent },
         })
       );
       proposalsCreated = absorbed.proposalsCreated;
-      result = { proposedFields: absorbed.proposedFields };
+      result = {
+        proposedFields: absorbed.proposedFields,
+        slugsPreserved: absorbed.slugsPreserved,
+      };
     } else {
       result = await mergeAffairs(keepId, removeId, {
         // The precheck above answers 409; this makes the service enforce it too,
         // in case the row is published between that read and the write.
         removeMustNotBePublished: true,
         audit: { ipAddress: meta.ip, userAgent: meta.userAgent },
-        pairDecision: { otherAffairId: removeId, ...ruling },
+        pairDecision: { otherAffairId: removeId, ...ruling, ...timestamps },
       });
     }
 
