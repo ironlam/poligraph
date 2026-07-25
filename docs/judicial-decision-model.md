@@ -200,8 +200,8 @@ champ, pas la fréquence du phénomène.
 | --------------- | ---------------------------------------------------- | ------------------------------------------------------- | --------------------------- | ---------------------------------------------- |
 | `ecli`          | export CSV, propositions, matching, fusion additive  | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | colonne CSV « ECLI »                           |
 | `pourvoiNumber` | matching, propositions, fusion additive              | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | aucune surface publique                        |
-| `caseNumbers`   | matching (`hasSome`), propositions                   | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | aucune, champ vide                             |
-| `caseNumber`    | page publique, fusion additive                       | `IDENTITÉ_DE_DÉCISION`                                  | **oui**                     | bloc « N° dossier » sur la fiche               |
+| `caseNumbers`   | matching (`hasSome`), propositions, jamais affiché   | `IDENTITÉ_DE_DÉCISION`                                  | **différé**, voir §6 bis    | aucune, champ vide                             |
+| `caseNumber`    | page publique, carte, formulaire admin, fusion       | `CONTENU_ÉDITORIAL_D_AFFAIRE` en l'état                 | **différé**, voir §6 bis    | bloc « N° dossier » sur la fiche               |
 | `chamber`       | page publique, `AffairCard`, admin                   | `IDENTITÉ_DE_DÉCISION`                                  | **oui**, coût nul (0 ligne) | bloc « Chambre » sur la fiche                  |
 | `court`         | page publique, export CSV, admin, fusion             | **`À_CLARIFIER`** : 23,7 % ne sont pas des juridictions | **non en l'état**           | bloc « Tribunal », colonne CSV « Juridiction » |
 | `verdictDate`   | **clé de tri**, API publique, MCP, export, affichage | `CONTENU_ÉDITORIAL_D_AFFAIRE`                           | **non**                     | tri, API, MCP, export                          |
@@ -306,9 +306,8 @@ L'intégration Judilibre ne tranche pas, `judilibreId` se lit aussi bien dans le
 deux. La convention du dépôt non plus : le code est en anglais, les deux formes
 l'étant également.
 
-Le reste de ce document conserve `JudicialDecision` dans les extraits de schéma,
-pour rester lisible à côté de l'issue. **Le nom à retenir pour la PR de schéma est
-`CourtDecision`**, avec `AffairCourtDecision` pour la table de liaison.
+Les extraits de schéma de ce document portent désormais les noms actés :
+**`CourtDecision`** et **`AffairCourtDecision`**.
 
 ---
 
@@ -334,7 +333,7 @@ Trois raisons, dont deux mesurées :
    un déplacement casserait le classement de toutes les listes.
 3. Elle est exposée par l'API publique, le MCP et l'export.
 
-`JudicialDecision.decisionDate` portera la date **de la décision**.
+`CourtDecision.decisionDate` porte la date **de la décision**.
 `Affair.verdictDate` reste la date éditoriale du **dernier résultat connu**. Les
 deux coexistent et ne disent pas la même chose : il faut le documenter, pas le
 fusionner.
@@ -367,7 +366,7 @@ Ils sont consignés ici, pas modélisés.
 ## 6. Modèle recommandé
 
 ```prisma
-model JudicialDecision {
+model CourtDecision {
   id String @id @default(cuid())
 
   /// Clé externe Judilibre, quand la décision en vient.
@@ -402,20 +401,20 @@ model JudicialDecision {
   @@index([decisionDate])
 }
 
-model AffairJudicialDecision {
-  affairId           String
-  judicialDecisionId String
+model AffairCourtDecision {
+  affairId        String
+  courtDecisionId String
 
   /// Texte libre en attendant d'avoir assez de cas pour un enum honnête.
   notes String?
 
-  affair           Affair           @relation(fields: [affairId], references: [id], onDelete: Cascade)
-  judicialDecision JudicialDecision @relation(fields: [judicialDecisionId], references: [id], onDelete: Cascade)
+  affair        Affair        @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  courtDecision CourtDecision @relation(fields: [courtDecisionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
-  @@id([affairId, judicialDecisionId])
-  @@index([judicialDecisionId])
+  @@id([affairId, courtDecisionId])
+  @@index([courtDecisionId])
 }
 ```
 
@@ -454,6 +453,45 @@ model AffairJudicialDecision {
     valeurs dont trois relèvent d'autres issues. `notes String?` suffit à consigner
     ce qu'un relecteur constate ; l'enum viendra quand cinq cas réels au moins
     auront été observés et classés.
+
+---
+
+## 6 bis. `caseNumber` et `caseNumbers` : différés, et pourquoi
+
+Le modèle ci-dessus n'en contient **aucun des deux**. Une version antérieure de ce
+document les classait tous deux `IDENTITÉ_DE_DÉCISION` et « doit migrer », ce qui
+était incohérent avec le schéma proposé. Position tranchée après audit.
+
+### Ils ne veulent pas dire la même chose
+
+| Champ         | Type       | Où il sert                                                                                                       | Nature réelle                                          |
+| ------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `caseNumber`  | `String?`  | fiche publique (« N° dossier »), `AffairCard`, formulaire admin (« N° d'affaire »), `lib/validations/affairs.ts` | chaîne **saisie à la main et affichée**                |
+| `caseNumbers` | `String[]` | rapprochement machine (`hasSome`), détection de doublons, whitelist auto-applicable des propositions             | identifiant **jamais affiché**, écrit par un importeur |
+
+Ce ne sont donc pas un singulier et son pluriel : l'un est éditorial et visible,
+l'autre est machine et invisible.
+
+### Décision : différer les deux
+
+Trois raisons :
+
+1. **Ils sont à 0 ligne.** Rien à migrer, aucune pression de données.
+2. **Les recopier importerait la confusion** ci-dessus dans un modèle neuf, où elle
+   n'a pas lieu d'être.
+3. **L'identité de la décision n'en a pas besoin** pour les phases 1 à 3 :
+   `judilibreId`, `ecli` et `pourvoiNumber` suffisent.
+
+Les champs historiques **restent sur `Affair`** pendant toute la transition, et
+`caseNumber` continue d'être affiché tel quel.
+
+### Quand les ajouter
+
+Au moment où une source officielle les remplit, c'est-à-dire à la **phase 4**, quand
+Judilibre montrera ce qu'une décision porte réellement et avec quelle cardinalité.
+Un seul champ canonique sera alors ajouté, `caseNumbers String[]` sur la décision, et
+non les deux. Ajouter aujourd'hui un champ qu'on ne peut ni peupler ni justifier
+serait spéculatif.
 
 ---
 
@@ -631,7 +669,7 @@ délibérément plus petit que `AffairProceeding`.
 
 | PR  | Contenu                                                      | Taille  | Bloquée par |
 | --- | ------------------------------------------------------------ | ------- | ----------- |
-| 1   | schéma additif : `JudicialDecision` + liaison, sans enum     | petite  | —           |
+| 1   | schéma additif : `CourtDecision` + liaison, sans enum        | petite  | —           |
 | 2   | service de création et de liaison, tests, **aucun backfill** | moyenne | 1           |
 | 3   | backfill contrôlé des 2 décisions, idempotent, rapport       | petite  | 2           |
 | 4   | double lecture avec repli, fiche publique et export          | moyenne | 3           |

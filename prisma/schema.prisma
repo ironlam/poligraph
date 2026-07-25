@@ -616,6 +616,11 @@ model Affair {
   // Importer-proposed changes awaiting review (Affaires v2, lot 1)
   updateProposals AffairUpdateProposal[]
 
+  /// Décisions juridictionnelles auxquelles cette fiche est rattachée (#536).
+  /// Optionnel par construction : une affaire portant sur une enquête en cours ou
+  /// une action du parquet n'attend aucune décision.
+  courtDecisions AffairCourtDecision[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2573,4 +2578,81 @@ enum AffairPairClassification {
 
   /// Deferred, not an exclusion: stays visible in a re-examination filter.
   UNCERTAIN
+}
+
+/// Une décision juridictionnelle rendue par une juridiction identifiée, quel que
+/// soit son ordre ou sa matière (#536).
+///
+/// Existe parce qu'une décision peut concerner plusieurs fiches éditoriales : deux
+/// condamnations mesurées en base partagent un numéro de pourvoi, une date de faits,
+/// une date de verdict et un arrêt de cassation, et sont pourtant deux chefs
+/// distincts. `Affair.ecli @unique` rend ce cas inexprimable.
+///
+/// Ne représente PAS un acte d'une autorité non juridictionnelle : ni réquisition du
+/// ministère public, ni délibération de la HATVP, ni sanction du Bureau du Sénat, ni
+/// travaux d'une commission d'enquête. Voir docs/judicial-decision-model.md §4 bis.
+model CourtDecision {
+  id String @id @default(cuid())
+
+  /// Clé externe Judilibre. Avec `ecli`, la seule identité réutilisable
+  /// automatiquement : le reste exige une procédure contrôlée.
+  judilibreId String? @unique
+  /// Identifiant européen. Identifie exactement une décision, d'où l'unicité — et
+  /// c'est ici son domicile correct, pas sur `Affair`.
+  ecli        String? @unique
+
+  /// Tel que publié, pour l'affichage : « 96-83.698 ».
+  pourvoiNumber           String?
+  /// Sans séparateurs, pour le rapprochement : « 9683698 ».
+  /// Indexé mais NON unique : un même pourvoi peut produire plusieurs décisions
+  /// (rejet, cassation partielle, renvoi), et rien dans les données ne prouve le
+  /// contraire. Ne jamais dédupliquer automatiquement sur ce champ.
+  pourvoiNumberNormalized String?
+
+  decisionDate DateTime?
+  /// La juridiction émettrice, jamais un parquet. Renseigné uniquement depuis une
+  /// source officielle : 23,7 % des `Affair.court` désignent un organe non
+  /// juridictionnel, donc ce champ ne se recopie pas depuis l'affaire.
+  court        String?
+  chamber      String?
+  /// Sens de la décision : rejet, cassation, cassation partielle, non-admission.
+  /// Chaîne libre en attendant d'observer le vocabulaire réel de Judilibre.
+  solution     String?
+  /// URL officielle canonique.
+  sourceUrl    String?
+
+  /// Charge brute d'une source officielle. Non requêtable, non faisant foi, et
+  /// jamais un endroit où ranger un champ modélisable.
+  metadata Json?
+
+  affairs AffairCourtDecision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pourvoiNumberNormalized])
+  @@index([decisionDate])
+}
+
+/// Rattachement d'une fiche éditoriale à une décision. Plusieurs-à-plusieurs des
+/// deux côtés : une décision peut porter plusieurs chefs, et une affaire peut
+/// traverser plusieurs décisions (#536).
+///
+/// Pas d'enum de relation : un seul cas réel observé ne peut pas en justifier cinq
+/// valeurs, dont certaines relèvent de #516 ou décrivent une relation entre deux
+/// décisions plutôt qu'entre une décision et une affaire.
+model AffairCourtDecision {
+  affairId        String
+  courtDecisionId String
+
+  /// Ce qu'un relecteur constate, en attendant assez de cas pour un enum honnête.
+  notes String?
+
+  affair        Affair        @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  courtDecision CourtDecision @relation(fields: [courtDecisionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([affairId, courtDecisionId])
+  @@index([courtDecisionId])
 }
