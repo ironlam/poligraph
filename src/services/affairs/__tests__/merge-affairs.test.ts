@@ -50,10 +50,10 @@ function affair(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "keep",
     title: "Affaire conservée",
+    politicianId: "p1",
     slug: "affaire-conservee",
     publicId: "AF-000001",
     oldSlugs: [],
-    politicianId: "p1",
     ecli: null,
     pourvoiNumber: null,
     caseNumbers: [],
@@ -353,5 +353,156 @@ describe("mergeAffairs — bookkeeping (issue #525)", () => {
 
     await expect(mergeAffairs("keep", "remove")).rejects.toThrow("Affair to keep not found");
     expect(tx.affair.delete).not.toHaveBeenCalled();
+  });
+});
+
+// Review of #526 — the invariants lived only in the admin routes, but the cron
+// calls the service directly. Both cases below deleted an affair outright.
+describe("mergeAffairs — invariants du service (#525)", () => {
+  it("refuse de fusionner une affaire avec elle-même, sans rien supprimer", async () => {
+    // Sans ce garde : les transferts sont tous ignorés (mêmes URL, mêmes clés),
+    // aucune redirection n'est écrite puisque les publicId sont égaux, puis la
+    // ligne est supprimée. Perte totale.
+    const same = affair({ id: "keep", slug: "gardee", publicId: "AF-000001" });
+    stub(same, same);
+
+    await expect(mergeAffairs("keep", "keep")).rejects.toThrow(/elle-même/i);
+
+    expect(tx.affair.delete).not.toHaveBeenCalled();
+    expect(tx.affair.update).not.toHaveBeenCalled();
+    expect(tx.source.update).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+    expect(tx.pressArticleAffair.update).not.toHaveBeenCalled();
+    expect(tx.publicIdRedirect.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuse de fusionner deux affaires de personnalités différentes", async () => {
+    // Affair est 1:1 avec Politician : une telle fusion déplacerait les sources
+    // d'une personne vers la fiche d'une autre, puis supprimerait la ligne.
+    stub(
+      affair({ id: "keep", politicianId: "p1" }),
+      affair({ id: "remove", slug: "absorbee", politicianId: "p2" })
+    );
+
+    await expect(mergeAffairs("keep", "remove")).rejects.toThrow(/personnalités différentes/i);
+
+    expect(tx.affair.delete).not.toHaveBeenCalled();
+    expect(tx.affair.update).not.toHaveBeenCalled();
+    expect(tx.source.update).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+    expect(tx.pressArticleAffair.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("mergeAffairs — la déduplication ne doit rien perdre (#525)", () => {
+  it("transfère deux événements qui ne diffèrent que par leur source", async () => {
+    const date = new Date("2024-03-01T00:00:00Z");
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([
+        {
+          date,
+          type: "CONDAMNATION",
+          title: "Jugement",
+          description: "Première instance",
+          sourceUrl: "https://example.org/a",
+          sourceTitle: "Le Monde",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "e1",
+          date,
+          type: "CONDAMNATION",
+          title: "Jugement",
+          description: "Première instance",
+          sourceUrl: "https://example.org/b",
+          sourceTitle: "AFP",
+        },
+      ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    // Même date, même type, même titre : l'ancienne clé les confondait et
+    // l'événement absorbé disparaissait avec sa source.
+    expect(result.eventsMoved).toBe(1);
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "e1" },
+      data: { affairId: "keep" },
+    });
+  });
+
+  it("ignore un événement identique sur tous ses champs", async () => {
+    const date = new Date("2024-03-01T00:00:00Z");
+    const event = {
+      date,
+      type: "CONDAMNATION",
+      title: "Jugement",
+      description: "Première instance",
+      sourceUrl: "https://example.org/a",
+      sourceTitle: "Le Monde",
+    };
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([event])
+      .mockResolvedValueOnce([{ id: "e1", ...event }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.eventsMoved).toBe(0);
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+  });
+
+  it("complète l'extrait et l'archive d'une source de même URL", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.source.findMany
+      .mockResolvedValueOnce([
+        { id: "s0", url: "https://example.org/a", excerpt: null, archivedUrl: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "s1",
+          url: "https://example.org/a",
+          excerpt: "Extrait clé",
+          archivedUrl: "https://archive.org/x",
+        },
+      ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    // La source n'est pas déplacée (l'URL existe déjà) mais ce qu'elle apportait
+    // ne disparaît pas avec la ligne supprimée.
+    expect(result.sourcesMoved).toBe(0);
+    expect(result.sourcesEnriched).toBe(1);
+    expect(tx.source.update).toHaveBeenCalledWith({
+      where: { id: "s0" },
+      data: { excerpt: "Extrait clé", archivedUrl: "https://archive.org/x" },
+    });
+  });
+
+  it("ne remplace pas un extrait déjà présent sur la source conservée", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.source.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "s0",
+          url: "https://example.org/a",
+          excerpt: "Extrait retenu",
+          archivedUrl: "https://archive.org/keep",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "s1",
+          url: "https://example.org/a",
+          excerpt: "Autre extrait",
+          archivedUrl: "https://archive.org/other",
+        },
+      ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.sourcesEnriched).toBe(0);
+    expect(tx.source.update).not.toHaveBeenCalled();
   });
 });

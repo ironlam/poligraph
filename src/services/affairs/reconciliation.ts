@@ -333,6 +333,8 @@ export interface MergeAffairsOptions {
 
 export interface MergeAffairsResult {
   sourcesMoved: number;
+  /** Sources whose URL already existed and whose extra fields were carried over. */
+  sourcesEnriched: number;
   eventsMoved: number;
   articlesMoved: number;
   identifiersMerged: string[];
@@ -340,9 +342,30 @@ export interface MergeAffairsResult {
   slugsPreserved: string[];
 }
 
-/** Semantic identity of an event: it carries no unique constraint in the schema. */
-function eventKey(event: { date: Date; type: string; title: string }): string {
-  return [event.date.toISOString(), event.type, event.title].join("|");
+/**
+ * Semantic identity of an event: it carries no unique constraint in the schema.
+ *
+ * Every field that holds information, not just date/type/title: two events can
+ * share those three and still differ by description or by the source they cite.
+ * Keying on the short triple dropped the absorbed one along with its source.
+ * When anything differs, both are kept — merging their prose is a human call.
+ */
+function eventKey(event: {
+  date: Date;
+  type: string;
+  title: string;
+  description: string | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+}): string {
+  return [
+    event.date.toISOString(),
+    event.type,
+    event.title,
+    event.description ?? "",
+    event.sourceUrl ?? "",
+    event.sourceTitle ?? "",
+  ].join("|");
 }
 
 /**
@@ -410,35 +433,80 @@ export async function mergeAffairs(
     if (!keep) throw new Error(`Affair to keep not found: ${keepId}`);
     if (!remove) throw new Error(`Affair to remove not found: ${removeId}`);
 
+    // Checked here rather than only in the callers: the cron path calls this
+    // service directly. Merging an affair with itself skipped every transfer
+    // (same rows on both sides), wrote no redirect (equal publicIds) and then
+    // deleted the row — an outright loss.
+    if (keepId === removeId) {
+      throw new Error(`Une affaire ne peut pas fusionner avec elle-même : ${keepId}`);
+    }
+    // Affair is 1:1 with Politician, so a cross-person merge would move one
+    // person's sources onto another's fiche and then delete the row.
+    if (keep.politicianId !== remove.politicianId) {
+      throw new Error(
+        `Fusion refusée entre personnalités différentes : ${keep.politicianId} / ${remove.politicianId}`
+      );
+    }
+
     // --- Sources: unique on (affairId, url), so skip URLs already present.
     const existingSources = await tx.source.findMany({
       where: { affairId: keepId },
-      select: { url: true },
+      select: { id: true, url: true, excerpt: true, archivedUrl: true },
     });
-    const existingUrls = new Set(existingSources.map((s) => s.url));
+    const keptByUrl = new Map(existingSources.map((s) => [s.url, s]));
 
     const sourcesToTransfer = await tx.source.findMany({
       where: { affairId: removeId },
-      select: { id: true, url: true },
+      select: { id: true, url: true, excerpt: true, archivedUrl: true },
     });
     let sourcesMoved = 0;
+    let sourcesEnriched = 0;
     for (const source of sourcesToTransfer) {
-      if (existingUrls.has(source.url)) continue;
-      await tx.source.update({ where: { id: source.id }, data: { affairId: keepId } });
-      existingUrls.add(source.url);
-      sourcesMoved++;
+      const kept = keptByUrl.get(source.url);
+      if (!kept) {
+        await tx.source.update({ where: { id: source.id }, data: { affairId: keepId } });
+        keptByUrl.set(source.url, { ...source });
+        sourcesMoved++;
+        continue;
+      }
+      // Same URL on both sides, so the row is not moved and will be cascaded away.
+      // Whatever it documented and the kept row does not must survive that.
+      // Fills only: a value already stated is never replaced.
+      const fill: { excerpt?: string; archivedUrl?: string } = {};
+      if (!kept.excerpt && source.excerpt) fill.excerpt = source.excerpt;
+      if (!kept.archivedUrl && source.archivedUrl) fill.archivedUrl = source.archivedUrl;
+      if (Object.keys(fill).length > 0) {
+        await tx.source.update({ where: { id: kept.id }, data: fill });
+        keptByUrl.set(source.url, { ...kept, ...fill });
+        sourcesEnriched++;
+      }
     }
 
     // --- Events: no unique constraint, so deduplicate on their semantic key.
     const existingEvents = await tx.affairEvent.findMany({
       where: { affairId: keepId },
-      select: { date: true, type: true, title: true },
+      select: {
+        date: true,
+        type: true,
+        title: true,
+        description: true,
+        sourceUrl: true,
+        sourceTitle: true,
+      },
     });
     const existingEventKeys = new Set(existingEvents.map(eventKey));
 
     const eventsToTransfer = await tx.affairEvent.findMany({
       where: { affairId: removeId },
-      select: { id: true, date: true, type: true, title: true },
+      select: {
+        id: true,
+        date: true,
+        type: true,
+        title: true,
+        description: true,
+        sourceUrl: true,
+        sourceTitle: true,
+      },
     });
     let eventsMoved = 0;
     for (const event of eventsToTransfer) {
@@ -532,6 +600,7 @@ export async function mergeAffairs(
           mergedFrom: removeId,
           mergedFromTitle: remove.title,
           sourcesMoved,
+          sourcesEnriched,
           eventsMoved,
           articlesMoved,
           identifiersMerged,
@@ -543,7 +612,14 @@ export async function mergeAffairs(
       },
     });
 
-    return { sourcesMoved, eventsMoved, articlesMoved, identifiersMerged, slugsPreserved };
+    return {
+      sourcesMoved,
+      sourcesEnriched,
+      eventsMoved,
+      articlesMoved,
+      identifiersMerged,
+      slugsPreserved,
+    };
   });
 }
 
