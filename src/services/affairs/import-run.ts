@@ -18,6 +18,8 @@ export const IMPORTER_DISCOVER_AFFAIRS = "discover-affairs";
 export const IMPORTER_JUDILIBRE = "judilibre";
 /** Reserved for admin-initiated proposals, so they never end up run-less. */
 export const IMPORTER_MANUAL_ADMIN = "manual-admin";
+/** Absorbing a draft into a published affair proposes rather than writes (#525). */
+export const IMPORTER_RECONCILE = "reconcile-affairs";
 
 export async function startImportRun(importer: string): Promise<string> {
   const run = await db.importRun.create({

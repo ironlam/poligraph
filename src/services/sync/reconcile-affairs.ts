@@ -1,11 +1,21 @@
 /**
  * Affair reconciliation service.
  *
- * Detects potential duplicate affairs from different sources
- * and auto-merges high-confidence duplicates.
+ * Detects potential duplicate affairs and folds the ones automation is allowed to
+ * fold. Since detection was widened to published affairs (issue #525), the queue
+ * mixes pairs a cron may merge with pairs that must never move without a human, so
+ * every pair goes through decideMergeAction() first.
  */
 
-import { findPotentialDuplicates, mergeAffairs } from "@/services/affairs/reconciliation";
+import {
+  findPotentialDuplicates,
+  mergeAffairs,
+  ABSORPTION_ADDITIVE_FIELDS,
+  type PotentialDuplicate,
+} from "@/services/affairs/reconciliation";
+import { decideMergeAction, type MergeDecision } from "@/services/affairs/merge-decision";
+import { absorbDraftIntoPublished } from "@/services/affairs/absorb-draft";
+import { withImportRun, IMPORTER_RECONCILE } from "@/services/affairs/import-run";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,9 +28,25 @@ export interface ReconcileAffairsOptions {
 
 export interface ReconcileAffairsStats {
   duplicatesFound: number;
+  /** Draft pairs folded together. */
   merged: number;
+  /** Drafts absorbed by a published affair on a court-assigned identifier. */
+  absorbed: number;
+  /** Pairs left for a human, by reason. */
+  reviewRequired: number;
+  notEligible: number;
+  /** Proposals opened because a draft stated something the published fiche did not. */
+  proposalsCreated: number;
   errors: number;
   remainingPossible: number;
+}
+
+interface PlannedPair {
+  pair: PotentialDuplicate;
+  decision: MergeDecision;
+  keepId?: string;
+  removeId?: string;
+  reason: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,43 +60,78 @@ export async function reconcileAffairs(
 
   const duplicates = await findPotentialDuplicates();
 
-  if (duplicates.length === 0) {
-    return { duplicatesFound: 0, merged: 0, errors: 0, remainingPossible: 0 };
-  }
+  const empty: ReconcileAffairsStats = {
+    duplicatesFound: 0,
+    merged: 0,
+    absorbed: 0,
+    reviewRequired: 0,
+    notEligible: 0,
+    proposalsCreated: 0,
+    errors: 0,
+    remainingPossible: 0,
+  };
+  if (duplicates.length === 0) return empty;
 
-  let merged = 0;
-  let errors = 0;
+  const planned: PlannedPair[] = duplicates.map((pair) => {
+    const plan = decideMergeAction(pair);
+    return { pair, ...plan };
+  });
 
-  if (autoMerge) {
-    const mergeable = duplicates.filter(
-      (d) => d.confidence === "CERTAIN" || d.confidence === "HIGH"
-    );
+  const stats: ReconcileAffairsStats = {
+    ...empty,
+    duplicatesFound: duplicates.length,
+    reviewRequired: planned.filter((p) => p.decision === "REVIEW_REQUIRED").length,
+    notEligible: planned.filter((p) => p.decision === "NOT_ELIGIBLE").length,
+    remainingPossible: duplicates.filter((d) => d.confidence === "POSSIBLE").length,
+  };
 
-    for (const dup of mergeable) {
-      const keepId =
-        dup.affairA.sources.length >= dup.affairB.sources.length ? dup.affairA.id : dup.affairB.id;
-      const removeId = keepId === dup.affairA.id ? dup.affairB.id : dup.affairA.id;
+  if (!autoMerge) return stats;
 
-      if (dryRun) {
-        merged++;
-        continue;
-      }
+  const draftMerges = planned.filter((p) => p.decision === "AUTO_MERGE_DRAFTS");
+  const absorptions = planned.filter((p) => p.decision === "AUTO_ABSORB_DRAFT_INTO_PUBLISHED");
 
-      try {
-        await mergeAffairs(keepId, removeId);
-        merged++;
-      } catch {
-        errors++;
-      }
+  for (const plan of draftMerges) {
+    if (dryRun) {
+      stats.merged++;
+      continue;
+    }
+    try {
+      await mergeAffairs(plan.keepId!, plan.removeId!, {
+        auditNotes: { decision: plan.decision, reason: plan.reason },
+      });
+      stats.merged++;
+    } catch {
+      stats.errors++;
     }
   }
 
-  const remainingPossible = duplicates.filter((d) => d.confidence === "POSSIBLE").length;
+  if (absorptions.length === 0) return stats;
 
-  return {
-    duplicatesFound: duplicates.length,
-    merged,
-    errors,
-    remainingPossible,
-  };
+  if (dryRun) {
+    stats.absorbed += absorptions.length;
+    return stats;
+  }
+
+  // Proposals must belong to a run, so one is opened only when an absorption
+  // actually has to write something (issue #513 invariant).
+  await withImportRun(IMPORTER_RECONCILE, async ({ importRunId, setStats }) => {
+    for (const plan of absorptions) {
+      try {
+        const result = await absorbDraftIntoPublished({
+          publishedId: plan.keepId!,
+          draftId: plan.removeId!,
+          importRunId,
+          reason: plan.reason,
+          additiveFields: ABSORPTION_ADDITIVE_FIELDS,
+        });
+        stats.absorbed++;
+        stats.proposalsCreated += result.proposalsCreated;
+      } catch {
+        stats.errors++;
+      }
+    }
+    setStats({ absorbed: stats.absorbed, proposalsCreated: stats.proposalsCreated });
+  });
+
+  return stats;
 }
