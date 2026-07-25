@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   affairFindMany: vi.fn(),
   affairUpdate: vi.fn(),
   auditCreate: vi.fn(),
+  decisionFindUnique: vi.fn(),
   mergeAffairs: vi.fn(),
   recordPairDecision: vi.fn(),
   invalidateEntity: vi.fn(),
@@ -24,6 +25,10 @@ vi.mock("@/lib/db", () => ({
       update: h.affairUpdate,
     },
     auditLog: { create: h.auditCreate },
+    affairPairDecision: { findUnique: h.decisionFindUnique },
+    // The link route writes the update and its audit entry together.
+    $transaction: (fn: (t: unknown) => unknown) =>
+      fn({ affair: { update: h.affairUpdate }, auditLog: { create: h.auditCreate } }),
   },
 }));
 vi.mock("@/services/affairs/reconciliation", () => ({ mergeAffairs: h.mergeAffairs }));
@@ -81,6 +86,11 @@ beforeEach(() => {
   });
   h.invalidateEntity.mockImplementation(() => {
     order.push("invalidate");
+  });
+  h.decisionFindUnique.mockResolvedValue({ classification: "LINKED" });
+  h.auditCreate.mockImplementation(async () => {
+    order.push("audit");
+    return {};
   });
 });
 
@@ -201,7 +211,60 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
 });
 
 describe("POST /doublons/lier — publier le lien est un acte séparé (#525)", () => {
-  it("écrit linkedAffairId et signale un remplacement", async () => {
+  it("exige une décision « affaires liées » courante", async () => {
+    h.decisionFindUnique.mockResolvedValue(null);
+    h.affairFindUnique
+      .mockResolvedValueOnce({ id: "from", linkedAffairId: null, politician: { slug: "x" } })
+      .mockResolvedValueOnce({ id: "to" });
+
+    const res = await linkPOST(
+      req({ fromAffairId: "from", toAffairId: "to", confirmed: true }),
+      ctx
+    );
+
+    expect(res.status).toBe(409);
+    expect(h.affairUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuse quand la paire est classée autrement", async () => {
+    h.decisionFindUnique.mockResolvedValue({ classification: "DISTINCT" });
+    h.affairFindUnique
+      .mockResolvedValueOnce({ id: "from", linkedAffairId: null, politician: { slug: "x" } })
+      .mockResolvedValueOnce({ id: "to" });
+
+    const res = await linkPOST(
+      req({ fromAffairId: "from", toAffairId: "to", confirmed: true }),
+      ctx
+    );
+
+    expect(res.status).toBe(409);
+    expect(h.affairUpdate).not.toHaveBeenCalled();
+  });
+
+  it("écrit le lien et sa trace dans la même transaction", async () => {
+    h.affairFindUnique
+      .mockResolvedValueOnce({
+        id: "from",
+        linkedAffairId: null,
+        politician: { slug: "jean-dupont" },
+      })
+      .mockResolvedValueOnce({ id: "to" });
+
+    const res = await linkPOST(
+      req({ fromAffairId: "from", toAffairId: "to", confirmed: true }),
+      ctx
+    );
+
+    expect(res.status).toBe(200);
+    expect(h.affairUpdate).toHaveBeenCalledWith({
+      where: { id: "from" },
+      data: { linkedAffairId: "to" },
+    });
+    // Écriture puis trace, puis seulement l'invalidation.
+    expect(order).toEqual(["update", "audit", "invalidate", "invalidate"]);
+  });
+
+  it("refuse de remplacer un lien existant sans confirmation explicite de l'API", async () => {
     h.affairFindUnique
       .mockResolvedValueOnce({
         id: "from",
@@ -215,15 +278,12 @@ describe("POST /doublons/lier — publier le lien est un acte séparé (#525)", 
       ctx
     );
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ replaced: true });
-    expect(h.affairUpdate).toHaveBeenCalledWith({
-      where: { id: "from" },
-      data: { linkedAffairId: "to" },
-    });
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ currentLinkedAffairId: "autre" });
+    expect(h.affairUpdate).not.toHaveBeenCalled();
   });
 
-  it("garde trace du lien remplacé", async () => {
+  it("remplace quand la demande le confirme, et garde trace de l'ancien lien", async () => {
     h.affairFindUnique
       .mockResolvedValueOnce({
         id: "from",
@@ -232,8 +292,18 @@ describe("POST /doublons/lier — publier le lien est un acte séparé (#525)", 
       })
       .mockResolvedValueOnce({ id: "to" });
 
-    await linkPOST(req({ fromAffairId: "from", toAffairId: "to", confirmed: true }), ctx);
+    const res = await linkPOST(
+      req({
+        fromAffairId: "from",
+        toAffairId: "to",
+        confirmed: true,
+        confirmReplacement: true,
+      }),
+      ctx
+    );
 
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ replaced: true });
     expect(h.auditCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         changes: expect.objectContaining({

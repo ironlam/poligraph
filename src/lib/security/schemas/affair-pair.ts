@@ -41,6 +41,14 @@ export const pairLinkSchema = z.object({
   toAffairId: affairId,
   /** Explicit: publishing the link is visible on published pages. */
   confirmed: z.literal(true),
+  /**
+   * Required when the affair already points at a different one.
+   *
+   * `linkedAffairId` holds a single link, so publishing a new one drops the
+   * previous relation. A browser dialog is not enough: the API must not accept a
+   * silent overwrite from any other caller.
+   */
+  confirmReplacement: z.boolean().optional(),
 });
 
 export type PairDecisionBody = z.infer<typeof pairDecisionSchema>;

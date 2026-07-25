@@ -152,7 +152,8 @@ export default function DuplicatesReviewPage() {
   };
 
   const publishLink = (pair: PairRow, from: PairSide, to: PairSide) => {
-    const existing = from.linkedAffairId
+    const replacing = Boolean(from.linkedAffairId && from.linkedAffairId !== to.id);
+    const existing = replacing
       ? `\n\nAttention : « ${from.title} » est déjà liée à une autre affaire. Ce lien sera remplacé.`
       : "";
     const message =
@@ -163,6 +164,8 @@ export default function DuplicatesReviewPage() {
       fromAffairId: from.id,
       toAffairId: to.id,
       confirmed: true,
+      // L'API refuse un remplacement implicite, la boîte de dialogue ne suffit pas.
+      ...(replacing ? { confirmReplacement: true } : {}),
     });
   };
 
