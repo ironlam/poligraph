@@ -613,6 +613,9 @@ model Affair {
 
   affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionAffair")
 
+  // Importer-proposed changes awaiting review (Affaires v2, lot 1)
+  updateProposals AffairUpdateProposal[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1917,6 +1920,99 @@ model ModerationReview {
   @@index([affairId])
   @@index([recommendation])
   @@index([createdAt])
+}
+
+// ============================================
+// AFFAIR UPDATE PROPOSALS (Affaires v2, lot 1)
+// ============================================
+// Importers never mutate an existing Affair directly. They emit an immutable,
+// reviewable proposal. Only machine identifiers that are absent and
+// non-contradictory are auto-applied. See docs (local spec) for the full design.
+
+enum ImportRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ProposalStatus {
+  PENDING // awaiting human review
+  APPROVED // accepted and applied
+  REJECTED // refused; never resurfaced by a later run
+  AUTO_APPLIED // low-risk identifier written without review
+  CONFLICT // live value drifted since the proposal was made
+}
+
+enum ProposalRisk {
+  LOW // fills a NULL technical identifier
+  MEDIUM // fills a NULL judicial or editorial field
+  HIGH // overwrites a non-NULL value, or touches status/involvement/publicationStatus
+}
+
+/// One execution of an importer. Groups the proposals it produced so a faulty
+/// extractor version can be identified and rejected in bulk.
+model ImportRun {
+  id         String          @id @default(cuid())
+  importer   String // "discover-affairs" | "judilibre"
+  status     ImportRunStatus @default(RUNNING)
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+  error      String?
+  stats      Json? // { proposalsCreated, autoApplied, conflicts, skipped }
+
+  proposals AffairUpdateProposal[]
+
+  @@index([importer, startedAt])
+  @@index([status])
+}
+
+/// An immutable, reviewable patch to an existing Affair, produced by an importer.
+model AffairUpdateProposal {
+  id       String @id @default(cuid())
+  affair   Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  affairId String
+
+  importer    String
+  importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  importRunId String?
+
+  // The change. observedValues holds the same keys as proposedPatch, snapshotted
+  // at proposal time, so acceptance can detect drift field by field.
+  proposedPatch  Json
+  observedValues Json
+
+  // Provenance
+  source        SourceType
+  sourceUrl     String?
+  officialId    String? // ECLI, n° pourvoi, Wikidata Q-ID
+  sourceExcerpt String?    @db.Text
+  metadata      Json?
+
+  confidence       Int // 0-100
+  riskLevel        ProposalRisk
+  rationale        String       @db.Text // why this affair, why this value
+  extractorVersion String       @default("v1")
+
+  /// SHA-256 over importer + extractorVersion + source fingerprint +
+  /// proposedPatch + observedValues. Makes re-runs idempotent while still
+  /// allowing a re-proposal once the affair, the source or the extractor moves.
+  payloadHash String
+
+  status         ProposalStatus @default(PENDING)
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  reviewNotes    String?        @db.Text
+  appliedAt      DateTime?
+  conflictDetail Json? // { field: { expected, actual } }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([affairId, importer, payloadHash])
+  @@index([status, riskLevel])
+  @@index([affairId])
+  @@index([importRunId])
+  @@index([status, createdAt])
 }
 
 // ============================================
