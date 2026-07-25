@@ -16,6 +16,7 @@ type TxRecorder = {
   affairEvent: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   pressArticleAffair: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   publicIdRedirect: { upsert: ReturnType<typeof vi.fn> };
+  affairPairDecision: { upsert: ReturnType<typeof vi.fn> };
   dismissedDuplicate: { deleteMany: ReturnType<typeof vi.fn> };
   auditLog: { create: ReturnType<typeof vi.fn> };
 };
@@ -26,6 +27,7 @@ const tx: TxRecorder = {
   affairEvent: { findMany: vi.fn(), update: vi.fn() },
   pressArticleAffair: { findMany: vi.fn(), update: vi.fn() },
   publicIdRedirect: { upsert: vi.fn() },
+  affairPairDecision: { upsert: vi.fn() },
   dismissedDuplicate: { deleteMany: vi.fn() },
   auditLog: { create: vi.fn() },
 };
@@ -35,6 +37,7 @@ vi.mock("@/lib/db", () => ({
     $transaction: (fn: (t: TxRecorder) => unknown) => fn(tx),
     affair: { findMany: vi.fn() },
     dismissedDuplicate: { findMany: vi.fn(), upsert: vi.fn() },
+    affairPairDecision: { findMany: vi.fn(), upsert: vi.fn() },
   },
 }));
 
@@ -60,6 +63,7 @@ function affair(overrides: Partial<Record<string, unknown>> = {}) {
     court: null,
     chamber: null,
     caseNumber: null,
+    publicationStatus: "DRAFT",
     ...overrides,
   };
 }
@@ -504,5 +508,51 @@ describe("mergeAffairs — la déduplication ne doit rien perdre (#525)", () => 
 
     expect(result.sourcesEnriched).toBe(0);
     expect(tx.source.update).not.toHaveBeenCalled();
+  });
+});
+
+// Review of #531 — the published guard lived only in the route. A row can be
+// published between a caller's precheck and this write, and a merge deletes it.
+describe("mergeAffairs — refus transactionnel d'absorber une affaire publiée (#525)", () => {
+  it("refuse quand l'affaire à absorber est publiée à la lecture transactionnelle", async () => {
+    // Le précontrôle de la route l'avait lue en DRAFT ; elle est publiée depuis.
+    stub(
+      affair({ id: "keep", publicationStatus: "PUBLISHED" }),
+      affair({ id: "remove", slug: "absorbee", publicationStatus: "PUBLISHED" })
+    );
+
+    await expect(
+      mergeAffairs("keep", "remove", { removeMustNotBePublished: true })
+    ).rejects.toThrow(/publiée/i);
+
+    expect(tx.affair.delete).not.toHaveBeenCalled();
+    expect(tx.affair.update).not.toHaveBeenCalled();
+    expect(tx.source.update).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+    expect(tx.pressArticleAffair.update).not.toHaveBeenCalled();
+    expect(tx.publicIdRedirect.upsert).not.toHaveBeenCalled();
+    expect(tx.affairPairDecision.upsert).not.toHaveBeenCalled();
+  });
+
+  it("laisse passer l'absorption d'un brouillon", async () => {
+    stub(
+      affair({ id: "keep", publicationStatus: "PUBLISHED" }),
+      affair({ id: "remove", slug: "absorbee", publicationStatus: "DRAFT" })
+    );
+
+    await expect(
+      mergeAffairs("keep", "remove", { removeMustNotBePublished: true })
+    ).resolves.toBeDefined();
+
+    expect(tx.affair.delete).toHaveBeenCalledWith({ where: { id: "remove" } });
+  });
+
+  it("ne contrôle rien sans l'option, pour ne pas changer les appels existants", async () => {
+    stub(
+      affair({ id: "keep", publicationStatus: "PUBLISHED" }),
+      affair({ id: "remove", slug: "absorbee", publicationStatus: "PUBLISHED" })
+    );
+
+    await expect(mergeAffairs("keep", "remove")).resolves.toBeDefined();
   });
 });

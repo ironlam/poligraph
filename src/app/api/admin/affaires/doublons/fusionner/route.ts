@@ -49,6 +49,9 @@ export const POST = withAdminAuth(
 
     const meta = getRequestMeta(request);
     const result = await mergeAffairs(keepId, removeId, {
+      // The precheck above answers 409; this makes the service enforce it too,
+      // in case the row is published between that read and the write.
+      removeMustNotBePublished: true,
       audit: { ipAddress: meta.ip, userAgent: meta.userAgent },
       pairDecision: {
         otherAffairId: removeId,

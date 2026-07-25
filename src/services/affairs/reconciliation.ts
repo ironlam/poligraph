@@ -335,6 +335,15 @@ export interface MergeAffairsOptions {
    */
   auditNotes?: Prisma.InputJsonValue;
   /**
+   * Refuses the merge when the affair to absorb is published.
+   *
+   * Checked inside the transaction, not only by the caller: the row can be
+   * published between a caller's precheck and this write, and a merge deletes it.
+   * Callers that own an HTTP contract keep their own precheck so they can answer
+   * 409 instead of surfacing an exception (issue #525).
+   */
+  removeMustNotBePublished?: boolean;
+  /**
    * Ruling to store in the same transaction as the merge.
    *
    * A merge without its ruling would be re-proposed at the next run; a ruling
@@ -437,6 +446,7 @@ export async function mergeAffairs(
       publicId: true,
       oldSlugs: true,
       politicianId: true,
+      publicationStatus: true,
       ecli: true,
       pourvoiNumber: true,
       caseNumbers: true,
@@ -464,6 +474,13 @@ export async function mergeAffairs(
     if (keep.politicianId !== remove.politicianId) {
       throw new Error(
         `Fusion refusée entre personnalités différentes : ${keep.politicianId} / ${remove.politicianId}`
+      );
+    }
+    // Re-read inside the transaction: absorbing deletes the row, and a page a
+    // reader can reach must not disappear because it was published a moment ago.
+    if (options.removeMustNotBePublished && remove.publicationStatus === "PUBLISHED") {
+      throw new Error(
+        `Fusion refusée : l'affaire à absorber est publiée (${removeId}). Dépubliez-la d'abord.`
       );
     }
 
