@@ -21,6 +21,7 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "backfill:court-decisions": "tsx scripts/backfill-court-decisions.ts",
     "sync:assemblee": "tsx scripts/sync-assemblee.ts",
     "sync:senat": "tsx scripts/sync-senat.ts",
     "sync:gouvernement": "tsx scripts/sync-gouvernement.ts",
