@@ -76,10 +76,17 @@ export function buildWikidataDiscoveredAffair(
   const confidence = isConviction ? 95 : 75;
   const titlePrefix = isConviction ? "" : "[À VÉRIFIER] ";
 
+  // The offense label alone is not a title: a person convicted three times for the
+  // same offense produced three identical titles, unreadable for a moderator and
+  // indistinguishable for title-based deduplication (issue #520). The decision
+  // year is the discriminator Wikidata gives us.
+  const verdictYear = input.penaltyData.verdictDate?.getUTCFullYear();
+  const labelWithYear = verdictYear ? `${input.offenseLabel} (${verdictYear})` : input.offenseLabel;
+
   return {
     politicianId: input.politicianId,
     politicianName: input.politicianName,
-    title: `${titlePrefix}${input.offenseLabel} — ${input.politicianName}`,
+    title: `${titlePrefix}${labelWithYear} — ${input.politicianName}`,
     description: `${input.offenseLabel} (${isConviction ? "condamnation" : "mise en cause"}) — source Wikidata (${input.qid}, propriété ${input.prop}).`,
     category: input.category,
     status: input.status,

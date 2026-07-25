@@ -85,3 +85,42 @@ describe("sémantique des dates — factsDate n'est pas verdictDate", () => {
     expect(affair.factsDate).not.toEqual(affair.verdictDate);
   });
 });
+
+// Issue #520 — the Wikidata title was the bare offense label, so several distinct
+// convictions for the same offense produced identical titles. Unreadable for a
+// moderator, and indistinguishable for title-based deduplication.
+describe("titre Wikidata — discriminant de décision (#520)", () => {
+  it("porte l'année de décision quand elle est connue", () => {
+    const affair = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      penaltyData: { verdictDate: new Date("2011-02-18") },
+    });
+    expect(affair.title).toBe("corruption (2011) — Jean Testeur");
+  });
+
+  it("deux condamnations de même infraction, années différentes, titres différents", () => {
+    const a = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      penaltyData: { verdictDate: new Date("2011-02-18") },
+    });
+    const b = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      penaltyData: { verdictDate: new Date("2024-02-22") },
+    });
+    expect(a.title).not.toBe(b.title);
+  });
+
+  it("sans date connue, le titre reste inchangé", () => {
+    const affair = buildWikidataDiscoveredAffair({ ...baseInput, penaltyData: {} });
+    expect(affair.title).toBe("corruption — Jean Testeur");
+  });
+
+  it("le préfixe de vérification reste en tête du titre", () => {
+    const affair = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      prop: "P1595",
+      penaltyData: { verdictDate: new Date("2019-09-17") },
+    });
+    expect(affair.title).toBe("[À VÉRIFIER] corruption (2019) — Jean Testeur");
+  });
+});
