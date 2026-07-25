@@ -46,7 +46,7 @@ model Politician {
   contactTwitter  String?
   contactFacebook String?
   contactWebsite  String?
-  contactOverride Boolean @default(false) // true = don't overwrite from sync
+  contactOverride Boolean  @default(false) // true = don't overwrite from sync
 
   // AI-generated biography
   biography            String?   @db.Text
@@ -73,23 +73,23 @@ model Politician {
   currentPartyId String?
 
   // Relations
-  mandates                  Mandate[]
-  affairs                   Affair[]
-  declarations              Declaration[]
-  partyHistory              PartyMembership[]
-  externalIds               ExternalId[] // IDs from all external sources
-  votes                     Vote[] // Parliamentary votes
-  pressMentions             PressArticleMention[] // Mentions in press articles
-  pressRejections           PressAnalysisRejection[] // Low-confidence press analysis rejections
-  factCheckMentions         FactCheckMention[] // Mentions in fact-checks
-  promises                  Promise[] // Tracker promesses 2027 (Q4 prototype)
-  candidacies               Candidacy[] // Election candidacies
-  candidates                Candidate[] // Local election candidates linked to this politician
-  participation             PoliticianParticipation? // Pre-computed participation stats
-  identityDecisions         IdentityDecision[] // Identity resolution audit trail
+  mandates          Mandate[]
+  affairs           Affair[]
+  declarations      Declaration[]
+  partyHistory      PartyMembership[]
+  externalIds       ExternalId[] // IDs from all external sources
+  votes             Vote[] // Parliamentary votes
+  pressMentions     PressArticleMention[] // Mentions in press articles
+  pressRejections   PressAnalysisRejection[] // Low-confidence press analysis rejections
+  factCheckMentions FactCheckMention[] // Mentions in fact-checks
+  promises          Promise[] // Tracker promesses 2027 (Q4 prototype)
+  candidacies       Candidacy[] // Election candidacies
+  candidates        Candidate[] // Local election candidates linked to this politician
+  participation       PoliticianParticipation? // Pre-computed participation stats
+  identityDecisions   IdentityDecision[] // Identity resolution audit trail
   affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
-  newsletterEditions        NewsletterEdition[] // Weeks featured as "politician of the week"
-  dossierAuthors            DossierAuthor[] // Dossiers authored/initiated by this politician
+  newsletterEditions  NewsletterEdition[] // Weeks featured as "politician of the week"
+  dossierAuthors      DossierAuthor[] // Dossiers authored/initiated by this politician
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -121,11 +121,11 @@ model ExternalId {
   url        String? // Direct URL to the source page
 
   // Identity resolution metadata
-  confidence Float? // 0.0 to 1.0 matching confidence
-  matchedBy  MatchMethod? // How the link was established
-  verifiedAt DateTime? // Manual validation timestamp
-  verifiedBy String? // Who validated ("admin:ldiaby")
-  metadata   Json? // Free-form context { birthDateMatch, deptMatch, etc. }
+  confidence  Float?        // 0.0 to 1.0 matching confidence
+  matchedBy   MatchMethod?  // How the link was established
+  verifiedAt  DateTime?     // Manual validation timestamp
+  verifiedBy  String?       // Who validated ("admin:ldiaby")
+  metadata    Json?         // Free-form context { birthDateMatch, deptMatch, etc. }
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -138,19 +138,19 @@ model ExternalId {
 
 // Audit trail for identity matching decisions
 model IdentityDecision {
-  id           String      @id @default(cuid())
-  sourceType   DataSource
-  sourceId     String // The external ID or source identifier
-  politicianId String
-  judgement    Judgement
-  confidence   Float // 0.0 to 1.0
-  method       MatchMethod
-  evidence     Json // { birthDateMatch: false, deptMatch: true, nameScore: 0.95 }
-  decidedBy    String // "system:sync-rne" or "admin:ldiaby"
-  decidedAt    DateTime    @default(now())
-  supersededBy String? // ID of the decision that replaces this one
+  id            String      @id @default(cuid())
+  sourceType    DataSource
+  sourceId      String      // The external ID or source identifier
+  politicianId  String
+  judgement     Judgement
+  confidence    Float       // 0.0 to 1.0
+  method        MatchMethod
+  evidence      Json        // { birthDateMatch: false, deptMatch: true, nameScore: 0.95 }
+  decidedBy     String      // "system:sync-rne" or "admin:ldiaby"
+  decidedAt     DateTime    @default(now())
+  supersededBy  String?     // ID of the decision that replaces this one
 
-  politician Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  politician    Politician  @relation(fields: [politicianId], references: [id], onDelete: Cascade)
 
   @@index([sourceType, sourceId])
   @@index([politicianId])
@@ -159,19 +159,19 @@ model IdentityDecision {
 
 // Affair-to-politician resolver decisions (deterministic matching, audit trail)
 model AffairPoliticianDecision {
-  id String @id @default(cuid())
+  id                 String   @id @default(cuid())
 
   // Input identity (for idempotency)
-  textHash      String // SHA256 of the input text
-  candidateText String @db.Text // first 2000 chars for audit
-  metadata      Json // source, refs, dates, court
+  textHash           String   // SHA256 of the input text
+  candidateText      String   @db.Text // first 2000 chars for audit
+  metadata           Json     // source, refs, dates, court
 
   // Resolver output
-  judgment        AffairPoliticianJudgment
-  topCandidates   Json // top 3 with full signal breakdown
-  topScore        Float
-  gap             Float
-  resolverVersion String                   @default("v1")
+  judgment           AffairPoliticianJudgment
+  topCandidates      Json     // top 3 with full signal breakdown
+  topScore           Float
+  gap                Float
+  resolverVersion    String   @default("v1")
 
   // Final destination (nullable until linked)
   affairId           String?
@@ -180,17 +180,17 @@ model AffairPoliticianDecision {
   chosenPolitician   Politician? @relation("AffairDecisionPolitician", fields: [chosenPoliticianId], references: [id], onDelete: SetNull)
 
   // Provenance (reuses existing SourceType enum)
-  source    SourceType
-  sourceRef String     @default("")
+  source             SourceType
+  sourceRef          String   @default("")
 
   // Review workflow
-  reviewedAt   DateTime?
-  reviewedBy   String?
-  reviewAction AffairReviewAction?
-  reviewNotes  String?             @db.Text
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  reviewAction       AffairReviewAction?
+  reviewNotes        String?  @db.Text
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([textHash, source, sourceRef])
   @@index([judgment, reviewedAt])
@@ -363,12 +363,6 @@ model Mandate {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  // NOTE: a partial UNIQUE index "Mandate_current_type_uq" on
-  // (politicianId, type) WHERE isCurrent = true AND type IN (DEPUTE, SENATEUR)
-  // is applied manually (see
-  // prisma/migrations/manual/add-mandate-current-type-unique.sql). Scoped to
-  // parliamentary types on purpose. Not declared here because partial indexes
-  // require the `partialIndexes` preview feature. db push leaves it untouched.
 
   @@index([politicianId])
   @@index([type])
@@ -377,6 +371,12 @@ model Mandate {
   @@index([isCurrent, type, departmentCode])
   @@index([departmentCode])
   @@index([partyId])
+  // NOTE: a partial UNIQUE index "Mandate_current_type_uq" on
+  // (politicianId, type) WHERE isCurrent = true AND type IN (DEPUTE, SENATEUR)
+  // is applied manually (see
+  // prisma/migrations/manual/add-mandate-current-type-unique.sql). Scoped to
+  // parliamentary types on purpose. Not declared here because partial indexes
+  // require the `partialIndexes` preview feature. db push leaves it untouched.
 }
 
 // Local mandate extension — 1:1 with Mandate for local-specific fields
@@ -404,7 +404,7 @@ model MandateGovernment {
   id             String   @id @default(cuid())
   mandate        Mandate  @relation(fields: [mandateId], references: [id], onDelete: Cascade)
   mandateId      String   @unique
-  governmentName String // "Gouvernement Borne", etc.
+  governmentName String   // "Gouvernement Borne", etc.
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -466,7 +466,7 @@ model EuropeanGroup {
 model ParliamentaryGroup {
   id        String  @id @default(cuid())
   code      String // "SOC", "EPR", "DR", "LR", "RN"...
-  slug      String? @unique // e.g. "epr-17", "soc-17"
+  slug      String?  @unique // e.g. "epr-17", "soc-17"
   publicId  String? @unique // "GP-000042" — stable public identifier (poligraphId, see /docs/api)
   name      String // Full official name
   shortName String? // Display short name if different from code
@@ -535,10 +535,10 @@ model Affair {
   partyAtTime   Party?  @relation(fields: [partyAtTimeId], references: [id])
   partyAtTimeId String?
 
-  title                 String // Ex: "Affaire des emplois fictifs du MoDem"
-  slug                  String    @unique
-  publicId              String?   @unique // "AF-000542" — stable public identifier (poligraphId, see /docs/api)
-  oldSlugs              String[]  @default([])
+  title       String // Ex: "Affaire des emplois fictifs du MoDem"
+  slug        String   @unique
+  publicId    String?  @unique // "AF-000542" — stable public identifier (poligraphId, see /docs/api)
+  oldSlugs    String[] @default([])
   description           String    @db.Text
   originalDescription   String?   @db.Text // Pre-enrichment description (for rollback)
   descriptionEnrichedAt DateTime? // When AI description enrichment was applied
@@ -594,9 +594,9 @@ model Affair {
   confidenceScore Int?
 
   // SLAPP (procédure-bâillon) tagging (orthogonal to AffairCategory)
-  isSlapp          Boolean   @default(false)
-  slappCriteria    Json? // SlappCriteriaPayload — see src/config/slapp.ts
-  slappQualifiedAt DateTime? // When qualified as SLAPP (audit trail)
+  isSlapp           Boolean   @default(false)
+  slappCriteria     Json?     // SlappCriteriaPayload — see src/config/slapp.ts
+  slappQualifiedAt  DateTime? // When qualified as SLAPP (audit trail)
 
   // Publication control (moderation)
   publicationStatus PublicationStatus @default(DRAFT)
@@ -962,8 +962,8 @@ model Vote {
   // sort and chamber filter. Maintained by Postgres trigger
   // sync_vote_denorm_from_scrutin_trigger when Scrutin.votingDate or Scrutin.chamber
   // is updated. See docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md.
-  votingDate  DateTime
-  chamber     Chamber
+  votingDate DateTime
+  chamber    Chamber
   // Also denormalized from Scrutin.type to drop the JOIN on the per-politician votes
   // list/counts filtered by tab (Textes de loi / Amendements). Same trigger and INSERT
   // path as votingDate/chamber. Nullable: mirrors Scrutin.type (which can be null).
@@ -986,9 +986,9 @@ model ScrutinImportance {
   id        String   @id @default(cuid())
   scrutinId String   @unique
   scrutin   Scrutin  @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
-  score     Float // 0-100
+  score     Float    // 0-100
   isKeyVote Boolean  @default(false)
-  signals   Json // { turnout, margin, pressCoverage, hasDossier, hasCitizenImpact, voteType }
+  signals   Json     // { turnout, margin, pressCoverage, hasDossier, hasCitizenImpact, voteType }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1005,7 +1005,7 @@ model ScrutinGroupPosition {
   forCount     Int
   againstCount Int
   abstainCount Int
-  cohesionPct  Float // max(for,against,abstain) / total * 100
+  cohesionPct  Float              // max(for,against,abstain) / total * 100
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
@@ -1028,22 +1028,22 @@ model ScrutinAnalysis {
 }
 
 model DebateTranscript {
-  id          String    @id @default(cuid())
-  scrutinId   String?
-  scrutin     Scrutin?  @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
-  seanceRef   String
-  date        DateTime
+  id        String   @id @default(cuid())
+  scrutinId String?
+  scrutin   Scrutin? @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
+  seanceRef String
+  date      DateTime
   // Séance start timestamp parsed from AN <dateSeance> (YYYYMMDDHHmmss). Enables
   // ordering same-day sittings; votes carry no time so it is metadata, not a join key.
-  startTime   DateTime?
+  startTime DateTime?
   // Sitting order within the day, from AN <numSeanceJour> (Unique -> 1, else the int).
   seanceOrder Int?
   // Full séance text (NOT truncated). Never index this column and never select it by
   // default — load it explicitly only when a matcher needs it.
-  content     String    @db.Text
-  sourceUrl   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  content   String   @db.Text
+  sourceUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([scrutinId])
   @@index([seanceRef])
@@ -1184,15 +1184,15 @@ model LegislativeDossier {
 }
 
 model DossierAuthor {
-  id           String             @id @default(cuid())
+  id           String              @id @default(cuid())
   dossierId    String
-  dossier      LegislativeDossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  dossier      LegislativeDossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
   politicianId String
-  politician   Politician         @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  politician   Politician          @relation(fields: [politicianId], references: [id], onDelete: Cascade)
   acteurRef    String? // AN acteurRef for traceability
-  role         DossierActorRole   @default(AUTEUR)
-  chamber      Chamber? // AN or SENAT
-  commission   String? // For rapporteurs: commission name
+  role         DossierActorRole    @default(AUTEUR)
+  chamber      Chamber?            // AN or SENAT
+  commission   String?             // For rapporteurs: commission name
 
   @@unique([dossierId, politicianId, role])
   @@index([dossierId])
@@ -1311,44 +1311,44 @@ enum ScrutinAmendmentSource {
 }
 
 model ScrutinPolicyTitle {
-  id        String  @id @default(cuid())
-  scrutinId String  @unique
-  scrutin   Scrutin @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
+  id                    String                       @id @default(cuid())
+  scrutinId             String                       @unique
+  scrutin               Scrutin                      @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
 
-  officialTitleSnapshot String  @db.Text
+  officialTitleSnapshot String                       @db.Text
   officialSourceUrl     String?
-  sources               Json    @default("[]")
+  sources               Json                         @default("[]")
 
-  inputHash String
+  inputHash             String
 
-  policyTitle     String? @db.VarChar(140)
-  policySubtitle  String? @db.Text
-  proceduralLabel String
+  policyTitle           String?                      @db.VarChar(140)
+  policySubtitle        String?                      @db.Text
+  proceduralLabel       String
 
-  confidence       PolicyTitleConfidence
-  qualitySignals   Json
-  generationSource PolicyTitleSource
-  modelVersion     String?
-  promptVersion    String?
+  confidence            PolicyTitleConfidence
+  qualitySignals        Json
+  generationSource      PolicyTitleSource
+  modelVersion          String?
+  promptVersion         String?
 
-  evidenceQuotes     Json @default("[]")
-  generationWarnings Json @default("[]")
-  currentWarnings    Json @default("[]")
-  inputs             Json @default("{}")
+  evidenceQuotes        Json                         @default("[]")
+  generationWarnings    Json                         @default("[]")
+  currentWarnings       Json                         @default("[]")
+  inputs                Json                         @default("{}")
 
-  status              PolicyTitleStatus
-  reviewedAt          DateTime?
-  reviewedBy          String?
-  editedFromGenerated Boolean           @default(false)
+  status                PolicyTitleStatus
+  reviewedAt            DateTime?
+  reviewedBy            String?
+  editedFromGenerated   Boolean                      @default(false)
 
-  regenerationStatus RegenerationStatus @default(idle)
-  regenerationError  String?
+  regenerationStatus    RegenerationStatus           @default(idle)
+  regenerationError     String?
 
-  generatedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  generatedAt           DateTime                     @default(now())
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
 
-  history ScrutinPolicyTitleRevision[]
+  history               ScrutinPolicyTitleRevision[]
 
   @@index([status, generatedAt])
   @@index([confidence, status])
@@ -1576,18 +1576,18 @@ model PressAnalysisRejection {
 // ============================================
 
 model FactCheck {
-  id                String            @id @default(cuid())
-  slug              String?           @unique // SEO-friendly URL slug
-  publicId          String?           @unique // "FC-000542" — stable public identifier (poligraphId, see /docs/api)
-  claimText         String            @db.Text // La déclaration vérifiée
-  claimant          String? // Qui a fait la déclaration
-  title             String            @db.Text // Titre de l'article de fact-check
-  verdict           String // Verdict textuel original (ex: "Faux", "Mostly False")
-  verdictRating     FactCheckRating // Rating normalisé
-  source            String // "AFP Factuel", "Les Décodeurs", etc.
-  sourceUrl         String            @unique // URL de l'article original
-  publishedAt       DateTime // Date de publication du fact-check
-  claimDate         DateTime? // Date de la déclaration vérifiée
+  id            String          @id @default(cuid())
+  slug          String?         @unique // SEO-friendly URL slug
+  publicId      String?         @unique // "FC-000542" — stable public identifier (poligraphId, see /docs/api)
+  claimText     String          @db.Text // La déclaration vérifiée
+  claimant      String? // Qui a fait la déclaration
+  title         String          @db.Text // Titre de l'article de fact-check
+  verdict       String // Verdict textuel original (ex: "Faux", "Mostly False")
+  verdictRating FactCheckRating // Rating normalisé
+  source        String // "AFP Factuel", "Les Décodeurs", etc.
+  sourceUrl     String          @unique // URL de l'article original
+  publishedAt   DateTime // Date de publication du fact-check
+  claimDate     DateTime? // Date de la déclaration vérifiée
   languageCode      String? // "fr", "en"
   publicationStatus PublicationStatus @default(DRAFT)
 
@@ -1692,10 +1692,10 @@ enum ElectionStatus {
 }
 
 enum CandidacyStatus {
-  DECLARE // Candidature officiellement annoncée par l'intéressé
-  PRESSENTI // Sources crédibles annoncent l'intention, pas d'annonce officielle
-  ENVISAGE // Hypothèse de presse, pas de signal direct de l'intéressé
-  RETIRE // Annoncé puis retiré ou écarté
+  DECLARE      // Candidature officiellement annoncée par l'intéressé
+  PRESSENTI    // Sources crédibles annoncent l'intention, pas d'annonce officielle
+  ENVISAGE     // Hypothèse de presse, pas de signal direct de l'intéressé
+  RETIRE       // Annoncé puis retiré ou écarté
 }
 
 model Election {
@@ -1843,7 +1843,7 @@ model ElectoralList {
   publicId   String?  @unique // "LM-000542" — stable public identifier (poligraphId, see /docs/api)
   election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
   electionId String
-  commune    Commune  @relation(fields: [communeId], references: [id])
+  commune    Commune @relation(fields: [communeId], references: [id])
   communeId  String
 
   listName   String
@@ -2206,19 +2206,19 @@ model SocialPost {
 // ============================================
 
 model Commune {
-  id                 String   @id // INSEE code (e.g., "75056")
-  name               String
-  departmentCode     String
-  departmentName     String
-  regionCode         String?
-  regionName         String?
-  postalCodes        String[]
-  population         Int?
-  latitude           Float?
-  longitude          Float?
-  totalSeats         Int? // Conseil municipal seats (computed from population)
-  constituencyNumber Int? // Legislative constituency (CIRCO_LEG from INSEE COG)
-  website            String?
+  id             String   @id // INSEE code (e.g., "75056")
+  name           String
+  departmentCode String
+  departmentName String
+  regionCode     String?
+  regionName     String?
+  postalCodes    String[]
+  population     Int?
+  latitude       Float?
+  longitude      Float?
+  totalSeats          Int? // Conseil municipal seats (computed from population)
+  constituencyNumber  Int? // Legislative constituency (CIRCO_LEG from INSEE COG)
+  website             String?
 
   candidacies           Candidacy[]
   electoralLists        ElectoralList[]
@@ -2372,7 +2372,7 @@ model PlatformUpdate {
   metadata    Json?
   sourceUrl   String?
 
-  createdAt DateTime @default(now())
+  createdAt   DateTime           @default(now())
 
   @@index([date])
   @@index([sourceUrl])
@@ -2421,13 +2421,13 @@ model Promise {
 // ============================================
 
 model Platform {
-  id              String         @id @default(cuid())
-  party           Party?         @relation(fields: [partyId], references: [id])
-  partyId         String?
+  id         String   @id @default(cuid())
+  party      Party?   @relation(fields: [partyId], references: [id])
+  partyId    String?
   electoralList   ElectoralList? @relation(fields: [electoralListId], references: [id])
   electoralListId String?        @unique
-  election        Election       @relation(fields: [electionId], references: [id])
-  electionId      String
+  election   Election @relation(fields: [electionId], references: [id])
+  electionId String
 
   sourceUrl         String?
   publicationStatus PublicationStatus @default(DRAFT)
@@ -2453,7 +2453,7 @@ model Proposal {
   position Int // -3..+3 scale: negative = Pole A, 0 = neutral, positive = Pole B
 
   summary       String
-  sourceExcerpt String? @db.Text
+  sourceExcerpt String?  @db.Text
   sourceUrl     String?
 
   aiGenerated Boolean @default(false)
@@ -2468,7 +2468,7 @@ model Proposal {
 }
 
 model QuizQuestion {
-  id    String            @id @default(cuid())
+  id    String @id @default(cuid())
   axis  ThematicAxis
   scope QuizElectionScope
 
@@ -2563,11 +2563,14 @@ model AffairPairDecision {
 enum AffairPairClassification {
   /// One affair recorded twice: merge authorised.
   DUPLICATE
+
   /// Distinct affairs that belong to the same story. Publishing the link is a
   /// separate editorial act, never a side effect of this ruling.
   LINKED
+
   /// Not the same affair. Excluded until either row changes.
   DISTINCT
+
   /// Deferred, not an exclusion: stays visible in a re-examination filter.
   UNCERTAIN
 }
