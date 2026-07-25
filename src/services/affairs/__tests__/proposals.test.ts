@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   db: {
     affair: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
-    affairUpdateProposal: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    affairUpdateProposal: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -20,6 +20,7 @@ import {
   deriveRiskLevel,
   detectDrift,
   EMPTY_VALUE,
+  hashSourceContent,
   normalizeForCompare,
   proposeAffairUpdate,
   ProposalValidationError,
@@ -31,20 +32,15 @@ const db = h.db;
 const EMPTY_AFFAIR = {
   id: "aff_1",
   slug: "affaire-test",
+  publicId: "AF-000542",
+  title: "Affaire de test",
+  politician: { slug: "jean-testeur", fullName: "Jean Testeur" },
   status: "INSTRUCTION",
-  involvement: "DIRECT",
-  category: "PROBITE",
-  severity: "GRAVE",
-  factsDate: null,
-  startDate: null,
   verdictDate: null,
   court: null,
-  chamber: null,
-  caseNumber: null,
   sentence: null,
   prisonMonths: null,
   prisonSuspended: null,
-  fineAmount: null,
   ineligibilityMonths: null,
   communityService: null,
   otherSentence: null,
@@ -60,6 +56,7 @@ const BASE_INPUT = {
   source: "WIKIDATA" as const,
   sourceUrl: "https://www.wikidata.org/wiki/Q123",
   officialId: "Q123",
+  sourceContentHash: "deadbeef",
   confidence: 95,
   rationale: "Rapprochement HIGH avec l'affaire existante.",
   extractorVersion: "wikidata-penalty-v2",
@@ -69,7 +66,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.affair.findUnique.mockResolvedValue(EMPTY_AFFAIR);
   db.affair.findFirst.mockResolvedValue(null);
-  db.affairUpdateProposal.findUnique.mockResolvedValue(null);
+  db.affairUpdateProposal.findFirst.mockResolvedValue(null);
   db.affairUpdateProposal.create.mockImplementation(async () => ({ id: "prop_new" }));
   db.affairUpdateProposal.update.mockResolvedValue({});
   db.auditLog.create.mockResolvedValue({});
@@ -99,9 +96,10 @@ describe("normalizeForCompare", () => {
 });
 
 describe("deriveRiskLevel", () => {
-  it("HIGH dès qu'on touche à l'état judiciaire, même sur un champ vide", () => {
+  it("HIGH dès qu'on touche au statut, même sur un champ vide", () => {
+    // status is the only judicial-state field proposable in lot 1; involvement,
+    // category and severity are out of the whitelist entirely.
     expect(deriveRiskLevel(["status"], { status: null })).toBe("HIGH");
-    expect(deriveRiskLevel(["involvement"], { involvement: null })).toBe("HIGH");
   });
 
   it("HIGH quand on écrase une valeur existante", () => {
@@ -184,6 +182,15 @@ describe("computePayloadHash", () => {
     expect(after).not.toBe(computePayloadHash(base));
   });
 
+  it("change quand le contenu de la source change à URL et identifiant constants", () => {
+    // The case URL and the ECLI are stable, but the page was corrected.
+    const before = computePayloadHash({ ...base, sourceContentHash: "hash-v1" });
+    const after = computePayloadHash({ ...base, sourceContentHash: "hash-v2" });
+    expect(after).not.toBe(before);
+    // And an absent hash is not the same as any hash.
+    expect(before).not.toBe(computePayloadHash(base));
+  });
+
   it("insensible à la forme Date ou ISO d'une même valeur", () => {
     const withDate = computePayloadHash({
       ...base,
@@ -199,6 +206,15 @@ describe("computePayloadHash", () => {
   });
 });
 
+describe("hashSourceContent", () => {
+  it("stable quel que soit l'ordre des clés, sensible au contenu", () => {
+    expect(hashSourceContent({ a: 1, b: 2 })).toBe(hashSourceContent({ b: 2, a: 1 }));
+    expect(hashSourceContent({ solution: "cassation" })).not.toBe(
+      hashSourceContent({ solution: "rejet" })
+    );
+  });
+});
+
 describe("validatePatch", () => {
   it("refuse une clé hors whitelist", () => {
     expect(() => validatePatch({ publicationStatus: "PUBLISHED" })).toThrow(
@@ -206,6 +222,43 @@ describe("validatePatch", () => {
     );
     expect(() => validatePatch({ politicianId: "pol_2" })).toThrow(ProposalValidationError);
     expect(() => validatePatch({ slug: "autre-slug" })).toThrow(ProposalValidationError);
+  });
+
+  it("refuse les champs que le lot 1 ne rend pas encore proposables", () => {
+    // Nothing emits these yet, so nothing may apply them.
+    for (const patch of [
+      { involvement: "MENTIONED_ONLY" },
+      { category: "PROBITE" },
+      { severity: "GRAVE" },
+      { title: "Autre titre" },
+      { description: "Autre description" },
+      { factsDate: "2020-01-01" },
+      { startDate: "2020-01-01" },
+      { chamber: "11e chambre" },
+      { caseNumber: "2023/12345" },
+      { fineAmount: "1500.50" },
+    ]) {
+      expect(() => validatePatch(patch), JSON.stringify(patch)).toThrow(ProposalValidationError);
+    }
+  });
+
+  it("accepte les 12 champs que discover-affairs et judilibre proposent", () => {
+    expect(() =>
+      validatePatch({
+        status: "CONDAMNATION_DEFINITIVE",
+        verdictDate: "2026-05-13",
+        court: "Cour de cassation",
+        sentence: "2 ans avec sursis",
+        prisonMonths: 24,
+        prisonSuspended: true,
+        ineligibilityMonths: 60,
+        communityService: 100,
+        otherSentence: "interdiction d'exercer",
+        ecli: "ECLI:FR:CCASS:2026:X",
+        pourvoiNumber: "23-80.000",
+        caseNumbers: ["A", "B"],
+      })
+    ).not.toThrow();
   });
 
   it("refuse un patch vide", () => {
@@ -218,10 +271,9 @@ describe("validatePatch", () => {
     expect(validatePatch({ status: "APPEL_EN_COURS" }).status).toBe("APPEL_EN_COURS");
   });
 
-  it("coerce une date ISO en Date et un montant en Decimal", () => {
-    const patch = validatePatch({ verdictDate: "2026-05-13", fineAmount: "1500.50" });
+  it("coerce une date ISO en Date", () => {
+    const patch = validatePatch({ verdictDate: "2026-05-13" });
     expect(patch.verdictDate).toBeInstanceOf(Date);
-    expect(Prisma.Decimal.isDecimal(patch.fineAmount)).toBe(true);
   });
 
   it("refuse une date invalide et une durée aberrante", () => {
@@ -245,6 +297,43 @@ describe("proposeAffairUpdate", () => {
     expect(db.affairUpdateProposal.create.mock.calls[0]![0].data.status).toBe("AUTO_APPLIED");
     // The automated write still leaves a trace.
     expect(db.auditLog.create).toHaveBeenCalledTimes(1);
+    // Proposal row, affair write and audit entry share one transaction.
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("l'auto-application revérifie l'éligibilité DANS la transaction", async () => {
+    // Field was empty at classification time, filled in by the time we write.
+    db.affair.findUnique
+      .mockResolvedValueOnce(EMPTY_AFFAIR)
+      .mockResolvedValueOnce({ ...EMPTY_AFFAIR, ecli: "ECLI:FR:CCASS:2020:OTHER" });
+
+    const result = await proposeAffairUpdate({
+      ...BASE_INPUT,
+      source: "JUDILIBRE",
+      patch: { ecli: "ECLI:FR:CCASS:2026:X" },
+    });
+
+    expect(result.autoApplied).toEqual([]);
+    expect(result.conflictProposalId).toBe("prop_new");
+    expect(db.affair.update).not.toHaveBeenCalled();
+    const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
+    expect(created.status).toBe("CONFLICT");
+    expect(created.conflictDetail).toEqual({
+      ecli: { expected: EMPTY_VALUE, actual: "ECLI:FR:CCASS:2020:OTHER" },
+    });
+  });
+
+  it("enregistre un affairSnapshot pour survivre à la suppression de l'affaire", async () => {
+    await proposeAffairUpdate({ ...BASE_INPUT, patch: { verdictDate: "2026-05-13" } });
+
+    const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
+    expect(created.affairSnapshot).toEqual({
+      publicId: "AF-000542",
+      slug: "affaire-test",
+      title: "Affaire de test",
+      politicianSlug: "jean-testeur",
+      politicianName: "Jean Testeur",
+    });
   });
 
   it("passe en CONFLICT quand l'ECLI appartient déjà à une autre affaire", async () => {
@@ -319,7 +408,7 @@ describe("proposeAffairUpdate", () => {
   });
 
   it("idempotence : un patch déjà enregistré ne crée pas de doublon", async () => {
-    db.affairUpdateProposal.findUnique.mockResolvedValue({ id: "prop_old", status: "PENDING" });
+    db.affairUpdateProposal.findFirst.mockResolvedValue({ id: "prop_old", status: "PENDING" });
 
     const result = await proposeAffairUpdate({
       ...BASE_INPUT,
@@ -332,7 +421,7 @@ describe("proposeAffairUpdate", () => {
   });
 
   it("un patch rejeté n'est jamais ressuscité par un run suivant", async () => {
-    db.affairUpdateProposal.findUnique.mockResolvedValue({ id: "prop_old", status: "REJECTED" });
+    db.affairUpdateProposal.findFirst.mockResolvedValue({ id: "prop_old", status: "REJECTED" });
 
     const result = await proposeAffairUpdate({
       ...BASE_INPUT,
