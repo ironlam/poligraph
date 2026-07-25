@@ -4,6 +4,8 @@ vi.mock("@/lib/db", () => ({
   db: {
     affair: { findMany: vi.fn() },
     dismissedDuplicate: { findMany: vi.fn() },
+    // Read by loadPairExclusions: detection now honours stored rulings (#525).
+    affairPairDecision: { findMany: vi.fn() },
   },
 }));
 
@@ -19,6 +21,7 @@ import { findMatchingAffairs } from "./matching";
 const mockedAffairFindMany = db.affair.findMany as ReturnType<typeof vi.fn>;
 const mockedDismissedFindMany = db.dismissedDuplicate.findMany as ReturnType<typeof vi.fn>;
 const mockedFindMatchingAffairs = findMatchingAffairs as ReturnType<typeof vi.fn>;
+const mockedDecisionFindMany = db.affairPairDecision.findMany as ReturnType<typeof vi.fn>;
 
 function makeDraft(
   id: string,
@@ -29,6 +32,7 @@ function makeDraft(
     publicationStatus: string;
     politicianId: string;
     verifiedAt: Date | null;
+    updatedAt: Date;
     involvement: string;
     factsDate: Date | null;
     verdictDate: Date | null;
@@ -48,6 +52,7 @@ function makeDraft(
     createdAt: overrides.createdAt ?? new Date("2026-05-19T10:00:00Z"),
     publicationStatus: overrides.publicationStatus ?? "DRAFT",
     verifiedAt: overrides.verifiedAt ?? null,
+    updatedAt: overrides.updatedAt ?? new Date("2026-05-19T10:00:00Z"),
     sources: [],
   };
 }
@@ -56,6 +61,7 @@ describe("findPotentialDuplicates — draft window clustering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedDismissedFindMany.mockResolvedValue([]);
+    mockedDecisionFindMany.mockResolvedValue([]);
     mockedFindMatchingAffairs.mockResolvedValue([]);
   });
 
@@ -161,6 +167,7 @@ describe("findPotentialDuplicates — périmètre élargi (#525)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedDismissedFindMany.mockResolvedValue([]);
+    mockedDecisionFindMany.mockResolvedValue([]);
     mockedFindMatchingAffairs.mockResolvedValue([]);
   });
 
@@ -306,5 +313,103 @@ describe("findPotentialDuplicates — périmètre élargi (#525)", () => {
     // Ordre canonique : le plus petit id en A.
     expect(duplicates[0]!.affairA.id).toBe("aaa");
     expect(duplicates[0]!.affairB.id).toBe("zzz");
+  });
+});
+
+// Issue #525 — a ruled pair must stop coming back, and must start coming back
+// once the rows it was ruled against have changed.
+describe("findPotentialDuplicates — jugements humains (#525)", () => {
+  const ruledAt = new Date("2026-07-01T00:00:00Z");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDismissedFindMany.mockResolvedValue([]);
+    mockedDecisionFindMany.mockResolvedValue([]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+  });
+
+  function pairOfPublished(updatedAt: Date) {
+    return [
+      { ...makeDraft("a1", { publicationStatus: "PUBLISHED" }), updatedAt },
+      { ...makeDraft("a2", { publicationStatus: "PUBLISHED" }), updatedAt },
+    ];
+  }
+
+  it("ne repropose pas une paire jugée distincte", async () => {
+    mockedAffairFindMany.mockResolvedValue(pairOfPublished(ruledAt));
+    mockedDecisionFindMany.mockResolvedValue([
+      {
+        pairKey: "a1:a2",
+        affairIdA: "a1",
+        affairIdB: "a2",
+        classification: "DISTINCT",
+        affairAUpdatedAt: ruledAt,
+        affairBUpdatedAt: ruledAt,
+      },
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(0);
+  });
+
+  it("repropose une paire jugée distincte dont une fiche a changé depuis", async () => {
+    const edited = new Date("2026-07-20T00:00:00Z");
+    mockedAffairFindMany.mockResolvedValue([
+      { ...makeDraft("a1", { publicationStatus: "PUBLISHED" }), updatedAt: edited },
+      { ...makeDraft("a2", { publicationStatus: "PUBLISHED" }), updatedAt: ruledAt },
+    ]);
+    mockedDecisionFindMany.mockResolvedValue([
+      {
+        pairKey: "a1:a2",
+        affairIdA: "a1",
+        affairIdB: "a2",
+        classification: "DISTINCT",
+        affairAUpdatedAt: ruledAt,
+        affairBUpdatedAt: ruledAt,
+      },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.rulingStale).toBe(true);
+    expect(duplicates[0]!.previousClassification).toBe("DISTINCT");
+  });
+
+  it("garde visible une paire différée en incertain", async () => {
+    mockedAffairFindMany.mockResolvedValue(pairOfPublished(ruledAt));
+    mockedDecisionFindMany.mockResolvedValue([
+      {
+        pairKey: "a1:a2",
+        affairIdA: "a1",
+        affairIdB: "a2",
+        classification: "UNCERTAIN",
+        affairAUpdatedAt: ruledAt,
+        affairBUpdatedAt: ruledAt,
+      },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.previousClassification).toBe("UNCERTAIN");
+  });
+
+  it("ne repropose pas une paire déjà fusionnée, même après modification", async () => {
+    const edited = new Date("2026-07-20T00:00:00Z");
+    mockedAffairFindMany.mockResolvedValue(pairOfPublished(edited));
+    mockedDecisionFindMany.mockResolvedValue([
+      {
+        pairKey: "a1:a2",
+        affairIdA: "a1",
+        affairIdB: "a2",
+        classification: "DUPLICATE",
+        affairAUpdatedAt: ruledAt,
+        affairBUpdatedAt: ruledAt,
+      },
+    ]);
+
+    expect(await findPotentialDuplicates()).toHaveLength(0);
   });
 });

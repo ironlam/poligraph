@@ -6,9 +6,12 @@
  */
 
 import { db } from "@/lib/db";
+import { canonicalPair } from "./affair-pair";
+import { buildPairDecisionUpsert, loadPairExclusions } from "./pair-decision";
 import {
   Prisma,
   type AffairCategory,
+  type AffairPairClassification,
   type PublicationStatus,
   type SourceType,
 } from "@/generated/prisma";
@@ -27,7 +30,11 @@ import {
 export interface AffairSummary {
   id: string;
   title: string;
+  /** Both sides always share it; carried so the queue can group by person. */
+  politicianId: string;
   sources: SourceType[];
+  /** Carried so a ruling can record the rows it was made against. */
+  updatedAt: Date;
   /** Needed by decideMergeAction: automation stops at the published boundary. */
   publicationStatus: PublicationStatus;
   /** A verified affair is never deleted automatically (issue #525). */
@@ -44,6 +51,10 @@ export interface PotentialDuplicate {
   contradictions: string[];
   /** Differences a merge could neither write nor turn into a proposal. */
   unpropagatableDifferences: string[];
+  /** An earlier human ruling on this pair, when one no longer excludes it. */
+  previousClassification: AffairPairClassification | null;
+  /** True when that ruling was made against rows that have since been edited. */
+  rulingStale: boolean;
 }
 
 export interface ReconciliationStats {
@@ -74,17 +85,6 @@ const DRAFT_CLUSTER_WINDOW_DAYS = 14;
  */
 const DETECTED_PUBLICATION_STATUSES = ["DRAFT", "PUBLISHED"] as const;
 
-/**
- * Canonical key for an unordered pair.
- *
- * Every store and every exclusion goes through this, so (A, B) and (B, A) can
- * never produce two rows for one pair.
- */
-export function canonicalPair(idA: string, idB: string): { a: string; b: string; key: string } {
-  const [a, b] = [idA, idB].sort();
-  return { a: a!, b: b!, key: `${a}:${b}` };
-}
-
 type DetectedAffair = {
   id: string;
   title: string;
@@ -99,6 +99,7 @@ type DetectedAffair = {
   createdAt: Date;
   publicationStatus: PublicationStatus;
   verifiedAt: Date | null;
+  updatedAt: Date;
   sources: { sourceType: SourceType }[];
 };
 
@@ -136,7 +137,9 @@ function toSummary(affair: DetectedAffair): AffairSummary {
   return {
     id: affair.id,
     title: affair.title,
+    politicianId: affair.politicianId,
     sources: [...new Set(affair.sources.map((s) => s.sourceType))],
+    updatedAt: affair.updatedAt,
     publicationStatus: affair.publicationStatus,
     verifiedAt: affair.verifiedAt,
   };
@@ -171,14 +174,14 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
       createdAt: true,
       publicationStatus: true,
       verifiedAt: true,
+      updatedAt: true,
       sources: { select: { sourceType: true } },
     },
   });
 
-  const dismissed = await db.dismissedDuplicate.findMany({
-    select: { affairIdA: true, affairIdB: true },
-  });
-  const dismissedSet = new Set(dismissed.map((d) => canonicalPair(d.affairIdA, d.affairIdB).key));
+  // Rulings are checked against the rows as they stand: a DISTINCT made before an
+  // edit no longer settles anything (issue #525).
+  const exclusions = await loadPairExclusions(new Map(affairs.map((a) => [a.id, a.updatedAt])));
 
   const byId = new Map(affairs.map((a) => [a.id, a as DetectedAffair]));
 
@@ -196,7 +199,7 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
 
   function record(a: DetectedAffair, b: DetectedAffair, match: MatchResult) {
     const { a: idA, key } = canonicalPair(a.id, b.id);
-    if (dismissedSet.has(key)) return;
+    if (exclusions.excluded.has(key)) return;
 
     const first = idA === a.id ? a : b;
     const second = idA === a.id ? b : a;
@@ -208,6 +211,8 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
       score: match.score,
       contradictions: findContradictions(first, second),
       unpropagatableDifferences: findUnpropagatableDifferences(first, second),
+      previousClassification: exclusions.classifications.get(key) ?? null,
+      rulingStale: exclusions.stale.has(key),
     };
 
     const existing = best.get(key);
@@ -266,7 +271,7 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
         const b = draftGroup[j]!;
 
         const { key } = canonicalPair(a.id, b.id);
-        if (dismissedSet.has(key) || best.has(key)) continue;
+        if (exclusions.excluded.has(key) || best.has(key)) continue;
         if (!sameCategoryFamily(a.category, b.category)) continue;
 
         const daysApart =
@@ -329,6 +334,20 @@ export interface MergeAffairsOptions {
    * stated and could not be carried over. Nothing is dropped silently.
    */
   auditNotes?: Prisma.InputJsonValue;
+  /**
+   * Ruling to store in the same transaction as the merge.
+   *
+   * A merge without its ruling would be re-proposed at the next run; a ruling
+   * without its merge would claim work that never happened. Both or neither.
+   */
+  pairDecision?: {
+    otherAffairId: string;
+    reviewedBy: string;
+    notes?: string | null;
+    signal: { confidence: string; matchedBy: string; score: number };
+    keepUpdatedAt: Date;
+    removeUpdatedAt: Date;
+  };
 }
 
 export interface MergeAffairsResult {
@@ -611,6 +630,25 @@ export async function mergeAffairs(
         userAgent: options.audit?.userAgent ?? null,
       },
     });
+
+    // Same transaction as the merge: a merge without its ruling would be
+    // re-proposed, a ruling without its merge would claim work never done.
+    if (options.pairDecision) {
+      const ruling = options.pairDecision;
+      await tx.affairPairDecision.upsert(
+        buildPairDecisionUpsert({
+          affairIdA: keepId,
+          affairIdB: ruling.otherAffairId,
+          classification: "DUPLICATE",
+          reviewedBy: ruling.reviewedBy,
+          notes: ruling.notes,
+          signal: ruling.signal,
+          affairAUpdatedAt: ruling.keepUpdatedAt,
+          affairBUpdatedAt: ruling.removeUpdatedAt,
+          mergedIntoAffairId: keepId,
+        })
+      );
+    }
 
     return {
       sourcesMoved,
