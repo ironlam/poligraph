@@ -7,7 +7,13 @@
 
 import { db } from "@/lib/db";
 import { Prisma, type SourceType } from "@/generated/prisma";
-import { findMatchingAffairs, sameCategoryFamily, type MatchConfidence } from "./matching";
+import {
+  findMatchingAffairs,
+  pairingRestsOnWildcard,
+  sameCategoryFamily,
+  titlesShareVocabulary,
+  type MatchConfidence,
+} from "./matching";
 
 // ============================================
 // TYPES
@@ -157,6 +163,17 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
           Math.abs(a.createdAt.getTime() - b.createdAt.getTime()) / (1000 * 60 * 60 * 24);
         if (daysApart > DRAFT_CLUSTER_WINDOW_DAYS) continue;
         if (!sameCategoryFamily(a.category, b.category)) continue;
+
+        // When only the AUTRE wildcard brings the categories together, the pair
+        // rests on the absence of a qualification rather than on evidence. Ask
+        // the titles for a second signal (issue #521): a minister mentioned in
+        // unrelated coverage otherwise pairs with every other draft about them.
+        if (
+          pairingRestsOnWildcard(a.category, b.category) &&
+          !titlesShareVocabulary(a.title, b.title)
+        ) {
+          continue;
+        }
 
         foundPairs.add(pairKey);
         duplicates.push({

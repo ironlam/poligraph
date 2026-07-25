@@ -74,12 +74,74 @@ describe("findPotentialDuplicates — draft window clustering", () => {
 
     const duplicates = await findPotentialDuplicates();
 
-    expect(duplicates).toHaveLength(3); // a1-a2, a1-a3, a2-a3
+    // a1-a2 pair on the probity family. a1-a3 rests on the AUTRE wildcard but
+    // both titles name Le Havre. a2-a3 rests on the wildcard and shares no
+    // vocabulary, so it is dropped (issue #521) — the cluster stays reachable
+    // because a3 is still connected through a1.
+    const pairs = duplicates.map((d) => [d.affairA.id, d.affairB.id].sort().join("-")).sort();
+    expect(pairs).toEqual(["a1-a2", "a1-a3"]);
     for (const pair of duplicates) {
       expect(pair.matchedBy).toBe("politician+category+window");
       expect(pair.confidence).toBe("POSSIBLE");
       expect(pair.score).toBe(0.45);
     }
+  });
+
+  it("keeps a wildcard pair whose titles share a word naming the facts", async () => {
+    // Regression guard for #521: the wildcard must stay useful. This is the
+    // shape that nothing else catches — sibling categories from different
+    // families, same facts, so neither identifiers nor title containment pair
+    // them.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        title: "Soupçons de tentative d'étouffement d'une procédure",
+        category: "RECEL",
+      }),
+      makeDraft("a2", {
+        title: "Tentative présumée d'étouffement d'une procédure",
+        category: "AUTRE",
+      }),
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.confidence).toBe("POSSIBLE");
+  });
+
+  it("drops a wildcard pair whose titles share nothing", async () => {
+    // A minister named in unrelated coverage: without this guard, every draft
+    // about them pairs with every other one (issue #521).
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        title: "Ordonnance du juge des référés sur les conditions de détention",
+        category: "AUTRE",
+      }),
+      makeDraft("a2", {
+        title: "Enlèvement suivi de meurtre",
+        category: "AGRESSION_SEXUELLE",
+      }),
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(0);
+  });
+
+  it("does not ask for shared vocabulary when a named family already pairs them", async () => {
+    // The guard is scoped to the wildcard. Sibling categories are evidence on
+    // their own, so a family pair survives with no vocabulary in common.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { title: "Emplois familiaux au Parlement", category: "EMPLOI_FICTIF" }),
+      makeDraft("a2", {
+        title: "Marché public attribué sans mise en concurrence",
+        category: "FAVORITISME",
+      }),
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
   });
 
   it("does not pair drafts created more than 14 days apart", async () => {
