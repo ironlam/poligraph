@@ -35,7 +35,8 @@ CREATE TABLE "AffairUpdateProposal" (
   "affairId"         TEXT,
   "affairSnapshot"   JSONB NOT NULL,
   "importer"         TEXT NOT NULL,
-  "importRunId"      TEXT,
+  -- Mandatory: every proposal belongs to a run, manual ones included.
+  "importRunId"      TEXT NOT NULL,
   "proposedPatch"    JSONB NOT NULL,
   "observedValues"   JSONB NOT NULL,
   "source"           "SourceType" NOT NULL,
@@ -65,9 +66,15 @@ ALTER TABLE "AffairUpdateProposal"
   ADD CONSTRAINT "AffairUpdateProposal_affairId_fkey"
   FOREIGN KEY ("affairId") REFERENCES "Affair" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- Restrict, not SetNull: deleting a run that still carries proposals is a
+-- mistake, not something to absorb silently.
 ALTER TABLE "AffairUpdateProposal"
   ADD CONSTRAINT "AffairUpdateProposal_importRunId_fkey"
-  FOREIGN KEY ("importRunId") REFERENCES "ImportRun" ("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  FOREIGN KEY ("importRunId") REFERENCES "ImportRun" ("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Stable identity of a source, so replaying an import cannot duplicate a row.
+-- Verified before adding: zero (affairId, url) duplicates across 1780 sources.
+CREATE UNIQUE INDEX "Source_affairId_url_key" ON "Source" ("affairId", "url");
 
 -- Idempotency: same importer replaying the same patch on the same affair from the
 -- same source and extractor version collapses onto one row.

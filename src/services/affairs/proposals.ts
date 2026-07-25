@@ -254,7 +254,8 @@ export function buildPrismaData(patch: AffairPatch): Prisma.AffairUpdateInput {
 export interface ProposeAffairUpdateInput {
   affairId: string;
   importer: string;
-  importRunId?: string | null;
+  /** Mandatory: a proposal always belongs to a run. See withImportRun(). */
+  importRunId: string;
   /** Raw patch; validated here, never trusted. */
   patch: unknown;
   source: SourceType;
@@ -393,7 +394,7 @@ function buildProposalData(
     affairId: args.input.affairId,
     affairSnapshot: toJson(args.snapshot),
     importer: args.input.importer,
-    importRunId: args.input.importRunId ?? null,
+    importRunId: args.input.importRunId,
     proposedPatch: toJson(args.patch),
     observedValues: toJson(args.observedValues),
     source: args.input.source,

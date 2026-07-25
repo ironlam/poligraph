@@ -778,6 +778,10 @@ model Source {
 
   createdAt DateTime @default(now())
 
+  // Stable identity of a source: the affair it documents plus its URL. Makes
+  // source creation idempotent, so replaying an import cannot duplicate a row.
+  // Verified before adding: zero (affairId, url) duplicates across 1780 sources.
+  @@unique([affairId, url])
   @@index([affairId])
   @@index([publisher])
   @@index([sourceType])
@@ -1929,6 +1933,16 @@ model ModerationReview {
 // reviewable proposal. Only machine identifiers that are absent and
 // non-contradictory are auto-applied. See docs (local spec) for the full design.
 
+/// Lifecycle of an importer pass. Describes EXECUTION, never business outcome.
+///
+/// RUNNING   the pass is in flight. No row may stay in this state once the
+///           process ended: startImportRun/withImportRun guarantee a terminal
+///           state via try/catch/finally.
+/// COMPLETED the pass reached its end. It says nothing about what it produced:
+///           a run that filed only PENDING or CONFLICT proposals is COMPLETED.
+/// FAILED    the pass was interrupted (throw, timeout, kill).
+///
+/// Business results live in `stats`, not in `status`.
 enum ImportRunStatus {
   RUNNING
   COMPLETED
@@ -1944,9 +1958,9 @@ enum ProposalStatus {
 }
 
 enum ProposalRisk {
-  LOW // fills a NULL technical identifier
-  MEDIUM // fills a NULL judicial or editorial field
-  HIGH // overwrites a non-NULL value, or touches status/involvement/publicationStatus
+  LOW // fills a NULL machine identifier (ecli, pourvoiNumber, caseNumbers)
+  MEDIUM // fills a NULL judicial field (dates, court, sentence)
+  HIGH // overwrites a non-NULL value, or touches the procedural status
 }
 
 /// One execution of an importer. Groups the proposals it produced so a faulty
@@ -1980,9 +1994,15 @@ model AffairUpdateProposal {
   /// stays readable: { publicId, slug, title, politicianSlug, politicianName }.
   affairSnapshot Json
 
-  importer    String
-  importRun   ImportRun? @relation(fields: [importRunId], references: [id], onDelete: SetNull)
-  importRunId String?
+  importer String
+
+  /// Mandatory: every proposal belongs to a run, so its provenance is always
+  /// traceable to an execution. A manual admin proposal must open a run with
+  /// importer "manual-admin" rather than produce an orphan row.
+  /// Restrict, not SetNull: deleting a run that still carries proposals is a
+  /// mistake, not something to absorb silently.
+  importRun   ImportRun @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+  importRunId String
 
   // The change. observedValues holds the same keys as proposedPatch, snapshotted
   // at proposal time, so acceptance can detect drift field by field.
