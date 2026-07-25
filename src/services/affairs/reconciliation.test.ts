@@ -28,6 +28,10 @@ function makeDraft(
     createdAt: Date;
     publicationStatus: string;
     politicianId: string;
+    verifiedAt: Date | null;
+    involvement: string;
+    factsDate: Date | null;
+    verdictDate: Date | null;
   }> = {}
 ) {
   return {
@@ -37,10 +41,13 @@ function makeDraft(
     pourvoiNumber: null,
     caseNumbers: [],
     category: overrides.category ?? "AUTRE",
-    verdictDate: null,
+    involvement: overrides.involvement ?? "DIRECT",
+    factsDate: overrides.factsDate ?? null,
+    verdictDate: overrides.verdictDate ?? null,
     politicianId: overrides.politicianId ?? "p1",
     createdAt: overrides.createdAt ?? new Date("2026-05-19T10:00:00Z"),
     publicationStatus: overrides.publicationStatus ?? "DRAFT",
+    verifiedAt: overrides.verifiedAt ?? null,
     sources: [],
   };
 }
@@ -145,5 +152,159 @@ describe("findPotentialDuplicates — draft window clustering", () => {
 
     expect(duplicates).toHaveLength(1);
     expect(duplicates[0]!.matchedBy).toBe("pourvoiNumber");
+  });
+});
+
+// Issue #525 — verifying an affair used to remove it from detection for good,
+// which hid every duplicate involving a published fiche.
+describe("findPotentialDuplicates — périmètre élargi (#525)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDismissedFindMany.mockResolvedValue([]);
+    mockedFindMatchingAffairs.mockResolvedValue([]);
+  });
+
+  it("n'exclut plus les affaires vérifiées de la requête", async () => {
+    mockedAffairFindMany.mockResolvedValue([]);
+
+    await findPotentialDuplicates();
+
+    const where = mockedAffairFindMany.mock.calls[0]![0].where;
+    expect(where).toEqual({ publicationStatus: { in: ["DRAFT", "PUBLISHED"] } });
+    expect(where).not.toHaveProperty("verifiedAt");
+  });
+
+  it("fait participer une affaire publiée et vérifiée à la détection", async () => {
+    const verifiedPublished = makeDraft("pub", {
+      publicationStatus: "PUBLISHED",
+      verifiedAt: new Date("2026-01-01"),
+      title: "Condamnation pour recel",
+    });
+    mockedAffairFindMany.mockResolvedValue([
+      verifiedPublished,
+      makeDraft("draft", { title: "Condamnation pour recel" }),
+    ]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "pub", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    const summaries = [duplicates[0]!.affairA, duplicates[0]!.affairB];
+    const published = summaries.find((s) => s.id === "pub")!;
+    expect(published.publicationStatus).toBe("PUBLISHED");
+    expect(published.verifiedAt).toEqual(new Date("2026-01-01"));
+  });
+
+  it("appelle le matcher une fois par affaire, pas une fois par paire", async () => {
+    // 4 affaires d'une même personnalité : 6 paires, mais 4 appels suffisent.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1"),
+      makeDraft("a2"),
+      makeDraft("a3"),
+      makeDraft("a4"),
+    ]);
+
+    await findPotentialDuplicates();
+
+    expect(mockedFindMatchingAffairs).toHaveBeenCalledTimes(4);
+  });
+
+  it("passe excludeAffairId pour qu'une affaire ne se rapproche pas d'elle-même", async () => {
+    mockedAffairFindMany.mockResolvedValue([makeDraft("a1"), makeDraft("a2")]);
+
+    await findPotentialDuplicates();
+
+    for (const call of mockedFindMatchingAffairs.mock.calls) {
+      expect(call[0].excludeAffairId).toBeDefined();
+    }
+  });
+
+  it("ignore un self-match même si le matcher en renvoie un", async () => {
+    // Catégories de familles incompatibles, pour que seul le 1er passage joue.
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { category: "MENACE" }),
+      makeDraft("a2", { category: "FRAUDE_FISCALE" }),
+    ]);
+    mockedFindMatchingAffairs.mockImplementation(
+      ({ excludeAffairId }: { excludeAffairId: string }) =>
+        Promise.resolve([
+          { affairId: excludeAffairId, confidence: "CERTAIN", score: 1, matchedBy: "ecli" },
+        ])
+    );
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(0);
+  });
+
+  it("ne remonte pas un faux positif déjà écarté", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { publicationStatus: "PUBLISHED" }),
+      makeDraft("a2", { publicationStatus: "PUBLISHED" }),
+    ]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+    // Enregistré dans l'autre sens : la clé canonique doit quand même l'exclure.
+    mockedDismissedFindMany.mockResolvedValue([{ affairIdA: "a2", affairIdB: "a1" }]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(0);
+  });
+
+  it("signale une contradiction de date de verdict sur la paire", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", {
+        publicationStatus: "PUBLISHED",
+        verdictDate: new Date("2020-01-01"),
+      }),
+      makeDraft("a2", { verdictDate: new Date("2024-06-01") }),
+    ]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates[0]!.contradictions).toContain("verdictDate");
+  });
+
+  it("signale un involvement divergent comme non transférable", async () => {
+    mockedAffairFindMany.mockResolvedValue([
+      makeDraft("a1", { publicationStatus: "PUBLISHED", involvement: "MENTIONED_ONLY" }),
+      makeDraft("a2", { involvement: "DIRECT" }),
+    ]);
+    mockedFindMatchingAffairs.mockResolvedValue([
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+    ]);
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates[0]!.unpropagatableDifferences).toContain("involvement");
+  });
+
+  it("produit la même paire quel que soit le sens du rapprochement", async () => {
+    mockedAffairFindMany.mockResolvedValue([makeDraft("zzz"), makeDraft("aaa")]);
+    // Chaque côté rapproche l'autre, avec des scores différents : le meilleur gagne.
+    mockedFindMatchingAffairs.mockImplementation(
+      ({ excludeAffairId }: { excludeAffairId: string }) =>
+        Promise.resolve(
+          excludeAffairId === "zzz"
+            ? [{ affairId: "aaa", confidence: "POSSIBLE", score: 0.3, matchedBy: "title-partial" }]
+            : [{ affairId: "zzz", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" }]
+        )
+    );
+
+    const duplicates = await findPotentialDuplicates();
+
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]!.score).toBe(0.95);
+    expect(duplicates[0]!.matchedBy).toBe("pourvoiNumber");
+    // Ordre canonique : le plus petit id en A.
+    expect(duplicates[0]!.affairA.id).toBe("aaa");
+    expect(duplicates[0]!.affairB.id).toBe("zzz");
   });
 });
