@@ -75,6 +75,25 @@ export interface MatchResult {
 }
 
 /**
+ * Signals that identify a decision rather than resemble one: official numbers
+ * assigned by a court, not words a title happens to share.
+ *
+ * Only these may carry a merge across the published boundary automatically
+ * (issue #525). Title, category, date and politician proximity are resemblance:
+ * they can be right, but they cannot prove two rows describe one decision.
+ */
+export const DETERMINISTIC_MATCH_SIGNALS: ReadonlySet<string> = new Set([
+  "ecli",
+  "pourvoiNumber",
+  "caseNumbers",
+]);
+
+/** Whether a match rests on an official identifier rather than on resemblance. */
+export function isDeterministicMatch(matchedBy: string): boolean {
+  return DETERMINISTIC_MATCH_SIGNALS.has(matchedBy);
+}
+
+/**
  * Minimum share of the longer title that the shorter one must cover for
  * containment to count as a duplicate signal.
  *
@@ -184,6 +203,14 @@ export interface MatchCandidate {
   caseNumbers?: string[];
   category?: AffairCategory;
   verdictDate?: Date | null;
+  /**
+   * Set when the candidate IS an existing row, so it cannot match itself.
+   *
+   * Importers leave this empty: they match a candidate that has no row yet.
+   * Duplicate detection must set it, otherwise the ECLI branch below returns the
+   * affair's own id and stops, hiding every other signal (issue #525).
+   */
+  excludeAffairId?: string;
 }
 
 /**
@@ -231,7 +258,9 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
       where: { ecli: candidate.ecli },
       select: { id: true },
     });
-    if (ecliMatch) {
+    // A self-match proves nothing and must not short-circuit: ecli is unique, so
+    // when the candidate is an existing row this lookup finds that row itself.
+    if (ecliMatch && ecliMatch.id !== candidate.excludeAffairId) {
       matches.push({
         affairId: ecliMatch.id,
         confidence: "CERTAIN",
@@ -252,6 +281,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
       select: { id: true },
     });
     for (const match of pourvoiMatches) {
+      if (match.id === candidate.excludeAffairId) continue;
       matches.push({
         affairId: match.id,
         confidence: "HIGH",
@@ -271,6 +301,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
       select: { id: true },
     });
     for (const match of caseNumberMatches) {
+      if (match.id === candidate.excludeAffairId) continue;
       // Avoid duplicating matches already found by pourvoi
       if (!matches.some((m) => m.affairId === match.id)) {
         matches.push({
@@ -306,6 +337,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
     });
 
     for (const existing of samePoliticianAffairs) {
+      if (existing.id === candidate.excludeAffairId) continue;
       if (matches.some((m) => m.affairId === existing.id)) continue;
 
       const normalizedExisting = normalizeAffairTitle(existing.title, politicianName);
@@ -360,6 +392,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
       select: { id: true },
     });
     for (const match of categoryDateMatches) {
+      if (match.id === candidate.excludeAffairId) continue;
       if (!matches.some((m) => m.affairId === match.id)) {
         matches.push({
           affairId: match.id,
