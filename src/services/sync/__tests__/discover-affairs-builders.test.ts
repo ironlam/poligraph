@@ -50,3 +50,38 @@ describe("buildWikidataDiscoveredAffair — invariant I1 (RGPD art. 10)", () => 
     affair.publicationStatus = "PUBLISHED";
   });
 });
+
+// Affaires v2, lot 1: Wikidata carries a decision date, not a facts date.
+// Squeezing it into factsDate is what made created affairs store a wrong
+// factsDate while leaving verdictDate NULL, and forced the reconciliation path
+// to read it back out behind a `phase === "wikidata"` guard.
+describe("sémantique des dates — factsDate n'est pas verdictDate", () => {
+  const verdictDate = new Date("2026-05-13T00:00:00.000Z");
+
+  it("la phase Wikidata renseigne verdictDate et laisse factsDate à null", () => {
+    const affair = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      penaltyData: { verdictDate, prisonMonths: 24 },
+    });
+
+    expect(affair.verdictDate).toEqual(verdictDate);
+    expect(affair.factsDate).toBeNull();
+  });
+
+  it("sans date de décision, les deux champs restent nuls", () => {
+    const affair = buildWikidataDiscoveredAffair({ ...baseInput, penaltyData: {} });
+
+    expect(affair.verdictDate).toBeNull();
+    expect(affair.factsDate).toBeNull();
+  });
+
+  it("le champ verdictDate existe sur le type et n'est jamais alimenté par factsDate", () => {
+    const affair = buildWikidataDiscoveredAffair({
+      ...baseInput,
+      penaltyData: { verdictDate },
+    });
+
+    // Regression guard: these two must never hold the same value by construction.
+    expect(affair.factsDate).not.toEqual(affair.verdictDate);
+  });
+});
