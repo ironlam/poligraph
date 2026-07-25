@@ -6,8 +6,19 @@
  */
 
 import { db } from "@/lib/db";
-import { Prisma, type SourceType } from "@/generated/prisma";
-import { findMatchingAffairs, sameCategoryFamily, type MatchConfidence } from "./matching";
+import {
+  Prisma,
+  type AffairCategory,
+  type PublicationStatus,
+  type SourceType,
+} from "@/generated/prisma";
+import {
+  findMatchingAffairs,
+  sameCategoryFamily,
+  verdictDatesConflict,
+  type MatchConfidence,
+  type MatchResult,
+} from "./matching";
 
 // ============================================
 // TYPES
@@ -17,6 +28,10 @@ export interface AffairSummary {
   id: string;
   title: string;
   sources: SourceType[];
+  /** Needed by decideMergeAction: automation stops at the published boundary. */
+  publicationStatus: PublicationStatus;
+  /** A verified affair is never deleted automatically (issue #525). */
+  verifiedAt: Date | null;
 }
 
 export interface PotentialDuplicate {
@@ -25,6 +40,10 @@ export interface PotentialDuplicate {
   confidence: MatchConfidence;
   matchedBy: string;
   score: number;
+  /** Judicial values that rule out the two rows describing one decision. */
+  contradictions: string[];
+  /** Differences a merge could neither write nor turn into a proposal. */
+  unpropagatableDifferences: string[];
 }
 
 export interface ReconciliationStats {
@@ -45,15 +64,99 @@ export interface ReconciliationStats {
 const DRAFT_CLUSTER_WINDOW_DAYS = 14;
 
 /**
- * Find potential duplicate pairs among unverified affairs.
+ * Statuses duplicate detection covers.
  *
- * Groups affairs by politician, then compares each pair using
- * the existing matching algorithm.
+ * Named explicitly rather than expressed as "everything except rejected", so
+ * adding a status to the enum cannot silently widen the queue. Left out for this
+ * lot: REJECTED (a moderator already ruled), EXCLUDED (a wrong exclusion is a
+ * moderation audit, not duplicate detection) and ARCHIVED (needs the reason for
+ * archiving to be read). Auditing those is a separate historical pass.
+ */
+const DETECTED_PUBLICATION_STATUSES = ["DRAFT", "PUBLISHED"] as const;
+
+/**
+ * Canonical key for an unordered pair.
+ *
+ * Every store and every exclusion goes through this, so (A, B) and (B, A) can
+ * never produce two rows for one pair.
+ */
+export function canonicalPair(idA: string, idB: string): { a: string; b: string; key: string } {
+  const [a, b] = [idA, idB].sort();
+  return { a: a!, b: b!, key: `${a}:${b}` };
+}
+
+type DetectedAffair = {
+  id: string;
+  title: string;
+  ecli: string | null;
+  pourvoiNumber: string | null;
+  caseNumbers: string[];
+  category: string;
+  involvement: string;
+  factsDate: Date | null;
+  verdictDate: Date | null;
+  politicianId: string;
+  createdAt: Date;
+  publicationStatus: PublicationStatus;
+  verifiedAt: Date | null;
+  sources: { sourceType: SourceType }[];
+};
+
+/** Judicial values that rule out the two rows being one decision. */
+function findContradictions(a: DetectedAffair, b: DetectedAffair): string[] {
+  const contradictions: string[] = [];
+  if (verdictDatesConflict(a.verdictDate, b.verdictDate)) contradictions.push("verdictDate");
+  if (a.ecli && b.ecli && a.ecli !== b.ecli) contradictions.push("ecli");
+  if (a.pourvoiNumber && b.pourvoiNumber && a.pourvoiNumber !== b.pourvoiNumber) {
+    contradictions.push("pourvoiNumber");
+  }
+  return contradictions;
+}
+
+/**
+ * Differences a merge could neither write nor propose, so absorbing would drop
+ * the claim in silence.
+ *
+ * `involvement` says what the person is accused of being, and `factsDate` says
+ * when: both are outside the proposal whitelist, so a disagreement has to stop
+ * automation. Title, description and category are left out on purpose — the
+ * surviving published fiche is the authoritative wording, and the merge audit
+ * trail records what the absorbed row said.
+ */
+function findUnpropagatableDifferences(a: DetectedAffair, b: DetectedAffair): string[] {
+  const differences: string[] = [];
+  if (a.involvement !== b.involvement) differences.push("involvement");
+  const factsA = a.factsDate?.getTime() ?? null;
+  const factsB = b.factsDate?.getTime() ?? null;
+  if (factsA !== null && factsB !== null && factsA !== factsB) differences.push("factsDate");
+  return differences;
+}
+
+function toSummary(affair: DetectedAffair): AffairSummary {
+  return {
+    id: affair.id,
+    title: affair.title,
+    sources: [...new Set(affair.sources.map((s) => s.sourceType))],
+    publicationStatus: affair.publicationStatus,
+    verifiedAt: affair.verifiedAt,
+  };
+}
+
+/**
+ * Find potential duplicate pairs among drafts and published affairs.
+ *
+ * Verifying an affair used to remove it from detection for good, which hid every
+ * duplicate involving a published fiche — the blind spot of issue #525. Scope is
+ * now publication status, not review state.
+ *
+ * Widening the outer loop made the previous shape untenable: findMatchingAffairs
+ * was called once per pair although it only depends on one side, so a politician
+ * with n affairs cost n(n-1)/2 calls where n suffice. It is now called once per
+ * affair and the results are folded into pairs.
  */
 export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
-  // Load all unverified affairs
   const affairs = await db.affair.findMany({
-    where: { verifiedAt: null },
+    where: { publicationStatus: { in: [...DETECTED_PUBLICATION_STATUSES] } },
     select: {
       id: true,
       title: true,
@@ -61,73 +164,87 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
       pourvoiNumber: true,
       caseNumbers: true,
       category: true,
+      involvement: true,
+      factsDate: true,
       verdictDate: true,
       politicianId: true,
       createdAt: true,
       publicationStatus: true,
+      verifiedAt: true,
       sources: { select: { sourceType: true } },
     },
   });
 
-  // Load dismissed pairs to exclude
   const dismissed = await db.dismissedDuplicate.findMany({
     select: { affairIdA: true, affairIdB: true },
   });
-  const dismissedSet = new Set(dismissed.map((d) => [d.affairIdA, d.affairIdB].sort().join(":")));
+  const dismissedSet = new Set(dismissed.map((d) => canonicalPair(d.affairIdA, d.affairIdB).key));
 
-  // Group by politician
-  const byPolitician = new Map<string, typeof affairs>();
+  const byId = new Map(affairs.map((a) => [a.id, a as DetectedAffair]));
+
+  const byPolitician = new Map<string, DetectedAffair[]>();
   for (const affair of affairs) {
     const list = byPolitician.get(affair.politicianId) ?? [];
-    list.push(affair);
+    list.push(affair as DetectedAffair);
     byPolitician.set(affair.politicianId, list);
   }
 
-  const duplicates: PotentialDuplicate[] = [];
+  // Best result per pair. Both sides of a pair can produce a match, and they can
+  // disagree, so the winner is picked on score then on matchedBy — never on which
+  // side was queried first, which would make the output order-dependent.
+  const best = new Map<string, PotentialDuplicate>();
+
+  function record(a: DetectedAffair, b: DetectedAffair, match: MatchResult) {
+    const { a: idA, key } = canonicalPair(a.id, b.id);
+    if (dismissedSet.has(key)) return;
+
+    const first = idA === a.id ? a : b;
+    const second = idA === a.id ? b : a;
+    const candidate: PotentialDuplicate = {
+      affairA: toSummary(first),
+      affairB: toSummary(second),
+      confidence: match.confidence,
+      matchedBy: match.matchedBy,
+      score: match.score,
+      contradictions: findContradictions(first, second),
+      unpropagatableDifferences: findUnpropagatableDifferences(first, second),
+    };
+
+    const existing = best.get(key);
+    if (
+      !existing ||
+      candidate.score > existing.score ||
+      (candidate.score === existing.score && candidate.matchedBy < existing.matchedBy)
+    ) {
+      best.set(key, candidate);
+    }
+  }
 
   for (const group of byPolitician.values()) {
     if (group.length < 2) continue;
 
-    // Compare each pair within the same politician
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        const a = group[i];
-        const b = group[j];
+    for (const affair of group) {
+      const matches = await findMatchingAffairs({
+        politicianId: affair.politicianId,
+        title: affair.title,
+        ecli: affair.ecli,
+        pourvoiNumber: affair.pourvoiNumber,
+        caseNumbers: affair.caseNumbers,
+        category: affair.category as AffairCategory,
+        verdictDate: affair.verdictDate,
+        // Without this the affair matches itself, and the ECLI branch would
+        // return that self-match alone and hide every other signal.
+        excludeAffairId: affair.id,
+      });
 
-        // Skip if already dismissed
-        const pairKey = [a!.id, b!.id].sort().join(":");
-        if (dismissedSet.has(pairKey)) continue;
-
-        // Use affair B as a candidate to match against A
-        const matches = await findMatchingAffairs({
-          politicianId: b!.politicianId,
-          title: b!.title,
-          ecli: b!.ecli,
-          pourvoiNumber: b!.pourvoiNumber,
-          caseNumbers: b!.caseNumbers,
-          category: b!.category,
-          verdictDate: b!.verdictDate,
-        });
-
-        // Check if affair A appears in the matches
-        const matchForA = matches.find((m) => m.affairId === a!.id);
-        if (matchForA) {
-          duplicates.push({
-            affairA: {
-              id: a!.id,
-              title: a!.title,
-              sources: [...new Set(a!.sources.map((s) => s.sourceType))],
-            },
-            affairB: {
-              id: b!.id,
-              title: b!.title,
-              sources: [...new Set(b!.sources.map((s) => s.sourceType))],
-            },
-            confidence: matchForA.confidence,
-            matchedBy: matchForA.matchedBy,
-            score: matchForA.score,
-          });
-        }
+      for (const match of matches) {
+        // Belt and braces: excludeAffairId already prevents this, but a self-pair
+        // must never reach the queue if a matcher path ever stops honouring it.
+        if (match.affairId === affair.id) continue;
+        const other = byId.get(match.affairId);
+        // Outside the detected scope, e.g. a rejected affair.
+        if (!other) continue;
+        record(affair, other, match);
       }
     }
   }
@@ -139,8 +256,6 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
   // cannot catch. Pair drafts of the same politician created within
   // DRAFT_CLUSTER_WINDOW_DAYS when their categories share a family.
   // POSSIBLE only (score 0.45): never auto-merged, surfaced for human review.
-  const foundPairs = new Set(duplicates.map((d) => [d.affairA.id, d.affairB.id].sort().join(":")));
-
   for (const group of byPolitician.values()) {
     const draftGroup = group.filter((a) => a.publicationStatus === "DRAFT");
     if (draftGroup.length < 2) continue;
@@ -150,37 +265,26 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
         const a = draftGroup[i]!;
         const b = draftGroup[j]!;
 
-        const pairKey = [a.id, b.id].sort().join(":");
-        if (dismissedSet.has(pairKey) || foundPairs.has(pairKey)) continue;
+        const { key } = canonicalPair(a.id, b.id);
+        if (dismissedSet.has(key) || best.has(key)) continue;
+        if (!sameCategoryFamily(a.category, b.category)) continue;
 
         const daysApart =
           Math.abs(a.createdAt.getTime() - b.createdAt.getTime()) / (1000 * 60 * 60 * 24);
         if (daysApart > DRAFT_CLUSTER_WINDOW_DAYS) continue;
-        if (!sameCategoryFamily(a.category, b.category)) continue;
 
-        foundPairs.add(pairKey);
-        duplicates.push({
-          affairA: {
-            id: a.id,
-            title: a.title,
-            sources: [...new Set(a.sources.map((s) => s.sourceType))],
-          },
-          affairB: {
-            id: b.id,
-            title: b.title,
-            sources: [...new Set(b.sources.map((s) => s.sourceType))],
-          },
+        record(a, b, {
+          affairId: b.id,
           confidence: "POSSIBLE",
-          matchedBy: "politician+category+window",
           score: 0.45,
+          matchedBy: "politician+category+window",
         });
       }
     }
   }
 
-  // Sort by score descending (most confident first)
-  duplicates.sort((a, b) => b.score - a.score);
-  return duplicates;
+  // Most confident first.
+  return [...best.values()].sort((a, b) => b.score - a.score);
 }
 
 // ============================================
@@ -194,9 +298,37 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
  */
 const ADDITIVE_MERGE_FIELDS = ["ecli", "pourvoiNumber", "court", "chamber", "caseNumber"] as const;
 
+export type AdditiveMergeField = (typeof ADDITIVE_MERGE_FIELDS)[number];
+
+/**
+ * What an automatic absorption into a published affair may fill: court-assigned
+ * identifiers only.
+ *
+ * `court` and `chamber` are left out although they would only fill a gap, because
+ * they describe the jurisdiction rather than identify the decision. Both are in
+ * the proposal whitelist, so the draft's value reaches the published fiche
+ * through review instead of a cron write (issue #525, §4).
+ */
+export const ABSORPTION_ADDITIVE_FIELDS: readonly AdditiveMergeField[] = [
+  "ecli",
+  "pourvoiNumber",
+  "caseNumber",
+];
+
 export interface MergeAffairsOptions {
   /** Request context, when the merge is human-initiated from the admin. */
   audit?: { ipAddress?: string | null; userAgent?: string | null };
+  /**
+   * Restricts which fields the survivor may have filled from the absorbed affair.
+   * Defaults to the full additive set, which is right for a human-initiated merge
+   * and for two drafts. Absorption into a published affair narrows it.
+   */
+  additiveFields?: readonly AdditiveMergeField[];
+  /**
+   * Recorded verbatim in the merge audit trail, to keep what the absorbed affair
+   * stated and could not be carried over. Nothing is dropped silently.
+   */
+  auditNotes?: Prisma.InputJsonValue;
 }
 
 export interface MergeAffairsResult {
@@ -342,7 +474,7 @@ export async function mergeAffairs(
     // --- Additive field fill, plus the absorbed affair's URLs.
     const updates: Prisma.AffairUpdateInput = {};
     const identifiersMerged: string[] = [];
-    for (const field of ADDITIVE_MERGE_FIELDS) {
+    for (const field of options.additiveFields ?? ADDITIVE_MERGE_FIELDS) {
       if (!keep[field] && remove[field]) {
         updates[field] = remove[field];
         identifiersMerged.push(field);
@@ -404,6 +536,7 @@ export async function mergeAffairs(
           articlesMoved,
           identifiersMerged,
           slugsPreserved,
+          ...(options.auditNotes ? { notes: options.auditNotes } : {}),
         },
         ipAddress: options.audit?.ipAddress ?? null,
         userAgent: options.audit?.userAgent ?? null,
