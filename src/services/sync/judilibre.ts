@@ -49,12 +49,8 @@ import { resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadJudilibreDecisionCache } from "./judilibre-decisions";
 import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
-import {
-  failImportRun,
-  finishImportRun,
-  IMPORTER_JUDILIBRE,
-  startImportRun,
-} from "@/services/affairs/import-run";
+import { upsertAffairSource } from "@/services/affairs/affair-source";
+import { IMPORTER_JUDILIBRE, withImportRun } from "@/services/affairs/import-run";
 
 /**
  * Bump when the Judilibre mapping changes shape or semantics. Part of the
@@ -184,10 +180,13 @@ async function enrichAffairFromJudilibre(
     }
 
     if (Object.keys(patch).length > 0) {
+      if (!importRunId) {
+        throw new Error("enrichAffairFromJudilibre: importRunId requis hors dry-run");
+      }
       await proposeAffairUpdate({
         affairId,
         importer: IMPORTER_JUDILIBRE,
-        importRunId: importRunId ?? null,
+        importRunId,
         patch,
         source: "JUDILIBRE",
         sourceUrl: decisionUrl,
@@ -212,26 +211,17 @@ async function enrichAffairFromJudilibre(
       });
     }
 
-    // Add Judilibre source if not already present
-    const existingSource = await db.source.findFirst({
-      where: {
-        affairId,
-        sourceType: "JUDILIBRE",
-      },
+    // Attach the decision as a source. Idempotent on (affairId, url): the
+    // previous code deduplicated on (affairId, sourceType), which silently
+    // dropped a second Cassation decision on the same affair.
+    await upsertAffairSource({
+      affairId,
+      url: decisionUrl,
+      title: `Cour de cassation - ${decision.solution} (${decision.number})`,
+      publisher: "Cour de cassation",
+      publishedAt: new Date(decision.decision_date),
+      sourceType: "JUDILIBRE",
     });
-
-    if (!existingSource) {
-      await db.source.create({
-        data: {
-          affairId,
-          url: `https://www.courdecassation.fr/decision/${decision.id}`,
-          title: `Cour de cassation - ${decision.solution} (${decision.number})`,
-          publisher: "Cour de cassation",
-          publishedAt: new Date(decision.decision_date),
-          sourceType: "JUDILIBRE",
-        },
-      });
-    }
 
     if (verbose) {
       console.log(`  ✓ Affaire ${affairId} enrichie avec ECLI ${decision.ecli}`);
@@ -481,10 +471,23 @@ export async function syncJudilibre(
   const politicians = await getPoliticiansToSearch(politicianSlug, limit);
   console.log(`${politicians.length} politicien(s) a rechercher\n`);
 
-  // Anchors every proposal this pass files. Skipped on dry runs, which write nothing.
-  const importRunId = dryRun ? null : await startImportRun(IMPORTER_JUDILIBRE);
+  if (dryRun) {
+    // A dry run writes nothing, so it opens no run: an ImportRun with no
+    // proposals would be noise in the provenance history.
+    await runJudilibreSearch({
+      politicians,
+      client,
+      decisionCache,
+      stats,
+      dryRun,
+      verbose,
+      importRunId: null,
+    });
+    return stats;
+  }
 
-  try {
+  // withImportRun guarantees the run leaves RUNNING whatever happens.
+  await withImportRun(IMPORTER_JUDILIBRE, async ({ importRunId, setStats }) => {
     await runJudilibreSearch({
       politicians,
       client,
@@ -494,19 +497,13 @@ export async function syncJudilibre(
       verbose,
       importRunId,
     });
-  } catch (error) {
-    if (importRunId) await failImportRun(importRunId, error);
-    throw error;
-  }
-
-  if (importRunId) {
-    await finishImportRun(importRunId, {
+    setStats({
       affairsEnriched: stats.affairsEnriched,
       affairsCreated: stats.affairsCreated,
       decisionsRelevant: stats.decisionsRelevant,
       errors: stats.errors,
     });
-  }
+  });
 
   return stats;
 }

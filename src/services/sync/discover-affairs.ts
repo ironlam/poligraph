@@ -32,12 +32,7 @@ import { loadCandidatePool } from "@/lib/affair-matching/persistence";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
 import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
-import {
-  failImportRun,
-  finishImportRun,
-  IMPORTER_DISCOVER_AFFAIRS,
-  startImportRun,
-} from "@/services/affairs/import-run";
+import { IMPORTER_DISCOVER_AFFAIRS, withImportRun } from "@/services/affairs/import-run";
 
 export const DISCOVER_AFFAIRS_CURSOR_KEY = "discover-affairs:cursor:lastName";
 
@@ -309,10 +304,10 @@ export async function discoverAffairs(options?: {
   if (allAffairs.length > 0) {
     // Reconciliation is the only phase that touches existing affairs, so it is
     // the only one that needs an ImportRun to anchor its proposals.
-    const importRunId = await startImportRun(IMPORTER_DISCOVER_AFFAIRS);
-    try {
+    // withImportRun guarantees the run leaves RUNNING whatever happens.
+    await withImportRun(IMPORTER_DISCOVER_AFFAIRS, async ({ importRunId, setStats }) => {
       await runPhase3Reconciliation(allAffairs, stats, importRunId);
-      await finishImportRun(importRunId, {
+      setStats({
         duplicatesSkipped: stats.duplicatesSkipped,
         affairsCreated: stats.affairsCreated,
         proposalsPending: stats.proposalsPending,
@@ -320,10 +315,7 @@ export async function discoverAffairs(options?: {
         proposalsConflicted: stats.proposalsConflicted,
         proposalsDeduped: stats.proposalsDeduped,
       });
-    } catch (error) {
-      await failImportRun(importRunId, error);
-      throw error;
-    }
+    });
   }
 
   return stats;
