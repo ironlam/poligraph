@@ -42,6 +42,7 @@ interface PairRow {
   score: number;
   contradictions: string[];
   unpropagatableDifferences: string[];
+  sharesOfficialIdentifier: boolean;
   previousClassification: Classification | null;
   rulingStale: boolean;
   plan: { decision: MergeDecision; reason: string; keepId?: string; removeId?: string };
@@ -57,8 +58,11 @@ interface Group {
 interface Metrics {
   candidatePairs: number;
   ruled: number;
+  decided: number;
   byClassification: Record<Classification, number>;
-  precision: number | null;
+  duplicateRate: number | null;
+  usefulMatchRate: number | null;
+  falsePositiveRate: number | null;
 }
 
 const CLASSIFICATION_LABELS: Record<Classification, string> = {
@@ -192,23 +196,45 @@ export default function DuplicatesReviewPage() {
 
       {metrics && (
         <Card>
-          <CardContent className="flex flex-wrap gap-x-8 gap-y-2 p-4 text-sm">
-            <span>
-              Paires jugées : <strong>{metrics.ruled}</strong>
-            </span>
-            <span>
-              Précision du signal :{" "}
-              <strong>
-                {metrics.precision === null
-                  ? "pas encore mesurable"
-                  : `${Math.round(metrics.precision * 100)} %`}
-              </strong>
-            </span>
-            {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((key) => (
-              <span key={key} className="text-muted-foreground">
-                {CLASSIFICATION_LABELS[key]} : {metrics.byClassification[key]}
+          <CardContent className="space-y-3 p-4 text-sm">
+            <div className="flex flex-wrap gap-x-8 gap-y-1">
+              <span>
+                Paires tranchées : <strong>{metrics.decided}</strong>
+                {metrics.byClassification.UNCERTAIN > 0 && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    (+ {metrics.byClassification.UNCERTAIN} différée
+                    {metrics.byClassification.UNCERTAIN > 1 ? "s" : ""})
+                  </span>
+                )}
               </span>
-            ))}
+              {(
+                [
+                  ["Vrais doublons", metrics.duplicateRate],
+                  ["Rapprochements utiles", metrics.usefulMatchRate],
+                  ["Faux positifs francs", metrics.falsePositiveRate],
+                ] as const
+              ).map(([label, rate]) => (
+                <span key={label}>
+                  {label} :{" "}
+                  <strong>
+                    {rate === null ? "pas encore mesurable" : `${Math.round(rate * 100)} %`}
+                  </strong>
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+              {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((key) => (
+                <span key={key}>
+                  {CLASSIFICATION_LABELS[key]} : {metrics.byClassification[key]}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Une paire différée n&apos;entre dans aucun taux : elle ne tranche rien. Un
+              rapprochement utile n&apos;est pas forcément un doublon : deux chefs d&apos;une même
+              décision se lient, ils ne se fusionnent pas.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -258,6 +284,9 @@ export default function DuplicatesReviewPage() {
                     <Badge variant="outline">{pair.confidence}</Badge>
                     <Badge variant="outline">{pair.matchedBy}</Badge>
                     <span className="text-muted-foreground">score {pair.score}</span>
+                    {pair.sharesOfficialIdentifier && (
+                      <Badge variant="secondary">identifiant judiciaire commun</Badge>
+                    )}
                     {pair.previousClassification && (
                       <Badge variant="secondary">
                         déjà jugé : {CLASSIFICATION_LABELS[pair.previousClassification]}

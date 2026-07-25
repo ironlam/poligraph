@@ -157,23 +157,38 @@ export async function loadPairExclusions(
   return { excluded, stale, uncertain, classifications };
 }
 
-export interface PairPrecisionMetrics {
+export interface PairMetrics {
   /** Pairs a run proposed, whatever the ruling. */
   candidatePairs: number;
+  /** Every ruling stored, UNCERTAIN included. */
   ruled: number;
+  /** Rulings that settled something. The denominator of every rate below. */
+  decided: number;
   byClassification: Record<AffairPairClassification, number>;
-  /** Share of ruled pairs that were real duplicates. Null before any ruling. */
-  precision: number | null;
+  /** Share of settled pairs that were one affair recorded twice. */
+  duplicateRate: number | null;
+  /** Share worth surfacing at all: duplicates plus genuinely related affairs. */
+  usefulMatchRate: number | null;
+  /** Share that turned out to relate nothing. */
+  falsePositiveRate: number | null;
 }
 
 /**
- * Precision of the detection signal, from rulings alone.
+ * How the detection signal actually performs, from rulings alone.
  *
- * Deliberately computed over every ruling rather than over the top of the ranking:
- * scoring only the most confident pairs would measure the ranking, not the signal
- * (issue #525, §7).
+ * Three rates rather than one "precision", because the first real triage showed a
+ * single number hides the answer (issue #525). Of 7 settled pairs, 3 were
+ * duplicates and 3 were correct but misnamed — two counts of one decision, two
+ * strands of one case, two episodes of one campaign. Reporting 43 % and calling it
+ * precision would suggest the other 57 % was noise; only 1 pair related nothing.
+ *
+ * Computed over every ruling rather than over the top of the ranking: scoring only
+ * the most confident pairs would measure the ranking, not the signal (§7).
+ *
+ * UNCERTAIN is excluded from the denominator. Deferring is not deciding, and
+ * counting it either way would move the numbers without new information.
  */
-export async function computePairPrecision(candidatePairs: number): Promise<PairPrecisionMetrics> {
+export async function computePairMetrics(candidatePairs: number): Promise<PairMetrics> {
   const grouped = await db.affairPairDecision.groupBy({
     by: ["classification"],
     _count: { _all: true },
@@ -189,15 +204,16 @@ export async function computePairPrecision(candidatePairs: number): Promise<Pair
     byClassification[row.classification] = row._count._all;
   }
 
-  // UNCERTAIN is excluded from both sides: it is an absence of judgement, and
-  // counting it either way would move the number without new information.
   const decided = byClassification.DUPLICATE + byClassification.LINKED + byClassification.DISTINCT;
-  const ruled = decided + byClassification.UNCERTAIN;
+  const rate = (numerator: number) => (decided === 0 ? null : numerator / decided);
 
   return {
     candidatePairs,
-    ruled,
+    ruled: decided + byClassification.UNCERTAIN,
+    decided,
     byClassification,
-    precision: decided === 0 ? null : byClassification.DUPLICATE / decided,
+    duplicateRate: rate(byClassification.DUPLICATE),
+    usefulMatchRate: rate(byClassification.DUPLICATE + byClassification.LINKED),
+    falsePositiveRate: rate(byClassification.DISTINCT),
   };
 }
