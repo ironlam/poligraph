@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, ExternalLink, Link2, Loader2 } from "lucide-react";
 // Type-only, so no service or database code reaches the client bundle. Imported
 // rather than redeclared: the local copy still listed an automatic absorption
-// months after the planner stopped being able to return one (issue #525).
+// while the planner could no longer return that value (issue #525).
 import type { MergeDecision } from "@/services/affairs/merge-decision";
 
 // Issue #525: review queue for detected duplicate pairs, grouped by politician.
