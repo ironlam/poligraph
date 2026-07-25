@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
   affairUpdate: vi.fn(),
   auditCreate: vi.fn(),
   decisionFindUnique: vi.fn(),
+  absorbDraftIntoPublished: vi.fn(),
+  withImportRun: vi.fn(),
   mergeAffairs: vi.fn(),
   recordPairDecision: vi.fn(),
   invalidateEntity: vi.fn(),
@@ -32,6 +34,13 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/services/affairs/reconciliation", () => ({ mergeAffairs: h.mergeAffairs }));
+vi.mock("@/services/affairs/absorb-draft", () => ({
+  absorbDraftIntoPublished: h.absorbDraftIntoPublished,
+}));
+vi.mock("@/services/affairs/import-run", () => ({
+  withImportRun: h.withImportRun,
+  IMPORTER_MANUAL_ADMIN: "manual-admin",
+}));
 vi.mock("@/services/affairs/pair-decision", () => ({
   recordPairDecision: h.recordPairDecision,
 }));
@@ -88,6 +97,14 @@ beforeEach(() => {
     order.push("invalidate");
   });
   h.decisionFindUnique.mockResolvedValue({ classification: "LINKED" });
+  h.absorbDraftIntoPublished.mockImplementation(async () => {
+    order.push("absorb");
+    return { proposalsCreated: 1, proposedFields: ["court"], recordedDifferences: [] };
+  });
+  h.withImportRun.mockImplementation(
+    async (_i: string, fn: (ctx: { importRunId: string }) => unknown) =>
+      fn({ importRunId: "run_1" })
+  );
   h.auditCreate.mockImplementation(async () => {
     order.push("audit");
     return {};
@@ -155,7 +172,12 @@ describe("POST /doublons/decision — classer sans rien déplacer (#525)", () =>
 describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525)", () => {
   it("refuse de supprimer une affaire publiée", async () => {
     h.affairFindUnique
-      .mockResolvedValueOnce({ id: "keep", updatedAt: new Date(), politician: { slug: "x" } })
+      .mockResolvedValueOnce({
+        id: "keep",
+        updatedAt: new Date(),
+        publicationStatus: "PUBLISHED",
+        politician: { slug: "x" },
+      })
       .mockResolvedValueOnce({
         id: "remove",
         updatedAt: new Date(),
@@ -168,11 +190,15 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
     expect(h.mergeAffairs).not.toHaveBeenCalled();
   });
 
-  it("absorbe un brouillon et écrit le jugement dans la même transaction", async () => {
+  it("emprunte le chemin d'absorption quand le survivant est publié", async () => {
+    // Absorber dans une fiche publiée ne doit pas écrire court/chamber en direct :
+    // seuls les identifiants attribués par une juridiction passent, le reste va en
+    // proposition (#525 §4).
     h.affairFindUnique
       .mockResolvedValueOnce({
         id: "keep",
         updatedAt: new Date("2026-07-01"),
+        publicationStatus: "PUBLISHED",
         politician: { slug: "jean-dupont" },
       })
       .mockResolvedValueOnce({
@@ -184,12 +210,41 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
     const res = await mergePOST(req({ keepId: "keep", removeId: "remove", signal }), ctx);
 
     expect(res.status).toBe(200);
-    // Le jugement part dans les options de la fusion, donc dans sa transaction.
+    expect(h.mergeAffairs).not.toHaveBeenCalled();
+    expect(h.absorbDraftIntoPublished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        publishedId: "keep",
+        draftId: "remove",
+        pairDecision: expect.objectContaining({ reviewedBy: "admin" }),
+      })
+    );
+    await expect(res.json()).resolves.toMatchObject({ proposalsCreated: 1 });
+  });
+
+  it("fusionne normalement entre deux brouillons, avec son jugement", async () => {
+    h.affairFindUnique
+      .mockResolvedValueOnce({
+        id: "keep",
+        updatedAt: new Date("2026-07-01"),
+        publicationStatus: "DRAFT",
+        politician: { slug: "jean-dupont" },
+      })
+      .mockResolvedValueOnce({
+        id: "remove",
+        updatedAt: new Date("2026-07-02"),
+        publicationStatus: "DRAFT",
+      });
+
+    const res = await mergePOST(req({ keepId: "keep", removeId: "remove", signal }), ctx);
+
+    expect(res.status).toBe(200);
+    expect(h.absorbDraftIntoPublished).not.toHaveBeenCalled();
     expect(h.mergeAffairs).toHaveBeenCalledWith(
       "keep",
       "remove",
       expect.objectContaining({
-        pairDecision: expect.objectContaining({ otherAffairId: "remove", reviewedBy: "admin" }),
+        removeMustNotBePublished: true,
+        pairDecision: expect.objectContaining({ otherAffairId: "remove" }),
       })
     );
   });
@@ -199,6 +254,7 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
       .mockResolvedValueOnce({
         id: "keep",
         updatedAt: new Date(),
+        publicationStatus: "DRAFT",
         politician: { slug: "jean-dupont" },
       })
       .mockResolvedValueOnce({ id: "remove", updatedAt: new Date(), publicationStatus: "DRAFT" });
