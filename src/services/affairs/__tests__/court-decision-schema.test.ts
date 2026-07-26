@@ -103,20 +103,22 @@ describe("Affair — ce que cette PR ne touche pas (#536)", () => {
     expect(model).toMatch(/courtDecisions\s+AffairCourtDecision\[\]/);
   });
 
-  it("conserve ses identifiants historiques et leur contrainte", () => {
-    // La transition les garde en place ; leur retrait est une PR ultérieure, et
-    // `ecli @unique` ne peut être levée qu'après peuplement et lecture de la
-    // décision.
-    expect(model).toMatch(/ecli\s+String\?\s+@unique/);
-    for (const field of [
-      "pourvoiNumber",
-      "caseNumber",
-      "caseNumbers",
-      "chamber",
-      "court",
-      "verdictDate",
-    ]) {
-      expect(model, `${field} retiré d'Affair`).toContain(field);
+  it("n'a plus d'identifiant de décision, ni la contrainte qui les portait (#545)", () => {
+    // `ecli @unique` encodait « une décision, une affaire », que le cas Carignon a
+    // démenti. Elle vit désormais sur CourtDecision, où elle est correcte.
+    expect(model).not.toMatch(/^\s*ecli\s+String/m);
+    for (const field of ["pourvoiNumber", "caseNumbers", "chamber"]) {
+      expect(model, `${field} encore sur Affair`).not.toMatch(
+        new RegExp(`^\\s*${field}\\s+String`, "m")
+      );
+    }
+  });
+
+  it("garde les champs éditoriaux, qui ne décrivent pas une décision (#545)", () => {
+    // 23,7 % des valeurs de court désignent un organe qui ne rend aucune décision,
+    // et caseNumber est une référence éditoriale affichée telle quelle.
+    for (const field of ["court", "verdictDate", "caseNumber"]) {
+      expect(model, `${field} retiré d'Affair`).toMatch(new RegExp(`^\\s*${field}\\s+`, "m"));
     }
   });
 });

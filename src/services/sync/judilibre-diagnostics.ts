@@ -30,10 +30,10 @@ const SYNC_SOURCE_KEY = "judilibre";
  * pipeline was retired on.
  */
 export async function getJudilibreStats(): Promise<void> {
-  const [meta, affairsWithEcli, affairsWithJudilibreSource, totalAffairs, identityDecisions] =
+  const [meta, affairsWithDecision, affairsWithJudilibreSource, totalAffairs, identityDecisions] =
     await Promise.all([
       syncMetadata.get(SYNC_SOURCE_KEY),
-      db.affair.count({ where: { ecli: { not: null } } }),
+      db.affair.count({ where: { courtDecisions: { some: {} } } }),
       db.source.count({ where: { sourceType: "JUDILIBRE" } }),
       db.affair.count(),
       db.identityDecision.groupBy({
@@ -60,7 +60,7 @@ export async function getJudilibreStats(): Promise<void> {
   );
 
   console.log(`\nAffaires : ${totalAffairs}`);
-  console.log(`  dont ECLI renseigné : ${affairsWithEcli}`);
+  console.log(`  dont décision rattachée : ${affairsWithDecision}`);
   console.log(`  sources Judilibre : ${affairsWithJudilibreSource}`);
 
   console.log(`\nDécisions juridictionnelles : ${courtDecisions}`);

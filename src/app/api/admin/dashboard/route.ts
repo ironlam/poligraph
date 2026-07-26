@@ -20,7 +20,11 @@ export const GET = withAdminAuth(async () => {
     db.politician.count({ where: { biography: null, publicationStatus: "PUBLISHED" } }),
     db.affair.count(),
     db.affair.count({ where: { publicationStatus: "DRAFT" } }),
-    db.affair.count({ where: { ecli: null, publicationStatus: "PUBLISHED" } }),
+    // « Sans référence judiciaire » se mesure sur les décisions rattachées, la
+    // colonne ayant été retirée d'Affair (#545).
+    db.affair.count({
+      where: { courtDecisions: { none: {} }, publicationStatus: "PUBLISHED" },
+    }),
     db.auditLog.findMany({
       take: 20,
       orderBy: { createdAt: "desc" },

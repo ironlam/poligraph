@@ -570,13 +570,9 @@ model Affair {
 
   // Jurisdiction info
   court      String? // Ex: "Tribunal correctionnel de Paris"
-  chamber    String? // Ex: "11ème chambre correctionnelle"
   caseNumber String? // Ex: "2023/12345"
 
   // Judicial identifiers (multi-source matching)
-  ecli          String?  @unique // European Case Law Identifier
-  pourvoiNumber String? // N° de pourvoi Cour de cassation
-  caseNumbers   String[] // N° de dossier multiples
 
   // Sources (minimum 1 required - enforced at app level)
   sources Source[]
@@ -629,7 +625,6 @@ model Affair {
   @@index([politicianId, publicationStatus])
   @@index([status])
   @@index([category])
-  @@index([pourvoiNumber])
   @@index([publicationStatus])
   @@index([severity])
   @@index([publicationStatus, severity])
