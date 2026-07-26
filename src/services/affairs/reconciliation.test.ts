@@ -533,10 +533,12 @@ describe("findPotentialDuplicates — garde lexical du joker AUTRE (#521)", () =
   });
 
   it("ne change pas une décision AUTO_MERGE_DRAFTS existante", async () => {
-    // Deux brouillons rapprochés en HIGH par un identifiant : le plan reste le même.
+    // Deux brouillons rapprochés en HIGH par une preuve éditoriale : le plan reste le
+    // même. Le signal n'est pas un identifiant de décision, qui partirait en revue
+    // depuis #557 ; ce test porte sur le garde du joker AUTRE, pas sur cette règle.
     mockedAffairFindMany.mockResolvedValue([makeDraft("a1"), makeDraft("a2")]);
     mockedFindMatchingAffairs.mockResolvedValue([
-      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" },
+      { affairId: "a1", confidence: "HIGH", score: 0.95, matchedBy: "title-exact" },
     ]);
 
     const duplicates = await findPotentialDuplicates();

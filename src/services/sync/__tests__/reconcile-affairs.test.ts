@@ -52,7 +52,9 @@ function pair(
     affairA: side(a, "a"),
     affairB: side(b, "b"),
     confidence: overrides.confidence ?? "HIGH",
-    matchedBy: overrides.matchedBy ?? "pourvoiNumber",
+    // Preuve éditoriale : depuis #557, un identifiant de décision seul part en revue,
+    // et ces tests portent sur l'invalidation du cache après fusion, pas sur la règle.
+    matchedBy: overrides.matchedBy ?? "title-exact",
     score: overrides.score ?? 0.95,
     contradictions: [],
     unpropagatableDifferences: [],

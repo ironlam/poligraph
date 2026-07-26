@@ -17,10 +17,21 @@
  * they are still two separate counts, so two affairs. A shared identifier means a
  * shared decision or proceeding, never a shared editorial affair. Nothing crosses
  * the published boundary without a person now.
+ *
+ * That fix stopped at the published boundary, and the reasoning does not (issue
+ * #557). Two *drafts* sharing an ECLI were still merged automatically, although the
+ * Carignon case says nothing about publication status: one decision carries several
+ * counts, whatever the status of the fiches describing them. So automatic merging
+ * now requires evidence drawn from the affairs' own editorial content, and a shared
+ * decision identity sends the pair to a reader instead — see `classifyMatchEvidence`.
  */
 
 import type { PublicationStatus, SourceType } from "@/generated/prisma";
-import { isOfficialJudicialIdentifierMatch, type MatchConfidence } from "./matching";
+import type { MatchConfidence } from "./matching";
+import {
+  classifyMatchEvidence,
+  isOfficialJudicialIdentifierMatch,
+} from "@/lib/affairs/match-evidence";
 
 /** Statuses this lot handles. See the issue for ARCHIVED/EXCLUDED/REJECTED. */
 const MERGEABLE_STATUSES: ReadonlySet<PublicationStatus> = new Set([
@@ -147,7 +158,24 @@ export function decideMergeAction(input: MergeDecisionInput): MergePlan {
     };
   }
 
-  // Two drafts: nothing public is at stake.
+  // Two drafts: nothing public is at stake, but a shared decision still is not a
+  // shared affair. This check sits before the confidence one on purpose: CERTAIN on
+  // an ECLI is exactly the case that used to merge, and the confidence was never the
+  // problem — what the confidence rested on was.
+  const evidence = classifyMatchEvidence(matchedBy);
+  if (!evidence.editorialIdentityEvidence) {
+    if (evidence.officialDecisionIdentity) {
+      return {
+        decision: "REVIEW_REQUIRED",
+        reason: `Identité de décision commune (${matchedBy}) : une même décision peut porter plusieurs chefs, donc plusieurs fiches`,
+      };
+    }
+    return {
+      decision: "REVIEW_REQUIRED",
+      reason: `Rapprochement sans preuve d'identité éditoriale (${matchedBy})`,
+    };
+  }
+
   if (!confident) {
     return {
       decision: "REVIEW_REQUIRED",

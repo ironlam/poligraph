@@ -192,32 +192,17 @@ export interface MatchResult {
 }
 
 /**
- * Signals that identify a shared court decision or proceeding: official numbers
- * assigned by a court, not words a title happens to share.
- *
- * What they prove is narrower than it looks. Measured on real data (issue #525):
- * two Carignon convictions share a pourvoi number, a facts date, a verdict date
- * and one cassation ruling, yet they are two separate counts — subornation of a
- * witness and misuse of company assets — and therefore two Poligraph affairs.
- *
- * So a shared identifier says "same decision or same proceeding". It does NOT say
- * "same editorial affair", and on its own it may never authorise a merge.
+ * Re-exported so callers keep importing the match vocabulary from the matcher, next
+ * to the code that produces the signals. The definitions live in a database-free
+ * module because the merge planner that consumes them is pure (#557).
  */
-export const OFFICIAL_JUDICIAL_IDENTIFIER_SIGNALS: ReadonlySet<string> = new Set([
-  "ecli",
-  "pourvoiNumber",
-  "caseNumbers",
-]);
-
-/**
- * Whether a match rests on a court-assigned identifier rather than resemblance.
- *
- * Useful to tell a reviewer why a pair is worth reading — the two fiches cite the
- * same decision — never to conclude that they are duplicates.
- */
-export function isOfficialJudicialIdentifierMatch(matchedBy: string): boolean {
-  return OFFICIAL_JUDICIAL_IDENTIFIER_SIGNALS.has(matchedBy);
-}
+export {
+  classifyMatchEvidence,
+  isOfficialJudicialIdentifierMatch,
+  EDITORIAL_IDENTITY_SIGNALS,
+  OFFICIAL_JUDICIAL_IDENTIFIER_SIGNALS,
+  type MatchEvidence,
+} from "@/lib/affairs/match-evidence";
 
 /**
  * Minimum share of the longer title that the shorter one must cover for
