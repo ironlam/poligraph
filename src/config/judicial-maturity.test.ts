@@ -89,12 +89,13 @@ describe("AGGREGATE_STATUSES", () => {
       "CONDAMNATION_DEFINITIVE",
       "CONDAMNATION_PREMIERE_INSTANCE",
       "APPEL_EN_COURS",
+      "POURVOI_EN_CASSATION",
       "MISE_EN_EXAMEN",
       "INSTRUCTION",
       "RENVOI_TRIBUNAL",
       "PROCES_EN_COURS",
     ];
-    expect(AGGREGATE_STATUSES).toHaveLength(7);
+    expect(AGGREGATE_STATUSES).toHaveLength(8);
     for (const s of expected) {
       expect(AGGREGATE_STATUSES).toContain(s);
     }

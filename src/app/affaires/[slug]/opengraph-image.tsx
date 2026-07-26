@@ -15,6 +15,7 @@ const STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
   PROCES_EN_COURS: "Procès en cours",
   CONDAMNATION_PREMIERE_INSTANCE: "Condamnation (1re inst.)",
   APPEL_EN_COURS: "Appel en cours",
+  POURVOI_EN_CASSATION: "Condamnation (pourvoi en cours)",
   CONDAMNATION_DEFINITIVE: "Condamnation définitive",
   RELAXE: "Relaxe",
   ACQUITTEMENT: "Acquittement",
@@ -26,6 +27,7 @@ const STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
 const STATUS_COLORS: Partial<Record<AffairStatus, string>> = {
   CONDAMNATION_DEFINITIVE: "#ef4444",
   CONDAMNATION_PREMIERE_INSTANCE: "#f97316",
+  POURVOI_EN_CASSATION: "#f97316",
   PROCES_EN_COURS: "#f59e0b",
   RELAXE: "#22c55e",
   ACQUITTEMENT: "#22c55e",

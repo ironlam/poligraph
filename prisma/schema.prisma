@@ -694,6 +694,9 @@ enum AffairStatus {
   PROCES_EN_COURS
   CONDAMNATION_PREMIERE_INSTANCE
   APPEL_EN_COURS
+  // Convicted on appeal with a cassation appeal filed: the conviction stands but is
+  // not final. Sits between APPEL_EN_COURS and CONDAMNATION_DEFINITIVE (#511).
+  POURVOI_EN_CASSATION
   CONDAMNATION_DEFINITIVE
   RELAXE
   ACQUITTEMENT

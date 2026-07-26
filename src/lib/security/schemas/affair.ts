@@ -1,13 +1,18 @@
 import { z } from "zod/v4";
 
-const VALID_STATUSES = [
+// Must stay identical to the Prisma `AffairStatus` enum: a value missing here is a
+// status moderation cannot set, and a value absent from Prisma passes Zod only to
+// fail at the database. `PROCES` and `APPEL` used to sit in this list; both belong to
+// `AffairEventType`, not to `AffairStatus`. Guarded by a test (#511).
+export const VALID_STATUSES = [
   "ENQUETE_PRELIMINAIRE",
   "INSTRUCTION",
   "MISE_EN_EXAMEN",
   "RENVOI_TRIBUNAL",
-  "PROCES",
+  "PROCES_EN_COURS",
   "CONDAMNATION_PREMIERE_INSTANCE",
-  "APPEL",
+  "APPEL_EN_COURS",
+  "POURVOI_EN_CASSATION",
   "CONDAMNATION_DEFINITIVE",
   "RELAXE",
   "ACQUITTEMENT",

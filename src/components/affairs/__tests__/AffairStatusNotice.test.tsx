@@ -37,11 +37,13 @@ describe("getAffairNoticeVariant — sélection par statut et involvement", () =
     }
   });
 
-  it("aucun encart pour les victimes, plaignants et simples mentions", () => {
+  it("aucun encart à charge pour les victimes, plaignants et simples mentions", () => {
     for (const inv of ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] as const) {
       expect(getAffairNoticeVariant("RELAXE", inv)).toBeNull();
-      expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", inv)).toBeNull();
       expect(getAffairNoticeVariant("INSTRUCTION", inv)).toBeNull();
+      // Sur une affaire de condamnation, le silence total laissait un statut à
+      // charge et une peine sans dire qu'ils ne sont pas les siens (#511).
+      expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", inv)).toBe("third_party");
     }
   });
 });
@@ -86,14 +88,21 @@ describe("régression #383 — plaignant/victime dans une affaire de condamnatio
   // Affaire « Plainte de X contre Y » : c'est Y qui est jugé. Ni le badge de
   // certitude (piloté par isAccusedInvolvement) ni l'encart de prudence
   // (getAffairNoticeVariant) ne doivent présenter X comme condamné.
+  /** Variantes qui qualifient la personne elle-même comme mise en cause. */
+  const CHARGING_VARIANTS = ["presumption", "non_definitive", "pourvoi", "definitive"];
+
   it("un plaignant n'est pas considéré comme mis en cause", () => {
     expect(isAccusedInvolvement("PLAINTIFF")).toBe(false);
-    expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "PLAINTIFF")).toBeNull();
+    const variant = getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "PLAINTIFF");
+    expect(CHARGING_VARIANTS).not.toContain(variant);
+    expect(variant).toBe("third_party");
   });
 
   it("une victime n'est pas considérée comme mise en cause", () => {
     expect(isAccusedInvolvement("VICTIM")).toBe(false);
-    expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "VICTIM")).toBeNull();
+    const variant = getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "VICTIM");
+    expect(CHARGING_VARIANTS).not.toContain(variant);
+    expect(variant).toBe("third_party");
   });
 
   it("un mis en cause direct conserve son badge de certitude", () => {

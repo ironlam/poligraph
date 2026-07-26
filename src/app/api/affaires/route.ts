@@ -17,7 +17,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         name: status
  *         schema:
  *           type: string
- *           enum: [ENQUETE_PRELIMINAIRE, MISE_EN_EXAMEN, PROCES_EN_COURS, CONDAMNATION_PREMIERE_INSTANCE, CONDAMNATION_DEFINITIVE, APPEL_EN_COURS, RELAXE, NON_LIEU, PRESCRIPTION]
+ *           enum: [ENQUETE_PRELIMINAIRE, MISE_EN_EXAMEN, PROCES_EN_COURS, CONDAMNATION_PREMIERE_INSTANCE, APPEL_EN_COURS, POURVOI_EN_CASSATION, CONDAMNATION_DEFINITIVE, RELAXE, NON_LIEU, PRESCRIPTION]
  *         description: Filtrer par statut judiciaire
  *       - in: query
  *         name: category

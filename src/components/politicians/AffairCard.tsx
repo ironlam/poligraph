@@ -5,8 +5,11 @@ import {
   AFFAIR_STATUS_LABELS,
   AFFAIR_STATUS_COLORS,
   AFFAIR_CATEGORY_LABELS,
+  INVOLVEMENT_LABELS,
+  INVOLVEMENT_COLORS,
 } from "@/config/labels";
-import type { AffairStatus, AffairCategory } from "@/types";
+import { isAccusedInvolvement } from "@/config/certainty";
+import type { AffairStatus, AffairCategory, Involvement } from "@/types";
 import { ensureContrast } from "@/lib/contrast";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { AffairTimeline } from "@/components/affairs/AffairTimeline";
@@ -26,6 +29,7 @@ function present(value: unknown): value is string {
 }
 
 export function AffairCard({ affair, variant }: AffairCardProps) {
+  const accused = isAccusedInvolvement(affair.involvement as Involvement);
   const borderClass =
     variant === "critique"
       ? "border-red-200 bg-red-50/30 dark:border-red-900/50 dark:bg-red-950/20"
@@ -60,8 +64,20 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 self-start">
+            {/* Same rule as the affair detail page (#383) : quand la personne n'est
+                pas mise en cause, le rôle mène et le statut passe en couleur neutre,
+                pour que l'affaire ne se lise pas comme sa condamnation (#511). */}
+            {!accused && (
+              <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
+                {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
+              </Badge>
+            )}
             <Badge
-              className={`whitespace-nowrap ${AFFAIR_STATUS_COLORS[affair.status as AffairStatus]}`}
+              className={`whitespace-nowrap ${
+                accused
+                  ? AFFAIR_STATUS_COLORS[affair.status as AffairStatus]
+                  : "bg-muted text-muted-foreground border-transparent"
+              }`}
             >
               {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
             </Badge>
@@ -143,7 +159,7 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
 
       {/* Sentence details */}
       <div className="mb-3">
-        <SentenceDetails affair={affair} />
+        <SentenceDetails affair={affair} involvement={affair.involvement} />
       </div>
 
       {/* Timeline */}

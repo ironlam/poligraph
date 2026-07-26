@@ -31,7 +31,7 @@ export const CERTAINTY_STATUS: Record<"etabli" | "prononcee" | "tous", AffairSta
   // APPEL_EN_COURS is included because Poligraph convention is: appeal filed
   // AFTER first-instance conviction. Marginal "acquittal + prosecution appeal"
   // cases are rare and remain visible in the `sentence` field.
-  prononcee: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"],
+  prononcee: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
   tous: "all",
 };
 

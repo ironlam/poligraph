@@ -51,10 +51,14 @@ describe("getCondamnations", () => {
     expect(args.where.status.in).toEqual(["CONDAMNATION_DEFINITIVE"]);
   });
 
-  it("passes certainty=prononcee as status filter (two statuses)", async () => {
+  it("passes certainty=prononcee as status filter (non-final convictions)", async () => {
     await getCondamnations({ certainty: "prononcee" });
     const args = mockFindMany.mock.calls[0]![0];
-    expect(args.where.status.in).toEqual(["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"]);
+    expect(args.where.status.in).toEqual([
+      "CONDAMNATION_PREMIERE_INSTANCE",
+      "APPEL_EN_COURS",
+      "POURVOI_EN_CASSATION",
+    ]);
   });
 
   it("omits status filter when certainty=tous (default)", async () => {

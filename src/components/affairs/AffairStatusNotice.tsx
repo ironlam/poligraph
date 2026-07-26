@@ -1,5 +1,6 @@
 import type { AffairStatus, Involvement } from "@/types";
 import { isAccusedInvolvement } from "@/config/certainty";
+import { getJudicialMaturity } from "@/config/judicial-maturity";
 
 /**
  * Encart de prudence juridique affiché avec chaque affaire publique
@@ -14,9 +15,11 @@ import { isAccusedInvolvement } from "@/config/certainty";
 export type AffairNoticeVariant =
   | "presumption"
   | "non_definitive"
+  | "pourvoi"
   | "definitive"
   | "favorable"
-  | "prescription";
+  | "prescription"
+  | "third_party";
 
 const FAVORABLE_STATUSES: readonly AffairStatus[] = [
   "RELAXE",
@@ -42,13 +45,19 @@ export function getAffairNoticeVariant(
   status: AffairStatus,
   involvement: Involvement
 ): AffairNoticeVariant | null {
-  // Les encarts qualifient la situation d'une personne mise en cause :
-  // pas d'encart quand le politicien est victime, plaignant ou simplement
-  // mentionné (ces affaires sont présentées dans des sections dédiées).
-  if (!isAccusedInvolvement(involvement)) return null;
+  // Les encarts qualifient la situation d'une personne mise en cause. Quand le
+  // politicien est victime, plaignant ou simplement mentionné, aucun encart à charge
+  // ne s'applique, mais le silence total laissait un statut de condamnation et une
+  // peine sur la page sans dire qu'ils ne sont pas les siens (#511).
+  if (!isAccusedInvolvement(involvement)) {
+    return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : null;
+  }
   if (status === "PRESCRIPTION") return "prescription";
   if (FAVORABLE_STATUSES.includes(status)) return "favorable";
   if (status === "CONDAMNATION_DEFINITIVE") return "definitive";
+  // Checked before the generic non-definitive wording: "en cours d'appel" would be
+  // wrong here, the appeal is over and it is cassation that is pending (#511).
+  if (status === "POURVOI_EN_CASSATION") return "pourvoi";
   if (NON_DEFINITIVE_STATUSES.includes(status)) return "non_definitive";
   if (EN_COURS_STATUSES.includes(status)) return "presumption";
   return null;
@@ -64,6 +73,18 @@ const NOTICES: Record<AffairNoticeVariant, { title: string; body: string; classN
   non_definitive: {
     title: "Décision non définitive",
     body: "cette condamnation peut encore faire l'objet d'un recours ou est en cours d'appel.",
+    className:
+      "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-200",
+  },
+  third_party: {
+    title: "Résultat judiciaire d'un tiers",
+    body: "cette personne n'est pas celle qui a été poursuivie dans cette affaire. La condamnation et les peines prononcées concernent une autre personne.",
+    className:
+      "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200",
+  },
+  pourvoi: {
+    title: "Décision non définitive",
+    body: "cette condamnation a été prononcée en appel et fait l'objet d'un pourvoi en cassation. La Cour de cassation peut encore l'annuler.",
     className:
       "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-200",
   },

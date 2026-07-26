@@ -40,6 +40,7 @@ export const AFFAIR_STATUS_LABELS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "Procès en cours",
   CONDAMNATION_PREMIERE_INSTANCE: "Condamnation (1ère instance)",
   APPEL_EN_COURS: "Appel en cours",
+  POURVOI_EN_CASSATION: "Condamnation non définitive, pourvoi en cassation en cours",
   CONDAMNATION_DEFINITIVE: "Condamnation définitive",
   RELAXE: "Relaxe",
   ACQUITTEMENT: "Acquittement",
@@ -56,6 +57,9 @@ export const AFFAIR_STATUS_COLORS: Record<AffairStatus, string> = {
   PROCES_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   CONDAMNATION_PREMIERE_INSTANCE: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   APPEL_EN_COURS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  // Same shade as a first-instance conviction: two courts have convicted, but the
+  // decision is not final, so it must not read as heavily as CONDAMNATION_DEFINITIVE.
+  POURVOI_EN_CASSATION: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   CONDAMNATION_DEFINITIVE: "bg-red-200 text-red-900 dark:bg-red-900/50 dark:text-red-200",
   RELAXE: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
   ACQUITTEMENT: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -76,6 +80,8 @@ export const AFFAIR_STATUS_DESCRIPTIONS: Record<AffairStatus, string> = {
   CONDAMNATION_PREMIERE_INSTANCE:
     "Le tribunal a prononcé une condamnation, mais un appel est encore possible.",
   APPEL_EN_COURS: "La décision du tribunal est contestée devant la cour d'appel.",
+  POURVOI_EN_CASSATION:
+    "La cour d'appel a condamné, et un pourvoi en cassation a été formé. La condamnation n'est pas définitive : la Cour de cassation peut encore l'annuler.",
   CONDAMNATION_DEFINITIVE:
     "Toutes les voies de recours sont épuisées. La condamnation est définitive.",
   RELAXE: "Le tribunal correctionnel a déclaré la personne non coupable.",
@@ -95,6 +101,7 @@ export const AFFAIR_STATUS_NEEDS_PRESUMPTION: Record<AffairStatus, boolean> = {
   PROCES_EN_COURS: true,
   CONDAMNATION_PREMIERE_INSTANCE: true, // Can still appeal
   APPEL_EN_COURS: true,
+  POURVOI_EN_CASSATION: true, // Cassation can still quash the conviction
   CONDAMNATION_DEFINITIVE: false,
   RELAXE: false,
   ACQUITTEMENT: false,

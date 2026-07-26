@@ -61,6 +61,7 @@ describe("public-filters — contrat des agrégats (RGPD art. 10)", () => {
       "APPEL_EN_COURS",
       "CONDAMNATION_DEFINITIVE",
       "CONDAMNATION_PREMIERE_INSTANCE",
+      "POURVOI_EN_CASSATION",
     ]);
   });
 

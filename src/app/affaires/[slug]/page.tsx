@@ -501,7 +501,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
             <h2 className="text-lg font-semibold">Peine</h2>
           </CardHeader>
           <CardContent>
-            <SentenceDetails affair={affair} />
+            <SentenceDetails affair={affair} involvement={affair.involvement} />
             {!affair.sentence &&
               !affair.prisonMonths &&
               !affair.fineAmount &&

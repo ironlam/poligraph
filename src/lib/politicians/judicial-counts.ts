@@ -16,6 +16,7 @@ export type JudicialCounts = {
 const NON_DEFINITIVE: ReadonlySet<AffairStatus> = new Set<AffairStatus>([
   "CONDAMNATION_PREMIERE_INSTANCE",
   "APPEL_EN_COURS",
+  "POURVOI_EN_CASSATION",
 ]);
 
 // "Mis en cause" scope for judicial counters: DIRECT only. This removes the

@@ -212,7 +212,12 @@ async function generateStatsAngle(angle: string, entityId: string): Promise<Twee
           publicationStatus: "PUBLISHED",
           involvement: "DIRECT",
           status: {
-            in: ["CONDAMNATION_DEFINITIVE", "CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"],
+            in: [
+              "CONDAMNATION_DEFINITIVE",
+              "CONDAMNATION_PREMIERE_INSTANCE",
+              "APPEL_EN_COURS",
+              "POURVOI_EN_CASSATION",
+            ],
           },
         },
         _count: true,

@@ -1,4 +1,6 @@
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { isAccusedInvolvement } from "@/config/certainty";
+import type { Involvement } from "@/types";
 
 interface SentenceDetailsProps {
   affair: {
@@ -10,6 +12,15 @@ interface SentenceDetailsProps {
     otherSentence?: string | null;
     sentence?: string | null;
   };
+  /**
+   * Role of the politician whose fiche is being read.
+   *
+   * Required on purpose: the penalty columns belong to the affair, not to the person,
+   * and an affair is one row per person. A fiche where the politician is only
+   * mentioned therefore carries the prosecuted third party's sentence. Rendering it
+   * unqualified attributes someone else's conviction to them (#511, mitigates #517).
+   */
+  involvement: Involvement;
 }
 
 function formatMonths(months: number): string {
@@ -33,7 +44,20 @@ function formatAmount(amount: unknown): string {
   }).format(num);
 }
 
-export function SentenceDetails({ affair }: SentenceDetailsProps) {
+export function SentenceDetails({ affair, involvement }: SentenceDetailsProps) {
+  // The values are never presented as this person's when they are not the one
+  // prosecuted. They stay readable in the description and the sources, which say
+  // who was sentenced; here there is no field naming the convicted party, so
+  // showing a figure would be an attribution the data does not support.
+  if (!isAccusedInvolvement(involvement)) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Les peines prononcées dans cette affaire ne concernent pas cette personne. Le détail figure
+        dans la description et les sources.
+      </p>
+    );
+  }
+
   const hasPrison = Boolean(affair.prisonMonths && affair.prisonMonths > 0);
   const hasFine = Boolean(affair.fineAmount != null && parseFloat(String(affair.fineAmount)) > 0);
   const hasIneligibility = Boolean(affair.ineligibilityMonths && affair.ineligibilityMonths > 0);

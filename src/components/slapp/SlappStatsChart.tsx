@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
   PROCES_EN_COURS: "Procès en cours",
   CONDAMNATION_PREMIERE_INSTANCE: "Condamnation 1re instance",
   APPEL_EN_COURS: "Appel en cours",
+  POURVOI_EN_CASSATION: "Condamnation, pourvoi en cassation",
   CONDAMNATION_DEFINITIVE: "Condamnation définitive",
   RELAXE: "Relaxe",
   ACQUITTEMENT: "Acquittement",

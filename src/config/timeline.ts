@@ -67,6 +67,7 @@ export const AFFAIR_STATUS_MARKER_COLORS: Record<AffairStatus, string> = {
   APPEL_EN_COURS: "#f97316",
   // Condamnations (rouge)
   CONDAMNATION_PREMIERE_INSTANCE: "#dc2626",
+  POURVOI_EN_CASSATION: "#dc2626",
   CONDAMNATION_DEFINITIVE: "#991b1b",
   // Relaxes/acquittements (vert)
   RELAXE: "#16a34a",
