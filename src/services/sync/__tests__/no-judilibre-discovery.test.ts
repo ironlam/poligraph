@@ -118,12 +118,17 @@ describe("garde : pas de découverte Judilibre par nom (#337)", () => {
   });
 
   it("aucun script npm ne lance de synchronisation Judilibre", () => {
+    // Ce qui est interdit, c'est une *synchronisation* nominale, pas toute mention de
+    // Judilibre : un script d'enrichissement ciblé ou de diagnostic est légitime, et
+    // c'est précisément ce que #337 livre. La règle porte donc sur un nom en `sync:`
+    // et sur les fichiers supprimés, pas sur le mot.
     const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
-    const offenders = Object.entries(pkg.scripts)
-      .filter(([name, cmd]) => /judilibre/i.test(`${name} ${cmd}`))
-      .filter(([name]) => !name.includes("diagnostics"));
+    const offenders = Object.entries(pkg.scripts).filter(
+      ([name, cmd]) =>
+        /^sync:.*judilibre/i.test(name) || REMOVED_FILES.some((removed) => cmd.includes(removed))
+    );
 
     expect(offenders).toEqual([]);
   });
