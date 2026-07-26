@@ -57,8 +57,6 @@ export default async function EditAffairPage({ params }: PageProps) {
     court: affair.court || undefined,
     chamber: affair.chamber || undefined,
     caseNumber: affair.caseNumber || undefined,
-    ecli: affair.ecli || undefined,
-    pourvoiNumber: affair.pourvoiNumber || undefined,
     linkedAffairId: affair.linkedAffairId ?? null,
     sources: affair.sources.map((s) => ({
       id: s.id,

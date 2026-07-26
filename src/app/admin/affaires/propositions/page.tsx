@@ -99,9 +99,6 @@ const FIELD_LABELS: Record<string, string> = {
   ineligibilityMonths: "Inéligibilité (mois)",
   communityService: "TIG (heures)",
   otherSentence: "Autre peine",
-  ecli: "ECLI",
-  pourvoiNumber: "N° de pourvoi",
-  caseNumbers: "N° de dossiers",
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;

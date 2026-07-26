@@ -115,9 +115,6 @@ export async function createAffair(input: CreateAffairInput): Promise<AffairWith
       startDate: input.startDate,
       verdictDate: input.verdictDate,
       sentence: input.sentence,
-      ecli: input.ecli,
-      pourvoiNumber: input.pourvoiNumber,
-      caseNumbers: input.caseNumbers || [],
       sources: {
         create: input.sources,
       },

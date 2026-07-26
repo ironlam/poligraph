@@ -122,12 +122,8 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
       otherSentence: data.otherSentence || null,
       // Jurisdiction
       court: data.court || null,
-      chamber: data.chamber || null,
       caseNumber: data.caseNumber || null,
       // Judicial identifiers
-      ecli: data.ecli || null,
-      pourvoiNumber: data.pourvoiNumber || null,
-      caseNumbers: data.caseNumbers || [],
       linkedAffairId: data.linkedAffairId ?? null,
     },
   });

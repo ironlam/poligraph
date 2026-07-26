@@ -16,7 +16,7 @@ import { AffairStatus, Prisma } from "@/generated/prisma";
  * discover-affairs (Wikidata penalties): verdictDate, court, sentence,
  *   prisonMonths, prisonSuspended, ineligibilityMonths, communityService,
  *   otherSentence.
- * judilibre: status, ecli, pourvoiNumber, caseNumbers.
+ * judilibre: status. Its identifiers moved to `CourtDecision` (#545).
  *
  * fineAmount is allowed but no importer emits it today: Wikidata signals a fine
  * (wikidata-penalties.ts maps Q1243001 to "fineAmount") yet the extractor reduces
@@ -34,6 +34,12 @@ import { AffairStatus, Prisma } from "@/generated/prisma";
  * - politicianId, partyAtTimeId, linkedAffairId: re-attribution is identity
  *   resolution work, handled by AffairPoliticianDecision.
  * - slug, publicId, oldSlugs: public URLs are not importer territory.
+ * - ecli, pourvoiNumber, caseNumbers: decision identifiers, and a decision is not
+ *   an affair (#545). They live on `CourtDecision`, reached through a link, and are
+ *   written by the targeted Judilibre enrichment (#337). Proposing them on an affair
+ *   would put back the "one decision, one affair" assumption the Carignon case
+ *   disproved. `Affair.court`, `Affair.verdictDate` and `Affair.caseNumber` stay:
+ *   they describe the editorial state of an affair, not a decision.
  *
  * Widen this list only together with the importer that needs it.
  */
@@ -70,11 +76,6 @@ export const affairPatchSchema = z
     ineligibilityMonths: monthsLike.nullable().optional(),
     communityService: z.number().int().min(0).max(10000).nullable().optional(),
     otherSentence: z.string().min(1).max(2000).nullable().optional(),
-
-    // Machine identifiers (the only auto-applicable family)
-    ecli: z.string().min(1).max(120).nullable().optional(),
-    pourvoiNumber: z.string().min(1).max(120).nullable().optional(),
-    caseNumbers: z.array(z.string().min(1).max(120)).max(50).optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "Le patch ne peut pas être vide",
@@ -94,9 +95,6 @@ export const PROPOSABLE_FIELDS = Object.freeze([
   "ineligibilityMonths",
   "communityService",
   "otherSentence",
-  "ecli",
-  "pourvoiNumber",
-  "caseNumbers",
 ] as const);
 
 export type ProposableField = (typeof PROPOSABLE_FIELDS)[number];

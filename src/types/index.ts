@@ -208,9 +208,6 @@ export type CreateAffairInput = {
   verdictDate?: Date;
   sentence?: string;
   // Judicial identifiers (multi-source matching)
-  ecli?: string;
-  pourvoiNumber?: string;
-  caseNumbers?: string[];
   sources: {
     url: string;
     title: string;

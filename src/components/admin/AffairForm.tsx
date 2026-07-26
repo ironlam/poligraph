@@ -59,11 +59,8 @@ interface AffairFormData {
   otherSentence?: string;
   // Jurisdiction
   court?: string;
-  chamber?: string;
   caseNumber?: string;
   // Judicial identifiers
-  ecli?: string;
-  pourvoiNumber?: string;
   linkedAffairId?: string | null;
   sources: Source[];
 }
@@ -370,15 +367,6 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
               />
             </div>
             <div>
-              <Label htmlFor="chamber">Chambre</Label>
-              <Input
-                id="chamber"
-                value={formData.chamber || ""}
-                onChange={(e) => updateField("chamber", e.target.value)}
-                placeholder="Ex: 11ème chambre"
-              />
-            </div>
-            <div>
               <Label htmlFor="caseNumber">N° d&apos;affaire</Label>
               <Input
                 id="caseNumber"
@@ -390,32 +378,11 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
           </div>
 
           <hr className="my-4" />
-          <h4 className="font-medium text-sm">Identifiants judiciaires</h4>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="ecli">ECLI</Label>
-              <Input
-                id="ecli"
-                value={formData.ecli || ""}
-                onChange={(e) => updateField("ecli", e.target.value)}
-                placeholder="Ex: ECLI:FR:CCASS:2023:CR00123"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                European Case Law Identifier (identifiant unique européen)
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="pourvoiNumber">N° de pourvoi</Label>
-              <Input
-                id="pourvoiNumber"
-                value={formData.pourvoiNumber || ""}
-                onChange={(e) => updateField("pourvoiNumber", e.target.value)}
-                placeholder="Ex: 22-83.456"
-              />
-              <p className="text-xs text-muted-foreground mt-1">Numéro de pourvoi en cassation</p>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Les identifiants d&apos;une décision (ECLI, n° de pourvoi) ne se saisissent plus ici :
+            une même décision peut concerner plusieurs affaires. Ils se gèrent en rattachant une
+            décision de justice, plus bas sur cette fiche.
+          </p>
         </CardContent>
       </Card>
 

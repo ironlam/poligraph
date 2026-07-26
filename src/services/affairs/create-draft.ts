@@ -47,9 +47,6 @@ export interface CreateDraftAffairInput {
 
   // Jurisdiction and machine identifiers
   court?: string | null;
-  ecli?: string | null;
-  pourvoiNumber?: string | null;
-  caseNumbers?: string[];
 
   // Sentence
   sentence?: string | null;
@@ -89,9 +86,6 @@ export async function createDraftAffairFromDiscovery(
     factsDate: input.factsDate ?? null,
     verdictDate: input.verdictDate ?? null,
     court: input.court ?? null,
-    ecli: input.ecli ?? null,
-    pourvoiNumber: input.pourvoiNumber ?? null,
-    caseNumbers: input.caseNumbers ?? [],
     sentence: input.sentence ?? null,
     prisonMonths: input.prisonMonths ?? null,
     prisonSuspended: input.prisonSuspended ?? null,

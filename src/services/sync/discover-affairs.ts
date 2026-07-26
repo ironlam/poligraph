@@ -87,8 +87,6 @@ export interface DiscoverAffairsResult {
   affairsCreated: number;
   /** Affaires v2, lot 1: enrichment of existing affairs is now proposal-based. */
   proposalsPending: number;
-  proposalsAutoApplied: number;
-  proposalsConflicted: number;
   proposalsDeduped: number;
   /** Several affairs tied at HIGH: no enrichment, a draft is created instead. */
   ambiguousMatches: number;
@@ -220,8 +218,6 @@ export async function discoverAffairs(options?: {
     duplicatesSkipped: 0,
     affairsCreated: 0,
     proposalsPending: 0,
-    proposalsAutoApplied: 0,
-    proposalsConflicted: 0,
     proposalsDeduped: 0,
     ambiguousMatches: 0,
     errors: [],
@@ -314,8 +310,6 @@ export async function discoverAffairs(options?: {
         duplicatesSkipped: stats.duplicatesSkipped,
         affairsCreated: stats.affairsCreated,
         proposalsPending: stats.proposalsPending,
-        proposalsAutoApplied: stats.proposalsAutoApplied,
-        proposalsConflicted: stats.proposalsConflicted,
         proposalsDeduped: stats.proposalsDeduped,
         ambiguousMatches: stats.ambiguousMatches,
       });
@@ -660,8 +654,6 @@ async function proposePenaltyEnrichment(
   });
 
   if (result.pendingProposalId) stats.proposalsPending++;
-  if (result.autoProposalId) stats.proposalsAutoApplied++;
-  if (result.conflictProposalId) stats.proposalsConflicted++;
   if (result.deduped) stats.proposalsDeduped++;
 }
 

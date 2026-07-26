@@ -111,12 +111,6 @@ describe("deriveRiskLevel", () => {
       "MEDIUM"
     );
   });
-
-  it("LOW quand seuls des identifiants machine vides sont remplis", () => {
-    expect(deriveRiskLevel(["ecli", "pourvoiNumber"], { ecli: null, pourvoiNumber: null })).toBe(
-      "LOW"
-    );
-  });
 });
 
 describe("detectDrift", () => {
@@ -241,7 +235,7 @@ describe("validatePatch", () => {
     }
   });
 
-  it("accepte les 13 champs de la whitelist du lot 1", () => {
+  it("accepte les 10 champs de la whitelist", () => {
     expect(() =>
       validatePatch({
         status: "CONDAMNATION_DEFINITIVE",
@@ -254,11 +248,19 @@ describe("validatePatch", () => {
         ineligibilityMonths: 60,
         communityService: 100,
         otherSentence: "interdiction d'exercer",
-        ecli: "ECLI:FR:CCASS:2026:X",
-        pourvoiNumber: "23-80.000",
-        caseNumbers: ["A", "B"],
       })
     ).not.toThrow();
+  });
+
+  it("refuse les identifiants de décision, partis sur CourtDecision (#545)", () => {
+    for (const patch of [
+      { ecli: "ECLI:FR:CCASS:2026:X" },
+      { pourvoiNumber: "23-80.000" },
+      { caseNumbers: ["A", "B"] },
+      { chamber: "Chambre criminelle" },
+    ]) {
+      expect(() => validatePatch(patch)).toThrow(ProposalValidationError);
+    }
   });
 
   it("coerce fineAmount en Decimal, sans passer par un flottant", () => {
@@ -290,46 +292,6 @@ describe("validatePatch", () => {
 });
 
 describe("proposeAffairUpdate", () => {
-  it("auto-applique un ECLI absent et libre, sans revue", async () => {
-    const result = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { ecli: "ECLI:FR:CCASS:2026:X" },
-    });
-
-    expect(result.autoApplied).toEqual(["ecli"]);
-    expect(result.pendingProposalId).toBeNull();
-    expect(db.affair.update).toHaveBeenCalledTimes(1);
-    expect(db.affair.update.mock.calls[0]![0].data).toEqual({ ecli: "ECLI:FR:CCASS:2026:X" });
-    expect(db.affairUpdateProposal.create.mock.calls[0]![0].data.status).toBe("AUTO_APPLIED");
-    // The automated write still leaves a trace.
-    expect(db.auditLog.create).toHaveBeenCalledTimes(1);
-    // Proposal row, affair write and audit entry share one transaction.
-    expect(db.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  it("l'auto-application revérifie l'éligibilité DANS la transaction", async () => {
-    // Field was empty at classification time, filled in by the time we write.
-    db.affair.findUnique
-      .mockResolvedValueOnce(EMPTY_AFFAIR)
-      .mockResolvedValueOnce({ ...EMPTY_AFFAIR, ecli: "ECLI:FR:CCASS:2020:OTHER" });
-
-    const result = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { ecli: "ECLI:FR:CCASS:2026:X" },
-    });
-
-    expect(result.autoApplied).toEqual([]);
-    expect(result.conflictProposalId).toBe("prop_new");
-    expect(db.affair.update).not.toHaveBeenCalled();
-    const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
-    expect(created.status).toBe("CONFLICT");
-    expect(created.conflictDetail).toEqual({
-      ecli: { expected: EMPTY_VALUE, actual: "ECLI:FR:CCASS:2020:OTHER" },
-    });
-  });
-
   it("enregistre un affairSnapshot pour survivre à la suppression de l'affaire", async () => {
     await proposeAffairUpdate({ ...BASE_INPUT, patch: { verdictDate: "2026-05-13" } });
 
@@ -343,46 +305,14 @@ describe("proposeAffairUpdate", () => {
     });
   });
 
-  it("passe en CONFLICT quand l'ECLI appartient déjà à une autre affaire", async () => {
-    db.affair.findFirst.mockResolvedValue({ id: "aff_other" });
-
-    const result = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { ecli: "ECLI:FR:CCASS:2026:X" },
-    });
-
-    expect(result.conflictProposalId).toBe("prop_new");
-    expect(result.autoApplied).toEqual([]);
-    // No blind write, so no P2002 on the unique index.
-    expect(db.affair.update).not.toHaveBeenCalled();
-    expect(db.affairUpdateProposal.create.mock.calls[0]![0].data.status).toBe("CONFLICT");
-  });
-
-  it("met un ECLI contradictoire en revue au lieu de l'écraser", async () => {
-    db.affair.findUnique.mockResolvedValue({ ...EMPTY_AFFAIR, ecli: "ECLI:FR:CCASS:2020:OLD" });
-
-    const result = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { ecli: "ECLI:FR:CCASS:2026:NEW" },
-    });
-
-    expect(result.autoApplied).toEqual([]);
-    expect(result.pendingProposalId).toBe("prop_new");
-    expect(db.affair.update).not.toHaveBeenCalled();
-    const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
-    expect(created.status).toBe("PENDING");
-    expect(created.riskLevel).toBe("HIGH");
-  });
-
-  it("n'auto-applique jamais un statut ou une peine", async () => {
+  it("n'écrit jamais sur l'affaire : tout part en revue", async () => {
+    // Depuis #545 l'invariant est absolu, sans exception : un importeur ne mute
+    // jamais une affaire existante, quel que soit le champ.
     const result = await proposeAffairUpdate({
       ...BASE_INPUT,
       patch: { status: "CONDAMNATION_DEFINITIVE", prisonMonths: 24, verdictDate: "2026-05-13" },
     });
 
-    expect(result.autoApplied).toEqual([]);
     expect(result.pendingProposalId).toBe("prop_new");
     expect(db.affair.update).not.toHaveBeenCalled();
     const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
@@ -392,26 +322,6 @@ describe("proposeAffairUpdate", () => {
       "verdictDate",
     ]);
     expect(created.riskLevel).toBe("HIGH");
-  });
-
-  it("n'ajoute que les numéros de dossier absents, et rien si tout est déjà là", async () => {
-    db.affair.findUnique.mockResolvedValue({ ...EMPTY_AFFAIR, caseNumbers: ["A", "B"] });
-
-    const nothingNew = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { caseNumbers: ["A", "B"] },
-    });
-    expect(nothingNew.autoApplied).toEqual([]);
-    expect(db.affair.update).not.toHaveBeenCalled();
-
-    const withNew = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { caseNumbers: ["B", "C"] },
-    });
-    expect(withNew.autoApplied).toEqual(["caseNumbers"]);
-    expect(db.affair.update.mock.calls[0]![0].data.caseNumbers.sort()).toEqual(["A", "B", "C"]);
   });
 
   it("idempotence : un patch déjà enregistré ne crée pas de doublon", async () => {
@@ -439,21 +349,6 @@ describe("proposeAffairUpdate", () => {
     expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
     // Not even a touch: the row keeps its terminal state.
     expect(db.affairUpdateProposal.update).not.toHaveBeenCalled();
-  });
-
-  it("sépare l'auto-applicable de ce qui doit être revu, en une passe", async () => {
-    const result = await proposeAffairUpdate({
-      ...BASE_INPUT,
-      source: "JUDILIBRE",
-      patch: { ecli: "ECLI:FR:CCASS:2026:X", status: "CONDAMNATION_DEFINITIVE" },
-    });
-
-    expect(result.autoApplied).toEqual(["ecli"]);
-    expect(result.pendingProposalId).toBe("prop_new");
-    expect(db.affair.update.mock.calls[0]![0].data).toEqual({ ecli: "ECLI:FR:CCASS:2026:X" });
-
-    const statuses = db.affairUpdateProposal.create.mock.calls.map((c) => c[0].data.status);
-    expect(statuses).toEqual(["AUTO_APPLIED", "PENDING"]);
   });
 
   it("refuse un patch invalide avant toute écriture", async () => {

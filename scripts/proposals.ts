@@ -46,9 +46,6 @@ const FIELD_LABELS: Record<string, string> = {
   ineligibilityMonths: "inéligibilité (mois)",
   communityService: "TIG (heures)",
   otherSentence: "autre peine",
-  ecli: "ECLI",
-  pourvoiNumber: "n° de pourvoi",
-  caseNumbers: "n° de dossiers",
 };
 
 function arg(name: string): string | undefined {

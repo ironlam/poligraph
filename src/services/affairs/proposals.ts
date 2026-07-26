@@ -16,12 +16,21 @@ import {
 // proposeAffairUpdate(), which auto-applies only absent, non-contradictory
 // machine identifiers and files everything else as a reviewable proposal.
 
-/** The only family an importer may write without human review. */
-export const AUTO_APPLICABLE_FIELDS = Object.freeze([
-  "ecli",
-  "pourvoiNumber",
-  "caseNumbers",
-] as const);
+/**
+ * Importers never write an affair. Not "almost never": never (#545).
+ *
+ * There used to be one exception, an auto-apply path that filled the decision
+ * identifiers `ecli`, `pourvoiNumber` and `caseNumbers` when they were empty, on the
+ * grounds that filling a blank machine identifier needed no editorial call.
+ *
+ * Those identifiers moved to `CourtDecision`, written by the targeted Judilibre
+ * enrichment (#337). No importer had anything left to auto-apply, so the exception
+ * and its machinery are gone rather than left inert: a code path nobody can reach is
+ * a code path nobody maintains.
+ *
+ * The `AUTO_APPLIED` and `CONFLICT` proposal statuses stay in the schema, and the
+ * admin still renders them. No new row can carry them; a historical one still reads.
+ */
 
 /**
  * Changing any of these is HIGH risk regardless of the previous value.
@@ -30,7 +39,6 @@ export const AUTO_APPLICABLE_FIELDS = Object.freeze([
  */
 const HIGH_RISK_FIELDS = Object.freeze(["status"] as const);
 
-const AUTO_SET: ReadonlySet<string> = new Set(AUTO_APPLICABLE_FIELDS);
 const HIGH_RISK_SET: ReadonlySet<string> = new Set(HIGH_RISK_FIELDS);
 
 export class ProposalValidationError extends Error {
@@ -62,9 +70,6 @@ export const AFFAIR_PROPOSABLE_SELECT = {
   ineligibilityMonths: true,
   communityService: true,
   otherSentence: true,
-  ecli: true,
-  pourvoiNumber: true,
-  caseNumbers: true,
 } as const;
 
 export interface AffairSnapshot {
@@ -182,7 +187,9 @@ export function deriveRiskLevel(
   const touchesJudicialState = patchKeys.some((k) => HIGH_RISK_SET.has(k));
   const overwrites = patchKeys.some((k) => normalizeForCompare(observedValues[k]) !== EMPTY_VALUE);
   if (touchesJudicialState || overwrites) return "HIGH";
-  return patchKeys.every((k) => AUTO_SET.has(k)) ? "LOW" : "MEDIUM";
+  // LOW is no longer produced: it meant "only auto-applicable identifiers", and no
+  // field is auto-applicable any more. The enum value stays for historical rows.
+  return "MEDIUM";
 }
 
 // ─── Drift detection ─────────────────────────────────────────────
@@ -256,13 +263,8 @@ export interface ProposeAffairUpdateInput {
 }
 
 export interface ProposeAffairUpdateResult {
-  /** Machine identifiers written straight away. */
-  autoApplied: ProposableField[];
-  autoProposalId: string | null;
-  /** Proposal awaiting review, if any field required one. */
+  /** The proposal awaiting review. Always set unless the payload was a duplicate. */
   pendingProposalId: string | null;
-  /** Set when an identifier is contradicted or already taken elsewhere. */
-  conflictProposalId: string | null;
   /** True when an identical payload had already been recorded. */
   deduped: boolean;
 }
@@ -295,60 +297,23 @@ export async function proposeAffairUpdate(
   }
   const live = affair as unknown as LiveAffair;
 
-  // Classification only. The auto path recomputes eligibility inside its own
-  // transaction, because the row can move between this read and the write.
-  const autoCandidates: Record<string, unknown> = {};
   const reviewPatch: Record<string, unknown> = {};
-
   for (const field of fields) {
-    const proposed = (patch as Record<string, unknown>)[field];
-    if (!AUTO_SET.has(field)) {
-      reviewPatch[field] = proposed;
-      continue;
-    }
-    if (field !== "caseNumbers" && normalizeForCompare(live[field]) !== EMPTY_VALUE) {
-      // Contradicts a stored identifier: that is a review decision, not a fill.
-      reviewPatch[field] = proposed;
-      continue;
-    }
-    if (proposed === null || proposed === undefined) continue;
-    autoCandidates[field] = proposed;
+    reviewPatch[field] = (patch as Record<string, unknown>)[field];
   }
 
   const result: ProposeAffairUpdateResult = {
-    autoApplied: [],
-    autoProposalId: null,
     pendingProposalId: null,
-    conflictProposalId: null,
     deduped: false,
   };
-
-  if (Object.keys(autoCandidates).length > 0) {
-    const outcome = await applyAutoCandidates(input, extractorVersion, autoCandidates, live);
-    result.deduped = result.deduped || outcome.deduped;
-    if (outcome.kind === "applied") {
-      result.autoApplied = outcome.appliedFields;
-      result.autoProposalId = outcome.proposalId;
-    } else if (outcome.kind === "conflict") {
-      result.conflictProposalId = outcome.proposalId;
-    }
-  }
 
   if (Object.keys(reviewPatch).length > 0) {
     const outcome = await recordPendingProposal(input, extractorVersion, reviewPatch, live);
     result.pendingProposalId = outcome.proposalId;
-    result.deduped = result.deduped || outcome.deduped;
+    result.deduped = outcome.deduped;
   }
 
   return result;
-}
-
-function mergeCaseNumbers(current: string[], incoming: string[]): string[] {
-  const seen = new Set(current);
-  for (const value of incoming) {
-    if (value) seen.add(value);
-  }
-  return Array.from(seen);
 }
 
 function pickObserved(
@@ -369,9 +334,13 @@ interface ProposalRowArgs {
   payloadHash: string;
 }
 
+/**
+ * Only `PENDING` remains creatable (#545). `AUTO_APPLIED` and `CONFLICT` stay in the
+ * schema so a historical row still reads, but nothing produces them any more.
+ */
 function buildProposalData(
   args: ProposalRowArgs,
-  status: "PENDING" | "AUTO_APPLIED" | "CONFLICT",
+  status: "PENDING",
   extras: { appliedAt?: Date | null; conflictDetail?: ConflictDetail } = {}
 ): Prisma.AffairUpdateProposalUncheckedCreateInput {
   return {
@@ -519,138 +488,6 @@ async function recordPendingProposal(
 
   const created = await db.affairUpdateProposal.create({ data, select: { id: true } });
   return { proposalId: created.id, deduped: false };
-}
-
-type AutoOutcome =
-  | { kind: "applied"; proposalId: string; appliedFields: ProposableField[]; deduped: boolean }
-  | { kind: "conflict"; proposalId: string; deduped: boolean }
-  | { kind: "skipped"; deduped: boolean };
-
-/**
- * Auto-applies absent, non-contradictory machine identifiers.
- *
- * Eligibility is re-checked INSIDE the transaction: between the classification
- * read and this write, another run or an editor may have filled the field or
- * claimed the ECLI. Proposal row, affair write, audit entry and terminal state
- * commit together or not at all.
- */
-async function applyAutoCandidates(
-  input: ProposeAffairUpdateInput,
-  extractorVersion: string,
-  candidates: Record<string, unknown>,
-  liveAtRead: LiveAffair
-): Promise<AutoOutcome> {
-  const payloadHash = computePayloadHash({
-    importer: input.importer,
-    extractorVersion,
-    source: input.source,
-    sourceUrl: input.sourceUrl,
-    officialId: input.officialId,
-    sourceContentHash: input.sourceContentHash,
-    proposedPatch: candidates,
-    observedValues: pickObserved(candidates, liveAtRead),
-  });
-
-  const existing = await findExisting(input.affairId, input.importer, payloadHash);
-  if (existing) return { kind: "skipped", deduped: true };
-
-  return db.$transaction(async (tx) => {
-    const live = (await tx.affair.findUnique({
-      where: { id: input.affairId },
-      select: AFFAIR_PROPOSABLE_SELECT,
-    })) as unknown as LiveAffair | null;
-    if (!live) return { kind: "skipped" as const, deduped: false };
-
-    const writePatch: Record<string, unknown> = {};
-    const conflicts: ConflictDetail = {};
-
-    for (const [field, proposed] of Object.entries(candidates)) {
-      if (field === "caseNumbers") {
-        const current = Array.isArray(live.caseNumbers) ? (live.caseNumbers as string[]) : [];
-        const merged = mergeCaseNumbers(current, Array.isArray(proposed) ? proposed : []);
-        // Additive only: nothing new means nothing to do.
-        if (merged.length > current.length) writePatch.caseNumbers = merged;
-        continue;
-      }
-
-      const actual = normalizeForCompare(live[field]);
-      if (actual !== EMPTY_VALUE) {
-        conflicts[field] = { expected: EMPTY_VALUE, actual };
-        continue;
-      }
-
-      if (field === "ecli") {
-        const taken = await tx.affair.findFirst({
-          where: { ecli: String(proposed), id: { not: input.affairId } },
-          select: { id: true },
-        });
-        if (taken) {
-          // "Absent" but not "non-contradictory": Affair.ecli is @unique, so a
-          // blind write would raise P2002. Surface it instead.
-          conflicts[field] = { expected: EMPTY_VALUE, actual: "déjà rattaché à une autre affaire" };
-          continue;
-        }
-      }
-
-      writePatch[field] = proposed;
-    }
-
-    const rowArgs: ProposalRowArgs = {
-      input,
-      extractorVersion,
-      patch: candidates,
-      observedValues: pickObserved(candidates, live),
-      snapshot: buildAffairSnapshot(live),
-      payloadHash,
-    };
-
-    if (Object.keys(conflicts).length > 0) {
-      const row = await tx.affairUpdateProposal.create({
-        data: buildProposalData(rowArgs, "CONFLICT", { conflictDetail: conflicts }),
-        select: { id: true },
-      });
-      return { kind: "conflict" as const, proposalId: row.id, deduped: false };
-    }
-
-    if (Object.keys(writePatch).length === 0) {
-      return { kind: "skipped" as const, deduped: false };
-    }
-
-    const row = await tx.affairUpdateProposal.create({
-      data: buildProposalData({ ...rowArgs, patch: writePatch }, "AUTO_APPLIED", {
-        appliedAt: new Date(),
-      }),
-      select: { id: true },
-    });
-
-    await tx.affair.update({
-      where: { id: input.affairId },
-      data: buildPrismaData(validatePatch(writePatch)),
-    });
-
-    await tx.auditLog.create({
-      data: {
-        action: "UPDATE",
-        entityType: "Affair",
-        entityId: input.affairId,
-        changes: toJson({
-          action: "PROPOSAL_AUTO_APPLIED",
-          importer: input.importer,
-          extractorVersion,
-          proposalId: row.id,
-          before: pickObserved(writePatch, live),
-          after: writePatch,
-        }),
-      },
-    });
-
-    return {
-      kind: "applied" as const,
-      proposalId: row.id,
-      appliedFields: Object.keys(writePatch) as ProposableField[],
-      deduped: false,
-    };
-  });
 }
 
 function clampConfidence(value: number): number {
