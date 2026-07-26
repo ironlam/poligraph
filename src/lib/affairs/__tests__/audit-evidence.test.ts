@@ -236,3 +236,52 @@ describe("detects a total shown as firm over a partly suspended sentence", () =>
     expect(a.contradictions).toEqual([]);
   });
 });
+
+// The "all sources predate the verdict" check was defeated by its own corpus:
+// a Wikidata row is stamped with its import date, so it always postdates the
+// verdict and pushed the maximum past it. Seven published convictions whose
+// only real source was written before the decision they assert went unflagged.
+describe("dating a verdict against sources that can actually attest it", () => {
+  const VERDICT_2024 = new Date("2024-06-19");
+  const PRESS_2020 = source({ publishedAt: new Date("2020-06-16") });
+  const WIKIDATA_2026 = source({
+    publisher: "Wikidata",
+    sourceType: "WIKIDATA",
+    title: "Wikidata — une personne",
+    publishedAt: new Date("2026-01-18"),
+  });
+  const MESSAGE = "toutes les sources précèdent la date du verdict";
+
+  it("flags a verdict whose only press source predates it, despite a later Wikidata row", () => {
+    const a = affair({
+      verdictDate: VERDICT_2024,
+      sources: [PRESS_2020, WIKIDATA_2026],
+    });
+
+    expect(a.contradictions).toContain(MESSAGE);
+    expect(a.level).toBe("D");
+  });
+
+  it("flags it just the same without the encyclopedia row", () => {
+    const a = affair({ verdictDate: VERDICT_2024, sources: [PRESS_2020] });
+
+    expect(a.contradictions).toContain(MESSAGE);
+  });
+
+  it("says nothing when a press source postdates the verdict", () => {
+    const a = affair({
+      verdictDate: VERDICT_2024,
+      sources: [source({ publishedAt: new Date("2024-06-20") }), WIKIDATA_2026],
+    });
+
+    expect(a.contradictions).not.toContain(MESSAGE);
+  });
+
+  it("says nothing when only encyclopedias are attached, the level already sanctioning it", () => {
+    const a = affair({ verdictDate: VERDICT_2024, sources: [WIKIDATA_2026] });
+
+    expect(a.contradictions).not.toContain(MESSAGE);
+    expect(a.independentCount).toBe(0);
+    expect(a.level).toBe("D");
+  });
+});

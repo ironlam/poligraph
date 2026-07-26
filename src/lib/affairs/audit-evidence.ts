@@ -236,10 +236,15 @@ export function assess(affair: {
   } else if (affair.verdictDate.getTime() > Date.now()) {
     contradictions.push("date de verdict dans le futur");
   } else {
-    const latest = affair.sources.reduce<number>(
-      (max, s) => Math.max(max, s.publishedAt.getTime()),
-      0
-    );
+    // Encyclopedias are excluded here for the same reason they are excluded from
+    // the independence count: they attest nothing about a dispositif. Leaving
+    // them in defeated the check outright, since a Wikidata row is stamped with
+    // its import date and therefore always postdates the verdict. Jalkh carried
+    // a 2024 verdict whose only press source was written in 2020, and nothing
+    // fired.
+    const latest = affair.sources
+      .filter((s) => !NOT_INDEPENDENT_TYPES.has(s.sourceType))
+      .reduce<number>((max, s) => Math.max(max, s.publishedAt.getTime()), 0);
     if (latest > 0 && latest < affair.verdictDate.getTime()) {
       contradictions.push("toutes les sources précèdent la date du verdict");
     }
