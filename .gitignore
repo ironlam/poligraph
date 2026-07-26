@@ -48,6 +48,9 @@ data/moderation-preflight.json
 # Audit de conformité RGPD (artefact local, régénéré à la demande)
 data/affairs-compliance-audit.json
 
+# Conviction audit ledger (#566), regenerated locally
+data/audit-convictions.json
+
 # debug / logs
 *.log
 npm-debug.log*
