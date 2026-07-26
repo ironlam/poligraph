@@ -64,9 +64,14 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 self-start">
-            {/* Same rule as the affair detail page (#383) : quand la personne n'est
-                pas mise en cause, le rôle mène et le statut passe en couleur neutre,
-                pour que l'affaire ne se lise pas comme sa condamnation (#511). */}
+            {/* Same rule as the affair detail page (#383): when the politician is not
+                the one prosecuted, the role leads and the status turns neutral, so the
+                affair does not read as their own conviction.
+                Currently unreachable in practice: `AffairsSection` routes
+                MENTIONED_ONLY, VICTIM and PLAINTIFF affairs to their own blocks, which
+                already do this. Kept because `affair` is typed `any` here, so nothing
+                stops a future call site from passing one — but the fiche is protected
+                by that routing, not by this branch (#511). */}
             {!accused && (
               <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
                 {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
