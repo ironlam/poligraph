@@ -63,7 +63,7 @@ Poligraph centralise les informations publiques sur les responsables politiques 
 
 ### Affaires judiciaires
 
-- Découverte automatique via Wikidata, Judilibre et presse (analyse IA)
+- Découverte automatique via Wikidata et presse (analyse IA)
 - Timeline des procédures (mise en examen, condamnation)
 - Modération éditoriale avec triage IA
 - Fact-checks agrégés (AFP, Les Décodeurs)
@@ -165,7 +165,7 @@ Voir `docs/DATASOURCES.md` pour la liste complète.
 | [data.gouv.fr](https://www.data.gouv.fr)                           | Gouvernement, élections, RNE         | Quotidienne  |
 | [HATVP](https://www.hatvp.fr/open-data/)                           | Déclarations de patrimoine           | Hebdomadaire |
 | [Wikidata](https://www.wikidata.org)                               | Enrichissement, affaires, décès      | Hebdomadaire |
-| [Judilibre](https://www.courdecassation.fr/acces-rapide-judilibre) | Jurisprudence                        | Hebdomadaire |
+| [Judilibre](https://www.courdecassation.fr/acces-rapide-judilibre) | Décisions de justice, par référence  | À la demande |
 | Flux RSS presse                                                    | Mentions médiatiques                 | Horaire      |
 | [Google Fact Check API](https://toolbox.google.com/factcheck/apis) | Fact-checks                          | Quotidienne  |
 

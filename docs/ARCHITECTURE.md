@@ -16,7 +16,7 @@ graph TB
         GV[Gouvernement]
         WD[Wikidata / Wikipedia]
         HT[HATVP]
-        JD[Judilibre]
+        JD[Judilibre - par référence]
         RSS[Flux RSS presse]
         FC[Google Fact-Check API]
         RNE[RNE maires]

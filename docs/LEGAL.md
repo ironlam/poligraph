@@ -168,9 +168,10 @@ Ces garde-fous sont implémentés dans le code et vérifiés par des tests
 automatisés :
 
 - **Aucune publication automatique.** Tout pipeline automatisé (presse,
-  Wikidata, Wikipédia, Judilibre) crée une affaire en brouillon (`DRAFT`),
+  Wikidata, Wikipédia) crée une affaire en brouillon (`DRAFT`),
   jamais publiée directement. Même une condamnation issue d'une source
-  structurée reste en attente de revue.
+  structurée reste en attente de revue. Judilibre ne crée aucune affaire : il
+  alimente une décision de justice rattachée, à partir d'une référence connue.
 - **Validation humaine obligatoire avant publication.** La mise en ligne d'une
   affaire passe par un point de contrôle unique côté serveur qui exige au moins
   une source vérifiable, refuse la publication si un rattachement automatique

@@ -5,6 +5,14 @@ migration, aucune modification de schéma, aucune implémentation.
 
 Mesures faites en lecture seule le 2026-07-25 sur 463 affaires.
 
+> **État livré.** #536 et #337 sont closes. Le modèle porte le nom `CourtDecision`,
+> avec la table de liaison `AffairCourtDecision`. La phase 4 ci-dessous a été livrée
+> autrement que prévu : l'enrichissement écrit **directement** sur la décision, avec
+> audit de provenance, plutôt que par proposition. Une `CourtDecision` consigne un
+> acte officiel, pas une fiche éditoriale ; les propositions restent réservées aux
+> corrections d'une `Affair`. Ce document reste le compte rendu de la conception,
+> y compris des options écartées.
+
 ---
 
 ## 1. Résumé exécutif
@@ -392,7 +400,7 @@ model CourtDecision {
   /// jamais un endroit où ranger un champ modélisable.
   metadata Json?
 
-  affairs AffairJudicialDecision[]
+  affairs AffairCourtDecision[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -538,7 +546,7 @@ affaires. Volume attendu : **2 décisions, 3 liaisons** (Carignon x2, Balkany x1
 
 ### Phase 3 — double lecture
 
-**Périmètre** : les nouvelles lectures privilégient `JudicialDecision`, avec repli
+**Périmètre** : les nouvelles lectures privilégient `CourtDecision`, avec repli
 sur les champs d'`Affair`.
 
 - Fichiers probables : `lib/data/affairs.ts`, `app/affaires/[slug]/page.tsx`,
@@ -551,7 +559,7 @@ sur les champs d'`Affair`.
 
 ### Phase 4 — alimentation ciblée
 
-**Périmètre** : Judilibre crée ou met à jour une `JudicialDecision` à partir d'une
+**Périmètre** : Judilibre crée ou met à jour une `CourtDecision` à partir d'une
 référence connue, et ne crée jamais d'`Affair`. Les corrections éditoriales passent
 par des propositions.
 
@@ -563,7 +571,7 @@ par des propositions.
 
 **Périmètre** : inventaire des champs encore lus, puis retrait éventuel.
 
-- **`Affair.ecli @unique` ne peut être levée qu'une fois `JudicialDecision.ecli`
+- **`Affair.ecli @unique` ne peut être levée qu'une fois `CourtDecision.ecli`
   peuplée et lue**, sinon on perd la seule garantie d'unicité existante.
 - `chamber` et `caseNumbers` sont à 0 ligne : leur retrait est sans risque de perte,
   mais reste une migration destructive, donc séparée et réversible.
@@ -628,7 +636,7 @@ partagée, un enrichissement Judilibre retomberait dans l'hypothèse « une déc
 une affaire ». Avec elle, le flux devient :
 
 ```
-référence connue → récupération ciblée → JudicialDecision → liaison → propositions
+référence connue → récupération ciblée → CourtDecision → liaison → affichage public
 ```
 
 Judilibre ne décide jamais qu'une affaire est un doublon, qu'une affaire doit être
@@ -646,7 +654,7 @@ créée, ou qu'un statut public doit changer.
 | **#516**      | procédure et ses étapes                                             | reçoit les 9 chaînes `court` multi-étapes et les 55 parquets     |
 | **#517**      | rôle et résultat par participant                                    | reçoit le cas d'une décision visant plusieurs personnes          |
 
-Ces trois chantiers ne doivent pas être fusionnés. `JudicialDecision` est
+Ces trois chantiers ne doivent pas être fusionnés. `CourtDecision` est
 délibérément plus petit que `AffairProceeding`.
 
 ---
@@ -684,7 +692,7 @@ délibérément plus petit que `AffairProceeding`.
 - [ ] Une décision peut être liée à plusieurs affaires, et le cas Carignon est
       enregistré comme tel
 - [ ] Aucun code ne déduit un doublon d'un identifiant partagé
-- [ ] `JudicialDecision.court` n'est jamais renseigné depuis `Affair.court`
+- [x] `CourtDecision.court` n'est jamais renseigné depuis `Affair.court`
 - [ ] `Affair.verdictDate` reste la date éditoriale et continue de trier les listes
 - [ ] L'export CSV rend exactement les mêmes valeurs qu'avant pour les 463 affaires
       actuelles
@@ -692,7 +700,7 @@ délibérément plus petit que `AffairProceeding`.
       synthétique
 - [ ] `Affair.ecli @unique` n'est levée qu'après peuplement et lecture effective
 - [ ] Le backfill est idempotent, prouvé par double exécution
-- [ ] Judilibre ne crée aucune `Affair`
+- [x] Judilibre ne crée aucune `Affair`
 - [ ] Aucune migration destructive dans la même PR qu'un changement de lecture
 - [ ] Une décision de conseil de prud'hommes ou de tribunal administratif peut être
       enregistrée : le modèle n'est pas restreint au pénal ni à l'ordre judiciaire

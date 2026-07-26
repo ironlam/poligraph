@@ -122,7 +122,7 @@ Full list in `package.json` under `scripts`. Most have a `:stats` dry-run varian
 - **Enrichment**: `sync:hatvp`, `sync:photos`, `sync:deceased`, `sync:birthdates`, `sync:careers`, `sync:partis`
 - **Votes**: `sync:scrutins-an`, `sync:scrutins-senat`
 - **Legislation**: `sync:legislation`, `sync:legislation:content`
-- **Content**: `sync:press`, `sync:factchecks`, `sync:judilibre:deprecated`, `sync:moderate`, `sync:enrich`
+- **Content**: `sync:press`, `sync:factchecks`, `sync:moderate`, `sync:enrich`
 - **Elections**: `sync:rne:maires`, `sync:elections:municipales`, `sync:resultats-csv`
 - **Orchestration**: `sync:daily`, `sync:full`
 
@@ -168,7 +168,7 @@ Pages import and render. Data modules query and cache. Business logic sits in se
 Two distinct resolver systems:
 
 - **Identity v2** (`src/lib/identity/`) — resolves a structured person description to a Politician row. Composable signal evaluators (birthdate, department, first-name, gender, external-id) feed a log-LR combiner. Auto-links only on `SAME` (>=0.95). `UNDECIDED` requires manual review.
-- **Affair-to-Politician** (`src/lib/affair-matching/`) — decides which politician a candidate affair mentions. Nine signal evaluators, log-LR combiner, three-tier judgment (SAME / UNDECIDED / NO_MATCH). Every import pipeline (Judilibre, press analysis, discover-affairs, manual admin) calls the resolver. Every decision writes an `AffairPoliticianDecision` audit row. Admin review: `/admin/affair-matching/`.
+- **Affair-to-Politician** (`src/lib/affair-matching/`) — decides which politician a candidate affair mentions. Nine signal evaluators, log-LR combiner, three-tier judgment (SAME / UNDECIDED / NO_MATCH). Every import pipeline (press analysis, discover-affairs, manual admin) calls the resolver. Every decision writes an `AffairPoliticianDecision` audit row. Admin review: `/admin/affair-matching/`.
 
 ### Caching strategy
 
@@ -281,7 +281,8 @@ These rules apply to AI assistants specifically when generating code, queries, o
 - **Escalate `Affair.involvement` automatically.** The default `MENTIONED_ONLY` exists to protect the presumption of innocence. Only human moderators can upgrade involvement.
 - **Auto-link politicians to affairs below threshold.** The resolver returns `SAME / UNDECIDED / NO_MATCH`. Only `SAME` (>= 0.95 for identity, above `SAME_THRESHOLD` for affair-matching) auto-links. `UNDECIDED` requires manual review.
 - **Publish a judicial affair outside the guard (RGPD art. 10).** Never write `publicationStatus: "PUBLISHED"` on `Affair` directly. The only path to publication is `assertPublishable()` in `src/lib/affairs/publish-guard.ts`, which requires a source, requires every automated matching decision to be human-validated, and writes `verifiedAt` + `verifiedBy` atomically. A CI guard rejects direct `PUBLISHED` literals; variable-based writes are caught in review.
-- **Let an automated pipeline create a non-DRAFT affair.** Press, Wikidata, Wikipedia, Judilibre and any future source create affairs in `DRAFT` only. Publication is always a separate, explicit human action.
+- **Let an automated pipeline create a non-DRAFT affair.** Press, Wikidata, Wikipedia and any future source create affairs in `DRAFT` only. Publication is always a separate, explicit human action.
+- **Search Judilibre by a person's name.** Removed in #337: the corpus is pseudonymised, and name-based discovery produced 0 affairs over 156 decisions. Judilibre is reached only from a known reference (Judilibre id, ECLI, pourvoi number), it fills a `CourtDecision`, and it never creates or modifies an `Affair`. An architecture test blocks reintroduction.
 - **Import data from unverified sources.** Blogs, forums, social media, unverified aggregators are not allowed as primary sources.
 - **Add feature flags or compatibility shims** when the code can be changed directly.
 - **Use em dashes (—) in any generated content.** Commas, colons, and parentheses do the job.

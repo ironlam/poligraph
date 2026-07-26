@@ -119,7 +119,7 @@ Le poligraphId est le point d'ancrage pour toutes les references externes. Il ap
 | NosDeputes          | Slug ND       | 0.85      | ID institutionnel    | Statistiques parlementaires           |
 | RNE                 | Code INSEE    | 0.7       | Nom + date naissance | Maires (35 000+)                      |
 | Wikipedia           | Titre article | 0.7       | Nom seul             | Biographies                           |
-| Judilibre           | N. decision   | Variable  | Multi-criteres       | Decisions de justice                  |
+| Judilibre           | N. decision   | s.o.      | Aucune               | Decisions rattachees par reference    |
 | Presse              | URL article   | Variable  | Mentions textuelles  | Couverture mediatique                 |
 
 ## Benchmark
