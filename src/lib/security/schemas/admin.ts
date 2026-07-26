@@ -1,19 +1,9 @@
 import { z } from "zod/v4";
-
-const VALID_CACHE_TAGS = [
-  "politicians",
-  "parties",
-  "votes",
-  "stats",
-  "dossiers",
-  "factchecks",
-  "elections",
-  "elections-municipales-2026",
-] as const;
+import { SELECTABLE_TAGS } from "@/lib/cache-tags";
 
 export const revalidateCacheSchema = z.union([
   z.object({ all: z.literal(true) }),
-  z.object({ tags: z.array(z.enum(VALID_CACHE_TAGS)).min(1) }),
+  z.object({ tags: z.array(z.enum(SELECTABLE_TAGS)).min(1) }),
 ]);
 
 // Cap at 200: this endpoint revalidates paths inline in the request, so an

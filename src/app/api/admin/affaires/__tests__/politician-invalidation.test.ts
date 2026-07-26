@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   invalidateEntity: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
   db: {
+    // Depublication now commits the row and its audit trail together (#572).
+    $transaction: vi.fn(),
     affair: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -74,6 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.auditLog.create.mockResolvedValue({});
   db.auditLog.createMany.mockResolvedValue({});
+  db.$transaction.mockResolvedValue([{ id: "1" }, {}]);
 });
 
 describe("affair mutations invalidate affected politician profiles", () => {

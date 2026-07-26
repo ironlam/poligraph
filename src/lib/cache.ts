@@ -1,4 +1,5 @@
 import { revalidatePath, revalidateTag, updateTag } from "next/cache";
+import { ALL_TAGS } from "@/lib/cache-tags";
 
 // ─── Cache tiers for API responses ────────────────────────────────
 
@@ -155,18 +156,10 @@ export function invalidateAffectedPoliticians(slugs: Array<string | null | undef
 
 // ─── Global revalidation (post-sync) ─────────────────────────────
 
-export const ALL_TAGS = [
-  "politicians",
-  "parties",
-  "affairs",
-  "votes",
-  "stats",
-  "dossiers",
-  "factchecks",
-  "elections",
-] as const;
-
-export type CacheTag = (typeof ALL_TAGS)[number];
+// Re-exported so existing call sites keep importing tags from here; the list
+// itself lives in @/lib/cache-tags, shared with the request schemas.
+export { ALL_TAGS, FROZEN_TAGS, SELECTABLE_TAGS } from "@/lib/cache-tags";
+export type { CacheTag, SelectableCacheTag } from "@/lib/cache-tags";
 
 /**
  * Purge all main cache tags. Call after full sync operations.

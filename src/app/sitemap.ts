@@ -1,5 +1,7 @@
 import { MetadataRoute } from "next";
+import { cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@/generated/prisma";
+import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllThemeSlugs } from "@/lib/theme-utils";
@@ -41,6 +43,10 @@ export default async function sitemap(props: {
 // (issue #385). This SQL mirrors isIndexablePolitician() from
 // src/lib/seo/politician-robots.ts — keep both in sync.
 async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[0]);
+  cacheLife("synced");
+
   const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     SELECT p."slug", p."updatedAt"
     FROM "Politician" p
@@ -262,6 +268,10 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
 
 // Sitemap 1: Affairs + parties + elections + departments (priority 0.6-0.7)
 async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[1]);
+  cacheLife("synced");
+
   const lastAffairUpdate = await db.affair.findFirst({
     where: {
       publicationStatus: "PUBLISHED",
@@ -414,6 +424,10 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
 
 // Sitemap 2: Legislative dossiers — top 300 most recent (priority 0.6)
 async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[2]);
+  cacheLife("synced");
+
   const dossiers = await db.legislativeDossier.findMany({
     where: { slug: { not: null } },
     select: { slug: true, updatedAt: true },
@@ -433,6 +447,10 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
 
 // Sitemap 3: Top 500 scrutins by recency (priority 0.4)
 async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[3]);
+  cacheLife("synced");
+
   const scrutins = await db.scrutin.findMany({
     where: { slug: { not: null } },
     select: { slug: true, updatedAt: true },
@@ -452,6 +470,10 @@ async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
 
 // Sitemap 4: Top 200 communes by population, restricted to those with candidacies (priority 0.6)
 async function buildCommunesSitemap(): Promise<MetadataRoute.Sitemap> {
+  "use cache";
+  cacheTag(...SITEMAP_SHARD_TAGS[4]);
+  cacheLife("synced");
+
   const communes: Array<{ id: string }> = await db.$queryRaw`
     SELECT DISTINCT c.id, c.population
     FROM "Commune" c

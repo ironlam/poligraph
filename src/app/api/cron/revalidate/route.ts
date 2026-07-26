@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ALL_TAGS, revalidateAll, revalidateTags } from "@/lib/cache";
+import { revalidateAll, revalidateTags } from "@/lib/cache";
+import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
 
-const CRON_ALLOWED_TAGS = [...ALL_TAGS, "elections-municipales-2026"] as const;
-type CronAllowedTag = (typeof CRON_ALLOWED_TAGS)[number];
+const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
+type CronAllowedTag = SelectableCacheTag;
 
 /**
  * POST /api/cron/revalidate

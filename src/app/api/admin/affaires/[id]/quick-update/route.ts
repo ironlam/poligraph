@@ -68,15 +68,17 @@ export const PATCH = withAdminAuth(
       });
     }
 
+    const meta = getRequestMeta(request);
     let updated;
-    if (Object.keys(updateData).length > 0) {
-      updated = await db.affair.update({
-        where: { id },
-        data: updateData,
-      });
-    }
 
     if (wantsPublish) {
+      // Publish path, unchanged: the guard owns verifiedAt/verifiedBy and must
+      // run after the field edits of the same request, so its audit row can only
+      // be written once the guard has accepted.
+      if (Object.keys(updateData).length > 0) {
+        updated = await db.affair.update({ where: { id }, data: updateData });
+      }
+
       try {
         await assertPublishable(id!, { verifiedBy: VERIFIED_BY_MODERATION });
       } catch (err) {
@@ -91,31 +93,48 @@ export const PATCH = withAdminAuth(
         }
         throw err;
       }
+
+      await db.auditLog.create({
+        data: {
+          action: "UPDATE",
+          entityType: "Affair",
+          entityId: id!,
+          changes: {
+            ...updateData,
+            publicationStatus: PUBLISHED_STATUS,
+            verifiedBy: VERIFIED_BY_MODERATION,
+          },
+          ipAddress: meta.ip,
+          userAgent: meta.userAgent,
+        },
+      });
+    } else {
+      // Depublication and field edits: the row and its audit trail commit
+      // together. A half-applied change would leave the affair altered with no
+      // trace, and the invalidation below would advertise a state that the audit
+      // log cannot account for (#572).
+      const [row] = await db.$transaction([
+        db.affair.update({ where: { id }, data: updateData }),
+        db.auditLog.create({
+          data: {
+            action: "UPDATE",
+            entityType: "Affair",
+            entityId: id!,
+            changes: updateData,
+            ipAddress: meta.ip,
+            userAgent: meta.userAgent,
+          },
+        }),
+      ]);
+      updated = row;
     }
 
     if (!updated) {
       updated = await db.affair.findUnique({ where: { id } });
     }
 
-    // Audit log
-    const meta = getRequestMeta(request);
-    await db.auditLog.create({
-      data: {
-        action: "UPDATE",
-        entityType: "Affair",
-        entityId: id!,
-        changes: wantsPublish
-          ? {
-              ...updateData,
-              publicationStatus: PUBLISHED_STATUS,
-              verifiedBy: VERIFIED_BY_MODERATION,
-            }
-          : updateData,
-        ipAddress: meta.ip,
-        userAgent: meta.userAgent,
-      },
-    });
-
+    // Only past the commit. Purging "affairs" also regenerates the sitemap
+    // shards that announce this URL (#572).
     invalidateEntity("affair", affair.slug);
     invalidateAffectedPoliticians([affair.politician?.slug]);
 

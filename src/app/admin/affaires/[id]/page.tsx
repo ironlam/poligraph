@@ -42,7 +42,7 @@ async function updatePublicationStatus(
   "use server";
   const { isAuthenticated } = await import("@/lib/auth");
   const { db } = await import("@/lib/db");
-  const { invalidateEntity } = await import("@/lib/cache");
+  const { invalidateEntity, invalidateAffectedPoliticians } = await import("@/lib/cache");
   const { revalidatePath } = await import("next/cache");
   const { assertPublishable, PublishGuardError, VERIFIED_BY_MODERATION, PUBLISHED_STATUS } =
     await import("@/lib/affairs/publish-guard");
@@ -50,6 +50,16 @@ async function updatePublicationStatus(
   const authenticated = await isAuthenticated();
   if (!authenticated) {
     return { ok: false, error: "Non autorisé" };
+  }
+
+  // Needed to invalidate the public surfaces: the affair page is keyed by slug
+  // and the politician profile embeds the affair list.
+  const target = await db.affair.findUnique({
+    where: { id },
+    select: { slug: true, politician: { select: { slug: true } } },
+  });
+  if (!target) {
+    return { ok: false, error: "Affaire introuvable" };
   }
 
   if (status === PUBLISHED_STATUS) {
@@ -69,23 +79,34 @@ async function updatePublicationStatus(
       }
       throw err;
     }
-  } else {
-    await db.affair.update({
-      where: { id },
-      data: { publicationStatus: status },
+    await db.auditLog.create({
+      data: {
+        action: "UPDATE",
+        entityType: "Affair",
+        entityId: id,
+        changes: { publicationStatus: status },
+      },
     });
+  } else {
+    // Depublication: the row and its audit trail commit together, and nothing
+    // is invalidated until the commit succeeds (#572).
+    await db.$transaction([
+      db.affair.update({ where: { id }, data: { publicationStatus: status } }),
+      db.auditLog.create({
+        data: {
+          action: "UPDATE",
+          entityType: "Affair",
+          entityId: id,
+          changes: { publicationStatus: status },
+        },
+      }),
+    ]);
   }
 
-  await db.auditLog.create({
-    data: {
-      action: "UPDATE",
-      entityType: "Affair",
-      entityId: id,
-      changes: { publicationStatus: status },
-    },
-  });
-
-  invalidateEntity("affair");
+  // Only past the commit. Purging "affairs" also regenerates the sitemap shards
+  // that announce this URL (#572).
+  invalidateEntity("affair", target.slug);
+  invalidateAffectedPoliticians([target.politician?.slug]);
   revalidatePath(`/admin/affaires/${id}`);
   return { ok: true };
 }
