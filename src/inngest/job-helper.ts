@@ -24,7 +24,7 @@ export async function markJobCompleted(jobId: string, result?: InputJsonValue) {
 
   // Notify on new affairs detected
   if (
-    (job.script === "sync-press-analysis" || job.script === "sync-judilibre") &&
+    job.script === "sync-press-analysis" &&
     result &&
     typeof result === "object" &&
     !Array.isArray(result) &&

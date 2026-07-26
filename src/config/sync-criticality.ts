@@ -6,7 +6,6 @@ export const CRITICAL_SCRIPTS = [
   "sync-gouvernement",
   "sync-scrutins-an",
   "sync-press-analysis",
-  "sync-judilibre",
 ] as const;
 
 export type CriticalScript = (typeof CRITICAL_SCRIPTS)[number];

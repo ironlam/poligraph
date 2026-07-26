@@ -37,27 +37,27 @@ Ce document décrit les sources de données utilisées par Poligraph, leur forma
 
 ## 1. Vue d'ensemble
 
-| #   | Source                   | Type d'accès     | Auth      | Données principales          | Script                                             | Fréquence    |
-| --- | ------------------------ | ---------------- | --------- | ---------------------------- | -------------------------------------------------- | ------------ |
-| 2   | Assemblée nationale      | CSV (data.gouv)  | Aucune    | Députés, groupes             | `sync:assemblee`                                   | Hebdomadaire |
-| 3   | Sénat                    | API JSON         | Aucune    | Sénateurs, groupes           | `sync:senat`                                       | Hebdomadaire |
-| 4   | Gouvernement             | CSV (data.gouv)  | Aucune    | Ministres, fonctions         | `sync:gouvernement`                                | Remaniement  |
-| 5   | Président                | Statique         | Aucune    | Président en exercice        | `sync:president`                                   | Manuelle     |
-| 6   | Parlement européen       | API JSON-LD      | Aucune    | Eurodéputés français         | `sync:europarl`                                    | Hebdomadaire |
-| 7   | HATVP                    | CSV opendata     | Aucune    | Déclarations patrimoine      | `sync:hatvp`                                       | Mensuelle    |
-| 8   | Wikidata                 | REST + SPARQL    | Aucune    | IDs, condamnations, décès    | `sync:wikidata-ids`                                | Hebdomadaire |
-| 9   | Votes AN                 | ZIP JSON         | Aucune    | Scrutins, votes individuels  | `sync:scrutins-an`                                 | Quotidienne  |
-| 10  | Votes Sénat              | HTML + JSON      | Aucune    | Scrutins, votes individuels  | `sync:scrutins-senat`                              | Quotidienne  |
-| 11  | Dossiers législatifs     | ZIP JSON         | Aucune    | Projets/propositions de loi  | `sync:legislation`                                 | Quotidienne  |
-| 12  | Presse (RSS)             | RSS/XML          | Aucune    | Articles, mentions           | `sync:press`                                       | Quotidienne  |
-| 13  | Google Fact Check        | API REST         | API key   | Fact-checks, verdicts        | `sync:factchecks`                                  | Quotidienne  |
-| 14  | RNE                      | CSV (data.gouv)  | Aucune    | Maires                       | `sync:rne:maires`                                  | Ponctuelle   |
-| 15  | Judilibre                | API REST (PISTE) | OAuth 2.0 | Décisions justice            | `sync:judilibre:deprecated` (désactivé 2026-05-15) | Désactivé    |
-| 16  | Candidatures             | CSV (data.gouv)  | Aucune    | Candidats municipales        | `sync:elections:municipales`                       | Ponctuelle   |
-| 17  | Photos                   | HTTP HEAD        | Aucune    | Photos politiciens           | `sync:photos`                                      | Hebdomadaire |
-| 18  | Analyse presse           | Analyse auto.    | API key   | Détection affaires           | `sync:press-analysis`                              | Quotidienne  |
-| 19  | Tracker promesses        | Réutilisation DB | API key   | Promesses politiques         | `promises-extract-sample`                          | À la demande |
-| 20  | Compte Rendu Intégral AN | XML public       | Aucune    | Interventions parlementaires | `promises-cri-demo`                                | Q1 2027      |
+| #   | Source                   | Type d'accès     | Auth      | Données principales          | Script                               | Fréquence    |
+| --- | ------------------------ | ---------------- | --------- | ---------------------------- | ------------------------------------ | ------------ |
+| 2   | Assemblée nationale      | CSV (data.gouv)  | Aucune    | Députés, groupes             | `sync:assemblee`                     | Hebdomadaire |
+| 3   | Sénat                    | API JSON         | Aucune    | Sénateurs, groupes           | `sync:senat`                         | Hebdomadaire |
+| 4   | Gouvernement             | CSV (data.gouv)  | Aucune    | Ministres, fonctions         | `sync:gouvernement`                  | Remaniement  |
+| 5   | Président                | Statique         | Aucune    | Président en exercice        | `sync:president`                     | Manuelle     |
+| 6   | Parlement européen       | API JSON-LD      | Aucune    | Eurodéputés français         | `sync:europarl`                      | Hebdomadaire |
+| 7   | HATVP                    | CSV opendata     | Aucune    | Déclarations patrimoine      | `sync:hatvp`                         | Mensuelle    |
+| 8   | Wikidata                 | REST + SPARQL    | Aucune    | IDs, condamnations, décès    | `sync:wikidata-ids`                  | Hebdomadaire |
+| 9   | Votes AN                 | ZIP JSON         | Aucune    | Scrutins, votes individuels  | `sync:scrutins-an`                   | Quotidienne  |
+| 10  | Votes Sénat              | HTML + JSON      | Aucune    | Scrutins, votes individuels  | `sync:scrutins-senat`                | Quotidienne  |
+| 11  | Dossiers législatifs     | ZIP JSON         | Aucune    | Projets/propositions de loi  | `sync:legislation`                   | Quotidienne  |
+| 12  | Presse (RSS)             | RSS/XML          | Aucune    | Articles, mentions           | `sync:press`                         | Quotidienne  |
+| 13  | Google Fact Check        | API REST         | API key   | Fact-checks, verdicts        | `sync:factchecks`                    | Quotidienne  |
+| 14  | RNE                      | CSV (data.gouv)  | Aucune    | Maires                       | `sync:rne:maires`                    | Ponctuelle   |
+| 15  | Judilibre                | API REST (PISTE) | OAuth 2.0 | Décisions justice            | Enrichissement ciblé, depuis l'admin | À la demande |
+| 16  | Candidatures             | CSV (data.gouv)  | Aucune    | Candidats municipales        | `sync:elections:municipales`         | Ponctuelle   |
+| 17  | Photos                   | HTTP HEAD        | Aucune    | Photos politiciens           | `sync:photos`                        | Hebdomadaire |
+| 18  | Analyse presse           | Analyse auto.    | API key   | Détection affaires           | `sync:press-analysis`                | Quotidienne  |
+| 19  | Tracker promesses        | Réutilisation DB | API key   | Promesses politiques         | `promises-extract-sample`            | À la demande |
+| 20  | Compte Rendu Intégral AN | XML public       | Aucune    | Interventions parlementaires | `promises-cri-demo`                  | Q1 2027      |
 
 ---
 
@@ -538,23 +538,34 @@ npm run sync:rne:maires
 
 ### Données importées
 
-- Décisions criminelles de la Cour de cassation
-- Recherche par nom de politicien (chambre criminelle uniquement)
-- Filtrage des homonymes via date de naissance + proximité du nom dans le texte
-- Enrichit les affaires existantes (ECLI, numéro de pourvoi, URL décision)
-- Crée de nouvelles affaires préfixées `[A VERIFIER]` (validation manuelle requise)
-- Intervalle minimum entre syncs : 8 heures (`--force` pour ignorer)
+- Décisions de la Cour de cassation
+- Récupération ciblée à partir d'une **référence connue** : identifiant Judilibre, ECLI ou numéro de pourvoi
+- Alimente une `CourtDecision` (juridiction, chambre, date, sens, ECLI, URL officielle)
+- Déclenchement manuel depuis l'admin, jamais planifié
 
-### Script (désactivé)
+### Le flux, et celui qui est interdit
 
-Pipeline désactivé le 2026-05-15 (Option C). Le corpus chambre criminelle Cassation ingéré est anonymisé par construction et n'a produit aucune affaire sur 156 décisions. Voir `docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md`. Une réorientation Option D (enrichissement d'affaires existantes) est tracée dans une issue GitHub de suivi.
+```text
+référence judiciaire connue  →  recherche Judilibre ciblée  →  CourtDecision  →  affichage public
+```
+
+Le flux inverse est retiré du code, pas simplement désactivé :
+
+```text
+nom de personnalité  →  recherche Judilibre  →  création automatique d'Affair
+```
+
+La recherche par nom a produit **0 affaire sur 156 décisions** : le corpus de la chambre criminelle est une jurisprudence doctrinale pseudonymisée, où une personnalité publique ne peut pas être reconnue. Le pipeline a été désactivé le 2026-05-15, puis supprimé en #337. Un test d'architecture empêche sa réintroduction.
+
+L'enrichissement n'écrit jamais sur une `Affair` : ni statut, ni publication, ni `court`, ni `verdictDate`. Un numéro de pourvoi qui rend plusieurs décisions arrête l'opération au lieu de choisir.
+
+### Scripts
 
 ```bash
-# Scripts conservés pour debug manuel uniquement (warning au démarrage).
-npm run sync:judilibre:deprecated              # Sync incrémentale
-npm run sync:judilibre:deprecated -- --limit=20
-npm run sync:judilibre:deprecated -- --force   # Ignorer l'intervalle minimum
+npm run judilibre:diagnostics   # lecture seule : comptes et traces de l'ancien pipeline
 ```
+
+L'enrichissement se déclenche depuis la fiche admin d'une affaire, sur une décision déjà rattachée, avec confirmation explicite.
 
 ---
 
@@ -812,21 +823,21 @@ npm run sync:daily -- --dry-run
 
 ### Par source
 
-| Variable                   | Source                                               | Obligatoire                                           |
-| -------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
-| `GOOGLE_FACTCHECK_API_KEY` | Google Fact Check (#13)                              | Pour `sync:factchecks`                                |
-| `JUDILIBRE_CLIENT_ID`      | Judilibre (#15)                                      | Pour `sync:judilibre:deprecated` (pipeline désactivé) |
-| `JUDILIBRE_CLIENT_SECRET`  | Judilibre (#15)                                      | Pour `sync:judilibre:deprecated` (pipeline désactivé) |
-| `JUDILIBRE_API_KEY`        | Judilibre (#15)                                      | Pour `sync:judilibre:deprecated` (pipeline désactivé) |
-| `JUDILIBRE_BASE_URL`       | Judilibre (#15)                                      | Pour `sync:judilibre:deprecated` (pipeline désactivé) |
-| `JUDILIBRE_OAUTH_URL`      | Judilibre (#15)                                      | Pour `sync:judilibre:deprecated` (pipeline désactivé) |
-| `ANTHROPIC_API_KEY`        | Analyse presse, classification thématique (#18, #19) | Pour scripts d'enrichissement                         |
-| `VOYAGE_API_KEY`           | Embeddings RAG (#19)                                 | Pour `index:embeddings`                               |
-| `MAILJET_API_KEY`          | Newsletter (#19)                                     | Pour la newsletter                                    |
-| `MAILJET_SECRET_KEY`       | Newsletter (#19)                                     | Pour la newsletter                                    |
-| `MEDIAPART_EMAIL`          | Analyse presse (#18)                                 | Optionnel (articles complets Mediapart)               |
-| `MEDIAPART_PASSWORD`       | Analyse presse (#18)                                 | Optionnel                                             |
-| `CRON_SECRET`              | Cache revalidation (sync:daily)                      | Optionnel                                             |
+| Variable                   | Source                                               | Obligatoire                             |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------- |
+| `GOOGLE_FACTCHECK_API_KEY` | Google Fact Check (#13)                              | Pour `sync:factchecks`                  |
+| `JUDILIBRE_CLIENT_ID`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
+| `JUDILIBRE_CLIENT_SECRET`  | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
+| `JUDILIBRE_API_KEY`        | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
+| `JUDILIBRE_BASE_URL`       | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
+| `JUDILIBRE_OAUTH_URL`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
+| `ANTHROPIC_API_KEY`        | Analyse presse, classification thématique (#18, #19) | Pour scripts d'enrichissement           |
+| `VOYAGE_API_KEY`           | Embeddings RAG (#19)                                 | Pour `index:embeddings`                 |
+| `MAILJET_API_KEY`          | Newsletter (#19)                                     | Pour la newsletter                      |
+| `MAILJET_SECRET_KEY`       | Newsletter (#19)                                     | Pour la newsletter                      |
+| `MEDIAPART_EMAIL`          | Analyse presse (#18)                                 | Optionnel (articles complets Mediapart) |
+| `MEDIAPART_PASSWORD`       | Analyse presse (#18)                                 | Optionnel                               |
+| `CRON_SECRET`              | Cache revalidation (sync:daily)                      | Optionnel                               |
 
 ### Configuration des URLs
 

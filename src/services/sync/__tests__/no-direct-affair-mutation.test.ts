@@ -91,17 +91,16 @@ describe("garde architectural : aucune mutation directe d'affaire dans src/servi
   // DiscoveredAffair.publicationStatus being the literal "DRAFT".
 
   it("les deux portes sont bien celles qu'utilisent les importeurs", () => {
+    // Judilibre ne figure plus ici : son importeur nominal a été retiré en #337, et
+    // l'enrichissement qui le remplace vise une décision, jamais une affaire.
     const discover = readFileSync(join(SYNC_DIR, "discover-affairs.ts"), "utf8");
-    const judilibre = readFileSync(join(SYNC_DIR, "judilibre.ts"), "utf8");
     const press = readFileSync(join(SYNC_DIR, "press-analysis.ts"), "utf8");
 
     expect(discover).toContain("proposeAffairUpdate(");
-    expect(judilibre).toContain("proposeAffairUpdate(");
 
     // press-analysis only ever creates; it must still go through the door.
     for (const [name, code] of [
       ["discover-affairs", discover],
-      ["judilibre", judilibre],
       ["press-analysis", press],
     ] as const) {
       expect(code, name).toContain("createDraftAffairFromDiscovery(");

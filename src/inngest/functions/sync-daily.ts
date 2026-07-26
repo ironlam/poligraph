@@ -249,18 +249,10 @@ const DAILY_STEPS: DailyStep[] = [
       return syncPressAnalysis({ limit: 100 });
     },
   },
-  // Judilibre step disabled 2026-05-15 (Option C, audit:
-  // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
-  // The Cassation chambre criminelle corpus is structurally anonymized;
-  // pipeline produced 0 affairs over 156 decisions. Re-enabling tracked
-  // as Option D (enrichment for existing affairs) in follow-up issue.
-  // {
-  //   name: "judilibre",
-  //   run: async () => {
-  //     const { syncJudilibre } = await import("@/services/sync/judilibre");
-  //     return syncJudilibre({ limit: 20 });
-  //   },
-  // },
+  // No Judilibre step here, and none may be added (#337). Searching the corpus by
+  // name produced 0 affairs over 156 decisions, because it is pseudonymised. The
+  // replacement starts from a known reference and writes onto a CourtDecision, never
+  // onto an Affair, and it is triggered by hand rather than scheduled.
   {
     name: "reconcile-affairs",
     run: async () => {

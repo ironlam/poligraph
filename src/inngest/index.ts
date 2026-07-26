@@ -58,13 +58,8 @@ const migratedFunctions = [
     const limit = (data.limit as number) || 100;
     return syncPressAnalysis({ limit });
   }),
-  // Judilibre pipeline disabled 2026-05-15 (Option C, audit:
-  // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
-  // The Cassation chambre criminelle corpus we ingest is doctrinal and
-  // anonymized; the pipeline produced 0 affairs over 156 decisions.
-  // Re-enabling is tracked as Option D (enrichment for existing affairs)
-  // in a follow-up GitHub issue; do not restore this block without
-  // implementing that reorientation.
+  // No Judilibre discovery function is registered, and none may be (#337): the
+  // name-based pipeline is removed, not merely switched off.
   createSyncFunction("sync-factchecks", async (data) => {
     const { syncFactchecks } = await import("@/services/sync/factchecks");
     const limit = (data.limit as number) || 50;
