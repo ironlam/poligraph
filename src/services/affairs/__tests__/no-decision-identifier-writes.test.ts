@@ -33,19 +33,24 @@ const WRITE_SURFACES = [
   "src/services/affairs/create-draft.ts",
   "src/app/api/admin/affaires/route.ts",
   "src/app/api/admin/affaires/[id]/route.ts",
+  // Ajouté en #545 PR 2 : la fusion remplissait additivement ces champs sur le
+  // survivant, et la première version de ce garde ne regardait pas ce fichier.
+  "src/services/affairs/reconciliation.ts",
 ];
 
 /**
  * An assignment, not a read.
  *
- * `ecli: true` is a Prisma `select`, and `ecli: { not: null }` is a `where`: both
- * read the column. Only a value that is neither a boolean nor an object writes it.
+ * `ecli: true` is a Prisma `select`, `ecli: { not: null }` is a `where`, and
+ * `ecli: string | null` is a type annotation: none of them writes the column. Only a
+ * value that is none of those three shapes does.
  *
  * The whitespace sits *inside* the lookahead on purpose. With `:\s*(?!…)` in front,
  * `\s*` can backtrack to zero characters and the lookahead then passes on the space,
  * so `ecli: { not: null }` would read as a write.
  */
-const ASSIGNMENT_SOURCE = (field: string) => String.raw`\b${field}\s*:(?!\s*(?:true\b|false\b|\{))`;
+const ASSIGNMENT_SOURCE = (field: string) =>
+  String.raw`\b${field}\s*:(?!\s*(?:true\b|false\b|\{|string\b|number\b|boolean\b|Date\b))`;
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");

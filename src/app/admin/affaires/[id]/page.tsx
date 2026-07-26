@@ -155,21 +155,10 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Judicial identifiers */}
-          {(affair.ecli || affair.pourvoiNumber || affair.caseNumber) && (
+          {/* Références éditoriales. Les identifiants de décision (ECLI, pourvoi)
+              se lisent sur les décisions rattachées, plus bas sur cette page (#545). */}
+          {affair.caseNumber && (
             <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-              {affair.ecli && (
-                <div>
-                  <p className="text-sm text-muted-foreground">ECLI</p>
-                  <p className="font-mono text-sm">{affair.ecli}</p>
-                </div>
-              )}
-              {affair.pourvoiNumber && (
-                <div>
-                  <p className="text-sm text-muted-foreground">N° de pourvoi</p>
-                  <p className="font-mono text-sm">{affair.pourvoiNumber}</p>
-                </div>
-              )}
               {affair.caseNumber && (
                 <div>
                   <p className="text-sm text-muted-foreground">N° de dossier</p>

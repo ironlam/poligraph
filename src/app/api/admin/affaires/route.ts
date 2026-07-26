@@ -32,8 +32,16 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   if (pubStatus) where.publicationStatus = pubStatus;
   if (category) where.category = category;
   if (status) where.status = status;
-  if (hasEcli === "true") where.ecli = { not: null };
-  if (hasEcli === "false") where.ecli = null;
+  // Filtre sur les décisions rattachées, plus sur la colonne de l'affaire, qui n'est
+  // plus alimentée (#545). « sans ECLI » signifie désormais « aucune décision
+  // rattachée n'en porte », ce qui est la question que se pose réellement un
+  // modérateur.
+  if (hasEcli === "true") {
+    where.courtDecisions = { some: { courtDecision: { ecli: { not: null } } } };
+  }
+  if (hasEcli === "false") {
+    where.courtDecisions = { none: { courtDecision: { ecli: { not: null } } } };
+  }
   if (search) {
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },

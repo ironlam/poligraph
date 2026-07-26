@@ -158,11 +158,7 @@ export const GET = withPublicRoute(async (request) => {
     sentence: a.sentence ?? "",
     otherSentence: a.otherSentence ?? "",
     court: a.court ?? "",
-    ecli:
-      resolveDecisionField(
-        a.ecli,
-        a.courtDecisions.map((l) => l.courtDecision.ecli)
-      ).value ?? "",
+    ecli: resolveDecisionField(a.courtDecisions.map((l) => l.courtDecision.ecli)).value ?? "",
     descriptionPlain: stripMarkdownForCSV(a.description),
     sourceCount: a._count.sources,
     sourceUrl: a.sources[0]?.url ?? "",

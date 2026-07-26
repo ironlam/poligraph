@@ -7,7 +7,8 @@
  */
 
 import { db } from "@/lib/db";
-import type { AffairCategory } from "@/generated/prisma";
+import { foldJudicialReference } from "@/lib/affairs/judicial-reference";
+import type { AffairCategory, Prisma } from "@/generated/prisma";
 
 export type MatchConfidence = "CERTAIN" | "HIGH" | "POSSIBLE";
 
@@ -309,9 +310,15 @@ export function pickConfidentMatch(matches: MatchResult[]): ConfidentMatch {
 export interface MatchCandidate {
   politicianId: string;
   title: string;
-  ecli?: string | null;
-  pourvoiNumber?: string | null;
-  caseNumbers?: string[];
+  /**
+   * References of the decisions the candidate is linked to (#545).
+   *
+   * A list, because an affair can cite several decisions, and because these no
+   * longer come from columns on the affair: `Affair.ecli` and
+   * `Affair.pourvoiNumber` stopped being written, so reading them would only ever
+   * return what a past backfill left behind.
+   */
+  decisionRefs?: Array<{ ecli?: string | null; pourvoiNumber?: string | null }>;
   category?: AffairCategory;
   verdictDate?: Date | null;
   /**
@@ -357,73 +364,67 @@ function normalizeAffairTitle(title: string, politicianName?: string): string {
 }
 
 /**
+ * Affairs linked to a decision matching `where`, optionally scoped to one politician.
+ *
+ * Reads through `AffairCourtDecision` rather than through columns on `Affair`: the
+ * identifiers live on the decision now (#545), and the same decision legitimately
+ * reaches several affairs.
+ */
+async function findAffairsLinkedToDecision(
+  where: Prisma.CourtDecisionWhereInput,
+  politicianId?: string
+): Promise<string[]> {
+  const links = await db.affairCourtDecision.findMany({
+    where: {
+      courtDecision: where,
+      ...(politicianId ? { affair: { politicianId } } : {}),
+    },
+    select: { affairId: true },
+  });
+  return [...new Set(links.map((l) => l.affairId))];
+}
+
+/**
  * Find existing affairs that match a candidate affair.
  * Returns matches ordered by confidence score (highest first).
  */
 export async function findMatchingAffairs(candidate: MatchCandidate): Promise<MatchResult[]> {
   const matches: MatchResult[] = [];
 
-  // Priority 1: ECLI (unique European identifier) — CERTAIN match
-  if (candidate.ecli) {
-    const ecliMatch = await db.affair.findUnique({
-      where: { ecli: candidate.ecli },
-      select: { id: true },
-    });
-    // A self-match proves nothing and must not short-circuit: ecli is unique, so
-    // when the candidate is an existing row this lookup finds that row itself.
-    if (ecliMatch && ecliMatch.id !== candidate.excludeAffairId) {
-      matches.push({
-        affairId: ecliMatch.id,
-        confidence: "CERTAIN",
-        score: 1.0,
-        matchedBy: "ecli",
-      });
-      return matches; // ECLI is definitive, no need to check further
+  const refs = candidate.decisionRefs ?? [];
+  const ecliRefs = refs.map((r) => r.ecli).filter((v): v is string => Boolean(v));
+  const pourvoiRefs = refs.map((r) => r.pourvoiNumber).filter((v): v is string => Boolean(v));
+
+  // Priority 1: shared ECLI, read through the linked decisions.
+  //
+  // It no longer short-circuits. An ECLI identifies a decision, and one decision can
+  // carry several counts, so it is a reason to read the pair rather than the end of
+  // the enquiry — the other signals may say something the reviewer needs (#557).
+  if (ecliRefs.length > 0) {
+    const ecliMatches = await findAffairsLinkedToDecision({ ecli: { in: ecliRefs } });
+    for (const affairId of ecliMatches) {
+      if (affairId === candidate.excludeAffairId) continue;
+      matches.push({ affairId, confidence: "CERTAIN", score: 1.0, matchedBy: "ecli" });
     }
   }
 
-  // Priority 2: Pourvoi number + same politician — HIGH confidence
-  if (candidate.pourvoiNumber) {
-    const pourvoiMatches = await db.affair.findMany({
-      where: {
-        pourvoiNumber: candidate.pourvoiNumber,
-        politicianId: candidate.politicianId,
-      },
-      select: { id: true },
-    });
-    for (const match of pourvoiMatches) {
-      if (match.id === candidate.excludeAffairId) continue;
-      matches.push({
-        affairId: match.id,
-        confidence: "HIGH",
-        score: 0.95,
-        matchedBy: "pourvoiNumber",
-      });
+  // Priority 2: shared pourvoi number, read through the linked decisions, on the
+  // same politician. A pourvoi is not unique, so this is a lead, never an identity.
+  if (pourvoiRefs.length > 0) {
+    const pourvoiMatches = await findAffairsLinkedToDecision(
+      { pourvoiNumberNormalized: { in: pourvoiRefs.map(foldJudicialReference) } },
+      candidate.politicianId
+    );
+    for (const affairId of pourvoiMatches) {
+      if (affairId === candidate.excludeAffairId) continue;
+      if (matches.some((m) => m.affairId === affairId)) continue;
+      matches.push({ affairId, confidence: "HIGH", score: 0.95, matchedBy: "pourvoiNumber" });
     }
   }
 
-  // Priority 3: Case numbers intersection + same politician — HIGH confidence
-  if (candidate.caseNumbers && candidate.caseNumbers.length > 0) {
-    const caseNumberMatches = await db.affair.findMany({
-      where: {
-        politicianId: candidate.politicianId,
-        caseNumbers: { hasSome: candidate.caseNumbers },
-      },
-      select: { id: true },
-    });
-    for (const match of caseNumberMatches) {
-      if (match.id === candidate.excludeAffairId) continue;
-      // Avoid duplicating matches already found by pourvoi
-      if (!matches.some((m) => m.affairId === match.id)) {
-        matches.push({
-          affairId: match.id,
-          confidence: "HIGH",
-          score: 0.8,
-          matchedBy: "caseNumbers",
-        });
-      }
-    }
-  }
+  // No case-number priority any more (#545). It matched on `Affair.caseNumbers`,
+  // which was empty on all 463 affairs and has no equivalent on `CourtDecision`:
+  // matching on a field that exists nowhere is not a capability worth keeping.
 
   // Priority 4: Normalized title matching — bidirectional
   // Strips "[À VÉRIFIER]" prefix, politician name, and common decorators,

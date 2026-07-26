@@ -37,14 +37,16 @@ function makeDraft(
     involvement: string;
     factsDate: Date | null;
     verdictDate: Date | null;
+    courtDecisions: Array<{
+      courtDecision: { ecli: string | null; pourvoiNumber: string | null };
+    }>;
   }> = {}
 ) {
   return {
     id,
     title: overrides.title ?? `Affaire ${id}`,
-    ecli: null,
-    pourvoiNumber: null,
-    caseNumbers: [],
+    // Références portées par les décisions rattachées (#545), plus par l'affaire.
+    courtDecisions: overrides.courtDecisions ?? [],
     category: overrides.category ?? "AUTRE",
     involvement: overrides.involvement ?? "DIRECT",
     factsDate: overrides.factsDate ?? null,

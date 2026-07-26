@@ -62,11 +62,7 @@ function affair(overrides: Partial<Record<string, unknown>> = {}) {
     slug: "affaire-conservee",
     publicId: "AF-000001",
     oldSlugs: [],
-    ecli: null,
-    pourvoiNumber: null,
-    caseNumbers: [],
     court: null,
-    chamber: null,
     caseNumber: null,
     publicationStatus: "DRAFT",
     ...overrides,
@@ -200,26 +196,47 @@ describe("mergeAffairs — URLs survive the merge (issue #525)", () => {
 });
 
 describe("mergeAffairs — additive only (issue #525)", () => {
-  it("fills a judicial field the survivor is missing", async () => {
+  it("fills an editorial field the survivor is missing", async () => {
     stub(
-      affair({ id: "keep", court: null, chamber: null }),
-      affair({ id: "remove", slug: "absorbee", court: "Cour d'appel de Paris", chamber: "2e" })
+      affair({ id: "keep", court: null, caseNumber: null }),
+      affair({
+        id: "remove",
+        slug: "absorbee",
+        court: "Cour d'appel de Paris",
+        caseNumber: "2023/12345",
+      })
     );
 
     const result = await mergeAffairs("keep", "remove");
 
-    expect(updatePayload()).toMatchObject({ court: "Cour d'appel de Paris", chamber: "2e" });
-    expect(result.identifiersMerged).toEqual(expect.arrayContaining(["court", "chamber"]));
+    expect(updatePayload()).toMatchObject({
+      court: "Cour d'appel de Paris",
+      caseNumber: "2023/12345",
+    });
+    expect(result.identifiersMerged).toEqual(expect.arrayContaining(["court", "caseNumber"]));
+  });
+
+  it("ne remplit plus aucun identifiant de décision (#545)", async () => {
+    // Ils vivent sur CourtDecision, et les liaisons de l'absorbée sont transférées :
+    // le survivant continue de citer les mêmes décisions, sans copie de colonne.
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+
+    await mergeAffairs("keep", "remove");
+
+    const payload = updatePayload() ?? {};
+    for (const field of ["ecli", "pourvoiNumber", "chamber", "caseNumbers"]) {
+      expect(payload).not.toHaveProperty(field);
+    }
   });
 
   it("never overwrites a judicial field the survivor already states", async () => {
     stub(
-      affair({ id: "keep", court: "Tribunal de Paris", ecli: "ECLI:FR:CCASS:2024:C100001" }),
+      affair({ id: "keep", court: "Tribunal de Paris", caseNumber: "2023/111" }),
       affair({
         id: "remove",
         slug: "absorbee",
         court: "Cour d'appel de Lyon",
-        ecli: "ECLI:FR:CCASS:2024:C900009",
+        caseNumber: "2023/999",
       })
     );
 
@@ -229,17 +246,6 @@ describe("mergeAffairs — additive only (issue #525)", () => {
     expect(payload).not.toHaveProperty("court");
     expect(payload).not.toHaveProperty("ecli");
     expect(result.identifiersMerged).toEqual([]);
-  });
-
-  it("unions caseNumbers instead of replacing them", async () => {
-    stub(
-      affair({ id: "keep", caseNumbers: ["A1"] }),
-      affair({ id: "remove", slug: "absorbee", caseNumbers: ["A1", "B2"] })
-    );
-
-    await mergeAffairs("keep", "remove");
-
-    expect(updatePayload()?.caseNumbers).toEqual(["A1", "B2"]);
   });
 
   it("leaves editorial fields alone", async () => {

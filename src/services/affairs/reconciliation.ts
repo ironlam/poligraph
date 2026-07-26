@@ -90,9 +90,10 @@ const DETECTED_PUBLICATION_STATUSES = ["DRAFT", "PUBLISHED"] as const;
 type DetectedAffair = {
   id: string;
   title: string;
-  ecli: string | null;
-  pourvoiNumber: string | null;
-  caseNumbers: string[];
+  /** Références des décisions rattachées (#545), et non des colonnes de l'affaire. */
+  courtDecisions: Array<{
+    courtDecision: { ecli: string | null; pourvoiNumber: string | null };
+  }>;
   category: string;
   involvement: string;
   factsDate: Date | null;
@@ -105,14 +106,36 @@ type DetectedAffair = {
   sources: { sourceType: SourceType }[];
 };
 
-/** Judicial values that rule out the two rows being one decision. */
+/** Le jeu de références portées par les décisions rattachées à une affaire. */
+function decisionRefs(affair: DetectedAffair, field: "ecli" | "pourvoiNumber"): Set<string> {
+  const refs = new Set<string>();
+  for (const link of affair.courtDecisions) {
+    const value = link.courtDecision[field];
+    if (value) refs.add(value);
+  }
+  return refs;
+}
+
+/**
+ * Judicial values that rule out the two rows being one decision.
+ *
+ * Lues depuis les décisions rattachées (#545). La contradiction porte sur des
+ * ensembles disjoints : deux fiches citant chacune une décision, et **aucune en
+ * commun**, ne décrivent pas la même décision. Partager une référence n'est en
+ * revanche pas une preuve de doublon, c'est ce que #557 verrouille.
+ */
 function findContradictions(a: DetectedAffair, b: DetectedAffair): string[] {
   const contradictions: string[] = [];
   if (verdictDatesConflict(a.verdictDate, b.verdictDate)) contradictions.push("verdictDate");
-  if (a.ecli && b.ecli && a.ecli !== b.ecli) contradictions.push("ecli");
-  if (a.pourvoiNumber && b.pourvoiNumber && a.pourvoiNumber !== b.pourvoiNumber) {
-    contradictions.push("pourvoiNumber");
+
+  for (const field of ["ecli", "pourvoiNumber"] as const) {
+    const refsA = decisionRefs(a, field);
+    const refsB = decisionRefs(b, field);
+    if (refsA.size === 0 || refsB.size === 0) continue;
+    const shared = [...refsA].some((ref) => refsB.has(ref));
+    if (!shared) contradictions.push(field);
   }
+
   return contradictions;
 }
 
@@ -165,9 +188,11 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
     select: {
       id: true,
       title: true,
-      ecli: true,
-      pourvoiNumber: true,
-      caseNumbers: true,
+      // Les références viennent des décisions rattachées, plus des colonnes de
+      // l'affaire, qui ne sont plus alimentées (#545).
+      courtDecisions: {
+        select: { courtDecision: { select: { ecli: true, pourvoiNumber: true } } },
+      },
       category: true,
       involvement: true,
       factsDate: true,
@@ -234,13 +259,10 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
       const matches = await findMatchingAffairs({
         politicianId: affair.politicianId,
         title: affair.title,
-        ecli: affair.ecli,
-        pourvoiNumber: affair.pourvoiNumber,
-        caseNumbers: affair.caseNumbers,
+        decisionRefs: affair.courtDecisions.map((l) => l.courtDecision),
         category: affair.category as AffairCategory,
         verdictDate: affair.verdictDate,
-        // Without this the affair matches itself, and the ECLI branch would
-        // return that self-match alone and hide every other signal.
+        // Without this the affair matches itself on every identifier branch.
         excludeAffairId: affair.id,
       });
 
@@ -315,25 +337,27 @@ export async function findPotentialDuplicates(): Promise<PotentialDuplicate[]> {
  * Fields filled on the survivor only when it does not already carry a value.
  * Purely additive: a merge must never overwrite what the survivor states, but
  * losing what the absorbed affair stated is data loss, since its row is deleted.
+ *
+ * `ecli`, `pourvoiNumber` and `chamber` left this list in #545: they identify a
+ * decision, not an affair, and nothing writes them on `Affair` any more. What the
+ * absorbed row cited is not lost — its decision links are transferred by the merge,
+ * so the survivor keeps citing the same decisions.
  */
-const ADDITIVE_MERGE_FIELDS = ["ecli", "pourvoiNumber", "court", "chamber", "caseNumber"] as const;
+const ADDITIVE_MERGE_FIELDS = ["court", "caseNumber"] as const;
 
 export type AdditiveMergeField = (typeof ADDITIVE_MERGE_FIELDS)[number];
 
 /**
- * What an automatic absorption into a published affair may fill: court-assigned
- * identifiers only.
+ * What an absorption into a published affair may fill.
  *
- * `court` and `chamber` are left out although they would only fill a gap, because
- * they describe the jurisdiction rather than identify the decision. Both are in
- * the proposal whitelist, so the draft's value reaches the published fiche
- * through review instead of a cron write (issue #525, §4).
+ * Only `caseNumber` remains: it is an editorial reference displayed as text, and
+ * filling a gap on it states nothing new about the person. `court` stays out although
+ * it would only fill a gap, because it describes the jurisdiction; it is in the
+ * proposal whitelist, so the draft's value reaches the published fiche through review
+ * rather than a write (issue #525, §4). The decision identifiers left the list
+ * entirely in #545 — they are carried by the transferred decision links.
  */
-export const ABSORPTION_ADDITIVE_FIELDS: readonly AdditiveMergeField[] = [
-  "ecli",
-  "pourvoiNumber",
-  "caseNumber",
-];
+export const ABSORPTION_ADDITIVE_FIELDS: readonly AdditiveMergeField[] = ["caseNumber"];
 
 export interface MergeAffairsOptions {
   /** Request context, when the merge is human-initiated from the admin. */
@@ -484,11 +508,7 @@ export async function mergeAffairsInTransaction(
       oldSlugs: true,
       politicianId: true,
       publicationStatus: true,
-      ecli: true,
-      pourvoiNumber: true,
-      caseNumbers: true,
       court: true,
-      chamber: true,
       caseNumber: true,
     } as const;
 
@@ -672,13 +692,6 @@ export async function mergeAffairsInTransaction(
       if (!keep[field] && remove[field]) {
         updates[field] = remove[field];
         identifiersMerged.push(field);
-      }
-    }
-    if (remove.caseNumbers.length > 0) {
-      const merged = [...new Set([...keep.caseNumbers, ...remove.caseNumbers])];
-      if (merged.length !== keep.caseNumbers.length) {
-        updates.caseNumbers = merged;
-        identifiersMerged.push("caseNumbers");
       }
     }
 

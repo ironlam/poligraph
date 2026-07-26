@@ -34,6 +34,18 @@ const STOPWORDS = new Set([
   "l",
 ]);
 
+/** Références qu'au moins une décision de chaque côté porte en commun. */
+function sharedDecisionRefs(a: AffairForComparison, b: AffairForComparison): string[] {
+  const refsOf = (affair: AffairForComparison) =>
+    new Set(
+      affair.courtDecisions.flatMap((l) =>
+        [l.courtDecision.ecli, l.courtDecision.pourvoiNumber].filter((v): v is string => Boolean(v))
+      )
+    );
+  const refsB = refsOf(b);
+  return [...refsOf(a)].filter((ref) => refsB.has(ref));
+}
+
 function normalizeTitle(title: string): string[] {
   return title
     .toLowerCase()
@@ -55,9 +67,10 @@ interface AffairForComparison {
   category: string;
   involvement: string;
   publicationStatus: string;
-  ecli: string | null;
-  pourvoiNumber: string | null;
-  caseNumbers: string[];
+  /** Décisions rattachées (#545), et non des colonnes de l'affaire. */
+  courtDecisions: Array<{
+    courtDecision: { ecli: string | null; pourvoiNumber: string | null };
+  }>;
   factsDate: Date | null;
   startDate: Date | null;
   verdictDate: Date | null;
@@ -76,8 +89,7 @@ export interface DuplicateGroup {
     category: string;
     involvement: string;
     publicationStatus: string;
-    ecli: string | null;
-    pourvoiNumber: string | null;
+    decisionRefs: Array<{ ecli: string | null; pourvoiNumber: string | null }>;
     factsDate: string | null;
     startDate: string | null;
     verdictDate: string | null;
@@ -93,22 +105,16 @@ function calculatePairScore(
   const reasons: string[] = [];
   let score = 0;
 
-  // Exact identifiers — definite match
-  if (a.ecli && b.ecli && a.ecli === b.ecli) {
-    return { score: 100, reasons: ["ECLI identique"] };
-  }
-
-  if (a.pourvoiNumber && b.pourvoiNumber && a.pourvoiNumber === b.pourvoiNumber) {
-    return { score: 95, reasons: ["Numéro de pourvoi identique"] };
-  }
-
-  // Case number overlap
-  if (a.caseNumbers.length > 0 && b.caseNumbers.length > 0) {
-    const overlap = a.caseNumbers.filter((n) => b.caseNumbers.includes(n));
-    if (overlap.length > 0) {
-      score += 40;
-      reasons.push(`Numéro(s) de dossier commun(s) : ${overlap.join(", ")}`);
-    }
+  // Une décision commune est la meilleure raison de LIRE la paire, jamais la preuve
+  // qu'elle est un doublon : une décision porte plusieurs chefs, donc plusieurs
+  // fiches (#557). Le rang reste élevé, l'affirmation ne l'est plus, et le score ne
+  // déclenche aucune action : il filtre et il trie, un humain tranche.
+  const shared = sharedDecisionRefs(a, b);
+  if (shared.length > 0) {
+    score += 60;
+    reasons.push(
+      `Décision commune (${shared.join(", ")}) : à départager, chefs distincts possibles`
+    );
   }
 
   // Title similarity — normalized word overlap
@@ -171,9 +177,9 @@ export const GET = withAdminAuth(async (_request: NextRequest, context) => {
       category: true,
       involvement: true,
       publicationStatus: true,
-      ecli: true,
-      pourvoiNumber: true,
-      caseNumbers: true,
+      courtDecisions: {
+        select: { courtDecision: { select: { ecli: true, pourvoiNumber: true } } },
+      },
       factsDate: true,
       startDate: true,
       verdictDate: true,
@@ -211,8 +217,7 @@ export const GET = withAdminAuth(async (_request: NextRequest, context) => {
         category: a.category,
         involvement: a.involvement,
         publicationStatus: a.publicationStatus,
-        ecli: a.ecli,
-        pourvoiNumber: a.pourvoiNumber,
+        decisionRefs: a.courtDecisions.map((l) => l.courtDecision),
         factsDate: a.factsDate?.toISOString() || null,
         startDate: a.startDate?.toISOString() || null,
         verdictDate: a.verdictDate?.toISOString() || null,

@@ -38,7 +38,6 @@ interface AffairItem {
   status: string;
   category: string;
   publicationStatus: PublicationStatus;
-  ecli: string | null;
   createdAt: string;
   politician: {
     id: string;

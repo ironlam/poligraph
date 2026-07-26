@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { Fragment, useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateShort } from "@/lib/utils";
@@ -34,8 +34,7 @@ interface DuplicateAffair {
   category: string;
   involvement: string;
   publicationStatus: string;
-  ecli: string | null;
-  pourvoiNumber: string | null;
+  decisionRefs?: Array<{ ecli: string | null; pourvoiNumber: string | null }>;
   factsDate: string | null;
   startDate: string | null;
   verdictDate: string | null;
@@ -146,19 +145,14 @@ function AffairCard({
         <dt className="text-muted-foreground">Sources</dt>
         <dd className="font-medium">{affair.sourceCount}</dd>
 
-        {affair.ecli && (
-          <>
-            <dt className="text-muted-foreground">ECLI</dt>
-            <dd className="font-mono text-[10px] break-all">{affair.ecli}</dd>
-          </>
-        )}
-
-        {affair.pourvoiNumber && (
-          <>
-            <dt className="text-muted-foreground">Pourvoi</dt>
-            <dd className="font-mono text-[10px]">{affair.pourvoiNumber}</dd>
-          </>
-        )}
+        {(affair.decisionRefs ?? []).map((ref, index) => (
+          <Fragment key={`${ref.ecli ?? ""}-${ref.pourvoiNumber ?? ""}-${index}`}>
+            <dt className="text-muted-foreground">Décision</dt>
+            <dd className="font-mono text-[10px] break-all">
+              {[ref.pourvoiNumber, ref.ecli].filter(Boolean).join(" · ") || "sans référence"}
+            </dd>
+          </Fragment>
+        ))}
       </dl>
 
       {/* Sources list */}

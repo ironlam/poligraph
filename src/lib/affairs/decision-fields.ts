@@ -1,9 +1,14 @@
 /**
- * Dual read of the identifiers that moved to `CourtDecision` (#536).
+ * Read of the identifiers that live on `CourtDecision` (#536, #545).
  *
- * During the transition an affair may carry a historical value, be linked to a
- * decision that carries it, or both. This module decides which one a flat field
- * shows, and refuses to invent one when the answer is genuinely plural.
+ * It used to be a dual read, preferring the affair's own historical value and falling
+ * back to the linked decision. #545 removed the affair side: nothing writes those
+ * columns any more, so keeping them as a preferred source would freeze whatever a
+ * backfill happened to leave there. The linked decisions are now the only source.
+ *
+ * Measured before the switch on the 340 published affairs: 3 carry a pourvoi number,
+ * and each is linked to exactly one decision carrying the same value, so no displayed
+ * value changes. What changes is provenance, from `affair` to `decision`.
  *
  * Two fields are deliberately absent: `court` and `verdictDate` stay editorial and
  * are always read from `Affair`. Measured on the base, 23.7 % of `Affair.court`
@@ -15,6 +20,10 @@
  */
 
 /** Where a displayed value came from, so a caller can label or debug it. */
+/**
+ * `affair` is no longer produced (#545): it survives in the type so a stored or
+ * logged value from before the switch still parses.
+ */
 export type DecisionFieldSource = "affair" | "decision" | "ambiguous" | "absent";
 
 export interface ResolvedDecisionField<T> {
@@ -32,25 +41,15 @@ export interface DecisionFieldCarrier {
 /**
  * Picks the value a flat field should show.
  *
- * Order, and the reasoning behind it:
- *
- * 1. **The affair's own value wins.** It was written or validated by moderation, so
- *    it is the editorial record and must not be overridden by a backfill.
- * 2. **One linked decision** and the affair says nothing: the decision's value fills
- *    the gap.
- * 3. **Several linked decisions**: no flat value at all. Choosing would mean picking
- *    one decision over another, and "the most recent" is the wrong default — on an
- *    affair covering first instance, appeal then cassation, the most recent is often
- *    a procedural rejection rather than the outcome a reader is looking for. The
- *    caller shows the list instead.
+ * **Several linked decisions mean no flat value at all.** Choosing would mean picking
+ * one decision over another, and "the most recent" is the wrong default — on an affair
+ * covering first instance, appeal then cassation, the most recent is often a
+ * procedural rejection rather than the outcome a reader is looking for. The caller
+ * shows the list instead.
  */
 export function resolveDecisionField<T>(
-  affairValue: T | null | undefined,
   decisionValues: Array<T | null | undefined>
 ): ResolvedDecisionField<T> {
-  if (affairValue !== null && affairValue !== undefined && affairValue !== "") {
-    return { value: affairValue, source: "affair" };
-  }
   // Ambiguity is about how many decisions are linked, not how many hold a value:
   // narrowing on the single non-null value would be exactly the implicit choice
   // this function exists to refuse.
@@ -80,22 +79,12 @@ export interface ResolvedDecisionFields {
  * `court` and `verdictDate` are not here on purpose: they remain read from `Affair`.
  */
 export function resolveDecisionFields(
-  affair: DecisionFieldCarrier,
   decisions: readonly DecisionFieldCarrier[]
 ): ResolvedDecisionFields {
   return {
-    ecli: resolveDecisionField(
-      affair.ecli,
-      decisions.map((d) => d.ecli)
-    ),
-    pourvoiNumber: resolveDecisionField(
-      affair.pourvoiNumber,
-      decisions.map((d) => d.pourvoiNumber)
-    ),
-    chamber: resolveDecisionField(
-      affair.chamber,
-      decisions.map((d) => d.chamber)
-    ),
+    ecli: resolveDecisionField(decisions.map((d) => d.ecli)),
+    pourvoiNumber: resolveDecisionField(decisions.map((d) => d.pourvoiNumber)),
+    chamber: resolveDecisionField(decisions.map((d) => d.chamber)),
     hasMultipleDecisions: decisions.length > 1,
     decisionCount: decisions.length,
   };

@@ -207,12 +207,12 @@ export default async function AffairDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // Double lecture des identifiants déplacés vers la décision (#536). `court` et
+  // Identifiants lus depuis les décisions rattachées (#545). `court` et
   // `verdictDate` restent lus depuis l'affaire : ils sont éditoriaux.
   const linkedDecisions = sortCourtDecisionsForDisplay(
     affair.courtDecisions.map((link) => link.courtDecision)
   );
-  const resolvedDecisionFields = resolveDecisionFields(affair, linkedDecisions);
+  const resolvedDecisionFields = resolveDecisionFields(linkedDecisions);
 
   const superCategory = CATEGORY_TO_SUPER[affair.category as AffairCategory];
   const certainty = getCertaintyLevel(affair.status);
