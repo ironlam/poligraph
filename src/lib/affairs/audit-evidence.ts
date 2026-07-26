@@ -60,6 +60,30 @@ export const PENDING_RECOURSE = [
 export const RECOURSE_EXHAUSTED =
   /rejet[^.]{0,40}pourvoi|pourvoi[^.]{0,40}(rejet|a [ée]t[ée] rejet)|d[ée]finitivement|caract[èe]re d[ée]finitif|voies de recours [ée]puis|condamnation est (aujourd'hui )?d[ée]finitive|devenue d[ée]finitive|rendant la condamnation d[ée]finitive/i;
 
+/**
+ * A sentence split between a firm part and a suspended part.
+ *
+ * `SentenceDetails` renders « (ferme) » as soon as `prisonSuspended` is not
+ * true, so a partly-suspended sentence stored as a plain total is published as
+ * if the whole term were firm. 15 fiches were in that state, some tripling the
+ * firm term of a named person, and none of them was flagged: the audit only
+ * compared the status against the recourse wording.
+ *
+ * Two shapes, because the corpus writes it both ways: « 4 ans dont 2 ferme »
+ * and « 4 ans ferme, 1 an avec sursis ». Kept close-range so an unrelated
+ * « dont » further down a description does not fire.
+ */
+const PARTLY_SUSPENDED = [
+  /\bdont\b[^.|]{0,60}(sursis|ferme)/i,
+  /\bferme\b[^.|]{0,60}sursis/i,
+  /\bsursis\b[^.|]{0,60}ferme/i,
+];
+
+/** True when the text describes a sentence that is not entirely firm. */
+export function describesPartlySuspendedSentence(text: string): boolean {
+  return PARTLY_SUSPENDED.some((re) => re.test(text));
+}
+
 export function describesPendingRecourse(description: string): boolean {
   if (RECOURSE_EXHAUSTED.test(description)) return false;
   return PENDING_RECOURSE.some((re) => re.test(description));
@@ -167,6 +191,9 @@ export function assess(affair: {
   verdictDate: Date | null;
   description: string | null;
   prisonMonths: number | null;
+  prisonSuspended?: boolean | null;
+  sentence?: string | null;
+  otherSentence?: string | null;
   fineAmount: unknown;
   ineligibilityMonths: number | null;
   sources: SourceRow[];
@@ -216,6 +243,20 @@ export function assess(affair: {
     if (latest > 0 && latest < affair.verdictDate.getTime()) {
       contradictions.push("toutes les sources précèdent la date du verdict");
     }
+  }
+
+  // A total shown as entirely firm while the fiche's own text splits it.
+  if (
+    affair.prisonMonths != null &&
+    affair.prisonMonths > 0 &&
+    affair.prisonSuspended === false &&
+    describesPartlySuspendedSentence(
+      [affair.otherSentence, affair.sentence, affair.description].filter(Boolean).join(" | ")
+    )
+  ) {
+    contradictions.push(
+      "peine affichée entièrement ferme alors que le texte décrit une part avec sursis"
+    );
   }
 
   const description = affair.description ?? "";

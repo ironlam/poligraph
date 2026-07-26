@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { assess, parseLedger, type SourceRow } from "@/lib/affairs/audit-evidence";
+import {
+  assess,
+  parseLedger,
+  describesPartlySuspendedSentence,
+  type SourceRow,
+} from "@/lib/affairs/audit-evidence";
 
 // #566 counted two different things under one name. `hasOfficialSource` only
 // looks at Source rows, while level A is granted on a linked CourtDecision, so
@@ -152,5 +157,82 @@ describe("the ledger stays readable across generations", () => {
     expect(parseLedger({}).done).toEqual([]);
     expect(parseLedger(null).done).toEqual([]);
     expect(parseLedger({ done: "not-an-array" }).done).toEqual([]);
+  });
+});
+
+// Regression on a defect the audit was blind to: `SentenceDetails` prints
+// « (ferme) » whenever `prisonSuspended` is not true, so a partly-suspended
+// sentence stored as a plain total is published as if the whole term were firm.
+// 15 published fiches were in that state; the wordings below are theirs.
+describe("detects a total shown as firm over a partly suspended sentence", () => {
+  const REAL_WORDINGS = [
+    "dont 48 mois de prison ferme, 12 mois avec sursis",
+    "4 ans ferme, 1 an avec sursis",
+    "2 ans de prison dont 1 ferme",
+    "6 mois ferme, 6 mois avec sursis",
+    "5 ans de prison dont 3 ans ferme",
+    "2 ans de prison dont 6 mois ferme",
+    "18 mois ferme (aménagé en détention à domicile) + 18 mois avec sursis",
+    "4 ans dont 2 ans ferme et 2 ans avec sursis",
+    "1 an ferme (aménagé en bracelet électronique) + 2 ans avec sursis",
+    "Le 31 mars 2025, il est condamné en première instance à 12 mois de prison dont 10 ferme",
+    "3 ans de prison dont 1 an ferme sous bracelet électronique",
+    "1 an de prison dont 6 mois ferme, aménagée sous bracelet électronique",
+    "2 ans de prison dont 1 an ferme avec aménagement",
+    "4 ans de prison dont 3 avec sursis",
+  ];
+
+  it.each(REAL_WORDINGS)("recognises %s", (wording) => {
+    expect(describesPartlySuspendedSentence(wording)).toBe(true);
+  });
+
+  // Both of these stayed firm in the corpus and must not be flagged.
+  it.each([
+    "2 ans de prison ferme, 50 000 € d'amende, 5 ans d'inéligibilité",
+    "1ère instance : 5 ans de prison ferme avec exécution provisoire",
+    "3 ans d'emprisonnement intégralement assortis du sursis",
+  ])("leaves %s alone", (wording) => {
+    expect(describesPartlySuspendedSentence(wording)).toBe(false);
+  });
+
+  it("flags the affair as contradictory, whichever field carries the wording", () => {
+    for (const field of ["otherSentence", "sentence", "description"] as const) {
+      const a = affair({
+        prisonMonths: 48,
+        prisonSuspended: false,
+        [field]: "4 ans dont 2 ans ferme et 2 ans avec sursis",
+      });
+      expect(a.contradictions, `via ${field}`).toContain(
+        "peine affichée entièrement ferme alors que le texte décrit une part avec sursis"
+      );
+      expect(a.level).toBe("D");
+    }
+  });
+
+  it("says nothing when the sentence is recorded as suspended", () => {
+    const a = affair({
+      prisonMonths: 48,
+      prisonSuspended: true,
+      otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
+    });
+    expect(a.contradictions).toEqual([]);
+  });
+
+  it("says nothing once the unrepresentable figure has been removed", () => {
+    const a = affair({
+      prisonMonths: null,
+      prisonSuspended: null,
+      otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
+    });
+    expect(a.contradictions).toEqual([]);
+  });
+
+  it("says nothing for a genuinely firm sentence", () => {
+    const a = affair({
+      prisonMonths: 24,
+      prisonSuspended: false,
+      otherSentence: "2 ans de prison ferme, 50 000 € d'amende",
+    });
+    expect(a.contradictions).toEqual([]);
   });
 });
