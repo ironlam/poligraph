@@ -71,9 +71,16 @@ const PENDING_RECOURSE = [
   /n['’]est pas d[ée]finitive/i,
 ];
 
-/** Recours épuisés, énoncé explicitement. Annule le signal de pendance. */
+/**
+ * Recours épuisés, énoncé explicitement. Annule le signal de pendance.
+ *
+ * La forme simple « la condamnation est définitive » a été ajoutée après un faux
+ * signalement : le motif ne reconnaissait que l'adverbe « définitivement » et
+ * « caractère définitif ». La négation « n'est pas définitive » ne peut pas matcher,
+ * le « n'est pas » s'intercalant entre les deux mots recherchés.
+ */
 const RECOURSE_EXHAUSTED =
-  /rejet[^.]{0,40}pourvoi|pourvoi[^.]{0,40}(rejet|a [ée]t[ée] rejet)|d[ée]finitivement|caract[èe]re d[ée]finitif|voies de recours [ée]puis/i;
+  /rejet[^.]{0,40}pourvoi|pourvoi[^.]{0,40}(rejet|a [ée]t[ée] rejet)|d[ée]finitivement|caract[èe]re d[ée]finitif|voies de recours [ée]puis|condamnation est (aujourd'hui )?d[ée]finitive|devenue d[ée]finitive|rendant la condamnation d[ée]finitive/i;
 
 function describesPendingRecourse(description: string): boolean {
   if (RECOURSE_EXHAUSTED.test(description)) return false;
