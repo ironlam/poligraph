@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { cacheTag, cacheLife } from "next/cache";
+import { connection } from "next/server";
 import { Prisma } from "@/generated/prisma";
 import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
@@ -20,6 +21,14 @@ export async function generateSitemaps() {
 export default async function sitemap(props: {
   id: Promise<string>;
 }): Promise<MetadataRoute.Sitemap> {
+  // Render the envelope per request. Measured in production: the shards were
+  // served as static artefacts (`accept-ranges: bytes`, no `x-nextjs-prerender`,
+  // query string ignored in the cache key), so tag invalidation never reached
+  // them and a depublished affair stayed announced — as did the absence of a
+  // newly published one. The data itself stays cached and tagged in the
+  // builders below, so this costs a serialisation, not a query (#572).
+  await connection();
+
   const id = Number(await props.id);
   switch (id) {
     case 0:
