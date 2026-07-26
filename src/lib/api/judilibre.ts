@@ -6,6 +6,7 @@
  */
 
 import { HTTPClient, HTTPError } from "./http-client";
+import { foldJudicialReference } from "@/lib/affairs/judicial-reference";
 import { JUDILIBRE_RATE_LIMIT_MS } from "@/config/rate-limits";
 
 // ============================================
@@ -23,19 +24,53 @@ export interface JudilibreSearchResult {
 
 export interface JudilibreDecisionSummary {
   id: string;
-  ecli: string;
+  /**
+   * Absent on historical decisions: ECLI was introduced in France around 2012, and
+   * the API omits the field entirely rather than returning an empty string. Verified
+   * against a 1997 decision (no `ecli` key) and a 2026 one (`ECLI:FR:CCASS:2026:…`).
+   */
+  ecli?: string;
   number: string; // N° pourvoi principal
   numbers: string[]; // Tous les n° pourvoi
   decision_date: string; // YYYY-MM-DD
-  chamber: string;
-  solution: string; // "rejet", "cassation", "irrecevabilité"...
+  /** Taxonomy code, e.g. "cc" for Cour de cassation. */
+  jurisdiction: string;
+  chamber: string; // Taxonomy code, e.g. "cr"
+  solution: string; // Taxonomy code: "rejet", "cassation", "irrecevabilite"...
+  type: string; // Taxonomy code: "arret", "avis"...
   themes: string[];
   summary: string;
 }
 
+/**
+ * A full decision record.
+ *
+ * Field list taken from an actual response, not from the documentation: the API
+ * returns `jurisdiction`, `type`, `publication`, `timeline`, `visa`, `nac`,
+ * `portalis` and others that were previously undeclared, and returns no `zones`.
+ * Extra keys are kept accessible so the raw payload can be stored verbatim.
+ */
 export interface JudilibreDecision extends JudilibreDecisionSummary {
   text: string; // Texte intégral
-  zones: Record<string, { start: number; end: number }[]>;
+  publication?: string[];
+  source?: string;
+  update_date?: string;
+  [key: string]: unknown;
+}
+
+/** A taxonomy maps an API code to its official French label. */
+export type JudilibreTaxonomy = Record<string, string>;
+
+export type JudilibreTaxonomyId = "jurisdiction" | "chamber" | "solution" | "type";
+
+/**
+ * Public URL of a decision on the Cour de cassation site.
+ *
+ * The API returns no URL field, so it is built from the decision id. Verified to
+ * answer 200 for both a 1997 and a 2026 decision.
+ */
+export function buildJudilibreDecisionUrl(judilibreId: string): string {
+  return `https://www.courdecassation.fr/decision/${encodeURIComponent(judilibreId)}`;
 }
 
 interface OAuthTokenResponse {
@@ -69,6 +104,7 @@ export class JudilibreClient {
 
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
+  private taxonomyCache = new Map<JudilibreTaxonomyId, JudilibreTaxonomy>();
 
   constructor() {
     const baseUrl = process.env.JUDILIBRE_BASE_URL;
@@ -181,6 +217,64 @@ export class JudilibreClient {
       headers,
     });
     return response.data;
+  }
+
+  /**
+   * Official label table for a taxonomy, e.g. `chamber` → `{ cr: "Chambre criminelle" }`.
+   *
+   * Fetched rather than hardcoded so the labels shown to readers are the ones the
+   * Cour de cassation publishes. Cached for the client's lifetime: the taxonomies
+   * change on the scale of institutional reform, not of a sync run.
+   */
+  async getTaxonomy(id: JudilibreTaxonomyId): Promise<JudilibreTaxonomy> {
+    const cached = this.taxonomyCache.get(id);
+    if (cached) return cached;
+
+    const headers = await this.getAuthHeaders();
+    const response = await this.httpClient.get<{ result?: JudilibreTaxonomy }>(
+      `/taxonomy?id=${encodeURIComponent(id)}`,
+      { headers }
+    );
+    const taxonomy = response.data?.result ?? {};
+    this.taxonomyCache.set(id, taxonomy);
+    return taxonomy;
+  }
+
+  /**
+   * Decisions carrying exactly this pourvoi number.
+   *
+   * `/search` is full-text, so its hits are candidates, not answers: the results are
+   * filtered down to those whose own `numbers` contain the requested reference, after
+   * normalisation. Without that filter a near-miss would be handed back as a match.
+   *
+   * Returns a list because a pourvoi is not unique — it can produce a rejection, a
+   * partial cassation and a remand. Deciding between them is the caller's job.
+   */
+  async findDecisionsByPourvoiNumber(pourvoiNumber: string): Promise<JudilibreDecisionSummary[]> {
+    const wanted = foldJudicialReference(pourvoiNumber);
+    if (!wanted) return [];
+
+    const { results } = await this.searchDecisions(pourvoiNumber);
+    return results.filter((decision) => {
+      const numbers = decision.numbers?.length ? decision.numbers : [decision.number];
+      return numbers.some((n) => n && foldJudicialReference(n) === wanted);
+    });
+  }
+
+  /**
+   * The decision carrying exactly this ECLI, or null.
+   *
+   * An ECLI identifies one decision, so a single result is expected; anything that
+   * does not match exactly is discarded rather than returned as a near miss.
+   */
+  async findDecisionByEcli(ecli: string): Promise<JudilibreDecisionSummary | null> {
+    const wanted = foldJudicialReference(ecli);
+    if (!wanted) return null;
+
+    const { results } = await this.searchDecisions(ecli);
+    return (
+      results.find((decision) => foldJudicialReference(decision.ecli ?? "") === wanted) ?? null
+    );
   }
 
   /**

@@ -14,6 +14,7 @@
 
 import { db, type DbTransactionClient } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
+import { foldJudicialReference } from "@/lib/affairs/judicial-reference";
 
 /**
  * Strips every separator from a pourvoi number so two spellings of the same
@@ -23,14 +24,7 @@ import type { Prisma } from "@/generated/prisma";
  * never to decide that two rows are the same decision.
  */
 export function normalizePourvoiNumber(raw: string): string {
-  return (
-    raw
-      .normalize("NFD")
-      // \p{Mn} keeps this ASCII-only: a literal combining-mark range is invisible in source.
-      .replace(/\p{Mn}/gu, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-  );
+  return foldJudicialReference(raw);
 }
 
 export interface CreateCourtDecisionInput {

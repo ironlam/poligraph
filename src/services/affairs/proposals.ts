@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalJson, hashSourceContent } from "@/lib/hash/canonical";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import type { ProposalRisk, SourceType } from "@/generated/prisma";
@@ -119,21 +120,6 @@ export function normalizeForCompare(value: unknown): string {
   return String(value);
 }
 
-/** Deterministic JSON: keys sorted at every depth, so hashing is stable. */
-function canonicalJson(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value instanceof Date) return JSON.stringify(value.toISOString());
-  if (Prisma.Decimal.isDecimal(value)) return JSON.stringify(value.toString());
-  if (typeof value === "object") {
-    const entries = Object.keys(value as Record<string, unknown>)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`);
-    return `{${entries.join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 function normalizeRecord(record: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of Object.keys(record).sort()) {
@@ -142,10 +128,8 @@ function normalizeRecord(record: Record<string, unknown>): Record<string, string
   return out;
 }
 
-/** Stable hash of a raw source payload, for sourceContentHash. */
-export function hashSourceContent(payload: unknown): string {
-  return createHash("sha256").update(canonicalJson(payload)).digest("hex");
-}
+/** Re-exported so existing callers keep importing it from here. */
+export { hashSourceContent };
 
 // ─── Hashing ─────────────────────────────────────────────────────
 
