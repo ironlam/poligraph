@@ -36,7 +36,27 @@ export const unlinkCourtDecisionSchema = z.object({
   confirmed: z.literal(true),
 });
 
+/**
+ * Targeted Judilibre enrichment of one existing decision (#337).
+ *
+ * The input is a reference, never a person's name: searching the pseudonymised
+ * corpus by name is the retired pipeline, and no field here can express it. At
+ * least one reference is required, checked below rather than left to the route.
+ */
+export const enrichCourtDecisionSchema = z
+  .object({
+    judilibreId: z.string().min(1).max(64).optional(),
+    ecli: z.string().min(1).max(120).optional(),
+    pourvoiNumber: z.string().min(1).max(60).optional(),
+    /** Explicit: enrichment writes official fields onto a publicly rendered decision. */
+    confirmed: z.literal(true),
+  })
+  .refine((v) => Boolean(v.judilibreId || v.ecli || v.pourvoiNumber), {
+    message: "Fournir au moins une référence : identifiant Judilibre, ECLI ou numéro de pourvoi.",
+  });
+
 export type CourtDecisionSearchQuery = z.infer<typeof courtDecisionSearchSchema>;
+export type EnrichCourtDecisionBody = z.infer<typeof enrichCourtDecisionSchema>;
 export type LinkCourtDecisionBody = z.infer<typeof linkCourtDecisionSchema>;
 export type UpdateCourtDecisionLinkBody = z.infer<typeof updateCourtDecisionLinkSchema>;
 export type UnlinkCourtDecisionBody = z.infer<typeof unlinkCourtDecisionSchema>;

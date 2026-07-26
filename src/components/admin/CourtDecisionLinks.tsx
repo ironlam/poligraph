@@ -1,18 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ExternalLink, Loader2, Search, Unlink } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, Loader2, Search, Unlink } from "lucide-react";
 
 /**
  * Manage the links between an affair and existing court decisions (#536).
  *
- * Links only. Nothing here creates, edits or deletes a decision: that belongs to
- * #337, once the identity rules are settled. A search by pourvoi number always shows
- * every candidate, because a pourvoi can produce several decisions.
+ * Links only. Nothing here creates or deletes a decision. A linked decision can be
+ * refreshed from Judilibre (#337): that rewrites the decision's own official fields,
+ * never the affair. A search by pourvoi number always shows every candidate, because
+ * a pourvoi can produce several decisions.
  */
 
 interface DecisionSummary {
@@ -84,6 +86,8 @@ export function CourtDecisionLinks({ affairId, initialLinks }: Props) {
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setLinks(initialLinks);
@@ -183,6 +187,43 @@ export function CourtDecisionLinks({ affairId, initialLinks }: Props) {
     [affairId, call]
   );
 
+  const enrich = useCallback(
+    async (decision: LinkedDecision) => {
+      const reference = decision.ecli ?? decision.pourvoiNumber;
+      if (!reference) {
+        setError("Cette décision n'a aucune référence à interroger.");
+        return;
+      }
+      const confirmed = window.confirm(
+        `Récupérer « ${reference} » depuis Judilibre ?\n\n` +
+          `Les champs officiels de la décision (juridiction, chambre, date, sens, ECLI) ` +
+          `seront écrits depuis la réponse de l'API et deviendront visibles sur la fiche ` +
+          `publique. L'affaire elle-même n'est pas modifiée.`
+      );
+      if (!confirmed) return;
+
+      setNotice(null);
+      const body = decision.ecli
+        ? { ecli: decision.ecli, confirmed: true }
+        : { pourvoiNumber: decision.pourvoiNumber, confirmed: true };
+      const data = await call(
+        `/api/admin/court-decisions/${decision.id}/enrich`,
+        { method: "POST", body: JSON.stringify(body) },
+        decision.id
+      );
+      if (!data) return;
+
+      if (data.status === "UNCHANGED") {
+        setNotice("Déjà à jour : la réponse officielle est identique à ce qui est enregistré.");
+        return;
+      }
+      const count = Array.isArray(data.changes) ? data.changes.length : 0;
+      setNotice(`${count} champ(s) mis à jour depuis Judilibre.`);
+      router.refresh();
+    },
+    [call, router]
+  );
+
   return (
     <section className="space-y-4">
       <header>
@@ -201,6 +242,12 @@ export function CourtDecisionLinks({ affairId, initialLinks }: Props) {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
+      )}
+
+      {notice && (
+        <p role="status" className="rounded-md border bg-muted/40 p-3 text-sm">
+          {notice}
+        </p>
       )}
 
       {links.length === 0 ? (
@@ -232,6 +279,20 @@ export function CourtDecisionLinks({ affairId, initialLinks }: Props) {
                     onClick={() => saveNote(decision.id)}
                   >
                     Enregistrer la note
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy === decision.id || !(decision.ecli || decision.pourvoiNumber)}
+                    onClick={() => enrich(decision)}
+                    title={
+                      decision.ecli || decision.pourvoiNumber
+                        ? undefined
+                        : "Aucune référence à interroger"
+                    }
+                  >
+                    <Download className="mr-1 h-3 w-3" aria-hidden="true" />
+                    Enrichir depuis Judilibre
                   </Button>
                   <Button
                     size="sm"
