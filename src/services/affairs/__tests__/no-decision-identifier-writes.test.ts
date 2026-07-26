@@ -149,6 +149,30 @@ describe("garde : aucune écriture d'identifiant de décision sur Affair (#545)"
     expect(offenders).toEqual([]);
   });
 
+  it("aucun SQL brut ne référence une colonne retirée", () => {
+    // Le trou que ce garde n'avait pas vu : un `$queryRaw` cite les colonnes en
+    // chaîne SQL, pas en syntaxe objet Prisma, donc le motif d'assignation passe à
+    // côté. Un `COUNT(*) … WHERE "ecli" IS NULL` sur Affair a cassé le build.
+    // `chamber` est exclu : le nom est partagé avec Scrutin, Amendment et Vote, où
+    // il désigne une chambre parlementaire. Le client Prisma généré aussi.
+    const unambiguous = DECISION_IDENTIFIERS.filter((f) => f !== "chamber");
+    const offenders: string[] = [];
+    const files = [...collect("src"), ...collect("scripts")].filter(
+      (f) => !f.includes("/generated/")
+    );
+
+    for (const file of files) {
+      const source = stripComments(readFileSync(file, "utf8"));
+      if (!/\$(?:query|execute)Raw/.test(source)) continue;
+      for (const field of unambiguous) {
+        // La colonne citée entre guillemets doubles, comme Postgres l'exige.
+        if (new RegExp(`"${field}"`).test(source)) offenders.push(`${relative(file)} → "${field}"`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it("ne prétend pas couvrir les champs éditoriaux", () => {
     // Rend explicite ce que ce garde ne dit pas, pour qu'on ne le lise pas comme
     // une interdiction d'écrire court ou verdictDate.

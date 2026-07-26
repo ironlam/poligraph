@@ -49,7 +49,12 @@ async function getDashboardData() {
       COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED' AND "biography" IS NULL)  AS without_bio,
       (SELECT COUNT(*) FROM "Affair")                                                    AS total_affairs,
       (SELECT COUNT(*) FROM "Affair" WHERE "publicationStatus" = 'DRAFT')                AS draft_affairs,
-      (SELECT COUNT(*) FROM "Affair" WHERE "publicationStatus" = 'PUBLISHED' AND "ecli" IS NULL) AS without_ecli
+      -- « Sans référence judiciaire » se mesure sur les décisions rattachées : la
+      -- colonne ecli a été retirée d'Affair (#545).
+      (SELECT COUNT(*) FROM "Affair" a
+        WHERE a."publicationStatus" = 'PUBLISHED'
+          AND NOT EXISTS (SELECT 1 FROM "AffairCourtDecision" acd WHERE acd."affairId" = a.id)
+      ) AS without_ecli
     FROM "Politician"
   `;
 
