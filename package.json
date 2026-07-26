@@ -122,6 +122,7 @@
     "sync:factchecks": "tsx scripts/sync-factchecks.ts",
     "sync:factchecks:stats": "tsx scripts/sync-factchecks.ts --stats",
     "judilibre:diagnostics": "tsx scripts/judilibre-diagnostics.ts",
+    "enrich:court-decisions": "tsx scripts/enrich-court-decisions-judilibre.ts",
     "sync:press-analysis": "tsx scripts/sync-press-analysis.ts",
     "reconcile:affairs": "tsx scripts/reconcile-affairs.ts",
     "discover:affairs": "tsx scripts/discover-affairs.ts",
