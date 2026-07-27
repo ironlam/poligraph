@@ -72,10 +72,10 @@ export function KeyVoteCard({
         )}
 
         <Link href={href} prefetch={false} className="hover:underline">
-          <p className="font-medium text-sm line-clamp-2 mb-2">
+          <p className="font-medium text-base mb-2">
             {heading}
             {isPolicy && (
-              <Badge variant="accent" className="ml-1.5 align-middle text-[10px] font-medium">
+              <Badge variant="accent" className="ml-1.5 align-middle text-xs font-medium">
                 Titre explicatif
               </Badge>
             )}

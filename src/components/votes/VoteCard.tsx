@@ -96,7 +96,7 @@ export function VoteCard({
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
             <Link href={href} prefetch={false} className="hover:underline">
-              <p className="font-medium text-sm line-clamp-2">
+              <p className="font-medium text-base">
                 {scrutinNumber && (
                   <span className="font-mono text-xs text-muted-foreground mr-1.5">
                     Scrutin n°{scrutinNumber}
@@ -104,7 +104,7 @@ export function VoteCard({
                 )}
                 {heading}
                 {isPolicy && (
-                  <Badge variant="accent" className="ml-1.5 align-middle text-[10px] font-medium">
+                  <Badge variant="accent" className="ml-1.5 align-middle text-xs font-medium">
                     Titre explicatif
                   </Badge>
                 )}
@@ -145,7 +145,7 @@ export function VoteCard({
                   {total} votants
                 </span>
               )}
-              <span className="text-muted-foreground/60">{legislature}e législature</span>
+              <span className="text-muted-foreground">{legislature}e législature</span>
             </div>
             {dossier?.slug && (
               <Link
@@ -167,6 +167,7 @@ export function VoteCard({
                 rel="noopener noreferrer"
                 className="text-muted-foreground hover:text-foreground"
                 title="Voir sur NosDéputés.fr"
+                aria-label="Voir le scrutin sur NosDéputés.fr (nouvelle fenêtre)"
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
