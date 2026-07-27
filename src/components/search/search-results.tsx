@@ -68,11 +68,6 @@ export interface GlobalSearchResponse {
   }>;
 }
 
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "...";
-}
-
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("fr-FR", {
     day: "numeric",
@@ -102,7 +97,7 @@ export function categorizeResults(data: GlobalSearchResponse): SearchResultCateg
       label: "Votes",
       results: data.scrutins.map((s) => ({
         href: `/parlement/votes/${s.slug ?? s.id}`,
-        primary: truncate(s.title, 80),
+        primary: s.title,
         secondary: [
           CHAMBER_LABELS[s.chamber as keyof typeof CHAMBER_LABELS] ?? s.chamber,
           formatDate(s.votingDate),
@@ -134,7 +129,7 @@ export function categorizeResults(data: GlobalSearchResponse): SearchResultCateg
       label: "Dossiers",
       results: data.dossiers.map((d) => ({
         href: `/parlement/dossiers/${d.slug}`,
-        primary: truncate(d.shortTitle ?? d.title, 80),
+        primary: d.shortTitle ?? d.title,
         secondary: d.status,
       })),
     },
@@ -143,7 +138,7 @@ export function categorizeResults(data: GlobalSearchResponse): SearchResultCateg
       label: "Fact-checks",
       results: data.factchecks.map((f) => ({
         href: `/factchecks/${f.slug}`,
-        primary: truncate(f.title, 80),
+        primary: f.title,
         secondary: f.source,
       })),
     },

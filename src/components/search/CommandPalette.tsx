@@ -374,16 +374,16 @@ export function CommandPalette() {
                             <CategoryIcon categoryKey={category.key} />
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">{result.primary}</div>
+                            <div className="text-base font-medium">{result.primary}</div>
                             {result.secondary && (
-                              <div className="truncate text-xs text-muted-foreground">
+                              <div className="text-xs text-muted-foreground">
                                 {result.secondary}
                               </div>
                             )}
                           </div>
                           {result.badge && (
                             <span
-                              className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+                              className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
                               style={
                                 result.badgeColor
                                   ? {

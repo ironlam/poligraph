@@ -539,7 +539,7 @@ function AffairRow({ result }: { result: AffairResult }) {
     >
       <Scale className="h-4 w-4 text-amber-500/60 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-sm leading-snug">{result.title}</span>
+        <span className="font-medium text-base leading-snug">{result.title}</span>
         <span className="block text-xs text-muted-foreground">{result.politicianName}</span>
       </div>
       <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 hidden sm:inline">
@@ -556,11 +556,11 @@ function ScrutinRow({ result }: { result: ScrutinResult }) {
       className="flex items-start gap-3 py-3 hover:bg-accent/40 rounded-lg transition-colors px-3 -mx-3"
       prefetch={false}
     >
-      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0 mt-0.5">
+      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0 mt-0.5">
         {CHAMBER_SHORT_LABELS[result.chamber]}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="font-medium text-sm leading-snug">{result.title}</span>
+        <span className="font-medium text-base leading-snug">{result.title}</span>
         <span className="block text-xs text-muted-foreground mt-0.5">
           {formatDateShort(result.votingDate)}
         </span>
@@ -584,7 +584,7 @@ function FactCheckRow({ result }: { result: FactCheckResult }) {
         aria-hidden="true"
       />
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-sm leading-snug">{result.title}</span>
+        <span className="font-medium text-base leading-snug">{result.title}</span>
         <span className="block text-xs text-muted-foreground">
           {result.source}
           {result.politicianName && ` · ${result.politicianName}`}
@@ -614,7 +614,7 @@ function DossierRow({ result }: { result: DossierResult }) {
     >
       <FileText className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-sm leading-snug">
+        <span className="font-medium text-base leading-snug">
           {result.shortTitle || result.title}
         </span>
         {result.filingDate && (
