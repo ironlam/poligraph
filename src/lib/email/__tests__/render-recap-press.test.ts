@@ -37,16 +37,13 @@ describe("buildPressStoriesHtml", () => {
     expect(html).toContain("Le Monde");
   });
 
-  it("includes the AI summary when present", () => {
+  it("never renders the AI summary, even when present (press neighbouring rights)", () => {
     const html = buildPressStoriesHtml([baseStory]);
-    expect(html).toContain("Un plan ambitieux annoncé.");
-  });
-
-  it("omits the summary block when aiSummary is null", () => {
-    const story: PressStory = { ...baseStory, aiSummary: null };
-    const html = buildPressStoriesHtml([story]);
-    expect(html).toContain("Le gouvernement annonce un plan");
+    expect(html).not.toContain("Un plan ambitieux annoncé.");
     expect(html).not.toContain("font-style: italic");
+    // We link, we don't reproduce: title and source stay, summary never appears.
+    expect(html).toContain("Le gouvernement annonce un plan");
+    expect(html).toContain('href="https://lemonde.fr/article/1"');
   });
 
   it("escapes HTML in story title", () => {

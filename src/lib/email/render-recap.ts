@@ -201,13 +201,11 @@ export function buildPressStoriesHtml(stories: PressStory[]): string {
       const title = escapeHtml(s.title);
       const feedSource = escapeHtml(s.feedSource);
       const dateLabel = formatDateShort(s.publishedAt);
-      const summary = s.aiSummary
-        ? `<p style="margin: 4px 0 0; font-style: italic; font-size: 13px; color: #374151;">${escapeHtml(s.aiSummary)}</p>`
-        : "";
+      // AI summary intentionally not rendered: link, don't reproduce
+      // (press-publisher neighbouring rights). Title + source + link only.
       return `<div style="padding: 10px 0; border-bottom: 1px solid #f3f4f6;">
         <p style="margin: 0; font-weight: 600;"><a href="${s.url}" style="color: #1e3a5f; text-decoration: none;">${title}</a></p>
         <p style="margin: 2px 0 0; font-size: 12px; color: #6b7280;">${feedSource} · ${dateLabel}</p>
-        ${summary}
       </div>`;
     })
     .join("");

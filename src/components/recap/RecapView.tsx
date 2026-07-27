@@ -16,7 +16,6 @@ import { PLATFORM_UPDATE_TYPE_LABELS, PLATFORM_UPDATE_TYPE_ICONS } from "@/confi
 import { CERTAINTY_LABELS, CERTAINTY_COLORS, type CertaintyLevel } from "@/config/certainty";
 import { NewsletterCTA } from "@/app/recap/NewsletterCTA";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { PressStoriesGrid } from "./PressStoriesGrid";
 import { RecapShareBlock } from "./RecapShareBlock";
 import { SITE_URL } from "@/config/site";
 
@@ -404,9 +403,8 @@ export function RecapView({ weekStart, data }: RecapViewProps) {
                     semaine.
                   </p>
 
-                  {data.press.storiesOfTheWeek.length > 0 ? (
-                    <PressStoriesGrid stories={data.press.storiesOfTheWeek} />
-                  ) : null}
+                  {/* Press "stories of the week" hidden from the public recap for now
+                      (press-publisher neighbouring rights). We link, we don't reproduce. */}
 
                   <Link
                     href="/presse"
