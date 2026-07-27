@@ -26,6 +26,7 @@ interface VotesSectionProps {
       position: VotePosition;
       scrutin: {
         id: string;
+        slug: string | null;
         title: string;
         votingDate: Date | null;
         result: string | null;
@@ -182,13 +183,19 @@ export function VotesSection({
                       sourceUrl: null,
                       policyTitle: vote.scrutin.policyTitle,
                     });
+                    // Link the canonical slug URL, not the cuid: the id form
+                    // exists only as a 308 to the slug, so a whole profile's
+                    // worth of internal links used to point at redirects
+                    // ("Page avec redirection" in Search Console). Falls back
+                    // to the id for the handful of scrutins without a slug.
+                    const scrutinPath = vote.scrutin.slug ?? vote.scrutin.id;
                     return (
                       <div key={vote.id} className="group flex items-start gap-2 text-sm">
                         <span
                           className={`w-2 h-2 mt-1.5 shrink-0 rounded-full ${VOTE_POSITION_DOT_COLORS[vote.position]}`}
                         />
                         <Link
-                          href={`/parlement/votes/${vote.scrutin.id}`}
+                          href={`/parlement/votes/${scrutinPath}`}
                           prefetch={false}
                           className="flex-1 hover:underline"
                         >
@@ -203,7 +210,7 @@ export function VotesSection({
                           )}
                         </Link>
                         <VotePositionBadge position={vote.position} size="sm" />
-                        <CiteAnchor permalink={scrutinPermalink(vote.scrutin.id)} label="ce vote" />
+                        <CiteAnchor permalink={scrutinPermalink(scrutinPath)} label="ce vote" />
                       </div>
                     );
                   })}

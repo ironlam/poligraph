@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { RelationsClient } from "./RelationsClient";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
+import { getPoliticianIndexSignals } from "@/lib/seo/politician-index-signals";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -37,7 +39,10 @@ const getPoliticianBasic = cache(async function getPoliticianBasic(slug: string)
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const politician = await getPoliticianBasic(slug);
+  const [politician, signals] = await Promise.all([
+    getPoliticianBasic(slug),
+    getPoliticianIndexSignals(slug),
+  ]);
 
   if (!politician) {
     return { title: "Non trouvé" };
@@ -46,6 +51,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `Relations de ${politician.fullName} | Poligraph`,
     description: `Découvrez les relations politiques de ${politician.fullName} : gouvernement, entreprises, département, parcours partisan.`,
+    // Same gate as the profile: a bare RNE-imported mayor has no relations to
+    // show, so the tab must not be a second crawlable URL for a noindexed
+    // profile (issue #385).
+    ...(signals ? politicianRobotsMetadata(signals) : {}),
     alternates: { canonical: `/politiques/${slug}/relations` },
   };
 }

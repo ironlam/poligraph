@@ -70,6 +70,10 @@ async function getVoteStats(politicianId: string) {
         scrutin: {
           select: {
             id: true,
+            // Slug drives the link: /parlement/votes/<cuid> only 308s to the
+            // slug URL, so linking by id made every "Derniers votes" row an
+            // internal redirect hop for crawlers.
+            slug: true,
             title: true,
             votingDate: true,
             result: true,

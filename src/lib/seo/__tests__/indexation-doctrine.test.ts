@@ -11,6 +11,7 @@ import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
 import { voteDateArchiveRobotsMetadata } from "../parliament-robots";
 import { OG_IMAGE_ROBOTS_SOURCE } from "../og-image-robots";
+import { API_NOINDEX_HEADERS, API_ROBOTS_SOURCE } from "../api-robots";
 import {
   AFFAIRES_LISTING_FILTER_KEYS,
   POLITIQUES_LISTING_FILTER_KEYS,
@@ -173,5 +174,56 @@ describe("doctrine — opengraph-image assets stay noindexed", () => {
   });
   it("leaves the parent page indexable", () => {
     expect(re.test("/parlement/votes/loi")).toBe(false);
+  });
+});
+
+describe("doctrine — /api endpoints stay noindexed", () => {
+  const require = createRequire(import.meta.url);
+  const { pathToRegexp } = require("next/dist/compiled/path-to-regexp") as {
+    pathToRegexp: (path: string, keys?: unknown[], opts?: Record<string, unknown>) => RegExp;
+  };
+  const re = pathToRegexp(API_ROBOTS_SOURCE, [], {
+    delimiter: "/",
+    sensitive: false,
+    strict: false,
+  });
+
+  it("tags every rule with X-Robots-Tag: noindex", () => {
+    expect(API_NOINDEX_HEADERS.length).toBeGreaterThan(0);
+    for (const rule of API_NOINDEX_HEADERS) {
+      expect(rule.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex" });
+    }
+  });
+
+  it.each(["/api/export/politiques", "/api/export/factchecks", "/api/docs", "/api/chat"])(
+    "noindexes API endpoint %s",
+    (path) => {
+      expect(re.test(path)).toBe(true);
+    }
+  );
+
+  // The human-readable API documentation is a real page and must stay indexable.
+  it.each(["/docs/api", "/statistiques"])("leaves real page %s indexable", (path) => {
+    expect(re.test(path)).toBe(false);
+  });
+});
+
+// The profile sub-tabs reuse the profile's own richness predicate, so a bare
+// RNE-imported mayor cannot leave two extra crawlable URLs behind. Guarded at
+// the source level: the pages must call politicianRobotsMetadata, not hardcode
+// their own rule.
+describe("doctrine — politician sub-tabs inherit the profile's indexability", () => {
+  it.each([
+    "src/app/politiques/[slug]/votes/page.tsx",
+    "src/app/politiques/[slug]/relations/page.tsx",
+  ])("%s applies politicianRobotsMetadata", (file) => {
+    const src = readFileSync(join(process.cwd(), file), "utf8");
+    expect(src).toContain("politicianRobotsMetadata");
+    expect(src).toContain("getPoliticianIndexSignals");
+  });
+
+  it("noindexes the sub-tabs of a bare mayor and leaves a député's indexable", () => {
+    expect(politicianRobotsMetadata(BARE_SMALL_MAYOR)).toEqual(NOINDEX_FOLLOW);
+    expect(politicianRobotsMetadata(RICH_DEPUTE)).toEqual(INDEXABLE);
   });
 });

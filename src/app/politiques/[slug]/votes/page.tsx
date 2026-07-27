@@ -15,6 +15,8 @@ import { ArrowLeft, ExternalLink, Info } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { feminizeRole, SCRUTIN_TYPE_LABELS, SCRUTIN_TYPE_COLORS } from "@/config/labels";
 import { getPoliticianVotingStats, getPoliticianVoteTabCounts } from "@/services/voteStats";
+import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
+import { getPoliticianIndexSignals } from "@/lib/seo/politician-index-signals";
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
 
@@ -128,7 +130,10 @@ async function getVotes(
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const politician = await getPolitician(slug);
+  const [politician, signals] = await Promise.all([
+    getPolitician(slug),
+    getPoliticianIndexSignals(slug),
+  ]);
 
   if (!politician) {
     return { title: "Politicien non trouvé" };
@@ -137,6 +142,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `Votes de ${politician.fullName}`,
     description: `Historique complet des votes parlementaires de ${politician.fullName} à l'Assemblée nationale.`,
+    // A sub-tab is never richer than its profile: when the profile is noindexed
+    // for lack of content (issue #385), the votes tab — empty for anyone who
+    // never sat in parliament — must not stay crawlable on its own.
+    ...(signals ? politicianRobotsMetadata(signals) : {}),
     alternates: { canonical: `/politiques/${slug}/votes` },
   };
 }

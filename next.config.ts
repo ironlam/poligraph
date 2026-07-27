@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { SITE_URL, SITE_HOSTNAME } from "./src/config/site";
 import { OG_IMAGE_NOINDEX_HEADERS } from "./src/lib/seo/og-image-robots";
+import { API_NOINDEX_HEADERS } from "./src/lib/seo/api-robots";
 import { buildSecurityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
@@ -73,6 +74,9 @@ const nextConfig: NextConfig = {
       // Keep auto-generated opengraph-image URLs out of the search index (they are
       // assets, not pages) while staying fetchable for social link previews.
       ...OG_IMAGE_NOINDEX_HEADERS,
+      // Same reasoning for /api: machine endpoints, publicly fetchable, never a
+      // search result. The human docs at /docs/api stay indexable.
+      ...API_NOINDEX_HEADERS,
     ];
   },
   async redirects() {

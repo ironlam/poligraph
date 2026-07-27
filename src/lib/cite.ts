@@ -16,5 +16,11 @@ export function buildAnchorUrl(anchorId: string): string {
   return `${SITE_URL}${pathname}${query}#${anchorId}`;
 }
 
-/** Absolute permalink to a scrutin detail page (used for recent-vote rows). */
-export const scrutinPermalink = (scrutinId: string) => `${SITE_URL}/parlement/votes/${scrutinId}`;
+/**
+ * Absolute permalink to a scrutin detail page (used for recent-vote rows).
+ * Pass the slug whenever there is one: `/parlement/votes/<cuid>` resolves only
+ * through a 308 to the slug URL, and a cited link should land on the canonical
+ * URL directly.
+ */
+export const scrutinPermalink = (scrutinSlugOrId: string) =>
+  `${SITE_URL}/parlement/votes/${scrutinSlugOrId}`;
