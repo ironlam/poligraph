@@ -97,7 +97,7 @@ export function DebouncedSearchInput({
         placeholder={placeholder}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-8 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 placeholder:text-muted-foreground"
+        className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-8 py-1 text-base md:text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 placeholder:text-muted-foreground"
       />
       {value && (
         <button
