@@ -109,7 +109,7 @@ async function checkUrl(url: string): Promise<{ ok: boolean; error?: string }> {
       method: "HEAD",
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; TransparencePolitique/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)",
       },
     });
 

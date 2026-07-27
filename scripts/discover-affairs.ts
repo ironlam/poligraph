@@ -25,6 +25,7 @@ import { mapWikidataOffense, getOffenseLabel } from "../src/config/wikidata-affa
 import { wikipediaService } from "../src/lib/api/wikipedia";
 import { extractAffairsFromWikipedia } from "../src/services/wikipedia-affair-extraction";
 import { findMatchingAffairs } from "../src/services/affairs/matching";
+import { createDraftAffairFromDiscovery } from "../src/services/affairs/create-draft";
 import { clampConfidenceScore } from "../src/services/affairs/confidence";
 import { extractDateFromUrl } from "../src/lib/extract-date-from-url";
 import {
@@ -49,7 +50,6 @@ interface DiscoveredAffair {
   court: string | null;
   charges: string[];
   confidenceScore: number;
-  publicationStatus: "PUBLISHED" | "DRAFT";
   sources: Array<{
     url: string;
     title: string;
@@ -70,7 +70,7 @@ interface DiscoveryStats {
   wikipediaAffairsFound: number;
   duplicatesSkipped: number;
   affairsCreated: number;
-  affairsPublished: number;
+  /** Toujours égal à affairsCreated : un importeur ne crée que des brouillons. */
   affairsDraft: number;
   errors: number;
 }
@@ -102,25 +102,6 @@ function extractPublisherFromUrl(url: string): string {
   } catch {
     return "Source inconnue";
   }
-}
-
-/**
- * Generate a unique affair slug, handling collisions.
- */
-async function generateUniqueAffairSlug(title: string): Promise<string> {
-  const baseSlug = generateSlug(title);
-  let slug = baseSlug;
-  let counter = 2;
-
-  while (await db.affair.findUnique({ where: { slug } })) {
-    const suffix = `-${counter}`;
-    const maxBaseLength = 120 - suffix.length;
-    const truncatedBase = baseSlug.slice(0, maxBaseLength).replace(/-$/, "");
-    slug = `${truncatedBase}${suffix}`;
-    counter++;
-  }
-
-  return slug;
 }
 
 // ============================================
@@ -181,8 +162,9 @@ async function runPhase1Wikidata(
           const { category, status } = mapWikidataOffense(offenseQid, prop);
           const label = getOffenseLabel(offenseQid);
 
+          // Le score sert à prioriser la revue humaine, pas à décider d'une
+          // mise en ligne : toute affaire découverte reste un brouillon.
           const isConviction = prop === "P1399";
-          const publicationStatus = isConviction ? "PUBLISHED" : "DRAFT";
           const confidence = isConviction ? 95 : 75;
           const titlePrefix = isConviction ? "" : "[À VÉRIFIER] ";
           const title = `${titlePrefix}${label} — ${politician.fullName}`;
@@ -199,7 +181,6 @@ async function runPhase1Wikidata(
             court: null,
             charges: [label],
             confidenceScore: clampConfidenceScore(confidence),
-            publicationStatus: publicationStatus as "PUBLISHED" | "DRAFT",
             sources: [
               {
                 url: `https://www.wikidata.org/wiki/${qid}`,
@@ -355,7 +336,6 @@ async function runPhase2Wikipedia(
             court: extracted.court,
             charges: extracted.charges,
             confidenceScore: clampConfidenceScore(extracted.confidenceScore),
-            publicationStatus: "DRAFT",
             sources,
             phase: "wikipedia",
           });
@@ -423,60 +403,40 @@ async function runPhase3Reconciliation(
       }
 
       if (dryRun) {
-        console.log(
-          `    [DRY] Créerait: ${affair.title} (${affair.category}, ${affair.publicationStatus})`
-        );
+        console.log(`    [DRY] Créerait (DRAFT): ${affair.title} (${affair.category})`);
         stats.affairsCreated++;
-        if (affair.publicationStatus === "PUBLISHED") {
-          stats.affairsPublished++;
-        } else {
-          stats.affairsDraft++;
-        }
+        stats.affairsDraft++;
         progress.tick();
         continue;
       }
 
-      // Generate unique slug
-      const slug = await generateUniqueAffairSlug(affair.title);
-
-      // Create affair with nested sources
-      await db.affair.create({
-        data: {
-          politicianId: affair.politicianId,
-          title: affair.title,
-          slug,
-          description: affair.description,
-          status: affair.status,
-          category: affair.category,
-          involvement: affair.involvement,
-          factsDate: affair.factsDate,
-          court: affair.court,
-          confidenceScore: affair.confidenceScore,
-          publicationStatus: affair.publicationStatus,
-          verifiedAt: affair.publicationStatus === "PUBLISHED" ? new Date() : null,
-          sources: {
-            create: affair.sources.map((s) => ({
-              url: s.url,
-              title: s.title,
-              publisher: s.publisher,
-              publishedAt: s.publishedAt ?? affair.factsDate ?? new Date(),
-              sourceType: s.sourceType,
-            })),
-          },
-        },
+      // Sas unique de création côté importeur : force DRAFT et verifiedAt
+      // null. La mise en ligne relève ensuite d'assertPublishable().
+      await createDraftAffairFromDiscovery({
+        politicianId: affair.politicianId,
+        title: affair.title,
+        baseSlug: generateSlug(affair.title),
+        description: affair.description,
+        status: affair.status,
+        category: affair.category,
+        involvement: affair.involvement,
+        confidenceScore: affair.confidenceScore,
+        factsDate: affair.factsDate,
+        court: affair.court,
+        sources: affair.sources.map((s) => ({
+          url: s.url,
+          title: s.title,
+          publisher: s.publisher,
+          publishedAt: s.publishedAt ?? affair.factsDate ?? new Date(),
+          sourceType: s.sourceType,
+        })),
       });
 
       stats.affairsCreated++;
-      if (affair.publicationStatus === "PUBLISHED") {
-        stats.affairsPublished++;
-      } else {
-        stats.affairsDraft++;
-      }
+      stats.affairsDraft++;
 
       if (verbose) {
-        console.log(
-          `    [OK] Créé: ${affair.title} (${affair.category}, ${affair.publicationStatus})`
-        );
+        console.log(`    [OK] Créé (DRAFT): ${affair.title} (${affair.category})`);
       }
     } catch (error) {
       stats.errors++;
@@ -598,7 +558,6 @@ Environnement :
       wikipediaAffairsFound: 0,
       duplicatesSkipped: 0,
       affairsCreated: 0,
-      affairsPublished: 0,
       affairsDraft: 0,
       errors: 0,
     };
@@ -691,8 +650,7 @@ Environnement :
     console.log(`  Wikipedia — affaires :      ${stats.wikipediaAffairsFound}`);
     console.log(`  Doublons ignorés :          ${stats.duplicatesSkipped}`);
     console.log(`  Affaires créées :           ${stats.affairsCreated}`);
-    console.log(`    — Publiées :              ${stats.affairsPublished}`);
-    console.log(`    — Brouillons :            ${stats.affairsDraft}`);
+    console.log(`    — Brouillons (toutes) :   ${stats.affairsDraft}`);
     console.log(`  Erreurs :                   ${stats.errors}`);
 
     return {

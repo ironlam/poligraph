@@ -6,7 +6,12 @@
  * par une session /moderate (flag prioritaire sur les affaires PUBLISHED
  * sans verifiedBy).
  *
- * Usage : npx dotenv -e .env -- npx tsx scripts/audit-affairs-compliance.ts
+ * Usage :
+ *   npx dotenv -e .env -- npx tsx scripts/audit-affairs-compliance.ts
+ *   npm run audit:compliance -- --fail-on-leak   # code de sortie 1 si écart
+ *
+ * --fail-on-leak permet d'utiliser cet audit comme étape bloquante en CI,
+ * après un import automatisé.
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -143,6 +148,29 @@ async function main() {
   console.log("\nJSON écrit : data/affairs-compliance-audit.json");
 
   await db.$disconnect();
+
+  if (process.argv.includes("--fail-on-leak")) {
+    // Écarts bloquants : une affaire visible du public doit avoir une
+    // validation humaine tracée et au moins une source vérifiable.
+    const leaks =
+      summary.publishedSansVerifiedBy +
+      summary.publishedSansSource +
+      summary.issuesFavorablesDansAgregatACharge;
+
+    if (leaks > 0) {
+      console.error(
+        `\n✗ ${leaks} non-conformité(s) bloquante(s) : ` +
+          `${summary.publishedSansVerifiedBy} publiée(s) sans verifiedBy, ` +
+          `${summary.publishedSansSource} sans source, ` +
+          `${summary.issuesFavorablesDansAgregatACharge} issue(s) favorable(s) dans l'agrégat à charge.`
+      );
+      console.error(
+        "  Remédiation : npm run remediate:unverified -- --confirm (dépublie vers DRAFT)."
+      );
+      process.exit(1);
+    }
+    console.log("\n✓ Aucune affaire publiée sans validation humaine tracée.");
+  }
 }
 
 main().catch((err) => {

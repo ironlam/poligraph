@@ -48,12 +48,21 @@ jobs:
         run: npm run reconcile:affairs -- --auto-merge
         continue-on-error: true
 
+      # Filet de sécurité : on contrôle l'état réel de la base après import
+      # plutôt que de se fier au seul code. Une affaire publique sans
+      # validation humaine tracée fait échouer le job et ouvre une issue.
+      - name: Assert no affair published without human validation
+        id: audit-compliance
+        run: npm run audit:compliance -- --fail-on-leak
+        continue-on-error: true
+
       - name: Fail job if any step failed
         if: always()
         run: |
           FAILED=""
           [ "${{ steps.discover-affairs.outcome }}" = "failure" ] && FAILED="$FAILED discover-affairs"
           [ "${{ steps.reconcile-affairs.outcome }}" = "failure" ] && FAILED="$FAILED reconcile-affairs"
+          [ "${{ steps.audit-compliance.outcome }}" = "failure" ] && FAILED="$FAILED audit-compliance"
           if [ -n "$FAILED" ]; then
             echo "::error::Failed steps:$FAILED"
             echo "FAILED_STEPS=$FAILED" >> $GITHUB_ENV

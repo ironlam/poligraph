@@ -1,12 +1,12 @@
 /**
  * Article Scraper
  *
- * Extracts full article text from press URLs using @mozilla/readability.
+ * Extracts article text from freely accessible press URLs using
+ * @mozilla/readability.
  *
- * Scraping strategy by source:
- * - Mediapart: login automatique (POST /login_check)
- * - Gratuits (franceinfo, liberation, LCP, Public Sénat, Politico): scrape direct
- * - Paywall (Le Monde, Le Figaro): pas de scrape → fallback titre+description RSS
+ * Accès anonyme uniquement, sur les sources en accès libre. Les sources
+ * payantes ne sont pas scrapées : press-analysis les analyse sur titre +
+ * description RSS.
  *
  * Content is fetched → extracted → returned for AI analysis → NOT stored (copyright).
  */
@@ -27,14 +27,16 @@ export interface ArticleContent {
   length: number;
 }
 
-/** Sources where we can scrape the full article */
+/**
+ * Sources scrapables : articles lisibles sans abonnement ni compte.
+ * Toute autre source est analysée sur titre + description RSS.
+ */
 const SCRAPABLE_SOURCES = new Set([
   "franceinfo",
   "liberation",
   "publicsenat",
   "lcp",
   "politico",
-  "mediapart",
   // Regional press (free access)
   "ouestfrance",
   "sudouest",
@@ -44,21 +46,14 @@ const SCRAPABLE_SOURCES = new Set([
   // Specialized / investigative + national TV (free access)
   "reporterre",
   "bfmtv-politique",
-  // mediacites: paywalled, RSS-only intentional (press-analysis falls back to RSS title+description)
   // googlenews links to external articles, don't scrape
 ]);
 
-interface AuthSession {
-  cookies: string;
-  expiresAt: number;
-}
-
 /**
- * Article scraper with per-source authentication strategies
+ * Article scraper limited to freely accessible sources.
  */
 export class ArticleScraper {
   private httpClient: HTTPClient;
-  private mediapartSession: AuthSession | null = null;
 
   constructor() {
     this.httpClient = new HTTPClient({
@@ -76,9 +71,8 @@ export class ArticleScraper {
   }
 
   /**
-   * Check if a source supports full article scraping.
-   * Paywalled sources (lemonde, lefigaro) return false — the orchestrator
-   * will fall back to analyzing title+description RSS instead.
+   * Check if a source supports article scraping. Otherwise the orchestrator
+   * falls back to analyzing title+description RSS.
    */
   canScrape(feedSource: string): boolean {
     return SCRAPABLE_SOURCES.has(feedSource);
@@ -94,7 +88,7 @@ export class ArticleScraper {
     }
 
     try {
-      const html = await this.fetchWithAuth(url, feedSource);
+      const html = await this.fetchAnonymously(url, feedSource);
       if (!html) return null;
 
       return this.parseWithReadability(html, url);
@@ -108,88 +102,19 @@ export class ArticleScraper {
   }
 
   /**
-   * Fetch HTML with source-specific authentication
+   * Fetch HTML anonymously, under the HTTPClient User-Agent. Une réponse
+   * partielle est un résultat acceptable : press-analysis retombe alors sur
+   * le titre + la description RSS.
    */
-  private async fetchWithAuth(url: string, feedSource: string): Promise<string | null> {
-    const headers: Record<string, string> = {};
-
-    if (feedSource === "mediapart") {
-      const cookies = await this.getMediapartCookies();
-      if (cookies) {
-        headers["Cookie"] = cookies;
-      }
-    }
-
+  private async fetchAnonymously(url: string, feedSource: string): Promise<string | null> {
     try {
-      const response = await this.httpClient.getText(url, { headers });
+      const response = await this.httpClient.getText(url);
       return response.data;
     } catch (error) {
       console.error(
         `  ✗ Fetch failed for ${feedSource} (${url}):`,
         error instanceof Error ? error.message : error
       );
-      return null;
-    }
-  }
-
-  /**
-   * Authenticate to Mediapart via login form.
-   * Returns session cookie, cached for 1 hour.
-   */
-  private async getMediapartCookies(): Promise<string | null> {
-    // Return cached session if still valid
-    if (this.mediapartSession && Date.now() < this.mediapartSession.expiresAt) {
-      return this.mediapartSession.cookies;
-    }
-
-    const email = process.env.MEDIAPART_EMAIL;
-    const password = process.env.MEDIAPART_PASSWORD;
-
-    if (!email || !password) {
-      return null;
-    }
-
-    try {
-      const response = await fetch("https://www.mediapart.fr/login_check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent":
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        },
-        body: new URLSearchParams({
-          email,
-          password,
-        }).toString(),
-        redirect: "manual", // Don't follow redirect, we want the Set-Cookie
-      });
-
-      // Detect invalid credentials (distinct from other failures)
-      if (response.headers.get("x-http-auth-error") === "true") {
-        console.error("  ✗ Mediapart auth: invalid credentials");
-        return null;
-      }
-
-      const setCookies = response.headers.getSetCookie?.() ?? [];
-      if (setCookies.length === 0) {
-        console.warn("  ⚠ Mediapart auth: no cookies returned");
-        return null;
-      }
-
-      // Extract cookie key=value pairs
-      const cookieParts = setCookies.map((c) => c.split(";")[0]).filter(Boolean);
-
-      const cookies = cookieParts.join("; ");
-
-      // Cache for 1 hour
-      this.mediapartSession = {
-        cookies,
-        expiresAt: Date.now() + 60 * 60 * 1000,
-      };
-
-      return cookies;
-    } catch (error) {
-      console.error("  ✗ Mediapart auth failed:", error instanceof Error ? error.message : error);
       return null;
     }
   }

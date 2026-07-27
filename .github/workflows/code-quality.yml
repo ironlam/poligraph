@@ -32,8 +32,9 @@ jobs:
           # src/lib/affairs/publish-guard.ts. Ce step détecte les écritures
           # directes : un littéral `publicationStatus: "PUBLISHED"` dont le
           # contexte amont (12 lignes) contient `data:` plus près que `where:`.
+          # scripts/ est couvert au même titre que src/.
           FOUND=0
-          for f in $(grep -rl 'publicationStatus: "PUBLISHED"' src/ --include='*.ts' --include='*.tsx' \
+          for f in $(grep -rl 'publicationStatus: "PUBLISHED"' src/ scripts/ --include='*.ts' --include='*.tsx' \
             | grep -v 'src/lib/affairs/publish-guard.ts' | grep -v '__tests__' | grep -v '\.test\.'); do
             while IFS=: read -r linenum rest; do
               START=$((linenum > 12 ? linenum - 12 : 1))
@@ -47,6 +48,65 @@ jobs:
             done < <(grep -n 'publicationStatus: "PUBLISHED"' "$f")
           done
           exit $FOUND
+
+      - name: Importers create affairs only through create-draft
+        run: |
+          # Le step précédent ne couvre qu'un littéral ; celui-ci pose
+          # l'invariant structurel, qui tient quelle que soit l'expression
+          # employée : un importeur (scripts/ ou src/services/sync/) ne
+          # construit pas une affaire lui-même, il passe par
+          # createDraftAffairFromDiscovery, qui force DRAFT.
+          # seed-fixtures est exclu : fixtures de dev, protégé par
+          # SEED_BLOCKED_HOSTS, et il ne touche pas publicationStatus.
+          VIOLATIONS=$(grep -rn '\(db\|tx\)\.affair\.create' scripts/ src/services/sync/ --include='*.ts' \
+            | grep -v '__tests__' | grep -v '\.test\.' \
+            | grep -v 'scripts/seed-fixtures.ts' || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Un importeur crée une affaire directement. Utilisez createDraftAffairFromDiscovery (src/services/affairs/create-draft.ts)."
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+
+      - name: Importers never write verifiedAt
+        run: |
+          # `verifiedAt` atteste d'une validation humaine : seul publish-guard
+          # l'écrit, et toujours avec `verifiedBy`, atomiquement. Un des deux
+          # champs sans l'autre ne veut rien dire.
+          # On ne cible que l'affectation d'une date : `verifiedAt: true`
+          # (select) et `verifiedAt: { not: null }` (where) restent permis.
+          VIOLATIONS=$(grep -rn 'verifiedAt:.*new Date(' scripts/ src/services/sync/ --include='*.ts' \
+            | grep -v '__tests__' | grep -v '\.test\.' || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Un importeur écrit verifiedAt. La validation humaine passe exclusivement par assertPublishable()."
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+
+      - name: No press paywall circumvention
+        run: |
+          # L'ingestion presse se fait en accès anonyme, sur les sources en
+          # accès libre. Aucun identifiant ni endpoint d'authentification
+          # éditeur ne doit apparaître dans le code.
+          # Les tests sont exclus : ils vérifient justement l'absence de ces
+          # motifs, et les citer est leur seule façon de le faire.
+          VIOLATIONS=$(grep -rniE 'MEDIAPART_(EMAIL|PASSWORD)|login_check' src/ scripts/ --include='*.ts' --include='*.tsx' \
+            | grep -v '__tests__' | grep -v '\.test\.' || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Référence à une authentification éditeur dans le code d'ingestion."
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          # Le robot s'identifie. La forme attendue nomme le projet et donne
+          # une URL de contact :
+          # "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)".
+          UA=$(grep -rn 'Mozilla/5.0' src/ scripts/ --include='*.ts' --include='*.tsx' \
+            | grep -v '__tests__' | grep -v '\.test\.' \
+            | grep -v 'Poligraph' || true)
+          if [ -n "$UA" ]; then
+            echo "::error::User-Agent n'identifiant pas Poligraph. Le robot doit s'identifier avec une URL de contact."
+            echo "$UA"
+            exit 1
+          fi
 
       - name: No dangerouslySetInnerHTML without sanitization
         run: |

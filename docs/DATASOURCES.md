@@ -439,7 +439,8 @@ npm run sync:legislation:content -- --limit=20
 ## 12. Presse (RSS)
 
 - **Type d'accès** : Flux RSS/XML parsés avec `fast-xml-parser`
-- **Authentification** : Aucune (les articles peuvent être paywallés mais les en-têtes RSS sont publics)
+- **Authentification** : Aucune. Lecture des métadonnées publiques du flux
+  (titre, lien, date), sous le User-Agent `Poligraph/1.0 (https://poligraph.fr)`.
 - **Rate limit** : 1000 ms (`RSS_RATE_LIMIT_MS`)
 
 ### Sources configurées
@@ -624,8 +625,10 @@ npm run sync:photos -- --validate  # Valider les URLs existantes + sync
 
 ## 18. Analyse presse
 
-- **Type d'accès** : Analyse automatisée + scraping d'articles
-- **Authentification** : **`ANTHROPIC_API_KEY`** (requis) + `MEDIAPART_EMAIL`/`MEDIAPART_PASSWORD` (optionnel)
+- **Type d'accès** : Analyse automatisée + scraping des sources en accès libre
+- **Authentification** : **`ANTHROPIC_API_KEY`** (requis). Aucune vers un
+  éditeur de presse ; les autres sources sont analysées sur titre +
+  description RSS.
 - **Rate limit** : 500 ms (`AI_RATE_LIMIT_MS`), backoff 30s sur 429
 
 ### Fonctionnement
@@ -823,21 +826,19 @@ npm run sync:daily -- --dry-run
 
 ### Par source
 
-| Variable                   | Source                                               | Obligatoire                             |
-| -------------------------- | ---------------------------------------------------- | --------------------------------------- |
-| `GOOGLE_FACTCHECK_API_KEY` | Google Fact Check (#13)                              | Pour `sync:factchecks`                  |
-| `JUDILIBRE_CLIENT_ID`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
-| `JUDILIBRE_CLIENT_SECRET`  | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
-| `JUDILIBRE_API_KEY`        | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
-| `JUDILIBRE_BASE_URL`       | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
-| `JUDILIBRE_OAUTH_URL`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15)       |
-| `ANTHROPIC_API_KEY`        | Analyse presse, classification thématique (#18, #19) | Pour scripts d'enrichissement           |
-| `VOYAGE_API_KEY`           | Embeddings RAG (#19)                                 | Pour `index:embeddings`                 |
-| `MAILJET_API_KEY`          | Newsletter (#19)                                     | Pour la newsletter                      |
-| `MAILJET_SECRET_KEY`       | Newsletter (#19)                                     | Pour la newsletter                      |
-| `MEDIAPART_EMAIL`          | Analyse presse (#18)                                 | Optionnel (articles complets Mediapart) |
-| `MEDIAPART_PASSWORD`       | Analyse presse (#18)                                 | Optionnel                               |
-| `CRON_SECRET`              | Cache revalidation (sync:daily)                      | Optionnel                               |
+| Variable                   | Source                                               | Obligatoire                       |
+| -------------------------- | ---------------------------------------------------- | --------------------------------- |
+| `GOOGLE_FACTCHECK_API_KEY` | Google Fact Check (#13)                              | Pour `sync:factchecks`            |
+| `JUDILIBRE_CLIENT_ID`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15) |
+| `JUDILIBRE_CLIENT_SECRET`  | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15) |
+| `JUDILIBRE_API_KEY`        | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15) |
+| `JUDILIBRE_BASE_URL`       | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15) |
+| `JUDILIBRE_OAUTH_URL`      | Judilibre (#15)                                      | Pour l'enrichissement ciblé (#15) |
+| `ANTHROPIC_API_KEY`        | Analyse presse, classification thématique (#18, #19) | Pour scripts d'enrichissement     |
+| `VOYAGE_API_KEY`           | Embeddings RAG (#19)                                 | Pour `index:embeddings`           |
+| `MAILJET_API_KEY`          | Newsletter (#19)                                     | Pour la newsletter                |
+| `MAILJET_SECRET_KEY`       | Newsletter (#19)                                     | Pour la newsletter                |
+| `CRON_SECRET`              | Cache revalidation (sync:daily)                      | Optionnel                         |
 
 ### Configuration des URLs
 

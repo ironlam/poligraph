@@ -54,9 +54,8 @@ Analyse les articles de presse avec Claude Haiku pour détecter les affaires
 judiciaires. Enrichit les affaires existantes avec des sources presse ou en
 crée de nouvelles (préfixées [À VÉRIFIER]).
 
-Sources gratuites (franceinfo, libé, LCP, Public Sénat, Politico) et
-Mediapart (login auto) : scrape du contenu complet.
-Sources payantes (Le Monde, Le Figaro) : analyse sur titre+description RSS.
+Sources en accès libre (franceinfo, libé, LCP, Public Sénat, Politico) :
+scrape du contenu. Autres sources : analyse sur titre+description RSS.
 
 Le contenu scrappé n'est PAS stocké (copyright). Seuls le résumé IA et les
 faits extraits sont conservés.
@@ -74,8 +73,6 @@ Options:
 
 Environment:
   ANTHROPIC_API_KEY       Requis. Clé API Anthropic pour Claude Haiku
-  MEDIAPART_EMAIL         Optionnel. Email pour auth Mediapart
-  MEDIAPART_PASSWORD      Optionnel. Mot de passe Mediapart
     `);
   },
 
