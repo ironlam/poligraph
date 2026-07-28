@@ -18,8 +18,10 @@ export function resolveColor(css: string): string | null {
 
 function luminance(hex: string): number {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const lin = c.map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  const [r = 0, g = 0, b = 0] = c.map((x) =>
+    x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  );
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 // WCAG contrast ratio between two CSS colors, or null if unresolved.
