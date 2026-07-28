@@ -85,6 +85,9 @@
   --sidebar-accent-foreground: oklch(0.25 0.05 250);
   --sidebar-border: oklch(0.87 0 0);
   --sidebar-ring: oklch(0.25 0.06 255);
+  --vote-pour: #4a8a5c;
+  --vote-contre: #9e5454;
+  --vote-abstention: #8a8e96;
 }
 
 .dark {
@@ -121,6 +124,9 @@
   --sidebar-accent-foreground: oklch(0.85 0.02 250);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.65 0.1 250);
+  --vote-pour: #7ab892;
+  --vote-contre: #c88a8a;
+  --vote-abstention: #6a6e78;
 }
 
 @layer base {
