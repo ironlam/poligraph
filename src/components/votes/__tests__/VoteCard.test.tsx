@@ -88,4 +88,39 @@ describe("VoteCard", () => {
     render(<VoteCard {...base} compact groupPositions={[groupPosition("1", "POUR", "RE")]} />);
     expect(screen.queryByText("RE")).not.toBeInTheDocument();
   });
+
+  it("motion de censure : pas de cadrage majorité simple, voix pour + note de règle", () => {
+    render(
+      <VoteCard
+        {...base}
+        type="MOTION"
+        votesFor={239}
+        votesAgainst={0}
+        votesAbstain={0}
+        result="REJECTED"
+      />
+    );
+    expect(screen.queryByText(/majorité \+/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vote serré/)).not.toBeInTheDocument();
+    expect(screen.getByText(/239 voix pour/)).toBeInTheDocument();
+    expect(screen.getByText(/majorité absolue des membres/)).toBeInTheDocument();
+  });
+
+  it("garde-fou : pour > contre mais rejeté (hors motion) masque le libellé de majorité", () => {
+    render(
+      <VoteCard
+        {...base}
+        type="ARTICLE"
+        votesFor={100}
+        votesAgainst={50}
+        votesAbstain={0}
+        result="REJECTED"
+      />
+    );
+    expect(screen.queryByText(/majorité \+/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vote serré/)).not.toBeInTheDocument();
+    // Les comptes bruts restent affichés, sans revendication de majorité.
+    expect(screen.getByText(/Pour: 100/)).toBeInTheDocument();
+    expect(screen.getByText(/Contre: 50/)).toBeInTheDocument();
+  });
 });

@@ -96,6 +96,16 @@ export function VoteCard({
   const total = votesFor + votesAgainst + votesAbstain;
   const margin = formatVoteMargin(votesFor, votesAgainst);
   const marginLabelBase = margin.isClose ? margin.label.replace(" · vote serré", "") : margin.label;
+  // Motions (censure/rejet/renvoi) follow an absolute-majority rule and record only
+  // "pour" votes, so the simple pour-vs-contre majority bar does not apply to them.
+  const isMotion = type === "MOTION";
+  // Safety net: never claim a simple majority when the pour/contre reading would
+  // contradict the official result (e.g. a qualified-majority vote passing or failing
+  // against the raw count). In that case we drop the 50% marker and the margin label.
+  const majorityContradicts =
+    (result === "REJECTED" && votesFor > votesAgainst) ||
+    (result === "ADOPTED" && votesFor < votesAgainst);
+  const showMajorityFraming = !isMotion && !majorityContradicts;
   const metaLine = [
     formatDate(new Date(votingDate)),
     ...(compact ? [] : [`${total} votants`]),
@@ -179,57 +189,73 @@ export function VoteCard({
 
         {!compact && (
           <>
-            {/* Suffrage bar: pour vs contre, relative to expressed votes, with
-                a 50% majority marker. Abstention is shown separately below. */}
-            <div className="space-y-1.5">
-              {margin.hasExpressed ? (
-                <>
-                  <div className="relative flex h-2 rounded-full overflow-hidden bg-muted">
-                    <div
-                      className="transition-all"
-                      style={{ width: `${margin.forPercent}%`, background: "var(--vote-pour)" }}
-                      title={`Pour: ${votesFor}`}
-                    />
-                    <div
-                      className="transition-all"
-                      style={{
-                        width: `${margin.againstPercent}%`,
-                        background: "var(--vote-contre)",
-                      }}
-                      title={`Contre: ${votesAgainst}`}
-                    />
-                    <span
-                      className="absolute left-1/2 top-0 bottom-0 w-px bg-foreground"
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
-                    <span className="flex items-center gap-3 text-muted-foreground">
-                      <span>Pour: {votesFor}</span>
-                      <span>Contre: {votesAgainst}</span>
-                    </span>
-                    <span className="font-medium">
-                      {marginLabelBase}
-                      {margin.isClose && (
-                        <Badge variant="outline" className="ml-1.5 align-middle text-xs">
-                          vote serré
-                        </Badge>
-                      )}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground">{margin.label}</p>
-              )}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: "var(--vote-abstention)" }}
-                  aria-hidden="true"
-                />
-                <span>Abstention: {votesAbstain}</span>
+            {isMotion ? (
+              /* Motion: absolute-majority rule, only "pour" votes recorded. No
+                 simple-majority bar; the result badge above carries the outcome. */
+              <div className="space-y-1 text-xs">
+                <p className="font-medium">{votesFor} voix pour</p>
+                <p className="text-muted-foreground">
+                  Adoption à la majorité absolue des membres ; seuls les votes pour sont décomptés.
+                </p>
               </div>
-            </div>
+            ) : (
+              /* Suffrage bar: pour vs contre, relative to expressed votes. The 50%
+                 majority marker and margin label appear only when the pour/contre
+                 reading agrees with the official result. Abstention shown separately. */
+              <div className="space-y-1.5">
+                {margin.hasExpressed ? (
+                  <>
+                    <div className="relative flex h-2 rounded-full overflow-hidden bg-muted">
+                      <div
+                        className="transition-all"
+                        style={{ width: `${margin.forPercent}%`, background: "var(--vote-pour)" }}
+                        title={`Pour: ${votesFor}`}
+                      />
+                      <div
+                        className="transition-all"
+                        style={{
+                          width: `${margin.againstPercent}%`,
+                          background: "var(--vote-contre)",
+                        }}
+                        title={`Contre: ${votesAgainst}`}
+                      />
+                      {showMajorityFraming && (
+                        <span
+                          className="absolute left-1/2 top-0 bottom-0 w-px bg-foreground"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                      <span className="flex items-center gap-3 text-muted-foreground">
+                        <span>Pour: {votesFor}</span>
+                        <span>Contre: {votesAgainst}</span>
+                      </span>
+                      {showMajorityFraming && (
+                        <span className="font-medium">
+                          {marginLabelBase}
+                          {margin.isClose && (
+                            <Badge variant="outline" className="ml-1.5 align-middle text-xs">
+                              vote serré
+                            </Badge>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{margin.label}</p>
+                )}
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: "var(--vote-abstention)" }}
+                    aria-hidden="true"
+                  />
+                  <span>Abstention: {votesAbstain}</span>
+                </div>
+              </div>
+            )}
             {groupPositions && groupPositions.length > 0 && (
               <div className="mt-3">
                 <CardGroupPositions positions={groupPositions} />
