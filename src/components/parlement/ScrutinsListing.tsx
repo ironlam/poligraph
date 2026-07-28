@@ -12,6 +12,7 @@ import {
   getTypeCounts,
   type ScrutinSort,
 } from "@/lib/data/scrutins";
+import { getScrutinGroupPositionsBatch } from "@/lib/data/groupes";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
@@ -70,6 +71,10 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
       getThemeCounts(),
       getTypeCounts(),
     ]);
+
+  // Group positions for the whole page in ONE batched query (anti-N+1), keyed by
+  // scrutin id. getScrutins stays untouched; this is the only extra query per page.
+  const positionsByScrutin = await getScrutinGroupPositionsBatch(scrutins.map((s) => s.id));
 
   const buildUrl = (newParams: Record<string, string | undefined>) => {
     const current = new URLSearchParams();
@@ -224,6 +229,7 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
                 type={scrutin.type}
                 dossier={scrutin.dossierLegislatif}
                 policy={scrutin.policyTitle}
+                groupPositions={positionsByScrutin.get(scrutin.id) ?? []}
               />
             ))}
           </div>
