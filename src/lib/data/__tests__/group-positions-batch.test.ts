@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 // groupes.ts imports @/lib/db at module load; this pure helper test needs no DB.
-// Mock it file-scoped (never load real .env globally — that would run describeIfDb
+// Mock it file-scoped (never load real .env globally, which would run describeIfDb
 // integration tests against the production database).
 vi.mock("@/lib/db", () => ({ db: {} }));
 

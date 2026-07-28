@@ -106,6 +106,23 @@ describe("VoteCard", () => {
     expect(screen.getByText(/majorité absolue des membres/)).toBeInTheDocument();
   });
 
+  it("motion ordinaire (contre > 0) : barre normale, contre visible, pas de note de censure", () => {
+    render(
+      <VoteCard
+        {...base}
+        type="MOTION"
+        votesFor={174}
+        votesAgainst={192}
+        votesAbstain={0}
+        result="REJECTED"
+      />
+    );
+    // Motion de rejet préalable : scrutin ordinaire à la majorité simple.
+    expect(screen.queryByText(/majorité absolue des membres/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Contre: 192/)).toBeInTheDocument();
+    expect(screen.getByText(/manque 18 voix/)).toBeInTheDocument();
+  });
+
   it("garde-fou : pour > contre mais rejeté (hors motion) masque le libellé de majorité", () => {
     render(
       <VoteCard

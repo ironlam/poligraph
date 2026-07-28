@@ -15,6 +15,12 @@ const HEADER_DOT_VAR: Record<GroupPosition, string> = {
   ABSTENTION: "var(--vote-abstention)",
 };
 
+const COLUMN_ARIA_LABEL: Record<GroupPosition, string> = {
+  POUR: "Groupes ayant voté pour",
+  CONTRE: "Groupes ayant voté contre",
+  ABSTENTION: "Groupes s'étant abstenus",
+};
+
 function MiniPill({ gp }: { gp: ScrutinGroupPositionData }) {
   const color = gp.group.color ?? getPartyColor(gp.group.code);
   return (
@@ -51,11 +57,7 @@ function PositionColumn({
           {GROUP_POSITION_LABELS[pos]}
         </span>
       </div>
-      <div
-        className="flex flex-wrap gap-1"
-        role="list"
-        aria-label={`Groupes ayant voté ${GROUP_POSITION_LABELS[pos].toLowerCase()}`}
-      >
+      <div className="flex flex-wrap gap-1" role="list" aria-label={COLUMN_ARIA_LABEL[pos]}>
         {groups.map((gp) => (
           <div key={gp.id} role="listitem">
             <MiniPill gp={gp} />

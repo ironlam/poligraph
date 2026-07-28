@@ -96,16 +96,18 @@ export function VoteCard({
   const total = votesFor + votesAgainst + votesAbstain;
   const margin = formatVoteMargin(votesFor, votesAgainst);
   const marginLabelBase = margin.isClose ? margin.label.replace(" · vote serré", "") : margin.label;
-  // Motions (censure/rejet/renvoi) follow an absolute-majority rule and record only
-  // "pour" votes, so the simple pour-vs-contre majority bar does not apply to them.
-  const isMotion = type === "MOTION";
+  // A motion de censure records only "pour" votes and passes by absolute majority of
+  // members, so the pour-vs-contre bar does not apply. Other motions (rejet préalable,
+  // renvoi) are ordinary simple-majority ballots with "contre" recorded and keep the
+  // normal bar; the data signal for a censure is votesAgainst === 0.
+  const isCensureStyle = type === "MOTION" && votesAgainst === 0;
   // Safety net: never claim a simple majority when the pour/contre reading would
   // contradict the official result (e.g. a qualified-majority vote passing or failing
   // against the raw count). In that case we drop the 50% marker and the margin label.
   const majorityContradicts =
     (result === "REJECTED" && votesFor > votesAgainst) ||
     (result === "ADOPTED" && votesFor < votesAgainst);
-  const showMajorityFraming = !isMotion && !majorityContradicts;
+  const showMajorityFraming = !isCensureStyle && !majorityContradicts;
   const metaLine = [
     formatDate(new Date(votingDate)),
     ...(compact ? [] : [`${total} votants`]),
@@ -189,9 +191,9 @@ export function VoteCard({
 
         {!compact && (
           <>
-            {isMotion ? (
-              /* Motion: absolute-majority rule, only "pour" votes recorded. No
-                 simple-majority bar; the result badge above carries the outcome. */
+            {isCensureStyle ? (
+              /* Motion de censure: absolute-majority rule, only "pour" votes recorded.
+                 No simple-majority bar; the result badge above carries the outcome. */
               <div className="space-y-1 text-xs">
                 <p className="font-medium">{votesFor} voix pour</p>
                 <p className="text-muted-foreground">
