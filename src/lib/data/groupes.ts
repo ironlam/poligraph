@@ -44,6 +44,47 @@ export async function getScrutinGroupPositions(
   });
 }
 
+export function groupPositionsByScrutinId(
+  rows: (ScrutinGroupPositionData & { scrutinId: string })[]
+): Map<string, ScrutinGroupPositionData[]> {
+  const map = new Map<string, ScrutinGroupPositionData[]>();
+  for (const row of rows) {
+    const { scrutinId, ...rest } = row;
+    const bucket = map.get(scrutinId);
+    if (bucket) bucket.push(rest);
+    else map.set(scrutinId, [rest]);
+  }
+  return map;
+}
+
+export async function getScrutinGroupPositionsBatch(
+  scrutinIds: string[]
+): Promise<Map<string, ScrutinGroupPositionData[]>> {
+  "use cache";
+  cacheTag("votes");
+  cacheLife("synced");
+
+  if (scrutinIds.length === 0) return new Map();
+
+  const rows = await db.scrutinGroupPosition.findMany({
+    where: { scrutinId: { in: scrutinIds } },
+    include: {
+      group: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          shortName: true,
+          color: true,
+          slug: true,
+        },
+      },
+    },
+    orderBy: [{ position: "asc" }, { forCount: "desc" }],
+  });
+  return groupPositionsByScrutinId(rows);
+}
+
 export interface ScrutinAnalysisData {
   argumentsFor: string;
   argumentsAgainst: string;
