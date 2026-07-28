@@ -54,7 +54,7 @@ describe("VotesFilterBar", () => {
 
   it("calls updateParams with the theme code when a theme is clicked", () => {
     render(<VotesFilterBar {...baseProps()} />);
-    const [radio] = screen.getAllByRole("radio", { name: THEME_CATEGORY_LABELS.SANTE });
+    const radio = screen.getAllByRole("radio", { name: THEME_CATEGORY_LABELS.SANTE })[0]!;
     fireEvent.click(radio);
     expect(mockUpdateParams).toHaveBeenCalledWith({ theme: "SANTE" }, { mode: "replace" });
   });
@@ -75,7 +75,7 @@ describe("VotesFilterBar", () => {
         })}
       />
     );
-    const [clearButton] = screen.getAllByRole("button", { name: "Tout effacer" });
+    const clearButton = screen.getAllByRole("button", { name: "Tout effacer" })[0]!;
     fireEvent.click(clearButton);
 
     expect(mockUpdateParams).toHaveBeenCalledTimes(1);
