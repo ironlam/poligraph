@@ -309,7 +309,7 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
             placeholder="Toutes les législatures"
             className="min-w-[220px]"
           />
-          <VotesSearchInput value={current.search ?? ""} />
+          <VotesSearchInput value={current.search ?? ""} mode="replace" />
         </div>
 
         <ActiveFilterChips filters={activeFilters} onRemove={removeFilter} onClearAll={clearAll} />
@@ -379,7 +379,7 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
                   placeholder="Toutes les législatures"
                 />
 
-                <VotesSearchInput value={current.search ?? ""} />
+                <VotesSearchInput value={current.search ?? ""} mode="replace" />
 
                 {activeFilters.length > 0 && (
                   <button

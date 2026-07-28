@@ -111,8 +111,16 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
   // Adoption rate for results summary
   const adoptedPct = total > 0 && stats.ADOPTED ? Math.round((stats.ADOPTED / total) * 100) : 0;
 
-  // Active non-chamber/non-type filters for display
-  const hasActiveFilters = !!(result || legislature || theme || search);
+  // Active filters for display: must match everything the "Effacer les
+  // filtres" link below resets (chamber, type, result, legislature, theme, search).
+  const hasActiveFilters = !!(
+    result ||
+    legislature ||
+    chamber ||
+    theme ||
+    search ||
+    typeTab !== "votes"
+  );
 
   // Showcase renders only on the default, unfiltered "votes" view (not paginated,
   // not the explained-only listing, default sort) so it doesn't duplicate results
@@ -164,25 +172,23 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
         </div>
 
         {/* Unified filter bar: chamber, portée, thème, résultat, législature, tri, recherche */}
-        <div className="mb-6">
-          <VotesFilterBar
-            current={{
-              chamber,
-              result,
-              legislature,
-              theme,
-              type: params.type,
-              search,
-              sort,
-            }}
-            options={{
-              chambers,
-              legislatures,
-              themeCounts,
-              typeCounts,
-            }}
-          />
-        </div>
+        <VotesFilterBar
+          current={{
+            chamber,
+            result,
+            legislature,
+            theme,
+            type: params.type,
+            search,
+            sort,
+          }}
+          options={{
+            chambers,
+            legislatures,
+            themeCounts,
+            typeCounts,
+          }}
+        />
 
         {/* Results summary */}
         <div className="flex items-center justify-between mb-4 pb-3 border-b">

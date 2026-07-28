@@ -26,6 +26,7 @@ import type { VotePosition } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
+import { formatLegislature } from "@/lib/votes/legislature";
 import { isVoteDateArchiveSlug, voteDateArchiveRobotsMetadata } from "@/lib/seo/parliament-robots";
 
 /** Parse externalId into human-readable label: "VTANR5L17V5729" → "Vote n°5729" */
@@ -356,7 +357,7 @@ export default async function ScrutinPage({ params }: PageProps) {
               <Users className="h-4 w-4" />
               {total} votants
             </span>
-            <Badge variant="outline">{scrutin.legislature}e législature</Badge>
+            <Badge variant="outline">{formatLegislature(scrutin.legislature)}</Badge>
             {scrutin.theme && (
               <Link
                 href={`/parlement/votes/themes/${scrutin.theme.toLowerCase().replace(/_/g, "-")}`}

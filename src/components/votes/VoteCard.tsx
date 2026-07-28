@@ -8,6 +8,7 @@ import {
   type PolicyForView,
 } from "@/lib/votes/to-public-title-view";
 import { formatDate } from "@/lib/utils";
+import { formatLegislature } from "@/lib/votes/legislature";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
 import {
   CHAMBER_SHORT_LABELS,
@@ -145,7 +146,7 @@ export function VoteCard({
                   {total} votants
                 </span>
               )}
-              <span className="text-muted-foreground">{legislature}e législature</span>
+              <span className="text-muted-foreground">{formatLegislature(legislature)}</span>
             </div>
             {dossier?.slug && (
               <Link
