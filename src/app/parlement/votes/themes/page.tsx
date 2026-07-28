@@ -90,6 +90,19 @@ export default async function ThemesListingPage() {
                     <span>{total.toLocaleString("fr-FR")} scrutins</span>
                     <span className="text-green-600 font-medium">{adoptedPercent}% adoptés</span>
                   </div>
+                  <div
+                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={adoptedPercent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Taux d'adoption : ${adoptedPercent}%`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-green-600 dark:bg-green-500"
+                      style={{ width: `${adoptedPercent}%` }}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </Link>
