@@ -1,52 +1,25 @@
 import Link from "next/link";
 import { SimplePagination } from "@/components/ui/SimplePagination";
-import { VoteCard, ScrutinTypeTabs } from "@/components/votes";
-import { VotesSearchInput } from "@/components/votes/VotesSearchInput";
-import { ThemeGrid } from "@/components/votes/ThemeGrid";
+import { VoteCard } from "@/components/votes";
+import { VotesFilterBar } from "@/components/votes/VotesFilterBar";
 import { ExplainedVotesModule } from "./ExplainedVotesModule";
 
-import {
-  VOTING_RESULT_LABELS,
-  THEME_CATEGORY_LABELS,
-  THEME_CATEGORY_ICONS,
-  THEME_CATEGORY_COLORS,
-} from "@/config/labels";
 import {
   getScrutins,
   getLegislatures,
   getChambers,
   getThemeCounts,
   getTypeCounts,
+  type ScrutinSort,
 } from "@/lib/data/scrutins";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
-import { Building2 } from "lucide-react";
 
 // Map URL param values to data layer params
 const TYPE_TAB_MAP: Record<string, { type?: ScrutinType; excludeType?: ScrutinType }> = {
   votes: { excludeType: "AMENDEMENT" },
   amendements: { type: "AMENDEMENT" },
-};
-
-const CHAMBER_META: Record<
-  Chamber,
-  { label: string; description: string; color: string; activeColor: string; hoverColor: string }
-> = {
-  AN: {
-    label: "Assemblée nationale",
-    description: "577 députés",
-    color: "border-blue-600",
-    activeColor: "bg-blue-600 text-white border-blue-600",
-    hoverColor: "hover:bg-blue-50 dark:hover:bg-blue-950/30",
-  },
-  SENAT: {
-    label: "Sénat",
-    description: "348 sénateurs",
-    color: "border-rose-600",
-    activeColor: "bg-rose-600 text-white border-rose-600",
-    hoverColor: "hover:bg-rose-50 dark:hover:bg-rose-950/30",
-  },
 };
 
 interface ScrutinsListingProps {
@@ -60,9 +33,10 @@ interface ScrutinsListingProps {
     search?: string;
     filter?: string;
   };
+  sort: ScrutinSort;
 }
 
-export async function ScrutinsListing({ searchParams: params }: ScrutinsListingProps) {
+export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsListingProps) {
   const page = Math.max(1, parseInt(params.page || "1", 10));
   const limit = 20;
   const result = (params.result || undefined) as VotingResult | undefined;
@@ -88,6 +62,7 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
         theme,
         search,
         explainedOnly,
+        sort,
         ...typeFilter,
       }),
       getLegislatures(),
@@ -95,12 +70,6 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
       getThemeCounts(),
       getTypeCounts(),
     ]);
-
-  // Compute tab counts from type distribution
-  const typeCountMap = new Map(typeCounts.map((c) => [c.type, c._count]));
-  const totalAll = typeCounts.reduce((sum, c) => sum + c._count, 0);
-  const amendementCount = typeCountMap.get("AMENDEMENT") ?? 0;
-  const votesCount = totalAll - amendementCount;
 
   const buildUrl = (newParams: Record<string, string | undefined>) => {
     const current = new URLSearchParams();
@@ -111,6 +80,7 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
     if (theme) current.set("theme", theme);
     if (typeTab && typeTab !== "votes") current.set("type", typeTab);
     if (filter) current.set("filter", filter);
+    if (sort !== "recent") current.set("sort", sort);
 
     for (const [key, value] of Object.entries(newParams)) {
       if (value) {
@@ -127,41 +97,6 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
     const qs = current.toString();
     return `/parlement/votes${qs ? `?${qs}` : ""}`;
   };
-
-  const hasMultipleChambers = chambers.length > 1;
-
-  // Prepare theme grid data
-  const themeGridItems = themeCounts.map((t) => ({
-    theme: t.theme,
-    label: THEME_CATEGORY_LABELS[t.theme],
-    icon: THEME_CATEGORY_ICONS[t.theme],
-    colorClass: THEME_CATEGORY_COLORS[t.theme],
-    count: t._count,
-    isActive: theme === t.theme,
-    href: buildUrl({ theme: theme === t.theme ? undefined : t.theme }),
-  }));
-
-  // Type tabs
-  const tabs = [
-    {
-      key: "votes",
-      label: "Textes de loi",
-      count: votesCount,
-      href: buildUrl({ type: undefined, page: undefined }),
-    },
-    {
-      key: "amendements",
-      label: "Amendements",
-      count: amendementCount,
-      href: buildUrl({ type: "amendements", page: undefined }),
-    },
-    {
-      key: "tous",
-      label: "Tous",
-      count: totalAll,
-      href: buildUrl({ type: "tous", page: undefined }),
-    },
-  ];
 
   // Dynamic title based on chamber (or the explained-votes filter, which takes priority)
   const pageTitle = explainedOnly
@@ -180,8 +115,8 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
   const hasActiveFilters = !!(result || legislature || theme || search);
 
   // Showcase renders only on the default, unfiltered "votes" view (not paginated,
-  // not the explained-only listing) so it doesn't duplicate results the user
-  // already filtered for.
+  // not the explained-only listing, default sort) so it doesn't duplicate results
+  // the user already filtered for.
   const showShowcase =
     !explainedOnly &&
     !search &&
@@ -190,7 +125,8 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
     !chamber &&
     !theme &&
     page === 1 &&
-    typeTab === "votes";
+    typeTab === "votes" &&
+    sort === "recent";
 
   return (
     <>
@@ -227,103 +163,28 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
           </div>
         </div>
 
-        {/* Chamber switcher - prominent, top-level navigation */}
-        {hasMultipleChambers && (
-          <div className="flex gap-2 mb-6">
-            <Link
-              href={buildUrl({ chamber: undefined })}
-              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold border-2 transition-colors min-h-[48px] ${
-                !chamber
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border bg-background hover:bg-muted"
-              }`}
-            >
-              Tout le Parlement
-            </Link>
-            {(["AN", "SENAT"] as Chamber[]).map((c) => {
-              const meta = CHAMBER_META[c];
-              const isActive = chamber === c;
-              return (
-                <Link
-                  key={c}
-                  href={buildUrl({ chamber: isActive ? undefined : c })}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold border-2 transition-colors min-h-[48px] flex-1 ${
-                    isActive ? meta.activeColor : `border-border bg-background ${meta.hoverColor}`
-                  }`}
-                >
-                  <Building2 className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">{meta.label}</span>
-                  <span className="sm:hidden">{c === "AN" ? "AN" : "Sénat"}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Type tabs */}
-        <ScrutinTypeTabs tabs={tabs} activeKey={typeTab} />
-
-        {/* Filters: search + result + legislature in one row */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          {/* Search */}
-          <VotesSearchInput value={search || ""} />
-
-          {/* Result filter */}
-          <div className="flex gap-2">
-            <Link
-              href={buildUrl({ result: undefined })}
-              className={`px-4 py-2 rounded-lg text-sm min-h-[40px] flex items-center transition-colors ${
-                !result ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
-              }`}
-            >
-              Tous
-            </Link>
-            {(["ADOPTED", "REJECTED"] as VotingResult[]).map((r) => (
-              <Link
-                key={r}
-                href={buildUrl({ result: r })}
-                className={`px-4 py-2 rounded-lg text-sm min-h-[40px] flex items-center transition-colors ${
-                  result === r ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
-                }`}
-              >
-                {VOTING_RESULT_LABELS[r]}
-              </Link>
-            ))}
-          </div>
-
-          {/* Legislature filter - no counts */}
-          {legislatures.length > 1 && (
-            <div className="flex gap-2">
-              {legislatures.map((leg) => (
-                <Link
-                  key={leg.legislature}
-                  href={buildUrl({
-                    legislature:
-                      legislature === leg.legislature ? undefined : String(leg.legislature),
-                  })}
-                  className={`px-4 py-2 rounded-lg text-sm min-h-[40px] flex items-center transition-colors ${
-                    legislature === leg.legislature
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
-                >
-                  {leg.legislature}e
-                </Link>
-              ))}
-            </div>
-          )}
+        {/* Unified filter bar: chamber, portée, thème, résultat, législature, tri, recherche */}
+        <div className="mb-6">
+          <VotesFilterBar
+            current={{
+              chamber,
+              result,
+              legislature,
+              theme,
+              type: params.type,
+              search,
+              sort,
+            }}
+            options={{
+              chambers,
+              legislatures,
+              themeCounts,
+              typeCounts,
+            }}
+          />
         </div>
 
-        {/* Theme filter grid */}
-        {themeCounts.length > 0 && (
-          <ThemeGrid
-            themes={themeGridItems}
-            clearHref={buildUrl({ theme: undefined })}
-            hasActiveTheme={!!theme}
-          />
-        )}
-
-        {/* Results summary + clear filters */}
+        {/* Results summary */}
         <div className="flex items-center justify-between mb-4 pb-3 border-b">
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">
@@ -331,20 +192,6 @@ export async function ScrutinsListing({ searchParams: params }: ScrutinsListingP
             </span>
             {adoptedPct > 0 && <span> · {adoptedPct}% adoptés</span>}
           </p>
-          {hasActiveFilters && (
-            <Link
-              href={buildUrl({
-                result: undefined,
-                legislature: undefined,
-                theme: undefined,
-                search: undefined,
-              })}
-              scroll={false}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Effacer les filtres
-            </Link>
-          )}
         </div>
 
         {showShowcase && <ExplainedVotesModule />}

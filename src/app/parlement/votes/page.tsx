@@ -3,6 +3,7 @@ import { ScrutinsListing } from "@/components/parlement";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import { VOTES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { normalizeSort } from "@/lib/data/scrutins";
 
 export const revalidate = 300;
 
@@ -16,6 +17,7 @@ interface PageProps {
     type?: string;
     search?: string;
     filter?: string;
+    sort?: string;
   }>;
 }
 
@@ -60,11 +62,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
 export default async function VotesListingPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  const sort = normalizeSort(params.sort);
 
   return (
     <>
       <Breadcrumb items={[{ label: "Parlement", href: "/parlement" }, { label: "Votes" }]} />
-      <ScrutinsListing searchParams={params} />
+      <ScrutinsListing searchParams={params} sort={sort} />
     </>
   );
 }

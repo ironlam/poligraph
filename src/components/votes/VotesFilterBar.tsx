@@ -379,11 +379,15 @@ export function VotesFilterBar({ current, options }: VotesFilterBarProps) {
 
                 <VotesSearchInput value={current.search ?? ""} />
 
-                <ActiveFilterChips
-                  filters={activeFilters}
-                  onRemove={removeFilter}
-                  onClearAll={clearAll}
-                />
+                {activeFilters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Tout effacer
+                  </button>
+                )}
               </div>
 
               <button
