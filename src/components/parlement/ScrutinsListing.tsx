@@ -227,6 +227,8 @@ export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsLi
             {hasActiveFilters && (
               <Link
                 href={buildUrl({
+                  chamber: undefined,
+                  type: undefined,
                   result: undefined,
                   legislature: undefined,
                   theme: undefined,
