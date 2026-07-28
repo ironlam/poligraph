@@ -23,6 +23,8 @@ interface PageProps {
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams;
+  // `sort` is intentionally absent from this whitelist: a sorted view's
+  // canonical always points at the unsorted listing (Task 6).
   const canonicalParams = new URLSearchParams();
   if (params.type) canonicalParams.set("type", params.type);
   if (params.theme) canonicalParams.set("theme", params.theme);
@@ -35,10 +37,19 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // bare /parlement/votes stays indexable. GSC: these facet URLs get 0 clicks.
   // Task 9: the bare ?filter=expliques view is its own indexable surface (own
   // title/canonical); any other param alongside it still falls back to noindex.
-  const isBareExplainedView =
-    params.filter === "expliques" && !hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
+  // Task 6: "recent" is normalizeSort()'s default (see @/lib/data/scrutins);
+  // the filter bar already omits it from the URL, but an explicit ?sort=recent
+  // must still read as the bare listing, not as an active filter, so it is
+  // stripped before the presence check below (VOTES_LISTING_FILTER_KEYS
+  // otherwise flips noindex on any non-empty `sort`).
+  const filterCheckParams = params.sort === "recent" ? { ...params, sort: undefined } : params;
 
-  const noindex = !isBareExplainedView && hasActiveListingFilter(params, VOTES_LISTING_FILTER_KEYS);
+  const isBareExplainedView =
+    params.filter === "expliques" &&
+    !hasActiveListingFilter(filterCheckParams, VOTES_LISTING_FILTER_KEYS);
+
+  const noindex =
+    !isBareExplainedView && hasActiveListingFilter(filterCheckParams, VOTES_LISTING_FILTER_KEYS);
 
   const chamberTitle =
     params.chamber === "AN"

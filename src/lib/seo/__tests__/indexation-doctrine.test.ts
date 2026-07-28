@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   politicianRobotsMetadata,
   MAIRE_MIN_COMMUNE_POPULATION,
@@ -17,6 +17,15 @@ import {
   VOTES_LISTING_FILTER_KEYS,
   DOSSIERS_LISTING_FILTER_KEYS,
 } from "../listing-filters";
+
+// votes/page.tsx renders <ScrutinsListing>, whose data-layer import chain
+// (src/lib/data/scrutins.ts -> src/lib/db.ts) constructs a real Prisma
+// client at module load. generateMetadata itself never touches the
+// database, so stub db here to import the module safely with no DB
+// available (e.g. in CI). Same pattern as explained-seo.test.ts.
+vi.mock("@/lib/db", () => ({ db: {} }));
+
+import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
 
 // Living map of the index-bloat doctrine. If any representative surface flips, this
 // file fails: a strong page must never become noindex, a thin one must never become
@@ -97,6 +106,9 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   it("filtered /parlement/votes (?chamber)", () => {
     expect(listingRobots({ chamber: "AN" }, VOTES_LISTING_FILTER_KEYS)).toEqual(NOINDEX_FOLLOW);
   });
+  it("sorted /parlement/votes (?sort=close)", () => {
+    expect(listingRobots({ sort: "close" }, VOTES_LISTING_FILTER_KEYS)).toEqual(NOINDEX_FOLLOW);
+  });
   it("filtered /parlement/dossiers (?status)", () => {
     expect(listingRobots({ status: "ADOPTED" }, DOSSIERS_LISTING_FILTER_KEYS)).toEqual(
       NOINDEX_FOLLOW
@@ -121,7 +133,7 @@ describe("doctrine — listing noindex perimeters can't silently shrink", () => 
     {
       route: "/parlement/votes",
       keys: VOTES_LISTING_FILTER_KEYS,
-      mandatory: ["chamber", "theme", "result"],
+      mandatory: ["chamber", "theme", "result", "sort"],
     },
     {
       route: "/parlement/dossiers",
@@ -138,6 +150,41 @@ describe("doctrine — listing noindex perimeters can't silently shrink", () => 
     for (const key of keys) {
       expect(hasActiveListingFilter({ [key]: "x" }, keys)).toBe(true);
     }
+  });
+});
+
+describe("doctrine — /parlement/votes sort stays out of the canonical", () => {
+  it("?sort=close is noindex,follow and canonical drops sort", async () => {
+    const m = await votesGenerateMetadata({
+      searchParams: Promise.resolve({ sort: "close" }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((m.robots as any)?.index).toBe(false);
+    expect(m.alternates?.canonical).toBe("/parlement/votes");
+  });
+
+  it("?sort=recent (default) is reachable and stays indexable, same canonical", async () => {
+    const m = await votesGenerateMetadata({
+      searchParams: Promise.resolve({ sort: "recent" }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((m.robots as any)?.index).not.toBe(false);
+    expect(m.alternates?.canonical).toBe("/parlement/votes");
+  });
+
+  it("bare listing (no sort param) matches ?sort=recent exactly", async () => {
+    const bare = await votesGenerateMetadata({
+      searchParams: Promise.resolve({}),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    const recent = await votesGenerateMetadata({
+      searchParams: Promise.resolve({ sort: "recent" }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    expect(recent.robots).toEqual(bare.robots);
+    expect(recent.alternates?.canonical).toBe(bare.alternates?.canonical);
   });
 });
 

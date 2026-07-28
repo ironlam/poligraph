@@ -28,6 +28,7 @@ export const VOTES_LISTING_FILTER_KEYS = [
   "chamber",
   "theme",
   "type",
+  "sort",
 ] as const;
 
 export const DOSSIERS_LISTING_FILTER_KEYS = ["status", "theme", "sort"] as const;
