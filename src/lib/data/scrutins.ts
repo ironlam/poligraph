@@ -296,6 +296,9 @@ async function queryScrutins(params: {
     search,
     explainedOnly,
   } = params;
+  // Defense-in-depth: getScrutins already whitelists `sort` before it can
+  // reach any "use cache" boundary, so this is a no-op on a well-behaved
+  // caller (idempotent on an already-whitelisted value or `undefined`).
   const sort = normalizeSort(params.sort);
   const skip = (page - 1) * limit;
 
@@ -365,8 +368,10 @@ async function queryScrutins(params: {
 
 /**
  * Cached path — bounded key space (enums + page, no free-text search).
- * `sort` is last with a `recent` default: omitting it (as all pre-existing
- * callers do) keeps the exact same cache key as before this param existed.
+ * `sort`, if present, is already whitelisted by the caller (getScrutins)
+ * before it reaches this "use cache" boundary — never a raw/garbage string.
+ * Omitting it (as all pre-existing callers do) keeps the exact same cache
+ * key as before this param existed.
  */
 async function getScrutinsFiltered(params: {
   page: number;
@@ -386,7 +391,16 @@ async function getScrutinsFiltered(params: {
   return queryScrutins(params);
 }
 
-/** Router: use cached path when no search, uncached when searching. */
+/**
+ * Router: use cached path when no search, uncached when searching.
+ *
+ * Whitelists `sort` here, BEFORE getScrutinsFiltered's "use cache" boundary
+ * fixes the cache key from these args. An unwhitelisted value (e.g. a
+ * garbage `?sort=` from the URL) must never cross that boundary — it would
+ * mint one new, unbounded cache entry per distinct garbage string. `sort` is
+ * left untouched when the caller omits it, so the default (no-sort) cache
+ * key is unchanged from before this normalization moved here.
+ */
 export async function getScrutins(params: {
   page: number;
   limit: number;
@@ -400,10 +414,12 @@ export async function getScrutins(params: {
   explainedOnly?: boolean;
   sort?: ScrutinSort;
 }) {
-  if (params.search) {
-    return queryScrutins(params);
+  const normalized =
+    params.sort === undefined ? params : { ...params, sort: normalizeSort(params.sort) };
+  if (normalized.search) {
+    return queryScrutins(normalized);
   }
-  return getScrutinsFiltered(params);
+  return getScrutinsFiltered(normalized);
 }
 
 export async function getLegislatures() {
