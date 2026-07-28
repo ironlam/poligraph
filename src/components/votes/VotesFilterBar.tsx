@@ -55,7 +55,9 @@ export interface VotesFilterBarOptions {
   chambers: { chamber: Chamber; _count: number }[];
   legislatures: { legislature: number; _count: number }[];
   themeCounts: { theme: ThemeCategory; _count: number }[];
-  typeCounts: { type: ScrutinType; _count: number }[];
+  // getTypeCounts() groups by type without filtering nulls (scrutins with no
+  // type), and those still count toward the "Tous" total, so keep the null bucket.
+  typeCounts: { type: ScrutinType | null; _count: number }[];
 }
 
 export interface VotesFilterBarProps {
