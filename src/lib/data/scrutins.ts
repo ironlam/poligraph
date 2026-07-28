@@ -178,8 +178,97 @@ export async function getTodayVotesSummary(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
+// Votes listing page — sort
+// ---------------------------------------------------------------------------
+
+export type ScrutinSort = "recent" | "close" | "turnout";
+const SORT_VALUES: ScrutinSort[] = ["recent", "close", "turnout"];
+
+// Whitelist guard: any non-listed value (incl. injection attempts) -> "recent".
+export function normalizeSort(raw: string | undefined): ScrutinSort {
+  return SORT_VALUES.includes(raw as ScrutinSort) ? (raw as ScrutinSort) : "recent";
+}
+
+type SortableRow = {
+  id: string;
+  votesFor: number;
+  votesAgainst: number;
+  votesAbstain: number;
+  votingDate: Date | null;
+};
+
+// Pure in-memory sort for computed orders. No raw SQL: the filtered id set is
+// fetched via a parameterized Prisma findMany, then ordered here.
+export function sortScrutinsInMemory<T extends SortableRow>(rows: T[], sort: ScrutinSort): T[] {
+  const byDateDesc = (a: T, b: T) =>
+    (b.votingDate?.getTime() ?? 0) - (a.votingDate?.getTime() ?? 0);
+  if (sort === "close") {
+    return [...rows].sort(
+      (a, b) =>
+        Math.abs(a.votesFor - a.votesAgainst) - Math.abs(b.votesFor - b.votesAgainst) ||
+        byDateDesc(a, b)
+    );
+  }
+  if (sort === "turnout") {
+    const t = (r: T) => r.votesFor + r.votesAgainst + r.votesAbstain;
+    return [...rows].sort((a, b) => t(b) - t(a) || byDateDesc(a, b));
+  }
+  return [...rows].sort(byDateDesc);
+}
+
+// ---------------------------------------------------------------------------
 // Votes listing page — data functions
 // ---------------------------------------------------------------------------
+
+const LISTING_SELECT = {
+  ...DAILY_SELECT,
+  dossierLegislatif: { select: { title: true, slug: true } },
+} satisfies Prisma.ScrutinSelect;
+
+type ListingRow = Prisma.ScrutinGetPayload<{ select: typeof LISTING_SELECT }>;
+
+/**
+ * Fetch one page of scrutins matching `where`, ordered by `sort`.
+ *
+ * `recent` uses Prisma's native `orderBy` + `skip`/`take`. `close`/`turnout`
+ * are computed orders: no raw SQL — fetch the filtered id set via a
+ * parameterized Prisma `findMany`, sort in memory (sortScrutinsInMemory),
+ * slice the page, then re-fetch full rows for just that page and reorder.
+ */
+async function fetchSortedPage(
+  where: Prisma.ScrutinWhereInput,
+  sort: ScrutinSort,
+  skip: number,
+  limit: number
+): Promise<{ scrutins: ListingRow[]; total: number }> {
+  if (sort === "recent") {
+    const [scrutins, total] = await Promise.all([
+      db.scrutin.findMany({
+        where,
+        orderBy: { votingDate: "desc" },
+        skip,
+        take: limit,
+        select: LISTING_SELECT,
+      }),
+      db.scrutin.count({ where }),
+    ]);
+    return { scrutins, total };
+  }
+
+  const filtered = await db.scrutin.findMany({
+    where,
+    select: { id: true, votesFor: true, votesAgainst: true, votesAbstain: true, votingDate: true },
+  });
+  const ordered = sortScrutinsInMemory(filtered, sort);
+  const pageIds = ordered.slice(skip, skip + limit).map((r) => r.id);
+  const rows = pageIds.length
+    ? await db.scrutin.findMany({ where: { id: { in: pageIds } }, select: LISTING_SELECT })
+    : [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const scrutins = pageIds.map((id) => byId.get(id)).filter((r): r is ListingRow => r != null);
+
+  return { scrutins, total: filtered.length };
+}
 
 /** Core query logic shared by cached and uncached paths. */
 async function queryScrutins(params: {
@@ -193,6 +282,7 @@ async function queryScrutins(params: {
   excludeType?: ScrutinType;
   search?: string;
   explainedOnly?: boolean;
+  sort?: ScrutinSort;
 }) {
   const {
     page,
@@ -206,6 +296,7 @@ async function queryScrutins(params: {
     search,
     explainedOnly,
   } = params;
+  const sort = normalizeSort(params.sort);
   const skip = (page - 1) * limit;
 
   const where = {
@@ -249,18 +340,8 @@ async function queryScrutins(params: {
     }),
   };
 
-  const [scrutins, total, stats] = await Promise.all([
-    db.scrutin.findMany({
-      where,
-      orderBy: { votingDate: "desc" },
-      skip,
-      take: limit,
-      select: {
-        ...DAILY_SELECT,
-        dossierLegislatif: { select: { title: true, slug: true } },
-      },
-    }),
-    db.scrutin.count({ where }),
+  const [{ scrutins, total }, stats] = await Promise.all([
+    fetchSortedPage(where, sort, skip, limit),
     db.scrutin.groupBy({
       by: ["result"],
       where,
@@ -282,7 +363,11 @@ async function queryScrutins(params: {
   };
 }
 
-/** Cached path — bounded key space (enums + page, no free-text search). */
+/**
+ * Cached path — bounded key space (enums + page, no free-text search).
+ * `sort` is last with a `recent` default: omitting it (as all pre-existing
+ * callers do) keeps the exact same cache key as before this param existed.
+ */
 async function getScrutinsFiltered(params: {
   page: number;
   limit: number;
@@ -293,6 +378,7 @@ async function getScrutinsFiltered(params: {
   type?: ScrutinType;
   excludeType?: ScrutinType;
   explainedOnly?: boolean;
+  sort?: ScrutinSort;
 }) {
   "use cache";
   cacheTag("votes");
@@ -312,6 +398,7 @@ export async function getScrutins(params: {
   excludeType?: ScrutinType;
   search?: string;
   explainedOnly?: boolean;
+  sort?: ScrutinSort;
 }) {
   if (params.search) {
     return queryScrutins(params);
