@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VotingResultBadge } from "./VoteBadge";
+import { CardGroupPositions } from "./CardGroupPositions";
 import {
   toPublicTitleView,
   displayTitleOf,
@@ -9,6 +10,8 @@ import {
 } from "@/lib/votes/to-public-title-view";
 import { formatDate } from "@/lib/utils";
 import { formatLegislature } from "@/lib/votes/legislature";
+import { formatVoteMargin } from "@/lib/votes/vote-margin";
+import type { ScrutinGroupPositionData } from "@/lib/data/groupes";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
 import {
   CHAMBER_SHORT_LABELS,
@@ -18,7 +21,7 @@ import {
   SCRUTIN_TYPE_LABELS,
   SCRUTIN_TYPE_COLORS,
 } from "@/config/labels";
-import { Calendar, Users, ExternalLink, Building2, FileText } from "lucide-react";
+import { ExternalLink, Building2, FileText } from "lucide-react";
 
 interface VoteCardProps {
   id: string;
@@ -40,6 +43,9 @@ interface VoteCardProps {
   /** Plan 6: the joined policy-title row. When APPROVED + valid, the card shows
    *  the policy title + "Titre explicatif" badge; otherwise the official title. */
   policy?: PolicyForView | null;
+  /** Group positions for this scrutin (batch-loaded by the listing). Rendered
+   *  below the suffrage bar in non-compact mode; omitted entirely when empty. */
+  groupPositions?: ScrutinGroupPositionData[];
   compact?: boolean;
 }
 
@@ -69,6 +75,7 @@ export function VoteCard({
   type,
   dossier,
   policy,
+  groupPositions,
   compact = false,
 }: VoteCardProps) {
   // Use slug for URL if available, fallback to id
@@ -87,9 +94,13 @@ export function VoteCard({
   const isPolicy = view.mode === "policy";
   const scrutinNumber = extractScrutinNumber(externalId);
   const total = votesFor + votesAgainst + votesAbstain;
-  const forPercent = total > 0 ? (votesFor / total) * 100 : 0;
-  const againstPercent = total > 0 ? (votesAgainst / total) * 100 : 0;
-  const abstainPercent = total > 0 ? (votesAbstain / total) * 100 : 0;
+  const margin = formatVoteMargin(votesFor, votesAgainst);
+  const marginLabelBase = margin.isClose ? margin.label.replace(" · vote serré", "") : margin.label;
+  const metaLine = [
+    formatDate(new Date(votingDate)),
+    ...(compact ? [] : [`${total} votants`]),
+    formatLegislature(legislature),
+  ].join(" · ");
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -136,18 +147,8 @@ export function VoteCard({
                   {THEME_CATEGORY_ICONS[theme]} {THEME_CATEGORY_LABELS[theme]}
                 </span>
               )}
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                {formatDate(new Date(votingDate))}
-              </span>
-              {!compact && (
-                <span className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {total} votants
-                </span>
-              )}
-              <span className="text-muted-foreground">{formatLegislature(legislature)}</span>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">{metaLine}</p>
             {dossier?.slug && (
               <Link
                 href={`/parlement/dossiers/${dossier.slug}`}
@@ -178,31 +179,62 @@ export function VoteCard({
 
         {!compact && (
           <>
-            {/* Vote bar */}
-            <div className="space-y-1">
-              <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
-                <div
-                  className="bg-green-500 transition-all"
-                  style={{ width: `${forPercent}%` }}
-                  title={`Pour: ${votesFor}`}
+            {/* Suffrage bar: pour vs contre, relative to expressed votes, with
+                a 50% majority marker. Abstention is shown separately below. */}
+            <div className="space-y-1.5">
+              {margin.hasExpressed ? (
+                <>
+                  <div className="relative flex h-2 rounded-full overflow-hidden bg-muted">
+                    <div
+                      className="transition-all"
+                      style={{ width: `${margin.forPercent}%`, background: "var(--vote-pour)" }}
+                      title={`Pour: ${votesFor}`}
+                    />
+                    <div
+                      className="transition-all"
+                      style={{
+                        width: `${margin.againstPercent}%`,
+                        background: "var(--vote-contre)",
+                      }}
+                      title={`Contre: ${votesAgainst}`}
+                    />
+                    <span
+                      className="absolute left-1/2 top-0 bottom-0 w-px bg-foreground"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                    <span className="flex items-center gap-3 text-muted-foreground">
+                      <span>Pour: {votesFor}</span>
+                      <span>Contre: {votesAgainst}</span>
+                    </span>
+                    <span className="font-medium">
+                      {marginLabelBase}
+                      {margin.isClose && (
+                        <Badge variant="outline" className="ml-1.5 align-middle text-xs">
+                          vote serré
+                        </Badge>
+                      )}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">{margin.label}</p>
+              )}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: "var(--vote-abstention)" }}
+                  aria-hidden="true"
                 />
-                <div
-                  className="bg-red-500 transition-all"
-                  style={{ width: `${againstPercent}%` }}
-                  title={`Contre: ${votesAgainst}`}
-                />
-                <div
-                  className="bg-yellow-500 transition-all"
-                  style={{ width: `${abstainPercent}%` }}
-                  title={`Abstention: ${votesAbstain}`}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span className="text-green-600">Pour: {votesFor}</span>
-                <span className="text-red-600">Contre: {votesAgainst}</span>
-                <span className="text-yellow-600">Abstention: {votesAbstain}</span>
+                <span>Abstention: {votesAbstain}</span>
               </div>
             </div>
+            {groupPositions && groupPositions.length > 0 && (
+              <div className="mt-3">
+                <CardGroupPositions positions={groupPositions} />
+              </div>
+            )}
           </>
         )}
       </CardContent>
