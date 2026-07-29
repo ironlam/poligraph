@@ -30,9 +30,20 @@ export const ALL_TAGS = [
  */
 export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
 
+/**
+ * Narrow sub-tags applied ALONGSIDE a broad tag on specific data functions
+ * (e.g. `getKeyVotes` is tagged both "votes" and "votes-key"). Selectable so an
+ * operator can refresh just that surface (the key-votes hub, the homepage)
+ * without purging the whole "votes" tag, which spans the entire site and is
+ * expensive to regenerate. Held out of `revalidateAll()`: a full purge already
+ * covers them through their parent tag.
+ */
+export const NARROW_TAGS = ["votes-key", "homepage"] as const;
+
 /** Every tag an operator may name explicitly (admin endpoint, cron endpoint). */
-export const SELECTABLE_TAGS = [...ALL_TAGS, ...FROZEN_TAGS] as const;
+export const SELECTABLE_TAGS = [...ALL_TAGS, ...FROZEN_TAGS, ...NARROW_TAGS] as const;
 
 export type CacheTag = (typeof ALL_TAGS)[number];
+export type NarrowCacheTag = (typeof NARROW_TAGS)[number];
 export type FrozenCacheTag = (typeof FROZEN_TAGS)[number];
 export type SelectableCacheTag = (typeof SELECTABLE_TAGS)[number];

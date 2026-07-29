@@ -13,12 +13,15 @@ import { SELECTABLE_TAGS } from "@/lib/cache-tags";
 import { SITEMAP_SHARD_TAGS, AFFAIR_BEARING_SHARDS } from "@/lib/seo/sitemap-tags";
 import { revalidateCacheSchema } from "@/lib/security/schemas/admin";
 
-describe("cache invalidation scopes", () => {
-  beforeEach(() => {
-    revalidateTagSpy.mockClear();
-    revalidatePathSpy.mockClear();
-  });
+// Clear the spies before EVERY test (all describes), so a test that fires a
+// broad purge (e.g. revalidateAll) can't leak its tag calls into a later
+// describe that reads the accumulated spy state.
+beforeEach(() => {
+  revalidateTagSpy.mockClear();
+  revalidatePathSpy.mockClear();
+});
 
+describe("cache invalidation scopes", () => {
   it("invalidateEntity('election') updates only the global elections tag", () => {
     invalidateEntity("election");
     const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
@@ -76,6 +79,24 @@ describe("selective invalidation allow-list", () => {
     expect(revalidateCacheSchema.safeParse({ tags: ["nope"] }).success).toBe(false);
     expect(revalidateCacheSchema.safeParse({ tags: ["affairs", "nope"] }).success).toBe(false);
     expect(revalidateCacheSchema.safeParse({ tags: [] }).success).toBe(false);
+  });
+});
+
+// Narrow sub-tags let an operator refresh the key-votes hub / homepage without
+// firing the global "votes" purge (which spans the whole site and once tripped
+// the Vercel spend cap).
+describe("narrow sub-tags (targeted hub/homepage refresh)", () => {
+  it("are operator-selectable via the cache endpoint", () => {
+    for (const tag of ["votes-key", "homepage"]) {
+      expect(revalidateCacheSchema.safeParse({ tags: [tag] }).success).toBe(true);
+    }
+  });
+
+  it("are NOT purged by revalidateAll — their parent tag covers them there", () => {
+    revalidateAll();
+    const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
+    expect(tags).not.toContain("votes-key");
+    expect(tags).not.toContain("homepage");
   });
 });
 
