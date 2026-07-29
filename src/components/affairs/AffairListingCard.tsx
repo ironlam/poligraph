@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { stripMarkdown } from "@/lib/utils";
+import { SITE_URL } from "@/config/site";
 import {
   getCertaintyLevel,
   CERTAINTY_LABELS,
@@ -50,7 +51,7 @@ export interface AffairListingCardData {
   startDate: Date | null;
   factsDate: Date | null;
   sentence: string | null;
-  sources: { length: number };
+  _count: { sources: number };
   politician: {
     slug: string;
     fullName: string;
@@ -80,7 +81,7 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
     currentParty: affair.politician.currentParty,
   });
 
-  const sourcesCount = affair.sources.length;
+  const sourcesCount = affair._count.sources;
 
   return (
     <article
@@ -182,7 +183,10 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
           <span className="flex items-center gap-1">
             {sourcesCount} source{sourcesCount !== 1 ? "s" : ""} vérifiée
             {sourcesCount !== 1 ? "s" : ""}
-            <CiteAnchor anchorId={citeAnchorId.affair(affair.id)} label={affair.title} />
+            <CiteAnchor
+              permalink={`${SITE_URL}/affaires/${affair.slug ?? affair.id}`}
+              label={affair.title}
+            />
           </span>
           <Link href={detailHref} className="font-medium text-primary hover:underline">
             Voir détails →

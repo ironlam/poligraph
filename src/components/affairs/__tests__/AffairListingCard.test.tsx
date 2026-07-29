@@ -15,7 +15,7 @@ function baseAffair(overrides: Partial<AffairListingCardData> = {}): AffairListi
     startDate: null,
     factsDate: null,
     sentence: null,
-    sources: { length: 2 },
+    _count: { sources: 2 },
     politician: {
       slug: "jean-test",
       fullName: "Jean Test",
@@ -71,8 +71,17 @@ describe("AffairListingCard : présomption d'innocence (RGPD art. 10)", () => {
 });
 
 describe("AffairListingCard : citabilité", () => {
-  it("expose un contrôle « Citer » (Copier le lien)", () => {
+  it("expose un contrôle « Citer » pointant vers le permalien de l'affaire", () => {
     render(<AffairListingCard affair={baseAffair()} />);
-    expect(screen.getByRole("link", { name: /Copier le lien/i })).toBeTruthy();
+    const cite = screen.getByRole("link", { name: /Copier le lien/i });
+    // Le lien citable vise la page de l'affaire, pas une ancre de la liste.
+    expect(cite.getAttribute("href")).toContain("/affaires/affaire-de-test");
+  });
+
+  it("affiche le nombre réel de sources vérifiées", () => {
+    const { container } = render(
+      <AffairListingCard affair={baseAffair({ _count: { sources: 5 } })} />
+    );
+    expect(container.textContent).toContain("5 sources vérifiées");
   });
 });

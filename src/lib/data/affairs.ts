@@ -107,6 +107,7 @@ async function queryAffairs(
           select: { id: true, slug: true, shortName: true, name: true, color: true },
         },
         sources: { select: { id: true }, take: 1 },
+        _count: { select: { sources: true } },
       },
       orderBy,
       skip,
