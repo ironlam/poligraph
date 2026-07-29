@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { AffairesFilterBar } from "@/components/affairs/AffairesFilterBar";
+import { AffairHubTiles } from "@/components/affairs/AffairHubTiles";
 import { SeoIntro } from "@/components/seo/SeoIntro";
 import { stripMarkdown } from "@/lib/utils";
 import {
@@ -34,7 +35,6 @@ import {
   isAccusedInvolvement,
   type CertaintyLevel,
 } from "@/config/certainty";
-import { AffairModeToggle } from "@/components/affairs/AffairModeToggle";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -204,29 +204,12 @@ export default async function AffairesPage({ searchParams }: PageProps) {
                 text={`${totalAffairs} affaires judiciaires impliquant des responsables politiques, documentées avec sources vérifiables. Mises en examen, procès, condamnations et relaxes.`}
               />
             </div>
-            {/* Route the strong judicial/statistics intents from the bare listing */}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <Link
-                href="/affaires/condamnations"
-                className="font-medium text-primary hover:underline"
-                prefetch={false}
-              >
-                Condamnations définitives et en cours →
-              </Link>
-              <Link
-                href="/statistiques"
-                className="font-medium text-primary hover:underline"
-                prefetch={false}
-              >
-                Statistiques : taux de condamnation par parti →
-              </Link>
-            </div>
           </div>
         </div>
 
-        {/* Mode toggle */}
+        {/* Hub tiles: route the strong judicial/statistics/victim intents from the bare listing */}
         <div className="mb-4">
-          <AffairModeToggle mode={mode} />
+          <AffairHubTiles etabliCount={certaintyCounts.ETABLI ?? 0} />
         </div>
 
         {/* Victim mode methodology note */}
@@ -239,31 +222,6 @@ export default async function AffairesPage({ searchParams }: PageProps) {
                 En savoir plus
               </a>
             </p>
-          </div>
-        )}
-
-        {/* Party quick-links */}
-        {partiesWithAffairs.length > 0 && (
-          <div className="mb-4">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Explorer par parti</p>
-            <div className="flex flex-wrap gap-2">
-              {partiesWithAffairs
-                .sort((a, b) => b._count.affairsAtTime - a._count.affairsAtTime)
-                .slice(0, 12)
-                .map((p) => (
-                  <Link
-                    key={p.slug}
-                    href={`/affaires/parti/${p.slug}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border hover:bg-muted transition-colors"
-                    prefetch={false}
-                  >
-                    <span className="font-medium">{p.shortName}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {p._count.affairsAtTime}
-                    </span>
-                  </Link>
-                ))}
-            </div>
           </div>
         )}
 
@@ -288,6 +246,7 @@ export default async function AffairesPage({ searchParams }: PageProps) {
 
         {/* Compact filter bar */}
         <AffairesFilterBar
+          mode={mode}
           currentFilters={{
             search: searchFilter,
             sort: sortFilter,
