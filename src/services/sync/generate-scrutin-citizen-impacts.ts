@@ -241,21 +241,27 @@ export async function generateScrutinCitizenImpacts(options?: {
         continue;
       }
 
-      // Coherence guard: for amendment-linked scrutins, the impact must echo the
-      // official reference (title/amendment). Otherwise the model described a
-      // measure from the broad dossier context — do not persist automatically.
-      if (prepared.hasLinkedAmendment && prepared.input.substanceBlocks.length > 0) {
+      // Coherence guard: for amendment-linked scrutins, the generated impact must
+      // echo the official reference (approved policy title, else resolved amendment
+      // substance). Runs whenever the scrutin is amendment-linked — NOT only when
+      // substance resolved: assessCoherence can check against the policy title even
+      // with empty blocks, and when NO reference exists at all (substance not yet
+      // resolved AND no policy title) we cannot tell whether the model described
+      // THIS amendment or drifted onto the broad dossier — so we refuse to persist.
+      // Better an empty "en bref" than a confident wrong one; a later run
+      // regenerates once a reference exists, since the row stays null.
+      if (prepared.hasLinkedAmendment) {
         const verdict = assessCoherence({
           text: result.citizenImpact,
           policyTitle: prepared.policyTitle?.policyTitle ?? null,
           policySubtitle: prepared.policyTitle?.policySubtitle ?? null,
           blocks: prepared.input.substanceBlocks,
         });
-        if (!verdict.coherent) {
+        if (verdict.referenceUsed === "none" || !verdict.coherent) {
           stats.skippedIncoherent++;
           console.warn(
-            `[citizen-impacts] INCOHERENT impact for ${prepared.slug ?? id} ` +
-              `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed}) — not persisted`
+            `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} ` +
+              `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed})`
           );
           continue;
         }
