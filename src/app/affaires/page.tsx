@@ -3,38 +3,24 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { SimplePagination } from "@/components/ui/SimplePagination";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 import { AffairesFilterBar } from "@/components/affairs/AffairesFilterBar";
 import { AffairHubTiles } from "@/components/affairs/AffairHubTiles";
+import { AffairListingCard } from "@/components/affairs/AffairListingCard";
 import { SeoIntro } from "@/components/seo/SeoIntro";
-import { stripMarkdown } from "@/lib/utils";
 import {
   getAffairs,
   getSuperCategoryCounts,
   getCertaintyCounts,
   getPartiesWithAffairs,
 } from "@/lib/data/affairs";
-import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import {
   AFFAIR_STATUS_LABELS,
-  AFFAIR_CATEGORY_LABELS,
-  AFFAIR_STATUS_NEEDS_PRESUMPTION,
   AFFAIR_SUPER_CATEGORY_LABELS,
-  AFFAIR_SUPER_CATEGORY_COLORS,
   AFFAIR_SUPER_CATEGORY_DESCRIPTIONS,
-  CATEGORY_TO_SUPER,
-  INVOLVEMENT_LABELS,
-  INVOLVEMENT_COLORS,
   type AffairSuperCategory,
 } from "@/config/labels";
-import {
-  getCertaintyLevel,
-  CERTAINTY_LABELS,
-  CERTAINTY_COLORS,
-  isAccusedInvolvement,
-  type CertaintyLevel,
-} from "@/config/certainty";
+import { CERTAINTY_LABELS, type CertaintyLevel } from "@/config/certainty";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -44,15 +30,6 @@ import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/
 import { AFFAIRES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
-
-// Hex border colors for affair card left-border (keyed by super-category)
-const SUPER_CATEGORY_BORDER: Record<AffairSuperCategory, string> = {
-  PROBITE: "#9333ea",
-  FINANCES: "#2563eb",
-  PERSONNES: "#dc2626",
-  EXPRESSION: "#d97706",
-  AUTRE: "#6b7280",
-};
 
 interface PageProps {
   searchParams: Promise<{
@@ -291,152 +268,9 @@ export default async function AffairesPage({ searchParams }: PageProps) {
         {affairs.length > 0 ? (
           <>
             <div className="space-y-4">
-              {affairs.map((affair) => {
-                const superCat = CATEGORY_TO_SUPER[affair.category];
-                const certainty = getCertaintyLevel(affair.status);
-                // Charging certainty badge only for the accused; otherwise the
-                // involvement badge below carries the politician's role (#383).
-                const accused = isAccusedInvolvement(affair.involvement);
-                // Get the most relevant date for display
-                const relevantDate = affair.verdictDate || affair.startDate || affair.factsDate;
-                const dateLabel = affair.verdictDate
-                  ? "Verdict"
-                  : affair.startDate
-                    ? "Révélation"
-                    : affair.factsDate
-                      ? "Faits"
-                      : null;
-                return (
-                  <Card
-                    key={affair.id}
-                    className="border-l-4 transition-shadow hover:shadow-md"
-                    style={{ borderLeftColor: SUPER_CATEGORY_BORDER[superCat] }}
-                  >
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-start gap-2 mb-2 flex-wrap">
-                            {relevantDate && (
-                              <Badge variant="secondary" className="font-mono text-base">
-                                {new Date(relevantDate).getFullYear()}
-                                {dateLabel && (
-                                  <span className="ml-1 text-xs opacity-70">({dateLabel})</span>
-                                )}
-                              </Badge>
-                            )}
-                            <Badge className={AFFAIR_SUPER_CATEGORY_COLORS[superCat]}>
-                              {AFFAIR_SUPER_CATEGORY_LABELS[superCat]}
-                            </Badge>
-                            {accused && (
-                              <Badge className={CERTAINTY_COLORS[certainty]}>
-                                {CERTAINTY_LABELS[certainty]}
-                              </Badge>
-                            )}
-                            <Badge variant="outline">
-                              {AFFAIR_CATEGORY_LABELS[affair.category]}
-                            </Badge>
-                            {affair.involvement !== "DIRECT" && (
-                              <Badge
-                                className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}
-                              >
-                                {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
-                              </Badge>
-                            )}
-                          </div>
-
-                          <h2 className="text-lg font-semibold mb-1">{affair.title}</h2>
-
-                          <Link
-                            href={`/politiques/${affair.politician.slug}`}
-                            className="text-primary hover:underline text-sm"
-                          >
-                            {affair.politician.fullName}
-                          </Link>
-                          {(() => {
-                            const display = getAffairPartyDisplay({
-                              factsDate: affair.factsDate,
-                              partyAtTime: affair.partyAtTime,
-                              currentParty: affair.politician.currentParty,
-                            });
-                            if (display.kind === "at-time") {
-                              return (
-                                <span className="text-sm text-muted-foreground">
-                                  {" ("}
-                                  {display.party.slug ? (
-                                    <Link
-                                      href={`/affaires/parti/${display.party.slug}`}
-                                      className="hover:underline hover:text-foreground"
-                                    >
-                                      {display.party.shortName}
-                                    </Link>
-                                  ) : (
-                                    display.party.shortName
-                                  )}
-                                  {!display.sameAsCurrent && (
-                                    <span className="text-xs"> à l&apos;époque</span>
-                                  )}
-                                  {")"}
-                                </span>
-                              );
-                            }
-                            if (display.kind === "current") {
-                              return (
-                                <span className="text-sm text-muted-foreground">
-                                  {" ("}
-                                  {display.party.shortName}
-                                  {")"}
-                                </span>
-                              );
-                            }
-                            if (
-                              display.kind === "unknown" &&
-                              display.reason === "pre-dates-current-party"
-                            ) {
-                              return (
-                                <span
-                                  className="text-sm text-muted-foreground italic"
-                                  title={`Parti actuel (${display.currentPartyName}) fondé en ${display.currentPartyFoundedDate?.getFullYear()}, soit après la date des faits.`}
-                                >
-                                  {" (parti à l'époque non renseigné)"}
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-
-                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                            {stripMarkdown(affair.description)}
-                          </p>
-
-                          {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status] &&
-                            (affair.involvement === "DIRECT" ||
-                              affair.involvement === "INDIRECT") && (
-                              <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded mt-3 inline-block">
-                                Présomption d&apos;innocence : affaire en cours
-                              </p>
-                            )}
-                        </div>
-
-                        <div className="text-sm text-muted-foreground md:text-right md:min-w-[150px]">
-                          {affair.sentence && (
-                            <p className="font-medium text-foreground mb-2">{affair.sentence}</p>
-                          )}
-                          <p className="mb-2">
-                            {affair.sources.length} source
-                            {affair.sources.length !== 1 ? "s" : ""}
-                          </p>
-                          <Link
-                            href={`/affaires/${affair.slug}`}
-                            className="text-primary hover:underline text-xs"
-                          >
-                            Voir détails →
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+              {affairs.map((affair) => (
+                <AffairListingCard key={affair.id} affair={affair} />
+              ))}
             </div>
 
             {/* Pagination */}
