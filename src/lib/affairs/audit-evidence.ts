@@ -9,84 +9,29 @@
  * a level or reads a ledger lives here.
  */
 import type { AffairStatus, Involvement } from "@/generated/prisma";
-
-/** Roles for which the judicial outcome of the affair is the person's own. */
-export const ADVERSE_INVOLVEMENTS: Involvement[] = ["DIRECT", "INDIRECT"];
-
-/** Hôtes de juridictions et d'institutions compétentes. Niveau B. */
-export const OFFICIAL_HOSTS = [
-  "courdecassation.fr",
-  "cours-appel.justice.fr",
-  "justice.fr",
-  "conseil-etat.fr",
-  "ccomptes.fr",
-  "legifrance.gouv.fr",
-  "conseil-constitutionnel.fr",
-  "juricaf.org",
-];
-
-/** Éditeurs correspondant à une juridiction ou institution compétente. Niveau B. */
-export const OFFICIAL_PUBLISHER =
-  /cour d.appel|cour de cassation|conseil d.[ée]tat|cour des comptes|tribunal|parquet|minist[èe]re de la justice|conseil constitutionnel|ordre des/i;
-
-/** Types de source qui ne comptent jamais comme secondaire indépendante.
- *  Wikipedia est exclu délibérément : c'est la source qui a induit en erreur sur
- *  l'arrêt du 7 juillet 2026, et une encyclopédie n'atteste pas un dispositif. */
-export const NOT_INDEPENDENT_TYPES = new Set(["WIKIPEDIA", "WIKIDATA"]);
+import { RULES } from "@/lib/affairs/grading-rules";
 
 /**
- * Recours encore ouvert, énoncé explicitement.
- *
- * La première version cherchait « pourvoi », « en appel » ou « non définitive »
- * n'importe où, et flaguait 15 affaires à tort : une condamnation définitive raconte
- * normalement son historique (« condamné en appel », « rejet du pourvoi, donnant un
- * caractère définitif »). Mentionner un recours passé n'est pas une contradiction.
+ * The rules themselves live in `grading-rules.ts`, where they can be fingerprinted
+ * as a whole. These are the names this module and the audit script already used;
+ * they are now derived rather than declared, so they cannot drift from the
+ * fingerprinted set.
  */
-export const PENDING_RECOURSE = [
-  /pourvoi[^.]{0,60}?(reste possible|est possible|en cours|pendant|a [ée]t[ée] form[ée])/i,
-  /(se sont pourvus|s'est pourvu|se pourvoit)[^.]{0,40}cassation/i,
-  /appel en cours/i,
-  /n['’]est pas d[ée]finitive/i,
-];
-
-/**
- * Recours épuisés, énoncé explicitement. Annule le signal de pendance.
- *
- * La forme simple « la condamnation est définitive » a été ajoutée après un faux
- * signalement : le motif ne reconnaissait que l'adverbe « définitivement » et
- * « caractère définitif ». La négation « n'est pas définitive » ne peut pas matcher,
- * le « n'est pas » s'intercalant entre les deux mots recherchés.
- */
-export const RECOURSE_EXHAUSTED =
-  /rejet[^.]{0,40}pourvoi|pourvoi[^.]{0,40}(rejet|a [ée]t[ée] rejet)|d[ée]finitivement|caract[èe]re d[ée]finitif|voies de recours [ée]puis|condamnation est (aujourd'hui )?d[ée]finitive|devenue d[ée]finitive|rendant la condamnation d[ée]finitive/i;
-
-/**
- * A sentence split between a firm part and a suspended part.
- *
- * `SentenceDetails` renders « (ferme) » as soon as `prisonSuspended` is not
- * true, so a partly-suspended sentence stored as a plain total is published as
- * if the whole term were firm. 15 fiches were in that state, some tripling the
- * firm term of a named person, and none of them was flagged: the audit only
- * compared the status against the recourse wording.
- *
- * Two shapes, because the corpus writes it both ways: « 4 ans dont 2 ferme »
- * and « 4 ans ferme, 1 an avec sursis ». Kept close-range so an unrelated
- * « dont » further down a description does not fire.
- */
-const PARTLY_SUSPENDED = [
-  /\bdont\b[^.|]{0,60}(sursis|ferme)/i,
-  /\bferme\b[^.|]{0,60}sursis/i,
-  /\bsursis\b[^.|]{0,60}ferme/i,
-];
+export const ADVERSE_INVOLVEMENTS = RULES.coherence.adverseInvolvements as readonly Involvement[];
+export const OFFICIAL_HOSTS: readonly string[] = RULES.evidence.officialHosts;
+export const OFFICIAL_PUBLISHER = RULES.evidence.officialPublisher;
+export const NOT_INDEPENDENT_TYPES = new Set<string>(RULES.evidence.notIndependentTypes);
+export const PENDING_RECOURSE: readonly RegExp[] = RULES.coherence.pendingRecourse;
+export const RECOURSE_EXHAUSTED = RULES.coherence.recourseExhausted;
 
 /** True when the text describes a sentence that is not entirely firm. */
 export function describesPartlySuspendedSentence(text: string): boolean {
-  return PARTLY_SUSPENDED.some((re) => re.test(text));
+  return RULES.coherence.partlySuspended.some((re) => re.test(text));
 }
 
 export function describesPendingRecourse(description: string): boolean {
-  if (RECOURSE_EXHAUSTED.test(description)) return false;
-  return PENDING_RECOURSE.some((re) => re.test(description));
+  if (RULES.coherence.recourseExhausted.test(description)) return false;
+  return RULES.coherence.pendingRecourse.some((re) => re.test(description));
 }
 
 export type EvidenceLevel = "A" | "B" | "C" | "D";
