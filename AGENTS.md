@@ -133,6 +133,28 @@ npx tsx scripts/my-script.ts
 npx dotenv -e .env -- npx tsx scripts/x.ts   # When env loading is needed
 ```
 
+### What belongs in `scripts/`
+
+Two kinds of script live here, and only one of them stays.
+
+**Durable**: re-runnable against any database state, assumes no particular
+starting point. `sync-*`, read-only `audit-*`, `debug-*`, `seed-*`. Lives in
+`scripts/` and gets a `package.json` entry so it is discoverable.
+
+**One-shot**: assumes a specific broken state that stops existing the moment the
+script succeeds. `backfill-*`, `migrate-*`, `fix-*`. Either write it in
+`scripts/.local/` (gitignored), or land it in `scripts/` and delete it in the PR
+that follows its run. A completed backfill has no second use: the state it
+repairs is gone.
+
+The distinction is the exit, not the prefix. A backfill kept "just in case" is
+dead weight that every contributor has to read past, and any deleted script comes
+back with `git log --diff-filter=D --name-only`.
+
+`src/__tests__/consistency.test.ts` enforces the mechanical half of this: every
+`package.json` entry and every `sync-full.ts` step must point at a file that
+exists. Deleting a wired script without unwiring it fails CI.
+
 ---
 
 ## 5. Architecture essentials
