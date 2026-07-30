@@ -17,7 +17,7 @@ import { RULES } from "@/lib/affairs/grading-rules";
  * they are now derived rather than declared, so they cannot drift from the
  * fingerprinted set.
  */
-export const ADVERSE_INVOLVEMENTS = RULES.coherence.adverseInvolvements as readonly Involvement[];
+export const ADVERSE_INVOLVEMENTS: readonly Involvement[] = RULES.coherence.adverseInvolvements;
 export const OFFICIAL_HOSTS: readonly string[] = RULES.evidence.officialHosts;
 export const OFFICIAL_PUBLISHER = RULES.evidence.officialPublisher;
 export const NOT_INDEPENDENT_TYPES = new Set<string>(RULES.evidence.notIndependentTypes);
@@ -101,6 +101,60 @@ export interface Ledger {
  */
 export function isComparable(baseline: Baseline | undefined, rulesVersion: number): boolean {
   return baseline?.rulesVersion === rulesVersion;
+}
+
+/** Deux motifs de transfert diffèrent s'ils ne visent pas la même issue. */
+function sameOutcome(a: ReviewOutcome, b: ReviewOutcome): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === "TRANSFERRED" && b.kind === "TRANSFERRED" ? a.issue === b.issue : true;
+}
+
+/**
+ * Record why affairs left the queue, reclassifying entries that are already there.
+ *
+ * Reclassification is not an edge case: the 27 entries inherited from the old
+ * format are all `LEGACY`, and assigning them to #569 or #571 is the next step
+ * this instrument is meant to enable. A version of this that skipped known ids
+ * made that impossible while reporting success.
+ */
+export function recordReview(
+  ledger: Ledger,
+  ids: string[],
+  outcome: ReviewOutcome
+): { added: number; reclassified: number } {
+  const at = new Date().toISOString();
+  const byId = new Map(ledger.reviewed.map((e) => [e.affairId, e]));
+  let added = 0;
+  let reclassified = 0;
+
+  for (const affairId of ids) {
+    const existing = byId.get(affairId);
+    if (!existing) {
+      byId.set(affairId, { affairId, outcome, at });
+      added++;
+      continue;
+    }
+    if (sameOutcome(existing.outcome, outcome)) continue;
+    byId.set(affairId, { affairId, outcome, at });
+    reclassified++;
+  }
+
+  ledger.reviewed = [...byId.values()];
+  return { added, reclassified };
+}
+
+/**
+ * Push a superseded baseline onto the archive, flat.
+ *
+ * A baseline is a comparison point that has been published, so losing one in
+ * silence costs more than keeping a dead object in a local file. Kept flat
+ * because wrapping the archive in itself on each call produced `[[old], new]`,
+ * gaining a level of nesting every time.
+ */
+export function archiveBaseline(archive: unknown, superseded: Baseline | undefined): unknown {
+  const existing = Array.isArray(archive) ? archive : archive ? [archive] : [];
+  const next = superseded ? [...existing, superseded] : existing;
+  return next.length ? next : undefined;
 }
 
 /**

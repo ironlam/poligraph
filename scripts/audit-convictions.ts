@@ -26,14 +26,15 @@ import type { AffairStatus } from "../src/generated/prisma";
 import { RULES } from "../src/lib/affairs/grading-rules.js";
 import {
   ADVERSE_INVOLVEMENTS,
+  archiveBaseline,
   assess,
   hasPreciseSentence,
   isComparable,
   parseLedger,
+  recordReview,
   type ContradictionKind,
   type EvidenceLevel,
   type Ledger,
-  type ReviewEntry,
   type ReviewOutcome,
 } from "../src/lib/affairs/audit-evidence.js";
 
@@ -75,16 +76,6 @@ function idsFrom(arg: string): string[] {
     .filter(Boolean);
 }
 
-/** Ajoute des entrées sans dupliquer : une affaire déjà sortie de la file y reste. */
-function record(ledger: Ledger, ids: string[], outcome: ReviewOutcome): number {
-  const known = new Set(ledger.reviewed.map((e) => e.affairId));
-  const fresh: ReviewEntry[] = ids
-    .filter((affairId) => !known.has(affairId))
-    .map((affairId) => ({ affairId, outcome, at: new Date().toISOString() }));
-  ledger.reviewed = [...ledger.reviewed, ...fresh];
-  return fresh.length;
-}
-
 async function main() {
   const args = process.argv.slice(2);
   const wantBatch = args.includes("--batch");
@@ -122,17 +113,28 @@ async function main() {
       process.exit(1);
     }
     let added = 0;
-    if (resolvedArg) added += record(ledger, idsFrom(resolvedArg), { kind: "RESOLVED" });
+    let reclassified = 0;
+    const tally = (counts: { added: number; reclassified: number }) => {
+      added += counts.added;
+      reclassified += counts.reclassified;
+    };
+
+    if (resolvedArg) tally(recordReview(ledger, idsFrom(resolvedArg), { kind: "RESOLVED" }));
     if (transferredArg) {
       const issue = Number(issueArg!.split("=")[1]);
       if (!Number.isInteger(issue) || issue <= 0) {
         console.error(`--issue=${issueArg!.split("=")[1]} n'est pas un numéro d'issue.`);
         process.exit(1);
       }
-      added += record(ledger, idsFrom(transferredArg), { kind: "TRANSFERRED", issue });
+      tally(recordReview(ledger, idsFrom(transferredArg), { kind: "TRANSFERRED", issue }));
     }
     writeLedger(ledger);
-    console.log(`Registre : ${added} entrée(s) ajoutée(s), ${ledger.reviewed.length} au total.`);
+    console.log(
+      `Registre : ${added} ajoutée(s), ${reclassified} reclassée(s), ${ledger.reviewed.length} au total.`
+    );
+    if (added === 0 && reclassified === 0) {
+      console.log("Aucun changement : ces affaires portaient déjà ce motif.");
+    }
     return;
   }
 
@@ -286,9 +288,7 @@ async function main() {
   if (wantRecapture) {
     // Archivée, pas écrasée : une référence est un point de comparaison publié, et
     // la perdre en silence coûte plus cher qu'un objet mort dans un fichier local.
-    const archived = ledger.legacyBaselines ? [ledger.legacyBaselines] : [];
-    if (ledger.baseline) archived.push(ledger.baseline);
-    ledger.legacyBaselines = archived.length ? archived : undefined;
+    ledger.legacyBaselines = archiveBaseline(ledger.legacyBaselines, ledger.baseline);
     ledger.baseline = {
       rulesVersion: RULES.version,
       evidence: evidenceDist,

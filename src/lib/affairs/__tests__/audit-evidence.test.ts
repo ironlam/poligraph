@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  archiveBaseline,
   assess,
   isComparable,
   parseLedger,
+  recordReview,
   describesPartlySuspendedSentence,
+  type Baseline,
   type ContradictionKind,
+  type Ledger,
   type SourceRow,
 } from "@/lib/affairs/audit-evidence";
 
@@ -255,6 +259,91 @@ describe("le registre distingue résolue, transférée et héritée", () => {
     expect(parseLedger(null).reviewed).toEqual([]);
     expect(parseLedger({ reviewed: "pas-un-tableau" }).reviewed).toEqual([]);
     expect(parseLedger({ done: "pas-un-tableau" }).reviewed).toEqual([]);
+  });
+});
+
+// The first version of this refused to touch an id already in the ledger, so the
+// 10 entries inherited as LEGACY could never be assigned to #569 or #571 — the
+// very next step this lot is meant to enable. Worse, it reported success while
+// adding nothing.
+describe("une entrée du registre peut être reclassée", () => {
+  const legacy = (): Ledger => ({
+    reviewed: [{ affairId: "aff-1", outcome: { kind: "LEGACY" } }],
+  });
+
+  it("reclasse une entrée héritée vers une issue", () => {
+    const ledger = legacy();
+    const counts = recordReview(ledger, ["aff-1"], { kind: "TRANSFERRED", issue: 571 });
+
+    expect(counts).toEqual({ added: 0, reclassified: 1 });
+    expect(ledger.reviewed).toHaveLength(1);
+    expect(ledger.reviewed[0]!.outcome).toEqual({ kind: "TRANSFERRED", issue: 571 });
+  });
+
+  it("horodate la reclassification", () => {
+    const ledger = legacy();
+    recordReview(ledger, ["aff-1"], { kind: "RESOLVED" });
+
+    expect(ledger.reviewed[0]!.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("ajoute une entrée inconnue", () => {
+    const ledger = legacy();
+    const counts = recordReview(ledger, ["aff-2"], { kind: "RESOLVED" });
+
+    expect(counts).toEqual({ added: 1, reclassified: 0 });
+    expect(ledger.reviewed).toHaveLength(2);
+  });
+
+  it("ne compte pas une reclassification vers le même motif", () => {
+    const ledger: Ledger = {
+      reviewed: [{ affairId: "aff-1", outcome: { kind: "TRANSFERRED", issue: 571 } }],
+    };
+    const counts = recordReview(ledger, ["aff-1"], { kind: "TRANSFERRED", issue: 571 });
+
+    expect(counts).toEqual({ added: 0, reclassified: 0 });
+  });
+
+  it("distingue deux issues de transfert différentes", () => {
+    const ledger: Ledger = {
+      reviewed: [{ affairId: "aff-1", outcome: { kind: "TRANSFERRED", issue: 569 } }],
+    };
+    const counts = recordReview(ledger, ["aff-1"], { kind: "TRANSFERRED", issue: 571 });
+
+    expect(counts).toEqual({ added: 0, reclassified: 1 });
+  });
+});
+
+describe("archiver une référence ne l'imbrique pas", () => {
+  const baseline = (day: string): Baseline => ({
+    rulesVersion: 1,
+    evidence: { A: 4, B: 11, C: 72, D: 45 },
+    contradictoryCount: 18,
+    withoutOfficialSource: 120,
+    withoutOfficialEvidence: 117,
+    capturedAt: `2026-07-${day}T00:00:00.000Z`,
+  });
+
+  it("archive la première référence dans un tableau plat", () => {
+    expect(archiveBaseline(undefined, baseline("30"))).toEqual([baseline("30")]);
+  });
+
+  // Two successive recaptures used to produce [[old], new]: an array whose first
+  // element was an array, gaining a level of nesting on every call.
+  it("reste plat après deux archivages", () => {
+    const once = archiveBaseline(undefined, baseline("30"));
+
+    expect(archiveBaseline(once, baseline("31"))).toEqual([baseline("30"), baseline("31")]);
+  });
+
+  it("absorbe la paire non versionnée héritée sans l'aplatir de force", () => {
+    const inherited = { baseline: { A: 3 }, evidenceBaseline: { withoutOfficialEvidence: 116 } };
+
+    expect(archiveBaseline(inherited, baseline("30"))).toEqual([inherited, baseline("30")]);
+  });
+
+  it("n'archive rien quand il n'y a pas de référence à remplacer", () => {
+    expect(archiveBaseline(undefined, undefined)).toBeUndefined();
   });
 });
 

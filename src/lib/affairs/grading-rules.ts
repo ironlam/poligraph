@@ -11,6 +11,7 @@
  * Anything that decides a level or reads a ledger belongs in `audit-evidence.ts`.
  */
 import { createHash } from "node:crypto";
+import type { Involvement } from "@/generated/prisma";
 
 export const RULES = {
   /**
@@ -52,8 +53,16 @@ export const RULES = {
   },
 
   coherence: {
-    /** Roles for which the judicial outcome of the affair is the person's own. */
-    adverseInvolvements: ["DIRECT", "INDIRECT"],
+    /**
+     * Roles for which the judicial outcome of the affair is the person's own.
+     *
+     * `satisfies` rather than a cast at the point of use: it checks every value
+     * against the Prisma enum while keeping the literal types the fingerprint
+     * needs. A cast would silence a typo here, and a typo here is not benign —
+     * `includes()` would match no involvement at all, so every conviction in the
+     * corpus would be reported as describing a third party's outcome.
+     */
+    adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly Involvement[],
 
     /**
      * A recourse still open, stated explicitly.
