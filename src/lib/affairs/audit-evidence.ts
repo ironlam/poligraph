@@ -110,8 +110,45 @@ export interface SourceRow {
   sourceType: string;
 }
 
+/**
+ * Stable identifiers for the coherence checks.
+ *
+ * The closure criteria of #566, #569, #571 and #580 used to quote the French
+ * display strings word for word, so rewording a message broke a criterion. Issues
+ * cite the kind; the message is free to change.
+ */
+export type ContradictionKind =
+  | "IMPLICATION_NON_ADVERSE"
+  | "VERDICT_SANS_DATE"
+  | "VERDICT_DANS_LE_FUTUR"
+  | "SOURCES_ANTERIEURES_AU_VERDICT"
+  | "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS"
+  | "DEFINITIF_MAIS_RECOURS_PENDANT"
+  | "NON_DEFINITIF_MAIS_RECOURS_EPUISE";
+
+export interface Contradiction {
+  kind: ContradictionKind;
+  /** Phrase affichée, en français. */
+  message: string;
+}
+
 export interface Assessment {
-  level: EvidenceLevel;
+  /**
+   * Evidence axis, on its own. A property of the world: the documents exist or
+   * they do not, and their absence can be permanent.
+   *
+   * A contradiction no longer collapses this. It used to: `if (contradictions
+   * .length > 0) level = "D"` short-circuited the whole cascade, so a fiche backed
+   * by an identified ruling whose `involvement` was wrong fell to D exactly like a
+   * single-source fiche. 11 published fiches were in that state and the breakdown
+   * had to be re-derived by hand to see it.
+   */
+  evidenceLevel: EvidenceLevel;
+  /**
+   * Coherence axis. A property of our own data entry, therefore always ours to
+   * fix. Empty means the fiche does not contradict itself.
+   */
+  contradictions: Contradiction[];
   /**
    * An official `Source` row is attached. Measures editorial completeness of
    * the visible sourcing: what a reader can click on the page.
@@ -127,7 +164,6 @@ export interface Assessment {
   independentCount: number;
   /** Sources écartées du compte parce qu'elles reprennent le même titre. */
   duplicateReprints: number;
-  contradictions: string[];
 }
 
 export function assess(affair: {
@@ -172,14 +208,19 @@ export function assess(affair: {
     independentCount++;
   }
 
-  const contradictions: string[] = [];
+  const contradictions: Contradiction[] = [];
+  const flag = (kind: ContradictionKind, message: string) => contradictions.push({ kind, message });
+
   if (!ADVERSE_INVOLVEMENTS.includes(affair.involvement)) {
-    contradictions.push(`statut de condamnation avec implication ${affair.involvement}`);
+    flag(
+      "IMPLICATION_NON_ADVERSE",
+      `statut de condamnation avec implication ${affair.involvement}`
+    );
   }
   if (!affair.verdictDate) {
-    contradictions.push("statut de condamnation sans date de verdict");
+    flag("VERDICT_SANS_DATE", "statut de condamnation sans date de verdict");
   } else if (affair.verdictDate.getTime() > Date.now()) {
-    contradictions.push("date de verdict dans le futur");
+    flag("VERDICT_DANS_LE_FUTUR", "date de verdict dans le futur");
   } else {
     // Encyclopedias are excluded here for the same reason they are excluded from
     // the independence count: they attest nothing about a dispositif. Leaving
@@ -191,7 +232,7 @@ export function assess(affair: {
       .filter((s) => !NOT_INDEPENDENT_TYPES.has(s.sourceType))
       .reduce<number>((max, s) => Math.max(max, s.publishedAt.getTime()), 0);
     if (latest > 0 && latest < affair.verdictDate.getTime()) {
-      contradictions.push("toutes les sources précèdent la date du verdict");
+      flag("SOURCES_ANTERIEURES_AU_VERDICT", "toutes les sources précèdent la date du verdict");
     }
   }
 
@@ -204,35 +245,42 @@ export function assess(affair: {
       [affair.otherSentence, affair.sentence, affair.description].filter(Boolean).join(" | ")
     )
   ) {
-    contradictions.push(
+    flag(
+      "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS",
       "peine affichée entièrement ferme alors que le texte décrit une part avec sursis"
     );
   }
 
   const description = affair.description ?? "";
   if (affair.status === "CONDAMNATION_DEFINITIVE" && describesPendingRecourse(description)) {
-    contradictions.push("statut définitif mais la description décrit un recours pendant");
+    flag(
+      "DEFINITIF_MAIS_RECOURS_PENDANT",
+      "statut définitif mais la description décrit un recours pendant"
+    );
   }
   if (affair.status !== "CONDAMNATION_DEFINITIVE" && RECOURSE_EXHAUSTED.test(description)) {
-    contradictions.push(
+    flag(
+      "NON_DEFINITIF_MAIS_RECOURS_EPUISE",
       "statut non définitif mais la description dit les voies de recours épuisées"
     );
   }
 
-  let level: EvidenceLevel;
-  if (contradictions.length > 0) level = "D";
-  else if (affair.decisionCount > 0) level = "A";
-  else if (hasOfficialSource) level = "B";
-  else if (independentCount >= 2) level = "C";
-  else level = "D";
+  // The cascade lost its first rung. A contradiction no longer decides the
+  // evidence level, so a well-backed fiche that contradicts itself now reports
+  // both facts instead of only the worse one.
+  let evidenceLevel: EvidenceLevel;
+  if (affair.decisionCount > 0) evidenceLevel = "A";
+  else if (hasOfficialSource) evidenceLevel = "B";
+  else if (independentCount >= 2) evidenceLevel = "C";
+  else evidenceLevel = "D";
 
   return {
-    level,
+    evidenceLevel,
+    contradictions,
     hasOfficialSource,
     hasOfficialEvidence: hasOfficialSource || affair.decisionCount > 0,
     independentCount,
     duplicateReprints,
-    contradictions,
   };
 }
 

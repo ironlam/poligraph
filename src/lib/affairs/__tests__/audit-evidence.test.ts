@@ -3,6 +3,7 @@ import {
   assess,
   parseLedger,
   describesPartlySuspendedSentence,
+  type ContradictionKind,
   type SourceRow,
 } from "@/lib/affairs/audit-evidence";
 
@@ -52,7 +53,7 @@ describe("the two official-backing metrics are distinct", () => {
 
     expect(a.hasOfficialSource).toBe(false);
     expect(a.hasOfficialEvidence).toBe(true);
-    expect(a.level).toBe("A");
+    expect(a.evidenceLevel).toBe("A");
   });
 
   it("an official Source row without a linked decision: both yes", () => {
@@ -60,7 +61,7 @@ describe("the two official-backing metrics are distinct", () => {
 
     expect(a.hasOfficialSource).toBe(true);
     expect(a.hasOfficialEvidence).toBe(true);
-    expect(a.level).toBe("B");
+    expect(a.evidenceLevel).toBe("B");
   });
 
   it("both at once: both yes, and the decision wins the level", () => {
@@ -68,7 +69,7 @@ describe("the two official-backing metrics are distinct", () => {
 
     expect(a.hasOfficialSource).toBe(true);
     expect(a.hasOfficialEvidence).toBe(true);
-    expect(a.level).toBe("A");
+    expect(a.evidenceLevel).toBe("A");
   });
 
   it("no official backing at all: both no", () => {
@@ -79,7 +80,7 @@ describe("the two official-backing metrics are distinct", () => {
 
     expect(a.hasOfficialSource).toBe(false);
     expect(a.hasOfficialEvidence).toBe(false);
-    expect(a.level).toBe("C");
+    expect(a.evidenceLevel).toBe("C");
   });
 
   it("no source at all: both no, and the affair falls to D", () => {
@@ -87,11 +88,12 @@ describe("the two official-backing metrics are distinct", () => {
 
     expect(a.hasOfficialSource).toBe(false);
     expect(a.hasOfficialEvidence).toBe(false);
-    expect(a.level).toBe("D");
+    expect(a.evidenceLevel).toBe("D");
   });
 
-  // A contradiction sends the affair to D whatever backs it, but it does not
-  // erase the fact that the backing exists: the two metrics stay truthful.
+  // This affair is backed by an identified ruling AND contradicts itself. It used
+  // to report level D, which said the evidence was insufficient when it was the
+  // best available. Both facts are now reported side by side.
   it("keeps reporting the backing of a contradictory affair", () => {
     const a = affair({
       decisionCount: 1,
@@ -100,10 +102,92 @@ describe("the two official-backing metrics are distinct", () => {
       description: "La condamnation est définitive.",
     });
 
-    expect(a.level).toBe("D");
-    expect(a.contradictions.length).toBeGreaterThan(0);
+    expect(a.evidenceLevel).toBe("A");
+    expect(a.contradictions.map((c) => c.kind)).toEqual(["NON_DEFINITIF_MAIS_RECOURS_EPUISE"]);
     expect(a.hasOfficialEvidence).toBe(true);
     expect(a.hasOfficialSource).toBe(true);
+  });
+});
+
+// Evidence quality is a property of the world: the documents exist or they do
+// not. Internal coherence is a property of our own data entry. Collapsing both
+// onto one axis hid 11 published fiches whose evidence was already at C and
+// whose only problem was a field we had written wrong ourselves.
+describe("preuve et cohérence sont deux axes indépendants", () => {
+  it("une fiche contradictoire garde le niveau de preuve qu'elle mérite", () => {
+    const contradictory = affair({
+      involvement: "VICTIM",
+      sources: [source(), source({ publisher: "Libération", title: "Un autre titre" })],
+    });
+
+    expect(contradictory.evidenceLevel).toBe("C");
+    expect(contradictory.contradictions).toHaveLength(1);
+    expect(contradictory.contradictions[0]!.kind).toBe("IMPLICATION_NON_ADVERSE");
+  });
+
+  it("le niveau de preuve est le même avec et sans contradiction", () => {
+    const sources = [OFFICIAL_SOURCE];
+    const clean = affair({ sources, involvement: "DIRECT" });
+    const dirty = affair({ sources, involvement: "VICTIM" });
+
+    expect(dirty.evidenceLevel).toBe(clean.evidenceLevel);
+    expect(clean.contradictions).toEqual([]);
+    expect(dirty.contradictions).not.toEqual([]);
+  });
+
+  it("une preuve absente reste en D, contradiction ou pas", () => {
+    expect(affair({ sources: [] }).evidenceLevel).toBe("D");
+    expect(affair({ sources: [], involvement: "VICTIM" }).evidenceLevel).toBe("D");
+  });
+});
+
+// The closure criteria of #566, #569, #571 and #580 quote these strings word for
+// word. A criterion anchored on a display string breaks at the first rewording,
+// so the kind is what issues should cite and the message stays free to change.
+describe("chaque contradiction porte un type stable", () => {
+  const cases: Array<[ContradictionKind, Partial<Parameters<typeof assess>[0]>]> = [
+    ["IMPLICATION_NON_ADVERSE", { involvement: "MENTIONED_ONLY" }],
+    ["VERDICT_SANS_DATE", { verdictDate: null }],
+    ["VERDICT_DANS_LE_FUTUR", { verdictDate: new Date("2099-01-01") }],
+    [
+      "SOURCES_ANTERIEURES_AU_VERDICT",
+      {
+        verdictDate: new Date("2024-06-19"),
+        sources: [source({ publishedAt: new Date("2020-01-01") })],
+      },
+    ],
+    [
+      "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS",
+      {
+        prisonMonths: 48,
+        prisonSuspended: false,
+        otherSentence: "4 ans dont 2 ans ferme et 2 avec sursis",
+      },
+    ],
+    [
+      "DEFINITIF_MAIS_RECOURS_PENDANT",
+      { status: "CONDAMNATION_DEFINITIVE", description: "Le pourvoi est en cours." },
+    ],
+    [
+      "NON_DEFINITIF_MAIS_RECOURS_EPUISE",
+      { status: "APPEL_EN_COURS", description: "La condamnation est définitive." },
+    ],
+  ];
+
+  it.each(cases)("%s", (kind, overrides) => {
+    expect(affair(overrides).contradictions.map((c) => c.kind)).toContain(kind);
+  });
+
+  it("garde une phrase française lisible à côté du type", () => {
+    const [first] = affair({ verdictDate: null }).contradictions;
+
+    expect(first!.message).toBe("statut de condamnation sans date de verdict");
+  });
+
+  it("nomme l'implication fautive dans le message", () => {
+    const [first] = affair({ involvement: "PLAINTIFF" }).contradictions;
+
+    expect(first!.message).toBe("statut de condamnation avec implication PLAINTIFF");
   });
 });
 
@@ -202,10 +286,13 @@ describe("detects a total shown as firm over a partly suspended sentence", () =>
         prisonSuspended: false,
         [field]: "4 ans dont 2 ans ferme et 2 ans avec sursis",
       });
-      expect(a.contradictions, `via ${field}`).toContain(
-        "peine affichée entièrement ferme alors que le texte décrit une part avec sursis"
-      );
-      expect(a.level).toBe("D");
+      expect(
+        a.contradictions.map((c) => c.kind),
+        `via ${field}`
+      ).toContain("PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS");
+      // A single press source, so the evidence axis is at D on its own merits,
+      // not because of the contradiction.
+      expect(a.evidenceLevel).toBe("D");
     }
   });
 
@@ -250,7 +337,7 @@ describe("dating a verdict against sources that can actually attest it", () => {
     title: "Wikidata — une personne",
     publishedAt: new Date("2026-01-18"),
   });
-  const MESSAGE = "toutes les sources précèdent la date du verdict";
+  const KIND = "SOURCES_ANTERIEURES_AU_VERDICT";
 
   it("flags a verdict whose only press source predates it, despite a later Wikidata row", () => {
     const a = affair({
@@ -258,14 +345,14 @@ describe("dating a verdict against sources that can actually attest it", () => {
       sources: [PRESS_2020, WIKIDATA_2026],
     });
 
-    expect(a.contradictions).toContain(MESSAGE);
-    expect(a.level).toBe("D");
+    expect(a.contradictions.map((c) => c.kind)).toContain(KIND);
+    expect(a.evidenceLevel).toBe("D");
   });
 
   it("flags it just the same without the encyclopedia row", () => {
     const a = affair({ verdictDate: VERDICT_2024, sources: [PRESS_2020] });
 
-    expect(a.contradictions).toContain(MESSAGE);
+    expect(a.contradictions.map((c) => c.kind)).toContain(KIND);
   });
 
   it("says nothing when a press source postdates the verdict", () => {
@@ -274,14 +361,14 @@ describe("dating a verdict against sources that can actually attest it", () => {
       sources: [source({ publishedAt: new Date("2024-06-20") }), WIKIDATA_2026],
     });
 
-    expect(a.contradictions).not.toContain(MESSAGE);
+    expect(a.contradictions.map((c) => c.kind)).not.toContain(KIND);
   });
 
   it("says nothing when only encyclopedias are attached, the level already sanctioning it", () => {
     const a = affair({ verdictDate: VERDICT_2024, sources: [WIKIDATA_2026] });
 
-    expect(a.contradictions).not.toContain(MESSAGE);
+    expect(a.contradictions.map((c) => c.kind)).not.toContain(KIND);
     expect(a.independentCount).toBe(0);
-    expect(a.level).toBe("D");
+    expect(a.evidenceLevel).toBe("D");
   });
 });

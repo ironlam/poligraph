@@ -141,7 +141,7 @@ async function main() {
   });
 
   const distribution = (subset: typeof rows) =>
-    subset.reduce((acc, r) => ({ ...acc, [r.level]: acc[r.level] + 1 }), {
+    subset.reduce((acc, r) => ({ ...acc, [r.evidenceLevel]: acc[r.evidenceLevel] + 1 }), {
       A: 0,
       B: 0,
       C: 0,
@@ -239,8 +239,8 @@ async function main() {
   if (urgent.length) {
     console.log(`\nREVUE URGENTE — ${urgent.length} affaire(s) contradictoires :`);
     for (const r of urgent) {
-      console.log(`  [${r.level}] ${r.name} — /affaires/${r.slug}`);
-      for (const c of r.contradictions) console.log(`        ${c}`);
+      console.log(`  [${r.evidenceLevel}] ${r.name} — /affaires/${r.slug}`);
+      for (const c of r.contradictions) console.log(`        ${c.message}`);
     }
   }
 
@@ -250,7 +250,7 @@ async function main() {
     for (const r of batch) {
       console.log(
         [
-          `[${r.level}]`,
+          `[${r.evidenceLevel}]`,
           r.status.padEnd(32),
           r.involvement.padEnd(14),
           `src=${String(r.sourceCount).padStart(2)}`,
