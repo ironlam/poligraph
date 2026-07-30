@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   assess,
+  isComparable,
   parseLedger,
   describesPartlySuspendedSentence,
   type ContradictionKind,
@@ -191,56 +192,94 @@ describe("chaque contradiction porte un type stable", () => {
   });
 });
 
-describe("the ledger stays readable across generations", () => {
-  it("reads a ledger written before the stricter metric existed", () => {
-    const old = {
-      done: ["aff-1", "aff-2"],
-      baseline: {
-        A: 3,
-        B: 12,
-        C: 64,
-        D: 53,
-        withoutOfficialSource: 120,
-        capturedAt: "2026-07-26T00:00:00.000Z",
-      },
-    };
+// #566 allows two reasons to mark an affair examined: resolved, or transferred to
+// an issue that has an owner and a closure criterion. A flat array of ids cannot
+// tell them apart, so the report treated them alike and hid both. 10 of the 27
+// entries were still contradictory and appeared nowhere.
+describe("le registre distingue résolue, transférée et héritée", () => {
+  const OLD_GENERATION = {
+    done: ["aff-1", "aff-2"],
+    baseline: {
+      A: 3,
+      B: 12,
+      C: 64,
+      D: 53,
+      withoutOfficialSource: 120,
+      capturedAt: "2026-07-26T00:00:00.000Z",
+    },
+    evidenceBaseline: {
+      withoutOfficialEvidence: 116,
+      capturedAt: "2026-07-27T00:00:00.000Z",
+    },
+  };
 
-    const ledger = parseLedger(old);
+  it("lit une génération ancienne sans inventer de motif", () => {
+    const ledger = parseLedger(OLD_GENERATION);
 
-    expect(ledger.done).toEqual(["aff-1", "aff-2"]);
-    // The historical figure keeps its original meaning: Source rows only.
-    expect(ledger.baseline?.withoutOfficialSource).toBe(120);
-    expect(ledger.baseline?.capturedAt).toBe("2026-07-26T00:00:00.000Z");
-    // No history is invented for the metric that did not exist yet.
-    expect(ledger.evidenceBaseline).toBeUndefined();
+    expect(ledger.reviewed).toHaveLength(2);
+    expect(ledger.reviewed[0]).toEqual({ affairId: "aff-1", outcome: { kind: "LEGACY" } });
   });
 
-  it("reads a ledger holding both baselines, each with its own date", () => {
-    const ledger = parseLedger({
-      done: [],
-      baseline: {
-        A: 3,
-        B: 11,
-        C: 66,
-        D: 51,
-        withoutOfficialSource: 119,
-        capturedAt: "2026-07-26T00:00:00.000Z",
-      },
-      evidenceBaseline: {
-        withoutOfficialEvidence: 116,
-        capturedAt: "2026-07-27T00:00:00.000Z",
-      },
+  // The old format recorded no timestamp, so none is invented.
+  it("ne fabrique pas d'horodatage pour une entrée héritée", () => {
+    expect(parseLedger(OLD_GENERATION).reviewed[0]!.at).toBeUndefined();
+  });
+
+  // 120 is the figure published on #566 as the canonical reference. It is archived
+  // rather than differenced: it was measured under rules we cannot identify.
+  it("archive l'ancienne paire de références sans la promouvoir", () => {
+    const ledger = parseLedger(OLD_GENERATION);
+
+    expect(ledger.baseline).toBeUndefined();
+    expect(ledger.legacyBaselines).toEqual({
+      baseline: OLD_GENERATION.baseline,
+      evidenceBaseline: OLD_GENERATION.evidenceBaseline,
     });
-
-    expect(ledger.baseline?.capturedAt).toBe("2026-07-26T00:00:00.000Z");
-    expect(ledger.evidenceBaseline?.capturedAt).toBe("2026-07-27T00:00:00.000Z");
-    expect(ledger.evidenceBaseline?.withoutOfficialEvidence).toBe(116);
   });
 
-  it("tolerates an empty or malformed ledger without inventing entries", () => {
-    expect(parseLedger({}).done).toEqual([]);
-    expect(parseLedger(null).done).toEqual([]);
-    expect(parseLedger({ done: "not-an-array" }).done).toEqual([]);
+  it("relit une génération typée à l'identique", () => {
+    const reviewed = [
+      { affairId: "aff-1", outcome: { kind: "RESOLVED" as const }, at: "2026-07-30T10:00:00.000Z" },
+      {
+        affairId: "aff-2",
+        outcome: { kind: "TRANSFERRED" as const, issue: 571 },
+        at: "2026-07-30T10:00:00.000Z",
+      },
+    ];
+
+    expect(parseLedger({ reviewed }).reviewed).toEqual(reviewed);
+  });
+
+  it("tolère un registre vide ou abîmé sans inventer d'entrée", () => {
+    expect(parseLedger({}).reviewed).toEqual([]);
+    expect(parseLedger(null).reviewed).toEqual([]);
+    expect(parseLedger({ reviewed: "pas-un-tableau" }).reviewed).toEqual([]);
+    expect(parseLedger({ done: "pas-un-tableau" }).reviewed).toEqual([]);
+  });
+});
+
+describe("une référence n'est comparable que sous les mêmes règles", () => {
+  const baseline = {
+    rulesVersion: 1,
+    evidence: { A: 4, B: 11, C: 72, D: 45 },
+    contradictoryCount: 18,
+    withoutOfficialSource: 120,
+    withoutOfficialEvidence: 117,
+    capturedAt: "2026-07-30T00:00:00.000Z",
+  };
+
+  it("comparable à version égale", () => {
+    expect(isComparable(baseline, 1)).toBe(true);
+  });
+
+  // This is the defect that produced a false regression diagnosis: the report
+  // printed « D : 53 → 56 (+3) » across a rule change, on an unchanged corpus.
+  it("non comparable à version différente", () => {
+    expect(isComparable(baseline, 2)).toBe(false);
+  });
+
+  it("non comparable en l'absence de référence", () => {
+    expect(isComparable(undefined, 1)).toBe(false);
   });
 });
 

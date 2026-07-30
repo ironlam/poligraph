@@ -37,47 +37,101 @@ export function describesPendingRecourse(description: string): boolean {
 export type EvidenceLevel = "A" | "B" | "C" | "D";
 
 /**
- * Distribution captured on a first pass, the frozen point of comparison.
+ * Why an affair left the queue.
  *
- * `withoutOfficialSource` keeps its original name and its original meaning:
- * affairs carrying no official `Source` row. Renaming it would silently
- * reinterpret the figure already published on #566.
+ * #566 allows two reasons to mark one examined: resolved, or transferred to an
+ * issue that has an owner and a closure criterion. They do not mean the same
+ * thing at all — the first asks nothing more, the second asks everything, just
+ * elsewhere — and a flat array of ids could not tell them apart.
  */
-export interface Baseline extends Record<EvidenceLevel, number> {
-  withoutOfficialSource: number;
-  capturedAt: string;
+export type ReviewOutcome =
+  | { kind: "RESOLVED" }
+  | { kind: "TRANSFERRED"; issue: number }
+  /**
+   * Marked examined under the string-array format, motive unrecorded. We know by
+   * measurement that 10 of the 27 such entries are in fact transferred to #569
+   * and #571, and that 17 are no longer contradictory hence probably resolved.
+   * "Probably" is not data, so the unknown stays explicit.
+   */
+  | { kind: "LEGACY" };
+
+export interface ReviewEntry {
+  affairId: string;
+  outcome: ReviewOutcome;
+  /** Absent on legacy entries: the old format recorded no timestamp. */
+  at?: string;
 }
 
 /**
- * Baseline for the stricter metric, added after `Baseline` and therefore
- * carrying its own capture date: a ledger written before this existed has no
- * historical figure to compare against, and inventing one would be a fiction.
+ * Frozen point of comparison, valid only under the rules that produced it.
+ *
+ * `rulesVersion` is what the previous shape lacked. Without it the report
+ * differenced measurements taken under different grading rules and printed
+ * « D : 53 → 56 (+3) » on a corpus that had not changed by a single affair.
  */
-export interface EvidenceBaseline {
+export interface Baseline {
+  rulesVersion: number;
+  evidence: Record<EvidenceLevel, number>;
+  contradictoryCount: number;
+  /** Affaires sans ligne Source officielle. Complétude éditoriale. */
+  withoutOfficialSource: number;
+  /** Affaires sans aucune preuve officielle, décision rattachée incluse. */
   withoutOfficialEvidence: number;
   capturedAt: string;
 }
 
 export interface Ledger {
-  /** Identifiants d'affaires déjà examinées, dans l'ordre de traitement. */
-  done: string[];
-  /** Affaires sans ligne Source officielle, au premier passage. */
+  /** Affaires sorties de la file, avec le motif de leur sortie. */
+  reviewed: ReviewEntry[];
   baseline?: Baseline;
-  /** Affaires sans aucune preuve officielle, à sa propre date de capture. */
-  evidenceBaseline?: EvidenceBaseline;
+  /**
+   * Untyped on purpose. This is an archive, not live data: nobody should read it
+   * to decide anything, and giving it a type would invite exactly that. It holds
+   * the pre-versioning baselines, one of which is the figure published on #566.
+   */
+  legacyBaselines?: unknown;
 }
 
 /**
- * Read a ledger of any generation. An older file has no `evidenceBaseline`;
- * that absence is preserved rather than filled in, so the report can say the
- * metric has no history yet instead of pretending it was measured.
+ * A baseline can only be differenced against the rules it was captured under.
+ *
+ * Returning false is the honest answer, not a degraded one: « référence non
+ * comparable » tells the reader something true, where a delta across a rule
+ * change tells them something false.
+ */
+export function isComparable(baseline: Baseline | undefined, rulesVersion: number): boolean {
+  return baseline?.rulesVersion === rulesVersion;
+}
+
+/**
+ * Read a ledger of any generation.
+ *
+ * An older file carries `done: string[]` and a pair of unversioned baselines.
+ * Those ids become `LEGACY` entries and the baselines are archived rather than
+ * promoted: they were measured under rules that cannot be identified, so
+ * treating them as a comparison point would reproduce the defect being fixed.
  */
 export function parseLedger(raw: unknown): Ledger {
-  const source = (raw ?? {}) as Partial<Ledger>;
+  const source = (raw ?? {}) as Record<string, unknown>;
+
+  if (Array.isArray(source.reviewed)) {
+    return {
+      reviewed: source.reviewed as ReviewEntry[],
+      baseline: source.baseline as Baseline | undefined,
+      legacyBaselines: source.legacyBaselines,
+    };
+  }
+
+  const done = Array.isArray(source.done) ? (source.done as string[]) : [];
+  const unversioned =
+    source.baseline || source.evidenceBaseline
+      ? { baseline: source.baseline, evidenceBaseline: source.evidenceBaseline }
+      : undefined;
+
   return {
-    done: Array.isArray(source.done) ? source.done : [],
-    baseline: source.baseline,
-    evidenceBaseline: source.evidenceBaseline,
+    reviewed: done.map((affairId) => ({ affairId, outcome: { kind: "LEGACY" } })),
+    baseline: undefined,
+    legacyBaselines: source.legacyBaselines ?? unversioned,
   };
 }
 
