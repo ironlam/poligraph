@@ -23,7 +23,8 @@ function makeAffair(overrides: Record<string, unknown> = {}) {
     sources: [],
     // SentenceDetails nullable fields
     prisonMonths: null,
-    prisonSuspended: null,
+    prisonFirmMonths: null,
+    ineligibilityFirmMonths: null,
     fineAmount: null,
     ineligibilityMonths: null,
     communityService: null,

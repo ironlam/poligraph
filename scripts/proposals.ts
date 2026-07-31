@@ -179,6 +179,10 @@ async function accept(id: string, note?: string, quiet = false): Promise<Outcome
       case "invalid_patch":
         console.error(`ÉCHEC ${id} : patch invalide → ${result.issues.join("; ")}`);
         break;
+      case "invalid_split":
+        console.error(`ÉCHEC ${id} : répartition incohérente → ${result.issues.join("; ")}`);
+        console.error(`  reste PENDING : le patch est valide, c'est la fusion qui ne l'est pas.`);
+        break;
       case "orphaned":
         console.error(`ÉCHEC ${id} : affaire supprimée, seul le rejet est possible.`);
         break;

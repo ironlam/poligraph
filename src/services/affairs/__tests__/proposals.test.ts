@@ -40,7 +40,8 @@ const EMPTY_AFFAIR = {
   court: null,
   sentence: null,
   prisonMonths: null,
-  prisonSuspended: null,
+  prisonFirmMonths: null,
+  ineligibilityFirmMonths: null,
   ineligibilityMonths: null,
   communityService: null,
   otherSentence: null,
@@ -235,17 +236,18 @@ describe("validatePatch", () => {
     }
   });
 
-  it("accepte les 10 champs de la whitelist", () => {
+  it("accepte les 11 champs de la whitelist", () => {
     expect(() =>
       validatePatch({
         status: "CONDAMNATION_DEFINITIVE",
         verdictDate: "2026-05-13",
         court: "Cour de cassation",
-        sentence: "2 ans avec sursis",
+        sentence: "2 ans dont 1 an avec sursis",
         prisonMonths: 24,
-        prisonSuspended: true,
+        prisonFirmMonths: 12,
         fineAmount: "1500.50",
         ineligibilityMonths: 60,
+        ineligibilityFirmMonths: 30,
         communityService: 100,
         otherSentence: "interdiction d'exercer",
       })

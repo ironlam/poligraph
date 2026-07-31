@@ -51,6 +51,17 @@ export const POST = withAdminAuth(
             { error: "Patch invalide", issues: result.issues },
             { status: 422 }
           );
+        case "invalid_split":
+          // The proposal stays PENDING: the patch alone was valid, it is the merge with
+          // the live row that would break the firm/suspended invariant (#576).
+          return NextResponse.json(
+            {
+              error:
+                "La répartition ferme / sursis obtenue serait incohérente avec la valeur en base",
+              issues: result.issues,
+            },
+            { status: 422 }
+          );
         case "conflict":
           return NextResponse.json(
             {

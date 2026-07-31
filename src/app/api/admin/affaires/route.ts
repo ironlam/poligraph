@@ -192,9 +192,11 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
       appeal: data.appeal || false,
       // Detailed sentence
       prisonMonths: data.prisonMonths || null,
-      prisonSuspended: data.prisonSuspended ?? null,
+      // `?? null` and not `|| null`: 0 means "entirely suspended", not "absent" (#576).
+      prisonFirmMonths: data.prisonFirmMonths ?? null,
       fineAmount: data.fineAmount || null,
       ineligibilityMonths: data.ineligibilityMonths || null,
+      ineligibilityFirmMonths: data.ineligibilityFirmMonths ?? null,
       communityService: data.communityService || null,
       otherSentence: data.otherSentence || null,
       // Jurisdiction

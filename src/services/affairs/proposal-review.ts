@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { AffairStatus, ProposalStatus } from "@/generated/prisma";
+import { isValidSentenceSplit } from "@/lib/affairs/sentence-split";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import {
   AFFAIR_PROPOSABLE_SELECT,
@@ -34,6 +35,7 @@ export type AcceptResult =
   | { ok: false; reason: "orphaned" }
   | { ok: false; reason: "not_pending"; status: ProposalStatus }
   | { ok: false; reason: "invalid_patch"; issues: string[] }
+  | { ok: false; reason: "invalid_split"; issues: string[] }
   | { ok: false; reason: "conflict"; conflictDetail: ConflictDetail };
 
 export type RejectResult =
@@ -50,10 +52,38 @@ interface ReviewInput {
 
 /** Aborts the transaction while carrying a structured reason out of it. */
 class RollbackSignal extends Error {
-  constructor(readonly reason: "lost_race" | "affair_gone") {
+  constructor(
+    readonly reason: "lost_race" | "affair_gone" | "invalid_split",
+    readonly issues: string[] = []
+  ) {
     super(`proposal review rollback: ${reason}`);
     this.name = "RollbackSignal";
   }
+}
+
+/**
+ * Checks the firm/suspended pairs against what the row actually holds (#576).
+ *
+ * The schema can only compare the two halves when the patch carries both, and an
+ * importer routinely proposes one. This is the only point that sees the merge, so it is
+ * the only place the invariant can be enforced for a partial patch.
+ */
+function splitIssues(live: Record<string, unknown>, patch: Record<string, unknown>): string[] {
+  const merged = { ...live, ...patch };
+  const pairs = [
+    ["prisonMonths", "prisonFirmMonths", "la peine"],
+    ["ineligibilityMonths", "ineligibilityFirmMonths", "l'inéligibilité"],
+  ] as const;
+
+  return pairs
+    .filter(
+      ([totalKey, firmKey]) =>
+        !isValidSentenceSplit(
+          (merged[totalKey] ?? null) as number | null,
+          (merged[firmKey] ?? null) as number | null
+        )
+    )
+    .map(([, firmKey, label]) => `${firmKey} : part ferme incompatible avec le total de ${label}`);
 }
 
 async function currentStatus(proposalId: string): Promise<ProposalStatus | null> {
@@ -156,6 +186,12 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
         return { kind: "conflict" as const, drift };
       }
 
+      const issues = splitIssues(
+        live as unknown as Record<string, unknown>,
+        patch as unknown as Record<string, unknown>
+      );
+      if (issues.length > 0) throw new RollbackSignal("invalid_split", issues);
+
       await tx.affair.update({
         where: { id: affairId },
         data: buildPrismaData(patch),
@@ -200,6 +236,11 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
   } catch (error) {
     if (error instanceof RollbackSignal) {
       if (error.reason === "affair_gone") return { ok: false, reason: "orphaned" };
+      // The rollback undid the APPROVED claim, so the proposal is PENDING again and the
+      // reviewer sees why rather than a bare "not_pending".
+      if (error.reason === "invalid_split") {
+        return { ok: false, reason: "invalid_split", issues: error.issues };
+      }
       const status = await currentStatus(proposal.id);
       return { ok: false, reason: "not_pending", status: status ?? "APPROVED" };
     }

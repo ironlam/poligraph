@@ -66,8 +66,9 @@ export const AFFAIR_PROPOSABLE_SELECT = {
   court: true,
   sentence: true,
   prisonMonths: true,
-  prisonSuspended: true,
+  prisonFirmMonths: true,
   ineligibilityMonths: true,
+  ineligibilityFirmMonths: true,
   communityService: true,
   otherSentence: true,
 } as const;

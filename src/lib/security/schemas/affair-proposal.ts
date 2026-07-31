@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { AffairStatus, Prisma } from "@/generated/prisma";
+import { isValidSentenceSplit, LIFE_SENTENCE_MONTHS } from "@/lib/affairs/sentence-split";
 
 // Affaires v2, lot 1: the strict gate between an importer-proposed JSON patch and
 // Prisma. A raw `proposedPatch` is NEVER spread into db.affair.update().
@@ -14,7 +15,7 @@ import { AffairStatus, Prisma } from "@/generated/prisma";
  * Scoped to what the two converted importers actually propose today.
  *
  * discover-affairs (Wikidata penalties): verdictDate, court, sentence,
- *   prisonMonths, prisonSuspended, ineligibilityMonths, communityService,
+ *   prisonMonths, prisonFirmMonths, ineligibilityMonths, communityService,
  *   otherSentence.
  * judilibre: status. Its identifiers moved to `CourtDecision` (#545).
  *
@@ -51,6 +52,26 @@ const dateLike = z
 /** 1200 months = 100 years. Guards against unit confusion (years passed as months). */
 const monthsLike = z.number().int().min(0).max(1200);
 
+/**
+ * A prison total may carry the perpetuity sentinel; a firm part never can, since French
+ * law does not suspend a life term. Reusing `monthsLike` for both would put the sentinel
+ * out of reach of the schema entirely, which is what made the invariant below look
+ * enforced when it was not (#576).
+ */
+const prisonTotalMonths = z.union([monthsLike, z.literal(LIFE_SENTENCE_MONTHS)]);
+
+/**
+ * A patch may carry one half of a pair, so the check can only fire when it holds both.
+ * The other half is verified against the live row in `acceptProposal`.
+ */
+function splitIsCoherent(
+  total: number | null | undefined,
+  firm: number | null | undefined
+): boolean {
+  if (total === undefined || firm === undefined) return true;
+  return isValidSentenceSplit(total, firm);
+}
+
 /** Accepts a string or number, normalizes through a string so no float rounding. */
 const decimalLike = z
   .union([z.string().min(1), z.number()])
@@ -70,15 +91,24 @@ export const affairPatchSchema = z
 
     // Sentence
     sentence: z.string().min(1).max(2000).nullable().optional(),
-    prisonMonths: monthsLike.nullable().optional(),
-    prisonSuspended: z.boolean().nullable().optional(),
+    prisonMonths: prisonTotalMonths.nullable().optional(),
+    prisonFirmMonths: monthsLike.nullable().optional(),
     fineAmount: decimalLike.nullable().optional(),
     ineligibilityMonths: monthsLike.nullable().optional(),
+    ineligibilityFirmMonths: monthsLike.nullable().optional(),
     communityService: z.number().int().min(0).max(10000).nullable().optional(),
     otherSentence: z.string().min(1).max(2000).nullable().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "Le patch ne peut pas être vide",
+  })
+  .refine((patch) => splitIsCoherent(patch.prisonMonths, patch.prisonFirmMonths), {
+    message: "La part ferme est incompatible avec le total de la peine",
+    path: ["prisonFirmMonths"],
+  })
+  .refine((patch) => splitIsCoherent(patch.ineligibilityMonths, patch.ineligibilityFirmMonths), {
+    message: "La part ferme est incompatible avec le total de l'inéligibilité",
+    path: ["ineligibilityFirmMonths"],
   });
 
 export type AffairPatch = z.infer<typeof affairPatchSchema>;
@@ -90,9 +120,10 @@ export const PROPOSABLE_FIELDS = Object.freeze([
   "court",
   "sentence",
   "prisonMonths",
-  "prisonSuspended",
+  "prisonFirmMonths",
   "fineAmount",
   "ineligibilityMonths",
+  "ineligibilityFirmMonths",
   "communityService",
   "otherSentence",
 ] as const);

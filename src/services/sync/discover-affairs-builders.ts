@@ -14,7 +14,12 @@ import type { AffairCategory, AffairStatus, Involvement } from "@/generated/pris
 
 export interface ExtractedPenaltyData {
   prisonMonths?: number;
-  prisonSuspended?: boolean;
+  /**
+   * `number | null` and not `number`: absent means the extractor said nothing, null means
+   * it looked and the source does not establish the split. Both land on null downstream,
+   * but the extractor needs to be able to state the second one (#576).
+   */
+  prisonFirmMonths?: number | null;
   hasFine?: boolean;
   ineligibilityMonths?: number;
   communityService?: number;
@@ -37,7 +42,7 @@ export interface DiscoveredAffair {
   verdictDate: Date | null;
   court: string | null;
   prisonMonths: number | null;
-  prisonSuspended: boolean | null;
+  prisonFirmMonths: number | null;
   ineligibilityMonths: number | null;
   communityService: number | null;
   otherSentence: string | null;
@@ -98,7 +103,7 @@ export function buildWikidataDiscoveredAffair(
     verdictDate: input.penaltyData.verdictDate ?? null,
     court: null,
     prisonMonths: input.penaltyData.prisonMonths ?? null,
-    prisonSuspended: input.penaltyData.prisonSuspended ?? null,
+    prisonFirmMonths: input.penaltyData.prisonFirmMonths ?? null,
     ineligibilityMonths: input.penaltyData.ineligibilityMonths ?? null,
     communityService: input.penaltyData.communityService ?? null,
     otherSentence: input.penaltyData.otherSentence ?? null,

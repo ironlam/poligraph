@@ -4,12 +4,14 @@ import { mapWikidataPenalty, parseDurationToMonths } from "./wikidata-penalties"
 describe("mapWikidataPenalty", () => {
   it("maps prison Q-ID to prisonMonths field", () => {
     const result = mapWikidataPenalty("Q853735");
-    expect(result).toEqual({ field: "prisonMonths", suspended: false });
+    // Wikidata says « emprisonnement », not « emprisonnement ferme ». The mapping used to
+    // add `suspended: false` here, which is an assertion the source does not carry.
+    expect(result).toEqual({ field: "prisonMonths" });
   });
 
-  it("maps sursis Q-ID to prisonMonths with suspended=true", () => {
+  it("maps sursis Q-ID to prisonMonths with fullySuspended", () => {
     const result = mapWikidataPenalty("Q4737759");
-    expect(result).toEqual({ field: "prisonMonths", suspended: true });
+    expect(result).toEqual({ field: "prisonMonths", fullySuspended: true });
   });
 
   it("maps amende Q-ID to fineAmount", () => {
@@ -34,7 +36,7 @@ describe("mapWikidataPenalty", () => {
 
   it("maps perpetuite to prisonMonths with fixedMonths=9999", () => {
     const result = mapWikidataPenalty("Q68676");
-    expect(result).toEqual({ field: "prisonMonths", suspended: false, fixedMonths: 9999 });
+    expect(result).toEqual({ field: "prisonMonths", fixedMonths: 9999 });
   });
 
   it("returns null for unknown Q-ID", () => {

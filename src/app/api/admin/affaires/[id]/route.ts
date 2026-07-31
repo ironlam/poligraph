@@ -115,9 +115,10 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
       appeal: data.appeal || false,
       // Detailed sentence
       prisonMonths: data.prisonMonths ?? null,
-      prisonSuspended: data.prisonSuspended ?? null,
+      prisonFirmMonths: data.prisonFirmMonths ?? null,
       fineAmount: data.fineAmount ?? null,
       ineligibilityMonths: data.ineligibilityMonths ?? null,
+      ineligibilityFirmMonths: data.ineligibilityFirmMonths ?? null,
       communityService: data.communityService ?? null,
       otherSentence: data.otherSentence || null,
       // Jurisdiction

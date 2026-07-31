@@ -13,6 +13,7 @@ import { WikidataService } from "@/lib/api/wikidata";
 import { WD_PROPS } from "@/config/wikidata";
 import { mapWikidataOffense, getOffenseLabel } from "@/config/wikidata-affairs";
 import { mapWikidataPenalty, parseDurationToMonths } from "@/config/wikidata-penalties";
+import { classifySentenceSplit, LIFE_SENTENCE_MONTHS } from "@/lib/affairs/sentence-split";
 import {
   buildWikidataDiscoveredAffair,
   type DiscoveredAffair,
@@ -148,10 +149,20 @@ export function extractPenaltyData(claim: WikidataClaim): ExtractedPenaltyData {
       if (!mapping) continue;
 
       switch (mapping.field) {
-        case "prisonMonths":
-          result.prisonMonths = mapping.fixedMonths ?? durationMonths;
-          result.prisonSuspended = mapping.suspended ?? false;
+        case "prisonMonths": {
+          const total = mapping.fixedMonths ?? durationMonths;
+          result.prisonMonths = total;
+          // `durationMonths` stays undefined when P2047 carries no usable duration, so a
+          // sursis Q-ID on its own must not produce a firm part of 0 with no term. And a
+          // life sentence carries no firm part at all (#576).
+          result.prisonFirmMonths =
+            total == null || total === LIFE_SENTENCE_MONTHS
+              ? null
+              : mapping.fullySuspended
+                ? 0
+                : null;
           break;
+        }
         case "fineAmount":
           result.hasFine = true;
           break;
@@ -531,7 +542,7 @@ async function runPhase2Wikipedia(
             verdictDate: null,
             court: extracted.court,
             prisonMonths: null,
-            prisonSuspended: null,
+            prisonFirmMonths: null,
             ineligibilityMonths: null,
             communityService: null,
             otherSentence: null,
@@ -564,21 +575,31 @@ async function runPhase2Wikipedia(
 function buildSentenceSummary(affair: DiscoveredAffair): string | null {
   const parts: string[] = [];
 
-  if (affair.prisonMonths !== null && affair.prisonMonths > 0) {
-    if (affair.prisonMonths === 9999) {
-      parts.push("réclusion criminelle à perpétuité");
-    } else {
-      const years = Math.floor(affair.prisonMonths / 12);
-      const months = affair.prisonMonths % 12;
-      const duration =
-        years > 0 && months > 0
-          ? `${years} an${years > 1 ? "s" : ""} et ${months} mois`
-          : years > 0
-            ? `${years} an${years > 1 ? "s" : ""}`
-            : `${months} mois`;
-      const suffix = affair.prisonSuspended ? " avec sursis" : " de prison ferme";
-      parts.push(duration + suffix);
-    }
+  const prisonSplit = classifySentenceSplit(affair.prisonMonths, affair.prisonFirmMonths);
+  if (prisonSplit.kind === "LIFE") {
+    parts.push("réclusion criminelle à perpétuité");
+  } else if (affair.prisonMonths !== null && affair.prisonMonths > 0) {
+    const years = Math.floor(affair.prisonMonths / 12);
+    const months = affair.prisonMonths % 12;
+    const duration =
+      years > 0 && months > 0
+        ? `${years} an${years > 1 ? "s" : ""} et ${months} mois`
+        : years > 0
+          ? `${years} an${years > 1 ? "s" : ""}`
+          : `${months} mois`;
+
+    // No default suffix. The previous ternary wrote « de prison ferme » whenever the
+    // boolean was not true, so an unestablished split entered the `sentence` text as an
+    // asserted firm term (#576).
+    const suffix =
+      prisonSplit.kind === "FULLY_SUSPENDED"
+        ? " de prison avec sursis"
+        : prisonSplit.kind === "FULLY_FIRM"
+          ? " de prison ferme"
+          : prisonSplit.kind === "MIXED"
+            ? ` de prison dont ${prisonSplit.suspendedMonths} mois avec sursis`
+            : " de prison";
+    parts.push(duration + suffix);
   }
 
   if (affair.ineligibilityMonths !== null && affair.ineligibilityMonths > 0) {
@@ -613,7 +634,11 @@ async function proposePenaltyEnrichment(
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
   if (affair.prisonMonths !== null) patch.prisonMonths = affair.prisonMonths;
-  if (affair.prisonSuspended !== null) patch.prisonSuspended = affair.prisonSuspended;
+  // Only propose the firm part alongside a total. Proposing it alone would be rejected at
+  // apply time against the live row, then refiled by the next run (#576).
+  if (affair.prisonMonths !== null && affair.prisonFirmMonths !== null) {
+    patch.prisonFirmMonths = affair.prisonFirmMonths;
+  }
   if (affair.ineligibilityMonths !== null) patch.ineligibilityMonths = affair.ineligibilityMonths;
   if (affair.communityService !== null) patch.communityService = affair.communityService;
   if (affair.otherSentence !== null) patch.otherSentence = affair.otherSentence;
@@ -726,7 +751,7 @@ async function runPhase3Reconciliation(
         verdictDate: affair.verdictDate,
         court: affair.court,
         prisonMonths: affair.prisonMonths,
-        prisonSuspended: affair.prisonSuspended,
+        prisonFirmMonths: affair.prisonFirmMonths,
         ineligibilityMonths: affair.ineligibilityMonths,
         communityService: affair.communityService,
         otherSentence: affair.otherSentence,

@@ -24,7 +24,8 @@ describe("extractPenaltyData", () => {
     };
     const result = extractPenaltyData(claim);
     expect(result.prisonMonths).toBe(24);
-    expect(result.prisonSuspended).toBe(false);
+    // « emprisonnement » says nothing about a sursis, so the split stays unestablished.
+    expect(result.prisonFirmMonths).toBeNull();
   });
 
   it("extracts sursis from P1596 qualifier", () => {
@@ -45,7 +46,7 @@ describe("extractPenaltyData", () => {
     };
     const result = extractPenaltyData(claim);
     expect(result.prisonMonths).toBe(18);
-    expect(result.prisonSuspended).toBe(true);
+    expect(result.prisonFirmMonths).toBe(0);
   });
 
   it("extracts verdict date from P585 qualifier", () => {
@@ -93,7 +94,8 @@ describe("extractPenaltyData", () => {
       },
     };
     const result = extractPenaltyData(claim);
-    expect(result.prisonSuspended).toBe(false);
+    expect(result.prisonMonths).toBeUndefined();
+    expect(result.prisonFirmMonths).toBeNull();
     expect(result.hasFine).toBe(true);
   });
 
@@ -118,6 +120,39 @@ describe("extractPenaltyData", () => {
     };
     const result = extractPenaltyData(claim);
     expect(result.prisonMonths).toBe(9999);
-    expect(result.prisonSuspended).toBe(false);
+    // French law does not suspend a life term, so no firm part is asserted either.
+    expect(result.prisonFirmMonths).toBeNull();
+  });
+
+  /**
+   * The case the fix exists for (#576): a sursis Q-ID with no usable P2047 duration.
+   * `durationMonths` stays undefined, so writing a firm part of 0 would assert a
+   * suspended term of no length, which no invariant allows.
+   */
+  it("n'écrit pas de part ferme sur un sursis sans durée", () => {
+    const claim: WikidataClaim = {
+      mainsnak: {
+        datavalue: { value: { id: "Q852973" }, type: "wikibase-entityid" },
+      },
+      qualifiers: {
+        P1596: [{ datavalue: { value: { id: "Q4737759" } } }],
+      },
+    };
+    const result = extractPenaltyData(claim);
+    expect(result.prisonMonths).toBeUndefined();
+    expect(result.prisonFirmMonths).toBeNull();
+  });
+
+  it("n'écrit pas de part ferme sur un sursis probatoire sans durée", () => {
+    const claim: WikidataClaim = {
+      mainsnak: {
+        datavalue: { value: { id: "Q852973" }, type: "wikibase-entityid" },
+      },
+      qualifiers: {
+        P1596: [{ datavalue: { value: { id: "Q17355222" } } }],
+      },
+    };
+    const result = extractPenaltyData(claim);
+    expect(result.prisonFirmMonths).toBeNull();
   });
 });

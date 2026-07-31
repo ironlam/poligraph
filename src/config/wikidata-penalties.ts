@@ -13,8 +13,14 @@ export interface PenaltyMapping {
     | "ineligibilityMonths"
     | "communityService"
     | "otherSentence";
-  /** For prisonMonths: whether the sentence is suspended (sursis) */
-  suspended?: boolean;
+  /**
+   * For prisonMonths: set only when the Q-ID itself means the term is entirely suspended.
+   *
+   * Deliberately not a boolean. `suspended: false` was posted on the five generic prison
+   * Q-IDs, which say nothing about a sursis, and `mapping.suspended ?? false` then turned
+   * every unknown split into an asserted firm term (#576).
+   */
+  fullySuspended?: true;
   /** Fixed value to use instead of parsing duration (e.g., perpetuity = 9999) */
   fixedMonths?: number;
   /** Label for otherSentence field */
@@ -23,15 +29,17 @@ export interface PenaltyMapping {
 
 export const PENALTY_QID_MAP: Record<string, PenaltyMapping> = {
   // --- Prison ---
-  Q853735: { field: "prisonMonths", suspended: false }, // imprisonment (emprisonnement)
-  Q841236: { field: "prisonMonths", suspended: false }, // prison sentence
-  Q11698769: { field: "prisonMonths", suspended: false }, // custodial sentence
-  Q40357: { field: "prisonMonths", suspended: false }, // prison
-  Q68676: { field: "prisonMonths", suspended: false, fixedMonths: 9999 }, // life imprisonment
+  // No `fullySuspended` on any of these: they name a custodial term without saying
+  // whether any part of it is suspended.
+  Q853735: { field: "prisonMonths" }, // imprisonment (emprisonnement)
+  Q841236: { field: "prisonMonths" }, // prison sentence
+  Q11698769: { field: "prisonMonths" }, // custodial sentence
+  Q40357: { field: "prisonMonths" }, // prison
+  Q68676: { field: "prisonMonths", fixedMonths: 9999 }, // life imprisonment
 
   // --- Prison avec sursis ---
-  Q4737759: { field: "prisonMonths", suspended: true }, // suspended sentence
-  Q17355222: { field: "prisonMonths", suspended: true }, // sursis probatoire
+  Q4737759: { field: "prisonMonths", fullySuspended: true }, // suspended sentence
+  Q17355222: { field: "prisonMonths", fullySuspended: true }, // sursis probatoire
   Q108476309: { field: "otherSentence", label: "Bracelet électronique" }, // electronic monitoring
 
   // --- Amende ---

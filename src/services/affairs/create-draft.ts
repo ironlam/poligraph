@@ -51,8 +51,9 @@ export interface CreateDraftAffairInput {
   // Sentence
   sentence?: string | null;
   prisonMonths?: number | null;
-  prisonSuspended?: boolean | null;
+  prisonFirmMonths?: number | null;
   ineligibilityMonths?: number | null;
+  ineligibilityFirmMonths?: number | null;
   communityService?: number | null;
   otherSentence?: string | null;
 
@@ -88,8 +89,9 @@ export async function createDraftAffairFromDiscovery(
     court: input.court ?? null,
     sentence: input.sentence ?? null,
     prisonMonths: input.prisonMonths ?? null,
-    prisonSuspended: input.prisonSuspended ?? null,
+    prisonFirmMonths: input.prisonFirmMonths ?? null,
     ineligibilityMonths: input.ineligibilityMonths ?? null,
+    ineligibilityFirmMonths: input.ineligibilityFirmMonths ?? null,
     communityService: input.communityService ?? null,
     otherSentence: input.otherSentence ?? null,
     publicationStatus: "DRAFT",
