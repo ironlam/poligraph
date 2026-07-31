@@ -41,9 +41,10 @@ const FIELD_LABELS: Record<string, string> = {
   court: "juridiction",
   sentence: "peine (résumé)",
   prisonMonths: "prison (mois)",
-  prisonSuspended: "sursis",
+  prisonFirmMonths: "prison, part non assortie du sursis (mois)",
   fineAmount: "amende (€)",
   ineligibilityMonths: "inéligibilité (mois)",
+  ineligibilityFirmMonths: "inéligibilité, part non assortie du sursis (mois)",
   communityService: "TIG (heures)",
   otherSentence: "autre peine",
 };

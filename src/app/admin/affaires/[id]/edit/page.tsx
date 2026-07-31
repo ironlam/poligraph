@@ -49,9 +49,12 @@ export default async function EditAffairPage({ params }: PageProps) {
     sentence: affair.sentence || undefined,
     appeal: affair.appeal,
     prisonMonths: affair.prisonMonths ?? undefined,
-    prisonSuspended: affair.prisonSuspended ?? undefined,
+    // `?? null` and not `?? undefined`: 0 is a value here ("entirely suspended"), and the
+    // form has to be able to hold "not established" as a distinct state (#576).
+    prisonFirmMonths: affair.prisonFirmMonths ?? null,
     fineAmount: affair.fineAmount != null ? Number(affair.fineAmount) : undefined,
     ineligibilityMonths: affair.ineligibilityMonths ?? undefined,
+    ineligibilityFirmMonths: affair.ineligibilityFirmMonths ?? null,
     communityService: affair.communityService ?? undefined,
     otherSentence: affair.otherSentence || undefined,
     court: affair.court || undefined,

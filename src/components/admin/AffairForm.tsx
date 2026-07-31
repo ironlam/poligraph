@@ -52,7 +52,9 @@ interface AffairFormData {
   appeal: boolean;
   // Detailed sentence
   prisonMonths?: number;
-  prisonSuspended?: boolean;
+  /** `number | null`, not `number | undefined`: clearing the field must reset the column. */
+  prisonFirmMonths?: number | null;
+  ineligibilityFirmMonths?: number | null;
   fineAmount?: number;
   ineligibilityMonths?: number;
   communityService?: number;
@@ -434,15 +436,26 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
               />
             </div>
 
-            <div className="flex items-end gap-2 pb-2">
-              <input
-                type="checkbox"
-                id="prisonSuspended"
-                checked={formData.prisonSuspended || false}
-                onChange={(e) => updateField("prisonSuspended", e.target.checked)}
-                className="h-4 w-4"
+            <div>
+              {/* Named in full so it is not a substring of the ineligibility label, which
+                  would make both ambiguous to a screen reader. */}
+              <Label htmlFor="prisonFirmMonths">Prison, part non assortie du sursis (mois)</Label>
+              <Input
+                id="prisonFirmMonths"
+                type="number"
+                min="0"
+                // `?? ""` and not `|| ""`: 0 means "entirely suspended" and has to stay
+                // visible, and clearing the field must send null, not undefined, or the
+                // property is omitted from the JSON instead of resetting the column (#576).
+                value={formData.prisonFirmMonths ?? ""}
+                onChange={(e) =>
+                  updateField(
+                    "prisonFirmMonths",
+                    e.target.value === "" ? null : Number.parseInt(e.target.value, 10)
+                  )
+                }
+                placeholder="vide si non établie"
               />
-              <Label htmlFor="prisonSuspended">Avec sursis</Label>
             </div>
 
             <div>
@@ -474,6 +487,25 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
                   )
                 }
                 placeholder="0"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="ineligibilityFirmMonths">
+                Inéligibilité, part non assortie du sursis (mois)
+              </Label>
+              <Input
+                id="ineligibilityFirmMonths"
+                type="number"
+                min="0"
+                value={formData.ineligibilityFirmMonths ?? ""}
+                onChange={(e) =>
+                  updateField(
+                    "ineligibilityFirmMonths",
+                    e.target.value === "" ? null : Number.parseInt(e.target.value, 10)
+                  )
+                }
+                placeholder="vide si non établie"
               />
             </div>
 
