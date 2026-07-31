@@ -25,7 +25,7 @@ export const Search: Story = {
 };
 
 export const WithValue: Story = {
-  args: { defaultValue: "Jean-Luc Mélenchon" },
+  args: { defaultValue: "Jean-Luc Mélenchon", "aria-label": "Nom recherché" },
 };
 
 export const Disabled: Story = {

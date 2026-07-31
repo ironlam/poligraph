@@ -54,21 +54,50 @@ se limite donc à quelques écarts ciblés, plus une recommandation d'outillage.
    (`aria-hidden`) ; avec `label`, il devient `role="status"` avec nom accessible,
    pour les cas où le spinner est le seul indicateur de chargement.
 
+## Passage axe automatisé (addon a11y)
+
+`@storybook/addon-a11y` est désormais branché (`.storybook/main.ts`), avec une
+config globale dans `.storybook/preview.tsx` (`parameters.a11y.test = "todo"` :
+axe s'exécute dans le panneau a11y de chaque story et remonte les écarts sans
+faire échouer la CI). Toute la famille `@storybook/*` a été alignée sur `10.5.5` :
+un addon en retard de version casse le rendu du renderer en build statique
+(`MissingRenderToCanvasError`).
+
+Premier balayage : les 100 stories passées à `@axe-core/playwright`, en thème
+clair **et** sombre (200 analyses), tags WCAG 2.0/2.1 A + AA. Résultat : **26
+écarts, ramenés à 11** après correction des défauts propres aux stories.
+
+### Corrigé dans les stories
+
+- **Champs sans nom accessible** (`label`, `select-name`, critique) : `Input`,
+  `Textarea` et les quatre `Select` de démonstration n'avaient ni `<label>` ni
+  `aria-label`. Ajout d'un `aria-label` décrivant le champ. Les composants
+  eux-mêmes sont conformes ; c'étaient les stories qui ne modélisaient pas un
+  usage accessible.
+- **Légendes invisibles en sombre** (`color-contrast`) : trois stories de la
+  marque (`Tailles`, `Monochrome`, `Zone de protection`) posent leur texte sur un
+  panneau fixe couleur « page » (`#fbfaf7`) qui ne bascule pas avec le thème ; en
+  sombre le texte héritait du premier plan clair (ratio 1,1:1). Couleur de texte
+  fixée à la marine de marque sur ces panneaux.
+
+### Écarts restants (11) : décisions de tokens, hors périmètre de cette passe
+
+Ces écarts ne sont **pas** des bugs de story : ils viennent des tokens et de
+composants de production, avec un rayon d'impact sur tout le site. Ils sont
+laissés visibles par l'addon (en `todo`) et documentés ici pour une correction
+coordonnée, séparée de ce branchement d'outillage.
+
+| Cause                                                           | Ratio (sombre)                                           | Où                                              | Correctif à cadrer                                           |
+| --------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| `--muted-foreground` sombre (`#808080` sur `#262626`)           | 3,83:1 (< 4,5)                                           | onglets et bascules inactifs, libellés atténués | éclaircir le token `--muted-foreground` en sombre            |
+| Premier plan `accent` / `destructive` (`#0b0b0b` sur `#de3b3d`) | 4,49:1 (< 4,5 d'un cheveu)                               | `Badge` accent, carte profil                    | assombrir le rouge ou passer le texte en noir pur            |
+| `StatCard` : accents hex fournis par l'appelant                 | 2,67:1 (nombre) et 1,06:1 (libellé sur fond actif clair) | toutes les stories `StatCard`                   | adapter les accents au thème (tokens ou calcul de contraste) |
+
+Une passe axe permanente en CI (via l'intégration Vitest/test-runner de
+Storybook) reste l'étape suivante recommandée : elle transformerait ces `todo` en
+garde-fou bloquant une fois les tokens corrigés.
+
 ## Recommandations (étapes suivantes)
-
-- **Guardrail a11y automatisé** : brancher `@storybook/addon-a11y` (axe sur chaque
-  story) pour capter les régressions. **Non appliqué ici** : le worktree partage son
-  `node_modules` avec une session active ; l'ajout d'une dépendance doit se faire sur
-  un checkout propre. Câblage prévu :
-
-  ```ts
-  // .storybook/main.ts
-  addons: ["@storybook/addon-a11y"],
-  ```
-
-  ```bash
-  npm i -D @storybook/addon-a11y
-  ```
 
 - **Cibles tactiles** : `Button size="icon"` fait 36 px (conforme AA 2.5.8, sous le
   seuil AAA 44 px). Acceptable, mais pour les boutons icône seule sur surfaces
@@ -81,7 +110,12 @@ se limite donc à quelques écarts ciblés, plus une recommandation d'outillage.
 ## Vérification
 
 - `tsc --noEmit` : 0 erreur sur les primitives (baseline conservée).
-- `vitest run src/components/ui` : 20 tests verts (dont 3 nouveaux sur
-  CollapsibleCard).
-- Aucune régression de comportement : les changements sont additifs ou purement
-  ARIA.
+- `vitest run src/components/ui` : 20 tests verts (dont 3 sur CollapsibleCard),
+  passe historique des corrections de primitives.
+- `storybook build` : succès avec l'addon a11y, famille `@storybook/*` alignée
+  sur `10.5.5`.
+- Balayage axe (100 stories × 2 thèmes, 200 analyses) : 26 écarts avant, 11
+  après, 0 story en erreur. Les 11 restants sont des décisions de tokens
+  documentées ci-dessus, pas des régressions.
+- Aucune régression de comportement : les changements sont additifs, purement
+  ARIA, ou limités aux stories de démonstration.

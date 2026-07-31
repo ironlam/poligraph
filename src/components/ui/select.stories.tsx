@@ -14,7 +14,7 @@ type Story = StoryObj<typeof Select>;
 
 export const Departements: Story = {
   render: (args) => (
-    <Select {...args}>
+    <Select aria-label="Filtrer par département" {...args}>
       <option value="">Tous les départements</option>
       <option value="75">Paris (75)</option>
       <option value="13">Bouches-du-Rhône (13)</option>
@@ -30,7 +30,7 @@ export const Departements: Story = {
 
 export const Partis: Story = {
   render: (args) => (
-    <Select {...args}>
+    <Select aria-label="Filtrer par parti" {...args}>
       <option value="">Tous les partis</option>
       <option value="RE">Renaissance</option>
       <option value="RN">Rassemblement National</option>
@@ -45,7 +45,7 @@ export const Partis: Story = {
 
 export const MandateType: Story = {
   render: (args) => (
-    <Select {...args}>
+    <Select aria-label="Filtrer par type de mandat" {...args}>
       <option value="">Type de mandat</option>
       <option value="DEPUTE">Député</option>
       <option value="SENATEUR">Sénateur</option>
@@ -58,7 +58,7 @@ export const MandateType: Story = {
 
 export const Disabled: Story = {
   render: () => (
-    <Select disabled>
+    <Select disabled aria-label="Sélection indisponible">
       <option>Sélection indisponible</option>
     </Select>
   ),

@@ -23,6 +23,7 @@ export const WithValue: Story = {
   args: {
     defaultValue:
       "Cette affaire a fait l'objet d'un non-lieu prononcé par le tribunal correctionnel de Paris le 12 janvier 2025. Source : Le Monde, AFP.",
+    "aria-label": "Commentaire de modération",
   },
 };
 

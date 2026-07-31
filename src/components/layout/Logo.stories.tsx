@@ -34,6 +34,7 @@ export const Tailles: Story = {
         gap: 24,
         alignItems: "flex-end",
         background: BRAND_PAGE,
+        color: BRAND_NAVY,
         padding: 32,
       }}
     >
@@ -87,7 +88,14 @@ export const Attribution: Story = {
 export const Monochrome: Story = {
   render: () => (
     <div
-      style={{ display: "flex", gap: 24, alignItems: "center", background: "#fbfaf7", padding: 32 }}
+      style={{
+        display: "flex",
+        gap: 24,
+        alignItems: "center",
+        background: "#fbfaf7",
+        color: BRAND_NAVY,
+        padding: 32,
+      }}
     >
       <img src="/logo-mono.svg" alt="" width={72} height={72} />
       <p style={{ maxWidth: 42 + "ch", fontSize: 14, margin: 0 }}>
@@ -99,7 +107,7 @@ export const Monochrome: Story = {
 
 export const ZoneDeProtection: Story = {
   render: () => (
-    <div style={{ background: BRAND_PAGE, padding: 32 }}>
+    <div style={{ background: BRAND_PAGE, color: BRAND_NAVY, padding: 32 }}>
       <div style={{ display: "inline-block", border: "1px dashed #9aa4b2", padding: 24 }}>
         <Logo size={64} withWordmark />
       </div>

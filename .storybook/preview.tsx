@@ -25,6 +25,12 @@ const preview: Preview = {
   parameters: {
     controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
     layout: "centered",
+    a11y: {
+      // The addon runs axe-core in the a11y panel for every story.
+      // "todo" reports violations without failing; switch to "error"
+      // once a Storybook test runner executes a11y checks in CI.
+      test: "todo",
+    },
   },
   globalTypes: {
     theme: {
