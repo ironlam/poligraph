@@ -7,6 +7,7 @@
  */
 
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
+import { classifySentenceSplit } from "@/lib/affairs/sentence-split";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1200;
@@ -25,9 +26,10 @@ export interface DescriptionEnrichmentInput {
   verdictDate: string | null;
   court: string | null;
   prisonMonths: number | null;
-  prisonSuspended: boolean | null;
+  prisonFirmMonths: number | null;
   fineAmount: number | null;
   ineligibilityMonths: number | null;
+  ineligibilityFirmMonths: number | null;
   communityService: number | null;
   otherSentence: string | null;
   sentence: string | null;
@@ -148,7 +150,14 @@ export async function enrichDescription(
 // HELPERS
 // ============================================
 
-function buildUserMessage(input: DescriptionEnrichmentInput): string {
+/**
+ * Builds the prompt sent to the model.
+ *
+ * Exported for testing: the sentence section used to assert « ferme » from a nullable
+ * boolean, and the model copied that qualifier into the prose it wrote, so a false claim
+ * reached the published page through the context (#576).
+ */
+export function buildUserMessage(input: DescriptionEnrichmentInput): string {
   const sections: string[] = [];
 
   // Affair data
@@ -164,13 +173,29 @@ function buildUserMessage(input: DescriptionEnrichmentInput): string {
   // Sentence details
   const sentenceParts: string[] = [];
   if (input.prisonMonths) {
-    sentenceParts.push(
-      `${input.prisonMonths} mois de prison${input.prisonSuspended ? " avec sursis" : " ferme"}`
-    );
+    // No default qualifier: an unestablished split says « 48 mois de prison », full stop.
+    const split = classifySentenceSplit(input.prisonMonths, input.prisonFirmMonths);
+    const suffix =
+      split.kind === "FULLY_SUSPENDED"
+        ? " avec sursis"
+        : split.kind === "FULLY_FIRM"
+          ? " ferme"
+          : split.kind === "MIXED"
+            ? ` dont ${split.suspendedMonths} mois avec sursis`
+            : "";
+    sentenceParts.push(`${input.prisonMonths} mois de prison${suffix}`);
   }
   if (input.fineAmount) sentenceParts.push(`${input.fineAmount}€ d'amende`);
-  if (input.ineligibilityMonths)
-    sentenceParts.push(`${input.ineligibilityMonths} mois d'inéligibilité`);
+  if (input.ineligibilityMonths) {
+    const split = classifySentenceSplit(input.ineligibilityMonths, input.ineligibilityFirmMonths);
+    const suffix =
+      split.kind === "FULLY_SUSPENDED"
+        ? " avec sursis"
+        : split.kind === "MIXED"
+          ? ` dont ${split.suspendedMonths} mois avec sursis`
+          : "";
+    sentenceParts.push(`${input.ineligibilityMonths} mois d'inéligibilité${suffix}`);
+  }
   if (input.communityService) sentenceParts.push(`${input.communityService}h de TIG`);
   if (input.otherSentence) sentenceParts.push(input.otherSentence);
   if (input.sentence && sentenceParts.length === 0) sentenceParts.push(input.sentence);

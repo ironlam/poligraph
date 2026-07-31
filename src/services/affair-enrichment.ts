@@ -55,7 +55,6 @@ interface AIEnrichmentOutput {
   corrected_category: string | null;
   sentence_details: {
     prison_months?: number;
-    prison_suspended?: boolean;
     fine_amount?: number;
     ineligibility_months?: number;
     community_service?: number;
@@ -118,10 +117,6 @@ const ENRICHMENT_TOOL = {
           prison_months: {
             type: "integer",
             description: "Peine de prison en mois (0 si pas de prison)",
-          },
-          prison_suspended: {
-            type: "boolean",
-            description: "true si la prison est avec sursis",
           },
           fine_amount: {
             type: "number",
@@ -395,9 +390,12 @@ export async function enrichAffair(affairId: string): Promise<EnrichmentResult> 
       affairUpdate.prisonMonths = sd.prison_months;
       changes.push(`Prison: ${sd.prison_months} mois`);
     }
-    if (sd.prison_suspended != null) {
-      affairUpdate.prisonSuspended = sd.prison_suspended;
-    }
+    // The firm/suspended split is deliberately NOT emitted by the model, and nothing
+    // replaces the boolean that used to be (#576). This function writes with
+    // db.affair.update() and only then asks for a review, and its admin route does not
+    // filter on publicationStatus, so an unreviewed model value can sit on a published
+    // fiche about a named person. A human enters the split; the model's reading survives
+    // in the prose it already writes.
     if (sd.fine_amount != null) {
       affairUpdate.fineAmount = sd.fine_amount;
       changes.push(`Amende: ${sd.fine_amount}€`);
