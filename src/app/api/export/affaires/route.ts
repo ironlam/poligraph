@@ -18,6 +18,7 @@ import type { AffairStatus, AffairCategory } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { resolveDecisionField } from "@/lib/affairs/decision-fields";
+import { AFFAIR_EXPORT_COLUMNS } from "./columns";
 
 export const dynamic = "force-dynamic";
 
@@ -151,8 +152,10 @@ export const GET = withPublicRoute(async (request) => {
     verdictDate: formatDateForCSV(a.verdictDate),
     fineAmount: a.fineAmount !== null ? Number(a.fineAmount) : "",
     prisonMonths: a.prisonMonths ?? "",
-    prisonSuspended: a.prisonSuspended === null ? "" : a.prisonSuspended ? "oui" : "non",
+    // `?? ""` and not `|| ""`: 0 means "entirely suspended" and must not export as empty.
+    prisonFirmMonths: a.prisonFirmMonths ?? "",
     ineligibilityMonths: a.ineligibilityMonths ?? "",
+    ineligibilityFirmMonths: a.ineligibilityFirmMonths ?? "",
     communityService: a.communityService ?? "",
     appeal: a.appeal ? "oui" : "non",
     sentence: a.sentence ?? "",
@@ -168,48 +171,7 @@ export const GET = withPublicRoute(async (request) => {
     updatedAt: formatDateTimeForCSV(a.updatedAt),
   }));
 
-  const columns = [
-    { key: "poligraphId" as const, header: "poligraphId" },
-    { key: "affairSlug" as const, header: "Slug affaire" },
-    { key: "title" as const, header: "Titre" },
-    { key: "politicianPoligraphId" as const, header: "poligraphId politique" },
-    { key: "politicianSlug" as const, header: "Slug politique" },
-    { key: "politicianName" as const, header: "Politique" },
-    { key: "partyCurrentShort" as const, header: "Parti actuel (abrégé)" },
-    { key: "partyCurrentLong" as const, header: "Parti actuel" },
-    { key: "partyCurrentPosition" as const, header: "Position politique" },
-    { key: "partyAtTimeShort" as const, header: "Parti au moment (abrégé)" },
-    { key: "partyAtTimeLong" as const, header: "Parti au moment" },
-    { key: "status" as const, header: "Statut" },
-    { key: "statusCode" as const, header: "Statut (code)" },
-    { key: "category" as const, header: "Catégorie" },
-    { key: "categoryCode" as const, header: "Catégorie (code)" },
-    { key: "severity" as const, header: "Gravité" },
-    { key: "severityCode" as const, header: "Gravité (code)" },
-    { key: "involvement" as const, header: "Implication" },
-    { key: "involvementCode" as const, header: "Implication (code)" },
-    { key: "isRelatedToMandate" as const, header: "Liée au mandat" },
-    { key: "factsDate" as const, header: "Date des faits" },
-    { key: "startDate" as const, header: "Date de début" },
-    { key: "verdictDate" as const, header: "Date du verdict" },
-    { key: "fineAmount" as const, header: "Amende (EUR)" },
-    { key: "prisonMonths" as const, header: "Prison (mois)" },
-    { key: "prisonSuspended" as const, header: "Prison avec sursis" },
-    { key: "ineligibilityMonths" as const, header: "Inéligibilité (mois)" },
-    { key: "communityService" as const, header: "TIG (heures)" },
-    { key: "appeal" as const, header: "Appel" },
-    { key: "sentence" as const, header: "Peine (texte libre)" },
-    { key: "otherSentence" as const, header: "Autres peines" },
-    { key: "court" as const, header: "Juridiction" },
-    { key: "ecli" as const, header: "ECLI" },
-    { key: "descriptionPlain" as const, header: "Description" },
-    { key: "sourceCount" as const, header: "Nombre de sources" },
-    { key: "sourceUrl" as const, header: "Première source (URL)" },
-    { key: "sourceTitle" as const, header: "Première source (titre)" },
-    { key: "pageUrl" as const, header: "Page Poligraph" },
-    { key: "createdAt" as const, header: "Créée le" },
-    { key: "updatedAt" as const, header: "Mise à jour le" },
-  ];
+  const columns = AFFAIR_EXPORT_COLUMNS;
 
   const csv = toCSV(data, columns);
   const filename = `affaires-${new Date().toISOString().split("T")[0]}.csv`;
