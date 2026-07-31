@@ -24,7 +24,7 @@ export const RULES = {
    * rules were in force that day cannot be reconstructed honestly. That baseline
    * therefore carries no version and is reported as incomparable.
    */
-  version: 1,
+  version: 2,
 
   evidence: {
     /** Court and competent-institution hosts. Level B. */
@@ -91,22 +91,55 @@ export const RULES = {
       /rejet[^.]{0,40}pourvoi|pourvoi[^.]{0,40}(rejet|a [ée]t[ée] rejet)|d[ée]finitivement|caract[èe]re d[ée]finitif|voies de recours [ée]puis|condamnation est (aujourd'hui )?d[ée]finitive|devenue d[ée]finitive|rendant la condamnation d[ée]finitive/i,
 
     /**
-     * A sentence split between a firm part and a suspended part.
+     * A term split between a firm part and a suspended part.
      *
-     * `SentenceDetails` renders « (ferme) » as soon as `prisonSuspended` is not
-     * true, so a partly-suspended sentence stored as a plain total is published
-     * as if the whole term were firm. 15 fiches were in that state, some tripling
-     * the firm term of a named person.
+     * Deliberately generic, naming no penalty: the corpus writes prison splits
+     * without ever saying « prison ». Four of the fifteen known fiches would be
+     * lost by requiring the word, among them « 1 an ferme (aménagé en bracelet
+     * électronique) + 2 ans avec sursis » and « 4 ans ferme, 1 an avec sursis ».
      *
-     * Two shapes, because the corpus writes it both ways: « 4 ans dont 2 ferme »
-     * and « 4 ans ferme, 1 an avec sursis ». Kept close-range so an unrelated
-     * « dont » further down a description does not fire.
+     * Attribution is asymmetric instead: see `prisonContext`. Kept close-range,
+     * and segmented on `;` too, so an unrelated « dont » further down a description
+     * does not fire.
+     *
+     * Lazy quantifiers, like `pendingRecourse` above: greedy ones swallowed the next
+     * penalty whole, so « dont 1 an ferme et 45 mois d'inéligibilité dont 30 avec
+     * sursis » produced a single match spanning both and only one of the two splits
+     * was ever seen.
      */
     partlySuspended: [
-      /\bdont\b[^.|]{0,60}(sursis|ferme)/i,
-      /\bferme\b[^.|]{0,60}sursis/i,
-      /\bsursis\b[^.|]{0,60}ferme/i,
+      /\bdont\b[^.|;]{0,60}?(sursis|ferme)/i,
+      /\bferme\b[^.|;]{0,60}?sursis/i,
+      /\bsursis\b[^.|;]{0,60}?ferme/i,
     ],
+
+    /**
+     * Which penalty a split marker belongs to, decided by the nearest keyword
+     * BEFORE it rather than by mere co-occurrence.
+     *
+     * Co-occurrence was tried first and misattributed five fiches: « 5 ans de
+     * prison dont 3 ans ferme, 6 ans d'inéligibilité » is a single segment, since a
+     * comma does not cut, and naming ineligibility later in it does not make the
+     * split the ineligibility's.
+     *
+     * No keyword before the marker means prison, which is why the pattern above
+     * names no penalty: « 1 an ferme (aménagé en bracelet électronique) + 2 ans
+     * avec sursis » carries none, and four of the fifteen known fiches read that way.
+     */
+    prisonContext: /prison|emprisonnement|r[ée]clusion|d[ée]tention/gi,
+    ineligibilityContext: /in[ée]ligibilit[ée]|droits civiques/gi,
+  },
+
+  /**
+   * Semantics of the consumer, folded into the fingerprinted values on purpose.
+   *
+   * The predicate behind `partlySuspended` changed from `prisonSuspended === false`
+   * to `prisonFirmMonths === prisonMonths` in v2. A guard watching only the patterns
+   * would have let a delta across that change look comparable, which is the exact
+   * failure this module exists to prevent (#576).
+   */
+  assessmentMode: {
+    partlySuspended: "firm-equals-total-v2",
   },
 } as const;
 

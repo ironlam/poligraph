@@ -5,7 +5,7 @@ import {
   isComparable,
   parseLedger,
   recordReview,
-  describesPartlySuspendedSentence,
+  splitsByTarget,
   type Baseline,
   type ContradictionKind,
   type Ledger,
@@ -165,7 +165,7 @@ describe("chaque contradiction porte un type stable", () => {
       "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS",
       {
         prisonMonths: 48,
-        prisonSuspended: false,
+        prisonFirmMonths: 48,
         otherSentence: "4 ans dont 2 ans ferme et 2 avec sursis",
       },
     ],
@@ -372,10 +372,12 @@ describe("une référence n'est comparable que sous les mêmes règles", () => {
   });
 });
 
-// Regression on a defect the audit was blind to: `SentenceDetails` prints
-// « (ferme) » whenever `prisonSuspended` is not true, so a partly-suspended
-// sentence stored as a plain total is published as if the whole term were firm.
-// 15 published fiches were in that state; the wordings below are theirs.
+// Regression on a defect the audit was blind to: a partly-suspended sentence stored as a
+// plain total was published as if the whole term were firm, because the renderer read a
+// nullable boolean. 15 published fiches were in that state; the wordings below are theirs.
+//
+// Since #576 the predicate is `prisonFirmMonths === prisonMonths`, so the contradiction
+// now means "our columns say entirely firm while our own prose splits it".
 describe("detects a total shown as firm over a partly suspended sentence", () => {
   const REAL_WORDINGS = [
     "dont 48 mois de prison ferme, 12 mois avec sursis",
@@ -395,7 +397,7 @@ describe("detects a total shown as firm over a partly suspended sentence", () =>
   ];
 
   it.each(REAL_WORDINGS)("recognises %s", (wording) => {
-    expect(describesPartlySuspendedSentence(wording)).toBe(true);
+    expect(splitsByTarget(wording).prison).toBe(true);
   });
 
   // Both of these stayed firm in the corpus and must not be flagged.
@@ -404,14 +406,14 @@ describe("detects a total shown as firm over a partly suspended sentence", () =>
     "1ère instance : 5 ans de prison ferme avec exécution provisoire",
     "3 ans d'emprisonnement intégralement assortis du sursis",
   ])("leaves %s alone", (wording) => {
-    expect(describesPartlySuspendedSentence(wording)).toBe(false);
+    expect(splitsByTarget(wording).prison).toBe(false);
   });
 
   it("flags the affair as contradictory, whichever field carries the wording", () => {
     for (const field of ["otherSentence", "sentence", "description"] as const) {
       const a = affair({
         prisonMonths: 48,
-        prisonSuspended: false,
+        prisonFirmMonths: 48,
         [field]: "4 ans dont 2 ans ferme et 2 ans avec sursis",
       });
       expect(
@@ -424,31 +426,51 @@ describe("detects a total shown as firm over a partly suspended sentence", () =>
     }
   });
 
-  it("says nothing when the sentence is recorded as suspended", () => {
+  it("says nothing when the sentence is recorded as entirely suspended", () => {
     const a = affair({
       prisonMonths: 48,
-      prisonSuspended: true,
+      prisonFirmMonths: 0,
       otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
     });
     expect(a.contradictions).toEqual([]);
   });
 
-  it("says nothing once the unrepresentable figure has been removed", () => {
+  it("says nothing at all once the split is correctly recorded", () => {
     const a = affair({
-      prisonMonths: null,
-      prisonSuspended: null,
+      prisonMonths: 48,
+      prisonFirmMonths: 24,
       otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
     });
     expect(a.contradictions).toEqual([]);
+    expect(a.editorialSignals).toEqual([]);
+  });
+
+  /**
+   * The lot-2 mitigation emptied `prisonMonths` on these 15 fiches, so nothing false is
+   * asserted any more and there is no contradiction. But the split is still written in
+   * their prose and absent from their columns, which is what the editorial queue is for.
+   *
+   * A signal requiring a total would find none of them. That is the defect this test
+   * exists to prevent.
+   */
+  it("recense la fiche vidée au lieu de la déclarer saine", () => {
+    const a = affair({
+      prisonMonths: null,
+      prisonFirmMonths: null,
+      otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
+    });
+    expect(a.contradictions).toEqual([]);
+    expect(a.editorialSignals.map((sig) => sig.kind)).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
   });
 
   it("says nothing for a genuinely firm sentence", () => {
     const a = affair({
       prisonMonths: 24,
-      prisonSuspended: false,
+      prisonFirmMonths: 24,
       otherSentence: "2 ans de prison ferme, 50 000 € d'amende",
     });
     expect(a.contradictions).toEqual([]);
+    expect(a.editorialSignals).toEqual([]);
   });
 });
 
@@ -498,5 +520,188 @@ describe("dating a verdict against sources that can actually attest it", () => {
     expect(a.contradictions.map((c) => c.kind)).not.toContain(KIND);
     expect(a.independentCount).toBe(0);
     expect(a.evidenceLevel).toBe("D");
+  });
+});
+
+/**
+ * Issue #576 — the patterns name no penalty, so prison and ineligibility had to be told
+ * apart some other way.
+ *
+ * Requiring a prison keyword was the obvious fix and the wrong one: four of the fifteen
+ * known fiches never say « prison ». So attribution is asymmetric, ineligibility proving
+ * itself by name and prison being the default subject of a sentence description.
+ */
+describe("splitsByTarget — attribution prison / inéligibilité (#576)", () => {
+  it.each([
+    "1 an ferme (aménagé en bracelet électronique) + 2 ans avec sursis",
+    "18 mois ferme (aménagé en détention à domicile) + 18 mois avec sursis",
+    "4 ans ferme, 1 an avec sursis. 400 000 FF d'amende",
+    "6 mois ferme, 6 mois avec sursis",
+  ])("attribue à la prison un texte qui ne la nomme pas : %s", (wording) => {
+    expect(splitsByTarget(wording).prison).toBe(true);
+    expect(splitsByTarget(wording).ineligibility).toBe(false);
+  });
+
+  it("attribue à l'inéligibilité un segment qui la nomme", () => {
+    const found = splitsByTarget("45 mois d'inéligibilité dont 30 avec sursis");
+
+    expect(found.ineligibility).toBe(true);
+    expect(found.prison).toBe(false);
+  });
+
+  it("reconnaît la privation des droits civiques", () => {
+    expect(splitsByTarget("5 ans de privation des droits civiques dont 2 avec sursis")).toEqual({
+      prison: false,
+      ineligibility: true,
+    });
+  });
+
+  it("sépare les deux quand une fiche porte les deux", () => {
+    const found = splitsByTarget(
+      "3 ans de prison dont 1 an ferme ; 45 mois d'inéligibilité dont 30 avec sursis"
+    );
+
+    expect(found).toEqual({ prison: true, ineligibility: true });
+  });
+
+  // Le point-virgule sépare les segments, sinon le « dont » de l'inéligibilité serait
+  // revendiqué par la phrase voisine.
+  it("ne laisse pas un segment revendiquer le « dont » du voisin", () => {
+    const found = splitsByTarget(
+      "3 ans de prison ferme ; 45 mois d'inéligibilité dont 30 avec sursis"
+    );
+
+    expect(found.ineligibility).toBe(true);
+    expect(found.prison).toBe(false);
+  });
+});
+
+describe("assess — file éditoriale prison / inéligibilité (#576)", () => {
+  it("ne prend pas une inéligibilité mixte pour une peine de prison mixte", () => {
+    const a = affair({
+      prisonMonths: 24,
+      prisonFirmMonths: 24,
+      ineligibilityMonths: 45,
+      ineligibilityFirmMonths: null,
+      otherSentence: "2 ans de prison ferme ; 45 mois d'inéligibilité dont 30 avec sursis",
+    });
+
+    expect(a.contradictions.map((c) => c.kind)).not.toContain(
+      "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS"
+    );
+    const kinds = a.editorialSignals.map((s) => s.kind);
+    expect(kinds).toContain("INELIGIBILITY_SPLIT_ONLY_IN_PROSE");
+    expect(kinds).not.toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+  });
+
+  it("compte les deux files séparément sur une fiche qui porte les deux", () => {
+    const a = affair({
+      prisonMonths: null,
+      prisonFirmMonths: null,
+      ineligibilityMonths: 45,
+      ineligibilityFirmMonths: null,
+      otherSentence:
+        "3 ans de prison dont 1 an ferme ; 45 mois d'inéligibilité dont 30 avec sursis",
+    });
+
+    expect(a.editorialSignals.map((s) => s.kind).sort()).toEqual([
+      "INELIGIBILITY_SPLIT_ONLY_IN_PROSE",
+      "PRISON_SPLIT_ONLY_IN_PROSE",
+    ]);
+    expect(a.contradictions).toEqual([]);
+  });
+
+  // Détection d'une paire irreprésentable : elle appartient à l'auditeur, pas au rendu.
+  it("signale une paire incohérente même sans prose", () => {
+    const a = affair({ prisonMonths: 24, prisonFirmMonths: 36, otherSentence: null });
+
+    expect(a.editorialSignals.map((s) => s.kind)).toContain("REPARTITION_INCOHERENTE");
+  });
+
+  it("ne signale rien sur une fiche sans peine chiffrée", () => {
+    const a = affair({ prisonMonths: null, prisonFirmMonths: null, otherSentence: null });
+
+    expect(a.editorialSignals).toEqual([]);
+  });
+});
+
+/**
+ * Regression on the crude version of the asymmetric rule (#576).
+ *
+ * Attributing by mere co-occurrence in a segment misattributed five fiches, because a
+ * comma does not cut a segment: « 5 ans de prison dont 3 ans ferme, 6 ans
+ * d'inéligibilité » names ineligibility after the marker, and that does not make the
+ * split the ineligibility's. The wordings below are the real ones.
+ */
+describe("splitsByTarget — proximité, pas co-occurrence (#576)", () => {
+  it.each([
+    "5 ans de prison dont 3 ans ferme, 6 ans d'inéligibilité",
+    "2 ans de prison dont 6 mois ferme, 3 ans d'inéligibilité",
+    "4 ans de prison dont 3 avec sursis, 100 000€ d'amende, 5 ans d'inéligibilité",
+    "2 ans de prison dont 1 an ferme avec aménagement, 5 ans d'inéligibilité",
+  ])("garde le partage à la prison quand l'inéligibilité vient après : %s", (wording) => {
+    expect(splitsByTarget(wording)).toEqual({ prison: true, ineligibility: false });
+  });
+
+  it("attribue à l'inéligibilité quand c'est elle qui précède le marqueur", () => {
+    expect(
+      splitsByTarget("3 ans de prison ferme, 45 mois d'inéligibilité dont 30 avec sursis")
+    ).toEqual({ prison: false, ineligibility: true });
+  });
+
+  it("attribue les deux quand chacune porte son propre marqueur", () => {
+    expect(
+      splitsByTarget(
+        "3 ans de prison dont 1 an ferme et 45 mois d'inéligibilité dont 30 avec sursis"
+      )
+    ).toEqual({ prison: true, ineligibility: true });
+  });
+});
+
+/**
+ * Regression on two false positives found by reading the queue the signal produced, not
+ * by reasoning about it (#576).
+ *
+ * The Macron fiche recounts Benalla's sentence and the Josso fiche recounts Guerriau's,
+ * both in their descriptions. Without the involvement guard, the editorial queue asked
+ * someone to enter a third party's split as this person's own.
+ */
+describe("la file éditoriale ne réclame pas la peine d'un tiers (#576)", () => {
+  const THIRD_PARTY_PROSE =
+    "Alexandre Benalla a été condamné à 3 ans de prison dont 1 an ferme et 2 ans avec sursis.";
+
+  it.each(["MENTIONED_ONLY", "VICTIM", "PLAINTIFF"] as const)(
+    "ne signale rien quand la personne est %s",
+    (involvement) => {
+      const a = affair({ involvement, prisonMonths: null, description: THIRD_PARTY_PROSE });
+
+      expect(a.editorialSignals.map((s) => s.kind)).not.toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+    }
+  );
+
+  it.each(["DIRECT", "INDIRECT"] as const)("signale quand la personne est %s", (involvement) => {
+    const a = affair({ involvement, prisonMonths: null, description: THIRD_PARTY_PROSE });
+
+    expect(a.editorialSignals.map((s) => s.kind)).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+  });
+
+  // `0` states there is no prison term; `null` states the figure was removed. Only the
+  // second belongs in the queue.
+  it("ne signale rien sur une fiche sans peine de prison (0, pas null)", () => {
+    const a = affair({
+      prisonMonths: 0,
+      description: "un partage sans rapport : 2 ans dont 1 an ferme",
+    });
+
+    expect(a.editorialSignals.map((s) => s.kind)).not.toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+  });
+
+  it("signale la fiche dont le total a été retiré (null)", () => {
+    const a = affair({
+      prisonMonths: null,
+      otherSentence: "4 ans dont 2 ans ferme et 2 ans avec sursis",
+    });
+
+    expect(a.editorialSignals.map((s) => s.kind)).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
   });
 });

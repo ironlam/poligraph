@@ -10,6 +10,7 @@
  */
 import type { AffairStatus, Involvement } from "@/generated/prisma";
 import { RULES } from "@/lib/affairs/grading-rules";
+import { isValidSentenceSplit } from "@/lib/affairs/sentence-split";
 
 /**
  * The rules themselves live in `grading-rules.ts`, where they can be fingerprinted
@@ -24,9 +25,55 @@ export const NOT_INDEPENDENT_TYPES = new Set<string>(RULES.evidence.notIndepende
 export const PENDING_RECOURSE: readonly RegExp[] = RULES.coherence.pendingRecourse;
 export const RECOURSE_EXHAUSTED = RULES.coherence.recourseExhausted;
 
-/** True when the text describes a sentence that is not entirely firm. */
-export function describesPartlySuspendedSentence(text: string): boolean {
-  return RULES.coherence.partlySuspended.some((re) => re.test(text));
+/**
+ * Which term a free-text split describes, prison or ineligibility.
+ *
+ * The patterns name no penalty, because the corpus writes prison splits without ever
+ * saying « prison » (« 1 an ferme (aménagé en bracelet électronique) + 2 ans avec
+ * sursis »). Requiring the word would drop four of the fifteen known fiches.
+ *
+ * So attribution is asymmetric: a segment naming ineligibility is an ineligibility
+ * split, anything else matching is a prison one. Segments are cut on `.`, `|` and `;`
+ * so a sentence about ineligibility cannot claim a « dont » belonging to its neighbour.
+ */
+export function splitsByTarget(text: string): { prison: boolean; ineligibility: boolean } {
+  const found = { prison: false, ineligibility: false };
+
+  /** Index of the last match of `pattern` in `prefix`, or -1. */
+  const lastIndexOf = (pattern: RegExp, prefix: string): number => {
+    let last = -1;
+    for (const m of prefix.matchAll(pattern)) last = m.index;
+    return last;
+  };
+
+  for (const segment of text.split(/[.|;]/)) {
+    for (const pattern of RULES.coherence.partlySuspended) {
+      // A local global copy: `matchAll` needs the flag, and putting `g` on the shared
+      // rule would make `lastIndex` stateful across calls.
+      const all = new RegExp(
+        pattern.source,
+        pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g"
+      );
+
+      for (const match of segment.matchAll(all)) {
+        // A match that swallows an ineligibility keyword straddles two penalties, as in
+        // « ferme, 45 mois d'inéligibilité dont 30 avec sursis ». Attributing it either
+        // way would be a guess, and the « dont » pattern already reads that one right.
+        if (RULES.coherence.ineligibilityContext.test(match[0])) continue;
+
+        const prefix = segment.slice(0, match.index);
+        const prison = lastIndexOf(RULES.coherence.prisonContext, prefix);
+        const ineligibility = lastIndexOf(RULES.coherence.ineligibilityContext, prefix);
+
+        // Ties and total absence both go to prison: it is the default subject of a
+        // sentence description, and four of the fifteen known fiches name no penalty.
+        if (ineligibility > prison) found.ineligibility = true;
+        else found.prison = true;
+      }
+    }
+  }
+
+  return found;
 }
 
 export function describesPendingRecourse(description: string): boolean {
@@ -240,6 +287,26 @@ export interface Contradiction {
   message: string;
 }
 
+/**
+ * Second channel, deliberately not a contradiction (#576).
+ *
+ * A fiche whose own prose holds a split its columns do not asserts nothing false: it is
+ * poorer than our text, not wrong. Counting these as contradictions would inflate the
+ * « 0 contradiction » criterion of #566 with honest cases and hide the ones that do lie.
+ *
+ * These are the editorial queue: 15 prison terms and 8 ineligibilities whose split was
+ * removed by the lot-2 mitigation and lives only in `otherSentence`.
+ */
+export type EditorialSignalKind =
+  | "PRISON_SPLIT_ONLY_IN_PROSE"
+  | "INELIGIBILITY_SPLIT_ONLY_IN_PROSE"
+  | "REPARTITION_INCOHERENTE";
+
+export interface EditorialSignal {
+  kind: EditorialSignalKind;
+  message: string;
+}
+
 export interface Assessment {
   /**
    * Evidence axis, on its own. A property of the world: the documents exist or
@@ -257,6 +324,11 @@ export interface Assessment {
    * fix. Empty means the fiche does not contradict itself.
    */
   contradictions: Contradiction[];
+  /**
+   * Third channel: information our own prose holds and our columns do not. Counted
+   * apart from contradictions because nothing here is a false claim (#576).
+   */
+  editorialSignals: EditorialSignal[];
   /**
    * An official `Source` row is attached. Measures editorial completeness of
    * the visible sourcing: what a reader can click on the page.
@@ -280,11 +352,12 @@ export function assess(affair: {
   verdictDate: Date | null;
   description: string | null;
   prisonMonths: number | null;
-  prisonSuspended?: boolean | null;
+  prisonFirmMonths?: number | null;
   sentence?: string | null;
   otherSentence?: string | null;
   fineAmount: unknown;
   ineligibilityMonths: number | null;
+  ineligibilityFirmMonths?: number | null;
   sources: SourceRow[];
   decisionCount: number;
 }): Assessment {
@@ -344,14 +417,21 @@ export function assess(affair: {
     }
   }
 
+  const prose = [affair.otherSentence, affair.sentence, affair.description]
+    .filter(Boolean)
+    .join(" | ");
+  const described = splitsByTarget(prose);
+
   // A total shown as entirely firm while the fiche's own text splits it.
+  //
+  // The `prisonMonths != null && > 0` guard has to stay FIRST: without it,
+  // `prisonFirmMonths === prisonMonths` fires on `null === null` and flags every fiche
+  // carrying no prison term at all. The comparison is only safe because of what precedes.
   if (
     affair.prisonMonths != null &&
     affair.prisonMonths > 0 &&
-    affair.prisonSuspended === false &&
-    describesPartlySuspendedSentence(
-      [affair.otherSentence, affair.sentence, affair.description].filter(Boolean).join(" | ")
-    )
+    affair.prisonFirmMonths === affair.prisonMonths &&
+    described.prison
   ) {
     flag(
       "PEINE_FERME_MAIS_PARTIELLEMENT_SURSIS",
@@ -373,6 +453,64 @@ export function assess(affair: {
     );
   }
 
+  const editorialSignals: EditorialSignal[] = [];
+  const signal = (kind: EditorialSignalKind, message: string) =>
+    editorialSignals.push({ kind, message });
+
+  // The queue of the editorial pass, not a contradiction.
+  //
+  // The predicate must NOT require a total: the lot-2 mitigation emptied `prisonMonths`
+  // on the fiches concerned, precisely so no false firm term would display. Demanding a
+  // total would find none of them, which is how the first draft of this signal was
+  // written and would have made the closure criterion unreachable.
+  //
+  // Two guards, both found by reading the queue it produced rather than by reasoning:
+  //
+  // 1. The prose has to be about THIS person. Macron's fiche recounts Benalla's sentence
+  //    and Josso's recounts Guerriau's, so without this the queue would have sent an
+  //    editor to enter a third party's split as theirs (#511, #569).
+  // 2. An explicit `0` states there is no prison term, unlike `null` which states the
+  //    figure was removed. Bompard's fiche carries 0 and a description mentioning an
+  //    unrelated split.
+  const aboutThisPerson = ADVERSE_INVOLVEMENTS.includes(affair.involvement);
+
+  if (
+    aboutThisPerson &&
+    described.prison &&
+    affair.prisonMonths !== 0 &&
+    (affair.prisonMonths == null ||
+      affair.prisonFirmMonths == null ||
+      !isValidSentenceSplit(affair.prisonMonths, affair.prisonFirmMonths))
+  ) {
+    signal("PRISON_SPLIT_ONLY_IN_PROSE", "répartition de la peine décrite en prose seulement");
+  }
+
+  if (
+    aboutThisPerson &&
+    described.ineligibility &&
+    affair.ineligibilityMonths !== 0 &&
+    (affair.ineligibilityMonths == null ||
+      affair.ineligibilityFirmMonths == null ||
+      !isValidSentenceSplit(affair.ineligibilityMonths, affair.ineligibilityFirmMonths))
+  ) {
+    signal(
+      "INELIGIBILITY_SPLIT_ONLY_IN_PROSE",
+      "répartition de l'inéligibilité décrite en prose seulement"
+    );
+  }
+
+  // Detection of an unrepresentable pair belongs to the auditor, not to the renderer:
+  // adding a console.warn to SentenceDetails would log on every ISR regeneration and
+  // still miss a row whose prose says nothing.
+  for (const [total, firm, label] of [
+    [affair.prisonMonths, affair.prisonFirmMonths, "la peine"],
+    [affair.ineligibilityMonths, affair.ineligibilityFirmMonths, "l'inéligibilité"],
+  ] as const) {
+    if (!isValidSentenceSplit(total ?? null, firm ?? null)) {
+      signal("REPARTITION_INCOHERENTE", `part ferme incompatible avec le total de ${label}`);
+    }
+  }
+
   // The cascade lost its first rung. A contradiction no longer decides the
   // evidence level, so a well-backed fiche that contradicts itself now reports
   // both facts instead of only the worse one.
@@ -385,6 +523,7 @@ export function assess(affair: {
   return {
     evidenceLevel,
     contradictions,
+    editorialSignals,
     hasOfficialSource,
     hasOfficialEvidence: hasOfficialSource || affair.decisionCount > 0,
     independentCount,

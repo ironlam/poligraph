@@ -33,6 +33,7 @@ import {
   parseLedger,
   recordReview,
   type ContradictionKind,
+  type EditorialSignalKind,
   type EvidenceLevel,
   type Ledger,
   type ReviewOutcome,
@@ -148,11 +149,12 @@ async function main() {
       verdictDate: true,
       description: true,
       prisonMonths: true,
-      prisonSuspended: true,
+      prisonFirmMonths: true,
       sentence: true,
       otherSentence: true,
       fineAmount: true,
       ineligibilityMonths: true,
+      ineligibilityFirmMonths: true,
       politician: {
         select: {
           fullName: true,
@@ -173,11 +175,12 @@ async function main() {
       verdictDate: a.verdictDate,
       description: a.description,
       prisonMonths: a.prisonMonths,
-      prisonSuspended: a.prisonSuspended,
+      prisonFirmMonths: a.prisonFirmMonths,
       sentence: a.sentence,
       otherSentence: a.otherSentence,
       fineAmount: a.fineAmount,
       ineligibilityMonths: a.ineligibilityMonths,
+      ineligibilityFirmMonths: a.ineligibilityFirmMonths,
       sources: a.sources,
       decisionCount: a._count.courtDecisions,
     });
@@ -237,6 +240,21 @@ async function main() {
       `\nCONTRADICTIONS PAR TYPE — ${occurrences} occurrence(s) sur ${contradictory.length} fiche(s)`
     );
     for (const [kind, n] of [...perKind].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${String(n).padStart(3)}  ${kind}`);
+    }
+  }
+
+  // Deliberately outside the contradiction count: these fiches assert nothing false,
+  // their own prose simply holds a split their columns do not. Folding them in would
+  // inflate the « 0 contradiction » criterion of #566 with honest cases (#576).
+  const perSignal = new Map<EditorialSignalKind, number>();
+  for (const r of rows) {
+    for (const s of r.editorialSignals) perSignal.set(s.kind, (perSignal.get(s.kind) ?? 0) + 1);
+  }
+  if (perSignal.size) {
+    const affected = rows.filter((r) => r.editorialSignals.length > 0).length;
+    console.log(`\nRÉPARTITION EN PROSE SEULEMENT — ${affected} fiche(s), file éditoriale`);
+    for (const [kind, n] of [...perSignal].sort((a, b) => b[1] - a[1])) {
       console.log(`  ${String(n).padStart(3)}  ${kind}`);
     }
   }

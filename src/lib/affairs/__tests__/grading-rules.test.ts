@@ -11,6 +11,11 @@ import { RULES, fingerprintOf, rulesFingerprint } from "@/lib/affairs/grading-ru
  */
 const KNOWN_FINGERPRINTS: Record<number, string> = {
   1: "a5f8154c1a1bed8a",
+  // v2 (#576): the predicate behind `partlySuspended` moved from
+  // `prisonSuspended === false` to `prisonFirmMonths === prisonMonths`, the patterns
+  // gained `;` as a segment separator, and `ineligibilityContext` was added so an
+  // ineligibility split stops satisfying the prison predicate.
+  2: "9d0939e641c49660",
 };
 
 describe("les règles de notation sont versionnées", () => {
@@ -45,13 +50,16 @@ describe("les règles de notation sont versionnées", () => {
   });
 
   // Declaration order is not a rule change, so it must not read as one.
+  //
+  // Rebuilt from RULES' own keys rather than listed by hand: a hand-written list goes
+  // stale the moment a top-level key is added, and then asserts that reordering changes
+  // the fingerprint, which is the opposite of what it means to check.
   it("l'empreinte ignore l'ordre de déclaration des clés", () => {
-    const reordered = {
-      version: RULES.version,
-      coherence: RULES.coherence,
-      evidence: RULES.evidence,
-    };
+    const reordered = Object.fromEntries(
+      Object.entries(RULES).reverse()
+    ) as unknown as typeof RULES;
 
+    expect(Object.keys(reordered)).not.toEqual(Object.keys(RULES));
     expect(fingerprintOf(reordered)).toBe(rulesFingerprint());
   });
 });
