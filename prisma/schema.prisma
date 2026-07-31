@@ -561,12 +561,18 @@ model Affair {
   appeal   Boolean @default(false)
 
   // Detailed sentence breakdown
-  prisonMonths        Int? // Prison sentence in months (0 if none)
-  prisonSuspended     Boolean? // True if suspended sentence (sursis)
-  fineAmount          Decimal? @db.Decimal(12, 2) // Fine in euros
-  ineligibilityMonths Int? // Ineligibility period in months
-  communityService    Int? // Community service hours (TIG)
-  otherSentence       String? // Other penalties (e.g., "interdiction d'exercer")
+  //
+  // The firm columns carry the part NOT covered by a sursis. null means "not
+  // established", which is distinct from 0 ("entirely suspended"). See
+  // src/lib/affairs/sentence-split.ts, sole authority on reading the pair (#576).
+  prisonMonths            Int? // Prison sentence in months (0 if none)
+  prisonSuspended         Boolean? // DEPRECATED (#576), dropped once the switch is verified
+  prisonFirmMonths        Int? // Firm part of the prison term; null = not established
+  fineAmount              Decimal? @db.Decimal(12, 2) // Fine in euros
+  ineligibilityMonths     Int? // Ineligibility period in months
+  ineligibilityFirmMonths Int? // Firm part of the ineligibility; null = not established
+  communityService        Int? // Community service hours (TIG)
+  otherSentence           String? // Other penalties (e.g., "interdiction d'exercer")
 
   // Jurisdiction info
   court      String? // Ex: "Tribunal correctionnel de Paris"
