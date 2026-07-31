@@ -1,13 +1,16 @@
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { isAccusedInvolvement } from "@/config/certainty";
+import { classifySentenceSplit, type SentenceSplit } from "@/lib/affairs/sentence-split";
+import type { GlossaryKey } from "@/config/glossary";
 import type { Involvement } from "@/types";
 
 interface SentenceDetailsProps {
   affair: {
     prisonMonths?: number | null;
-    prisonSuspended?: boolean | null;
+    prisonFirmMonths?: number | null;
     fineAmount?: unknown; // Prisma Decimal type
     ineligibilityMonths?: number | null;
+    ineligibilityFirmMonths?: number | null;
     communityService?: number | null;
     otherSentence?: string | null;
     sentence?: string | null;
@@ -44,6 +47,96 @@ function formatAmount(amount: unknown): string {
   }).format(num);
 }
 
+/**
+ * How a split is worded next to the total.
+ *
+ * `ownLine` keeps the long ones out of the figure's line: the cell is a narrow grid
+ * column and the notice is around forty characters.
+ */
+interface SplitQualifier {
+  text: string;
+  term?: GlossaryKey;
+  tone: "muted" | "firm";
+  ownLine?: boolean;
+}
+
+/**
+ * The wording follows the rulings themselves, which state the suspended part
+ * (« 3 ans d'emprisonnement, dont 2 ans assortis du sursis »), while the column stores
+ * the firm one. There is no default branch: every case is named, and `null` produces a
+ * stated gap rather than the accusatory reading it used to (#576).
+ */
+function prisonQualifier(split: SentenceSplit): SplitQualifier | null {
+  switch (split.kind) {
+    case "FULLY_SUSPENDED":
+      return { text: "avec sursis", term: "sursis", tone: "muted" };
+    case "FULLY_FIRM":
+      return { text: "ferme", term: "ferme", tone: "firm" };
+    case "MIXED":
+      return {
+        text: `dont ${formatMonths(split.suspendedMonths)} avec sursis`,
+        term: "sursis",
+        tone: "muted",
+      };
+    case "UNKNOWN":
+      return {
+        text: "répartition ferme / sursis non établie",
+        term: "repartitionNonEtablie",
+        tone: "muted",
+        ownLine: true,
+      };
+    case "INVALID":
+      return { text: "répartition incohérente dans les données", tone: "muted", ownLine: true };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Deliberately quieter than the prison one: this box has never used firm/suspended
+ * wording, so its silence has never read as a claim. A bare total is also how rulings
+ * state a fully firm ineligibility, so `UNKNOWN` and `FULLY_FIRM` render alike. The data
+ * still tells them apart, and the audit counts the gap.
+ */
+function ineligibilityQualifier(split: SentenceSplit): SplitQualifier | null {
+  switch (split.kind) {
+    case "FULLY_SUSPENDED":
+      return { text: "avec sursis", term: "sursis", tone: "muted" };
+    case "MIXED":
+      return {
+        text: `dont ${formatMonths(split.suspendedMonths)} avec sursis`,
+        term: "sursis",
+        tone: "muted",
+      };
+    case "INVALID":
+      return { text: "répartition incohérente dans les données", tone: "muted", ownLine: true };
+    default:
+      return null;
+  }
+}
+
+function SplitNote({ qualifier }: { qualifier: SplitQualifier | null }) {
+  if (!qualifier) return null;
+
+  const tone =
+    qualifier.tone === "firm" ? "text-red-600 dark:text-red-400" : "text-muted-foreground";
+
+  return (
+    <span className={`${qualifier.ownLine ? "block" : "inline"} ${tone}`}>
+      {qualifier.ownLine ? "" : " "}
+      <span className="inline-flex items-center gap-1">
+        {qualifier.text}
+        {qualifier.term ? <InfoTooltip term={qualifier.term} /> : null}
+      </span>
+    </span>
+  );
+}
+
+/** `formatMonths(9999)` would read « 833 ans et 3 mois ». */
+function formatTerm(split: SentenceSplit, months: number): string {
+  return split.kind === "LIFE" ? "réclusion criminelle à perpétuité" : formatMonths(months);
+}
+
 export function SentenceDetails({ affair, involvement }: SentenceDetailsProps) {
   // The values are never presented as this person's when they are not the one
   // prosecuted. They stay readable in the description and the sources, which say
@@ -57,6 +150,15 @@ export function SentenceDetails({ affair, involvement }: SentenceDetailsProps) {
       </p>
     );
   }
+
+  const prisonSplit = classifySentenceSplit(
+    affair.prisonMonths ?? null,
+    affair.prisonFirmMonths ?? null
+  );
+  const ineligibilitySplit = classifySentenceSplit(
+    affair.ineligibilityMonths ?? null,
+    affair.ineligibilityFirmMonths ?? null
+  );
 
   const hasPrison = Boolean(affair.prisonMonths && affair.prisonMonths > 0);
   const hasFine = Boolean(affair.fineAmount != null && parseFloat(String(affair.fineAmount)) > 0);
@@ -99,19 +201,8 @@ export function SentenceDetails({ affair, involvement }: SentenceDetailsProps) {
               />
             </svg>
             <span>
-              <span className="font-medium">{formatMonths(affair.prisonMonths!)}</span>
-              {affair.prisonSuspended && (
-                <span className="text-muted-foreground inline-flex items-center gap-1">
-                  {" "}
-                  (avec sursis) <InfoTooltip term="sursis" />
-                </span>
-              )}
-              {!affair.prisonSuspended && (
-                <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1">
-                  {" "}
-                  (ferme) <InfoTooltip term="ferme" />
-                </span>
-              )}
+              <span className="font-medium">{formatTerm(prisonSplit, affair.prisonMonths!)}</span>
+              <SplitNote qualifier={prisonQualifier(prisonSplit)} />
             </span>
           </div>
         )}
@@ -153,6 +244,7 @@ export function SentenceDetails({ affair, involvement }: SentenceDetailsProps) {
                 {" "}
                 d&apos;inéligibilité <InfoTooltip term="ineligibilite" />
               </span>
+              <SplitNote qualifier={ineligibilityQualifier(ineligibilitySplit)} />
             </span>
           </div>
         )}

@@ -12,6 +12,8 @@ export const LEGAL_TERMS = {
     "Peine prononcée mais non exécutée, sauf en cas de nouvelle infraction dans un délai fixé par le tribunal.",
   ferme:
     "Peine de prison effectivement exécutée (le condamné est incarcéré), par opposition au sursis.",
+  repartitionNonEtablie:
+    "La durée totale de la peine est attestée, mais aucune source ne dit quelle part est ferme et quelle part est assortie du sursis.",
   ineligibilite:
     "Interdiction temporaire de se présenter à une élection. Prononcée par un tribunal comme peine complémentaire.",
   tig: "Travail d'Intérêt Général : travail non rémunéré au profit de la collectivité, prononcé comme alternative à la prison.",
