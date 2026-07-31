@@ -20,6 +20,7 @@ spécification. Les valeurs de tokens du bundle sont d'ailleurs reprises de
 | Primitives UI                              | `src/components/ui/*`                                         |
 | Specimens de fondations                    | `src/components/foundations/*` (Typography, Colors, Spacing)  |
 | Documentation vivante                      | Storybook (`npm run storybook`)                               |
+| Patterns et invariants légaux              | `docs/design/patterns/*`, `docs/design/legal-invariants.md`   |
 | Assets de marque                           | `docs/design/*`, `public/*`                                   |
 
 ## Langue visuelle
@@ -52,14 +53,28 @@ Cible : WCAG 2.1/2.2 AA. `globals.css` fournit le focus-visible global
 sous `prefers-reduced-motion`, et le dark mode. L'audit par primitive et les
 corrections sont consignés dans [`a11y-perf-audit.md`](./a11y-perf-audit.md).
 
-Guardrail recommandé (non encore branché) : `@storybook/addon-a11y` pour passer
-axe sur chaque story et capter les régressions.
+Guardrail a11y branché : `@storybook/addon-a11y` passe axe sur chaque story (voir
+[`a11y-perf-audit.md`](./a11y-perf-audit.md) pour le balayage et les écarts de
+contraste restants).
+
+## Patterns et invariants
+
+La couche **patterns** vit dans [`patterns/`](./patterns/README.md) : huit fiches
+(InvolvementBand, JudicialCaution, MissingData, ClickTarget, ContextNav,
+SourceAttribution, VoteBreakdown, PoliticianIdentity) qui documentent comment
+résoudre un problème récurrent du produit, et pourquoi la solution évidente est
+souvent fausse.
+
+Elles s'ancrent sur le chapitre normatif [`legal-invariants.md`](./legal-invariants.md)
+(I1 à I9, vocabulaire imposé, checklist avant publication, cas de refus). Ce
+chapitre décrit des obligations RGPD article 10, pas des préférences : un écran
+qui enfreint un invariant se refuse.
 
 ## Reste à faire (finalisation)
 
-- Brancher le guardrail a11y Storybook (sur un checkout propre).
-- Couche **patterns** du bundle (JudicialCaution, MissingData, SourceAttribution,
-  VoteBreakdown, PoliticianIdentity, ContextNav…), ancrée sur les invariants
-  légaux.
 - Composants **dataviz** partagés (CompassRadar, PositionAxis, VoteBar,
-  ParticipationRing), en consolidant les Hemicycle existants.
+  ParticipationRing) : à extraire des surfaces existantes (`VoteCard`, `Hemicycle`,
+  `RadarChart`), c'est un refactor à cadrer, pas un ajout greenfield.
+- Écarts de contraste en thème sombre relevés par l'addon a11y et les écarts prod
+  catalogués dans les fiches patterns (par exemple la variante `not_accused` de
+  `JudicialCaution`) : correctifs à cadrer séparément.
