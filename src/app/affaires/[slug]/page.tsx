@@ -27,7 +27,10 @@ import {
   CERTAINTY_DESCRIPTIONS,
   isAccusedInvolvement,
 } from "@/config/certainty";
-import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
+import {
+  AffairStatusNotice,
+  getAffairNoticeVariant,
+} from "@/components/affairs/AffairStatusNotice";
 import { LinkedAffairBanner } from "@/components/affairs/LinkedAffairBanner";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { StatusTooltip } from "@/components/affairs/StatusTooltip";
@@ -196,15 +199,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Affaire non trouvée" };
   }
 
+  // Hors du site il ne reste souvent qu'un nom et un titre d'affaire : on
+  // n'accole le nom que si la personne est mise en cause (I7).
+  const title = isAccusedInvolvement(affair.involvement)
+    ? `${affair.title} - ${affair.politician.fullName}`
+    : affair.title;
+  const description = stripMarkdown(affair.description).slice(0, 160);
+
   return {
-    title: `${affair.title} - ${affair.politician.fullName}`,
-    description: stripMarkdown(affair.description).slice(0, 160),
+    title,
+    description,
     alternates: { canonical: `/affaires/${affair.slug}` },
-    openGraph: {
-      title: `${affair.title} - ${affair.politician.fullName}`,
-      description: stripMarkdown(affair.description).slice(0, 160),
-      type: "article",
-    },
+    openGraph: { title, description, type: "article" },
   };
 }
 
@@ -233,6 +239,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
   // the tracked politician is a plaintiff, victim or merely mentioned, a
   // charging badge ("Condamnation définitive") would misrepresent them (#383).
   const accused = isAccusedInvolvement(affair.involvement);
+  const noticeVariant = getAffairNoticeVariant(affair.status, affair.involvement);
   const partyDisplay = getAffairPartyDisplay({
     factsDate: affair.factsDate,
     partyAtTime: affair.partyAtTime,
@@ -279,10 +286,30 @@ export default async function AffairDetailPage({ params }: PageProps) {
     { name: affair.title, url: `${SITE_URL}/affaires/${affair.slug}` },
   ];
 
+  // Pour une personne non mise en cause, les blocs Peine et Juridiction vides ne
+  // s'affichent pas : deux cartes réservées à un procès qui ne la vise pas
+  // contredisaient le rôle. Renseignés, ils restent (peine d'un tiers).
+  const hasSentence = Boolean(
+    affair.sentence ||
+    affair.prisonMonths ||
+    affair.fineAmount ||
+    affair.ineligibilityMonths ||
+    affair.communityService ||
+    affair.otherSentence
+  );
+  const hasJuridiction = Boolean(
+    affair.court ||
+    resolvedDecisionFields.chamber.value ||
+    affair.caseNumber ||
+    linkedDecisions.length > 0
+  );
+  const showPeine = accused || hasSentence;
+  const showJuridiction = accused || hasJuridiction;
+
   return (
     <>
       <ArticleJsonLd
-        headline={`${affair.title} - ${affair.politician.fullName}`}
+        headline={accused ? `${affair.title} - ${affair.politician.fullName}` : affair.title}
         description={stripMarkdown(affair.description).slice(0, 300)}
         datePublished={affair.factsDate?.toISOString()}
         dateModified={affair.updatedAt?.toISOString()}
@@ -304,38 +331,39 @@ export default async function AffairDetailPage({ params }: PageProps) {
       <div className="container mx-auto max-w-4xl px-4 pt-4 pb-24 sm:pb-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            {/* For a plaintiff/victim/mentioned politician the charging certainty
-                badge is suppressed: the involvement badge leads and the status is
-                shown with a neutral colour, so the affair is not read as their
-                own conviction (#383). */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             {accused ? (
-              <Badge className={`${CERTAINTY_COLORS[certainty]} text-sm px-3 py-1`}>
-                {CERTAINTY_LABELS[certainty]}
-              </Badge>
+              <>
+                <Badge className={`${CERTAINTY_COLORS[certainty]} px-3 py-1 text-sm`}>
+                  {CERTAINTY_LABELS[certainty]}
+                </Badge>
+                <Badge className={AFFAIR_SUPER_CATEGORY_COLORS[superCategory]}>
+                  {AFFAIR_SUPER_CATEGORY_LABELS[superCategory]}
+                </Badge>
+                <Badge variant="outline">{AFFAIR_CATEGORY_LABELS[affair.category]}</Badge>
+                <StatusTooltip
+                  status={affair.status}
+                  label={AFFAIR_STATUS_LABELS[affair.status]}
+                  description={AFFAIR_STATUS_DESCRIPTIONS[affair.status]}
+                  colorClass={AFFAIR_STATUS_COLORS[affair.status]}
+                />
+                {affair.involvement !== "DIRECT" && (
+                  <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
+                    {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
+                  </Badge>
+                )}
+              </>
             ) : (
-              <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
-                {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
-              </Badge>
-            )}
-            <Badge className={AFFAIR_SUPER_CATEGORY_COLORS[superCategory]}>
-              {AFFAIR_SUPER_CATEGORY_LABELS[superCategory]}
-            </Badge>
-            <Badge variant="outline">{AFFAIR_CATEGORY_LABELS[affair.category]}</Badge>
-            <StatusTooltip
-              status={affair.status}
-              label={AFFAIR_STATUS_LABELS[affair.status]}
-              description={AFFAIR_STATUS_DESCRIPTIONS[affair.status]}
-              colorClass={
-                accused
-                  ? AFFAIR_STATUS_COLORS[affair.status]
-                  : "bg-muted text-muted-foreground border-transparent"
-              }
-            />
-            {accused && affair.involvement !== "DIRECT" && (
-              <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
-                {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
-              </Badge>
+              // Non mis en cause : ni pastille de certitude à charge, ni catégorie
+              // d'infraction posée à côté de la personne (I1, I2). Le statut reste,
+              // en neutre, pour situer la procédure ; le rôle et la ligne « Faits
+              // qualifiés » ci-dessous rattachent tout à l'affaire.
+              <StatusTooltip
+                status={affair.status}
+                label={AFFAIR_STATUS_LABELS[affair.status]}
+                description={AFFAIR_STATUS_DESCRIPTIONS[affair.status]}
+                colorClass="bg-muted text-muted-foreground border-transparent"
+              />
             )}
             {affair.isSlapp && affair.slappCriteria ? (
               <SlappBadge
@@ -346,6 +374,13 @@ export default async function AffairDetailPage({ params }: PageProps) {
               />
             ) : null}
           </div>
+          {!accused && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Faits qualifiés :</span>{" "}
+              {AFFAIR_SUPER_CATEGORY_LABELS[superCategory]} ·{" "}
+              {AFFAIR_CATEGORY_LABELS[affair.category]}
+            </p>
+          )}
           {accused && (
             <p className="text-sm text-muted-foreground mb-4">
               {CERTAINTY_DESCRIPTIONS[certainty]}
@@ -363,16 +398,22 @@ export default async function AffairDetailPage({ params }: PageProps) {
             meta={politicianMeta}
             affairCount={affairCount}
             party={contextParty}
+            involvement={affair.involvement}
           />
         </div>
 
-        {/* Encart de prudence juridique : présomption, recours, issue favorable
-            ou prescription selon le statut (RGPD art. 10, invariant I5) */}
-        <AffairStatusNotice
-          status={affair.status}
-          involvement={affair.involvement}
-          className="mb-6"
-        />
+        {/* Encart de prudence juridique (RGPD art. 10, I5). Pour un non mis en
+            cause hors condamnation, la caution est déjà portée par l'étage de
+            rôle du bandeau : on ne répète pas (not_accused). On garde l'encart
+            pour l'accusé et pour le tiers d'une affaire conclue par une
+            condamnation (third_party), qui dit que la peine est celle d'un autre. */}
+        {noticeVariant && noticeVariant !== "not_accused" && (
+          <AffairStatusNotice
+            status={affair.status}
+            involvement={affair.involvement}
+            className="mb-6"
+          />
+        )}
 
         {/* Linked affair cross-reference */}
         {linked && (
@@ -406,7 +447,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
         ) : null}
 
         {/* Dates & Jurisdiction */}
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className={showJuridiction ? "mb-6 grid gap-6 md:grid-cols-2" : "mb-6"}>
           {/* Dates */}
           <Card>
             <CardHeader>
@@ -439,99 +480,111 @@ export default async function AffairDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
 
-          {/* Jurisdiction */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold">Juridiction</h2>
-            </CardHeader>
-            <CardContent>
-              {affair.court || resolvedDecisionFields.chamber.value || affair.caseNumber ? (
-                <dl className="space-y-3">
-                  {affair.court && (
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Tribunal</dt>
-                      <dd className="font-medium text-right">{affair.court}</dd>
-                    </div>
-                  )}
-                  {resolvedDecisionFields.chamber.value && (
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">Chambre</dt>
-                      <dd className="font-medium">{resolvedDecisionFields.chamber.value}</dd>
-                    </div>
-                  )}
-                  {affair.caseNumber && (
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">N° dossier</dt>
-                      <dd className="font-mono text-sm">{affair.caseNumber}</dd>
-                    </div>
-                  )}
-                </dl>
-              ) : (
-                <p className="text-muted-foreground text-sm">Informations non renseignées</p>
-              )}
+          {/* Jurisdiction — masqué pour un non mis en cause sans donnée (I8) */}
+          {showJuridiction && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold">
+                  {accused ? "Juridiction" : "Juridiction (procédure de l'affaire)"}
+                </h2>
+              </CardHeader>
+              <CardContent>
+                {affair.court || resolvedDecisionFields.chamber.value || affair.caseNumber ? (
+                  <dl className="space-y-3">
+                    {affair.court && (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">Tribunal</dt>
+                        <dd className="font-medium text-right">{affair.court}</dd>
+                      </div>
+                    )}
+                    {resolvedDecisionFields.chamber.value && (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">Chambre</dt>
+                        <dd className="font-medium">{resolvedDecisionFields.chamber.value}</dd>
+                      </div>
+                    )}
+                    {affair.caseNumber && (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">N° dossier</dt>
+                        <dd className="font-mono text-sm">{affair.caseNumber}</dd>
+                      </div>
+                    )}
+                  </dl>
+                ) : (
+                  <p className="text-muted-foreground text-sm">Informations non renseignées</p>
+                )}
 
-              {linkedDecisions.length > 0 && (
-                <div className="mt-4 border-t pt-4">
-                  <h3 className="mb-2 text-sm font-medium">
-                    Décision{linkedDecisions.length > 1 ? "s" : ""} de justice rattachée
-                    {linkedDecisions.length > 1 ? "s" : ""}
-                  </h3>
-                  <ul className="space-y-2 text-sm">
-                    {linkedDecisions.map((decision) => {
-                      const display = buildCourtDecisionDisplay(decision, formatDate);
-                      return (
-                        <li key={decision.id} className="text-muted-foreground">
-                          <span>{display.parts.join(" — ")}</span>
-                          {display.link && (
-                            <>
-                              {" "}
-                              <a
-                                href={display.link.href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="underline underline-offset-4 hover:text-foreground"
-                              >
-                                {display.link.label}
-                              </a>
-                            </>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {resolvedDecisionFields.hasMultipleDecisions && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Cette affaire est rattachée à plusieurs décisions. Les références sont listées
-                      séparément plutôt que résumées en une seule valeur.
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {linkedDecisions.length > 0 && (
+                  <div className="mt-4 border-t pt-4">
+                    <h3 className="mb-2 text-sm font-medium">
+                      Décision{linkedDecisions.length > 1 ? "s" : ""} de justice rattachée
+                      {linkedDecisions.length > 1 ? "s" : ""}
+                    </h3>
+                    <ul className="space-y-2 text-sm">
+                      {linkedDecisions.map((decision) => {
+                        const display = buildCourtDecisionDisplay(decision, formatDate);
+                        return (
+                          <li key={decision.id} className="text-muted-foreground">
+                            <span>{display.parts.join(" — ")}</span>
+                            {display.link && (
+                              <>
+                                {" "}
+                                <a
+                                  href={display.link.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline underline-offset-4 hover:text-foreground"
+                                >
+                                  {display.link.label}
+                                </a>
+                              </>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {resolvedDecisionFields.hasMultipleDecisions && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Cette affaire est rattachée à plusieurs décisions. Les références sont
+                        listées séparément plutôt que résumées en une seule valeur.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Sentence */}
-        <Card className="mb-6">
-          <CardHeader>
-            <h2 className="text-lg font-semibold">Peine</h2>
-          </CardHeader>
-          <CardContent>
-            <SentenceDetails affair={affair} involvement={affair.involvement} />
-            {!affair.sentence &&
-              !affair.prisonMonths &&
-              !affair.fineAmount &&
-              !affair.ineligibilityMonths &&
-              !affair.communityService &&
-              !affair.otherSentence && (
-                <p className="text-muted-foreground text-sm">
-                  {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status]
-                    ? "Affaire en cours - pas encore de verdict"
-                    : "Peine non renseignée"}
-                </p>
-              )}
-          </CardContent>
-        </Card>
+        {/* Sentence — masquée pour un non mis en cause sans donnée (I8) ; sinon
+            l'en-tête rappelle que la peine ne vise pas cette personne. */}
+        {showPeine && (
+          <Card className="mb-6">
+            <CardHeader>
+              <h2 className="text-lg font-semibold">
+                {accused
+                  ? "Peine"
+                  : "Peine prononcée dans l'affaire (ne concerne pas cette personne)"}
+              </h2>
+            </CardHeader>
+            <CardContent>
+              <SentenceDetails affair={affair} involvement={affair.involvement} />
+              {accused &&
+                !affair.sentence &&
+                !affair.prisonMonths &&
+                !affair.fineAmount &&
+                !affair.ineligibilityMonths &&
+                !affair.communityService &&
+                !affair.otherSentence && (
+                  <p className="text-muted-foreground text-sm">
+                    {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status]
+                      ? "Affaire en cours - pas encore de verdict"
+                      : "Peine non renseignée"}
+                  </p>
+                )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Timeline */}
         {affair.events.length > 0 && (

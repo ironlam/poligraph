@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OgBadge, OG_SIZE, truncateOg } from "@/lib/og-utils";
+import { isAccusedInvolvement } from "@/config/certainty";
 import type { AffairStatus } from "@/generated/prisma";
 
 export const alt = "Affaire judiciaire sur Poligraph";
@@ -43,6 +44,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
     select: {
       title: true,
       status: true,
+      involvement: true,
       politician: {
         select: { firstName: true, lastName: true },
       },
@@ -87,9 +89,13 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         {truncateOg(affair.title, 100)}
       </div>
 
-      <div style={{ fontSize: 26, color: "#94a3b8", marginBottom: 24 }}>
-        {`${affair.politician.firstName} ${affair.politician.lastName}`}
-      </div>
+      {/* Hors du site, ne pas accoler le nom au titre d'une personne non mise
+          en cause (I7) : l'image OG suit la même règle que le <title>. */}
+      {isAccusedInvolvement(affair.involvement) && (
+        <div style={{ fontSize: 26, color: "#94a3b8", marginBottom: 24 }}>
+          {`${affair.politician.firstName} ${affair.politician.lastName}`}
+        </div>
+      )}
 
       <div style={{ display: "flex" }}>
         <OgBadge label={statusLabel} color={statusColor} />

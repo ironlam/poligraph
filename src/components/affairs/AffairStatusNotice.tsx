@@ -20,6 +20,7 @@ export type AffairNoticeVariant =
   | "favorable"
   | "prescription"
   | "third_party"
+  | "not_accused"
   | "instruction_close";
 
 const FAVORABLE_STATUSES: readonly AffairStatus[] = [
@@ -48,10 +49,11 @@ export function getAffairNoticeVariant(
 ): AffairNoticeVariant | null {
   // Les encarts qualifient la situation d'une personne mise en cause. Quand le
   // politicien est victime, plaignant ou simplement mentionné, aucun encart à charge
-  // ne s'applique, mais le silence total laissait un statut de condamnation et une
-  // peine sur la page sans dire qu'ils ne sont pas les siens (#511).
+  // ne s'applique. Une condamnation déjà prononcée est celle d'un tiers ; sinon la
+  // personne n'est ni mise en cause ni poursuivie, et le silence total laissait le
+  // statut et les qualifications se lire comme les siens (I5, #511).
   if (!isAccusedInvolvement(involvement)) {
-    return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : null;
+    return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : "not_accused";
   }
   if (status === "PRESCRIPTION") return "prescription";
   if (FAVORABLE_STATUSES.includes(status)) return "favorable";
@@ -81,6 +83,12 @@ const NOTICES: Record<AffairNoticeVariant, { title: string; body: string; classN
   third_party: {
     title: "Résultat judiciaire d'un tiers",
     body: "cette personne n'est pas celle qui a été poursuivie dans cette affaire. La condamnation et les peines prononcées concernent une autre personne.",
+    className:
+      "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200",
+  },
+  not_accused: {
+    title: "Personne non mise en cause",
+    body: "cette personne n'est ni mise en cause, ni poursuivie ; le statut et les peines éventuelles de cette affaire ne la concernent pas.",
     className:
       "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200",
   },

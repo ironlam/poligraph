@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { Scale, Landmark, Vote, ArrowRight } from "lucide-react";
+import { Scale, Landmark, Vote, ArrowRight, Info } from "lucide-react";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { AffairPartyChip } from "@/components/affairs/AffairPartyChip";
+import { isAccusedInvolvement } from "@/config/certainty";
+import { getRoleNoticeCopy } from "@/lib/affairs/role-notice";
+import type { Involvement } from "@/types";
 
 /**
  * Context band under the <h1>: who the tracked politician is, and the lateral
@@ -26,6 +29,9 @@ interface AffairContextBandProps {
     slug: string | null;
     atTime: boolean;
   } | null;
+  /** Drives the role étage: for a non-accused involvement the band states, in a
+      sentence, that the person is neither mise en cause nor poursuivie (I3, I5). */
+  involvement: Involvement;
 }
 
 function RailLink({
@@ -56,10 +62,13 @@ export function AffairContextBand({
   meta,
   affairCount,
   party,
+  involvement,
 }: AffairContextBandProps) {
   const ficheHref = `/politiques/${politicianSlug}`;
   const votesHref = `/politiques/${politicianSlug}/votes`;
   const partyAffairsHref = party?.slug ? `/affaires/parti/${party.slug}` : null;
+  const accused = isAccusedInvolvement(involvement);
+  const roleCopy = accused ? null : getRoleNoticeCopy(involvement);
 
   return (
     <div className="mb-6 rounded-xl border bg-card p-4">
@@ -101,6 +110,30 @@ export function AffairContextBand({
           />
         )}
       </div>
+
+      {roleCopy && (
+        <div
+          role="note"
+          data-variant="not_accused"
+          className="mt-3 flex gap-2 rounded-lg border bg-slate-50 p-3 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
+        >
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div className="text-sm">
+            <p>
+              <strong>Son rôle dans cette affaire : {roleCopy.roleLabel}.</strong>{" "}
+              {roleCopy.position} {roleCopy.reminder}
+            </p>
+            <Link
+              href="/methodologie"
+              className="mt-1 inline-flex items-center font-medium text-primary hover:underline"
+            >
+              Que veulent dire «&nbsp;mis en cause&nbsp;», «&nbsp;mentionné&nbsp;»,
+              «&nbsp;victime&nbsp;»&nbsp;?
+              <ArrowRight className="ml-0.5 size-3" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
         <RailLink href={ficheHref} icon={Scale}>

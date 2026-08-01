@@ -37,12 +37,14 @@ describe("getAffairNoticeVariant — sélection par statut et involvement", () =
     }
   });
 
-  it("aucun encart à charge pour les victimes, plaignants et simples mentions", () => {
+  it("non mis en cause : encart de rôle, jamais un encart à charge (I5)", () => {
     for (const inv of ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] as const) {
-      expect(getAffairNoticeVariant("RELAXE", inv)).toBeNull();
-      expect(getAffairNoticeVariant("INSTRUCTION", inv)).toBeNull();
-      // Sur une affaire de condamnation, le silence total laissait un statut à
-      // charge et une peine sans dire qu'ils ne sont pas les siens (#511).
+      // Procédure en cours ou issue favorable : la personne n'est pas poursuivie,
+      // mais un encart doit le dire — le silence laissait le statut se lire comme
+      // le sien (I5, #511).
+      expect(getAffairNoticeVariant("RELAXE", inv)).toBe("not_accused");
+      expect(getAffairNoticeVariant("INSTRUCTION", inv)).toBe("not_accused");
+      // Affaire conclue par une condamnation : celle d'un tiers.
       expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", inv)).toBe("third_party");
     }
   });
@@ -78,9 +80,11 @@ describe("AffairStatusNotice — wordings validés (RGPD art. 10)", () => {
     expect(getByRole("note").textContent).toContain("Décision non définitive");
   });
 
-  it("rien ne s'affiche pour une victime", () => {
-    const { container } = render(<AffairStatusNotice status="RELAXE" involvement="VICTIM" />);
-    expect(container.firstChild).toBeNull();
+  it("non mis en cause : encart « personne non mise en cause » (I5)", () => {
+    const { getByRole } = render(<AffairStatusNotice status="INSTRUCTION" involvement="VICTIM" />);
+    const note = getByRole("note");
+    expect(note.getAttribute("data-variant")).toBe("not_accused");
+    expect(note.textContent).toContain("ni mise en cause, ni poursuivie");
   });
 });
 
@@ -91,10 +95,10 @@ describe("instruction close sans mise en examen", () => {
     );
   });
 
-  it("ne rend aucun encart quand la personne est seulement mentionnée", () => {
+  it("mentionné : encart de rôle, pas la variante à charge instruction_close", () => {
     expect(
       getAffairNoticeVariant("INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN", "MENTIONED_ONLY")
-    ).toBeNull();
+    ).toBe("not_accused");
   });
 });
 
