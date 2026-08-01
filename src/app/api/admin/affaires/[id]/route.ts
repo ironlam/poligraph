@@ -101,6 +101,10 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
       severity,
       isRelatedToMandate: mandateRelated,
       involvement: data.involvement || "DIRECT",
+      subjectLabel: data.subjectLabel?.trim() || null,
+      subjectKind: data.subjectKind || null,
+      subjectNote: data.subjectNote?.trim() || null,
+      involvementNote: data.involvementNote?.trim() || null,
       // RGPD art. 10 : la transition vers PUBLISHED passe exclusivement par
       // le guard (après application des champs et des sources). Les autres
       // statuts (dépublication) restent des écritures directes.

@@ -44,6 +44,10 @@ interface AffairFormData {
   status: AffairStatus;
   category: AffairCategory;
   involvement?: Involvement;
+  subjectLabel?: string;
+  subjectKind?: "PERSON" | "ORGANISATION" | "UNKNOWN";
+  subjectNote?: string;
+  involvementNote?: string;
   publicationStatus?: PublicationStatus;
   factsDate?: string;
   startDate?: string;
@@ -304,6 +308,73 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
               </div>
             )}
           </div>
+
+          {formData.involvement && formData.involvement !== "DIRECT" && (
+            <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm text-muted-foreground">
+                Personne non mise en cause : énoncer son rôle et, s&apos;il y a lieu, qui est
+                réellement visé.{" "}
+                <strong className="text-foreground">
+                  La note d&apos;implication est obligatoire à la publication.
+                </strong>
+              </p>
+              <div>
+                <Label htmlFor="involvementNote">
+                  Note d&apos;implication (rôle sourcé, factuel)
+                </Label>
+                <Textarea
+                  id="involvementNote"
+                  value={formData.involvementNote || ""}
+                  onChange={(e) => updateField("involvementNote", e.target.value)}
+                  rows={2}
+                  maxLength={280}
+                  placeholder="Ex. Président de la commission d'enquête visée ; a reçu et rejeté les sollicitations."
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {(formData.involvementNote || "").length}/280 — la nature du lien, pas une
+                  qualification juridique nouvelle.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="subjectLabel">Sujet réellement visé (si autre)</Label>
+                  <Input
+                    id="subjectLabel"
+                    value={formData.subjectLabel || ""}
+                    onChange={(e) => updateField("subjectLabel", e.target.value)}
+                    placeholder="Ex. Lagardère News"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="subjectKind">Type de sujet</Label>
+                  <Select
+                    id="subjectKind"
+                    value={formData.subjectKind || ""}
+                    onChange={(e) =>
+                      updateField(
+                        "subjectKind",
+                        (e.target.value || undefined) as AffairFormData["subjectKind"]
+                      )
+                    }
+                  >
+                    <option value="">—</option>
+                    <option value="PERSON">Personne</option>
+                    <option value="ORGANISATION">Personne morale (hors périmètre)</option>
+                    <option value="UNKNOWN">Inconnu</option>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="subjectNote">Note sur le sujet visé</Label>
+                <Input
+                  id="subjectNote"
+                  value={formData.subjectNote || ""}
+                  onChange={(e) => updateField("subjectNote", e.target.value)}
+                  placeholder="Ex. Groupe de presse, propriété de Vincent Bolloré"
+                />
+              </div>
+            </div>
+          )}
 
           <LinkedAffairSelect
             value={formData.linkedAffairId ?? null}

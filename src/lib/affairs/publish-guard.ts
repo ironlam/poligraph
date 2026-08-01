@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
+import type { Involvement } from "@/types";
 
 /**
  * Garde de publication des affaires judiciaires (RGPD article 10,
@@ -27,6 +28,7 @@ const CONFIRMING_REVIEW_ACTIONS = ["CONFIRMED", "REASSIGNED", "CREATED_POLITICIA
 
 export type PublishBlockReason =
   | { code: "NO_SOURCE"; message: string }
+  | { code: "MISSING_INVOLVEMENT_NOTE"; message: string }
   | {
       code: "UNREVIEWED_MATCHING_DECISION";
       message: string;
@@ -55,7 +57,13 @@ type GuardClient = {
     findUnique: (args: {
       where: Prisma.AffairWhereUniqueInput;
       select: Prisma.AffairSelect;
-    }) => Promise<{ id: string; politicianId: string; sources: { url: string }[] } | null>;
+    }) => Promise<{
+      id: string;
+      politicianId: string;
+      involvement: Involvement;
+      involvementNote: string | null;
+      sources: { url: string }[];
+    } | null>;
     update: (args: {
       where: Prisma.AffairWhereUniqueInput;
       data: Prisma.AffairUpdateInput;
@@ -102,6 +110,8 @@ export async function checkPublishable(
     select: {
       id: true,
       politicianId: true,
+      involvement: true,
+      involvementNote: true,
       sources: { select: { url: true } },
     },
   });
@@ -116,6 +126,15 @@ export async function checkPublishable(
     reasons.push({
       code: "NO_SOURCE",
       message: "aucune source vérifiable",
+    });
+  }
+
+  // Une personne non mise en cause ne peut plus être publiée sans dire pourquoi
+  // elle figure dans l'affaire : la nature du lien, sourcée (I3, I5).
+  if (affair.involvement !== "DIRECT" && !affair.involvementNote?.trim()) {
+    reasons.push({
+      code: "MISSING_INVOLVEMENT_NOTE",
+      message: "note d'implication manquante (obligatoire hors « mis en cause »)",
     });
   }
 

@@ -31,6 +31,8 @@ const tx = (db as unknown as { __tx: MockTx }).__tx;
 const AFFAIR = {
   id: "aff_1",
   politicianId: "pol_1",
+  involvement: "DIRECT",
+  involvementNote: null,
   sources: [{ url: "https://presse.example/article" }],
 };
 
@@ -129,6 +131,55 @@ describe("checkPublishable — invariant I2 (RGPD art. 10)", () => {
   it("affaire introuvable → erreur explicite", async () => {
     tx.affair.findUnique.mockResolvedValue(null);
     await expect(checkPublishable("aff_inconnu")).rejects.toThrow(/introuvable/);
+  });
+});
+
+describe("checkPublishable — note d'implication obligatoire hors DIRECT (I3, I5)", () => {
+  it("refuse un non mis en cause sans note", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      involvement: "VICTIM",
+      involvementNote: null,
+    });
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).toContain("MISSING_INVOLVEMENT_NOTE");
+  });
+
+  it("refuse une note vide ou en espaces", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      involvement: "MENTIONED_ONLY",
+      involvementNote: "   ",
+    });
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).toContain("MISSING_INVOLVEMENT_NOTE");
+  });
+
+  it("accepte un non mis en cause avec note renseignée", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      involvement: "PLAINTIFF",
+      involvementNote: "À l'origine de la plainte pour violation du secret de l'enquête.",
+    });
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).not.toContain("MISSING_INVOLVEMENT_NOTE");
+  });
+
+  it("n'exige pas de note pour un mis en cause (DIRECT)", async () => {
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).not.toContain("MISSING_INVOLVEMENT_NOTE");
+  });
+
+  it("assertPublishable refuse et n'écrit rien sans note (non mis en cause)", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      involvement: "VICTIM",
+      involvementNote: null,
+    });
+    await expect(
+      assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
+    ).rejects.toBeInstanceOf(PublishGuardError);
+    expect(tx.affair.update).not.toHaveBeenCalled();
   });
 });
 

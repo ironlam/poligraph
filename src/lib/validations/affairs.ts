@@ -67,6 +67,13 @@ const createAffairFields = z.object({
   status: z.enum(AFFAIR_STATUSES),
   category: z.enum(AFFAIR_CATEGORIES),
   involvement: z.enum(INVOLVEMENTS).optional(),
+  // Sujet réel de la procédure quand ce n'est pas la personne suivie, et nature
+  // sourcée du lien. involvementNote est obligatoire à la publication hors DIRECT
+  // (publish-guard) ; la longueur suit la contrainte éditoriale (<= 280).
+  subjectLabel: z.string().max(200).optional(),
+  subjectKind: z.enum(["PERSON", "ORGANISATION", "UNKNOWN"]).optional(),
+  subjectNote: z.string().max(500).optional(),
+  involvementNote: z.string().max(280).optional(),
   isRelatedToMandate: z.boolean().optional(),
   publicationStatus: z.enum(PUBLICATION_STATUSES).optional(),
   factsDate: z.string().optional(),
