@@ -78,14 +78,16 @@ describe("AffairCard — issues favorables dominantes (RGPD art. 10)", () => {
     expect(container.textContent).toContain("présumée innocente");
   });
 
-  it("aucun encart quand le politicien est victime", () => {
+  it("victime : encart « personne non mise en cause », jamais un encart à charge (I5)", () => {
     const { container } = render(
       <AffairCard
         affair={makeAffair({ status: "ENQUETE_PRELIMINAIRE", involvement: "VICTIM" })}
         variant="other"
       />
     );
-    expect(container.querySelector('[role="note"]')).toBeNull();
+    const note = container.querySelector('[role="note"]');
+    expect(note).not.toBeNull();
+    expect(note?.getAttribute("data-variant")).toBe("not_accused");
   });
 });
 
