@@ -199,8 +199,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Affaire non trouvée" };
   }
 
-  // Hors du site il ne reste souvent qu'un nom et un titre d'affaire : on
-  // n'accole le nom que si la personne est mise en cause (I7).
+  // Off-site there is often only a name and an affair title left: append the
+  // name only when the person is accused (I7).
   const title = isAccusedInvolvement(affair.involvement)
     ? `${affair.title} - ${affair.politician.fullName}`
     : affair.title;
@@ -286,9 +286,9 @@ export default async function AffairDetailPage({ params }: PageProps) {
     { name: affair.title, url: `${SITE_URL}/affaires/${affair.slug}` },
   ];
 
-  // Pour une personne non mise en cause, les blocs Peine et Juridiction vides ne
-  // s'affichent pas : deux cartes réservées à un procès qui ne la vise pas
-  // contredisaient le rôle. Renseignés, ils restent (peine d'un tiers).
+  // For a non-accused person the empty Peine and Juridiction cards are hidden:
+  // two cards reserved for a trial that does not target them contradicted the
+  // role. When populated they stay (a third party's sentence).
   const hasSentence = Boolean(
     affair.sentence ||
     affair.prisonMonths ||
@@ -354,10 +354,10 @@ export default async function AffairDetailPage({ params }: PageProps) {
                 )}
               </>
             ) : (
-              // Non mis en cause : ni pastille de certitude à charge, ni catégorie
-              // d'infraction posée à côté de la personne (I1, I2). Le statut reste,
-              // en neutre, pour situer la procédure ; le rôle et la ligne « Faits
-              // qualifiés » ci-dessous rattachent tout à l'affaire.
+              // Not accused: no charging certainty pill and no offence category
+              // next to the person (I1, I2). The status stays, neutral, to situate
+              // the procedure; the role and the "Faits qualifiés" line below
+              // re-attach everything to the affair.
               <StatusTooltip
                 status={affair.status}
                 label={AFFAIR_STATUS_LABELS[affair.status]}
@@ -402,11 +402,11 @@ export default async function AffairDetailPage({ params }: PageProps) {
           />
         </div>
 
-        {/* Encart de prudence juridique (RGPD art. 10, I5). Pour un non mis en
-            cause hors condamnation, la caution est déjà portée par l'étage de
-            rôle du bandeau : on ne répète pas (not_accused). On garde l'encart
-            pour l'accusé et pour le tiers d'une affaire conclue par une
-            condamnation (third_party), qui dit que la peine est celle d'un autre. */}
+        {/* Legal caution notice (RGPD art. 10, I5). For a non-accused person
+            outside a conviction the caution is already carried by the band's role
+            étage, so we do not repeat it (not_accused). We keep the notice for the
+            accused and for the third party of an affair concluded by a conviction
+            (third_party), which states the sentence is someone else's. */}
         {noticeVariant && noticeVariant !== "not_accused" && (
           <AffairStatusNotice
             status={affair.status}
@@ -480,7 +480,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
 
-          {/* Jurisdiction — masqué pour un non mis en cause sans donnée (I8) */}
+          {/* Jurisdiction — hidden for a non-accused person with no data (I8) */}
           {showJuridiction && (
             <Card>
               <CardHeader>
@@ -556,8 +556,8 @@ export default async function AffairDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* Sentence — masquée pour un non mis en cause sans donnée (I8) ; sinon
-            l'en-tête rappelle que la peine ne vise pas cette personne. */}
+        {/* Sentence — hidden for a non-accused person with no data (I8); otherwise
+            the header reminds that the sentence does not target this person. */}
         {showPeine && (
           <Card className="mb-6">
             <CardHeader>

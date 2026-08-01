@@ -547,13 +547,13 @@ model Affair {
   category    AffairCategory
   involvement Involvement    @default(MENTIONED_ONLY)
 
-  // Qui / quoi la procédure vise réellement quand ce n'est pas la personne
-  // suivie (I2/I3). subjectLabel null = la personne suivie est le sujet.
+  // Who / what the procedure actually targets when it is not the tracked person
+  // (I2/I3). subjectLabel null = the tracked person is the subject.
   subjectLabel    String? // Ex: "Lagardère News"
   subjectKind     SubjectKind?
   subjectNote     String? // Ex: "Groupe de presse, propriété de Vincent Bolloré"
-  // Nature sourcée du lien (pas son degré), <= 280 caractères. Obligatoire à la
-  // publication pour tout involvement != DIRECT (publish-guard).
+  // Sourced nature of the link (not its degree), <= 280 chars. Required to
+  // publish any involvement != DIRECT (publish-guard).
   involvementNote String?
 
   // Severity hierarchy (computed from category + isRelatedToMandate)
@@ -732,9 +732,9 @@ enum Involvement {
   PLAINTIFF
 }
 
-// Nature du sujet réellement visé par la procédure quand ce n'est pas la
-// personne suivie. Reste du texte libre côté subjectLabel : pas de fiche pour
-// les personnes morales.
+// Nature of the subject actually targeted by the procedure when it is not the
+// tracked person. subjectLabel stays free text: no profile page for legal
+// entities.
 enum SubjectKind {
   PERSON
   ORGANISATION

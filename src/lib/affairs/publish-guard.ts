@@ -129,8 +129,8 @@ export async function checkPublishable(
     });
   }
 
-  // Une personne non mise en cause ne peut plus être publiée sans dire pourquoi
-  // elle figure dans l'affaire : la nature du lien, sourcée (I3, I5).
+  // A non-accused person can no longer be published without stating why they
+  // appear in the affair: the sourced nature of the link (I3, I5).
   if (affair.involvement !== "DIRECT" && !affair.involvementNote?.trim()) {
     reasons.push({
       code: "MISSING_INVOLVEMENT_NOTE",
