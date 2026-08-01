@@ -28,6 +28,7 @@ import type { AffairStatus, Involvement } from "@/types";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/affaires-metadata";
 import { AFFAIRES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { buildRetourParam } from "@/lib/affairs/listing-return";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -145,6 +146,20 @@ export default async function AffairesPage({ searchParams }: PageProps) {
     ]);
 
   const totalAffairs = Object.values(superCounts).reduce((a, b) => a + b, 0);
+
+  // Serialise the active perimeter so each card's detail link can offer a
+  // non-destructive "Retour aux N résultats" (read client-side on the detail
+  // page; the detail canonical stays clean, so no `?retour=` is ever indexed).
+  const retourParam = buildRetourParam({
+    search: searchFilter,
+    sort: sortFilter,
+    status: statusFilter,
+    supercat: superCatFilter,
+    category: categoryFilter,
+    certainty: certaintyFilter,
+    parti: partiFilter,
+    mode: mode !== "mise-en-cause" ? mode : "",
+  });
 
   // Build URL helper (only used for super-category cards + pagination)
   function buildUrl(params: Record<string, string>) {
@@ -269,7 +284,12 @@ export default async function AffairesPage({ searchParams }: PageProps) {
           <>
             <div className="space-y-4">
               {affairs.map((affair) => (
-                <AffairListingCard key={affair.id} affair={affair} />
+                <AffairListingCard
+                  key={affair.id}
+                  affair={affair}
+                  retour={retourParam}
+                  resultCount={total}
+                />
               ))}
             </div>
 
@@ -306,10 +326,12 @@ export default async function AffairesPage({ searchParams }: PageProps) {
         )}
 
         {/* Info box */}
-        <Card className="mt-8 bg-blue-50 border-blue-200">
+        <Card className="mt-8 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
           <CardContent className="pt-6">
-            <h3 className="font-semibold text-blue-900 mb-2">À propos des données</h3>
-            <p className="text-sm text-blue-800">
+            <h3 className="mb-2 font-semibold text-blue-900 dark:text-blue-200">
+              À propos des données
+            </h3>
+            <p className="text-sm text-blue-800 dark:text-blue-300">
               Les affaires listées sont issues de sources publiques vérifiables (articles de presse,
               décisions de justice) et font l&apos;objet d&apos;une validation éditoriale avant
               publication. Les procédures en cours sont présentées avec rappel de la présomption

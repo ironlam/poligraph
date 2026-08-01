@@ -62,15 +62,26 @@ export interface AffairListingCardData {
 
 interface AffairListingCardProps {
   affair: AffairListingCardData;
+  /** Serialised origin filters, for the non-destructive return on the detail page. */
+  retour?: string;
+  /** Origin result count, so the return can read "Retour aux N résultats". */
+  resultCount?: number;
 }
 
-export function AffairListingCard({ affair }: AffairListingCardProps) {
+export function AffairListingCard({ affair, retour, resultCount }: AffairListingCardProps) {
   const certainty = getCertaintyLevel(affair.status);
   // Charging certainty pill only for the accused; otherwise the involvement
   // badge carries the politician's role, never a status that is not theirs (#383).
   const accused = isAccusedInvolvement(affair.involvement);
   const superCat = CATEGORY_TO_SUPER[affair.category];
-  const detailHref = `/affaires/${affair.slug ?? affair.id}`;
+  const detailBase = `/affaires/${affair.slug ?? affair.id}`;
+  const detailHref = (() => {
+    const sp = new URLSearchParams();
+    if (retour) sp.set("retour", retour);
+    if (resultCount !== undefined) sp.set("rn", String(resultCount));
+    const qs = sp.toString();
+    return qs ? `${detailBase}?${qs}` : detailBase;
+  })();
 
   const relevantDate = affair.verdictDate || affair.startDate || affair.factsDate;
   const dateLabel = affair.verdictDate ? "Verdict" : affair.startDate ? "Révélation" : "Faits";
@@ -86,7 +97,7 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
   return (
     <article
       id={citeAnchorId.affair(affair.id)}
-      className="group rounded-xl border border-l-4 bg-card p-4 text-card-foreground shadow-sm transition-shadow hover:shadow-md"
+      className="group relative rounded-xl border border-l-4 bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
       style={{ borderLeftColor: accused ? CERTAINTY_BORDER[certainty] : NON_ACCUSED_BORDER }}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -112,7 +123,13 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
       </div>
 
       <h2 className="mb-1 text-lg font-semibold">
-        <Link href={detailHref} className="hover:underline focus-visible:underline">
+        {/* Stretched link: the title is the single card-navigation link; its
+            ::after overlay makes the whole card clickable. Nested links below sit
+            at z-10 so they stay independently clickable. */}
+        <Link
+          href={detailHref}
+          className="after:absolute after:inset-0 hover:underline focus-visible:underline focus:outline-none"
+        >
           {affair.title}
         </Link>
       </h2>
@@ -120,7 +137,7 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
       <p className="text-sm">
         <Link
           href={`/politiques/${affair.politician.slug}`}
-          className="text-primary hover:underline"
+          className="relative z-10 text-primary hover:underline"
         >
           {affair.politician.fullName}
         </Link>
@@ -130,7 +147,7 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
             {partyDisplay.party.slug ? (
               <Link
                 href={`/affaires/parti/${partyDisplay.party.slug}`}
-                className="hover:underline hover:text-foreground"
+                className="relative z-10 hover:text-foreground hover:underline"
               >
                 {partyDisplay.party.shortName}
               </Link>
@@ -186,11 +203,14 @@ export function AffairListingCard({ affair }: AffairListingCardProps) {
             <CiteAnchor
               permalink={`${SITE_URL}/affaires/${affair.slug ?? affair.id}`}
               label={affair.title}
+              className="relative z-10"
             />
           </span>
-          <Link href={detailHref} className="font-medium text-primary hover:underline">
+          {/* Decorative affordance only: the whole card is the link (stretched
+              above), so this must not be a second link to the same target. */}
+          <span aria-hidden="true" className="font-medium text-primary">
             Voir détails →
-          </Link>
+          </span>
         </div>
       </div>
     </article>

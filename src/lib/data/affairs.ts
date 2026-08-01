@@ -39,6 +39,63 @@ export async function getPartiesWithAffairs() {
   return parties;
 }
 
+interface AffairFilterOpts {
+  search?: string;
+  status?: string;
+  superCategory?: AffairSuperCategory;
+  category?: string;
+  severity?: AffairSeverity;
+  involvements: Involvement[];
+  partySlug?: string;
+  certainty?: CertaintyLevel;
+}
+
+// Single source of truth for the listing WHERE clause, shared by the paginated
+// query and the neighbour query so "affaire précédente / suivante" matches the
+// exact perimeter the reader was browsing.
+function buildAffairWhere(opts: AffairFilterOpts) {
+  const { search, status, superCategory, category, severity, involvements, partySlug, certainty } =
+    opts;
+
+  // Build category filter based on super-category or specific category
+  let categoryFilter: AffairCategory[] | undefined;
+  if (category) {
+    categoryFilter = [category as AffairCategory];
+  } else if (superCategory) {
+    categoryFilter = getCategoriesForSuper(superCategory);
+  }
+
+  // In victim mode, restrict to violence-related categories
+  if (involvements.includes("VICTIM")) {
+    categoryFilter = categoryFilter
+      ? categoryFilter.filter((c) => VIOLENCE_CATEGORIES.includes(c))
+      : VIOLENCE_CATEGORIES;
+  }
+
+  // Build status filter: certainty takes precedence over individual status
+  let statusFilter: { status: AffairStatus } | { status: { in: AffairStatus[] } } | undefined;
+  if (certainty) {
+    statusFilter = { status: { in: getStatusesForCertainty(certainty) } };
+  } else if (status) {
+    statusFilter = { status: status as AffairStatus };
+  }
+
+  return {
+    publicationStatus: "PUBLISHED" as const,
+    involvement: { in: involvements },
+    ...statusFilter,
+    ...(categoryFilter && { category: { in: categoryFilter } }),
+    ...(severity && { severity }),
+    ...(partySlug && { partyAtTime: { slug: partySlug } }),
+    ...(search && {
+      OR: [
+        { title: { contains: search, mode: "insensitive" as const } },
+        { description: { contains: search, mode: "insensitive" as const } },
+      ],
+    }),
+  };
+}
+
 // Tier 1: Core query — accepts free-text search (never cached directly)
 async function queryAffairs(
   search?: string,
@@ -55,44 +112,16 @@ async function queryAffairs(
   const limit = 20;
   const skip = (page - 1) * limit;
 
-  // Build category filter based on super-category or specific category
-  let categoryFilter: AffairCategory[] | undefined;
-  if (category) {
-    categoryFilter = [category as AffairCategory];
-  } else if (superCategory) {
-    categoryFilter = getCategoriesForSuper(superCategory);
-  }
-
-  // In victim mode, restrict to violence-related categories
-  const isVictimMode = involvements.includes("VICTIM");
-  if (isVictimMode) {
-    categoryFilter = categoryFilter
-      ? categoryFilter.filter((c) => VIOLENCE_CATEGORIES.includes(c))
-      : VIOLENCE_CATEGORIES;
-  }
-
-  // Build status filter: certainty takes precedence over individual status
-  let statusFilter: { status: AffairStatus } | { status: { in: AffairStatus[] } } | undefined;
-  if (certainty) {
-    statusFilter = { status: { in: getStatusesForCertainty(certainty) } };
-  } else if (status) {
-    statusFilter = { status: status as AffairStatus };
-  }
-
-  const where = {
-    publicationStatus: "PUBLISHED" as const,
-    involvement: { in: involvements },
-    ...statusFilter,
-    ...(categoryFilter && { category: { in: categoryFilter } }),
-    ...(severity && { severity }),
-    ...(partySlug && { partyAtTime: { slug: partySlug } }),
-    ...(search && {
-      OR: [
-        { title: { contains: search, mode: "insensitive" as const } },
-        { description: { contains: search, mode: "insensitive" as const } },
-      ],
-    }),
-  };
+  const where = buildAffairWhere({
+    search,
+    status,
+    superCategory,
+    category,
+    severity,
+    involvements,
+    partySlug,
+    certainty,
+  });
 
   const orderBy = buildOrderBy(sort);
 
@@ -258,6 +287,21 @@ export async function getAffairs(
     sort,
     certainty
   );
+}
+
+/**
+ * Ordered slug+title list for a filter perimeter, no pagination, used by the
+ * neighbour API to resolve prev/next. Bounded (the full published set is small)
+ * and select-only, so an unpaginated scan is cheap. Same WHERE + ORDER BY as the
+ * listing, so the order matches what the reader was browsing.
+ */
+export async function getAffairNeighborsList(
+  opts: AffairFilterOpts & { sort?: string }
+): Promise<Array<{ slug: string; title: string }>> {
+  const where = buildAffairWhere(opts);
+  const orderBy = buildOrderBy(opts.sort);
+  const rows = await db.affair.findMany({ where, orderBy, select: { slug: true, title: true } });
+  return rows.flatMap((r) => (r.slug ? [{ slug: r.slug, title: r.title }] : []));
 }
 
 export async function getSuperCategoryCounts() {

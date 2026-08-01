@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
@@ -31,13 +32,15 @@ import { LinkedAffairBanner } from "@/components/affairs/LinkedAffairBanner";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { StatusTooltip } from "@/components/affairs/StatusTooltip";
 import { AffairTimeline } from "@/components/affairs/AffairTimeline";
-import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import { ArticleJsonLd } from "@/components/seo/JsonLd";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd";
+import { AffairStickyBar } from "@/components/affairs/AffairStickyBar";
+import { AffairContextBand } from "@/components/affairs/AffairContextBand";
+import { AffairContinue } from "@/components/affairs/AffairContinue";
+import { AffairNeighborBar } from "@/components/affairs/AffairNeighborBar";
+import { pickDisplayMandate, formatMandateMeta } from "@/lib/affairs/context-meta";
 import type { AffairCategory, Involvement } from "@/types";
 import type { Prisma } from "@/generated/prisma";
 import { SITE_URL } from "@/config/site";
-import { ShareBar } from "@/components/ui/ShareBar";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import { buildPublicAffairLookupWheres, pickPublicLinkedAffair } from "@/lib/affairs/affair-lookup";
 import { resolveDecisionFields } from "@/lib/affairs/decision-fields";
@@ -76,12 +79,19 @@ const affairInclude = {
       currentParty: {
         select: {
           id: true,
+          slug: true,
           shortName: true,
           name: true,
           color: true,
           foundedDate: true,
         },
       },
+      mandates: {
+        where: { isCurrent: true },
+        select: { type: true, constituency: true, startDate: true },
+        orderBy: { startDate: "asc" as const },
+      },
+      _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" as const } } } },
     },
   },
   partyAtTime: {
@@ -92,6 +102,9 @@ const affairInclude = {
       name: true,
       color: true,
       foundedDate: true,
+      _count: {
+        select: { affairsAtTime: { where: { publicationStatus: "PUBLISHED" as const } } },
+      },
     },
   },
   sources: {
@@ -227,6 +240,45 @@ export default async function AffairDetailPage({ params }: PageProps) {
   });
   const linked = pickPublicLinkedAffair(affair.linkedAffair, affair.linkedBy);
 
+  // Context band: who the tracked politician is, plus lateral journeys.
+  const displayMandate = pickDisplayMandate(affair.politician.mandates);
+  const politicianMeta = formatMandateMeta(displayMandate, affair.politician.civility);
+  const affairCount = affair.politician._count.affairs;
+
+  const contextParty =
+    partyDisplay.kind === "at-time"
+      ? {
+          name: partyDisplay.party.name,
+          shortName: partyDisplay.party.shortName,
+          color: partyDisplay.party.color ?? null,
+          slug: partyDisplay.party.slug ?? null,
+          atTime: !partyDisplay.sameAsCurrent,
+        }
+      : partyDisplay.kind === "current"
+        ? {
+            name: partyDisplay.party.name,
+            shortName: partyDisplay.party.shortName,
+            color: partyDisplay.party.color ?? null,
+            slug: partyDisplay.party.slug ?? null,
+            atTime: false,
+          }
+        : null;
+
+  // Only the historical party carries a count we fetched; the current-party
+  // fallback shows the tile without an unverified number.
+  const partyAffairCount =
+    partyDisplay.kind === "at-time" ? (affair.partyAtTime?._count?.affairsAtTime ?? null) : null;
+
+  const superCategoryLabel = AFFAIR_SUPER_CATEGORY_LABELS[superCategory];
+  const superCategoryHref = `/affaires?supercat=${superCategory}`;
+
+  const breadcrumbItems = [
+    { name: "Accueil", url: `${SITE_URL}/` },
+    { name: "Affaires", url: `${SITE_URL}/affaires` },
+    { name: superCategoryLabel, url: `${SITE_URL}${superCategoryHref}` },
+    { name: affair.title, url: `${SITE_URL}/affaires/${affair.slug}` },
+  ];
+
   return (
     <>
       <ArticleJsonLd
@@ -241,16 +293,15 @@ export default async function AffairDetailPage({ params }: PageProps) {
           url: `${SITE_URL}/politiques/${affair.politician.slug}`,
         }}
       />
-      <ShareBar
-        data={{
-          title: affair.title,
-          text: `Affaire judiciaire : ${affair.title} (${AFFAIR_STATUS_LABELS[affair.status]})`,
-          url: `${SITE_URL}/affaires/${affair.slug}`,
-        }}
+      <BreadcrumbJsonLd items={breadcrumbItems} />
+      <AffairStickyBar
+        title={affair.title}
+        shareUrl={`${SITE_URL}/affaires/${affair.slug}`}
+        shareText={`Affaire : ${affair.title} (${AFFAIR_STATUS_LABELS[affair.status]})`}
+        superCategoryLabel={superCategoryLabel}
+        superCategoryHref={superCategoryHref}
       />
-      <div className="container mx-auto px-4 pt-4 pb-8 max-w-4xl">
-        <Breadcrumb items={[{ label: "Affaires", href: "/affaires" }, { label: affair.title }]} />
-
+      <div className="container mx-auto max-w-4xl px-4 pt-4 pb-24 sm:pb-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -305,49 +356,14 @@ export default async function AffairDetailPage({ params }: PageProps) {
             {affair.title}
           </h1>
 
-          {/* Politician card */}
-          <div className="inline-flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-            <Link
-              href={`/politiques/${affair.politician.slug}`}
-              className="inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
-            >
-              <PoliticianAvatar
-                fullName={affair.politician.fullName}
-                photoUrl={affair.politician.photoUrl}
-                size="md"
-              />
-              <div>
-                <p className="font-semibold">{affair.politician.fullName}</p>
-              </div>
-            </Link>
-            {partyDisplay.kind === "at-time" && (
-              <p className="text-sm text-muted-foreground">
-                {partyDisplay.party.slug ? (
-                  <Link
-                    href={`/affaires/parti/${partyDisplay.party.slug}`}
-                    className="hover:underline hover:text-foreground"
-                  >
-                    {partyDisplay.party.name}
-                  </Link>
-                ) : (
-                  partyDisplay.party.name
-                )}
-                {!partyDisplay.sameAsCurrent && <span className="text-xs"> (à l&apos;époque)</span>}
-              </p>
-            )}
-            {partyDisplay.kind === "current" && (
-              <p className="text-sm text-muted-foreground">{partyDisplay.party.name}</p>
-            )}
-            {partyDisplay.kind === "unknown" &&
-              partyDisplay.reason === "pre-dates-current-party" && (
-                <p
-                  className="text-sm text-muted-foreground italic"
-                  title={`Parti actuel (${partyDisplay.currentPartyName}) fondé en ${partyDisplay.currentPartyFoundedDate?.getFullYear()}, soit après la date des faits.`}
-                >
-                  Parti à l&apos;époque : non renseigné
-                </p>
-              )}
-          </div>
+          <AffairContextBand
+            politicianSlug={affair.politician.slug}
+            fullName={affair.politician.fullName}
+            photoUrl={affair.politician.photoUrl}
+            meta={politicianMeta}
+            affairCount={affairCount}
+            party={contextParty}
+          />
         </div>
 
         {/* Encart de prudence juridique : présomption, recours, issue favorable
@@ -596,26 +612,25 @@ export default async function AffairDetailPage({ params }: PageProps) {
           </Card>
         )}
 
-        {/* Actions */}
-        <div className="mt-8 flex flex-wrap gap-4">
-          <Link
-            href={`/politiques/${affair.politician.slug}`}
-            className="text-sm text-primary hover:underline"
-          >
-            ← Voir la fiche de {affair.politician.fullName}
-          </Link>
-          <Link href="/affaires" className="text-sm text-primary hover:underline">
-            ← Retour à la liste des affaires
-          </Link>
-          {affair.partyAtTime?.slug && (
-            <Link
-              href={`/affaires/parti/${affair.partyAtTime.slug}`}
-              className="text-sm text-primary hover:underline"
-            >
-              ← Affaires {affair.partyAtTime.shortName}
-            </Link>
-          )}
-        </div>
+        {/* Poursuivre — lateral journeys replace the former stacked "← …" footer */}
+        <AffairContinue
+          politicianSlug={affair.politician.slug}
+          politicianName={affair.politician.fullName}
+          affairCount={affairCount}
+          party={
+            contextParty
+              ? {
+                  name: contextParty.name,
+                  shortName: contextParty.shortName,
+                  slug: contextParty.slug,
+                }
+              : null
+          }
+          partyAffairCount={partyAffairCount}
+        />
+        <Suspense fallback={null}>
+          <AffairNeighborBar slug={affair.slug} politicianSlug={affair.politician.slug} />
+        </Suspense>
       </div>
     </>
   );

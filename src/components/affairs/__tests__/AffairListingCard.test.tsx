@@ -85,3 +85,34 @@ describe("AffairListingCard : citabilité", () => {
     expect(container.textContent).toContain("5 sources vérifiées");
   });
 });
+
+describe("AffairListingCard : cible de clic étendue", () => {
+  it("le titre est le lien de navigation de la carte et porte le périmètre de retour", () => {
+    render(
+      <AffairListingCard affair={baseAffair()} retour="certainty=EN_COURS" resultCount={12} />
+    );
+    const titleLink = screen.getByRole("link", { name: "Affaire de test" });
+    const href = titleLink.getAttribute("href")!;
+    expect(href).toContain("/affaires/affaire-de-test");
+    expect(href).toContain("retour=certainty");
+    expect(href).toContain("rn=12");
+  });
+
+  it("« Voir détails » n'est pas un second lien vers la même cible", () => {
+    render(<AffairListingCard affair={baseAffair()} />);
+    expect(screen.getByText(/Voir détails/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Voir détails/ })).toBeNull();
+  });
+
+  it("l'élu reste un lien imbriqué indépendant", () => {
+    render(<AffairListingCard affair={baseAffair()} />);
+    const elu = screen.getByRole("link", { name: "Jean Test" });
+    expect(elu.getAttribute("href")).toBe("/politiques/jean-test");
+  });
+
+  it("sans périmètre, le lien du titre reste propre", () => {
+    render(<AffairListingCard affair={baseAffair()} />);
+    const titleLink = screen.getByRole("link", { name: "Affaire de test" });
+    expect(titleLink.getAttribute("href")).toBe("/affaires/affaire-de-test");
+  });
+});
