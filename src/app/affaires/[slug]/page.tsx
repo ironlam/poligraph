@@ -399,6 +399,10 @@ export default async function AffairDetailPage({ params }: PageProps) {
             affairCount={affairCount}
             party={contextParty}
             involvement={affair.involvement}
+            subjectLabel={affair.subjectLabel}
+            subjectKind={affair.subjectKind}
+            subjectNote={affair.subjectNote}
+            involvementNote={affair.involvementNote}
           />
         </div>
 

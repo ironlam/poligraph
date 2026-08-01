@@ -11,10 +11,20 @@ import type { Involvement } from "@/types";
  * journeys a reader wants next (their affairs, their party's affairs, their
  * votes). Turns the fiche from a cul-de-sac into a crossroads.
  *
- * This is the identity étage of the InvolvementBand pattern. B1 will add the
- * role étage (the "ni mis en cause, ni poursuivi" sentence + not_accused notice)
- * below the identity row for non-accused involvements, without reshaping this.
+ * It is the InvolvementBand pattern. For a non-accused involvement it carries a
+ * role étage (the "ni mise en cause, ni poursuivie" sentence, or the sourced
+ * involvementNote when present). When subjectLabel names who the procedure
+ * really targets, the identity étage splits into two columns: "Visé par la
+ * procédure" (the subject) and "Suivi sur cette page" (the tracked person).
  */
+type SubjectKind = "PERSON" | "ORGANISATION" | "UNKNOWN";
+
+const SUBJECT_KIND_LABELS: Record<SubjectKind, string> = {
+  PERSON: "Personne",
+  ORGANISATION: "Personne morale (hors périmètre Poligraph)",
+  UNKNOWN: "Sujet non déterminé",
+};
+
 interface AffairContextBandProps {
   politicianSlug: string;
   fullName: string;
@@ -32,6 +42,12 @@ interface AffairContextBandProps {
   /** Drives the role étage: for a non-accused involvement the band states, in a
       sentence, that the person is neither mise en cause nor poursuivie (I3, I5). */
   involvement: Involvement;
+  /** Who/what the procedure really targets, when it is not the tracked person. */
+  subjectLabel: string | null;
+  subjectKind: SubjectKind | null;
+  subjectNote: string | null;
+  /** Sourced nature of the link; replaces the generic role sentence when set. */
+  involvementNote: string | null;
 }
 
 function RailLink({
@@ -63,53 +79,91 @@ export function AffairContextBand({
   affairCount,
   party,
   involvement,
+  subjectLabel,
+  subjectKind,
+  subjectNote,
+  involvementNote,
 }: AffairContextBandProps) {
   const ficheHref = `/politiques/${politicianSlug}`;
   const votesHref = `/politiques/${politicianSlug}/votes`;
   const partyAffairsHref = party?.slug ? `/affaires/parti/${party.slug}` : null;
   const accused = isAccusedInvolvement(involvement);
   const roleCopy = accused ? null : getRoleNoticeCopy(involvement);
+  // The sourced note is more specific than the generic role sentence.
+  const rolePosition = involvementNote?.trim() || roleCopy?.position;
+
+  const identity = (
+    <div className="flex items-center gap-3">
+      <Link
+        href={ficheHref}
+        className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <PoliticianAvatar fullName={fullName} photoUrl={photoUrl} size="md" />
+      </Link>
+      <div>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <Link
+            href={ficheHref}
+            className="font-display text-lg font-semibold text-primary underline-offset-2 hover:underline"
+          >
+            {fullName}
+          </Link>
+          <Link
+            href={ficheHref}
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Fiche complète
+            <ArrowRight className="ml-0.5 inline size-3" aria-hidden="true" />
+          </Link>
+        </div>
+        {meta && <p className="mt-0.5 text-sm text-muted-foreground">{meta}</p>}
+      </div>
+    </div>
+  );
+
+  const partyChip = party ? (
+    <AffairPartyChip
+      name={party.name}
+      shortName={party.shortName}
+      color={party.color}
+      href={partyAffairsHref ?? undefined}
+      atTime={party.atTime}
+    />
+  ) : null;
 
   return (
     <div className="mb-6 rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href={ficheHref}
-            className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <PoliticianAvatar fullName={fullName} photoUrl={photoUrl} size="md" />
-          </Link>
-          <div>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <Link
-                href={ficheHref}
-                className="font-display text-lg font-semibold text-primary underline-offset-2 hover:underline"
-              >
-                {fullName}
-              </Link>
-              <Link
-                href={ficheHref}
-                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Fiche complète
-                <ArrowRight className="ml-0.5 inline size-3" aria-hidden="true" />
-              </Link>
-            </div>
-            {meta && <p className="mt-0.5 text-sm text-muted-foreground">{meta}</p>}
+      {subjectLabel ? (
+        // Two columns: name the real subject without confusing it with the
+        // tracked person (the only layout that does both).
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Visé par la procédure
+            </p>
+            <p className="mt-1 font-semibold text-foreground">{subjectLabel}</p>
+            {subjectKind && (
+              <p className="text-sm text-muted-foreground">{SUBJECT_KIND_LABELS[subjectKind]}</p>
+            )}
+            {subjectNote && <p className="mt-0.5 text-sm text-muted-foreground">{subjectNote}</p>}
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Suivi sur cette page
+            </p>
+            <div className="mt-1">{identity}</div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Non poursuivi · aucune peine encourue
+            </p>
+            {partyChip && <div className="mt-2">{partyChip}</div>}
           </div>
         </div>
-
-        {party && (
-          <AffairPartyChip
-            name={party.name}
-            shortName={party.shortName}
-            color={party.color}
-            href={partyAffairsHref ?? undefined}
-            atTime={party.atTime}
-          />
-        )}
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          {identity}
+          {partyChip}
+        </div>
+      )}
 
       {roleCopy && (
         <div
@@ -120,8 +174,8 @@ export function AffairContextBand({
           <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="text-sm">
             <p>
-              <strong>Son rôle dans cette affaire : {roleCopy.roleLabel}.</strong>{" "}
-              {roleCopy.position} {roleCopy.reminder}
+              <strong>Son rôle dans cette affaire : {roleCopy.roleLabel}.</strong> {rolePosition}{" "}
+              {roleCopy.reminder}
             </p>
             <Link
               href="/methodologie"

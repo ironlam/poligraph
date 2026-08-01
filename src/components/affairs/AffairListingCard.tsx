@@ -46,6 +46,7 @@ export interface AffairListingCardData {
   description: string;
   status: AffairStatus;
   involvement: Involvement;
+  involvementNote: string | null;
   category: AffairCategory;
   verdictDate: Date | null;
   startDate: Date | null;
@@ -181,6 +182,13 @@ export function AffairListingCard({ affair, retour, resultCount }: AffairListing
           <> · {INVOLVEMENT_LABELS[affair.involvement]}</>
         )}
       </p>
+
+      {!accused && affair.involvementNote && (
+        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Rôle : </span>
+          {affair.involvementNote}
+        </p>
+      )}
 
       <AffairStatusNotice
         status={affair.status}

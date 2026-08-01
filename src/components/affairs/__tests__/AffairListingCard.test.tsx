@@ -10,6 +10,7 @@ function baseAffair(overrides: Partial<AffairListingCardData> = {}): AffairListi
     description: "Description factuelle des faits reprochés.",
     status: "RELAXE",
     involvement: "DIRECT",
+    involvementNote: null,
     category: "CORRUPTION",
     verdictDate: new Date("2024-06-15"),
     startDate: null,
