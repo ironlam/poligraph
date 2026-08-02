@@ -15,6 +15,7 @@ import {
 import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { formatDate } from "@/lib/utils";
 import { AffairPublishControl } from "@/components/admin/AffairPublishControl";
+import { AffairMergePanel } from "@/components/admin/AffairMergePanel";
 import type { BlockingDecision as BlockingDecisionPayload } from "@/lib/affairs/blocking-decisions";
 import { PublicationStatus } from "@/generated/prisma";
 
@@ -35,6 +36,28 @@ async function getAffair(id: string) {
         orderBy: { createdAt: "asc" },
       },
     },
+  });
+}
+
+/**
+ * The person's other affairs, for the merge panel. Same politician only: the
+ * merge service refuses a cross-person absorption, since Affair is 1:1 with
+ * Politician and moving one person's sources onto another's fiche then deleting
+ * the row would be a loss, not a merge.
+ */
+async function getSiblingAffairs(politicianId: string, exceptId: string) {
+  return db.affair.findMany({
+    where: { politicianId, id: { not: exceptId } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      category: true,
+      publicationStatus: true,
+      _count: { select: { sources: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
   });
 }
 
@@ -131,6 +154,8 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
   if (!affair) {
     notFound();
   }
+
+  const siblings = await getSiblingAffairs(affair.politician.id, affair.id);
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -329,6 +354,20 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
           </ul>
         </CardContent>
       </Card>
+
+      <AffairMergePanel
+        affairId={affair.id}
+        affairTitle={affair.title}
+        affairIsPublished={affair.publicationStatus === "PUBLISHED"}
+        siblings={siblings.map((s) => ({
+          id: s.id,
+          title: s.title,
+          status: s.status,
+          category: s.category,
+          publicationStatus: s.publicationStatus,
+          sourceCount: s._count.sources,
+        }))}
+      />
 
       <Card>
         <CardContent className="pt-6">
