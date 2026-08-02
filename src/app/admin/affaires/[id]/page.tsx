@@ -12,7 +12,8 @@ import {
   AFFAIR_STATUS_NEEDS_PRESUMPTION,
 } from "@/config/labels";
 import { formatDate } from "@/lib/utils";
-import { PublicationStatusSelect } from "@/components/admin/PublicationStatusSelect";
+import { AffairPublishControl } from "@/components/admin/AffairPublishControl";
+import type { BlockingDecision as BlockingDecisionPayload } from "@/lib/affairs/blocking-decisions";
 import { PublicationStatus } from "@/generated/prisma";
 
 interface PageProps {
@@ -38,7 +39,7 @@ async function getAffair(id: string) {
 async function updatePublicationStatus(
   id: string,
   status: PublicationStatus
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; blocking?: BlockingDecisionPayload[] }> {
   "use server";
   const { isAuthenticated } = await import("@/lib/auth");
   const { db } = await import("@/lib/db");
@@ -72,9 +73,17 @@ async function updatePublicationStatus(
       await assertPublishable(id, { verifiedBy: VERIFIED_BY_MODERATION });
     } catch (err) {
       if (err instanceof PublishGuardError) {
+        // The reasons carry the blocking decision ids. Flattening them to a sentence used
+        // to strand the moderator: told that a decision blocked them, with no way to
+        // reach it. They travel to the client so the block is resolvable in place.
+        const { loadBlockingDecisions } = await import("@/lib/affairs/blocking-decisions");
+        const decisionIds = err.reasons.flatMap((r) =>
+          r.code === "UNREVIEWED_MATCHING_DECISION" ? r.decisionIds : []
+        );
         return {
           ok: false,
           error: `Affaire non publiable : ${err.reasons.map((r) => r.message).join(" ; ")}`,
+          blocking: await loadBlockingDecisions(decisionIds),
         };
       }
       throw err;
@@ -132,9 +141,10 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
           <h1 className="text-2xl font-bold mt-2">{affair.title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <PublicationStatusSelect
-            entityId={affair.id}
-            entityType="affair"
+          <AffairPublishControl
+            affairId={affair.id}
+            politicianId={affair.politician.id}
+            politicianName={affair.politician.fullName}
             currentStatus={affair.publicationStatus}
             onChange={updatePublicationStatus}
           />
