@@ -166,6 +166,13 @@ export function AffairPublishControl({
                   « {d.excerpt} »
                 </blockquote>
 
+                {d.provenance === "ASSISTED" && (
+                  <p className="mt-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+                    Déjà confirmé par l&apos;assistance ({d.reviewedBy}) : il reste à valider ou à
+                    contredire.
+                  </p>
+                )}
+
                 <p className="mt-2 text-xs">
                   <span className="text-muted-foreground">Source : </span>
                   {d.sourceRef ? (

@@ -140,3 +140,37 @@ describe("loadBlockingDecisions", () => {
     expect(d!.excerpt).toBe("Un titre sur plusieurs lignes");
   });
 });
+
+/**
+ * La garde distingue « jamais regardé » de « la machine a dit oui ». Le panneau doit
+ * porter la différence, sinon il repose la question à froid au lieu de demander un
+ * arbitrage, ce qui est précisément ce que la validation assistée doit éviter.
+ */
+describe("loadBlockingDecisions — provenance de la revue", () => {
+  it("marque une décision confirmée par assistance", async () => {
+    db.affairPoliticianDecision.findMany.mockResolvedValue([
+      decision({ reviewedBy: "auto-triage" }),
+    ]);
+
+    const [d] = await loadBlockingDecisions(["dec_1"]);
+
+    expect(d!.provenance).toBe("ASSISTED");
+    expect(d!.reviewedBy).toBe("auto-triage");
+  });
+
+  it("marque une décision jamais revue", async () => {
+    db.affairPoliticianDecision.findMany.mockResolvedValue([decision({ reviewedBy: null })]);
+
+    const [d] = await loadBlockingDecisions(["dec_1"]);
+
+    expect(d!.provenance).toBe("NONE");
+  });
+
+  it("marque une décision revue par un humain", async () => {
+    db.affairPoliticianDecision.findMany.mockResolvedValue([decision({ reviewedBy: "admin" })]);
+
+    const [d] = await loadBlockingDecisions(["dec_1"]);
+
+    expect(d!.provenance).toBe("HUMAN");
+  });
+});

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { reviewProvenance, type ReviewProvenance } from "@/lib/affairs/review-provenance";
 
 /**
  * Display data for the matching decisions that block a publication.
@@ -21,6 +22,15 @@ export interface BlockingCandidate {
 export interface BlockingDecision {
   id: string;
   judgment: string;
+  /**
+   * Qui a déjà tranché, s'il y a eu une revue.
+   *
+   * « ASSISTED » change la question posée au modérateur : ce n'est plus « qui est-ce ? »
+   * mais « la machine dit oui, êtes-vous d'accord ? ». C'est le sens même de la
+   * validation assistée, et le cacher la ramènerait à un examen à froid.
+   */
+  provenance: ReviewProvenance;
+  reviewedBy: string | null;
   source: string;
   sourceRef: string;
   /** The press text the resolver read. This is what a human has to judge. */
@@ -57,6 +67,7 @@ export async function loadBlockingDecisions(
       sourceRef: true,
       candidateText: true,
       topCandidates: true,
+      reviewedBy: true,
     },
   });
 
@@ -78,6 +89,8 @@ export async function loadBlockingDecisions(
   return rows.map((row) => ({
     id: row.id,
     judgment: row.judgment,
+    provenance: reviewProvenance(row.reviewedBy),
+    reviewedBy: row.reviewedBy,
     source: row.source,
     sourceRef: row.sourceRef,
     excerpt: row.candidateText.replace(/\s+/g, " ").slice(0, EXCERPT_LENGTH),

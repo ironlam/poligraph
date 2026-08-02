@@ -77,9 +77,11 @@ async function updatePublicationStatus(
         // to strand the moderator: told that a decision blocked them, with no way to
         // reach it. They travel to the client so the block is resolvable in place.
         const { loadBlockingDecisions } = await import("@/lib/affairs/blocking-decisions");
-        const decisionIds = err.reasons.flatMap((r) =>
-          r.code === "UNREVIEWED_MATCHING_DECISION" ? r.decisionIds : []
-        );
+        // Toute raison qui porte des identifiants, pas seulement celle qui existait
+        // quand ce code a été écrit : la garde en a gagné une seconde
+        // (ASSISTED_MATCHING_DECISION), et filtrer sur un code nommé aurait rendu le
+        // panneau vide pour une affaire bloquée uniquement par une confirmation assistée.
+        const decisionIds = err.reasons.flatMap((r) => ("decisionIds" in r ? r.decisionIds : []));
         return {
           ok: false,
           error: `Affaire non publiable : ${err.reasons.map((r) => r.message).join(" ; ")}`,
