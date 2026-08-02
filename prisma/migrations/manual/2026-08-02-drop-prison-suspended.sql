@@ -1,0 +1,19 @@
+-- Contract step: drop the boolean the firm-months columns replaced (#576).
+--
+-- Documentation only, applied via `npm run db:push`. This database has no
+-- `_prisma_migrations` table, so `prisma migrate deploy` is never run against it and a
+-- versioned migration directory here would only arm the staging workflow with a history
+-- it cannot replay. Companion of 2026-07-31-sentence-firm-months.sql, which added the
+-- replacements.
+--
+-- ORDER MATTERS, AND THE DEPLOY IS PART OF IT. Several Affair queries use `include`
+-- without `select`, so Prisma names every scalar column in the SELECT it emits. A client
+-- generated while `prisonSuspended` still existed keeps asking for it, and a runtime
+-- built from that client breaks the moment the column is gone. The schema change must
+-- therefore be deployed BEFORE this statement runs, never in the same step.
+--
+-- The 81 rows carrying a value (50 true, 31 false) were exported before the drop. Their
+-- meaning already lives in prisonFirmMonths, and sentence-split.ts is the sole authority
+-- on reading it; the boolean could not express "not established" at all, which is what
+-- made it report a suspended sentence as firm on 15 published fiches.
+ALTER TABLE "Affair" DROP COLUMN "prisonSuspended";

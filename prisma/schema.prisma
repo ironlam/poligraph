@@ -575,7 +575,6 @@ model Affair {
   // established", which is distinct from 0 ("entirely suspended"). See
   // src/lib/affairs/sentence-split.ts, sole authority on reading the pair (#576).
   prisonMonths            Int? // Prison sentence in months (0 if none)
-  prisonSuspended         Boolean? // DEPRECATED (#576), dropped once the switch is verified
   prisonFirmMonths        Int? // Firm part of the prison term; null = not established
   fineAmount              Decimal? @db.Decimal(12, 2) // Fine in euros
   ineligibilityMonths     Int? // Ineligibility period in months
