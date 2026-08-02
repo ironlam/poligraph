@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, LinkIcon, Loader2, Search } from "lucide-react";
+import { BlockedAffairs } from "@/components/admin/BlockedAffairs";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -200,12 +201,14 @@ export default function AffairMatchingReviewPage() {
           Révision des décisions de liaison
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Décisions en attente de validation humaine. L{"'"}onglet{" "}
-          <span className="font-medium">En attente</span> liste les cas où plusieurs politiciens
-          sont plausibles. L{"'"}onglet <span className="font-medium">Sans candidat</span> regroupe
-          les cas sans candidat plausible (politiciens étrangers ou absents de la base).
+          Les onglets listent l{"'"}ensemble du registre, qui compte plusieurs milliers de lignes.
+          La plupart ne retiennent rien : seules celles reprises ci-dessous empêchent une
+          publication.
         </p>
       </div>
+
+      {/* What actually has to be settled, before the full registry. */}
+      <BlockedAffairs />
 
       {/* Tab bar */}
       <div

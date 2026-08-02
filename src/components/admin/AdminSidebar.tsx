@@ -51,7 +51,7 @@ const contentItems: NavItem[] = [
   { href: "/admin/dossiers", label: "Dossiers", icon: FileText },
   { href: "/admin/policy-titles", label: "Titres de scrutins", icon: Vote },
   { href: "/admin/affair-matching/review", label: "Liaison affaires", icon: Fingerprint },
-  { href: "/admin/affair-matching/dashboard", label: "Stats liaison", icon: BarChart3 },
+  { href: "/admin/affair-matching/dashboard", label: "Liaison — activité", icon: BarChart3 },
 ];
 
 const mediaItems: NavItem[] = [
