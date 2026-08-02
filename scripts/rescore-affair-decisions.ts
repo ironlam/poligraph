@@ -53,11 +53,33 @@ function parseArgs() {
     const a = args.find((x) => x.startsWith(prefix));
     return a ? Number(a.split("=")[1]) : 0;
   };
-  return { apply: args.includes("--apply"), sample: num("--sample="), limit: num("--limit=") };
+  return {
+    apply: args.includes("--apply"),
+    sample: num("--sample="),
+    limit: num("--limit="),
+    includeChosen: args.includes("--include-chosen"),
+  };
+}
+
+/**
+ * Rows the widened mode refuses to write, with the affair they currently gate.
+ * Only DRAFT and PUBLISHED count: releasing a block on a REJECTED affair changes
+ * nothing, since publishing one means changing its status first, which runs the
+ * guard again from scratch.
+ */
+interface Withheld {
+  id: string;
+  affairTitle: string;
+  status: string;
+  who: string;
+  change: string;
 }
 
 interface Rescored {
   id: string;
+  /** State read at scoring time; re-asserted at write time as a concurrency check. */
+  expectAffairId: string | null;
+  expectChosenPoliticianId: string | null;
   before: string;
   after: string;
   partial: boolean;
@@ -69,18 +91,18 @@ interface Rescored {
   excerpt: string;
 }
 
-async function compute(limit: number) {
+async function compute(limit: number, includeChosen: boolean) {
   const [pool, vocabulary] = await Promise.all([loadCandidatePool(), loadSurnameVocabulary()]);
   const prefilter = new CandidatePrefilter(pool);
   const byId = new Map(pool.map((p) => [p.id, p]));
 
   const rows = await db.affairPoliticianDecision.findMany({
-    // Neither guard path can reach these, so nothing publishable moves.
     where: {
       reviewedAt: null,
-      affairId: null,
-      chosenPoliticianId: null,
       resolverVersion: { notIn: [RESOLVER_VERSION, PARTIAL_VERSION] },
+      // Default scope: neither guard path can reach these rows. The widened mode
+      // gives that up and buys the safety back per row, below.
+      ...(includeChosen ? {} : { affairId: null, chosenPoliticianId: null }),
     },
     select: {
       id: true,
@@ -91,6 +113,8 @@ async function compute(limit: number) {
       source: true,
       sourceRef: true,
       topCandidates: true,
+      affairId: true,
+      chosenPoliticianId: true,
     },
     orderBy: { createdAt: "asc" },
     ...(limit > 0 ? { take: limit } : {}),
@@ -109,7 +133,45 @@ async function compute(limit: number) {
     blocklist.set(b.textHash, set);
   }
 
+  // Which live affair, if any, each row currently gates. Mirrors the two paths of
+  // checkPublishable, but only to DECIDE WHAT TO SKIP; the real guard is called
+  // afterwards as the oracle, so a drift here withholds too much, never too little.
+  const gating = new Map<string, { title: string; status: string }>();
+  if (includeChosen) {
+    const live = await db.affair.findMany({
+      where: { publicationStatus: { in: ["DRAFT", "PUBLISHED"] } },
+      select: {
+        id: true,
+        title: true,
+        politicianId: true,
+        publicationStatus: true,
+        sources: { select: { url: true } },
+      },
+    });
+    const byUrlAndPolitician = new Map<string, { title: string; status: string }>();
+    const byAffairId = new Map<string, { title: string; status: string }>();
+    for (const a of live) {
+      byAffairId.set(a.id, { title: a.title, status: a.publicationStatus });
+      for (const src of a.sources) {
+        if (src.url.length > 0)
+          byUrlAndPolitician.set(`${a.politicianId}::${src.url}`, {
+            title: a.title,
+            status: a.publicationStatus,
+          });
+      }
+    }
+    for (const r of rows) {
+      const direct = r.affairId ? byAffairId.get(r.affairId) : undefined;
+      const fallback = r.chosenPoliticianId
+        ? byUrlAndPolitician.get(`${r.chosenPoliticianId}::${r.sourceRef}`)
+        : undefined;
+      const hit = direct ?? fallback;
+      if (hit) gating.set(r.id, hit);
+    }
+  }
+
   const results: Rescored[] = [];
+  const withheld: Withheld[] = [];
 
   for (const row of rows) {
     const meta = (row.metadata ?? {}) as Record<string, unknown>;
@@ -140,8 +202,32 @@ async function compute(limit: number) {
       .filter((c) => !previousIds.has(c.candidateId))
       .map((c) => byId.get(c.candidateId)?.fullName ?? c.candidateId);
 
+    // A row that gates a live affair only gets written when nothing the guard
+    // reads would change: same judgment class, same politician. The reverse case,
+    // a row that would START gating one, is deliberately not withheld: blocking
+    // more is the safe direction, and the post-write guard snapshot names them.
+    const gated = gating.get(row.id);
+    if (gated) {
+      const stillBlocks = decision.judgment === "SAME" || decision.judgment === "UNDECIDED";
+      const samePolitician = decision.topCandidateId === row.chosenPoliticianId;
+      if (!stillBlocks || !samePolitician) {
+        withheld.push({
+          id: row.id,
+          affairTitle: gated.title,
+          status: gated.status,
+          who: byId.get(row.chosenPoliticianId ?? "")?.fullName ?? "?",
+          change: !samePolitician
+            ? `attribution → ${byId.get(decision.topCandidateId ?? "")?.fullName ?? "?"}`
+            : `${row.judgment} → ${decision.judgment}`,
+        });
+        continue;
+      }
+    }
+
     results.push({
       id: row.id,
+      expectAffairId: row.affairId,
+      expectChosenPoliticianId: row.chosenPoliticianId,
       before: row.judgment as string,
       after: decision.judgment,
       partial: row.candidateText.length >= TEXT_STORAGE_LIMIT,
@@ -154,7 +240,7 @@ async function compute(limit: number) {
     });
   }
 
-  return results;
+  return { results, withheld };
 }
 
 function report(results: Rescored[]) {
@@ -195,6 +281,34 @@ function report(results: Rescored[]) {
   for (const [n, c] of top) console.log(`  ${String(c).padStart(4)}  ${n}`);
 }
 
+/**
+ * Blocking state of every live affair, read through `checkPublishable` itself.
+ *
+ * The withholding filter above reimplements the guard's two paths to decide what
+ * to skip, and a reimplementation drifts. This calls the real thing before and
+ * after the write, so a drift shows up as an affair that changed state instead
+ * of passing unnoticed. Slow on purpose: correctness here is worth a minute.
+ */
+async function guardSnapshot(): Promise<
+  Map<string, { title: string; status: string; blocked: boolean }>
+> {
+  const { checkPublishable } = await import("@/lib/affairs/publish-guard");
+  const affairs = await db.affair.findMany({
+    where: { publicationStatus: { in: ["DRAFT", "PUBLISHED"] } },
+    select: { id: true, title: true, publicationStatus: true },
+  });
+  const out = new Map<string, { title: string; status: string; blocked: boolean }>();
+  for (const a of affairs) {
+    const reasons = await checkPublishable(a.id);
+    out.set(a.id, {
+      title: a.title,
+      status: a.publicationStatus,
+      blocked: reasons.some((r) => "decisionIds" in r),
+    });
+  }
+  return out;
+}
+
 async function apply(results: Rescored[]) {
   console.log(`\nÉcriture sur ${results.length} décisions…`);
   let done = 0;
@@ -207,11 +321,14 @@ async function apply(results: Rescored[]) {
         // to review one meanwhile, and only a filtered write re-asserts the three
         // conditions that make this safe. An update by id would overwrite them.
         db.affairPoliticianDecision.updateMany({
+          // Optimistic concurrency on the exact state that was scored, rather
+          // than on a scope constant: the widened mode reads rows that DO carry
+          // these fields, and hardcoding null silently wrote nothing at all.
           where: {
             id: r.id,
             reviewedAt: null,
-            affairId: null,
-            chosenPoliticianId: null,
+            affairId: r.expectAffairId,
+            chosenPoliticianId: r.expectChosenPoliticianId,
           },
           data: {
             judgment: r.after as "SAME" | "UNDECIDED" | "NO_MATCH",
@@ -234,16 +351,29 @@ async function apply(results: Rescored[]) {
   console.log(`\n${done} décisions re-résolues.`);
   if (done !== results.length) {
     console.log(
-      `${results.length - done} ignorées : touchées pendant le scoring, elles gardent leur état.`
+      `${results.length - done} non écrites : leur état a changé depuis le scoring, ou la ` +
+        `condition de re-vérification ne correspond plus. Rien n'a été forcé.`
     );
   }
   console.log(`Trier ensuite : npm run triage:matching`);
 }
 
 async function main() {
-  const { apply: shouldApply, sample, limit } = parseArgs();
-  const results = await compute(limit);
+  const { apply: shouldApply, sample, limit, includeChosen } = parseArgs();
+  const { results, withheld } = await compute(limit, includeChosen);
   report(results);
+
+  if (includeChosen) {
+    console.log(`\n=== MODE ÉTENDU : lignes portant un politicien choisi ou une affaire ===`);
+    console.log(
+      `${withheld.length} retirées du lot : elles gouvernent une affaire vivante et changeraient.`
+    );
+    for (const w of withheld)
+      console.log(
+        `  ${w.status.padEnd(9)} « ${w.affairTitle.slice(0, 58)} » — ${w.who} : ${w.change}`
+      );
+    if (withheld.length > 0) console.log(`  À trancher depuis la fiche, panneau de rattachement.`);
+  }
 
   if (sample > 0) {
     const pool = [...results];
@@ -260,8 +390,38 @@ async function main() {
     }
   }
 
-  if (shouldApply) await apply(results);
-  else console.log(`\nAucune écriture. --sample=15 pour relire, --apply pour écrire.`);
+  if (shouldApply) {
+    const before = includeChosen ? await guardSnapshot() : null;
+    await apply(results);
+    if (before) {
+      console.log(`\nVérification par la garde elle-même sur ${before.size} affaires vivantes…`);
+      const after = await guardSnapshot();
+      // Direction matters. Newly blocked is the safe outcome and the expected one
+      // when an attribution gets corrected onto the right affair. Newly unblocked
+      // is the failure this whole mode exists to prevent, so it is reported as one.
+      const released = [...before.entries()].filter(
+        ([id, b]) => b.blocked && after.get(id)?.blocked === false
+      );
+      const acquired = [...before.entries()].filter(
+        ([id, b]) => !b.blocked && after.get(id)?.blocked === true
+      );
+
+      if (released.length === 0) {
+        console.log(`  aucune affaire vivante n'a perdu de blocage. C'est l'invariant.`);
+      } else {
+        console.log(`  ÉCHEC : ${released.length} affaire(s) ne sont plus bloquées :`);
+        for (const [, b] of released) console.log(`    ${b.status} « ${b.title.slice(0, 58)} »`);
+      }
+
+      if (acquired.length > 0) {
+        console.log(
+          `\n  ${acquired.length} affaire(s) gagnent un blocage : une attribution corrigée les`
+        );
+        console.log(`  désigne enfin, et la garde demande la confirmation humaine correspondante.`);
+        for (const [, b] of acquired) console.log(`    ${b.status} « ${b.title.slice(0, 58)} »`);
+      }
+    }
+  } else console.log(`\nAucune écriture. --sample=15 pour relire, --apply pour écrire.`);
 
   await db.$disconnect();
 }
