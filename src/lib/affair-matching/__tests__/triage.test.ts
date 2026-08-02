@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { classifyForTriage, TRIAGE_VERSION, type TriageRow } from "../triage";
+import {
+  classifyForTriage,
+  unproposedNames,
+  looseWords,
+  TRIAGE_VERSION,
+  type TriageRow,
+} from "../triage";
 import { RESOLVER_VERSION } from "../signals/constants";
 import type { SurnameVocabulary } from "../surname-ambiguity";
 import { HUMAN_REVIEWERS } from "@/lib/affairs/review-provenance";
@@ -173,5 +179,53 @@ describe("TRIAGE_VERSION", () => {
 
   it("porte un numéro de version, pour qu'un lot entier reste révocable", () => {
     expect(TRIAGE_VERSION).toMatch(/-v\d+$/);
+  });
+});
+
+describe("unproposedNames — le contrôle qui n'écoute pas le résolveur", () => {
+  const index = new Map<string, string[]>([
+    ["marine le pen", ["lepen"]],
+    ["jean luc melenchon", ["jlm"]],
+  ]);
+
+  it("repère un élu nommé en toutes lettres qui n'est pas candidat", () => {
+    // Le cas réel : un texte anglophone, « Marine Le Pen's appeal », dont le seul
+    // candidat était Benoît Mariné. Trois correctifs de normalisation successifs
+    // avaient chacun l'air d'être le dernier.
+    const found = unproposedNames(
+      "A ruling in Marine Le Pen's appeal could settle the question.",
+      new Set(["autre"]),
+      index,
+      3
+    );
+    expect(found).toEqual(["lepen"]);
+  });
+
+  it("se tait quand l'élu nommé est déjà candidat", () => {
+    const found = unproposedNames("Marine Le Pen a été condamnée.", new Set(["lepen"]), index, 3);
+    expect(found).toEqual([]);
+  });
+
+  it("ignore traits d'union, insécables et ponctuation", () => {
+    const found = unproposedNames("Jean-Luc\u00A0Mélenchon, visé.", new Set(), index, 3);
+    expect(found).toEqual(["jlm"]);
+  });
+
+  it("n'exige pas de patronyme seul, seulement un nom complet", () => {
+    // Un patronyme nu est ce que le vocabulaire juge déjà ; ce contrôle ne parle
+    // que de preuve non ambiguë.
+    expect(unproposedNames("Le Pen était présente.", new Set(), index, 3)).toEqual([]);
+  });
+});
+
+describe("looseWords", () => {
+  it("réduit à des mots de lettres et chiffres", () => {
+    expect(looseWords("L'« Affaire » Dupond-Moretti : 2026")).toEqual([
+      "l",
+      "affaire",
+      "dupond",
+      "moretti",
+      "2026",
+    ]);
   });
 });

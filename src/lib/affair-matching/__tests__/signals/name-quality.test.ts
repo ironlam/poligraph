@@ -107,6 +107,44 @@ describe("NameQualitySignal", () => {
     expect(result.logLikelihoodRatio).toBe(NAME_LEGAL_TITLE_SURNAME_LLR);
   });
 
+  it("apparie un patronyme composé quel que soit le séparateur des deux côtés", () => {
+    // Le préfiltre proposait « Mayer Rossignol » sur un texte écrivant
+    // « Mayer-Rossignol », et ce signal le disqualifiait comme absent du texte.
+    // Rien ne plantait : le candidat disparaissait du classement.
+    const candidate = makeCandidate({
+      firstName: "Nicolas",
+      lastName: "Mayer Rossignol",
+      fullName: "Nicolas Mayer Rossignol",
+      normalizedLastName: "mayer rossignol",
+    });
+    const result = signal.evaluate(
+      makeInput("Le maire de Rouen, Nicolas Mayer-Rossignol, a déposé plainte."),
+      candidate,
+      context
+    );
+    expect(result.disqualified).toBeUndefined();
+    expect(result.logLikelihoodRatio).toBe(NAME_FULL_EXACT_LLR);
+  });
+
+  it("apparie malgré une espace insécable, que la typographie française sème partout", () => {
+    // Le texte stocké s'écrit « Marine Le\u00A0Pen\u00A0: 6 questions ». Le préfiltre
+    // tokenise avec \\s et proposait la candidate ; ce signal comparait « le pen »
+    // à « le\u00A0pen » et la disqualifiait comme absente du texte.
+    const candidate = makeCandidate({
+      firstName: "Marine",
+      lastName: "Le Pen",
+      fullName: "Marine Le Pen",
+      normalizedLastName: "le pen",
+    });
+    const result = signal.evaluate(
+      makeInput("Marine Le\u00A0Pen\u00A0: 6 questions sur un pourvoi en cassation."),
+      candidate,
+      context
+    );
+    expect(result.disqualified).toBeUndefined();
+    expect(result.logLikelihoodRatio).toBe(NAME_FULL_EXACT_LLR);
+  });
+
   it("disqualifies when the surname is too short", () => {
     const candidate = makeCandidate({
       lastName: "Do",

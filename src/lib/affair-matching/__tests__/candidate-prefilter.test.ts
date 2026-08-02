@@ -83,6 +83,17 @@ describe("CandidatePrefilter", () => {
     expect(result.map((p) => p.id)).toContain("lepen");
   });
 
+  it("atteint un patronyme malgré le possessif anglais", () => {
+    // Le corpus contient de la couverture anglophone de la politique française :
+    // « Marine Le Pen's appeal » produisait la clé « le pen's ».
+    const pool = [politician("Le Pen", "lepen")];
+    const prefilter = new CandidatePrefilter(pool);
+    const result = prefilter.filter(
+      "A ruling in Marine Le Pen's appeal could settle the question."
+    );
+    expect(result.map((p) => p.id)).toContain("lepen");
+  });
+
   it("n'invente pas de candidat quand les mots capitalisés ne forment aucun patronyme connu", () => {
     const pool = [politician("Le Pen", "lepen")];
     const prefilter = new CandidatePrefilter(pool);

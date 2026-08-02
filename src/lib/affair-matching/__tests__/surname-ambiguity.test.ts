@@ -63,8 +63,12 @@ describe("normalizeForMatching", () => {
     expect(normalizeForMatching("LE PEN")).toBe("le pen");
   });
 
-  it("conserve le trait d'union, contrairement au préfiltre", () => {
-    expect(normalizeForMatching("Dupond-Moretti")).toBe("dupond-moretti");
+  it("ramène le trait d'union à une espace, comme tout le reste du dépôt", () => {
+    // Le décalage qui a fait disparaître Nicolas Mayer-Rossignol : le préfiltre
+    // le proposait sur la clé « mayer rossignol », name-quality cherchait
+    // « mayer-rossignol » dans le texte et le disqualifiait comme absent.
+    expect(normalizeForMatching("Dupond-Moretti")).toBe("dupond moretti");
+    expect(normalizeForMatching("Mayer-Rossignol")).toBe(normalizeForMatching("Mayer Rossignol"));
   });
 });
 

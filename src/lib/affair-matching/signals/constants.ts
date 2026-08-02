@@ -96,9 +96,14 @@ export const MIN_GAP = 2.0;
 // Versioning
 // ============================================================================
 /**
- * Bumped to v2 when the ambiguity vocabulary and the compound-surname pairs
- * landed. Both change which candidates a text produces, so a v1 row and a v2 row
- * are not comparable and must not be triaged by the same rule: assisted triage
- * only touches rows scored by the current version.
+ * Bumped whenever a change alters which candidates a text produces, so rows
+ * scored under different versions are never triaged by the same rule: assisted
+ * triage only touches rows carrying the current version.
+ *
+ * v2 added the ambiguity vocabulary and the compound-surname pairs. v3 and v4
+ * unified the module on one normalizer: hyphens, then any run of whitespace,
+ * which recovers compound surnames the press spells with a hyphen or a
+ * non-breaking space while the base holds a plain one. v5 drops the English
+ * possessive, which glued itself to the surname in anglophone coverage.
  */
-export const RESOLVER_VERSION = "v2";
+export const RESOLVER_VERSION = "v5";

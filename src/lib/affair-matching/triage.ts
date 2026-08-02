@@ -148,3 +148,50 @@ export function classifyForTriage(
     reason: `les ${row.candidates.length} candidats tiennent à un patronyme ambigu`,
   };
 }
+
+/**
+ * Letters and digits only, single-spaced. Deliberately looser than the resolver's
+ * normalizer: this check exists to disagree with the pipeline, so it must not
+ * reuse the tokenizing decisions the pipeline made.
+ */
+export function looseWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+/**
+ * Names a text mentions in full that are not among its candidates.
+ *
+ * The last line of defence before closing a row, and the one that earns its
+ * keep: it reads the text against the whole name index instead of trusting the
+ * prefilter, so it catches a blind spot without having to know which one. It
+ * found « Marine Le Pen's appeal » after three separate normalizer fixes had
+ * each looked like the last.
+ *
+ * A hit does not mean the row is wrong, only that a person should look. Callers
+ * drop the row from the batch rather than failing the batch, so a false positive
+ * costs one line instead of the whole pass.
+ */
+export function unproposedNames(
+  text: string,
+  candidateIds: ReadonlySet<string>,
+  fullNameIndex: ReadonlyMap<string, readonly string[]>,
+  maxWords: number
+): string[] {
+  const words = looseWords(text);
+  const found = new Set<string>();
+  for (let n = 2; n <= maxWords; n++) {
+    for (let i = 0; i + n <= words.length; i++) {
+      for (const id of fullNameIndex.get(words.slice(i, i + n).join(" ")) ?? []) {
+        if (!candidateIds.has(id)) found.add(id);
+      }
+    }
+  }
+  return [...found];
+}

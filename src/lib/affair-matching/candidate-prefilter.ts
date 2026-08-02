@@ -1,18 +1,16 @@
 import type { AffairCandidateRecord } from "./signals/types";
+import { normalizeForMatching } from "./normalize";
+
+/** @deprecated Importer `normalizeForMatching` depuis ./normalize. Conservé pour les appelants existants. */
+export const normalizeText = normalizeForMatching;
 
 /**
- * Normalizes text by lowercasing, stripping accents, and normalizing dashes.
- * Shared with the identity resolver's `normalizeText` in `src/lib/name-matching.ts`
- * but kept local here to avoid importing server-only modules into signals.
+ * Drops an English possessive so « Marine Le Pen's appeal » still yields the key
+ * "le pen". The corpus carries English-language coverage of French politics, and
+ * the suffix rode along with the token, turning the surname into "le pen's".
  */
-export function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[-–—]/g, " ")
-    .trim();
+function stripPossessive(token: string): string {
+  return token.replace(/'s$/, "");
 }
 
 /**
@@ -32,13 +30,13 @@ export function normalizeText(text: string): string {
  */
 export function extractSurnameCandidates(text: string): string[] {
   const matches = text.match(/(?:^|\s)[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']{3,}(?=\s|$|[^\w\-'])/g) ?? [];
-  const tokens = matches.map((m) => normalizeText(m.trim()));
+  const tokens = matches.map((m) => stripPossessive(normalizeText(m.trim())));
 
   const runs = text.match(/(?:[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']*)(?:\s+[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']*)+/g) ?? [];
   for (const run of runs) {
     const words = run.split(/\s+/);
     for (let i = 0; i + 1 < words.length; i++) {
-      tokens.push(normalizeText(`${words[i]} ${words[i + 1]}`));
+      tokens.push(stripPossessive(normalizeText(`${words[i]} ${words[i + 1]}`)));
     }
   }
 

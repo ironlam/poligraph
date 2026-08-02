@@ -26,16 +26,10 @@
  * 0% for "le pen", against 71% for "cour" and 96% for "juge".
  */
 
-/**
- * Normalizes a name or token for case- and accent-insensitive comparison.
- *
- * Shared with the name-quality signal on purpose: the vocabulary is keyed by the
- * normalized surname, so the two must agree exactly or every lookup misses in
- * silence.
- */
-export function normalizeForMatching(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[‘’]/g, "'").trim();
-}
+import { normalizeForMatching } from "./normalize";
+
+/** Re-exported so callers of the vocabulary key it with the same function. */
+export { normalizeForMatching };
 
 /** Why a surname is not usable as the sole evidence of a match. */
 export type SurnameAmbiguity =

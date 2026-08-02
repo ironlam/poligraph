@@ -25,11 +25,13 @@ import { db } from "@/lib/db";
 import { loadSurnameVocabulary } from "@/lib/affair-matching/persistence";
 import {
   classifyForTriage,
+  unproposedNames,
   TRIAGE_VERSION,
   KNOWN_TRIAGE_VERSIONS,
   type TriageCandidate,
   type TriageRow,
 } from "@/lib/affair-matching/triage";
+import { looseWords } from "@/lib/affair-matching/triage";
 
 /** Postgres tolerates far more, but a bounded chunk keeps the statement readable in logs. */
 const CHUNK = 200;
@@ -59,6 +61,10 @@ interface Eligible {
   excerpt: string;
 }
 
+interface Withheld extends Eligible {
+  named: string[];
+}
+
 async function collect() {
   const vocabulary = await loadSurnameVocabulary();
 
@@ -86,7 +92,22 @@ async function collect() {
   const byId = new Map(politicians.map((p) => [p.id, p]));
   const surnameOf = (id: string) => byId.get(id)?.lastName ?? null;
 
+  // Every known politician, not just the ones this text proposed: the check has
+  // to be able to disagree with the prefilter.
+  const allNames = await db.politician.findMany({ select: { id: true, fullName: true } });
+  const nameOf = new Map(allNames.map((p) => [p.id, p.fullName]));
+  const fullNameIndex = new Map<string, string[]>();
+  for (const p of allNames) {
+    const key = looseWords(p.fullName).join(" ");
+    if (key.split(" ").length < 2) continue;
+    const list = fullNameIndex.get(key) ?? [];
+    list.push(p.id);
+    fullNameIndex.set(key, list);
+  }
+  const maxNameWords = Math.max(2, ...[...fullNameIndex.keys()].map((k) => k.split(" ").length));
+
   const eligible: Eligible[] = [];
+  const withheld: Withheld[] = [];
   const kept = new Map<string, number>();
 
   for (const r of rows) {
@@ -103,20 +124,30 @@ async function collect() {
       kept.set(verdict.reason, (kept.get(verdict.reason) ?? 0) + 1);
       continue;
     }
-    eligible.push({
+    const entry: Eligible = {
       id: r.id,
       previousJudgment: row.judgment,
       reason: verdict.reason,
       who: candidates.map((c) => byId.get(c.candidateId)?.fullName ?? "?").join(", "),
       excerpt: r.candidateText.replace(/\s+/g, " ").slice(0, 240),
-    });
+    };
+
+    const named = unproposedNames(
+      r.candidateText,
+      new Set(candidates.map((c) => c.candidateId)),
+      fullNameIndex,
+      maxNameWords
+    ).map((id) => nameOf.get(id) ?? id);
+
+    if (named.length > 0) withheld.push({ ...entry, named });
+    else eligible.push(entry);
   }
 
-  return { total: rows.length, eligible, kept };
+  return { total: rows.length, eligible, withheld, kept };
 }
 
 async function report() {
-  const { total, eligible, kept } = await collect();
+  const { total, eligible, withheld, kept } = await collect();
   const byJudgment = new Map<string, number>();
   for (const e of eligible)
     byJudgment.set(e.previousJudgment, (byJudgment.get(e.previousJudgment) ?? 0) + 1);
@@ -124,6 +155,15 @@ async function report() {
   console.log(`File non revue : ${total} décisions`);
   console.log(`Éligibles à la clôture hors périmètre : ${eligible.length}`);
   for (const [j, n] of byJudgment) console.log(`  depuis ${j} : ${n}`);
+  if (withheld.length > 0) {
+    console.log(`\nRetirées du lot : ${withheld.length} nomment un élu qui n'est pas candidat`);
+    for (const w of withheld.slice(0, 10)) {
+      console.log(`  ${w.named.join(", ")}  (candidats: ${w.who || "aucun"})`);
+      console.log(`    « ${w.excerpt.slice(0, 130)} »`);
+    }
+    if (withheld.length > 10) console.log(`  … et ${withheld.length - 10} autres`);
+  }
+
   console.log(`\nLaissées à l'humain : ${total - eligible.length}`);
   for (const [reason, n] of [...kept.entries()].sort((a, b) => b[1] - a[1]))
     console.log(`  ${String(n).padStart(5)}  ${reason}`);
