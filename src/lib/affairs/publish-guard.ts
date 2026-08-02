@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import type { Involvement } from "@/types";
+import { isHumanReview } from "@/lib/affairs/review-provenance";
 
 /**
  * Garde de publication des affaires judiciaires (RGPD article 10,
@@ -23,10 +24,21 @@ export const VERIFIED_BY_MODERATION = "Poligraph Moderation";
  */
 export const PUBLISHED_STATUS = "PUBLISHED" as const;
 
-/** reviewActions valant confirmation humaine d'un rattachement. */
+/**
+ * reviewActions valant confirmation d'un rattachement.
+ *
+ * L'action dit ce qui a été décidé, pas qui l'a décidé : c'est `reviewedBy`, lu par
+ * `review-provenance`, qui distingue l'humain de l'assistance.
+ */
 const CONFIRMING_REVIEW_ACTIONS = ["CONFIRMED", "REASSIGNED", "CREATED_POLITICIAN"] as const;
 
 export type PublishBlockReason =
+  | {
+      /** Confirmé, mais par une passe assistée : demande une confirmation humaine. */
+      code: "ASSISTED_MATCHING_DECISION";
+      message: string;
+      decisionIds: string[];
+    }
   | { code: "NO_SOURCE"; message: string }
   | { code: "MISSING_INVOLVEMENT_NOTE"; message: string }
   | {
@@ -92,9 +104,17 @@ type GuardClient = {
  * 1. Au moins une Source.
  * 2. Aucune décision de matching automatique (SAME ou UNDECIDED) non validée
  *    par un humain. Une décision est validée si et seulement si :
- *    reviewedAt non null, reviewedBy non null, reviewAction confirmant
- *    (CONFIRMED, REASSIGNED, CREATED_POLITICIAN) et chosenPoliticianId égal
- *    au politicien de l'affaire.
+ *    reviewedAt non null, reviewAction confirmant (CONFIRMED, REASSIGNED,
+ *    CREATED_POLITICIAN), chosenPoliticianId égal au politicien de l'affaire,
+ *    ET `reviewedBy` désignant un humain au sens de `review-provenance`.
+ *
+ *    Cette dernière condition est le correctif du décalage entre ce que la
+ *    garde annonçait et ce qu'elle vérifiait : `reviewedBy non null` acceptait
+ *    `auto-triage`, donc une confirmation machine publiait sous un message
+ *    promettant un humain. Une décision confirmée par assistance ne bloque plus
+ *    pour la même raison qu'une décision jamais regardée : elle sort en
+ *    ASSISTED_MATCHING_DECISION, qui dit au modérateur qu'il lui reste à
+ *    trancher, pas à tout reprendre.
  *
  * Les décisions sont cherchées par deux chemins : lien direct `affairId`,
  * et fallback sur les décisions orphelines (affairId null) partageant le
@@ -165,22 +185,37 @@ export async function checkPublishable(
     },
   });
 
-  const blocking = decisions.filter(
-    (d) =>
-      !(
-        d.reviewedAt !== null &&
-        d.reviewedBy !== null &&
-        d.reviewAction !== null &&
-        (CONFIRMING_REVIEW_ACTIONS as readonly string[]).includes(d.reviewAction) &&
-        d.chosenPoliticianId === affair.politicianId
-      )
-  );
+  // Confirmée pour ce politicien, quelle que soit la main qui l'a fait.
+  //
+  // `reviewedBy` reste exigé ici : une ligne horodatée sans réviseur est un
+  // enregistrement incomplet, pas une revue assistée, et la ranger dans « assisté »
+  // laisserait croire que quelqu'un ou quelque chose a tranché.
+  const confirmed = (d: (typeof decisions)[number]) =>
+    d.reviewedAt !== null &&
+    d.reviewedBy !== null &&
+    d.reviewAction !== null &&
+    (CONFIRMING_REVIEW_ACTIONS as readonly string[]).includes(d.reviewAction) &&
+    d.chosenPoliticianId === affair.politicianId;
 
-  if (blocking.length > 0) {
+  const unreviewed = decisions.filter((d) => !confirmed(d));
+  const assisted = decisions.filter((d) => confirmed(d) && !isHumanReview(d.reviewedBy));
+
+  if (unreviewed.length > 0) {
     reasons.push({
       code: "UNREVIEWED_MATCHING_DECISION",
-      message: `${blocking.length} décision(s) de rattachement automatique non validée(s) par un humain`,
-      decisionIds: blocking.map((d) => d.id),
+      message: `${unreviewed.length} rattachement(s) automatique(s) jamais validé(s)`,
+      decisionIds: unreviewed.map((d) => d.id),
+    });
+  }
+
+  // Séparé volontairement : « personne n'a regardé » et « la machine a dit oui »
+  // n'appellent pas le même geste, et les confondre sous un seul message a laissé
+  // trois affaires se publier sur une confirmation automatique.
+  if (assisted.length > 0) {
+    reasons.push({
+      code: "ASSISTED_MATCHING_DECISION",
+      message: `${assisted.length} rattachement(s) confirmé(s) par l'assistance automatique, à valider par un humain`,
+      decisionIds: assisted.map((d) => d.id),
     });
   }
 

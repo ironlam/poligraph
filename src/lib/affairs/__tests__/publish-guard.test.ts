@@ -207,3 +207,83 @@ describe("assertPublishable — écriture atomique", () => {
     expect(vi.mocked(db.$transaction)).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * La garde annonçait « non validée(s) par un humain » et testait `reviewedBy !== null`.
+ * `auto-triage` la franchissait donc : trois affaires publiées reposent sur un
+ * rattachement que seule la machine a confirmé (Estrosi, Massondo, Pedehontaa, mesuré le
+ * 2026-08-02, 60 confirmations automatiques au registre).
+ *
+ * L'assistance reste légitime, et c'est même 69 % des revues de ce registre. Ce qui ne
+ * l'était pas, c'est qu'une garde promette une chose et en vérifie une autre.
+ */
+describe("checkPublishable — humain contre assistance", () => {
+  beforeEach(() => {
+    tx.affair.findUnique.mockResolvedValue(AFFAIR);
+  });
+
+  it("une confirmation par assistance ne publie pas", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, reviewedBy: "auto-triage" },
+    ]);
+
+    const reasons = await checkPublishable("aff_1");
+
+    expect(reasons.map((r) => r.code)).toContain("ASSISTED_MATCHING_DECISION");
+  });
+
+  // Deux situations distinctes pour le modérateur : « personne n'a regardé » demande un
+  // examen, « la machine a dit oui » demande un arbitrage. Les confondre sous un seul
+  // message est ce qui a rendu le blocage illisible.
+  it("distingue jamais validé de validé par assistance", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, id: "dec_auto", reviewedBy: "auto-triage" },
+      { ...VALID_DECISION, id: "dec_rien", reviewedAt: null, reviewedBy: null },
+    ]);
+
+    const reasons = await checkPublishable("aff_1");
+    const assisted = reasons.find((r) => r.code === "ASSISTED_MATCHING_DECISION");
+    const never = reasons.find((r) => r.code === "UNREVIEWED_MATCHING_DECISION");
+
+    expect(assisted).toBeDefined();
+    expect(never).toBeDefined();
+    expect(assisted!.code === "ASSISTED_MATCHING_DECISION" && assisted!.decisionIds).toEqual([
+      "dec_auto",
+    ]);
+    expect(never!.code === "UNREVIEWED_MATCHING_DECISION" && never!.decisionIds).toEqual([
+      "dec_rien",
+    ]);
+  });
+
+  it("une confirmation humaine publie", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([VALID_DECISION]);
+
+    const reasons = await checkPublishable("aff_1");
+
+    expect(reasons.map((r) => r.code)).not.toContain("ASSISTED_MATCHING_DECISION");
+    expect(reasons.map((r) => r.code)).not.toContain("UNREVIEWED_MATCHING_DECISION");
+  });
+
+  // Le sens de la liste est délibéré : un réviseur automatique ajouté demain est assisté
+  // par défaut, sans qu'on ait à y penser. L'inverse le laisserait publier tout seul.
+  it("un réviseur inconnu est traité comme assisté, pas comme humain", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, reviewedBy: "auto-triage-v3" },
+    ]);
+
+    const reasons = await checkPublishable("aff_1");
+
+    expect(reasons.map((r) => r.code)).toContain("ASSISTED_MATCHING_DECISION");
+  });
+
+  it("le message ne promet plus l'humain là où il ne l'exige pas", async () => {
+    tx.affairPoliticianDecision.findMany.mockResolvedValue([
+      { ...VALID_DECISION, reviewedBy: "auto-triage" },
+    ]);
+
+    const [reason] = await checkPublishable("aff_1");
+
+    expect(reason!.message).toMatch(/assistance automatique/);
+    expect(reason!.message).toMatch(/à valider par un humain/);
+  });
+});
