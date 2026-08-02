@@ -739,3 +739,55 @@ describe("mergeAffairs — transfert des liaisons de décision (#536)", () => {
     expect(order).toEqual(["transfer", "delete"]);
   });
 });
+
+describe("mergeAffairs — snapshot de l'affaire absorbée (#534)", () => {
+  it("écrit la description de l'absorbée dans l'audit, champ par champ", async () => {
+    // Le critère porteur : la fusion supprime la ligne, et jusqu'ici sa description
+    // disparaissait avec elle. Les fusions se décidaient donc sur la richesse de la
+    // ligne plutôt que sur le bon survivant.
+    stub(
+      affair(),
+      affair({
+        id: "remove",
+        title: "Plainte classée sans suite",
+        slug: "plainte-classee",
+        publicId: "AF-000002",
+        description: "Le parquet a classé la plainte sans suite.",
+        category: "PRISE_ILLEGALE_INTERETS",
+        status: "CLASSEMENT_SANS_SUITE",
+        court: "Parquet de Paris",
+      })
+    );
+
+    await mergeAffairs("keep", "remove");
+
+    const changes = tx.auditLog.create.mock.calls[0]?.[0].data.changes as Record<string, unknown>;
+    const snapshot = changes.absorbedAffairSnapshot as Record<string, unknown>;
+    expect(snapshot).toBeDefined();
+    expect(snapshot.description).toBe("Le parquet a classé la plainte sans suite.");
+    expect(snapshot.status).toBe("CLASSEMENT_SANS_SUITE");
+    expect(snapshot.category).toBe("PRISE_ILLEGALE_INTERETS");
+    expect(snapshot.court).toBe("Parquet de Paris");
+    expect(snapshot.publicId).toBe("AF-000002");
+    expect(snapshot.version).toBe(1);
+  });
+
+  it("annule la suppression quand l'écriture de l'audit échoue", async () => {
+    // Même transaction : un audit perdu laisserait une fiche supprimée sans trace
+    // de ce qu'elle disait. L'erreur doit remonter pour que le rollback ait lieu.
+    stub(affair(), affair({ id: "remove", slug: "absorbee", publicId: "AF-000002" }));
+    tx.auditLog.create.mockRejectedValueOnce(new Error("audit indisponible"));
+
+    await expect(mergeAffairs("keep", "remove")).rejects.toThrow("audit indisponible");
+  });
+
+  it("lit l'absorbée avant de la supprimer", async () => {
+    // L'ordre compte : lue après le delete, la ligne n'existe plus.
+    stub(affair(), affair({ id: "remove", slug: "absorbee", publicId: "AF-000002" }));
+    await mergeAffairs("keep", "remove");
+
+    const readOrder = tx.affair.findUnique.mock.invocationCallOrder[0] ?? Infinity;
+    const deleteOrder = tx.affair.delete.mock.invocationCallOrder[0] ?? -Infinity;
+    expect(readOrder).toBeLessThan(deleteOrder);
+  });
+});

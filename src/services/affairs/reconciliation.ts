@@ -15,6 +15,7 @@ import {
   type PublicationStatus,
   type SourceType,
 } from "@/generated/prisma";
+import { absorbedAffairSelect, buildAbsorbedSnapshot } from "./absorbed-snapshot";
 import {
   findMatchingAffairs,
   pairingRestsOnWildcard,
@@ -500,16 +501,11 @@ export async function mergeAffairsInTransaction(
   options: MergeAffairsOptions = {}
 ): Promise<MergeAffairsResult> {
   {
+    // The snapshot fields ride along: they have to be read before the row is
+    // deleted, and a second query would open a window where they could change.
     const affairSelect = {
-      id: true,
-      title: true,
-      slug: true,
-      publicId: true,
-      oldSlugs: true,
+      ...absorbedAffairSelect,
       politicianId: true,
-      publicationStatus: true,
-      court: true,
-      caseNumber: true,
     } as const;
 
     const [keep, remove] = await Promise.all([
@@ -738,6 +734,9 @@ export async function mergeAffairsInTransaction(
         changes: {
           mergedFrom: removeId,
           mergedFromTitle: remove.title,
+          // Written in the same transaction as the delete: if this insert fails,
+          // the merge rolls back and the absorbed row is still there (#534).
+          absorbedAffairSnapshot: buildAbsorbedSnapshot(remove),
           sourcesMoved,
           sourcesEnriched,
           eventsMoved,
