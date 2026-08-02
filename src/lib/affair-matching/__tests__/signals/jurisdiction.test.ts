@@ -11,9 +11,13 @@ import type {
   AffairSignalContext,
 } from "../../signals/types";
 import { SourceType } from "@/generated/prisma";
+import { EMPTY_SURNAME_VOCABULARY } from "../../surname-ambiguity";
 
 const signal = new JurisdictionSignal();
-const context: AffairSignalContext = { resolverVersion: "v1" };
+const context: AffairSignalContext = {
+  resolverVersion: "v1",
+  vocabulary: EMPTY_SURNAME_VOCABULARY,
+};
 
 function candidate(
   departments: string[],

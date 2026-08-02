@@ -29,7 +29,8 @@ import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
 import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
-import { loadCandidatePool } from "@/lib/affair-matching/persistence";
+import { loadCandidatePool, loadSurnameVocabulary } from "@/lib/affair-matching/persistence";
+import type { SurnameVocabulary } from "@/lib/affair-matching/surname-ambiguity";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
 import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
@@ -303,9 +304,18 @@ export async function discoverAffairs(options?: {
   if (!wikidataOnly) {
     // Load the candidate pool once for the entire Wikipedia pass.
     // Building a Map avoids repeated array scans during per-politician lookups.
-    const candidatePool = await loadCandidatePool();
+    const [candidatePool, vocabulary] = await Promise.all([
+      loadCandidatePool(),
+      loadSurnameVocabulary(),
+    ]);
     const poolById = new Map<string, AffairCandidateRecord>(candidatePool.map((c) => [c.id, c]));
-    phase2Affairs = await runPhase2Wikipedia(politicians, phase1Affairs, stats, poolById);
+    phase2Affairs = await runPhase2Wikipedia(
+      politicians,
+      phase1Affairs,
+      stats,
+      poolById,
+      vocabulary
+    );
   }
 
   // Phase 3: Reconciliation
@@ -442,7 +452,8 @@ async function runPhase2Wikipedia(
   }>,
   phase1Affairs: DiscoveredAffair[],
   stats: DiscoverAffairsResult,
-  poolById: Map<string, AffairCandidateRecord>
+  poolById: Map<string, AffairCandidateRecord>,
+  vocabulary: SurnameVocabulary
 ): Promise<DiscoveredAffair[]> {
   const discovered: DiscoveredAffair[] = [];
   const phase1Keys = new Set(phase1Affairs.map((a) => `${a.politicianId}:${a.category}`));
@@ -496,7 +507,8 @@ async function runPhase2Wikipedia(
                 factsDate: extracted.factsDate ? new Date(extracted.factsDate) : null,
               },
             },
-            [candidate]
+            [candidate],
+            vocabulary
           );
 
           if (sanityCheck.judgment !== "SAME") {

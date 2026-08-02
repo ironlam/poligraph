@@ -4,7 +4,14 @@ import type {
   AffairScoringInput,
   AffairSignalContext,
 } from "./signals/types";
-import { computeTextHash, loadCandidatePool, loadBlocklist, persistDecision } from "./persistence";
+import {
+  computeTextHash,
+  loadCandidatePool,
+  loadBlocklist,
+  loadSurnameVocabulary,
+  persistDecision,
+} from "./persistence";
+import type { SurnameVocabulary } from "./surname-ambiguity";
 import { CandidatePrefilter } from "./candidate-prefilter";
 import { RESOLVER_VERSION } from "./signals/constants";
 import { ExternalIdSignal } from "./signals/external-id";
@@ -39,9 +46,10 @@ const combiner = new AffairCombiner();
  */
 export function scoreAffairAgainstCandidates(
   input: AffairScoringInput,
-  candidates: AffairCandidateRecord[]
+  candidates: AffairCandidateRecord[],
+  vocabulary: SurnameVocabulary
 ): CombinerDecision {
-  const context: AffairSignalContext = { resolverVersion: RESOLVER_VERSION };
+  const context: AffairSignalContext = { resolverVersion: RESOLVER_VERSION, vocabulary };
 
   const candidateSignals = candidates.map((candidate) => ({
     candidateId: candidate.id,
@@ -69,7 +77,7 @@ export async function resolveAffairPolitician(input: AffairScoringInput): Promis
     throw new Error("Affair text exceeds 100KB limit");
   }
 
-  const pool = await loadCandidatePool();
+  const [pool, vocabulary] = await Promise.all([loadCandidatePool(), loadSurnameVocabulary()]);
   const prefilter = new CandidatePrefilter(pool);
   const prefiltered = prefilter.filter(input.text);
 
@@ -77,7 +85,7 @@ export async function resolveAffairPolitician(input: AffairScoringInput): Promis
   const blocklist = await loadBlocklist(textHash);
   const candidates = prefiltered.filter((p) => !blocklist.has(p.id));
 
-  const decision = scoreAffairAgainstCandidates(input, candidates);
+  const decision = scoreAffairAgainstCandidates(input, candidates, vocabulary);
 
   const { decisionId } = await persistDecision({
     text: input.text,

@@ -5,6 +5,8 @@ import {
   NAME_LEGAL_TITLE_SURNAME_LLR,
   NAME_SURNAME_PROXIMITY_LLR,
   NAME_SURNAME_ONLY_LLR,
+  NAME_SURNAME_AMBIGUOUS_LLR,
+  ROLE_LOCATION_MATCH_LLR,
 } from "../../signals/constants";
 import type {
   AffairScoringInput,
@@ -12,9 +14,13 @@ import type {
   AffairSignalContext,
 } from "../../signals/types";
 import { SourceType } from "@/generated/prisma";
+import { EMPTY_SURNAME_VOCABULARY, type SurnameAmbiguity } from "../../surname-ambiguity";
 
 const signal = new NameQualitySignal();
-const context: AffairSignalContext = { resolverVersion: "v1" };
+const context: AffairSignalContext = {
+  resolverVersion: "v1",
+  vocabulary: EMPTY_SURNAME_VOCABULARY,
+};
 
 function makeCandidate(overrides: Partial<AffairCandidateRecord> = {}): AffairCandidateRecord {
   return {
@@ -109,5 +115,102 @@ describe("NameQualitySignal", () => {
     });
     const result = signal.evaluate(makeInput("Le sujet Jean Do est évoqué."), candidate, context);
     expect(result.disqualified).toBeDefined();
+  });
+});
+
+describe("NameQualitySignal — patronyme ambigu", () => {
+  /** Stub rather than a built vocabulary: this suite tests the signal, not the rules. */
+  const ambiguous = (kinds: Record<string, SurnameAmbiguity["kind"]>): AffairSignalContext => ({
+    resolverVersion: "v1",
+    vocabulary: {
+      lookup: (s) => (kinds[s] ? { kind: kinds[s]!, detail: "raison mesurée" } : null),
+    },
+  });
+
+  it("pénalise un appariement sur patronyme seul quand le token est ambigu", () => {
+    const candidate = makeCandidate({
+      firstName: "Sophie",
+      lastName: "Mariné",
+      fullName: "Sophie Mariné",
+      normalizedLastName: "marine",
+    });
+    const result = signal.evaluate(
+      makeInput("Marine Le Pen a été condamnée par le tribunal."),
+      candidate,
+      ambiguous({ marine: "GIVEN_NAME" })
+    );
+    expect(result.logLikelihoodRatio).toBe(NAME_SURNAME_AMBIGUOUS_LLR);
+    expect(result.logLikelihoodRatio).toBeLessThan(0);
+    expect(result.evidence).toMatchObject({
+      matchType: "SURNAME_ONLY_AMBIGUOUS",
+      ambiguity: "GIVEN_NAME",
+    });
+  });
+
+  it("porte la raison dans l'explication, pour que la revue puisse la lire", () => {
+    const candidate = makeCandidate({
+      lastName: "Justice",
+      fullName: "Paul Justice",
+      normalizedLastName: "justice",
+    });
+    const result = signal.evaluate(
+      makeInput("Le Palais de Justice a été évacué."),
+      candidate,
+      ambiguous({ justice: "COMMON_WORD" })
+    );
+    expect(result.explanation).toContain("raison mesurée");
+  });
+
+  it("n'applique jamais la pénalité quand le nom complet est présent", () => {
+    // La garde centrale : au-dessus du palier « patronyme seul », le prénom ou un
+    // titre a déjà établi qu'il s'agit d'un nom et non d'un mot de la phrase.
+    const candidate = makeCandidate({
+      firstName: "Jean",
+      lastName: "Paris",
+      fullName: "Jean Paris",
+      normalizedLastName: "paris",
+    });
+    const result = signal.evaluate(
+      makeInput("Jean Paris, adjoint au maire, a été mis en examen."),
+      candidate,
+      ambiguous({ paris: "MAJOR_COMMUNE" })
+    );
+    expect(result.logLikelihoodRatio).toBe(NAME_FULL_EXACT_LLR);
+  });
+
+  it("n'applique pas la pénalité sur un appariement par titre de civilité", () => {
+    const candidate = makeCandidate({
+      firstName: "Luc",
+      lastName: "Paris",
+      fullName: "Luc Paris",
+      normalizedLastName: "paris",
+    });
+    const result = signal.evaluate(
+      makeInput("M. Paris a été entendu par les enquêteurs."),
+      candidate,
+      ambiguous({ paris: "MAJOR_COMMUNE" })
+    );
+    expect(result.logLikelihoodRatio).toBe(NAME_LEGAL_TITLE_SURNAME_LLR);
+  });
+
+  it("laisse le patronyme seul non ambigu à sa valeur habituelle", () => {
+    const candidate = makeCandidate({
+      firstName: "Jean-Luc",
+      lastName: "Mélenchon",
+      fullName: "Jean-Luc Mélenchon",
+      normalizedLastName: "melenchon",
+    });
+    const result = signal.evaluate(
+      makeInput("Mélenchon est visé par une plainte."),
+      candidate,
+      ambiguous({ paris: "MAJOR_COMMUNE" })
+    );
+    expect(result.logLikelihoodRatio).toBe(NAME_SURNAME_ONLY_LLR);
+  });
+
+  it("reste rattrapable par la preuve : la pénalité ne dépasse pas un signal corroborant", () => {
+    // Un candidat vraiment lié à l'affaire par son rôle doit encore pouvoir
+    // franchir FLOOR_SCORE. C'est ce qui distingue la pénalité d'une disqualification.
+    expect(NAME_SURNAME_AMBIGUOUS_LLR + ROLE_LOCATION_MATCH_LLR).toBeGreaterThan(0);
   });
 });

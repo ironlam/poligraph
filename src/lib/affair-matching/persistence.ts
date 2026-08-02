@@ -5,6 +5,7 @@ import type { AffairCandidateRecord, AffairScoringInput } from "./signals/types"
 import type { CombinerDecision } from "./combiner";
 import { RESOLVER_VERSION } from "./signals/constants";
 import { normalizeText } from "./candidate-prefilter";
+import { buildSurnameVocabulary, type SurnameVocabulary } from "./surname-ambiguity";
 
 /** SHA256 hex digest of a text input, used as the idempotency key. */
 export function computeTextHash(text: string): string {
@@ -112,6 +113,40 @@ export async function loadCandidatePool(): Promise<AffairCandidateRecord[]> {
       parties,
       externalIds,
     };
+  });
+}
+
+/**
+ * How many past decisions feed the casing statistic. The corpus only has to be
+ * large enough for the lowercase rate to be stable; the separation it measures
+ * is wide (2% for "paris" against 76% for "justice"), so a few thousand texts
+ * settle it. Bounded because this loads text into memory on a serverless
+ * function, and ordered by recency so the vocabulary tracks current coverage.
+ */
+const VOCABULARY_CORPUS_SIZE = 3_000;
+
+/**
+ * Loads the surname ambiguity vocabulary. Same contract as loadCandidatePool:
+ * called once per batch, result passed down to every scoring call.
+ *
+ * Three queries, none of them per-candidate. The corpus one is the only heavy
+ * read, and it is why batch callers must hoist this out of their loop.
+ */
+export async function loadSurnameVocabulary(): Promise<SurnameVocabulary> {
+  const [communes, politicianNames, decisions] = await Promise.all([
+    db.commune.findMany({ select: { name: true, population: true } }),
+    db.politician.findMany({ select: { firstName: true, lastName: true } }),
+    db.affairPoliticianDecision.findMany({
+      select: { candidateText: true },
+      orderBy: { createdAt: "desc" },
+      take: VOCABULARY_CORPUS_SIZE,
+    }),
+  ]);
+
+  return buildSurnameVocabulary({
+    communes,
+    politicianNames,
+    corpus: decisions.map((d) => d.candidateText),
   });
 }
 

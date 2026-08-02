@@ -1,4 +1,5 @@
 import type { SourceType } from "@/generated/prisma";
+import type { SurnameVocabulary } from "../surname-ambiguity";
 
 /**
  * Importance tier of a signal in the resolver pipeline.
@@ -83,6 +84,13 @@ export interface AffairCandidateRecord {
  */
 export interface AffairSignalContext {
   resolverVersion: string;
+  /**
+   * Surname ambiguity lookup, loaded once per batch alongside the candidate
+   * pool. Required rather than optional so the compiler names every call site
+   * that would otherwise score without it and lose the fix in silence; pass
+   * EMPTY_SURNAME_VOCABULARY where the corpus is genuinely unavailable.
+   */
+  vocabulary: SurnameVocabulary;
 }
 
 /**

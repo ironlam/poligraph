@@ -16,7 +16,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/lib/db";
 import { scoreAffairAgainstCandidates } from "@/lib/affair-matching";
-import { loadCandidatePool } from "@/lib/affair-matching/persistence";
+import { loadCandidatePool, loadSurnameVocabulary } from "@/lib/affair-matching/persistence";
 import { CandidatePrefilter } from "@/lib/affair-matching/candidate-prefilter";
 import { SourceType } from "@/generated/prisma";
 
@@ -53,6 +53,7 @@ async function main() {
 
   console.log("[retrofit] Loading politician pool...");
   const pool = await loadCandidatePool();
+  const vocabulary = await loadSurnameVocabulary();
   const poolById = new Map(pool.map((p) => [p.id, p]));
   console.log(`[retrofit] Loaded ${pool.length} politicians`);
 
@@ -125,7 +126,8 @@ async function main() {
             sourceRef: `retrofit:${affair.id}`,
           },
         },
-        prefiltered
+        prefiltered,
+        vocabulary
       );
 
       const top = decision.topCandidates[0];

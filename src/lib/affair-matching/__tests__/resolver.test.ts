@@ -14,6 +14,7 @@ vi.mock("@/lib/db", () => ({
 import { scoreAffairAgainstCandidates } from "../resolver";
 import type { AffairCandidateRecord, AffairScoringInput } from "../signals/types";
 import { SourceType } from "@/generated/prisma";
+import { EMPTY_SURNAME_VOCABULARY } from "../surname-ambiguity";
 
 function politician(overrides: Partial<AffairCandidateRecord>): AffairCandidateRecord {
   return {
@@ -63,7 +64,7 @@ describe("scoreAffairAgainstCandidates", () => {
       }),
     ];
 
-    const decision = scoreAffairAgainstCandidates(input, candidates);
+    const decision = scoreAffairAgainstCandidates(input, candidates, EMPTY_SURNAME_VOCABULARY);
     expect(decision.judgment).toBe("SAME");
     expect(decision.topCandidateId).toBe("winner");
   });
@@ -78,7 +79,7 @@ describe("scoreAffairAgainstCandidates", () => {
       politician({ id: "pol1", lastName: "Mendez", normalizedLastName: "mendez" }),
     ];
 
-    const decision = scoreAffairAgainstCandidates(input, candidates);
+    const decision = scoreAffairAgainstCandidates(input, candidates, EMPTY_SURNAME_VOCABULARY);
     expect(decision.judgment).toBe("NO_MATCH");
   });
 
@@ -100,7 +101,7 @@ describe("scoreAffairAgainstCandidates", () => {
       politician({ id: "pol2", mandates: [lyonMayor] }),
     ];
 
-    const decision = scoreAffairAgainstCandidates(input, candidates);
+    const decision = scoreAffairAgainstCandidates(input, candidates, EMPTY_SURNAME_VOCABULARY);
     expect(decision.judgment).toBe("UNDECIDED");
   });
 
@@ -117,7 +118,7 @@ describe("scoreAffairAgainstCandidates", () => {
       politician({ id: "pol2" }),
     ];
 
-    const decision = scoreAffairAgainstCandidates(input, candidates);
+    const decision = scoreAffairAgainstCandidates(input, candidates, EMPTY_SURNAME_VOCABULARY);
     expect(decision.judgment).toBe("NO_MATCH");
   });
 });

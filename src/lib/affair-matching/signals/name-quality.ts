@@ -11,22 +11,11 @@ import {
   NAME_LEGAL_TITLE_SURNAME_LLR,
   NAME_SURNAME_PROXIMITY_LLR,
   NAME_SURNAME_ONLY_LLR,
+  NAME_SURNAME_AMBIGUOUS_LLR,
   MIN_SURNAME_LENGTH,
   FIRST_NAME_PROXIMITY_CHARS,
 } from "./constants";
-
-/**
- * Normalizes text for case- and accent-insensitive matching.
- * Keeps word characters, spaces, hyphens, and apostrophes.
- */
-function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[\u2018\u2019]/g, "'")
-    .trim();
-}
+import { normalizeForMatching as normalize } from "../surname-ambiguity";
 
 /**
  * Legal titles that indicate the following word is a surname in French
@@ -59,7 +48,7 @@ export class NameQualitySignal implements AffairSignalEvaluator {
   evaluate(
     input: AffairScoringInput,
     candidate: AffairCandidateRecord,
-    _context: AffairSignalContext
+    context: AffairSignalContext
   ): AffairSignalResult {
     if (candidate.lastName.length < MIN_SURNAME_LENGTH) {
       return {
@@ -125,7 +114,20 @@ export class NameQualitySignal implements AffairSignalEvaluator {
       }
     }
 
-    // 4. Surname only. Weakest positive, vulnerable to common-word false positives.
+    // 4. Surname only, the weakest positive. This is where common-word false
+    //    positives live, so it is the only tier the ambiguity vocabulary judges:
+    //    above it the first name or a legal title has already been seen, which
+    //    settles that the token is a name and not a word of the sentence.
+    const ambiguity = context.vocabulary.lookup(normalizedLast);
+    if (ambiguity) {
+      return {
+        signalId: this.id,
+        logLikelihoodRatio: NAME_SURNAME_AMBIGUOUS_LLR,
+        explanation: `Surname only "${candidate.lastName}", ambiguous token (${ambiguity.detail})`,
+        evidence: { matchType: "SURNAME_ONLY_AMBIGUOUS", ambiguity: ambiguity.kind },
+      };
+    }
+
     return {
       signalId: this.id,
       logLikelihoodRatio: NAME_SURNAME_ONLY_LLR,

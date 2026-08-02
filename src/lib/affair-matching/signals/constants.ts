@@ -20,6 +20,19 @@ export const NAME_LEGAL_TITLE_SURNAME_LLR = 3.6;
 export const NAME_SURNAME_PROXIMITY_LLR = 2.6;
 export const NAME_SURNAME_ONLY_LLR = 0.7;
 
+/**
+ * Surname-only match where the surname is also an ordinary word of the text:
+ * a major city, a common given name, or a word that lives in lowercase.
+ *
+ * Negative rather than disqualifying, for two reasons. A disqualified candidate
+ * is filtered out of the ranking, so its reason never reaches the persisted row
+ * and the moderator cannot tell an artefact from a genuine unknown. And a
+ * penalty stays revocable by evidence: a candidate really tied to the affair by
+ * role-context (+4.0) or jurisdiction (+3.0) still clears FLOOR_SCORE, which is
+ * the right outcome for someone whose surname happens to be Pierre or Marie.
+ */
+export const NAME_SURNAME_AMBIGUOUS_LLR = -2.0;
+
 /** Minimum surname length for non-disqualifying match. */
 export const MIN_SURNAME_LENGTH = 3;
 
