@@ -9,8 +9,10 @@ import {
   AFFAIR_STATUS_LABELS,
   AFFAIR_STATUS_COLORS,
   AFFAIR_CATEGORY_LABELS,
-  AFFAIR_STATUS_NEEDS_PRESUMPTION,
+  INVOLVEMENT_LABELS,
+  INVOLVEMENT_COLORS,
 } from "@/config/labels";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { formatDate } from "@/lib/utils";
 import { AffairPublishControl } from "@/components/admin/AffairPublishControl";
 import type { BlockingDecision as BlockingDecisionPayload } from "@/lib/affairs/blocking-decisions";
@@ -163,14 +165,24 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
+            {/* La fiche admin d'abord : depuis l'admin, on veut modérer la personne,
+                pas relire sa page publique. Le lien public reste, en second. */}
             <div>
               <p className="text-sm text-muted-foreground">Politique</p>
               <Link
-                href={`/politiques/${affair.politician.slug}`}
+                href={`/admin/politiques/${affair.politician.id}`}
                 className="font-medium text-primary hover:underline"
               >
                 {affair.politician.fullName}
               </Link>
+              <a
+                href={`/politiques/${affair.politician.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                fiche publique &nearr;
+              </a>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Catégorie</p>
@@ -182,11 +194,35 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
                 {AFFAIR_STATUS_LABELS[affair.status]}
               </Badge>
             </div>
+            {/* Le champ qui dit si la personne est mise en cause ou visée par les
+                faits. Il n'était lisible qu'en ouvrant le formulaire d'édition, si
+                bien qu'une fiche « Insultes et menaces contre X » se lisait comme
+                une affaire de X. */}
+            <div>
+              <p className="text-sm text-muted-foreground">Implication</p>
+              <Badge variant="outline" className={INVOLVEMENT_COLORS[affair.involvement]}>
+                {INVOLVEMENT_LABELS[affair.involvement]}
+              </Badge>
+            </div>
             <div>
               <p className="text-sm text-muted-foreground">Slug</p>
               <p className="font-mono text-sm">{affair.slug}</p>
             </div>
           </div>
+
+          {affair.involvement !== "DIRECT" && (
+            <div className="pt-2 border-t">
+              <p className="text-sm text-muted-foreground mb-1">Rôle dans l{"'"}affaire</p>
+              {affair.involvementNote?.trim() ? (
+                <p className="whitespace-pre-wrap">{affair.involvementNote}</p>
+              ) : (
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  Aucune note d{"'"}implication. Elle est obligatoire hors « mis en cause », et son
+                  absence empêche la publication.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Références éditoriales. Les identifiants de décision (ECLI, pourvoi)
               se lisent sur les décisions rattachées, plus bas sur cette page (#545). */}
@@ -207,11 +243,10 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {AFFAIR_STATUS_NEEDS_PRESUMPTION[affair.status] && (
-            <div className="bg-amber-50 text-amber-800 p-3 rounded-md text-sm">
-              Cette affaire est en cours. La présomption d&apos;innocence s&apos;applique.
-            </div>
-          )}
+          {/* Le même encart que le public, et pour la même raison : celui d'avant
+              ne lisait que le statut, donc il annonçait « la présomption d'innocence
+              s'applique » sur la fiche d'une victime. */}
+          <AffairStatusNotice status={affair.status} involvement={affair.involvement} />
 
           <div>
             <p className="text-sm text-muted-foreground mb-1">Description</p>
