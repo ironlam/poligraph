@@ -7,8 +7,7 @@ import { HomeHero } from "@/components/home/HomeHero";
 import { KPIStrip } from "@/components/home/KPIStrip";
 import { ElectionBanner } from "@/components/home/ElectionBanner";
 import { HomeIntentGrid } from "@/components/home/HomeIntentGrid";
-import { PopularData } from "@/components/home/PopularData";
-import { ActivityFeed } from "@/components/home/ActivityFeed";
+import { WeekFeed } from "@/components/home/WeekFeed";
 import { TrustStrip } from "@/components/home/TrustStrip";
 import { SupportCampaign } from "@/components/home/SupportCampaign";
 
@@ -44,15 +43,13 @@ export default async function HomePage() {
 
       {featuredElection && <ElectionBanner election={featuredElection} daysUntil={daysUntil} />}
 
-      <KPIStrip kpis={kpis} />
-
       <HomeIntentGrid enabledFlags={enabledFlags} />
 
-      <PopularData />
+      <KPIStrip kpis={kpis} />
+
+      <WeekFeed recap={weeklyRecap} />
 
       <SupportCampaign />
-
-      <ActivityFeed recap={weeklyRecap} />
 
       <TrustStrip />
     </div>

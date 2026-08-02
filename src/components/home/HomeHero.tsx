@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Scale, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { MapPin, ArrowRight } from "lucide-react";
 import { HomeHeroSearch } from "./HomeHeroSearch";
 
 export function HomeHero() {
@@ -16,39 +15,19 @@ export function HomeHero() {
         </p>
       </div>
 
-      <div className="max-w-xl">
+      <div className="max-w-xl space-y-2">
         <HomeHeroSearch />
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button asChild size="lg" className="h-11 justify-start sm:justify-center">
-          <Link href="/statistiques">
-            <BarChart3 aria-hidden="true" />
-            Voir les statistiques
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          size="lg"
-          className="h-11 justify-start sm:justify-center"
+        <Link
+          href="/mon-depute"
+          className="group inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-primary"
         >
-          <Link href="/affaires">
-            <Scale aria-hidden="true" />
-            Explorer les affaires documentées
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          size="lg"
-          className="h-11 justify-start sm:justify-center"
-        >
-          <Link href="/mon-depute">
-            <MapPin aria-hidden="true" />
-            Trouver mon député
-          </Link>
-        </Button>
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+          Trouver mon député
+          <ArrowRight
+            className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </Link>
       </div>
     </section>
   );

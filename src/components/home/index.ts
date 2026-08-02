@@ -2,8 +2,7 @@ export { HomeHero } from "./HomeHero";
 export { KPIStrip } from "./KPIStrip";
 export { ElectionBanner } from "./ElectionBanner";
 export { HomeIntentGrid } from "./HomeIntentGrid";
-export { PopularData } from "./PopularData";
-export { ActivityFeed } from "./ActivityFeed";
+export { WeekFeed } from "./WeekFeed";
 export { TrustStrip } from "./TrustStrip";
 export { SupportCampaign } from "./SupportCampaign";
 
