@@ -69,4 +69,24 @@ describe("CandidatePrefilter", () => {
     const result = prefilter.filter("Aucun nom politique connu ici.");
     expect(result).toEqual([]);
   });
+
+  it("atteint un patronyme composé dont aucun mot ne passe le plancher de 4 caractères", () => {
+    // La régression qui a bloqué le tri assisté. « Le » fait deux caractères,
+    // « Pen » en fait trois, et la clé d'index est « le pen » : aucun token seul
+    // ne peut la produire. La condamnation la plus couverte du corpus proposait
+    // donc Benoît Mariné, sur le prénom « Marine », et jamais Marine Le Pen.
+    const pool = [politician("Le Pen", "lepen"), politician("Mariné", "marine")];
+    const prefilter = new CandidatePrefilter(pool);
+    const result = prefilter.filter(
+      "Condamnée par la cour d'appel de Paris, Marine Le Pen a annoncé se pourvoir en cassation."
+    );
+    expect(result.map((p) => p.id)).toContain("lepen");
+  });
+
+  it("n'invente pas de candidat quand les mots capitalisés ne forment aucun patronyme connu", () => {
+    const pool = [politician("Le Pen", "lepen")];
+    const prefilter = new CandidatePrefilter(pool);
+    const result = prefilter.filter("Le Tribunal Administratif a rendu sa décision.");
+    expect(result).toEqual([]);
+  });
 });

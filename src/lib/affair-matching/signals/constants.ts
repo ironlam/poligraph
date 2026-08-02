@@ -95,4 +95,10 @@ export const MIN_GAP = 2.0;
 // ============================================================================
 // Versioning
 // ============================================================================
-export const RESOLVER_VERSION = "v1";
+/**
+ * Bumped to v2 when the ambiguity vocabulary and the compound-surname pairs
+ * landed. Both change which candidates a text produces, so a v1 row and a v2 row
+ * are not comparable and must not be triaged by the same rule: assisted triage
+ * only touches rows scored by the current version.
+ */
+export const RESOLVER_VERSION = "v2";

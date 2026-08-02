@@ -15,6 +15,7 @@
     "storybook:build": "STORYBOOK_DISABLE_TELEMETRY=1 storybook build",
     "test": "vitest",
     "test:run": "vitest run",
+    "triage:matching": "tsx --env-file=.env scripts/triage-matching.ts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "test:db:477": "bash scripts/test-db-477.sh",

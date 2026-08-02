@@ -21,10 +21,28 @@ export function normalizeText(text: string): string {
  * Returns normalized tokens for use as blocking keys.
  * Note: word boundaries (\b) don't work reliably with accented characters,
  * so we use a lookahead/lookbehind approach instead.
+ *
+ * Pairs of adjacent capitalized words are emitted too, because a compound
+ * surname is indexed under its whole normalized form. Without them the four
+ * character floor made « Le Pen » unreachable: "Le" is two characters, "Pen" is
+ * three, and no single token ever spells the key "le pen". The most covered
+ * conviction of the corpus proposed Benoît Mariné, on the first name « Marine »,
+ * and never Marine Le Pen. Measured cost of the pairs: 0.2 extra candidates per
+ * text, since a pair only matches when the compound surname appears verbatim.
  */
 export function extractSurnameCandidates(text: string): string[] {
   const matches = text.match(/(?:^|\s)[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']{3,}(?=\s|$|[^\w\-'])/g) ?? [];
-  return matches.map((m) => normalizeText(m.trim()));
+  const tokens = matches.map((m) => normalizeText(m.trim()));
+
+  const runs = text.match(/(?:[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']*)(?:\s+[A-ZÀ-ÿ][a-zA-ZÀ-ÿ\-']*)+/g) ?? [];
+  for (const run of runs) {
+    const words = run.split(/\s+/);
+    for (let i = 0; i + 1 < words.length; i++) {
+      tokens.push(normalizeText(`${words[i]} ${words[i + 1]}`));
+    }
+  }
+
+  return tokens;
 }
 
 /**
