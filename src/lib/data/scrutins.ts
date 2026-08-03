@@ -1,9 +1,16 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import type { Chamber, VotingResult, ThemeCategory, ScrutinType, Prisma } from "@/generated/prisma";
-import { KEY_VOTES_HUB_WINDOW_DAYS, KEY_VOTES_GRID_COUNT } from "@/config/scrutin-importance";
+import {
+  KEY_VOTES_WINDOWS_DAYS,
+  KEY_VOTES_GRID_COUNT,
+  KEY_VOTES_POOL_SIZE,
+  KEY_VOTES_MAX_PER_DOSSIER,
+  KEY_VOTES_QUERY_LIMIT,
+} from "@/config/scrutin-importance";
 import type { PolicyForView } from "@/lib/votes/to-public-title-view";
 import { scoreExplainedVote, diversify } from "@/lib/votes/explained-scoring";
+import { selectKeyVotes } from "@/lib/votes/key-vote-selection";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -611,7 +618,33 @@ export async function getChamberAdoptionRates(): Promise<
 // Key votes (parlement-riche hub)
 // ---------------------------------------------------------------------------
 
-/** Key votes from last N days for the hub hero + grid. */
+const KEY_VOTE_SELECT = {
+  ...DAILY_SELECT,
+  dossierLegislatifId: true, // scalar FK — the per-dossier cap reads it
+  importance: { select: { score: true } },
+} satisfies Prisma.ScrutinSelect;
+
+type KeyVoteRow = Prisma.ScrutinGetPayload<{ select: typeof KEY_VOTE_SELECT }>;
+
+function toKeyVoteCandidate(s: KeyVoteRow) {
+  return {
+    id: s.id,
+    title: s.title,
+    votingDate: s.votingDate,
+    dossierLegislatifId: s.dossierLegislatifId ?? null,
+    type: s.type,
+    importanceScore: s.importance?.score ?? 0,
+    _row: s,
+  };
+}
+
+/**
+ * Key votes for the hub hero + grid, ranked by `selectKeyVotes` (importance,
+ * recency, procedural weight), capped per dossier and rotated daily. The window
+ * widens (30 / 90 / 180 days) only when the narrower one cannot fill the surface,
+ * so a parliamentary recess reaches further back instead of emptying the hub.
+ * Falls back to the best-scored scrutins when no key vote has been promoted at all.
+ */
 export async function getKeyVotes(): Promise<{
   hero: (DailyScrutin & { score: number }) | null;
   grid: Array<DailyScrutin & { score: number }>;
@@ -620,50 +653,52 @@ export async function getKeyVotes(): Promise<{
   cacheTag("votes", "votes-key");
   cacheLife("synced");
 
-  const windowStart = new Date();
-  windowStart.setDate(windowStart.getDate() - KEY_VOTES_HUB_WINDOW_DAYS);
+  const now = new Date();
+  const widestWindow = KEY_VOTES_WINDOWS_DAYS[KEY_VOTES_WINDOWS_DAYS.length - 1]!;
+  const windowStart = new Date(now);
+  windowStart.setDate(windowStart.getDate() - widestWindow);
 
-  const keyVotes = await db.scrutin.findMany({
-    where: {
-      importance: { isKeyVote: true },
-      votingDate: { gte: windowStart },
-    },
-    orderBy: [{ votingDate: "desc" }, { importance: { score: "desc" } }],
-    take: KEY_VOTES_GRID_COUNT + 1,
-    select: {
-      ...DAILY_SELECT,
-      importance: { select: { score: true } },
-    },
+  const selectOpts = {
+    now,
+    gridCount: KEY_VOTES_GRID_COUNT,
+    poolSize: KEY_VOTES_POOL_SIZE,
+    maxPerDossier: KEY_VOTES_MAX_PER_DOSSIER,
+  };
+  const toResult = (picked: { hero: KeyVoteRow | null; grid: KeyVoteRow[] }) => ({
+    hero: picked.hero ? { ...picked.hero, score: picked.hero.importance?.score ?? 0 } : null,
+    grid: picked.grid.map((s) => ({ ...s, score: s.importance?.score ?? 0 })),
+  });
+  const pick = (pool: KeyVoteRow[]) => {
+    const { hero, grid } = selectKeyVotes(pool.map(toKeyVoteCandidate), selectOpts);
+    return { hero: hero?._row ?? null, grid: grid.map((c) => c._row) };
+  };
+
+  const rows = await db.scrutin.findMany({
+    where: { importance: { isKeyVote: true }, votingDate: { gte: windowStart } },
+    orderBy: { votingDate: "desc" },
+    take: KEY_VOTES_QUERY_LIMIT,
+    select: KEY_VOTE_SELECT,
   });
 
-  if (keyVotes.length === 0) {
-    const fallback = await db.scrutin.findMany({
-      where: {
-        importance: { isNot: null },
-        votingDate: { gte: windowStart },
-      },
-      orderBy: { importance: { score: "desc" } },
-      take: KEY_VOTES_GRID_COUNT + 1,
-      select: {
-        ...DAILY_SELECT,
-        importance: { select: { score: true } },
-      },
-    });
-
-    const mapped = fallback.map((s) => ({
-      ...s,
-      score: s.importance?.score ?? 0,
-    }));
-
-    return { hero: mapped[0] ?? null, grid: mapped.slice(1) };
+  let picked: { hero: KeyVoteRow | null; grid: KeyVoteRow[] } = { hero: null, grid: [] };
+  for (const days of KEY_VOTES_WINDOWS_DAYS) {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - days);
+    picked = pick(rows.filter((r) => r.votingDate >= cutoff));
+    if (picked.grid.length >= KEY_VOTES_GRID_COUNT) return toResult(picked);
   }
+  if (picked.hero) return toResult(picked);
 
-  const mapped = keyVotes.map((s) => ({
-    ...s,
-    score: s.importance?.score ?? 0,
-  }));
+  // No key vote promoted in the widest window: show the best-scored scrutins
+  // rather than an empty hub.
+  const fallback = await db.scrutin.findMany({
+    where: { importance: { isNot: null }, votingDate: { gte: windowStart } },
+    orderBy: { importance: { score: "desc" } },
+    take: KEY_VOTES_QUERY_LIMIT,
+    select: KEY_VOTE_SELECT,
+  });
 
-  return { hero: mapped[0] ?? null, grid: mapped.slice(1) };
+  return toResult(pick(fallback));
 }
 
 // ---------------------------------------------------------------------------

@@ -191,7 +191,7 @@ export async function ParlementHub() {
 
       {/* Hero Spotlight */}
       {keyVotes.hero && (
-        <section className="mb-8" aria-label="Vote clé de la semaine">
+        <section className="mb-8" aria-label="Vote clé mis en avant">
           <HeroSpotlight
             id={keyVotes.hero.id}
             slug={keyVotes.hero.slug}
@@ -212,7 +212,7 @@ export async function ParlementHub() {
       {/* Votes clés + exploration des scrutins */}
       <section className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-1">
-          <h2 className="text-lg font-semibold">Votes clés récents</h2>
+          <h2 className="text-lg font-semibold">Votes clés</h2>
           <Link
             href={ROUTES.votes}
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium text-primary hover:bg-muted transition-colors shrink-0"
@@ -223,7 +223,8 @@ export async function ParlementHub() {
         </div>
         <p className="text-sm text-muted-foreground mb-3 max-w-3xl">
           Sélection de scrutins mis en avant pour leur portée politique, institutionnelle ou
-          citoyenne. Ce n{"'"}est ni un classement exhaustif, ni un palmarès.
+          citoyenne, renouvelée chaque jour parmi les votes les plus marquants des dernières
+          semaines. Ce n{"'"}est ni un classement exhaustif, ni un palmarès.
         </p>
         {keyVotes.grid.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
