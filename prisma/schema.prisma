@@ -2681,3 +2681,56 @@ model AffairCourtDecision {
   @@id([affairId, courtDecisionId])
   @@index([courtDecisionId])
 }
+
+// ============================================
+// SEARCH SUBSTRATE (lot 1B)
+// ============================================
+
+enum SearchEntityType {
+  MEASURE
+  QUESTION
+}
+
+enum SearchVisibility {
+  PUBLIC
+  ADMIN_ONLY
+}
+
+// Central inverted index. Deliberately agnostic of the entity it describes:
+// entityType + entityId and no foreign key, so a single write path serves the
+// measures of lot 1, the questions of lot 6 and the six existing entity families
+// that lot 9 will migrate.
+model SearchDocument {
+  id String @id @default(cuid())
+
+  entityType SearchEntityType
+  entityId   String
+
+  title String
+  body  String @db.Text
+  url   String // result destination, so a search never needs a second query
+
+  visibility SearchVisibility
+
+  // Opaque identifier, deliberately NOT a relation: Question has its own revision
+  // family and the lot 9 entities have no revision at all. Nothing guarantees this
+  // value points at an existing row, which is what `search:audit` is for.
+  sourceRevisionId String?
+
+  // Filled by SQL in upsertSearchDocument(). Prisma cannot read this type; only the
+  // GIN index uses it. Must stay nullable: a non-nullable Unsupported column makes
+  // some write operations disappear from the generated client.
+  searchVector Unsupported("tsvector")?
+
+  // Accent-folded, lowercased title + body, for the trigram fallback. An empty
+  // string means the second statement of the upsert never ran, which is detectable.
+  searchText String @default("")
+
+  indexedAt       DateTime @default(now())
+  sourceUpdatedAt DateTime // the reference revision's updatedAt at indexing time
+
+  @@unique([entityType, entityId])
+  @@index([searchVector], type: Gin)
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([visibility])
+}
