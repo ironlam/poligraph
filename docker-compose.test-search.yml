@@ -1,0 +1,26 @@
+# Disposable PostgreSQL 17 for the lot 1B search substrate tests ONLY.
+# NEVER for production or shared data. Torn down with `down -v` by scripts/test-db-search.sh.
+#
+# PostgreSQL 17 and not 16 (docker-compose.test.yml): this lot asserts how `db:push`
+# treats an Unsupported("tsvector") column and two GIN indexes. The spike measured that
+# on 17.7, production runs 17.6. Asserting it on 16 would check a third engine.
+name: poligraph-test-search
+services:
+  db-search:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: poligraph_test
+      POSTGRES_PASSWORD: poligraph_test
+      POSTGRES_DB: poligraph_test
+    ports:
+      - "55433:5432"
+    volumes:
+      - pgdata_search:/var/lib/postgresql/data
+      - ./docker/init-search.sql:/docker-entrypoint-initdb.d/init-search.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poligraph_test -d poligraph_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata_search:
