@@ -42,8 +42,13 @@ echo "[test:db:search] DATABASE_SSL=$DATABASE_SSL  DOTENV_CONFIG_PATH=$DOTENV_CO
 "${COMPOSE[@]}" up -d
 
 echo "[test:db:search] waiting for postgres..."
+# -h localhost is not cosmetic: the entrypoint starts a TEMPORARY server to run
+# /docker-entrypoint-initdb.d/*.sql, with listen_addresses='' so it only answers on
+# the Unix socket. A socket probe therefore reports "ready" against a server that is
+# about to be shut down, and the next command fails with "the database system is
+# shutting down". Probing over TCP only succeeds once the real server is listening.
 for i in $(seq 1 60); do
-  if "${COMPOSE[@]}" exec -T db-search pg_isready -U poligraph_test -d poligraph_test >/dev/null 2>&1; then
+  if "${COMPOSE[@]}" exec -T db-search pg_isready -h localhost -U poligraph_test -d poligraph_test >/dev/null 2>&1; then
     echo "[test:db:search] ready (${i}s)"; break
   fi
   [ "$i" -eq 60 ] && { echo "[test:db:search] not ready after 60s" >&2; exit 1; }

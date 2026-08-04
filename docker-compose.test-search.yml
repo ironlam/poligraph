@@ -18,7 +18,10 @@ services:
       - pgdata_search:/var/lib/postgresql/data
       - ./docker/init-search.sql:/docker-entrypoint-initdb.d/init-search.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U poligraph_test -d poligraph_test"]
+      # Over TCP (-h localhost) and not the Unix socket: the temporary server the
+      # entrypoint runs for the init scripts listens on the socket only, so a socket
+      # probe reports healthy before the real server exists.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U poligraph_test -d poligraph_test"]
       interval: 2s
       timeout: 3s
       retries: 30
