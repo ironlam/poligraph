@@ -53,3 +53,20 @@ export async function upsertSearchDocument(
       AND "entityId" = ${input.entityId}
   `;
 }
+
+/**
+ * Entity deletion path, and the only one that removes a row.
+ *
+ * A depublication is NOT a deletion: it is an upsert with ADMIN_ONLY visibility, which
+ * keeps the indexed text so bringing the entity back needs no reindex (spec 7.2).
+ *
+ * deleteMany and not delete: deleting an entity that was never indexed is an ordinary
+ * case, not an error, and delete would raise P2025.
+ */
+export async function deleteSearchDocument(
+  tx: DbTransactionClient,
+  entityType: SearchEntityType,
+  entityId: string
+): Promise<void> {
+  await tx.searchDocument.deleteMany({ where: { entityType, entityId } });
+}
