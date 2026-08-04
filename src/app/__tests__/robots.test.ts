@@ -21,7 +21,7 @@ const asArray = (v: string | string[] | undefined): string[] =>
  * Google's robots.txt path matching: a rule is a prefix match, `*` stands for any run of
  * characters, and a trailing `$` anchors the end. Implemented rather than approximated
  * with startsWith/includes, because a rule like `/parlement/votes?*theme=` must NOT match
- * `/parlement/votes/themes/sante` — the exact boundary this file is here to protect.
+ * `/parlement/votes/themes/sante`, the exact boundary this file is here to protect.
  */
 function matchesRobotsPattern(pattern: string, url: string): boolean {
   const anchored = pattern.endsWith("$");
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("robots.txt — non-production", () => {
+describe("robots.txt (non-production)", () => {
   it("blocks everything and announces no sitemap", async () => {
     const robots = await loadRobots("preview");
     const generic = groupFor(robots, "*")!;
@@ -56,7 +56,7 @@ describe("robots.txt — non-production", () => {
   });
 });
 
-describe("robots.txt — production", () => {
+describe("robots.txt (production)", () => {
   let robots: MetadataRoute.Robots;
 
   beforeEach(async () => {
@@ -100,9 +100,8 @@ describe("robots.txt — production", () => {
       expect(blocking).toEqual([]);
     });
 
-    // Search Console attributes roughly 9K of the site's ~23K clicks to these facets.
-    // They are the strongest organic surface Poligraph has: their duplicate handling is
-    // canonical-only, never a crawl block.
+    // These facets carry the largest share of the site's organic clicks, so their
+    // duplicate handling is canonical-only, never a crawl block.
     it.each(["mandat", "parti", "certainty", "view"])(
       "never blocks the /affaires/condamnations ?%s facet",
       (key) => {

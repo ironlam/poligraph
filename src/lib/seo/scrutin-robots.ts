@@ -11,13 +11,13 @@ const NOINDEX_FOLLOW = { index: false, follow: true } as const;
 export interface ScrutinIndexSignals {
   /** Sum of the three tallies. Zero means no ballot was recorded for this scrutin. */
   totalVotes: number;
-  /** `Scrutin.summary` — AI-written recap of what was at stake. */
+  /** `Scrutin.summary`: AI-written recap of what was at stake. */
   summary: string | null;
-  /** `Scrutin.citizenImpact` — what the vote changes for citizens. */
+  /** `Scrutin.citizenImpact`: what the vote changes for citizens. */
   citizenImpact: string | null;
   /** Status of the joined ScrutinPolicyTitle row, `null` when the scrutin has none. */
   policyTitleStatus: PolicyTitleStatus | null;
-  /** `ScrutinImportance.isKeyVote` — editorially promoted on the parliament hub. */
+  /** `ScrutinImportance.isKeyVote`: editorially promoted on the parliament hub. */
   isKeyVote: boolean;
 }
 
@@ -30,10 +30,10 @@ const hasText = (value: string | null): boolean => Boolean(value && value.trim()
  * Amendment scrutins are the index-bloat engine of this site: they arrive by the
  * thousand, and a bare one renders the same layout around an official title that differs
  * from its neighbour's by an amendment number and a date. Google reads them exactly that
- * way — the 2026-08-04 Coverage export puts ~1,000 of the 1,904 "duplicate without
- * user-selected canonical" URLs on /parlement/votes/[slug], despite every one of those
- * pages emitting a correct self-canonical. A canonical cannot fix near-duplicate content;
- * only withholding the page can.
+ * way: Search Console files a large share of these pages under "duplicate without
+ * user-selected canonical", despite every one of them emitting a correct self-canonical.
+ * A canonical cannot fix near-duplicate content; only withholding the page can. Volumes
+ * live in the dated note under docs/search-console/ (gitignored), never in the repo.
  *
  * So a scrutin earns indexation through one of four signals, each meaning a human or a
  * generator produced something specific about *this* vote:

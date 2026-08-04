@@ -238,16 +238,38 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
     }
   );
 
-  // The scrutin shard has no shared constant to import (the predicate is a `where`
-  // clause, not a threshold), so the guard is that each isIndexableScrutin() signal
-  // appears in the shard's filter. A sitemap that announced noindex scrutins would
-  // spend crawl budget to reach a noindex — the exact waste this shard now avoids.
+  // The scrutin shard has no shared constant to import (the predicate is a query, not a
+  // threshold), so the guard is that each isIndexableScrutin() signal appears in the
+  // shard's own filter. A sitemap that announced noindex scrutins would spend crawl
+  // budget to reach a noindex, the exact waste this shard avoids.
+  //
+  // Scoped to the query with its comments stripped, not the whole file: matching the file
+  // let a signal named in the surrounding prose keep the guard green after the predicate
+  // had dropped it. Removing the summary condition used to leave this test passing.
+  const scrutinShardQuery = (() => {
+    const start = src.indexOf("async function buildScrutinsSitemap");
+    expect(start).toBeGreaterThan(-1);
+    const end = src.indexOf("\n}", start);
+    return src
+      .slice(start, end)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*|--)/.test(line))
+      .join("\n");
+  })();
+
   it.each(["isKeyVote", "APPROVED", "summary", "citizenImpact", "votesFor"])(
     "scrutin shard filters on the %s signal",
     (signal) => {
-      expect(src).toContain(signal);
+      expect(scrutinShardQuery).toContain(signal);
     }
   );
+
+  it("keeps the SQL/JS parity that isIndexableScrutin() needs on text signals", () => {
+    // hasText() trims before testing, so a value made of whitespace must not count here
+    // either. Mirrors the btrim already used for the biography threshold above.
+    expect(scrutinShardQuery).toContain('btrim(COALESCE(s."summary"');
+    expect(scrutinShardQuery).toContain('btrim(COALESCE(s."citizenImpact"');
+  });
 });
 
 describe("doctrine — opengraph-image assets stay noindexed", () => {

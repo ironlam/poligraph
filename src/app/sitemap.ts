@@ -455,43 +455,42 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 // Sitemap 3: Top 500 indexable scrutins by recency (priority 0.4).
-// Bare amendment scrutins (no approved policy title, no summary, no citizen impact, not
+// Bare amendment scrutins (no approved policy title, no recap, no citizen impact, not
 // a key vote, or no ballot recorded) are excluded: they are noindex,follow on the page
 // itself, so announcing them here only spends crawl budget to reach a noindex. This
-// `where` mirrors isIndexableScrutin() from src/lib/seo/scrutin-robots.ts — keep both
+// query mirrors isIndexableScrutin() from src/lib/seo/scrutin-robots.ts, keep both
 // in sync (guarded by src/lib/seo/__tests__/indexation-doctrine.test.ts).
 async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[3]);
   cacheLife("synced");
 
-  const scrutins = await db.scrutin.findMany({
-    where: {
-      slug: { not: null },
-      OR: [
-        { importance: { isKeyVote: true } },
-        { policyTitle: { status: "APPROVED" } },
-        // Paired conditions, not a bare `not: null`: isIndexableScrutin() treats an
-        // empty string as no summary, and Prisma's `not` on a nullable column keeps
-        // NULL rows, so each side has to be stated.
-        { AND: [{ summary: { not: null } }, { summary: { not: "" } }] },
-        { AND: [{ citizenImpact: { not: null } }, { citizenImpact: { not: "" } }] },
-      ],
-      NOT: { votesFor: 0, votesAgainst: 0, votesAbstain: 0 },
-    },
-    select: { slug: true, updatedAt: true },
-    orderBy: { votingDate: "desc" },
-    take: 500,
-  });
+  // Raw SQL rather than findMany, for the same reason as the politician shard above:
+  // isIndexableScrutin() reads text through trim(), so only btrim() gives the SQL side
+  // the same verdict on a value made of whitespace.
+  const scrutins = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
+    SELECT s."slug", s."updatedAt"
+    FROM "Scrutin" s
+    LEFT JOIN "ScrutinPolicyTitle" pt ON pt."scrutinId" = s."id"
+    LEFT JOIN "ScrutinImportance" i ON i."scrutinId" = s."id"
+    WHERE s."slug" IS NOT NULL
+      AND (s."votesFor" + s."votesAgainst" + s."votesAbstain") > 0
+      AND (
+        COALESCE(i."isKeyVote", false)
+        OR pt."status" = 'APPROVED'
+        OR btrim(COALESCE(s."summary", ''), E' \t\n\r') <> ''
+        OR btrim(COALESCE(s."citizenImpact", ''), E' \t\n\r') <> ''
+      )
+    ORDER BY s."votingDate" DESC
+    LIMIT 500
+  `);
 
-  return scrutins
-    .filter((s) => s.slug)
-    .map((s) => ({
-      url: `${SITE_URL}/parlement/votes/${s.slug}`,
-      lastModified: s.updatedAt,
-      changeFrequency: "monthly" as const,
-      priority: 0.4,
-    }));
+  return scrutins.map((s) => ({
+    url: `${SITE_URL}/parlement/votes/${s.slug}`,
+    lastModified: s.updatedAt,
+    changeFrequency: "monthly" as const,
+    priority: 0.4,
+  }));
 }
 
 // Sitemap 4: Top 200 communes by population, restricted to those with candidacies (priority 0.6)
