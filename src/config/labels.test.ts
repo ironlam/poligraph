@@ -13,6 +13,7 @@ import {
   DOSSIER_STATUS_ICONS,
   DOSSIER_STATUS_DESCRIPTIONS,
   DOSSIER_STATUS_SITUATIONS,
+  CANDIDACY_STATUS_LABELS,
 } from "./labels";
 
 describe("AFFAIR_STATUS_LABELS", () => {
@@ -222,5 +223,30 @@ describe("DOSSIER_STATUS_LABELS", () => {
 
   it("should not conflate ADOPTE with promulgation", () => {
     expect(DOSSIER_STATUS_SITUATIONS.ADOPTE.toLowerCase()).not.toContain("promulgu");
+  });
+});
+
+describe("CANDIDACY_STATUS_LABELS", () => {
+  it("should have a label for each candidacy status", () => {
+    const statuses = ["DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"];
+
+    expect(Object.keys(CANDIDACY_STATUS_LABELS)).toHaveLength(statuses.length);
+
+    statuses.forEach((status) => {
+      expect(CANDIDACY_STATUS_LABELS).toHaveProperty(status);
+      const label = CANDIDACY_STATUS_LABELS[status as keyof typeof CANDIDACY_STATUS_LABELS];
+      expect(typeof label).toBe("string");
+      expect(label).not.toHaveLength(0);
+    });
+  });
+
+  it("should keep every status distinct so none can be read as another", () => {
+    const labels = Object.values(CANDIDACY_STATUS_LABELS);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("should not describe an unannounced candidacy as declared", () => {
+    expect(CANDIDACY_STATUS_LABELS.PRESSENTI).not.toMatch(/déclar/i);
+    expect(CANDIDACY_STATUS_LABELS.ENVISAGE).not.toMatch(/déclar/i);
   });
 });

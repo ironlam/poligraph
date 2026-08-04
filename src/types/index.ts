@@ -43,6 +43,7 @@ import type {
   ProfessionDeFoiSource,
   PromiseSourceKind,
   PromiseExtractionStatus,
+  CandidacyStatus,
 } from "@/generated/prisma";
 
 // Compare types
@@ -100,6 +101,7 @@ export type {
   ProfessionDeFoiSource,
   PromiseSourceKind,
   PromiseExtractionStatus,
+  CandidacyStatus,
 };
 
 // Serialized types (for client components)

@@ -27,6 +27,7 @@ import type {
   QuizElectionScope,
   PromiseSourceKind,
   PromiseExtractionStatus,
+  CandidacyStatus,
 } from "@/types";
 
 // Nombre de sièges à l'Assemblée nationale (XVIIe législature)
@@ -1349,4 +1350,13 @@ export const PROMISE_EXTRACTION_STATUS_LABELS: Record<PromiseExtractionStatus, s
   PUBLISHED: "Publiée",
   REJECTED: "Rejetée",
   NEEDS_REVIEW: "À retraiter",
+};
+
+// Pre-campaign candidacy status. Before official filing, no one is formally a candidate:
+// the four levels must stay distinguishable so a rumour is never rendered as an announcement.
+export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
+  DECLARE: "Candidature déclarée",
+  PRESSENTI: "Candidature pressentie",
+  ENVISAGE: "Candidature évoquée",
+  RETIRE: "Candidature retirée",
 };
