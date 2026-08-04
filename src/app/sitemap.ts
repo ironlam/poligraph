@@ -454,14 +454,31 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 }
 
-// Sitemap 3: Top 500 scrutins by recency (priority 0.4)
+// Sitemap 3: Top 500 indexable scrutins by recency (priority 0.4).
+// Bare amendment scrutins (no approved policy title, no summary, no citizen impact, not
+// a key vote, or no ballot recorded) are excluded: they are noindex,follow on the page
+// itself, so announcing them here only spends crawl budget to reach a noindex. This
+// `where` mirrors isIndexableScrutin() from src/lib/seo/scrutin-robots.ts — keep both
+// in sync (guarded by src/lib/seo/__tests__/indexation-doctrine.test.ts).
 async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[3]);
   cacheLife("synced");
 
   const scrutins = await db.scrutin.findMany({
-    where: { slug: { not: null } },
+    where: {
+      slug: { not: null },
+      OR: [
+        { importance: { isKeyVote: true } },
+        { policyTitle: { status: "APPROVED" } },
+        // Paired conditions, not a bare `not: null`: isIndexableScrutin() treats an
+        // empty string as no summary, and Prisma's `not` on a nullable column keeps
+        // NULL rows, so each side has to be stated.
+        { AND: [{ summary: { not: null } }, { summary: { not: "" } }] },
+        { AND: [{ citizenImpact: { not: null } }, { citizenImpact: { not: "" } }] },
+      ],
+      NOT: { votesFor: 0, votesAgainst: 0, votesAbstain: 0 },
+    },
     select: { slug: true, updatedAt: true },
     orderBy: { votingDate: "desc" },
     take: 500,

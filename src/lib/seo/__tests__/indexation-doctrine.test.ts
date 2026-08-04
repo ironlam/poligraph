@@ -10,6 +10,7 @@ import {
 import { communeRobotsMetadata, COMMUNE_MIN_POPULATION } from "../commune-robots";
 import { hasActiveListingFilter, listingRobotsMetadata } from "../listing-robots";
 import { voteDateArchiveRobotsMetadata } from "../parliament-robots";
+import { scrutinRobotsMetadata, type ScrutinIndexSignals } from "../scrutin-robots";
 import { OG_IMAGE_ROBOTS_SOURCE } from "../og-image-robots";
 import { API_NOINDEX_HEADERS, API_ROBOTS_SOURCE } from "../api-robots";
 import {
@@ -58,6 +59,18 @@ const THIN_LOCAL: PoliticianIndexSignals = {
 const listingRobots = (params: Record<string, string>, keys: readonly string[]) =>
   listingRobotsMetadata(hasActiveListingFilter(params, keys));
 
+const BARE_AMENDMENT: ScrutinIndexSignals = {
+  totalVotes: 212,
+  summary: null,
+  citizenImpact: null,
+  policyTitleStatus: null,
+  isKeyVote: false,
+};
+const EXPLAINED_SCRUTIN: ScrutinIndexSignals = {
+  ...BARE_AMENDMENT,
+  policyTitleStatus: "APPROVED",
+};
+
 describe("doctrine — strong surfaces stay indexable", () => {
   it("rich politician (député)", () => {
     expect(politicianRobotsMetadata(RICH_DEPUTE)).toEqual(INDEXABLE);
@@ -85,6 +98,15 @@ describe("doctrine — strong surfaces stay indexable", () => {
   });
   it("vote detail page (dated slug with title)", () => {
     expect(voteDateArchiveRobotsMetadata("2026-03-04-loi-de-finances")).toEqual(INDEXABLE);
+  });
+  it("scrutin explained by an approved policy title", () => {
+    expect(scrutinRobotsMetadata(EXPLAINED_SCRUTIN)).toEqual(INDEXABLE);
+  });
+  it("scrutin with a summary", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, summary: "Un résumé." })).toEqual(INDEXABLE);
+  });
+  it("editorially promoted key vote", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, isKeyVote: true })).toEqual(INDEXABLE);
   });
 });
 
@@ -120,6 +142,19 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   });
   it("vote date archive (bare date)", () => {
     expect(voteDateArchiveRobotsMetadata("2026-03-04")).toEqual(NOINDEX_FOLLOW);
+  });
+  // Thousands of these ship per legislature and differ from each other by an amendment
+  // number: a correct self-canonical does not stop Google reading them as duplicates.
+  it("bare amendment scrutin (no summary, no impact, no policy title)", () => {
+    expect(scrutinRobotsMetadata(BARE_AMENDMENT)).toEqual(NOINDEX_FOLLOW);
+  });
+  it("scrutin whose policy title is not approved yet", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, policyTitleStatus: "DRAFT" })).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
+  it("scrutin with no ballot recorded", () => {
+    expect(scrutinRobotsMetadata({ ...EXPLAINED_SCRUTIN, totalVotes: 0 })).toEqual(NOINDEX_FOLLOW);
   });
 });
 
@@ -200,6 +235,17 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
     "uses %s rather than a hardcoded value",
     (name) => {
       expect(src).toContain(name);
+    }
+  );
+
+  // The scrutin shard has no shared constant to import (the predicate is a `where`
+  // clause, not a threshold), so the guard is that each isIndexableScrutin() signal
+  // appears in the shard's filter. A sitemap that announced noindex scrutins would
+  // spend crawl budget to reach a noindex — the exact waste this shard now avoids.
+  it.each(["isKeyVote", "APPROVED", "summary", "citizenImpact", "votesFor"])(
+    "scrutin shard filters on the %s signal",
+    (signal) => {
+      expect(src).toContain(signal);
     }
   );
 });

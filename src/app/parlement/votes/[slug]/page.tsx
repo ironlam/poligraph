@@ -28,6 +28,7 @@ import { ShareBar } from "@/components/ui/ShareBar";
 import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
 import { formatLegislature } from "@/lib/votes/legislature";
 import { isVoteDateArchiveSlug, voteDateArchiveRobotsMetadata } from "@/lib/seo/parliament-robots";
+import { scrutinRobotsMetadata } from "@/lib/seo/scrutin-robots";
 
 /** Parse externalId into human-readable label: "VTANR5L17V5729" → "Vote n°5729" */
 function formatExternalId(externalId: string, chamber: string): string {
@@ -202,9 +203,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     summaryFirstLine ||
     `Scrutin du ${formatDate(scrutin.votingDate)} - ${scrutin.result === "ADOPTED" ? "Adopté" : "Rejeté"} avec ${scrutin.votesFor} pour, ${scrutin.votesAgainst} contre et ${scrutin.votesAbstain} abstentions.`;
 
-  const total = scrutin.votesFor + scrutin.votesAgainst + scrutin.votesAbstain;
-  const isThinContent = !scrutin.summary && total === 0;
-
   // Public title: policy title iff APPROVED + valid, else official (no leak).
   const view = toPublicTitleView(scrutin);
   const displayTitle = view.mode === "policy" ? view.policyTitle : view.officialTitle;
@@ -219,7 +217,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: seoTitle,
     description,
     alternates: { canonical: `/parlement/votes/${scrutin.slug}` },
-    ...(isThinContent && { robots: { index: false, follow: true } }),
+    ...scrutinRobotsMetadata({
+      totalVotes: scrutin.votesFor + scrutin.votesAgainst + scrutin.votesAbstain,
+      summary: scrutin.summary,
+      citizenImpact: scrutin.citizenImpact,
+      policyTitleStatus: scrutin.policyTitle?.status ?? null,
+      isKeyVote: scrutin.importance?.isKeyVote ?? false,
+    }),
   };
 }
 
