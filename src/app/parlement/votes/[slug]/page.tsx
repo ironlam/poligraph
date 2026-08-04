@@ -218,10 +218,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description,
     alternates: { canonical: `/parlement/votes/${scrutin.slug}` },
     ...scrutinRobotsMetadata({
+      type: scrutin.type,
       totalVotes: scrutin.votesFor + scrutin.votesAgainst + scrutin.votesAbstain,
-      summary: scrutin.summary,
       citizenImpact: scrutin.citizenImpact,
-      policyTitleStatus: scrutin.policyTitle?.status ?? null,
       isKeyVote: scrutin.importance?.isKeyVote ?? false,
     }),
   };

@@ -5,13 +5,12 @@ import {
   type ScrutinIndexSignals,
 } from "../scrutin-robots";
 
-/** A bare amendment scrutin: real ballots, zero editorial substance. The shape that
- *  floods Coverage with "duplicate without user-selected canonical". */
+/** A bare amendment scrutin: real ballots, no editorial decision attached. The shape
+ *  that floods Coverage with "duplicate without user-selected canonical". */
 const BARE_AMENDMENT: ScrutinIndexSignals = {
+  type: "AMENDEMENT",
   totalVotes: 212,
-  summary: null,
   citizenImpact: null,
-  policyTitleStatus: null,
   isKeyVote: false,
 };
 
@@ -21,39 +20,47 @@ describe("isIndexableScrutin", () => {
   });
 
   it.each([
-    ["a key vote", { isKeyVote: true }],
-    ["an approved policy title", { policyTitleStatus: "APPROVED" as const }],
-    ["a summary", { summary: "Le texte durcit les sanctions." }],
+    ["the key-vote flag", { isKeyVote: true }],
     ["a citizen impact", { citizenImpact: "Vos cotisations augmentent de 0,3 point." }],
-  ])("indexes a scrutin with %s", (_label, signal) => {
+  ])("indexes an amendment carrying %s", (_label, signal) => {
     expect(isIndexableScrutin({ ...BARE_AMENDMENT, ...signal })).toBe(true);
   });
 
-  // A policy title only earns indexation once a human has approved it: the earlier
-  // states are generator output that may still be wrong or a near-copy of the official
-  // title, which is exactly the duplicate content this rule exists to withhold.
-  it.each(["DRAFT", "NEEDS_REVIEW", "REJECTED", "STALE"] as const)(
-    "does not index a %s policy title",
-    (status) => {
-      expect(isIndexableScrutin({ ...BARE_AMENDMENT, policyTitleStatus: status })).toBe(false);
-    }
-  );
-
-  it("treats blank text as absent", () => {
-    expect(isIndexableScrutin({ ...BARE_AMENDMENT, summary: "   ", citizenImpact: "" })).toBe(
-      false
-    );
+  // Everything that is not an amendment decides a text or the fate of a government, which
+  // is documentary value on its own: no prose required.
+  it.each(["FINAL", "MOTION", "ARTICLE", "AUTRE"] as const)("indexes a bare %s scrutin", (type) => {
+    expect(isIndexableScrutin({ ...BARE_AMENDMENT, type })).toBe(true);
   });
 
-  // Vote data is a precondition, not one signal among four: a scrutin with no ballot
-  // recorded has nothing to show whatever text hangs off it. This subsumes the previous
-  // `!summary && total === 0` guard.
+  // Fail-open, like the commune-population and MAIRE-without-commune fallbacks: a missing
+  // signal must never silently deindex a page.
+  it("indexes a scrutin whose type is unknown", () => {
+    expect(isIndexableScrutin({ ...BARE_AMENDMENT, type: null })).toBe(true);
+  });
+
+  it("treats blank citizen impact as absent", () => {
+    expect(isIndexableScrutin({ ...BARE_AMENDMENT, citizenImpact: "   " })).toBe(false);
+    expect(isIndexableScrutin({ ...BARE_AMENDMENT, citizenImpact: "" })).toBe(false);
+  });
+
+  // Vote data is a precondition, not one signal among several: a scrutin with no ballot
+  // recorded has nothing to show whatever else it carries. Applies to every type, so a
+  // vote solennel with no tally recorded stays out too.
   it.each([
-    ["a summary", { summary: "Un résumé." }],
-    ["a key vote flag", { isKeyVote: true }],
-    ["an approved policy title", { policyTitleStatus: "APPROVED" as const }],
-  ])("excludes a scrutin with no ballots even with %s", (_label, signal) => {
+    ["an amendment with the key-vote flag", { isKeyVote: true }],
+    ["an amendment with a citizen impact", { citizenImpact: "Un impact." }],
+    ["a vote solennel", { type: "FINAL" as const }],
+  ])("excludes %s when no ballot was recorded", (_label, signal) => {
     expect(isIndexableScrutin({ ...BARE_AMENDMENT, totalVotes: 0, ...signal })).toBe(false);
+  });
+
+  // Guard against the calibration regressing to signals a generator fills in bulk. The
+  // summary and the APPROVED policy title are deliberately absent from ScrutinIndexSignals
+  // (measured on production data: keying on them withheld zero pages), so this is enforced
+  // by the type, and this test documents why the fields are not there.
+  it("exposes only signals that require an editorial decision", () => {
+    const keys = Object.keys(BARE_AMENDMENT).sort();
+    expect(keys).toEqual(["citizenImpact", "isKeyVote", "totalVotes", "type"]);
   });
 });
 

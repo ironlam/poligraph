@@ -60,16 +60,12 @@ const listingRobots = (params: Record<string, string>, keys: readonly string[]) 
   listingRobotsMetadata(hasActiveListingFilter(params, keys));
 
 const BARE_AMENDMENT: ScrutinIndexSignals = {
+  type: "AMENDEMENT",
   totalVotes: 212,
-  summary: null,
   citizenImpact: null,
-  policyTitleStatus: null,
   isKeyVote: false,
 };
-const EXPLAINED_SCRUTIN: ScrutinIndexSignals = {
-  ...BARE_AMENDMENT,
-  policyTitleStatus: "APPROVED",
-};
+const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINAL" };
 
 describe("doctrine — strong surfaces stay indexable", () => {
   it("rich politician (député)", () => {
@@ -99,11 +95,13 @@ describe("doctrine — strong surfaces stay indexable", () => {
   it("vote detail page (dated slug with title)", () => {
     expect(voteDateArchiveRobotsMetadata("2026-03-04-loi-de-finances")).toEqual(INDEXABLE);
   });
-  it("scrutin explained by an approved policy title", () => {
-    expect(scrutinRobotsMetadata(EXPLAINED_SCRUTIN)).toEqual(INDEXABLE);
+  it("vote solennel, even with no prose attached", () => {
+    expect(scrutinRobotsMetadata(BARE_VOTE_SOLENNEL)).toEqual(INDEXABLE);
   });
-  it("scrutin with a summary", () => {
-    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, summary: "Un résumé." })).toEqual(INDEXABLE);
+  it("amendment with a written citizen impact", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, citizenImpact: "Un impact." })).toEqual(
+      INDEXABLE
+    );
   });
   it("editorially promoted key vote", () => {
     expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, isKeyVote: true })).toEqual(INDEXABLE);
@@ -145,16 +143,16 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   });
   // Thousands of these ship per legislature and differ from each other by an amendment
   // number: a correct self-canonical does not stop Google reading them as duplicates.
-  it("bare amendment scrutin (no summary, no impact, no policy title)", () => {
+  it("bare amendment scrutin (no key-vote flag, no citizen impact)", () => {
     expect(scrutinRobotsMetadata(BARE_AMENDMENT)).toEqual(NOINDEX_FOLLOW);
   });
-  it("scrutin whose policy title is not approved yet", () => {
-    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, policyTitleStatus: "DRAFT" })).toEqual(
+  it("amendment whose citizen impact is blank", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_AMENDMENT, citizenImpact: "   " })).toEqual(
       NOINDEX_FOLLOW
     );
   });
-  it("scrutin with no ballot recorded", () => {
-    expect(scrutinRobotsMetadata({ ...EXPLAINED_SCRUTIN, totalVotes: 0 })).toEqual(NOINDEX_FOLLOW);
+  it("scrutin with no ballot recorded, whatever its type", () => {
+    expect(scrutinRobotsMetadata({ ...BARE_VOTE_SOLENNEL, totalVotes: 0 })).toEqual(NOINDEX_FOLLOW);
   });
 });
 
@@ -257,18 +255,27 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
       .join("\n");
   })();
 
-  it.each(["isKeyVote", "APPROVED", "summary", "citizenImpact", "votesFor"])(
+  it.each(["AMENDEMENT", "isKeyVote", "citizenImpact", "votesFor"])(
     "scrutin shard filters on the %s signal",
     (signal) => {
       expect(scrutinShardQuery).toContain(signal);
     }
   );
 
-  it("keeps the SQL/JS parity that isIndexableScrutin() needs on text signals", () => {
+  it("keeps the SQL/JS parity that isIndexableScrutin() needs on the text signal", () => {
     // hasText() trims before testing, so a value made of whitespace must not count here
     // either. Mirrors the btrim already used for the biography threshold above.
-    expect(scrutinShardQuery).toContain('btrim(COALESCE(s."summary"');
     expect(scrutinShardQuery).toContain('btrim(COALESCE(s."citizenImpact"');
+  });
+
+  // The shard must not reintroduce the saturated signals the predicate dropped: keying on
+  // them withheld zero pages when measured against production.
+  it.each(["summary", "APPROVED"])("scrutin shard does not filter on %s", (signal) => {
+    expect(scrutinShardQuery).not.toContain(signal);
+  });
+
+  it("keeps an unknown scrutin type fail-open", () => {
+    expect(scrutinShardQuery).toContain("IS DISTINCT FROM");
   });
 });
 

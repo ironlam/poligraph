@@ -455,11 +455,11 @@ async function buildDossiersSitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 // Sitemap 3: Top 500 indexable scrutins by recency (priority 0.4).
-// Bare amendment scrutins (no approved policy title, no recap, no citizen impact, not
-// a key vote, or no ballot recorded) are excluded: they are noindex,follow on the page
-// itself, so announcing them here only spends crawl budget to reach a noindex. This
-// query mirrors isIndexableScrutin() from src/lib/seo/scrutin-robots.ts, keep both
-// in sync (guarded by src/lib/seo/__tests__/indexation-doctrine.test.ts).
+// Bare amendment scrutins (no key-vote flag, no citizen impact) and scrutins with no
+// ballot recorded are excluded: they are noindex,follow on the page itself, so
+// announcing them here only spends crawl budget to reach a noindex. This query mirrors
+// isIndexableScrutin() from src/lib/seo/scrutin-robots.ts, keep both in sync (guarded
+// by src/lib/seo/__tests__/indexation-doctrine.test.ts).
 async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[3]);
@@ -467,18 +467,17 @@ async function buildScrutinsSitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Raw SQL rather than findMany, for the same reason as the politician shard above:
   // isIndexableScrutin() reads text through trim(), so only btrim() gives the SQL side
-  // the same verdict on a value made of whitespace.
+  // the same verdict on a value made of whitespace. `IS DISTINCT FROM` keeps an unknown
+  // type fail-open, like the predicate's `type !== "AMENDEMENT"`.
   const scrutins = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     SELECT s."slug", s."updatedAt"
     FROM "Scrutin" s
-    LEFT JOIN "ScrutinPolicyTitle" pt ON pt."scrutinId" = s."id"
     LEFT JOIN "ScrutinImportance" i ON i."scrutinId" = s."id"
     WHERE s."slug" IS NOT NULL
       AND (s."votesFor" + s."votesAgainst" + s."votesAbstain") > 0
       AND (
-        COALESCE(i."isKeyVote", false)
-        OR pt."status" = 'APPROVED'
-        OR btrim(COALESCE(s."summary", ''), E' \t\n\r') <> ''
+        s."type" IS DISTINCT FROM 'AMENDEMENT'
+        OR COALESCE(i."isKeyVote", false)
         OR btrim(COALESCE(s."citizenImpact", ''), E' \t\n\r') <> ''
       )
     ORDER BY s."votingDate" DESC
