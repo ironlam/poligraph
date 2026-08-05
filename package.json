@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build --webpack",
     "build:net-check": "tsx scripts/check-build-network.mts",
+    "measures:audit": "tsx scripts/audit-measures.ts",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
