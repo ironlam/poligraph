@@ -24,15 +24,13 @@ const PASSWORD = process.env.ADMIN_PASSWORD;
 const WCAG = ["wcag2a", "wcag2aa", "wcag21aa"];
 
 /**
- * The scan is scoped to the page content, not the whole document.
+ * Le document entier, plus aucun scope.
  *
- * The admin sidebar carries one WCAG AA contrast failure (#6e7174 on #0d1218, 3.82:1 in the
- * section labels), verified identical on /admin/policy-titles, /admin/promises and
- * /admin/affaires. It is layout debt these screens inherit, not something they introduce, and
- * it is tracked separately. Scoping states what this suite is responsible for instead of
- * silencing a rule.
+ * La sidebar admin portait un échec de contraste AA que ces écrans héritaient sans l'introduire, donc
+ * l'analyse était bornée à `#admin-main`. Corrigé par #648, vérifié sur le document complet de
+ * /admin/mesures, /admin/policy-titles et /admin/promises : le scope n'a plus de raison d'être, et le
+ * garder cacherait une régression future du layout.
  */
-const CONTENT = "#admin-main";
 
 async function signIn(context: BrowserContext, password: string): Promise<void> {
   const timestamp = Date.now();
@@ -100,7 +98,7 @@ test.describe("/admin/mesures — modération des mesures", () => {
     await page.goto("/admin/mesures");
     await expect(page.getByRole("table")).toBeVisible();
 
-    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -108,7 +106,7 @@ test.describe("/admin/mesures — modération des mesures", () => {
   test("le détail n'a aucune violation WCAG AA", async ({ page }) => {
     await openFirstDetail(page);
 
-    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -276,7 +274,7 @@ test.describe("/admin/mesures — parcours éditorial", () => {
     await page.goto("/admin/mesures/nouvelle");
     await expect(page.getByRole("heading", { name: "Nouvelle mesure" })).toBeVisible();
 
-    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
 
     expect(results.violations).toEqual([]);
   });
@@ -288,7 +286,7 @@ test.describe("/admin/mesures — parcours éditorial", () => {
     // Formulaires ouverts : c'est dans cet état que les champs et leurs libellés existent.
     await page.getByRole("button", { name: "Ajouter une qualification" }).click();
 
-    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
 
     expect(results.violations).toEqual([]);
   });
