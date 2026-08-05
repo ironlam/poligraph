@@ -162,6 +162,19 @@ describe("assertDisposableTestDb", () => {
   });
 });
 
+describe("le module de garde reste utilisable hors de vitest", () => {
+  it("n'importe pas vitest dans disposable-db.ts", () => {
+    // Trouvé en exécutant scripts/seed-measures-demo.ts : quand assertDisposableTestDb()
+    // venait de db-guard.ts, le script tsx échouait sur « Vitest cannot be imported in a
+    // CommonJS module using require() ». Aucun test ne pouvait le voir, ils tournent tous
+    // sous vitest. La garde doit rester appelable par un script qui écrit en base.
+    const source = readFileSync(join(process.cwd(), "src/test/disposable-db.ts"), "utf8");
+
+    expect(source).not.toMatch(/from\s+"vitest"/);
+    expect(source).not.toMatch(/require\(\s*"vitest"/);
+  });
+});
+
 describe("describeIfDisposableDb", () => {
   it.skipIf(isDisposableTestDb())("n'est pas le describe ouvert hors du conteneur jetable", () => {
     expect(describeIfDisposableDb).not.toBe(describe);

@@ -18,7 +18,10 @@
  */
 
 import type { ThemeCategory } from "@/generated/prisma";
-import { assertDisposableTestDb } from "@/test/db-guard";
+// From ./disposable-db and NOT @/test/db-guard: this module is also imported by
+// scripts/seed-measures-demo.ts under tsx, where pulling vitest in through the gate module
+// crashes the script.
+import { assertDisposableTestDb } from "@/test/disposable-db";
 
 /** Deferred, same reason as the lot 1 fixtures: `@/lib/db` throws at module load. */
 async function client(): Promise<typeof import("@/lib/db").db> {

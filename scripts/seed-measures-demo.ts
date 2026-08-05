@@ -10,11 +10,11 @@
  * point: `.env` and `.env.prod` point at the same Supabase database, so an ungated run with
  * the default environment would write fabricated political positions into production.
  *
- * Usage, with the container from `npm run test:db:search` running:
- *   DATABASE_URL=postgresql://poligraph:poligraph@localhost:55433/poligraph_test \
+ * Usage, with the container from docker-compose.test-search.yml running:
+ *   DATABASE_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test?sslmode=disable \
  *     npx tsx scripts/seed-measures-demo.ts
  */
-import { assertDisposableTestDb } from "@/test/db-guard";
+import { assertDisposableTestDb } from "@/test/disposable-db";
 import { seedMeasuresDemoCorpus } from "@/test/fixtures/measures-demo";
 
 async function main(): Promise<void> {
