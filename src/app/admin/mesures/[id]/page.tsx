@@ -70,15 +70,26 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
   const state = deriveModerationState(toRow(measure));
   const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
 
+  // The published revision when there is one, the active draft otherwise. Same reference the
+  // queue shows, so the two screens name the measure identically.
+  const referenceRevisionId = measure.publishedRevisionId ?? measure.latestRevisionId;
+  const referenceText =
+    measure.revisions.find((revision) => revision.id === referenceRevisionId)?.text ?? null;
+
   return (
     <div className="space-y-6">
       <header className="space-y-3">
         <Link href="/admin/mesures" prefetch={false} className="text-sm text-primary underline">
           Retour à la file
         </Link>
+        {/* The measure is what this page is about, so it is the h1. Naming the politician
+            instead read as a page about the person, who carries many measures. */}
         <h1 className="font-display text-2xl font-bold tracking-tight">
-          {context.politician.fullName}
+          {referenceText ?? "Mesure sans révision saisie"}
         </h1>
+        <p className="text-sm text-muted-foreground">
+          {context.politician.fullName} · {context.election.title}
+        </p>
         <ModerationStateBadge state={state} />
       </header>
 
