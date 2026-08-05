@@ -35,6 +35,7 @@ import type {
   MeasurePrecision,
   MeasureSourceKind,
   QualificationKind,
+  SimilarityConclusion,
   SourceTier,
 } from "@/generated/prisma";
 import type {
@@ -1456,4 +1457,10 @@ export const VISIBILITY_BLOCKER_LABELS: Record<VisibilityBlocker, string> = {
   revision_superseded: "La révision désignée a été remplacée",
   revision_discarded: "La révision désignée a été abandonnée",
   revision_without_source: "La révision désignée n'a aucune source",
+};
+
+export const SIMILARITY_CONCLUSION_LABELS: Record<SimilarityConclusion, string> = {
+  NO_EQUIVALENT_FOUND: "Aucun équivalent trouvé",
+  EQUIVALENT_FOUND: "Équivalent trouvé",
+  INCONCLUSIVE: "Non concluant",
 };

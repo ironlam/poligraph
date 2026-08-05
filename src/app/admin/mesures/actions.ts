@@ -1,15 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { QUALIFICATION_KIND_LABELS } from "@/config/labels";
 import type {
   MeasureAttribution,
   MeasureExtractionMethod,
   MeasurePrecision,
   MeasureSourceKind,
+  QualificationKind,
+  SimilarityConclusion,
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
 import { isAuthenticated } from "@/lib/auth";
+import { createQualification, createSimilarityAssessment } from "@/lib/measures/assessments";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 import {
   createMeasure,
@@ -265,6 +269,73 @@ export async function withdrawMeasureAction(input: {
       sourceUrl: input.sourceUrl.trim(),
       sourceLabel: input.sourceLabel.trim(),
       expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
+    });
+    revalidate(input.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/**
+ * A dated editorial conclusion on ONE formulation.
+ *
+ * No version token, and that is deliberate: a qualification writes a child table and leaves
+ * `Measure.updatedAt` untouched, so the token would protect nothing here. The revision is targeted
+ * explicitly instead, which is the guarantee that matters: a conclusion belongs to the text it was
+ * drawn from.
+ *
+ * No update path either. Several dated conclusions on the same revision can be legitimate, so a
+ * second reading is a second row, not an edit of the first.
+ */
+export async function createQualificationAction(input: {
+  measureId: string;
+  revisionId: string;
+  kind: QualificationKind;
+  rationale: string;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    await createQualification({
+      measureRevisionId: input.revisionId,
+      kind: input.kind,
+      // The label follows the enum rather than being typed: two different wordings for the same
+      // qualification would make the opposable definitions unopposable.
+      label: QUALIFICATION_KIND_LABELS[input.kind],
+      rationale: input.rationale,
+      sourceUrl: input.sourceUrl,
+      sourceLabel: input.sourceLabel,
+      assessedBy: ACTOR,
+    });
+    revalidate(input.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/** Same reasoning as above: attached to one revision, never edited in place. */
+export async function createSimilarityAssessmentAction(input: {
+  measureId: string;
+  revisionId: string;
+  comparedCorpusVersion: string;
+  conclusion: SimilarityConclusion;
+  rationale: string;
+  equivalentRevisionIds: string[];
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    await createSimilarityAssessment({
+      measureRevisionId: input.revisionId,
+      comparedCorpusVersion: input.comparedCorpusVersion,
+      conclusion: input.conclusion,
+      rationale: input.rationale,
+      assessedBy: ACTOR,
+      equivalentRevisionIds: input.equivalentRevisionIds,
     });
     revalidate(input.measureId);
     return { ok: true };

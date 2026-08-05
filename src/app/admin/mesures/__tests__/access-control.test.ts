@@ -49,6 +49,23 @@ vi.mock("../_data/detail-query", () => ({
   getMeasureContext: vi.fn(async () => null),
 }));
 
+vi.mock("../_data/candidacies-query", () => ({
+  listPresidentialCandidacies: vi.fn(async () => []),
+}));
+
+// Les écrans importent le panneau d'actions, qui importe les server actions, qui importent les
+// transitions, qui chargent le client Prisma en VALEUR. Sans ce mock, les pages ne se chargent pas
+// sans DATABASE_URL et le test échoue avant d'avoir vérifié quoi que ce soit.
+vi.mock("../actions", () => ({
+  createMeasureAction: vi.fn(async () => ({ ok: true })),
+  draftRevisionAction: vi.fn(async () => ({ ok: true })),
+  reviewRevisionAction: vi.fn(async () => ({ ok: true })),
+  discardRevisionAction: vi.fn(async () => ({ ok: true })),
+  publishRevisionAction: vi.fn(async () => ({ ok: true })),
+  depublishMeasureAction: vi.fn(async () => ({ ok: true })),
+  withdrawMeasureAction: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock("@/lib/data/measures", () => ({
   getMeasureForModeration: vi.fn(async () => null),
   getPublicMeasure: vi.fn(async () => null),
@@ -80,6 +97,13 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(redirectMock).toHaveBeenCalledWith("/admin/login");
   });
 
+  it("redirige la création vers la connexion en l'absence de session", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { default: NewPage } = await import("../nouvelle/page");
+
+    await expect(NewPage()).rejects.toThrow("REDIRECT:/admin/login");
+  });
+
   it("laisse passer la file avec une session valide", async () => {
     // Without this case, a guard that redirected unconditionally would pass the two tests
     // above while making the screen unusable.
@@ -92,12 +116,14 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(queryMeasureQueueMock).toHaveBeenCalledTimes(1);
   });
 
-  it("garde les deux écrans hors des index", async () => {
+  it("garde les trois écrans hors des index", async () => {
     // A crawled admin page would publish unreviewed editorial text under our name.
     const queue = await import("../page");
     const detail = await import("../[id]/page");
+    const create = await import("../nouvelle/page");
 
     expect(queue.metadata.robots).toEqual({ index: false });
     expect(detail.metadata.robots).toEqual({ index: false });
+    expect(create.metadata.robots).toEqual({ index: false });
   });
 });

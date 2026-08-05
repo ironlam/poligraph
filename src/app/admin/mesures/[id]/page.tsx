@@ -10,6 +10,7 @@ import { getMeasureForModeration, getPublicMeasure } from "@/lib/data/measures";
 import { deriveModerationState, type ModerationMeasureRow } from "@/lib/measures/moderation-state";
 import { AnomalyList } from "../_components/AnomalyList";
 import { MeasureActionPanel } from "../_components/MeasureActionPanel";
+import { MeasureMetadataPanel } from "../_components/MeasureMetadataPanel";
 import { ModerationStateBadge } from "../_components/ModerationStateBadge";
 import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
@@ -178,6 +179,26 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
         </h2>
         <div className="mt-3">
           <AnomalyList anomalies={state.anomalies} />
+        </div>
+      </section>
+
+      <section aria-labelledby="metadata-heading">
+        <h2 id="metadata-heading" className="text-base font-semibold">
+          Conclusions éditoriales
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            datées, attachées à une révision, jamais modifiées en place
+          </span>
+        </h2>
+        <div className="mt-3">
+          <MeasureMetadataPanel
+            measureId={id}
+            defaultRevisionId={referenceRevisionId}
+            revisions={measure.revisions.map((revision) => ({
+              id: revision.id,
+              text: revision.text,
+              validFrom: dateFormat.format(revision.validFrom),
+            }))}
+          />
         </div>
       </section>
 

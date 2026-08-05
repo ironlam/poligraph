@@ -28,6 +28,12 @@ vi.mock("@/lib/auth", () => ({ isAuthenticated: () => isAuthenticatedMock() }));
 vi.mock("next/cache", () => ({ revalidatePath: (path: string) => revalidatePathMock(path) }));
 vi.mock("@/lib/measures/transitions", () => transitionsMock);
 
+const assessmentsMock = {
+  createQualification: vi.fn(async () => undefined),
+  createSimilarityAssessment: vi.fn(async () => undefined),
+};
+vi.mock("@/lib/measures/assessments", () => assessmentsMock);
+
 const REVISION = {
   text: "Encadrer les loyers dans les zones tendues.",
   precision: "OBJECTIF_SANS_CHIFFRE" as const,
@@ -298,5 +304,89 @@ describe("écrivain unique : la route admin n'écrit pas en base elle-même", ()
     expect(offenders.map((f) => f.replace(process.cwd() + "/", ""))).toEqual([]);
     // Sans cette borne, renommer les fichiers rendrait la règle verte et vide.
     expect(files.length).toBeGreaterThanOrEqual(8);
+  });
+});
+
+describe("conclusions éditoriales : pas de jeton de version, une révision explicite", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  it("refuse les deux actions sans session, sans rien écrire", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const a = await actions();
+
+    await expect(
+      a.createQualificationAction({
+        measureId: "m-1",
+        revisionId: "rev-1",
+        kind: "FINANCEMENT_NON_PRECISE",
+        rationale: "x",
+        sourceUrl: null,
+        sourceLabel: null,
+      })
+    ).rejects.toThrow("Non autorisé");
+    await expect(
+      a.createSimilarityAssessmentAction({
+        measureId: "m-1",
+        revisionId: "rev-1",
+        comparedCorpusVersion: "2027-01",
+        conclusion: "NO_EQUIVALENT_FOUND",
+        rationale: "x",
+        equivalentRevisionIds: [],
+      })
+    ).rejects.toThrow("Non autorisé");
+
+    expect(assessmentsMock.createQualification).not.toHaveBeenCalled();
+    expect(assessmentsMock.createSimilarityAssessment).not.toHaveBeenCalled();
+  });
+
+  it("dérive le libellé du qualificatif de l'enum et attribue l'auteur à admin", async () => {
+    // Deux formulations différentes du même qualificatif rendraient les définitions opposables
+    // inopposables, donc le libellé suit l'enum et n'est pas saisi.
+    const { createQualificationAction } = await actions();
+
+    await createQualificationAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      kind: "DEJA_TENTEE",
+      rationale: "Dispositif comparable en 2018.",
+      sourceUrl: null,
+      sourceLabel: null,
+    });
+
+    expect(assessmentsMock.createQualification).toHaveBeenCalledWith({
+      measureRevisionId: "rev-1",
+      kind: "DEJA_TENTEE",
+      label: "Déjà tentée",
+      rationale: "Dispositif comparable en 2018.",
+      sourceUrl: null,
+      sourceLabel: null,
+      assessedBy: "admin",
+    });
+  });
+
+  it("rend l'erreur de cohérence conclusion / équivalents", async () => {
+    assessmentsMock.createSimilarityAssessment.mockRejectedValueOnce(
+      new MeasureValidationError(
+        "Une conclusion EQUIVALENT_FOUND exige au moins un équivalent identifié"
+      )
+    );
+    const { createSimilarityAssessmentAction } = await actions();
+
+    const result = await createSimilarityAssessmentAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      comparedCorpusVersion: "2027-01",
+      conclusion: "EQUIVALENT_FOUND",
+      rationale: "x",
+      equivalentRevisionIds: [],
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Une conclusion EQUIVALENT_FOUND exige au moins un équivalent identifié",
+    });
   });
 });

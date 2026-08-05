@@ -70,14 +70,23 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Mesures : relecture</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {result.total === 1
-            ? "1 mesure correspond aux filtres"
-            : `${result.total} mesures correspondent aux filtres`}
-          . Ordre : de la plus anciennement saisie à la plus récente.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Mesures : relecture</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {result.total === 1
+              ? "1 mesure correspond aux filtres"
+              : `${result.total} mesures correspondent aux filtres`}
+            . Ordre : de la plus anciennement saisie à la plus récente.
+          </p>
+        </div>
+        <Link
+          href="/admin/mesures/nouvelle"
+          prefetch={false}
+          className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Nouvelle mesure
+        </Link>
       </header>
 
       {result.scanCapped && (
