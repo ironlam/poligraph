@@ -27,3 +27,9 @@ export {
   type AttributionVerdict,
   type GuardInvolvement,
 } from "./attribution-guard";
+export {
+  assessProcedureEvidence,
+  type ProcedureGuardInput,
+  type ProcedureGuardResult,
+  type ProcedureVerdict,
+} from "./procedure-guard";
