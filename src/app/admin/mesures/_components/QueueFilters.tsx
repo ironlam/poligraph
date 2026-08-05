@@ -82,7 +82,7 @@ export function QueueFilters({
               href={hrefWith(current, { publication: toggle(current.publication, state) })}
               prefetch={false}
               className={`${TAB} ${current.publication.includes(state) ? TAB_ACTIVE : ""}`}
-              aria-pressed={current.publication.includes(state)}
+              aria-current={current.publication.includes(state) ? "true" : undefined}
             >
               {PUBLICATION_STATE_LABELS[state]}
               <span className="ml-1.5 text-muted-foreground">{result.counts[state]}</span>
@@ -100,7 +100,7 @@ export function QueueFilters({
             href={hrefWith(current, { anomaliesOnly: !current.anomaliesOnly })}
             prefetch={false}
             className={`${TAB} ${current.anomaliesOnly ? TAB_ACTIVE : ""}`}
-            aria-pressed={current.anomaliesOnly}
+            aria-current={current.anomaliesOnly ? "true" : undefined}
           >
             Anomalies seulement
             <span className="ml-1.5 text-muted-foreground">{result.anomalyCount}</span>
@@ -111,7 +111,7 @@ export function QueueFilters({
             })}
             prefetch={false}
             className={`${TAB} ${current.withdrawn === "only" ? TAB_ACTIVE : ""}`}
-            aria-pressed={current.withdrawn === "only"}
+            aria-current={current.withdrawn === "only" ? "true" : undefined}
           >
             Retraits
             <span className="ml-1.5 text-muted-foreground">{result.withdrawnCount}</span>
@@ -122,7 +122,7 @@ export function QueueFilters({
             })}
             prefetch={false}
             className={`${TAB} ${current.withdrawn === "exclude" ? TAB_ACTIVE : ""}`}
-            aria-pressed={current.withdrawn === "exclude"}
+            aria-current={current.withdrawn === "exclude" ? "true" : undefined}
           >
             Hors retraits
           </Link>
@@ -140,7 +140,7 @@ export function QueueFilters({
               href={hrefWith(current, { theme: toggle(current.theme, theme) })}
               prefetch={false}
               className={`${TAB} ${current.theme.includes(theme) ? TAB_ACTIVE : ""}`}
-              aria-pressed={current.theme.includes(theme)}
+              aria-current={current.theme.includes(theme) ? "true" : undefined}
             >
               {THEME_CATEGORY_LABELS[theme]}
             </Link>
