@@ -10,7 +10,16 @@
 
 export type PortraitRejectionReason =
   | "non-portrait-subject"
+  /** Another person is named in the frame, joined by "et", "avec", "&". */
   | "multiple-subjects"
+  /**
+   * Words in the filename we cannot account for. Measured over 554 real files,
+   * these are mostly places and event descriptions ("Roeulx", "Toulouse",
+   * "quatre jours de Dunkerque") rather than second people, so calling them
+   * `multiple-subjects` would state something false in the report. Either way
+   * the framing cannot be trusted, so the crop is refused.
+   */
+  | "unexplained-words"
   | "too-wide"
   | "too-small";
 
@@ -199,6 +208,14 @@ const HUMAN_CROPPED_MARKERS = [/\(\s*cropped\s*\)/i, /\(\s*recadr\w*\s*\)/i, /_c
  */
 const CREDIT_MARKER = /[_\s-](par|by|photo de|foto)[_\s]/i;
 
+/**
+ * Joins two people in a filename: "Fernand et Carl", "Ségolène Royal & Guillaume
+ * Coutey". This is the only positive evidence of a second subject we can read
+ * from a filename, so it is what separates `multiple-subjects` from words we
+ * merely fail to recognise.
+ */
+const COMPANION_CONJUNCTION = /[_\s](et|avec|and|with)[_\s]|&/i;
+
 function stripAccents(value: string): string {
   return value.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
@@ -296,11 +313,15 @@ export function screenFilename(filename: string, politicianName: string): Portra
       !isGluedOwnName(token, nameTokens)
   );
 
-  if (leftovers.length > 0) {
-    return reject("multiple-subjects", `unexplained name(s) in filename: ${leftovers.join(", ")}`);
+  if (leftovers.length === 0) return PASS;
+
+  // A conjunction is the one signal that positively means "and this other
+  // person", as opposed to a word we simply do not recognise.
+  if (COMPANION_CONJUNCTION.test(credited)) {
+    return reject("multiple-subjects", `another person named alongside: ${leftovers.join(", ")}`);
   }
 
-  return PASS;
+  return reject("unexplained-words", `cannot account for: ${leftovers.join(", ")}`);
 }
 
 /** Widest aspect ratio we still treat as a portrait rather than a scene. */

@@ -49,6 +49,25 @@ describe("screenFilename — several people in frame", () => {
     ).toBe(false);
   });
 
+  it("reserves multiple-subjects for a conjunction, and reports the rest honestly", () => {
+    // Measured over 554 real files: most unaccounted words are places and event
+    // descriptions, so claiming a second person would be a false statement.
+    const place = screenFilename("Eric_Bocquet,_sénateur,_2023_à_Roeulx,.jpg", "Eric Bocquet");
+    expect(place.ok).toBe(false);
+    if (!place.ok) expect(place.reason).toBe("unexplained-words");
+
+    const scene = screenFilename(
+      "Frédéric_Delannoy_Aniche_quatre_jours_de_Dunkerque.jpg",
+      "Frédéric Delannoy"
+    );
+    expect(scene.ok).toBe(false);
+    if (!scene.ok) expect(scene.reason).toBe("unexplained-words");
+
+    const companion = screenFilename("Ségolène_Royal_&_Guillaume_Coutey.jpg", "Guillaume Coutey");
+    expect(companion.ok).toBe(false);
+    if (!companion.ok) expect(companion.reason).toBe("multiple-subjects");
+  });
+
   it("accepts a photo a Commons contributor already cropped to one person", () => {
     // "(cropped)" means a human framed it on the subject; the extra names in
     // the filename describe the original scene, not what is in the frame.

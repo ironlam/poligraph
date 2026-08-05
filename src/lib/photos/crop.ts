@@ -25,6 +25,18 @@ const FACE_VERTICAL_POSITION = 0.38;
 /** A face span under this share of the frame's short side is treated as noise. */
 const MIN_FACE_SPAN_SHARE = 0.03;
 
+/**
+ * Lowest the centre of a detected region may sit and still be a head.
+ *
+ * In a portrait the head is in the upper part of the frame. A skin region found
+ * below this line is something else: measured on François Alfonsi's file, a
+ * beige wall pushed the detector onto his gesturing hand at 66% of the height,
+ * and sharp's attention point landed low too, so neither signal could be
+ * trusted. Falling back keeps the uncropped source rather than publishing a
+ * portrait of a hand.
+ */
+const MAX_HEAD_CENTRE_SHARE = 0.55;
+
 /** Never crop so tight that filling PORTRAIT_SIZE would blur the result. */
 const MAX_UPSCALE = 1.7;
 
@@ -113,6 +125,11 @@ function usesFaceBox(
   if (!faceBox) return false;
   const span = faceSpan(faceBox);
   if (span < Math.min(source.width, source.height) * MIN_FACE_SPAN_SHARE) return false;
+
+  // Too low in the frame to be a head.
+  const centreShare = (faceBox.y + span / 2) / source.height;
+  if (centreShare > MAX_HEAD_CENTRE_SHARE) return false;
+
   // A crop that has to be blown up too far would look worse than a loose one.
   return span * BUST_FACTOR >= PORTRAIT_SIZE / MAX_UPSCALE;
 }

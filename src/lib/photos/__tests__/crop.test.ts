@@ -115,6 +115,22 @@ describe("cropToPortrait", () => {
     expect(region.top + region.size).toBeLessThanOrEqual(source.height);
   });
 
+  it("refuses to size the crop from a skin region low in the frame", async () => {
+    // A gesturing hand over a warm-toned background, no head. In a portrait the
+    // head is up top, so a region centred this low is not one; framing from it
+    // published a portrait of a hand on François Alfonsi's file.
+    const handLow = await syntheticPortrait(960, 1200, { left: 500, top: 860, size: 180 });
+    const { strategy, region } = await cropToPortrait(handLow);
+
+    expect(strategy).toBe("attention");
+    expect(region.size).toBe(960);
+  });
+
+  it("still frames from a head in the upper half", async () => {
+    const headHigh = await syntheticPortrait(960, 1200, { left: 400, top: 180, size: 180 });
+    expect((await cropToPortrait(headHigh)).strategy).toBe("face");
+  });
+
   it("falls back to the largest square when no face is found", async () => {
     const scene = await greyscaleScene(900, 1300);
     const { strategy, region } = await cropToPortrait(scene);
