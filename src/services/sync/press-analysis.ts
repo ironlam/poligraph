@@ -628,6 +628,10 @@ async function createAffairFromPress(
       description: detected.description,
       status: detected.status as AffairStatus,
       category: detected.category as AffairCategory,
+      // Without this the Prisma default (MENTIONED_ONLY) applied, while the loop
+      // above `continue`s on MENTIONED_ONLY detections: every press-created
+      // affair claimed the politician was neither mis en cause nor poursuivi.
+      involvement: detected.involvement,
       confidenceScore: detected.confidenceScore,
       factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
       court: detected.court,

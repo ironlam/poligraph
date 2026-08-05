@@ -1,20 +1,56 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/db", () => ({ db: {} }));
+// Only the DB-backed collaborators are mocked. assessProcedureEvidence and
+// assessPressAttribution stay real: they are pure, and mocking them would empty
+// these tests of their meaning.
+const mocks = vi.hoisted(() => ({
+  resolveAffairPolitician: vi.fn(),
+  findMatchingAffairs: vi.fn(),
+  createDraftAffairFromDiscovery: vi.fn(),
+}));
 
-// Only the resolver is mocked: it loads the whole politician pool from the DB.
-// assessProcedureEvidence and assessPressAttribution stay real — they are pure,
-// and mocking them would empty these tests of their meaning.
+vi.mock("@/lib/db", () => ({
+  db: {
+    pressArticle: { update: vi.fn(async () => ({})) },
+    politician: {
+      findUnique: vi.fn(async () => ({
+        firstName: "Jeanne",
+        lastName: "Martin",
+        fullName: "Jeanne Martin",
+      })),
+    },
+    pressArticleAffair: { upsert: vi.fn(async () => ({})) },
+    affairPoliticianDecision: { update: vi.fn(async () => ({})) },
+  },
+}));
+
 vi.mock("@/lib/affair-matching", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/affair-matching")>()),
-  resolveAffairPolitician: vi.fn(async () => ({
-    judgment: "NO_MATCH",
-    topCandidateId: null,
-    decisionId: null,
-  })),
+  resolveAffairPolitician: mocks.resolveAffairPolitician,
+}));
+
+// pickConfidentMatch is pure and stays real; only the DB lookup is replaced.
+vi.mock("@/services/affairs/matching", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/affairs/matching")>()),
+  findMatchingAffairs: mocks.findMatchingAffairs,
+}));
+
+vi.mock("@/services/affairs/create-draft", () => ({
+  createDraftAffairFromDiscovery: mocks.createDraftAffairFromDiscovery,
 }));
 
 import { isPressAnalysisSuccessful, processAnalyzedArticle } from "./press-analysis";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.resolveAffairPolitician.mockResolvedValue({
+    judgment: "NO_MATCH",
+    topCandidateId: null,
+    decisionId: null,
+  });
+  mocks.findMatchingAffairs.mockResolvedValue([]);
+  mocks.createDraftAffairFromDiscovery.mockResolvedValue({ id: "aff-1", slug: "aff-1" });
+});
 
 function zeroStats() {
   return {
@@ -182,5 +218,62 @@ describe("processAnalyzedArticle : garde-fou procédure", () => {
     );
 
     expect(stats.affairsRejected).toBe(0);
+  });
+});
+
+/**
+ * createAffairFromPress never passed `involvement` to
+ * createDraftAffairFromDiscovery, so Prisma applied the schema default,
+ * MENTIONED_ONLY. Yet the loop `continue`s on MENTIONED_ONLY detections: no
+ * press-created affair should carry that value. A politician actually mis en
+ * cause was stored as "ni mise en cause, ni poursuivie".
+ */
+describe("createAffairFromPress : involvement", () => {
+  it("écrit l'implication détectée au lieu du défaut de schéma", async () => {
+    mocks.resolveAffairPolitician.mockResolvedValue({
+      judgment: "SAME",
+      topCandidateId: "pol-1",
+      decisionId: "dec-1",
+    });
+
+    const stats = zeroStats();
+    await processAnalyzedArticle(
+      {
+        id: "a3",
+        url: "https://example.com/z",
+        title: "Titre",
+        feedSource: "lemonde",
+        publishedAt: new Date("2026-08-03"),
+      },
+      "Jeanne Martin a été mise en examen pour détournement de fonds publics.",
+      {
+        isAffairRelated: true,
+        summary: "résumé",
+        affairs: [
+          {
+            politicianName: "Jeanne Martin",
+            involvement: "DIRECT" as const,
+            category: "AUTRE",
+            status: "MISE_EN_EXAMEN",
+            title: "Titre affaire",
+            description: "Description",
+            factsDate: null,
+            court: null,
+            charges: [],
+            excerpts: [],
+            isNewRevelation: true,
+            confidenceScore: 95,
+            mentionedNames: ["Jeanne Martin"],
+          },
+        ],
+      },
+      stats,
+      { dryRun: false, verbose: false }
+    );
+
+    expect(stats.affairsCreated).toBe(1);
+    expect(mocks.createDraftAffairFromDiscovery).toHaveBeenCalledWith(
+      expect.objectContaining({ involvement: "DIRECT" })
+    );
   });
 });
