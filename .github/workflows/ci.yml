@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main, staging]
 
+# Cancel the superseded run when a new commit lands on the same pull request: the build
+# job makes an obsolete run expensive rather than merely noisy. Only for pull requests,
+# so every run on main and staging is kept: a cancelled run there would leave a commit
+# unverified.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     name: ESLint

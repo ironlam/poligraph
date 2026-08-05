@@ -1,5 +1,9 @@
 /**
- * Records every outbound host a `next build` reaches, so CI can fail on an unknown one.
+ * Records the hosts a `next build` reaches over HTTP(S), so CI can fail on an unknown one.
+ *
+ * NOT a firewall, and the distinction matters: it observes requests going through
+ * `globalThis.fetch`, undici and `node:http`/`node:https`. A child binary with its own
+ * network client, or a raw socket, would not necessarily show up here.
  *
  * Loaded through NODE_OPTIONS=--require, which is what makes it land in the static
  * generation workers Next forks: a probe living only in the parent process would miss
@@ -19,19 +23,38 @@ if (!LOG) {
   throw new Error("build-net-probe: BUILD_NET_LOG is required, refusing to run blind");
 }
 
+/**
+ * Being unable to observe must fail the build.
+ *
+ * An earlier version swallowed write errors, "so a probe never breaks the build". That
+ * left a silent-success hole the probe-loaded proof does not close: the first write
+ * succeeds, the disk fills mid-build, later calls go unrecorded, and the checker finds
+ * its proof of loading and reports that all is well.
+ *
+ * Exiting rather than throwing, and this is not paranoia: this code runs INSIDE the
+ * fetch call it wraps, and application code that wraps its own fetch in a try/catch
+ * would swallow the throw. process.exit cannot be caught.
+ */
 function write(line) {
   try {
-    // O_APPEND keeps the 13 workers from interleaving inside a line.
+    // O_APPEND keeps the workers from interleaving inside a line.
     fs.appendFileSync(LOG, `${line}\n`);
-  } catch {
-    // A probe must never be the reason a build fails.
+  } catch (error) {
+    process.stderr.write(
+      `build-net-probe: cannot write ${LOG}, so outbound calls are no longer observed: ` +
+        `${error instanceof Error ? error.message : String(error)}\n`
+    );
+    process.exit(1);
   }
 }
 
 /**
- * Host and path only. Query strings are dropped rather than trimmed: the earlier
- * throwaway version of this probe logged a Sentry envelope URL complete with its
- * `sentry_key`, and a CI log is a public artefact.
+ * Protocol and host, nothing else.
+ *
+ * The checker only ever compares hosts, so the path serves no assertion, and an
+ * identifier or a token can be embedded in a path the day the log is published for
+ * diagnosis. Query strings were already dropped: a throwaway version of this probe
+ * logged a Sentry envelope URL complete with its `sentry_key`.
  */
 function record(kind, rawUrl) {
   if (typeof rawUrl !== "string" || rawUrl === "") return;
@@ -39,7 +62,7 @@ function record(kind, rawUrl) {
   if (rawUrl.startsWith("data:") || rawUrl.startsWith("blob:")) return;
   try {
     const url = new URL(rawUrl);
-    write(`${kind} ${url.protocol}//${url.host}${url.pathname}`);
+    write(`${kind} ${url.protocol}//${url.host}`);
   } catch {
     write(`${kind} unparseable`);
   }
