@@ -31,6 +31,28 @@ for v in DATABASE_URL DIRECT_URL; do
   esac
 done
 
+# --- Prisma 7.9's AI-agent guard -------------------------------------------------
+# Since prisma 7.9, `db push` aborts when it detects an AI coding agent, unless
+# PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION carries the user's own words of consent.
+# The variable is deliberately NOT set here: it is a human's consent, it does not
+# belong in a repository. Checked up front so the failure is this message rather than
+# Prisma's wall of text after the container is already up.
+#
+# Running this by hand as a human needs nothing: the guard only fires for agents.
+if [ -n "${CLAUDECODE:-}${CLAUDE_CODE:-}" ] && [ -z "${PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:-}" ]; then
+  cat >&2 <<'MSG'
+REFUSING: prisma db push is invoked by an AI agent without recorded consent.
+
+This harness pushes the schema to the DISPOSABLE container it just created
+(localhost:55433/poligraph_test) and destroys it, volume included, on exit. It never
+touches .env, Supabase or any shared database. Prisma cannot know that, so it asks.
+
+Ask the human, then re-run with their answer:
+  PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="<their exact words>" npm run test:db:search
+MSG
+  exit 1
+fi
+
 cleanup() {
   echo "[test:db:search] teardown: destroying container + volume (down -v)"
   "${COMPOSE[@]}" down -v --remove-orphans || true
