@@ -25,7 +25,12 @@ export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    // `relative` is load-bearing, not decoration. `sr-only` is position: absolute, so the
+    // hidden label in the last header cell is placed against the nearest positioned ancestor.
+    // Without it, that ancestor is outside the scroll container, the label lands at x=736 in
+    // the document, and the whole PAGE scrolls horizontally by 361px on a 375px viewport.
+    // Measured, then fixed.
+    <div className="relative overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm">
         <caption className="sr-only">
           Mesures en attente de relecture, de la plus ancienne à la plus récente
