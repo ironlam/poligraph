@@ -1,15 +1,16 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIfLocalDb } from "@/test/db-guard";
+
 import { deleteSearchDocument, upsertSearchDocument } from "../documents";
-import { uniqueEntityId } from "./helpers";
+import { assertSearchTestDb, describeIfSearchTestDb, uniqueEntityId } from "./helpers";
 
 // Deferred import, and not a convenience: `@/lib/db` throws at module load when
 // DATABASE_URL is unset, so a top-level import would fail the whole suite instead of
-// skipping this block. describeIfLocalDb only skips the block, it cannot undo an import.
+// skipping this block. describeIfSearchTestDb only skips the block, it cannot undo an import.
 let db: typeof import("@/lib/db").db;
 
-describeIfLocalDb("upsertSearchDocument", () => {
+describeIfSearchTestDb("upsertSearchDocument", () => {
   beforeAll(async () => {
+    assertSearchTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
