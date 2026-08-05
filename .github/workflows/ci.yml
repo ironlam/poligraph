@@ -99,3 +99,73 @@ jobs:
 
       - name: Run tests
         run: npm run test:run
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # An EMPTY PostgreSQL 17, and no .env: the point of this job is to prove the build
+    # holds without secrets and without production data. Every earlier build ran locally,
+    # where `next build` silently loads .env by itself, so "it builds here" never tested
+    # what this job tests.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: poligraph_test
+          POSTGRES_PASSWORD: poligraph_test
+          POSTGRES_DB: poligraph_test
+        ports:
+          - 5432:5432
+        # -h localhost forces TCP: the entrypoint runs a temporary server on the Unix
+        # socket while executing its init scripts, and a socket probe reports healthy
+        # against that one.
+        options: >-
+          --health-cmd "pg_isready -h localhost -U poligraph_test -d poligraph_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
+      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
+      DATABASE_SSL: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      CHECKPOINT_DISABLE: "1"
+      BUILD_NET_LOG: ${{ github.workspace }}/build-network.log
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The same file the local harness feeds its container, so the two cannot drift:
+      # unaccent, which the search queries call, and the ten publicId sequences, which
+      # are not in the datamodel and which `db push` therefore cannot create.
+      - name: Create extensions and publicId sequences
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
+
+      # No --accept-data-loss: the database is empty, so there is nothing to lose, and
+      # a push that WOULD need the flag is a signal rather than something to force.
+      - name: Apply the schema
+        run: npx prisma db push
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_OPTIONS: --require ${{ github.workspace }}/scripts/build-net-probe.cjs
+
+      # Runs even when the build fails: a build that died halfway may still have reached
+      # somewhere new, and that is worth seeing.
+      - name: Check the hosts the build reached
+        if: always()
+        run: npm run build:net-check
