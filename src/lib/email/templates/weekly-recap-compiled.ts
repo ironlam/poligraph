@@ -109,12 +109,12 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
     </style>
     
   </head>
-  <body style="word-spacing:normal;background-color:#f3f4f6;">
-    
-    
-      <div
-         aria-roledescription="email" style="background-color:#f3f4f6;" role="article" lang="und" dir="auto"
-      >
+  
+      <body  style="word-spacing:normal;background-color:#f3f4f6;">
+        
+        <div
+           aria-roledescription="email" role="article" lang="und" dir="auto" style="word-spacing:normal;background-color:#f3f4f6;"
+        >
         <!-- Header -->
       
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" role="presentation" style="width:600px;" width="600" bgcolor="#1e3a5f" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
@@ -160,7 +160,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:1.6;text-align:center;color:#93c5fd;"
-      >{{ weekLabel }}</div>
+      >{{weekLabel}}</div>
     
                 </td>
               </tr>
@@ -214,10 +214,10 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:1.6;text-align:center;color:#6b7280;"
-      ><span class="kpi-value">{{ totalScrutins }}</span> scrutins &middot;
-          <span class="kpi-value">{{ totalArticles }}</span> articles &middot;
-          <span class="kpi-value">{{ totalAffairs }}</span> affaires &middot;
-          <span class="kpi-value">{{ totalFactChecks }}</span> fact-checks</div>
+      ><span class="kpi-value">{{totalScrutins}}</span> scrutins &middot;
+          <span class="kpi-value">{{totalArticles}}</span> articles &middot;
+          <span class="kpi-value">{{totalAffairs}}</span> affaires &middot;
+          <span class="kpi-value">{{totalFactChecks}}</span> fact-checks</div>
     
                 </td>
               </tr>
@@ -293,7 +293,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:15px;font-style:italic;line-height:1.7;text-align:left;color:#374151;"
-      >{{ editorialIntro }}</div>
+      >{{editorialIntro}}</div>
     
                 </td>
               </tr>
@@ -979,7 +979,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:18px;font-weight:700;line-height:1.6;text-align:left;color:#1e3a5f;"
-      >{{ politicianName }}</div>
+      >{{politicianName}}</div>
     
                 </td>
               </tr>
@@ -991,7 +991,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:13px;line-height:1.6;text-align:left;color:#6b7280;"
-      >{{ politicianMandate }} · {{ politicianParty }}</div>
+      >{{politicianMandate}} · {{politicianParty}}</div>
     
                 </td>
               </tr>
@@ -1041,7 +1041,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:1.6;text-align:left;color:#374151;"
-      >{{ politicianBio }}</div>
+      >{{politicianBio}}</div>
     
                 </td>
               </tr>
@@ -1250,7 +1250,7 @@ export const WEEKLY_RECAP_HTML = `<!doctype html>
     
     
       </div>
+      </body>
     
-  </body>
 </html>
   `;

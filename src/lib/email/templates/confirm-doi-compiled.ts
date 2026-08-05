@@ -48,16 +48,18 @@ export const CONFIRM_DOI_HTML = `<!doctype html>
     
      
     <style type="text/css">
-a { color: #1e3a5f; }
+a {
+        color: #1e3a5f;
+      }
     </style>
     
   </head>
-  <body style="word-spacing:normal;background-color:#f3f4f6;">
-    
-    
-      <div
-         aria-roledescription="email" style="background-color:#f3f4f6;" role="article" lang="und" dir="auto"
-      >
+  
+      <body  style="word-spacing:normal;background-color:#f3f4f6;">
+        
+        <div
+           aria-roledescription="email" role="article" lang="und" dir="auto" style="word-spacing:normal;background-color:#f3f4f6;"
+        >
         
       
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" role="presentation" style="width:600px;" width="600" bgcolor="#1e3a5f" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
@@ -153,7 +155,8 @@ a { color: #1e3a5f; }
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:14px;line-height:1.6;text-align:left;color:#1f2937;"
-      >Tu viens de t'inscrire à La Semaine Poligraph, le récap parlementaire hebdomadaire. Pour activer ton inscription, clique sur le bouton ci-dessous.</div>
+      >Tu viens de t'inscrire à La Semaine Poligraph, le récap parlementaire hebdomadaire. Pour
+          activer ton inscription, clique sur le bouton ci-dessous.</div>
     
                 </td>
               </tr>
@@ -291,7 +294,8 @@ a { color: #1e3a5f; }
                   
       <div
          style="font-family:Arial, Helvetica, sans-serif;font-size:12px;line-height:1.6;text-align:left;color:#6b7280;"
-      >Si tu n'es pas à l'origine de cette inscription, ignore simplement cet email. Aucune autre suite ne sera donnée.</div>
+      >Si tu n'es pas à l'origine de cette inscription, ignore simplement cet email. Aucune autre
+          suite ne sera donnée.</div>
     
                 </td>
               </tr>
@@ -364,7 +368,7 @@ a { color: #1e3a5f; }
     
     
       </div>
+      </body>
     
-  </body>
 </html>
   `;
