@@ -20,3 +20,25 @@ export class MeasureValidationError extends Error {
     this.name = "MeasureValidationError";
   }
 }
+
+/**
+ * The measure changed between the moment a page was rendered and the moment its form was
+ * submitted.
+ *
+ * Distinct from MeasureValidationError because the caller has nothing to fix: the input was
+ * valid, the world moved. The interface has to say "reload and look again", not "your data is
+ * wrong".
+ */
+export class MeasureConcurrencyError extends Error {
+  constructor(
+    readonly measureId: string,
+    readonly expectedUpdatedAt: Date,
+    readonly actualUpdatedAt: Date
+  ) {
+    super(
+      `La mesure a changé depuis l'affichage de cette page ` +
+        `(vue à ${expectedUpdatedAt.toISOString()}, modifiée à ${actualUpdatedAt.toISOString()})`
+    );
+    this.name = "MeasureConcurrencyError";
+  }
+}

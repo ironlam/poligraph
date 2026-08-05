@@ -8,7 +8,7 @@ import type {
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { invalidateMeasureTags } from "./cache";
-import { MeasureValidationError } from "./errors";
+import { MeasureConcurrencyError, MeasureValidationError } from "./errors";
 import { lockMeasure } from "./lock";
 import { syncSearchDocument } from "./search-sync";
 
@@ -324,6 +324,22 @@ export async function discardMeasureRevision(input: {
 export async function publishMeasureRevision(input: {
   measureId: string;
   revisionId: string;
+  /**
+   * The `Measure.updatedAt` the caller last saw. When given, publication is refused if the row
+   * has moved since, with MeasureConcurrencyError.
+   *
+   * Optimistic concurrency, and it belongs HERE rather than in the caller: checking before
+   * calling the transition would be a read-then-decide outside the lock, which is the race this
+   * module takes the lock for.
+   *
+   * `updatedAt` rather than `publishedRevisionId`, because depublishMeasure() keeps the pointer
+   * and only moves publicationStatus. Comparing the pointer would let the worst case through: a
+   * reviewer republishing content another reviewer just took down for a legal reason.
+   *
+   * Optional on purpose: a script or the Promise migration has no rendered page, so demanding a
+   * version from them would be a check with nothing to check.
+   */
+  expectedUpdatedAt?: Date;
 }): Promise<void> {
   const { electionId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
@@ -334,8 +350,20 @@ export async function publishMeasureRevision(input: {
         electionId: true,
         publishedRevisionId: true,
         latestRevisionId: true,
+        updatedAt: true,
       },
     });
+
+    if (
+      input.expectedUpdatedAt !== undefined &&
+      measure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()
+    ) {
+      throw new MeasureConcurrencyError(
+        input.measureId,
+        input.expectedUpdatedAt,
+        measure.updatedAt
+      );
+    }
 
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.revisionId },
