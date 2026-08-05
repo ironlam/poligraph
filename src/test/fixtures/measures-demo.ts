@@ -149,10 +149,16 @@ async function createDemoMeasure(
   options: { chiffree?: boolean } = {}
 ): Promise<{ measureId: string; revisionId: string }> {
   const { createMeasure } = await transitions();
+  const politicianId = context.politicianIds[candidateIndex];
+  const candidacyId = context.candidacyIds[candidateIndex];
+  if (politicianId === undefined || candidacyId === undefined) {
+    throw new Error(`Candidature de démonstration ${candidateIndex} absente du contexte`);
+  }
+
   return createMeasure({
-    politicianId: context.politicianIds[candidateIndex],
+    politicianId,
     electionId: context.electionId,
-    candidacyId: context.candidacyIds[candidateIndex],
+    candidacyId,
     programEditionId: null,
     attribution: "PERSONAL",
     theme: seed.theme,
