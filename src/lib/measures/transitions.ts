@@ -7,6 +7,7 @@ import type {
   ThemeCategory,
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
+import { invalidateMeasureTags } from "./cache";
 import { MeasureValidationError } from "./errors";
 import { lockMeasure } from "./lock";
 import { syncSearchDocument } from "./search-sync";
@@ -310,4 +311,193 @@ export async function discardMeasureRevision(input: {
 
     await syncSearchDocument(tx, input.measureId);
   });
+}
+
+/**
+ * Publishes a reviewed revision. Five writes in one PostgreSQL transaction, then the cache
+ * invalidation outside it.
+ *
+ * Note what this signature does NOT take: no reviewedAt, no reviewedBy. The review is
+ * verified here, never declared. A publish function that accepts a review timestamp makes
+ * the "a published revision has been reviewed" guarantee circular.
+ */
+export async function publishMeasureRevision(input: {
+  measureId: string;
+  revisionId: string;
+}): Promise<void> {
+  const { electionId } = await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: {
+        electionId: true,
+        publishedRevisionId: true,
+        latestRevisionId: true,
+      },
+    });
+
+    const revision = await tx.measureRevision.findUnique({
+      where: { id: input.revisionId },
+      select: {
+        measureId: true,
+        text: true,
+        reviewedAt: true,
+        discardedAt: true,
+        supersededAt: true,
+        _count: { select: { sources: true } },
+      },
+    });
+
+    if (!revision) throw new MeasureValidationError(`Révision ${input.revisionId} introuvable`);
+    if (revision.measureId !== input.measureId) {
+      throw new MeasureValidationError("La révision appartient à une autre mesure");
+    }
+    if (!revision.reviewedAt) {
+      throw new MeasureValidationError("Une révision non relue ne peut pas être publiée");
+    }
+    if (revision.discardedAt) {
+      throw new MeasureValidationError("Une révision abandonnée ne peut pas être publiée");
+    }
+    if (revision.supersededAt) {
+      throw new MeasureValidationError("Une révision remplacée ne peut pas être republiée");
+    }
+    if (revision._count.sources === 0) {
+      throw new MeasureValidationError("Une révision publiée doit porter au moins une source");
+    }
+
+    const now = new Date();
+
+    // Republishing the current revision while a draft is in flight must NOT move
+    // latestRevisionId: pointing it back at the published revision would leave the draft
+    // active with no pointer designating it, which the audit reports as an orphan.
+    // Reachable through an admin republish after a depublication.
+    const hasNewerDraft =
+      measure.latestRevisionId !== null &&
+      measure.latestRevisionId !== input.revisionId &&
+      measure.latestRevisionId !== measure.publishedRevisionId;
+
+    if (measure.publishedRevisionId && measure.publishedRevisionId !== input.revisionId) {
+      await tx.measureRevision.update({
+        where: { id: measure.publishedRevisionId },
+        data: { supersededAt: now },
+      });
+    }
+
+    await tx.measureRevision.update({
+      where: { id: input.revisionId },
+      data: { publishedAt: now },
+    });
+
+    await tx.measure.update({
+      where: { id: input.measureId },
+      data: {
+        publishedRevisionId: input.revisionId,
+        publicationStatus: "PUBLISHED",
+        depublishedAt: null,
+        depublicationReason: null,
+        // Publishing normally makes the revision the latest state too, unless a newer
+        // draft is in flight (see hasNewerDraft above).
+        ...(hasNewerDraft ? {} : { latestRevisionId: input.revisionId }),
+      },
+    });
+
+    // In the same transaction: the database must never expose a new revision while the
+    // index still holds the previous text. Called last, so it reads the pointers this
+    // transaction has just written.
+    await syncSearchDocument(tx, input.measureId);
+
+    return { electionId: measure.electionId };
+  });
+
+  invalidateMeasureTags(input.measureId, electionId);
+}
+
+/**
+ * Our act: removing a published measure from the site. Reserved for content that is
+ * legally or factually dangerous, which is why it demands a reason.
+ *
+ * Does not touch the revision: what the candidate said has not changed, only our decision
+ * to show it.
+ */
+export async function depublishMeasure(input: {
+  measureId: string;
+  reason: string;
+}): Promise<void> {
+  if (input.reason.trim() === "") {
+    throw new MeasureValidationError("Une dépublication exige un motif");
+  }
+
+  const { electionId } = await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { electionId: true },
+    });
+
+    await tx.measure.update({
+      where: { id: input.measureId },
+      data: {
+        publicationStatus: "DRAFT",
+        depublishedAt: new Date(),
+        depublicationReason: input.reason,
+      },
+    });
+
+    // Re-derives rather than just flipping visibility. With a draft in flight, the
+    // reference revision becomes latestRevisionId, so the document must carry the draft
+    // text: only changing visibility would leave it aligned on the former published
+    // revision, which the staleness rule reports as stale. The row is kept either way, an
+    // upsert never deletes.
+    await syncSearchDocument(tx, input.measureId);
+
+    return { electionId: measure.electionId };
+  });
+
+  invalidateMeasureTags(input.measureId, electionId);
+}
+
+/**
+ * The candidate's act: dropping a proposal before the election. Not a revision, and not a
+ * depublication. The measure keeps its published revision and its sources, and its
+ * withdrawal state is displayed explicitly.
+ *
+ * The three withdrawal fields are written here and nowhere else, and never separately.
+ *
+ * No syncSearchDocument call, same as reviewMeasureRevision: neither changes the pointers,
+ * the visibility or the indexed text. A withdrawal is displayed by the page, it does not
+ * change the searchable content, so syncing here would be a write that changes nothing.
+ */
+export async function withdrawMeasure(input: {
+  measureId: string;
+  withdrawnAt: Date;
+  sourceUrl: string;
+  sourceLabel: string;
+}): Promise<void> {
+  if (input.sourceUrl.trim() === "" || input.sourceLabel.trim() === "") {
+    throw new MeasureValidationError("Un retrait exige une URL et un libellé de source, les deux");
+  }
+
+  const { electionId } = await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { electionId: true },
+    });
+
+    await tx.measure.update({
+      where: { id: input.measureId },
+      data: {
+        withdrawnAt: input.withdrawnAt,
+        withdrawnSourceUrl: input.sourceUrl,
+        withdrawnSourceLabel: input.sourceLabel,
+      },
+    });
+
+    return { electionId: measure.electionId };
+  });
+
+  invalidateMeasureTags(input.measureId, electionId);
 }

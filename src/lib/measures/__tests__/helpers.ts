@@ -9,7 +9,17 @@
  */
 
 import { assertDisposableTestDb } from "@/test/db-guard";
-import { createMeasure, type DraftMeasureRevisionInput } from "../transitions";
+// TYPE-ONLY, and that matters: `../transitions` imports `@/lib/db` as a value, which
+// throws at module load without DATABASE_URL. A value import here would fail every test
+// file that imports these fixtures, before any gate could skip a block. A type import is
+// erased at compile time, so it costs nothing.
+import type { DraftMeasureRevisionInput } from "../transitions";
+
+/** Deferred, for the same reason as client(): the module must not load at import time. */
+async function transitions(): Promise<typeof import("../transitions")> {
+  assertDisposableTestDb();
+  return import("../transitions");
+}
 
 /**
  * Deferred client. `@/lib/db` throws `DATABASE_URL environment variable is not set` at
@@ -97,6 +107,7 @@ export async function seedCandidacy(politicianId: string, electionId: string): P
 
 /** A measure with a single, never-published draft. The starting point of most scenarios. */
 export async function seedMeasureWithDraft(): Promise<{ measureId: string; revisionId: string }> {
+  const { createMeasure } = await transitions();
   const politicianId = await seedPolitician();
   const electionId = await seedElection();
   return createMeasure({
@@ -148,4 +159,13 @@ export function draftInput(measureId: string, text: string): DraftMeasureRevisio
       },
     ],
   };
+}
+
+/** A measure published through the real path: created, reviewed, then published. */
+export async function publishSeededMeasure(): Promise<{ measureId: string; revisionId: string }> {
+  const { publishMeasureRevision, reviewMeasureRevision } = await transitions();
+  const seeded = await seedMeasureWithDraft();
+  await reviewMeasureRevision({ ...seeded, reviewedBy: "relecteur" });
+  await publishMeasureRevision(seeded);
+  return seeded;
 }
