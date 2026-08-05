@@ -22,8 +22,9 @@ export type SearchDocumentInput = {
  * or fail with the indexing.
  *
  * Two statements because searchVector is Unsupported("tsvector") and therefore absent
- * from the generated client. The second one recomputes both derived columns from the
- * row's own title and body, so searchText can never disagree with the indexed text.
+ * from the generated client. The second one recomputes the vector from the row's own
+ * title and body rather than from the input, so the index can never disagree with the
+ * text stored next to it.
  */
 export async function upsertSearchDocument(
   tx: DbTransactionClient,
@@ -47,8 +48,7 @@ export async function upsertSearchDocument(
 
   await tx.$executeRaw`
     UPDATE "SearchDocument"
-    SET "searchVector" = to_tsvector('simple', unaccent(title || ' ' || body)),
-        "searchText"   = lower(unaccent(title || ' ' || body))
+    SET "searchVector" = to_tsvector('simple', unaccent(title || ' ' || body))
     WHERE "entityType" = ${input.entityType}::"SearchEntityType"
       AND "entityId" = ${input.entityId}
   `;

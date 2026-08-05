@@ -90,11 +90,18 @@ describeIfSearchTestDb("domain lexical corpus", () => {
     return rows.length > 0;
   }
 
+  /**
+   * The substring match the substrate does NOT use, computed on the fly.
+   *
+   * Deliberately not backed by a stored column: the accent-folded searchText column and
+   * its GIN trigram index were removed with the fallback they served. What remains here
+   * is the demonstration of why, which needs no column to hold.
+   */
   async function matchesSubstring(entityId: string, query: string): Promise<boolean> {
     const rows = await db.$queryRaw<{ hit: number }[]>`
       SELECT 1 AS hit FROM "SearchDocument"
       WHERE "entityId" = ${entityId}
-        AND "searchText" LIKE '%' || lower(unaccent(${query})) || '%'
+        AND lower(unaccent(title || ' ' || body)) LIKE '%' || lower(unaccent(${query})) || '%'
     `;
     return rows.length > 0;
   }

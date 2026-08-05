@@ -51,14 +51,22 @@ describeIfSearchTestDb("SearchDocument schema", () => {
     expect(gin).toHaveLength(1);
   });
 
-  it("indexes searchText with the trigram operator class", async () => {
-    const indexes = await searchDocumentIndexes();
-    const trigram = indexes.filter((i) => i.indexdef.includes("gin_trgm_ops"));
+  it("declares no derived column besides the vector", async () => {
+    const columns = await db.$queryRaw<{ column_name: string }[]>`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'SearchDocument'
+    `;
+    const names = columns.map((c) => c.column_name);
 
-    // Without the explicit opclass the index exists but never serves a LIKE '%...%',
-    // so the morphological fallback of spec 7.2 silently degrades to a sequential scan.
-    expect(trigram).toHaveLength(1);
-    expect(trigram[0]?.indexdef).toContain("searchText");
+    // searchText and its GIN trigram index were removed with the substring fallback.
+    // Asserting their absence, and not merely not asserting their presence: a column
+    // recomputed on every write and indexed on every write, that nothing reads, is a
+    // cost no test would otherwise notice.
+    expect(names).toContain("searchVector");
+    expect(names).not.toContain("searchText");
+
+    const indexes = await searchDocumentIndexes();
+    expect(indexes.filter((i) => i.indexdef.includes("gin_trgm_ops"))).toHaveLength(0);
   });
 
   it("indexes visibility", async () => {
@@ -125,7 +133,7 @@ describeIfSearchTestDb("db:push drift", () => {
   );
 
   it(
-    "keeps the declared tsvector column and both GIN indexes across two pushes",
+    "keeps the declared tsvector column and its GIN index across two pushes",
     async () => {
       dbPush();
       dbPush();
@@ -144,7 +152,9 @@ describeIfSearchTestDb("db:push drift", () => {
           (i) => i.indexdef.includes("USING gin") && i.indexdef.includes("searchVector")
         )
       ).toHaveLength(1);
-      expect(indexes.filter((i) => i.indexdef.includes("gin_trgm_ops"))).toHaveLength(1);
+      // No trigram index survives either, because none is declared any more. A push that
+      // reintroduced one would mean the schema drifted back.
+      expect(indexes.filter((i) => i.indexdef.includes("gin_trgm_ops"))).toHaveLength(0);
     },
     DB_PUSH_TIMEOUT_MS
   );

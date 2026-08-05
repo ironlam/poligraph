@@ -45,7 +45,7 @@ describeIfSearchTestDb("upsertSearchDocument", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("fills both derived columns on insert", async () => {
+  it("fills the search vector on insert", async () => {
     const entityId = uniqueEntityId("insert");
 
     await db.$transaction(async (tx) => {
@@ -61,20 +61,23 @@ describeIfSearchTestDb("upsertSearchDocument", () => {
       });
     });
 
-    const rows = await db.$queryRaw<{ searchText: string; lexemes: string }[]>`
-      SELECT "searchText", "searchVector"::text AS lexemes
+    const rows = await db.$queryRaw<{ lexemes: string | null }[]>`
+      SELECT "searchVector"::text AS lexemes
       FROM "SearchDocument"
       WHERE "entityType" = 'MEASURE'::"SearchEntityType" AND "entityId" = ${entityId}
     `;
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.searchText).toContain("encadrer les loyers");
+    // The column is nullable and Prisma cannot write it, so a non-null value is the proof
+    // that the second statement of the upsert ran at all.
+    expect(rows[0]?.lexemes).not.toBeNull();
     expect(rows[0]?.lexemes).toContain("loyers");
-    // The default is an empty string: a non-empty value proves the second statement ran.
-    expect(rows[0]?.searchText).not.toBe("");
+    expect(rows[0]?.lexemes).toContain("encadrer");
+    // Words from both fields, which is what proves the vector is built from title AND body.
+    expect(rows[0]?.lexemes).toContain("tendues");
   });
 
-  it("recomputes the derived columns when the text changes", async () => {
+  it("recomputes the search vector when the text changes", async () => {
     const entityId = uniqueEntityId("update");
     const base = {
       entityType: "MEASURE" as const,
@@ -101,18 +104,18 @@ describeIfSearchTestDb("upsertSearchDocument", () => {
       });
     });
 
-    const rows = await db.$queryRaw<{ searchText: string; sourceRevisionId: string }[]>`
-      SELECT "searchText", "sourceRevisionId"
+    const rows = await db.$queryRaw<{ lexemes: string | null; sourceRevisionId: string }[]>`
+      SELECT "searchVector"::text AS lexemes, "sourceRevisionId"
       FROM "SearchDocument"
       WHERE "entityType" = 'MEASURE'::"SearchEntityType" AND "entityId" = ${entityId}
     `;
 
-    // A stale searchText is the failure mode the central model exists to prevent:
-    // the row is unique on (entityType, entityId), so a second call must overwrite
-    // the derived columns and not leave the previous formulation searchable.
+    // A stale vector is the failure mode the central model exists to prevent: the row is
+    // unique on (entityType, entityId), so a second call must overwrite the vector and
+    // not leave the previous formulation searchable.
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.searchText).toContain("geler");
-    expect(rows[0]?.searchText).not.toContain("encadrer");
+    expect(rows[0]?.lexemes).toContain("geler");
+    expect(rows[0]?.lexemes).not.toContain("encadrer");
     expect(rows[0]?.sourceRevisionId).toBe("rev-2");
   });
 
@@ -138,12 +141,18 @@ describeIfSearchTestDb("upsertSearchDocument", () => {
     const row = await db.searchDocument.findUnique({
       where: { entityType_entityId: { entityType: "MEASURE", entityId } },
     });
+    const rows = await db.$queryRaw<{ lexemes: string | null }[]>`
+      SELECT "searchVector"::text AS lexemes
+      FROM "SearchDocument"
+      WHERE "entityType" = 'MEASURE'::"SearchEntityType" AND "entityId" = ${entityId}
+    `;
 
     // Deleting on depublication would lose the indexed text and force a full
     // reindex to bring the entity back, which spec 7.2 forbids explicitly.
     expect(row).not.toBeNull();
     expect(row?.visibility).toBe("ADMIN_ONLY");
-    expect(row?.searchText).toContain("loyers");
+    expect(row?.title).toBe("Encadrer les loyers");
+    expect(rows[0]?.lexemes).toContain("loyers");
   });
 
   it("removes the row when the entity is deleted", async () => {

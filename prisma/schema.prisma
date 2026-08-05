@@ -2720,23 +2720,21 @@ model SearchDocument {
   // Filled by SQL in upsertSearchDocument(). Prisma cannot read this type; only the
   // GIN index uses it. Must stay nullable: a non-nullable Unsupported column makes
   // some write operations disappear from the generated client.
-  searchVector Unsupported("tsvector")?
-
-  // Accent-folded, lowercased title + body. An empty string means the second statement
-  // of the upsert never ran, which is detectable.
   //
-  // NOT read by searchPublic(): a substring match over this column recovers the plural
-  // we want (loyer -> loyers) and the false positive we refuse (retrait -> retraite)
-  // with no way to tell them apart, so the public fallback enumerates controlled
-  // variants against searchVector instead. The column and its trigram index stay for
-  // the approximate search of lot 7, which owns the thresholds and the negative corpus.
-  searchText String @default("")
+  // The only derived column, and deliberately so. An accent-folded text column with a
+  // GIN trigram index used to sit next to it for a substring fallback, which turned out
+  // to recover the plural we want (loyer -> loyers) and the false positive we refuse
+  // (retrait -> retraite) with no way to tell them apart. searchPublic() enumerates
+  // controlled variants against this vector instead. Approximate search is lot 7's
+  // subject: it measures its own operators and thresholds against a negative corpus, so
+  // it declares its own columns rather than inheriting a guess made here. title and body
+  // stay on the row, so any derived column can be rebuilt when the need is demonstrated.
+  searchVector Unsupported("tsvector")?
 
   indexedAt       DateTime @default(now())
   sourceUpdatedAt DateTime // the reference revision's updatedAt at indexing time
 
   @@unique([entityType, entityId])
   @@index([searchVector], type: Gin)
-  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([visibility])
 }
