@@ -31,30 +31,14 @@ for v in DATABASE_URL DIRECT_URL; do
   esac
 done
 
-# --- Prisma 7.9's AI-agent guard -------------------------------------------------
-# Since prisma 7.9, `db push` aborts when it detects an AI coding agent, unless
-# PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION carries the user's own words of consent.
-# The variable is deliberately NOT set here: it is a human's consent, it does not
-# belong in a repository. Checked up front so the failure is this message rather than
-# Prisma's wall of text after the container is already up.
+# Note for AI agents, not a check. Since prisma 7.9, the `db push` below aborts when
+# Prisma detects an AI coding agent, and asks for PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
+# to carry the human's own words of consent. Prisma's own message says what to do, and it
+# is the single source of truth on which callers are concerned: an earlier check here only
+# duplicated the policy approximately, refusing runs Prisma would have allowed.
 #
-# The condition is "no consent recorded AND no terminal attached", not a list of agent
-# environment variables: Prisma recognises several agents and the list would rot. A human
-# in a shell has a TTY and sees no friction. Prisma remains the actual guard either way,
-# this precheck only buys a message that says what to do.
-if [ -z "${PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:-}" ] && ! [ -t 0 ]; then
-  cat >&2 <<'MSG'
-REFUSING: prisma db push is invoked by an AI agent without recorded consent.
-
-This harness pushes the schema to the DISPOSABLE container it just created
-(localhost:55433/poligraph_test) and destroys it, volume included, on exit. It never
-touches .env, Supabase or any shared database. Prisma cannot know that, so it asks.
-
-Ask the human, then re-run with their answer:
-  PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="<their exact words>" npm run test:db:search
-MSG
-  exit 1
-fi
+# The variable is deliberately absent from this repository: it is a human's consent.
+# Running the harness by hand needs nothing.
 
 cleanup() {
   echo "[test:db:search] teardown: destroying container + volume (down -v)"
