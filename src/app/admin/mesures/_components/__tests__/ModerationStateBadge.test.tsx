@@ -11,7 +11,8 @@ function state(over: Partial<ModerationState> = {}): ModerationState {
     visibilityBlockers: ["status_not_published"],
     withdrawal: null,
     depublication: null,
-    pendingDraft: null,
+    activeDraft: null,
+    draftIsCorrection: false,
     anomalies: [],
     ...over,
   };
@@ -89,7 +90,11 @@ describe("ModerationStateBadge", () => {
   it("montre la correction en cours au lieu de la cacher derrière l'étape", () => {
     render(
       <ModerationStateBadge
-        state={state({ ...PUBLISHED, pendingDraft: { id: "rev-2", reviewed: true } })}
+        state={state({
+          ...PUBLISHED,
+          activeDraft: { id: "rev-2", reviewed: true },
+          draftIsCorrection: true,
+        })}
       />
     );
 
@@ -99,7 +104,11 @@ describe("ModerationStateBadge", () => {
   it("distingue une correction relue d'une correction en cours", () => {
     render(
       <ModerationStateBadge
-        state={state({ ...PUBLISHED, pendingDraft: { id: "rev-2", reviewed: false } })}
+        state={state({
+          ...PUBLISHED,
+          activeDraft: { id: "rev-2", reviewed: false },
+          draftIsCorrection: true,
+        })}
       />
     );
 

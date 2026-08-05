@@ -145,10 +145,8 @@ describeIfDisposableDb("queryMeasureQueue", () => {
     // The reference text is the PUBLISHED one, because that is what the site displays. The
     // pending draft is signalled beside it instead of quietly replacing it.
     expect(row?.referenceText).toContain("sur la durée du mandat");
-    expect(row?.state.pendingDraft).toEqual({
-      id: expect.any(String),
-      reviewed: true,
-    });
+    expect(row?.state.activeDraft).toEqual({ id: expect.any(String), reviewed: true });
+    expect(row?.state.draftIsCorrection).toBe(true);
   });
 
   it("n'invente pas de texte pour une mesure sans révision de référence", async () => {

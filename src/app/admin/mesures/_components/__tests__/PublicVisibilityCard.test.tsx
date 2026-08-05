@@ -12,7 +12,8 @@ function state(over: Partial<ModerationState> = {}): ModerationState {
     visibilityBlockers: [],
     withdrawal: null,
     depublication: null,
-    pendingDraft: null,
+    activeDraft: null,
+    draftIsCorrection: false,
     anomalies: [],
     ...over,
   };

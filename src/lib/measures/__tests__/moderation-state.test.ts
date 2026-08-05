@@ -79,7 +79,7 @@ describe("deriveModerationState : visibilité publique", () => {
     expect(state.publication).toBe("PUBLISHED");
     expect(state.publiclyVisible).toBe(true);
     expect(state.anomalies).toEqual([]);
-    expect(state.pendingDraft).toBeNull();
+    expect(state.activeDraft).toBeNull();
     expect(state.withdrawal).toBeNull();
     expect(state.depublication).toBeNull();
   });
@@ -175,7 +175,7 @@ describe("deriveModerationState : les étapes du cycle", () => {
     );
 
     expect(state.publication).toBe("EMPTY");
-    expect(state.pendingDraft).toBeNull();
+    expect(state.activeDraft).toBeNull();
     expect(state.anomalies).toEqual([]);
   });
 
@@ -186,9 +186,10 @@ describe("deriveModerationState : les étapes du cycle", () => {
     );
 
     expect(state.publication).toBe("DRAFT");
-    // No pending draft: nothing is published, so this draft IS the current state and not a
-    // correction waiting on top of one. Reporting both would claim two versions exist.
-    expect(state.pendingDraft).toBeNull();
+    // The draft is there, and it is NOT a correction: nothing is published under it. Reporting a
+    // correction here would claim two versions exist where there is one.
+    expect(state.activeDraft).toEqual({ id: "rev-draft", reviewed: false });
+    expect(state.draftIsCorrection).toBe(false);
   });
 
   it("reports REVIEWED on an active draft that has been read", () => {
@@ -198,7 +199,8 @@ describe("deriveModerationState : les étapes du cycle", () => {
     );
 
     expect(state.publication).toBe("REVIEWED");
-    expect(state.pendingDraft).toBeNull();
+    expect(state.activeDraft).toEqual({ id: "rev-draft", reviewed: true });
+    expect(state.draftIsCorrection).toBe(false);
     expect(state.publiclyVisible).toBe(false);
   });
 
@@ -252,7 +254,8 @@ describe("deriveModerationState : la correction en cours", () => {
 
     expect(state.publication).toBe("PUBLISHED");
     expect(state.publiclyVisible).toBe(true);
-    expect(state.pendingDraft).toEqual({ id: "rev-draft", reviewed: true });
+    expect(state.activeDraft).toEqual({ id: "rev-draft", reviewed: true });
+    expect(state.draftIsCorrection).toBe(true);
     expect(state.anomalies).toEqual([]);
   });
 
@@ -268,7 +271,8 @@ describe("deriveModerationState : la correction en cours", () => {
       })
     );
 
-    expect(state.pendingDraft).toEqual({ id: "rev-draft", reviewed: false });
+    expect(state.activeDraft).toEqual({ id: "rev-draft", reviewed: false });
+    expect(state.draftIsCorrection).toBe(true);
   });
 });
 

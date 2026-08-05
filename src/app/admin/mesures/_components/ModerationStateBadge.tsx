@@ -57,9 +57,9 @@ export function ModerationStateBadge({ state }: { state: ModerationState }) {
         </span>
       )}
 
-      {state.pendingDraft !== null && (
+      {state.activeDraft !== null && state.draftIsCorrection && (
         <span className={`${CHIP} ${NEUTRAL}`}>
-          {state.pendingDraft.reviewed ? "Correction relue en attente" : "Correction en cours"}
+          {state.activeDraft.reviewed ? "Correction relue en attente" : "Correction en cours"}
         </span>
       )}
 

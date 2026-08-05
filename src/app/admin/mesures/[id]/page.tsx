@@ -9,9 +9,11 @@ import { isAuthenticated } from "@/lib/auth";
 import { getMeasureForModeration, getPublicMeasure } from "@/lib/data/measures";
 import { deriveModerationState, type ModerationMeasureRow } from "@/lib/measures/moderation-state";
 import { AnomalyList } from "../_components/AnomalyList";
+import { MeasureActionPanel } from "../_components/MeasureActionPanel";
 import { ModerationStateBadge } from "../_components/ModerationStateBadge";
 import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
+import { availableActions, hasAmbiguousPointers } from "../_data/available-actions";
 import { getMeasureContext } from "../_data/detail-query";
 
 export const metadata = {
@@ -75,6 +77,17 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
   const referenceRevisionId = measure.publishedRevisionId ?? measure.latestRevisionId;
   const referenceText =
     measure.revisions.find((revision) => revision.id === referenceRevisionId)?.text ?? null;
+
+  const actions = availableActions({
+    state,
+    publishedRevisionId: measure.publishedRevisionId,
+  });
+  // The token comes from THIS read, the one that renders the forms below. Reading it again later
+  // would defeat the point: it has to be the version the reviewer actually saw.
+  const expectedUpdatedAt = measure.updatedAt.toISOString();
+  const revisionTexts = Object.fromEntries(
+    measure.revisions.map((revision) => [revision.id, revision.text])
+  );
 
   return (
     <div className="space-y-6">
@@ -184,9 +197,21 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      <p className="text-sm text-muted-foreground">
-        Cet écran est en lecture seule. Les actions éditoriales arrivent au lot suivant.
-      </p>
+      <section aria-labelledby="actions-heading">
+        <h2 id="actions-heading" className="text-base font-semibold">
+          Actions éditoriales
+        </h2>
+        <div className="mt-3">
+          <MeasureActionPanel
+            measureId={id}
+            expectedUpdatedAt={expectedUpdatedAt}
+            actions={actions}
+            revisionTexts={revisionTexts}
+            isWithdrawn={state.withdrawal !== null}
+            pointersAmbiguous={hasAmbiguousPointers(state)}
+          />
+        </div>
+      </section>
     </div>
   );
 }
