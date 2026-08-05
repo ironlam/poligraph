@@ -8,8 +8,10 @@ import { uniqueEntityId } from "./helpers";
 // skipping this block. describeIfLocalDb only skips the block, it cannot undo an import.
 let db: typeof import("@/lib/db").db;
 
-// The dictionary name cannot be a bound parameter of to_tsvector, and $executeRawUnsafe
-// is banned by CI, so each dictionary gets its own tagged template.
+// The dictionary name cannot be a bound parameter of to_tsvector, and the unparameterized
+// raw-SQL escape hatch is banned by CI, so each dictionary gets its own tagged template.
+// That ban is a plain grep over src/, so it also fires on a comment that merely names the
+// forbidden method. Hence the periphrasis.
 async function lexemes(dictionary: "simple" | "french", word: string): Promise<string> {
   const rows =
     dictionary === "french"
