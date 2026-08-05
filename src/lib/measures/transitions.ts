@@ -221,3 +221,93 @@ export async function draftMeasureRevision(
     return { revisionId: revision.id };
   });
 }
+
+/**
+ * Records that a human read this formulation. Separate from publication on purpose: a
+ * function that receives reviewedAt as a parameter declares the review rather than
+ * verifying it, which made the guarantee "a published revision has been reviewed"
+ * circular in the first version of this plan.
+ */
+export async function reviewMeasureRevision(input: {
+  measureId: string;
+  revisionId: string;
+  reviewedBy: string;
+}): Promise<void> {
+  if (input.reviewedBy.trim() === "") {
+    throw new MeasureValidationError("Le relecteur doit être identifié");
+  }
+
+  await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    const revision = await tx.measureRevision.findUnique({
+      where: { id: input.revisionId },
+      select: { measureId: true, discardedAt: true, supersededAt: true },
+    });
+    if (!revision) throw new MeasureValidationError(`Révision ${input.revisionId} introuvable`);
+    if (revision.measureId !== input.measureId) {
+      throw new MeasureValidationError("La révision appartient à une autre mesure");
+    }
+    if (revision.discardedAt) {
+      throw new MeasureValidationError("Une révision abandonnée ne peut pas être relue");
+    }
+    if (revision.supersededAt) {
+      throw new MeasureValidationError("Une révision remplacée ne peut pas être relue");
+    }
+
+    await tx.measureRevision.update({
+      where: { id: input.revisionId },
+      data: { reviewedAt: new Date(), reviewedBy: input.reviewedBy },
+    });
+  });
+}
+
+/**
+ * Abandons a draft. If it was the latest, the pointer falls back to the published
+ * revision, so the measure never designates a discarded draft as its latest state.
+ */
+export async function discardMeasureRevision(input: {
+  measureId: string;
+  revisionId: string;
+}): Promise<void> {
+  await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    // Ownership check, not a formality: the lock is taken on input.measureId, and the
+    // update targets input.revisionId. Without this, a call can lock measure A and set
+    // discardedAt on a revision of measure B, which is both unlocked and untouched by the
+    // caller's intent.
+    const revision = await tx.measureRevision.findUnique({
+      where: { id: input.revisionId },
+      select: { measureId: true },
+    });
+    if (!revision) throw new MeasureValidationError(`Révision ${input.revisionId} introuvable`);
+    if (revision.measureId !== input.measureId) {
+      throw new MeasureValidationError("La révision appartient à une autre mesure");
+    }
+
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { latestRevisionId: true, publishedRevisionId: true },
+    });
+    if (input.revisionId === measure.publishedRevisionId) {
+      throw new MeasureValidationError(
+        "Une révision publiée ne s'abandonne pas, elle se dépublie ou se remplace"
+      );
+    }
+
+    await tx.measureRevision.update({
+      where: { id: input.revisionId },
+      data: { discardedAt: new Date() },
+    });
+
+    if (measure.latestRevisionId === input.revisionId) {
+      await tx.measure.update({
+        where: { id: input.measureId },
+        data: { latestRevisionId: measure.publishedRevisionId },
+      });
+    }
+
+    await syncSearchDocument(tx, input.measureId);
+  });
+}
