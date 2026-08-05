@@ -84,6 +84,25 @@ async function assertContextIsCoherent(
   }
 }
 
+/**
+ * Refuses a write built on a state the caller no longer sees.
+ *
+ * Called after lockMeasure() in every transition that writes the Measure ROW. `undefined` means
+ * "do not check", for scripts and the migration, which have no rendered page.
+ *
+ * BOUND OF THE GUARANTEE: `Measure.updatedAt` only moves when the Measure row is written, so this
+ * covers publication, depublication, withdrawal, drafting and discarding. It is NOT a version of
+ * the editorial dossier: reviewing a revision, adding a qualification or recording a similarity
+ * assessment write a revision or a child table and leave `updatedAt` untouched. Those have their
+ * own preconditions instead, which is why reviewMeasureRevision() refuses an already-reviewed
+ * revision rather than taking a token.
+ */
+function assertVersionMatches(measureId: string, expected: Date | undefined, actual: Date): void {
+  if (expected !== undefined && actual.getTime() !== expected.getTime()) {
+    throw new MeasureConcurrencyError(measureId, expected, actual);
+  }
+}
+
 function assertRevisionIsUsable(
   revision: MeasureRevisionInput,
   sources: MeasureSourceInput[]
@@ -158,6 +177,12 @@ export type DraftMeasureRevisionInput = {
   measureId: string;
   revision: MeasureRevisionInput;
   sources: MeasureSourceInput[];
+  /**
+   * The `Measure.updatedAt` the caller last saw. Drafting needs this as much as publishing does:
+   * it ACTIVELY discards the previous active draft, so a stale page throws away a colleague's work
+   * in progress without anyone seeing it.
+   */
+  expectedUpdatedAt?: Date;
 };
 
 // No `discardedBy` and no `supersedesDraftBy`. A first version of this plan took a
@@ -183,8 +208,10 @@ export async function draftMeasureRevision(
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true },
+      select: { latestRevisionId: true, publishedRevisionId: true, updatedAt: true },
     });
+
+    assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
     // The previous latest revision is an active draft only if it is not the published
     // one: a published revision is superseded at publication time, never discarded.
@@ -243,7 +270,7 @@ export async function reviewMeasureRevision(input: {
 
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.revisionId },
-      select: { measureId: true, discardedAt: true, supersededAt: true },
+      select: { measureId: true, discardedAt: true, supersededAt: true, reviewedAt: true },
     });
     if (!revision) throw new MeasureValidationError(`Révision ${input.revisionId} introuvable`);
     if (revision.measureId !== input.measureId) {
@@ -254,6 +281,13 @@ export async function reviewMeasureRevision(input: {
     }
     if (revision.supersededAt) {
       throw new MeasureValidationError("Une révision remplacée ne peut pas être relue");
+    }
+    // Without this, a second review overwrites reviewedAt and reviewedBy: two successive reviewers
+    // leave only the trace of the last one, and the attribution becomes false without anything
+    // failing. A real counter-review needs its own history; simulating it by erasing the previous
+    // reviewer is worse than not having it.
+    if (revision.reviewedAt) {
+      throw new MeasureValidationError("Cette révision a déjà été relue");
     }
 
     await tx.measureRevision.update({
@@ -354,16 +388,7 @@ export async function publishMeasureRevision(input: {
       },
     });
 
-    if (
-      input.expectedUpdatedAt !== undefined &&
-      measure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()
-    ) {
-      throw new MeasureConcurrencyError(
-        input.measureId,
-        input.expectedUpdatedAt,
-        measure.updatedAt
-      );
-    }
+    assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.revisionId },
@@ -451,6 +476,11 @@ export async function publishMeasureRevision(input: {
 export async function depublishMeasure(input: {
   measureId: string;
   reason: string;
+  /**
+   * The `Measure.updatedAt` the caller last saw. Without it, an old page depublishes a correction
+   * that was published in the meantime, with a reason written about the previous formulation.
+   */
+  expectedUpdatedAt?: Date;
 }): Promise<void> {
   if (input.reason.trim() === "") {
     throw new MeasureValidationError("Une dépublication exige un motif");
@@ -461,8 +491,10 @@ export async function depublishMeasure(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { electionId: true },
+      select: { electionId: true, updatedAt: true },
     });
+
+    assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
     await tx.measure.update({
       where: { id: input.measureId },
@@ -502,6 +534,12 @@ export async function withdrawMeasure(input: {
   withdrawnAt: Date;
   sourceUrl: string;
   sourceLabel: string;
+  /**
+   * The `Measure.updatedAt` the caller last saw. A withdrawal is the candidate's act, recorded by
+   * us: recording it against a state nobody looked at attaches a political fact to the wrong
+   * formulation.
+   */
+  expectedUpdatedAt?: Date;
 }): Promise<void> {
   if (input.sourceUrl.trim() === "" || input.sourceLabel.trim() === "") {
     throw new MeasureValidationError("Un retrait exige une URL et un libellé de source, les deux");
@@ -512,8 +550,10 @@ export async function withdrawMeasure(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { electionId: true },
+      select: { electionId: true, updatedAt: true },
     });
+
+    assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
     await tx.measure.update({
       where: { id: input.measureId },

@@ -157,6 +157,8 @@ export async function draftRevisionAction(input: {
   measureId: string;
   revision: RevisionInput;
   sources: SourceInput[];
+  /** The `Measure.updatedAt` the page carried, in ISO form. */
+  expectedUpdatedAt: string;
 }): Promise<ActionResult> {
   await assertAuthenticated();
 
@@ -165,6 +167,7 @@ export async function draftRevisionAction(input: {
       measureId: input.measureId,
       revision: toRevision(input.revision),
       sources: toSources(input.sources),
+      expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
     });
     revalidate(input.measureId);
     return { ok: true };
@@ -227,11 +230,17 @@ export async function publishRevisionAction(input: {
 export async function depublishMeasureAction(input: {
   measureId: string;
   reason: string;
+  /** The `Measure.updatedAt` the page carried, in ISO form. */
+  expectedUpdatedAt: string;
 }): Promise<ActionResult> {
   await assertAuthenticated();
 
   try {
-    await depublishMeasure(input);
+    await depublishMeasure({
+      measureId: input.measureId,
+      reason: input.reason,
+      expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
+    });
     revalidate(input.measureId);
     return { ok: true };
   } catch (error) {
@@ -244,6 +253,8 @@ export async function withdrawMeasureAction(input: {
   withdrawnAt: string;
   sourceUrl: string;
   sourceLabel: string;
+  /** The `Measure.updatedAt` the page carried, in ISO form. */
+  expectedUpdatedAt: string;
 }): Promise<ActionResult> {
   await assertAuthenticated();
 
@@ -253,6 +264,7 @@ export async function withdrawMeasureAction(input: {
       withdrawnAt: parseDate(input.withdrawnAt, "La date de retrait"),
       sourceUrl: input.sourceUrl.trim(),
       sourceLabel: input.sourceLabel.trim(),
+      expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
     });
     revalidate(input.measureId);
     return { ok: true };

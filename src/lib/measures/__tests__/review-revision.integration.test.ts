@@ -66,6 +66,23 @@ describeIfDisposableDb("reviewMeasureRevision", () => {
     expect(measure.publishedRevisionId).toBeNull();
     expect(measure.publicationStatus).toBe("DRAFT");
   });
+  it("refuse une seconde relecture, qui effacerait le premier relecteur", async () => {
+    // Sans cette garde, reviewMeasureRevision() écrase reviewedAt et reviewedBy : deux relecteurs
+    // successifs ne laisseraient que la trace du dernier, et l'attribution de la relecture
+    // deviendrait fausse sans que rien ne plante. Une véritable contre-relecture demanderait un
+    // historique dédié ; on ne la simule pas en écrasant l'auteur précédent.
+    const { measureId, revisionId } = await seedMeasureWithDraft();
+    await transitions.reviewMeasureRevision({ measureId, revisionId, reviewedBy: "premier" });
+    const first = await db.measureRevision.findUniqueOrThrow({ where: { id: revisionId } });
+
+    await expect(
+      transitions.reviewMeasureRevision({ measureId, revisionId, reviewedBy: "second" })
+    ).rejects.toThrow(/déjà été relue/);
+
+    const after = await db.measureRevision.findUniqueOrThrow({ where: { id: revisionId } });
+    expect(after.reviewedBy).toBe("premier");
+    expect(after.reviewedAt).toEqual(first.reviewedAt);
+  });
 });
 
 describeIfDisposableDb("discardMeasureRevision", () => {

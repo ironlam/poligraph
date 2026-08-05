@@ -68,7 +68,13 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
     },
     {
       name: "draftRevisionAction",
-      call: () => a.draftRevisionAction({ measureId: "m-1", revision: REVISION, sources: SOURCES }),
+      call: () =>
+        a.draftRevisionAction({
+          measureId: "m-1",
+          revision: REVISION,
+          sources: SOURCES,
+          expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        }),
     },
     {
       name: "reviewRevisionAction",
@@ -89,7 +95,12 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
     },
     {
       name: "depublishMeasureAction",
-      call: () => a.depublishMeasureAction({ measureId: "m-1", reason: "Source à vérifier" }),
+      call: () =>
+        a.depublishMeasureAction({
+          measureId: "m-1",
+          reason: "Source à vérifier",
+          expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        }),
     },
     {
       name: "withdrawMeasureAction",
@@ -99,6 +110,7 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
           withdrawnAt: "2027-03-01T00:00:00.000Z",
           sourceUrl: "https://example.org/retrait",
           sourceLabel: "Conférence de presse",
+          expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
         }),
     },
   ];
@@ -185,7 +197,11 @@ describe("actions éditoriales : la traduction des erreurs", () => {
     const { depublishMeasureAction } = await actions();
 
     await expect(
-      depublishMeasureAction({ measureId: "m-1", reason: "Source à vérifier" })
+      depublishMeasureAction({
+        measureId: "m-1",
+        reason: "Source à vérifier",
+        expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+      })
     ).rejects.toThrow("connection terminated");
   });
 
@@ -197,6 +213,7 @@ describe("actions éditoriales : la traduction des erreurs", () => {
       withdrawnAt: "pas une date",
       sourceUrl: "https://example.org/retrait",
       sourceLabel: "Conférence de presse",
+      expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
     });
 
     expect(result).toEqual({ ok: false, message: "La date de retrait n'est pas une date valide" });
