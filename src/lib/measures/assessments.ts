@@ -8,6 +8,11 @@ import { MeasureValidationError } from "./errors";
  * depends on the text that was analysed.
  *
  * Attached to the REVISION, so a reformulation does not inherit the conclusion.
+ *
+ * Each QualificationKind value needs an opposable definition before it can be used. See
+ * docs/editorial/qualifications-mesures.md, which states the corpus to examine for each
+ * one: "funding not specified" gives three different answers depending on whether the
+ * reviewer read the revision alone, its primary sources, or the whole programme.
  */
 export async function createQualification(input: {
   measureRevisionId: string;
