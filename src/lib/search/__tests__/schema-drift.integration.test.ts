@@ -159,6 +159,32 @@ describeIfDisposableDb("db:push drift", () => {
     DB_PUSH_TIMEOUT_MS
   );
 
+  it(
+    "keeps the publicId sequences, which the datamodel does not declare",
+    async () => {
+      // Not a curiosity: the lot 1 fixtures create a Politician and an Election, and the
+      // publicId extension of src/lib/db.ts reads a sequence on every such create. Those
+      // sequences are created by docker/init-search.sql because `prisma db push` cannot
+      // create them, so the question "does a push also DROP them" decides whether the
+      // measures tests can run after this file. An undeclared column and an undeclared
+      // index are dropped, per the two tests above; a standalone sequence is not part of
+      // the datamodel at all. Asserted rather than assumed, because the failure mode is
+      // an unrelated test suite breaking depending on file order.
+      const before = await db.$queryRaw<{ n: number }[]>`
+      SELECT COUNT(*)::int AS n FROM pg_sequences WHERE sequencename LIKE 'poligraph_%'
+    `;
+      expect(before[0]?.n).toBe(10);
+
+      dbPush();
+
+      const after = await db.$queryRaw<{ n: number }[]>`
+      SELECT COUNT(*)::int AS n FROM pg_sequences WHERE sequencename LIKE 'poligraph_%'
+    `;
+      expect(after[0]?.n).toBe(10);
+    },
+    DB_PUSH_TIMEOUT_MS
+  );
+
   afterAll(async () => {
     await db.$disconnect();
   });

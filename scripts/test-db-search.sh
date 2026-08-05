@@ -77,5 +77,8 @@ else
   # assertDisposableTestDb "does not throw" branch only executes when DATABASE_URL IS
   # the disposable container, so running it outside this harness proves half the guard.
   echo "[test:db:search] running the suites that need the disposable container"
-  npx vitest run --no-file-parallelism src/lib/search src/test/__tests__/db-guard.test.ts
+  npx vitest run --no-file-parallelism \
+    src/lib/search \
+    src/lib/measures \
+    src/test/__tests__/db-guard.test.ts
 fi

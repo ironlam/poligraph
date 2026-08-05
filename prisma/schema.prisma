@@ -90,6 +90,7 @@ model Politician {
   affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
   newsletterEditions  NewsletterEdition[] // Weeks featured as "politician of the week"
   dossierAuthors      DossierAuthor[] // Dossiers authored/initiated by this politician
+  measures            Measure[] // Programme measures attributed to this politician (lot 1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -274,6 +275,7 @@ model Party {
   leadershipMandates  Mandate[] // Leadership mandates (PRESIDENT_PARTI)
   parliamentaryGroups ParliamentaryGroup[] // Parliamentary groups that map to this party
   platforms           Platform[]
+  programEditions     ProgramEdition[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1765,6 +1767,8 @@ model Election {
   rounds                ElectionRound[]
   communeElectionRounds CommuneElectionRound[]
   platforms             Platform[]
+  measures              Measure[]
+  programEditions       ProgramEdition[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1787,6 +1791,9 @@ model Candidacy {
 
   // Denormalized candidate info (always filled, even if linked)
   candidateName String
+
+  measures        Measure[]
+  programEditions ProgramEdition[]
   partyLabel    String?
 
   // Pre-campaign editorial status (used for présidentielle 2027 and future open elections)
@@ -2737,4 +2744,288 @@ model SearchDocument {
   @@unique([entityType, entityId])
   @@index([searchVector], type: Gin)
   @@index([visibility])
+}
+
+// ============================================
+// MEASURES : versioned editorial model (lot 1)
+// ============================================
+
+enum MeasureAttribution {
+  PERSONAL // the person formulated the measure themselves
+  PARTY_PROGRAM // inherited from the party programme, not personally stated
+}
+
+enum MeasurePrecision {
+  CHIFFREE
+  OBJECTIF_SANS_CHIFFRE
+}
+
+// How the text entered the database. No provider name here: the provider changes
+// (this repo already has a Mistral fallback on theme classification), so the fine
+// detail lives in MeasureRevision.extractorVersion, which is free text.
+enum MeasureExtractionMethod {
+  MANUAL
+  AI_ASSISTED
+  IMPORTED
+}
+
+// Eight values and not six. A campaign rally, a televised debate and a written
+// declaration are the most common primary sources of a presidential measure, and
+// revision 3 of the spec could express none of them: a non-parliamentary candidate
+// had no primary source at all. Closed on purpose, with no AUTRE value: the 60 %
+// primary-source threshold of spec 4.1 stops being auditable if a catch-all bucket
+// can carry tier = PRIMARY.
+enum MeasureSourceKind {
+  PROGRAMME_PARTI
+  DISCOURS_CAMPAGNE
+  DEBAT_TELEVISE
+  DISCOURS_AN
+  DISCOURS_SENAT
+  INTERVIEW_PRESSE
+  ARTICLE_PRESSE
+  PROPOSITION_LOI
+}
+
+enum SourceTier {
+  PRIMARY
+  SECONDARY
+}
+
+// Every value needs an opposable definition before it can be used, see
+// docs/editorial/qualifications-mesures.md.
+enum QualificationKind {
+  FINANCEMENT_NON_PRECISE
+  DEJA_TENTEE
+  CALENDRIER_PRECISE
+  PERIMETRE_INCERTAIN
+}
+
+enum SimilarityConclusion {
+  NO_EQUIVALENT_FOUND
+  EQUIVALENT_FOUND
+  INCONCLUSIVE
+}
+
+enum ProgramOwnerType {
+  PARTY
+  CANDIDACY
+}
+
+// The stable object. Two publication pointers, not one: latestRevisionId carries the
+// work in progress, publishedRevisionId carries what the public sees. With a single
+// pointer, fixing a comma created an unreviewed revision that became current, which
+// pulled the measure off the site and could push a subject page under its indexing
+// threshold. An internal editorial action would depublish valid public content.
+model Measure {
+  id String @id @default(cuid())
+
+  politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  politicianId String
+  election     Election   @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  electionId   String
+  candidacy    Candidacy? @relation(fields: [candidacyId], references: [id], onDelete: SetNull)
+  candidacyId  String?
+
+  programEdition   ProgramEdition? @relation(fields: [programEditionId], references: [id], onDelete: SetNull)
+  programEditionId String?
+
+  attribution MeasureAttribution
+  theme       ThemeCategory
+
+  // The same proposal at an earlier election (spec 5.1, case 1).
+  precedingMeasure   Measure?  @relation("MeasureLineage", fields: [precedingMeasureId], references: [id], onDelete: SetNull)
+  precedingMeasureId String?
+  followingMeasures  Measure[] @relation("MeasureLineage")
+
+  revisions MeasureRevision[] @relation("MeasureRevisions")
+
+  latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
+  latestRevisionId    String?          @unique
+  publishedRevision   MeasureRevision? @relation("MeasurePublished", fields: [publishedRevisionId], references: [id], onDelete: SetNull)
+  publishedRevisionId String?          @unique
+
+  // Withdrawal is not a revision: fixing a text produces a new revision, withdrawing
+  // a proposal changes the state of the object. Three flat fields rather than an event
+  // table because there is only one transition to keep today, written only by
+  // withdrawMeasure() and never separately.
+  withdrawnAt          DateTime?
+  withdrawnSourceUrl   String?
+  withdrawnSourceLabel String?
+
+  publicationStatus PublicationStatus @default(DRAFT)
+
+  // "Leaves a trace" of spec 5.10, made concrete: without these two fields a
+  // depublication is indistinguishable from a measure that was never published.
+  depublishedAt       DateTime?
+  depublicationReason String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([electionId, publicationStatus])
+  @@index([politicianId])
+  @@index([candidacyId])
+  @@index([theme, publicationStatus])
+  @@index([programEditionId])
+}
+
+// What is said, and when. Four dates with four distinct meanings: validFrom is when
+// the candidate's formulation applies, publishedAt is when Poligraph validated it,
+// supersededAt is when a public version was replaced, discardedAt is when a draft was
+// abandoned. Collapsing the first two made the revision 3 invariant impossible to hold.
+model MeasureRevision {
+  id String @id @default(cuid())
+
+  measure   Measure @relation("MeasureRevisions", fields: [measureId], references: [id], onDelete: Cascade)
+  measureId String
+
+  text      String            @db.Text
+  precision MeasurePrecision?
+
+  validFrom    DateTime
+  publishedAt  DateTime?
+  supersededAt DateTime?
+  discardedAt  DateTime?
+  reviewedAt   DateTime?
+  reviewedBy   String?
+
+  extractionMethod     MeasureExtractionMethod
+  extractionConfidence Float?
+  extractorVersion     String?
+
+  sources        MeasureSource[]
+  qualifications MeasureQualification[]
+  assessments    MeasureSimilarityAssessment[]
+  equivalentOf   MeasureSimilarityMatch[]      @relation("EquivalentRevision")
+
+  latestOf    Measure? @relation("MeasureLatest")
+  publishedOf Measure? @relation("MeasurePublished")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([measureId, validFrom])
+  @@index([measureId, supersededAt])
+  @@index([measureId, discardedAt])
+}
+
+// Attached to the revision and not to the measure: this is what represents the ordinary
+// case of a measure announced in an interview, reformulated in the programme, then cited
+// by three newspapers.
+model MeasureSource {
+  id String @id @default(cuid())
+
+  measureRevision   MeasureRevision @relation(fields: [measureRevisionId], references: [id], onDelete: Cascade)
+  measureRevisionId String
+
+  sourceKind  MeasureSourceKind
+  tier        SourceTier
+  url         String
+  page        String?
+  publishedAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([measureRevisionId])
+  @@index([tier])
+}
+
+// Qualifiers as dated conclusions and not as a String[] on the measure: "funding not
+// specified" is not a technical property, it is an editorial conclusion that depends on
+// the text analysed, can go stale, and sometimes needs a source (spec rule 4).
+model MeasureQualification {
+  id String @id @default(cuid())
+
+  measureRevision   MeasureRevision @relation(fields: [measureRevisionId], references: [id], onDelete: Cascade)
+  measureRevisionId String
+
+  kind        QualificationKind
+  label       String
+  rationale   String            @db.Text
+  sourceUrl   String?
+  sourceLabel String?
+  assessedAt  DateTime
+  assessedBy  String
+
+  createdAt DateTime @default(now())
+
+  @@index([measureRevisionId])
+}
+
+// Uniqueness as a dated assessment. A boolean isUnique would go stale immediately: a
+// measure looks unique until the next programme is published, and "equivalent" has no
+// single definition. The assessment targets a revision, since a major reformulation can
+// change the result.
+model MeasureSimilarityAssessment {
+  id String @id @default(cuid())
+
+  measureRevision   MeasureRevision @relation(fields: [measureRevisionId], references: [id], onDelete: Cascade)
+  measureRevisionId String
+
+  comparedCorpusVersion String
+  assessedAt            DateTime
+  assessedBy            String
+  conclusion            SimilarityConclusion
+  rationale             String               @db.Text
+
+  matches MeasureSimilarityMatch[]
+
+  createdAt DateTime @default(now())
+
+  @@index([measureRevisionId])
+}
+
+// An EQUIVALENT_FOUND conclusion without the identified equivalents is neither usable
+// nor auditable, so the matches are rows and not a sentence in the rationale.
+model MeasureSimilarityMatch {
+  id String @id @default(cuid())
+
+  assessment   MeasureSimilarityAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentId String
+
+  equivalentMeasureRevision   MeasureRevision @relation("EquivalentRevision", fields: [equivalentMeasureRevisionId], references: [id], onDelete: Cascade)
+  equivalentMeasureRevisionId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([assessmentId, equivalentMeasureRevisionId])
+  @@index([equivalentMeasureRevisionId])
+}
+
+// Platform cannot play this role: it carries @@unique([partyId, electionId]), which
+// forbids several editions per campaign, and it is semantically loaded by the compass
+// (its Proposal rows are a -3..+3 position on 8 axes) and lives in production.
+model ProgramEdition {
+  id String @id @default(cuid())
+
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  electionId String
+
+  // An explicit owner rather than an implicit invariant: ownerType says which of the
+  // two fields is set, and the validation guarantees exactly one, not at least one.
+  ownerType   ProgramOwnerType
+  party       Party?           @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  partyId     String?
+  candidacy   Candidacy?       @relation(fields: [candidacyId], references: [id], onDelete: Cascade)
+  candidacyId String?
+
+  label       String
+  version     Int
+  publishedAt DateTime
+  documentUrl String
+
+  publicationStatus PublicationStatus @default(DRAFT)
+
+  measures Measure[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Two separate constraints, never one composite. In PostgreSQL the NULLs of a unique
+  // index are distinct, so a composite including both owners would let two identical
+  // PARTY editions through, each with candidacyId NULL. Each constraint below only
+  // bites on the rows where its owner column is set.
+  @@unique([partyId, electionId, version])
+  @@unique([candidacyId, electionId, version])
+  @@index([electionId, publicationStatus])
 }
