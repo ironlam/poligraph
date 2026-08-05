@@ -2,14 +2,13 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MeasureMetadataPanel } from "../MeasureMetadataPanel";
 
-const createQualificationAction = vi.fn(async () => ({ ok: true }) as const);
-const createSimilarityAssessmentAction = vi.fn(async () => ({ ok: true }) as const);
+const createQualificationAction = vi.fn(async (_input: unknown) => ({ ok: true }) as const);
+const createSimilarityAssessmentAction = vi.fn(async (_input: unknown) => ({ ok: true }) as const);
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../../actions", () => ({
-  createQualificationAction: (input: unknown) => createQualificationAction(input as never),
-  createSimilarityAssessmentAction: (input: unknown) =>
-    createSimilarityAssessmentAction(input as never),
+  createQualificationAction: (input: unknown) => createQualificationAction(input),
+  createSimilarityAssessmentAction: (input: unknown) => createSimilarityAssessmentAction(input),
 }));
 
 const REVISIONS = [
