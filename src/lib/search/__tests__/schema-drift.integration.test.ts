@@ -91,6 +91,38 @@ function dbPush(): void {
   });
 }
 
+/**
+ * The exact set expected, spelled out rather than counted.
+ *
+ * Counting them was weaker than it looked: `_` is a single-character wildcard in LIKE,
+ * so 'poligraph_%' also matches a hypothetical "poligraphX...", the query did not pin
+ * the schema, and a missing required sequence plus any unrelated matching one keeps the
+ * total at ten. Listing the names is also the point of the test: it fails the day an
+ * eleventh sequence is added to scripts/create-public-id-sequences.ts without being
+ * added to docker/init-search.sql, which is exactly the drift that would otherwise
+ * surface as a fixture failing to create a row.
+ */
+const EXPECTED_PUBLIC_ID_SEQUENCES = [
+  "poligraph_affair_seq",
+  "poligraph_dossier_seq",
+  "poligraph_election_seq",
+  "poligraph_electoral_list_seq",
+  "poligraph_factcheck_seq",
+  "poligraph_group_seq",
+  "poligraph_mandate_seq",
+  "poligraph_party_seq",
+  "poligraph_politician_seq",
+  "poligraph_scrutin_seq",
+];
+
+/** Filtered in JavaScript, so no LIKE pattern can widen the match. */
+async function publicIdSequences(): Promise<string[]> {
+  const rows = await db.$queryRaw<{ sequencename: string }[]>`
+    SELECT sequencename FROM pg_sequences WHERE schemaname = 'public' ORDER BY sequencename
+  `;
+  return rows.map((row) => row.sequencename).filter((name) => name.startsWith("poligraph_"));
+}
+
 // One `prisma db push` through npx costs about four seconds, so the two tests below
 // blow through vitest's 5s default. The timeout is per test and generous on purpose:
 // a tighter one would fail on a cold npx cache rather than on a real regression.
@@ -170,17 +202,11 @@ describeIfDisposableDb("db:push drift", () => {
       // index are dropped, per the two tests above; a standalone sequence is not part of
       // the datamodel at all. Asserted rather than assumed, because the failure mode is
       // an unrelated test suite breaking depending on file order.
-      const before = await db.$queryRaw<{ n: number }[]>`
-      SELECT COUNT(*)::int AS n FROM pg_sequences WHERE sequencename LIKE 'poligraph_%'
-    `;
-      expect(before[0]?.n).toBe(10);
+      expect(await publicIdSequences()).toEqual(EXPECTED_PUBLIC_ID_SEQUENCES);
 
       dbPush();
 
-      const after = await db.$queryRaw<{ n: number }[]>`
-      SELECT COUNT(*)::int AS n FROM pg_sequences WHERE sequencename LIKE 'poligraph_%'
-    `;
-      expect(after[0]?.n).toBe(10);
+      expect(await publicIdSequences()).toEqual(EXPECTED_PUBLIC_ID_SEQUENCES);
     },
     DB_PUSH_TIMEOUT_MS
   );

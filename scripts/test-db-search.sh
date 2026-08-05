@@ -38,8 +38,11 @@ done
 # belong in a repository. Checked up front so the failure is this message rather than
 # Prisma's wall of text after the container is already up.
 #
-# Running this by hand as a human needs nothing: the guard only fires for agents.
-if [ -n "${CLAUDECODE:-}${CLAUDE_CODE:-}" ] && [ -z "${PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:-}" ]; then
+# The condition is "no consent recorded AND no terminal attached", not a list of agent
+# environment variables: Prisma recognises several agents and the list would rot. A human
+# in a shell has a TTY and sees no friction. Prisma remains the actual guard either way,
+# this precheck only buys a message that says what to do.
+if [ -z "${PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:-}" ] && ! [ -t 0 ]; then
   cat >&2 <<'MSG'
 REFUSING: prisma db push is invoked by an AI agent without recorded consent.
 

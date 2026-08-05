@@ -136,6 +136,37 @@ describeIfDisposableDb("createMeasure", () => {
     expect(document?.body).toContain("loyers");
   });
 
+  it("rolls back the measure when search indexing fails", async () => {
+    const politicianId = await seedPolitician();
+    const electionId = await seedElection();
+
+    // The test above only reads the final state, so moving the indexing after the commit
+    // would leave it green: measure and document would both still exist. Atomicity is
+    // only observable by making the indexing FAIL and checking that nothing survived.
+    //
+    // NOT VALID skips the existing rows, which other tests of this run have already
+    // filled with MEASURE documents, while still rejecting every new one.
+    await db.$executeRaw`
+      ALTER TABLE "SearchDocument"
+      ADD CONSTRAINT "reject_measure_search_document_test"
+      CHECK ("entityType" <> 'MEASURE'::"SearchEntityType") NOT VALID
+    `;
+
+    try {
+      await expect(createMeasure(baseInput(politicianId, electionId))).rejects.toThrow();
+
+      // The lot 1B rollback test proves the primitive honours the transaction it is
+      // given. It says nothing about whether createMeasure gives it its own.
+      expect(await db.measure.count({ where: { politicianId, electionId } })).toBe(0);
+      expect(await db.measureRevision.count({ where: { measure: { politicianId } } })).toBe(0);
+    } finally {
+      await db.$executeRaw`
+        ALTER TABLE "SearchDocument"
+        DROP CONSTRAINT IF EXISTS "reject_measure_search_document_test"
+      `;
+    }
+  });
+
   it("refuses a revision without any source", async () => {
     const politicianId = await seedPolitician();
     const electionId = await seedElection();
