@@ -129,6 +129,34 @@ describeIfSearchTestDb("searchPublic", () => {
     expect(hits.map((hit) => hit.entityId)).not.toContain(retraite);
   });
 
+  it("does not invent a singular by stripping a trailing s", async () => {
+    const token = uniqueToken();
+    const faith = uniqueEntityId("foi");
+    const court = uniqueEntityId("cour");
+    await index(faith, `Une question de foi ${token}`, "PUBLIC");
+    await index(court, `Saisir la Cour des comptes ${token}`, "PUBLIC");
+
+    // Deriving the singular by dropping an s invents French: fois gives foi, cours gives
+    // cour, pays gives pay. Both words below are ordinary in this corpus, and "cours"
+    // returning the Cour des comptes is the same class of false positive the simple
+    // dictionary was chosen to avoid.
+    expect((await searchPublic(`fois ${token}`)).map((h) => h.entityId)).not.toContain(faith);
+    expect((await searchPublic(`cours ${token}`)).map((h) => h.entityId)).not.toContain(court);
+  });
+
+  it("does not reach a singular document from a plural query, and that is the accepted cost", async () => {
+    const token = uniqueToken();
+    const singular = uniqueEntityId("asymmetry");
+    await index(singular, `Plafonner le loyer ${token}`, "PUBLIC");
+
+    // The counterpart of the rule above, asserted rather than left to be discovered: the
+    // expansion runs in one direction. Making it symmetric needs a morphological lexicon
+    // with its exceptions, which is lot 7's subject. This test is here to fail the day
+    // someone believes the substrate already does it.
+    expect((await searchPublic(`loyers ${token}`)).map((h) => h.entityId)).not.toContain(singular);
+    expect((await searchPublic(`loyer ${token}`)).map((h) => h.entityId)).toContain(singular);
+  });
+
   it("treats LIKE wildcards as ordinary characters", async () => {
     const token = uniqueToken();
     const entityId = uniqueEntityId("wildcard");

@@ -42,24 +42,28 @@ function clampLimit(limit: number): number {
 }
 
 /**
- * The controlled variants of a term: itself, plus the other side of the -s plural.
+ * The controlled variants of a term: itself, plus its -s plural. One direction only.
  *
  * Enumerated and not inferred, which is the whole point. No lexical rule separates the
  * recall we want from the false positive we refuse: "loyer" is a prefix of "loyers" and
  * "retrait" is a prefix of "retraite", so a substring match, a prefix tsquery and a
- * trigram similarity threshold all treat the two pairs the same way. Deriving the plural
- * instead of matching loosely keeps "retraite" out of a search for "retrait", because
- * "retraite" is not "retrait" plus an s.
+ * trigram similarity threshold all treat the two pairs the same way. Adding an s keeps
+ * "retraite" out of a search for "retrait", because "retraite" is not "retrait" plus an s.
  *
- * Not covered, deliberately: the -al/-aux plurals, and typos. A transposition such as
- * "retratite" shares no lexeme with "retraite" and no amount of suffix work finds it.
- * That is lot 7's subject, with the vector index and its own negative corpus.
+ * Stripping a trailing s would NOT be the mirror image of that, it would invent French:
+ * fois -> foi, cours -> cour, fonds -> fond, pays -> pay, plus -> plu. The first two are
+ * ordinary words of this corpus, and "cours" returning the Cour des comptes is the very
+ * class of false positive the simple dictionary was chosen to avoid.
+ *
+ * The accepted cost: a query already written in the plural does not yet reach a document
+ * written in the singular. Making it symmetric needs a morphological lexicon with its
+ * exceptions, not a suffix rule, so it belongs with lot 7's approximate search.
+ *
+ * Also not covered: the -al/-aux plurals, and typos. A transposition such as "retratite"
+ * shares no lexeme with "retraite" and no amount of suffix work finds it.
  */
 function variantsOf(term: string): string[] {
-  if (term.endsWith("s")) {
-    const singular = term.slice(0, -1);
-    return singular.length > 0 ? [term, singular] : [term];
-  }
+  if (term.endsWith("s")) return [term];
   return [term, `${term}s`];
 }
 
@@ -80,7 +84,7 @@ async function searchExact(query: string, limit: number): Promise<SearchHit[]> {
 }
 
 /**
- * Singular and plural recall, term by term.
+ * Plural recall, term by term.
  *
  * Term by term and not on the whole query: each term has to be found on its own, which
  * is what makes "loyer <token>" match a document reading "loyers <token>".
