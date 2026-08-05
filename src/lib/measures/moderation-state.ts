@@ -24,7 +24,7 @@ export type PublicationState = "EMPTY" | "DRAFT" | "REVIEWED" | "PUBLISHED" | "D
  * of `src/lib/measures/audit.ts`, so the queue and the command name the same defect the same
  * way. A test asserts every code below appears literally in that file.
  *
- * These eleven are the rules derivable from a measure and its revisions. The audit's other
+ * These fourteen are the rules derivable from a measure and its revisions. The audit's other
  * rules cross other tables (candidacy, programme edition, search index, qualifications,
  * assessments); recomputing them here would duplicate the audit inside a page.
  */
@@ -34,6 +34,9 @@ export const MODERATION_ANOMALY_CODES = [
   "published_revision_unpublished",
   "published_revision_superseded",
   "published_revision_without_source",
+  "published_revision_discarded",
+  "published_without_revision",
+  "depublished_without_reason",
   "multiple_published_revisions",
   "orphan_active_draft",
   "latest_revision_foreign",
@@ -277,6 +280,16 @@ function collectAnomalies(
     if (published.sourceCount === 0) {
       anomalies.push({ code: "published_revision_without_source", detail: published.id });
     }
+    if (published.discardedAt !== null) {
+      anomalies.push({ code: "published_revision_discarded", detail: published.id });
+    }
+  }
+
+  if (row.publicationStatus === "PUBLISHED" && row.publishedRevisionId === null) {
+    anomalies.push({ code: "published_without_revision", detail: row.id });
+  }
+  if (row.depublishedAt !== null && (row.depublicationReason ?? "").trim() === "") {
+    anomalies.push({ code: "depublished_without_reason", detail: row.id });
   }
 
   const currentlyPublished = row.revisions.filter(

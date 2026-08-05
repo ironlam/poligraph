@@ -123,12 +123,11 @@ describe("deriveModerationState : visibilité publique", () => {
     expect(state.visibilityBlockers).toEqual(["status_not_published"]);
   });
 
-  it("explains a discarded published revision that no anomaly rule reports", () => {
-    // Found while writing the moderation card. PUBLIC_MEASURE_WHERE filters on
-    // `discardedAt: null` on the pointed revision, and neither measures:audit nor the anomaly
-    // list has a rule for it. The narrow case is what proves the gap: with the latest pointer
-    // on a separate live draft, `latest_revision_discarded` does not fire either, so the
-    // measure is invisible to the public and reported as healthy.
+  it("signale et explique une révision publiée abandonnée", () => {
+    // Ce cas était le trou trouvé en écrivant la fiche : invisible du public et déclaré sain, parce
+    // qu'avec le pointeur de brouillon sur une autre révision vivante, `latest_revision_discarded` ne
+    // se déclenche pas non plus. La règle existe depuis #649, donc l'anomalie est maintenant remontée
+    // EN PLUS du bloqueur de visibilité.
     const published = revision({
       id: "rev-pub",
       reviewedAt: T0,
@@ -146,7 +145,24 @@ describe("deriveModerationState : visibilité publique", () => {
     );
 
     expect(state.visibilityBlockers).toEqual(["revision_discarded"]);
-    expect(state.anomalies).toEqual([]);
+    expect(state.anomalies.map((a) => a.code)).toEqual(["published_revision_discarded"]);
+  });
+
+  it("signale un statut publié sans révision désignée", () => {
+    const state = deriveModerationState(measureRow({ publicationStatus: "PUBLISHED" }));
+
+    expect(state.anomalies.map((a) => a.code)).toContain("published_without_revision");
+    expect(state.publiclyVisible).toBe(false);
+  });
+
+  it("signale une dépublication sans motif", () => {
+    // Symétrique de withdrawn_without_source : depublishMeasure() exige un motif, donc une
+    // dépublication sans motif est une décision dont personne ne peut rendre compte.
+    const state = deriveModerationState(
+      publishedRow({}, { publicationStatus: "DRAFT", depublishedAt: T1 })
+    );
+
+    expect(state.anomalies.map((a) => a.code)).toContain("depublished_without_reason");
   });
 
   it("carries the declared status through instead of folding it into the stage", () => {

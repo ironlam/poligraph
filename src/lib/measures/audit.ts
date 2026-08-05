@@ -9,7 +9,7 @@ export type AuditViolation = {
 /**
  * The invariants Prisma cannot express, checked in the database.
  *
- * Nineteen rules. Two rules of an earlier draft are deliberately absent: "orphan
+ * Twenty-two rules. Two rules of an earlier draft are deliberately absent: "orphan
  * qualification" and "orphan assessment" queried `revision: { is: null }` on a required
  * relation with cascade delete. The orphan is structurally impossible and the query is
  * meaningless.
@@ -36,6 +36,8 @@ export async function auditMeasures(): Promise<AuditViolation[]> {
       withdrawnAt: true,
       withdrawnSourceUrl: true,
       withdrawnSourceLabel: true,
+      depublishedAt: true,
+      depublicationReason: true,
       candidacy: { select: { politicianId: true } },
       programEdition: { select: { electionId: true } },
       publishedRevision: {
@@ -45,6 +47,7 @@ export async function auditMeasures(): Promise<AuditViolation[]> {
           reviewedAt: true,
           publishedAt: true,
           supersededAt: true,
+          discardedAt: true,
           _count: { select: { sources: true } },
         },
       },
@@ -88,6 +91,16 @@ export async function auditMeasures(): Promise<AuditViolation[]> {
         detail: published.id,
       });
     }
+    // A published revision carrying discardedAt is invisible to the public (PUBLIC_MEASURE_WHERE
+    // filters on it) and no rule covered it. The narrow case proves the gap: with latestRevisionId
+    // on a separate live draft, latest_revision_discarded does not fire either.
+    if (published && published.discardedAt) {
+      violations.push({
+        rule: "published_revision_discarded",
+        measureId: m.id,
+        detail: published.id,
+      });
+    }
     if (published && published.supersededAt) {
       violations.push({
         rule: "published_revision_superseded",
@@ -101,6 +114,18 @@ export async function auditMeasures(): Promise<AuditViolation[]> {
         measureId: m.id,
         detail: published.id,
       });
+    }
+
+    // Declared published with no revision designated: invisible to the public, and unreachable
+    // through the transitions, which set both together. Only a direct write produces it.
+    if (m.publicationStatus === "PUBLISHED" && m.publishedRevisionId === null) {
+      violations.push({ rule: "published_without_revision", measureId: m.id, detail: "" });
+    }
+
+    // Symmetric to withdrawn_without_source: depublishMeasure() demands a reason, so a depublication
+    // with none is a decision nobody can account for.
+    if (m.depublishedAt && (m.depublicationReason ?? "").trim() === "") {
+      violations.push({ rule: "depublished_without_reason", measureId: m.id, detail: "" });
     }
 
     // The state two concurrent publications produce without FOR UPDATE. No public call can

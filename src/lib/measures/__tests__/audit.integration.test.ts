@@ -296,4 +296,43 @@ describeIfDisposableDb("auditMeasures", () => {
 
     expect(await allRules()).toContain("program_edition_owner_count");
   });
+  // Les trois règles ajoutées par #649 : des états invisibles du public que l'audit déclarait sains.
+
+  it("detects a published revision that was discarded", async () => {
+    const { measureId, revisionId } = await publishSeededMeasure();
+    // Le pointeur de brouillon vise ailleurs, sinon latest_revision_discarded couvrirait le cas et la
+    // règle ne prouverait rien.
+    const other = await seedMeasureWithDraft();
+    await db.measure.update({ where: { id: other.measureId }, data: { latestRevisionId: null } });
+    await db.measure.update({
+      where: { id: measureId },
+      data: { latestRevisionId: other.revisionId },
+    });
+    await db.measureRevision.update({
+      where: { id: revisionId },
+      data: { discardedAt: new Date() },
+    });
+
+    expect(await violationsFor(measureId)).toContain("published_revision_discarded");
+  });
+
+  it("detects a PUBLISHED status with no revision designated", async () => {
+    const { measureId } = await seedMeasureWithDraft();
+    await db.measure.update({
+      where: { id: measureId },
+      data: { publicationStatus: "PUBLISHED", publishedRevisionId: null },
+    });
+
+    expect(await violationsFor(measureId)).toContain("published_without_revision");
+  });
+
+  it("detects a depublication with no reason", async () => {
+    const { measureId } = await publishSeededMeasure();
+    await db.measure.update({
+      where: { id: measureId },
+      data: { publicationStatus: "DRAFT", depublishedAt: new Date() },
+    });
+
+    expect(await violationsFor(measureId)).toContain("depublished_without_reason");
+  });
 });
