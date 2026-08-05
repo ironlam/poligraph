@@ -88,8 +88,9 @@ test.describe("/admin/mesures — modération des mesures", () => {
     await page.goto("/admin/mesures");
 
     await expect(page.getByRole("heading", { name: "Mesures : relecture" })).toBeVisible();
-    // Ten measures in the corpus, so ten rows plus the header row.
-    await expect(page.locator("tbody tr")).toHaveCount(10);
+    // Au moins les dix du corpus, et pas exactement dix : le parcours éditorial de ce fichier crée
+    // ses propres mesures dans la même base, donc un compte absolu se casse tout seul.
+    expect(await page.locator("tbody tr").count()).toBeGreaterThanOrEqual(10);
     // The state that must never be smoothed over.
     await expect(page.getByText("Publiée mais invisible du public").first()).toBeVisible();
     await expect(page.getByText("Retirée, source incomplète").first()).toBeVisible();
@@ -146,6 +147,181 @@ test.describe("/admin/mesures — modération des mesures", () => {
 
       await page.screenshot({
         path: `tests/visual/test-results/mesures-detail-${label}.png`,
+        fullPage: true,
+      });
+    });
+  }
+});
+
+/**
+ * The editorial journey through the interface.
+ *
+ * The integration suite already walks the transitions. This walks the SCREENS, which is the only way
+ * to exercise the server actions in a real Next context: `revalidatePath` needs a request scope, so
+ * it cannot be reached from vitest.
+ */
+test.describe("/admin/mesures — parcours éditorial", () => {
+  // En série, et ce n'est pas un contournement de flake : ces tests écrivent dans la même base et
+  // agissent sur le même serveur de dev. En parallèle (le défaut local, workers non borné), ils se
+  // gênent et les échecs deviennent aléatoires.
+  test.describe.configure({ mode: "serial" });
+
+  test.skip(!PASSWORD, "ADMIN_PASSWORD doit valoir le mot de passe du serveur de dev local");
+
+  test.beforeEach(async ({ context }) => {
+    await signIn(context, PASSWORD as string);
+  });
+
+  async function createMeasure(page: Page, text: string): Promise<void> {
+    await page.goto("/admin/mesures/nouvelle");
+    await page.getByLabel("Texte de la mesure").fill(text);
+    await page.getByLabel("En vigueur à partir du").fill("2027-01-15");
+    await page.getByLabel("URL").fill("https://example.org/programme-parcours.pdf");
+    await page.getByLabel("Date de la source").fill("2027-01-15");
+    await page.getByRole("button", { name: "Créer la mesure en brouillon" }).click();
+    await expect(page).toHaveURL(/\/admin\/mesures\/[A-Za-z0-9]+$/);
+  }
+
+  test("crée, relit, publie, corrige, dépublie, republie et retire", async ({ page }) => {
+    await createMeasure(page, "Parcours : encadrer les loyers dans les zones tendues.");
+
+    // Brouillon : relire et abandonner, rien d'autre.
+    await expect(page.getByRole("button", { name: "Marquer comme relue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Publier cette version" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Marquer comme relue" }).click();
+    await expect(page.getByRole("button", { name: "Publier cette version" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Publier cette version" }).click();
+    // « Dépublier » n'est proposé QUE sur une mesure publiée : c'est la preuve non ambiguë que la
+    // publication a eu lieu. getByText("Publiée") matcherait le libellé <dt>Publiée</dt> de la
+    // chronologie, présent avant toute publication, et passerait donc à vide.
+    await expect(page.getByRole("button", { name: "Dépublier" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ce que le public voit" })).toBeVisible();
+    await expect(page.getByText("1 source citée")).toBeVisible();
+
+    // Correction : le texte public ne bouge pas tant qu'elle n'est pas publiée.
+    await page.getByRole("button", { name: "Saisir une nouvelle révision" }).click();
+    await page.getByLabel("Texte de la nouvelle révision").fill("Parcours : périmètre étendu.");
+    await page.getByLabel("En vigueur à partir du").fill("2027-02-01");
+    await page.getByLabel("URL").fill("https://example.org/correction-parcours");
+    await page.getByLabel("Date de la source").fill("2027-02-01");
+    await page.getByRole("button", { name: "Enregistrer le brouillon" }).click();
+
+    await expect(page.getByText("Correction en cours")).toBeVisible();
+    await page.getByRole("button", { name: "Marquer comme relue" }).click();
+    await expect(page.getByText("Correction relue en attente")).toBeVisible();
+
+    await page.getByRole("button", { name: "Publier cette correction" }).click();
+    await expect(page.getByText("Parcours : périmètre étendu.").first()).toBeVisible();
+
+    // Dépublication, motif exigé.
+    await page.getByRole("button", { name: "Dépublier" }).click();
+    await page.getByLabel("Motif de la dépublication").fill("Source contestée, à revérifier");
+    await page.getByRole("button", { name: "Dépublier maintenant" }).click();
+    await expect(page.getByText("Cette mesure ne sort d'aucune lecture publique.")).toBeVisible();
+
+    // Republication depuis l'état rafraîchi.
+    await page.getByRole("button", { name: "Publier cette correction" }).first().click();
+    await expect(page.getByRole("button", { name: "Dépublier" })).toBeVisible();
+
+    // Retrait du candidat : la mesure reste publique et porte son état de retrait.
+    await page.getByRole("button", { name: "Enregistrer un retrait du candidat" }).click();
+    await page.getByLabel("Date du retrait").fill("2027-03-01");
+    await page.getByLabel("URL de la source").fill("https://example.org/retrait-parcours");
+    await page.getByLabel("Libellé de la source").fill("Conférence de presse");
+    await page.getByRole("button", { name: "Enregistrer le retrait" }).click();
+
+    await expect(page.getByText("Retirée, sourcée")).toBeVisible();
+    await expect(page.getByText(/Retirée le 1 mars 2027/)).toBeVisible();
+    await expect(page.getByText(/ne réactive pas la proposition/)).toBeVisible();
+  });
+
+  test("explique un conflit de version au lieu de le présenter comme une faute de saisie", async ({
+    context,
+  }) => {
+    const first = await context.newPage();
+    await createMeasure(first, "Conflit : instaurer un revenu de base pour les 18-25 ans.");
+    await first.getByRole("button", { name: "Marquer comme relue" }).click();
+    await first.getByRole("button", { name: "Publier cette version" }).click();
+    await expect(first.getByRole("button", { name: "Dépublier" })).toBeVisible();
+    const url = first.url();
+
+    // Deuxième onglet sur la même fiche : son jeton de version est celui de maintenant.
+    const second = await context.newPage();
+    await second.goto(url);
+    await expect(second.getByRole("button", { name: "Dépublier" })).toBeVisible();
+
+    // Le premier onglet agit, donc le jeton du second devient périmé.
+    await first.getByRole("button", { name: "Dépublier" }).click();
+    await first.getByLabel("Motif de la dépublication").fill("Retrait immédiat demandé");
+    await first.getByRole("button", { name: "Dépublier maintenant" }).click();
+    await expect(first.getByText("Cette mesure ne sort d'aucune lecture publique.")).toBeVisible();
+
+    // Le second tente sa dépublication avec l'ancien jeton.
+    await second.getByRole("button", { name: "Dépublier" }).click();
+    await second.getByLabel("Motif de la dépublication").fill("Motif écrit avant");
+    await second.getByRole("button", { name: "Dépublier maintenant" }).click();
+
+    await expect(second.getByText("La fiche a changé")).toBeVisible();
+    await expect(second.getByRole("button", { name: "Recharger la fiche" })).toBeVisible();
+    // Et surtout : pas de « Action refusée », qui ferait chercher une faute de saisie.
+    await expect(second.getByText("Action refusée")).toHaveCount(0);
+
+    await first.close();
+    await second.close();
+  });
+
+  test("l'écran de création n'a aucune violation WCAG AA", async ({ page }) => {
+    await page.goto("/admin/mesures/nouvelle");
+    await expect(page.getByRole("heading", { name: "Nouvelle mesure" })).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+
+  test("la fiche avec ses actions et ses formulaires n'a aucune violation WCAG AA", async ({
+    page,
+  }) => {
+    await createMeasure(page, "Accessibilité : doubler le budget de la rénovation énergétique.");
+    // Formulaires ouverts : c'est dans cet état que les champs et leurs libellés existent.
+    await page.getByRole("button", { name: "Ajouter une qualification" }).click();
+
+    const results = await new AxeBuilder({ page }).include(CONTENT).withTags(WCAG).analyze();
+
+    expect(results.violations).toEqual([]);
+  });
+
+  for (const [label, width, height] of [
+    ["mobile", 375, 812],
+    ["tablette", 768, 1024],
+    ["bureau", 1440, 900],
+  ] as const) {
+    test(`les actions restent lisibles en ${label} sans sept formulaires ouverts`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      await createMeasure(page, `Responsive ${label} : encadrer les loyers.`);
+      await page.getByRole("button", { name: "Marquer comme relue" }).click();
+      await page.getByRole("button", { name: "Publier cette version" }).click();
+      await expect(page.getByRole("button", { name: "Dépublier" })).toBeVisible();
+
+      // Aucun formulaire n'est ouvert par défaut.
+      await expect(page.getByLabel("Motif de la dépublication")).toHaveCount(0);
+      await expect(page.getByLabel("Texte de la nouvelle révision")).toHaveCount(0);
+
+      // Un seul à la fois : ouvrir le second ferme le premier.
+      await page.getByRole("button", { name: "Dépublier" }).click();
+      await expect(page.getByLabel("Motif de la dépublication")).toBeVisible();
+      await page.getByRole("button", { name: "Saisir une nouvelle révision" }).click();
+      await expect(page.getByLabel("Texte de la nouvelle révision")).toBeVisible();
+      await expect(page.getByLabel("Motif de la dépublication")).toHaveCount(0);
+
+      expect(await horizontalScroll(page)).toBe(0);
+
+      await page.screenshot({
+        path: `tests/visual/test-results/mesures-actions-${label}.png`,
         fullPage: true,
       });
     });
