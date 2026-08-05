@@ -26,16 +26,24 @@ jobs:
             exit 1
           fi
 
-      - name: No direct PUBLISHED writes on Affair outside publish-guard
+      - name: No direct PUBLISHED writes outside an authorized publisher
         run: |
           # RGPD art. 10 : la publication d'une affaire passe exclusivement par
           # src/lib/affairs/publish-guard.ts. Ce step détecte les écritures
           # directes : un littéral `publicationStatus: "PUBLISHED"` dont le
           # contexte amont (12 lignes) contient `data:` plus près que `where:`.
           # scripts/ est couvert au même titre que src/.
+          #
+          # La détection est lexicale, donc aveugle au modèle : `PublicationStatus`
+          # est un enum partagé, et ce step attrape aussi la publication d'une
+          # mesure. La liste ci-dessous nomme donc UN fichier autorisé par modèle,
+          # jamais un répertoire : tout autre fichier qui publierait une mesure
+          # reste détecté, ce qui est bien l'invariant voulu.
           FOUND=0
           for f in $(grep -rl 'publicationStatus: "PUBLISHED"' src/ scripts/ --include='*.ts' --include='*.tsx' \
-            | grep -v 'src/lib/affairs/publish-guard.ts' | grep -v '__tests__' | grep -v '\.test\.'); do
+            | grep -v 'src/lib/affairs/publish-guard.ts' \
+            | grep -v 'src/lib/measures/transitions.ts' \
+            | grep -v '__tests__' | grep -v '\.test\.'); do
             while IFS=: read -r linenum rest; do
               START=$((linenum > 12 ? linenum - 12 : 1))
               CONTEXT=$(sed -n "${START},${linenum}p" "$f")
