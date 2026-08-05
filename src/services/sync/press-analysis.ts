@@ -27,7 +27,11 @@ import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matc
 import { syncMetadata } from "@/lib/sync";
 import { classifyArticleTier, type ArticleTier } from "@/config/press-keywords";
 import { MIN_CONFIDENCE_THRESHOLD } from "@/config/press-analysis";
-import { resolveAffairPolitician, assessPressAttribution } from "@/lib/affair-matching";
+import {
+  resolveAffairPolitician,
+  assessPressAttribution,
+  assessProcedureEvidence,
+} from "@/lib/affair-matching";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 
 // ============================================
@@ -324,6 +328,20 @@ export async function processAnalyzedArticle(
       if (verbose) {
         console.log(`  - ${detected.politicianName} simplement mentionné, pas impliqué → ignoré`);
       }
+      continue;
+    }
+
+    // Procedure guard: AffairStatus has no "no procedure" value, so the
+    // extraction has to emit a judicial status even on an article that
+    // describes none. Block before the resolver, which would otherwise write an
+    // AffairPoliticianDecision audit row for a detection we are discarding.
+    const procedure = assessProcedureEvidence({ text: analysisContent });
+    if (!procedure.hasProcedure) {
+      if (verbose) {
+        console.log(`  - Aucune procédure judiciaire dans l'article → "${detected.title}" ignoré`);
+      }
+      await rejectWeakAttribution(article.id, null, detected, procedure.verdict, dryRun);
+      stats.affairsRejected++;
       continue;
     }
 
