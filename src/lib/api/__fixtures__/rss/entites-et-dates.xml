@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Entités HTML dans un titre, et deux formats de date. Le second item porte une date ISO 8601 : les
+  flux français mélangent les deux, et une date non analysée ressort en Invalid Date sans rien casser
+  d'autre, donc en silence.
+-->
+<rss version="2.0">
+  <channel>
+    <title>Entités et dates</title>
+    <link>https://example.org/</link>
+    <description>Contrat d'analyse</description>
+    <item>
+      <title>Budget &amp; fiscalit&eacute; : ce qui change</title>
+      <link>https://example.org/budget</link>
+      <pubDate>Tue, 04 Aug 2026 18:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Retraites &#8211; le calendrier</title>
+      <link>https://example.org/retraites</link>
+      <pubDate>2026-08-03T07:15:00Z</pubDate>
+    </item>
+  </channel>
+</rss>

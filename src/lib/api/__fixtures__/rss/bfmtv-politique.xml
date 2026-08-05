@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Home Politique - actualités</title>
+        <link>https://www.bfmtv.com/politique/</link>
+        <description>Suivez toute l'actualité politique en France en direct : élections, gouvernement, Parlement, Élysée, partis politique, sondages, analyses et décryptages sur BFM</description>
+        <lastBuildDate>Wed, 05 Aug 2026 23:34:59 GMT</lastBuildDate>
+        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+        <generator>BFMTV</generator>
+        <language>fr</language>
+        <image>
+            <title>Home Politique - actualités</title>
+            <url>https://www.bfmtv.com/assets/v24/images/BFMTV_default_16x9.20e7113082d8a27cea24f2ade5a4d03e.jpg</url>
+            <link>https://www.bfmtv.com/politique/</link>
+        </image>
+        <copyright>Copyright BFMTV</copyright>
+        <category>Home Politique - actualités</category>
+        <atom:link href="https://www.bfmtv.com/politique/" rel="self" type="application/rss+xml"/>
+        <item>
+            <title><![CDATA[Campagne présidentielle: Gabriel Attal ciblé par des ingérences russes]]></title>
+            <link>https://www.bfmtv.com/politique/video-campagne-presidentielle-gabriel-attal-cible-par-des-ingerences-russes_VN-202608050546.html</link>
+            <guid>https://www.bfmtv.com/politique/video-campagne-presidentielle-gabriel-attal-cible-par-des-ingerences-russes_VN-202608050546.html</guid>
+            <pubDate>Wed, 05 Aug 2026 21:57:34 GMT</pubDate>
+            <description><![CDATA[Après Raphaël Glucksmann, Gabriel Attal a également été ciblé par une campagne de désinformation lancée par de nouvelles ingérences russes. Ces faux contenus publiés sur les réseaux sociaux ont notamment usurpé l’identité visuelle de BFMTV, qui a engagé des démarches pour obtenir leur retrait. Une action en justice est par ailleurs en cours.<br /><br /><img src="https://images.bfmtv.com/TT-0pmOeA18w0ISdJ_Q1DiRFIns=/0x0:1280x720/800x0/images/Campagne-presidentielle-Gabriel-Attal-cible-par-des-ingerences-russes-2329276.jpg" />]]></description>
+            <enclosure url="https://images.bfmtv.com/TT-0pmOeA18w0ISdJ_Q1DiRFIns=/0x0:1280x720/800x0/images/Campagne-presidentielle-Gabriel-Attal-cible-par-des-ingerences-russes-2329276.jpg" length="0" type="image/jpg"/>
+        </item>
+<item>
+            <title><![CDATA[Présidentielle: Gabriel Attal visé par "une ingérence en provenance de la Russie"]]></title>
+            <link>https://www.bfmtv.com/politique/elections/presidentielle/presidentielle-gabriel-attal-vise-par-une-ingerence-en-provenance-de-la-russie_AN-202608050544.html</link>
+            <guid>https://www.bfmtv.com/politique/elections/presidentielle/presidentielle-gabriel-attal-vise-par-une-ingerence-en-provenance-de-la-russie_AN-202608050544.html</guid>
+            <pubDate>Wed, 05 Aug 2026 21:55:02 GMT</pubDate>
+            <description><![CDATA[Le candidat Renaissance à la présidentielle a été victime d'une "ingérance" russe. Une tentativate de déstabilisation qui a déjà visé l'ex-Premier ministre et candidat Édouard Philippe, ainsi que le candidat putatif Raphaël Glucksmann.<br /><br /><img src="https://images.bfmtv.com/WcOp64ySuzt9dfckcrZsS9Jrdu4=/0x106:2048x1258/800x0/images/Gabriel-Attal-lors-de-son-premier-meeting-de-campagne-a-Paris-ce-samedi-30-mai-2026-2294930.jpg" />]]></description>
+            <enclosure url="https://images.bfmtv.com/WcOp64ySuzt9dfckcrZsS9Jrdu4=/0x106:2048x1258/800x0/images/Gabriel-Attal-lors-de-son-premier-meeting-de-campagne-a-Paris-ce-samedi-30-mai-2026-2294930.jpg" length="0" type="image/jpg"/>
+        </item>
+<item>
+            <title><![CDATA[Primaire socialiste: le député Philippe Brun dénonce l'idée de payer 15 euros pour voter et propose une "caisse populaire"]]></title>
+            <link>https://www.bfmtv.com/politique/parti-socialiste/primaire-socialiste-le-depute-philippe-brun-denonce-l-idee-de-payer-15-euros-pour-voter-et-propose-une-caisse-populaire_AN-202608050388.html</link>
+            <guid>https://www.bfmtv.com/politique/parti-socialiste/primaire-socialiste-le-depute-philippe-brun-denonce-l-idee-de-payer-15-euros-pour-voter-et-propose-une-caisse-populaire_AN-202608050388.html</guid>
+            <pubDate>Wed, 05 Aug 2026 15:01:30 GMT</pubDate>
+            <description><![CDATA[Le député de l'Eure Philippe Brun a dénoncé ce mercredi 5 août le droit de vote à quinze euros, proposé pour la primaire socialiste en vue de l'élection présidentielle, à laquelle il est candidat. Si cette idée est maintenue, il propose la mise en place d'une "caisse populaire" pour financer les électeurs les moins aisés.<br /><br /><img src="https://images.bfmtv.com/32sl7nt6m47TcivMcmCna2hc-rs=/0x0:2032x1143/800x0/images/Le-depute-socialiste-Philippe-Brun-a-l-Assemblee-nationale-le-18-novembre-2025-2217877.jpg" />]]></description>
+            <enclosure url="https://images.bfmtv.com/32sl7nt6m47TcivMcmCna2hc-rs=/0x0:2032x1143/800x0/images/Le-depute-socialiste-Philippe-Brun-a-l-Assemblee-nationale-le-18-novembre-2025-2217877.jpg" length="0" type="image/jpg"/>
+        </item>
+    </channel>
+</rss>

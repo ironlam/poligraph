@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un flux à UN SEUL item, et c'est le cas limite qui compte : fast-xml-parser rend `item` comme un
+  objet quand il n'y en a qu'un, et comme un tableau au-delà. Un parseur qui suppose toujours un
+  tableau perd silencieusement le seul article d'un flux calme.
+-->
+<rss version="2.0">
+  <channel>
+    <title>Flux à un seul article</title>
+    <link>https://example.org/</link>
+    <description>Cas limite du parseur XML</description>
+    <item>
+      <title><![CDATA[Un titre entre CDATA avec une apostrophe d'essai]]></title>
+      <link>https://example.org/article-unique</link>
+      <pubDate>Wed, 05 Aug 2026 09:30:00 +0200</pubDate>
+      <description><![CDATA[Un chapô contenant &amp; une entité et <strong>du balisage</strong>.]]></description>
+    </item>
+  </channel>
+</rss>
