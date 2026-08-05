@@ -90,5 +90,7 @@ else
     src/lib/data/__tests__/measures.integration.test.ts \
     src/lib/search \
     src/lib/measures \
+    src/app/admin/mesures \
+    src/test/fixtures/__tests__ \
     src/test/__tests__/db-guard.test.ts
 fi
