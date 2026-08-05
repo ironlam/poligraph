@@ -20,10 +20,15 @@ let reviewMeasureRevision: typeof import("../transitions").reviewMeasureRevision
 // constraint is on what the caller can pass, not on what the body does.
 //
 // Erased at runtime: it is `npx tsc --noEmit` that fails on a violation.
+// `expectedUpdatedAt` was added in lot 2 for optimistic concurrency. It is NOT a review
+// field: it carries the version of the row the caller last saw, so a stale form cannot
+// republish content another reviewer just took down. The exact shape is kept rather than
+// loosened, so that any future field has to be added here deliberately.
 it("keeps the publication input free of any review field", () => {
   expectTypeOf<Parameters<typeof PublishFn>[0]>().toEqualTypeOf<{
     measureId: string;
     revisionId: string;
+    expectedUpdatedAt?: Date;
   }>();
 });
 
