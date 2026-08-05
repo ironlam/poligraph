@@ -295,6 +295,7 @@ export default async function PoliticianPage({ params }: PageProps) {
         <div className="flex items-start gap-6 mb-8">
           <PoliticianAvatar
             photoUrl={politician.photoUrl}
+            blobPhotoUrl={politician.blobPhotoUrl}
             firstName={politician.firstName}
             lastName={politician.lastName}
             size="lg"

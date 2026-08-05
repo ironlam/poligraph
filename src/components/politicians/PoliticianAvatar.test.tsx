@@ -26,6 +26,39 @@ describe("PoliticianAvatar", () => {
     expect(img).toHaveAttribute("alt", "Jean Dupont");
   });
 
+  it("should prefer the Blob copy over the source photo", () => {
+    render(
+      <PoliticianAvatar
+        photoUrl="https://upload.wikimedia.org/source.jpg"
+        blobPhotoUrl="https://abc.public.blob.vercel-storage.com/politicians/x-portrait"
+        fullName="Jean Dupont"
+      />
+    );
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://abc.public.blob.vercel-storage.com/politicians/x-portrait"
+    );
+  });
+
+  it("should fall back to the source photo when there is no Blob copy", () => {
+    render(
+      <PoliticianAvatar
+        photoUrl="https://upload.wikimedia.org/source.jpg"
+        blobPhotoUrl={null}
+        fullName="Jean Dupont"
+      />
+    );
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://upload.wikimedia.org/source.jpg"
+    );
+  });
+
+  it("should render initials when neither photo is available", () => {
+    render(<PoliticianAvatar photoUrl={null} blobPhotoUrl={null} fullName="Jean Dupont" />);
+    expect(screen.getByText("JD")).toBeInTheDocument();
+  });
+
   it("should fallback to initials on image error", () => {
     render(
       <PoliticianAvatar

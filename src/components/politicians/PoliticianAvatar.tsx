@@ -6,6 +6,15 @@ import { cn, normalizeImageUrl } from "@/lib/utils";
 
 interface PoliticianAvatarProps {
   photoUrl: string | null;
+  /**
+   * Cached copy on Vercel Blob, preferred over `photoUrl` when present.
+   *
+   * For Commons-sourced portraits this is the version cropped on the subject's
+   * face, so passing it is what makes the framing visible. It also stops the
+   * page depending on an external host staying up: `photoUrl` is the provenance
+   * record, not the best thing to serve.
+   */
+  blobPhotoUrl?: string | null;
   firstName?: string;
   lastName?: string;
   fullName?: string;
@@ -23,6 +32,7 @@ const sizeClasses = {
 
 export function PoliticianAvatar({
   photoUrl,
+  blobPhotoUrl,
   firstName,
   lastName,
   fullName,
@@ -40,8 +50,9 @@ export function PoliticianAvatar({
   const displayName = fullName || `${derivedFirstName} ${derivedLastName}`;
   const sizeClass = sizeClasses[size];
 
-  const normalizedUrl = normalizeImageUrl(photoUrl);
-  const imageSrc = normalizedUrl;
+  // The Blob copy wins when there is one: it is the cropped portrait, and it is
+  // served from our own CDN rather than from the upstream source.
+  const imageSrc = normalizeImageUrl(blobPhotoUrl ?? photoUrl);
 
   // Fallback to initials if no photo or image fails to load
   if (!imageSrc || imageError) {

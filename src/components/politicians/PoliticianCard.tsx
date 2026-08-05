@@ -68,6 +68,7 @@ export function PoliticianCard({
               <div className="transition-transform duration-300 group-hover:scale-110">
                 <PoliticianAvatar
                   photoUrl={politician.photoUrl}
+                  blobPhotoUrl={politician.blobPhotoUrl}
                   firstName={politician.firstName}
                   lastName={politician.lastName}
                   size="md"

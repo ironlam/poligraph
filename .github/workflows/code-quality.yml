@@ -151,6 +151,22 @@ jobs:
             exit 1
           fi
 
+      - name: Commons thumbnail URLs built only via lib/photos/commons
+        run: |
+          # upload.wikimedia.org only serves the widths listed on
+          # https://www.mediawiki.org/wiki/Common_thumbnail_sizes ; any other
+          # width returns HTTP 400. Building these URLs by hand silently broke
+          # 549 portraits once already, so the MD5-shard construction lives in
+          # src/lib/photos/commons.ts and nowhere else.
+          VIOLATIONS=$(grep -rn 'wikipedia/commons/thumb' src/ scripts/ --include='*.ts' --include='*.tsx' \
+            | grep -v 'src/lib/photos/commons.ts' \
+            | grep -v '__tests__' | grep -v '\.test\.' || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::Build Commons thumbnail URLs with commonsThumbnailUrl() from @/lib/photos/commons — hardcoded widths get rejected by Wikimedia."
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+
       - name: No secrets in NEXT_PUBLIC_ vars
         run: |
           VIOLATIONS=$(grep -rn 'NEXT_PUBLIC_.*SECRET\|NEXT_PUBLIC_.*TOKEN\|NEXT_PUBLIC_.*PASSWORD\|NEXT_PUBLIC_.*API_KEY' src/ .env.example --include='*.ts' --include='*.tsx' --include='*.env*' || true)

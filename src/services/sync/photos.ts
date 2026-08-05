@@ -1,9 +1,9 @@
-import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { DataSource, MandateType } from "@/generated/prisma";
 import { HTTPClient } from "@/lib/api/http-client";
 import { WIKIDATA_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { PHOTO_SOURCE_PRIORITY, shouldUpdatePhoto } from "@/config/photos";
+import { COMMONS_STORED_WIDTH, commonsThumbnailUrl } from "@/lib/photos/commons";
 
 const wikidataClient = new HTTPClient({ rateLimitMs: WIKIDATA_RATE_LIMIT_MS });
 
@@ -29,23 +29,12 @@ async function isPhotoUrlValid(url: string): Promise<boolean> {
 }
 
 /**
- * Build a Wikimedia Commons thumbnail URL from a filename.
- *
- * Wikimedia Commons uses MD5-based directory hashing:
- *   /wikipedia/commons/thumb/{hash[0]}/{hash[0:2]}/{filename}/{width}px-{filename}
- */
-function buildCommonsThumbnailUrl(filename: string, width = 400): string {
-  const normalized = filename.replace(/ /g, "_");
-  const hash = createHash("md5").update(normalized).digest("hex");
-  const encoded = encodeURIComponent(normalized);
-  return `https://upload.wikimedia.org/wikipedia/commons/thumb/${hash[0]}/${hash.slice(0, 2)}/${encoded}/${width}px-${encoded}`;
-}
-
-/**
  * Get photo URL from Wikidata P18 via REST API + Wikimedia Commons thumbnail.
  *
- * Uses the Wikidata REST API (not SPARQL) for speed and reliability,
- * then constructs a direct thumbnail URL via MD5 hash convention.
+ * Uses the Wikidata REST API (not SPARQL) for speed and reliability, then
+ * constructs a direct thumbnail URL. The width must come from the official
+ * allowed list, otherwise upload.wikimedia.org rejects the hotlink — see
+ * `@/lib/photos/commons`.
  */
 async function getWikidataPhoto(wikidataId: string): Promise<string | null> {
   try {
@@ -58,7 +47,7 @@ async function getWikidataPhoto(wikidataId: string): Promise<string | null> {
     const filename = data.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
     if (!filename) return null;
 
-    return buildCommonsThumbnailUrl(filename);
+    return commonsThumbnailUrl(filename, COMMONS_STORED_WIDTH);
   } catch {
     return null;
   }
