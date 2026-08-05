@@ -9,6 +9,7 @@
  */
 
 import { assertDisposableTestDb } from "@/test/db-guard";
+import { createMeasure, type DraftMeasureRevisionInput } from "../transitions";
 
 /**
  * Deferred client. `@/lib/db` throws `DATABASE_URL environment variable is not set` at
@@ -88,4 +89,63 @@ export async function seedCandidacy(politicianId: string, electionId: string): P
     data: { electionId, politicianId, candidateName: `Candidat ${uniqueSlug("c")}` },
   });
   return row.id;
+}
+
+// The three fixtures below are shared by every task from the editorial cycle onwards, so
+// they live here rather than in one test file. Duplicating them means two definitions
+// that drift, and a test that then passes for a reason nobody intended.
+
+/** A measure with a single, never-published draft. The starting point of most scenarios. */
+export async function seedMeasureWithDraft(): Promise<{ measureId: string; revisionId: string }> {
+  const politicianId = await seedPolitician();
+  const electionId = await seedElection();
+  return createMeasure({
+    politicianId,
+    electionId,
+    candidacyId: null,
+    programEditionId: null,
+    attribution: "PERSONAL",
+    theme: "LOGEMENT_URBANISME",
+    precedingMeasureId: null,
+    revision: {
+      text: "Encadrer les loyers dans les zones tendues.",
+      precision: "OBJECTIF_SANS_CHIFFRE",
+      validFrom: new Date("2027-01-01T00:00:00Z"),
+      extractionMethod: "MANUAL",
+      extractionConfidence: null,
+      extractorVersion: null,
+    },
+    sources: [
+      {
+        sourceKind: "DISCOURS_CAMPAGNE",
+        tier: "PRIMARY",
+        url: "https://example.org/meeting",
+        page: null,
+        publishedAt: new Date("2027-01-01T00:00:00Z"),
+      },
+    ],
+  });
+}
+
+export function draftInput(measureId: string, text: string): DraftMeasureRevisionInput {
+  return {
+    measureId,
+    revision: {
+      text,
+      precision: null,
+      validFrom: new Date("2027-02-01T00:00:00Z"),
+      extractionMethod: "MANUAL",
+      extractionConfidence: null,
+      extractorVersion: null,
+    },
+    sources: [
+      {
+        sourceKind: "ARTICLE_PRESSE",
+        tier: "SECONDARY",
+        url: "https://example.org/article",
+        page: null,
+        publishedAt: new Date("2027-02-01T00:00:00Z"),
+      },
+    ],
+  };
 }

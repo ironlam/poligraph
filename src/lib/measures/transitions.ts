@@ -8,6 +8,7 @@ import type {
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { MeasureValidationError } from "./errors";
+import { lockMeasure } from "./lock";
 import { syncSearchDocument } from "./search-sync";
 
 export type MeasureSourceInput = {
@@ -149,5 +150,74 @@ export async function createMeasure(
     await syncSearchDocument(tx, measure.id);
 
     return { measureId: measure.id, revisionId: revision.id };
+  });
+}
+
+export type DraftMeasureRevisionInput = {
+  measureId: string;
+  revision: MeasureRevisionInput;
+  sources: MeasureSourceInput[];
+};
+
+// No `discardedBy` and no `supersedesDraftBy`. A first version of this plan took a
+// `supersedesDraftBy` and never stored it anywhere, which is a parameter documenting an
+// intention the code does not honour. Attributing a discard needs a real column on
+// MeasureRevision, and the moderation admin is what will know whether it needs one.
+
+/**
+ * Creates a new revision in draft. The public keeps seeing publishedRevisionId, which
+ * this function never touches.
+ *
+ * Also discards the previous active draft, and that second write is the point: without
+ * it, two successive calls leave two active drafts while latestRevisionId designates only
+ * one of them. The other becomes an orphan no path can ever publish or clean up.
+ */
+export async function draftMeasureRevision(
+  input: DraftMeasureRevisionInput
+): Promise<{ revisionId: string }> {
+  assertRevisionIsUsable(input.revision, input.sources);
+
+  return db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { latestRevisionId: true, publishedRevisionId: true },
+    });
+
+    // The previous latest revision is an active draft only if it is not the published
+    // one: a published revision is superseded at publication time, never discarded.
+    if (measure.latestRevisionId && measure.latestRevisionId !== measure.publishedRevisionId) {
+      await tx.measureRevision.update({
+        where: { id: measure.latestRevisionId },
+        data: { discardedAt: new Date() },
+      });
+    }
+
+    const revision = await tx.measureRevision.create({
+      data: {
+        measureId: input.measureId,
+        text: input.revision.text,
+        precision: input.revision.precision,
+        validFrom: input.revision.validFrom,
+        extractionMethod: input.revision.extractionMethod,
+        extractionConfidence: input.revision.extractionConfidence,
+        extractorVersion: input.revision.extractorVersion,
+        sources: { create: input.sources },
+      },
+    });
+
+    await tx.measure.update({
+      where: { id: input.measureId },
+      data: { latestRevisionId: revision.id },
+    });
+
+    // Re-derives the document. On a public measure this changes nothing, because the
+    // reference stays publishedRevisionId: that is precisely how a correction in progress
+    // stays invisible. On a never-published or depublished measure, it moves the
+    // ADMIN_ONLY document onto the new draft.
+    await syncSearchDocument(tx, input.measureId);
+
+    return { revisionId: revision.id };
   });
 }
