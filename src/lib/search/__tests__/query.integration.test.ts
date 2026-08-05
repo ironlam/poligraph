@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIfLocalDb } from "@/test/db-guard";
+
 import { upsertSearchDocument } from "../documents";
-import { uniqueEntityId, uniqueToken } from "./helpers";
+import { assertSearchTestDb, describeIfSearchTestDb, uniqueEntityId, uniqueToken } from "./helpers";
 
 // Two deferred imports, and neither is a convenience. `@/lib/db` throws at module load
 // when DATABASE_URL is unset, and `../query` imports it as a VALUE, unlike
 // `../documents` which only imports its type. A top-level import of either would fail
-// the whole suite instead of skipping this block: describeIfLocalDb skips a block, it
+// the whole suite instead of skipping this block: describeIfSearchTestDb skips a block, it
 // cannot undo an import.
 let db: typeof import("@/lib/db").db;
 let searchPublic: typeof import("../query").searchPublic;
@@ -30,8 +30,9 @@ async function index(
   });
 }
 
-describeIfLocalDb("searchPublic", () => {
+describeIfSearchTestDb("searchPublic", () => {
   beforeAll(async () => {
+    assertSearchTestDb();
     ({ db } = await import("@/lib/db"));
     ({ searchPublic } = await import("../query"));
   });
@@ -79,8 +80,8 @@ describeIfLocalDb("searchPublic", () => {
 
     // The decisive case. Under the simple dictionary "loyer" is a lexeme of the first
     // document only, so an implementation that stops as soon as the exact pass returns
-    // something would silently drop the plural, which is the exact thing the trigram
-    // column exists to catch.
+    // something would silently drop the plural, which is the exact thing the variant
+    // pass exists to catch.
     expect(ids).toContain(singular);
     expect(ids).toContain(plural);
     expect(ids.indexOf(singular)).toBeLessThan(ids.indexOf(plural));
@@ -91,9 +92,9 @@ describeIfLocalDb("searchPublic", () => {
     const entityId = uniqueEntityId("multiterm");
     await index(entityId, `Encadrer les loyers ${token}`, "PUBLIC");
 
-    // Two terms, one exact and one that only the trigram pass can match. A fallback
-    // comparing the whole query as one substring fails here: "loyer <token>" is not a
-    // substring of "loyers <token>", the plural breaks the run.
+    // Two terms, one that matches exactly and one that only its plural variant matches.
+    // The fallback has to work term by term: a pass comparing the whole query at once
+    // never relates "loyer <token>" to "loyers <token>".
     const hits = await searchPublic(`loyer ${token}`);
 
     expect(hits.map((h) => h.entityId)).toContain(entityId);
@@ -112,6 +113,59 @@ describeIfLocalDb("searchPublic", () => {
   it("returns nothing for an empty or whitespace-only query", async () => {
     expect(await searchPublic("")).toEqual([]);
     expect(await searchPublic("   ")).toEqual([]);
+  });
+
+  it("does not return retraite for retrait", async () => {
+    const token = uniqueToken();
+    const retraite = uniqueEntityId("retraite");
+    await index(retraite, `Retraite à 60 ans ${token}`, "PUBLIC");
+
+    const hits = await searchPublic(`retrait ${token}`);
+
+    // The false positive the whole dictionary choice exists to avoid, asserted on the
+    // public entry point and not on one SQL pass. The exact pass avoids it, so it can
+    // only come back through the fallback: "retrait" is a prefix of "retraite", exactly
+    // like "loyer" is a prefix of "loyers", so any loose match recovers both.
+    expect(hits.map((hit) => hit.entityId)).not.toContain(retraite);
+  });
+
+  it("treats LIKE wildcards as ordinary characters", async () => {
+    const token = uniqueToken();
+    const entityId = uniqueEntityId("wildcard");
+    await index(entityId, `Encadrer les loyers ${token}`, "PUBLIC");
+
+    // A bound parameter is safe against injection but its characters are still read
+    // with LIKE semantics: "%%%" builds a pattern that matches every public document,
+    // and "_" matches any single character.
+    expect(await searchPublic("%%%")).toEqual([]);
+    expect(await searchPublic("___")).toEqual([]);
+    expect((await searchPublic(`%oyer% ${token}`)).map((h) => h.entityId)).not.toContain(entityId);
+  });
+
+  it("still derives the plural when the term carries punctuation", async () => {
+    const token = uniqueToken();
+    const entityId = uniqueEntityId("punctuation");
+    await index(entityId, `Encadrer les loyers ${token}`, "PUBLIC");
+
+    // The singular with a trailing comma against a document holding the plural. This is
+    // where punctuation normalization earns its place: on the raw term the derived plural
+    // would be "loyer,s", which plainto_tsquery reads as two lexemes and never matches.
+    // plainto_tsquery cleans up punctuation on its own, so a query already spelled the
+    // way the document is would pass without any normalization and prove nothing.
+    const hits = await searchPublic(`loyer, ${token}`);
+
+    expect(hits.map((h) => h.entityId)).toContain(entityId);
+  });
+
+  it("bounds the limit instead of passing it through to SQL", async () => {
+    const token = uniqueToken();
+    await index(uniqueEntityId("bounded"), `Encadrer les loyers ${token}`, "PUBLIC");
+
+    // A negative LIMIT is an error in PostgreSQL, so an unbounded limit turns a caller
+    // mistake into a 500. An excessive one turns a search box into a bulk export.
+    await expect(searchPublic(token, -1)).resolves.toHaveLength(1);
+    await expect(searchPublic(token, 0)).resolves.toHaveLength(1);
+    await expect(searchPublic(token, 10_000)).resolves.toHaveLength(1);
   });
 
   it("caps the query length at 200 characters", async () => {

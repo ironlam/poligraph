@@ -2722,8 +2722,14 @@ model SearchDocument {
   // some write operations disappear from the generated client.
   searchVector Unsupported("tsvector")?
 
-  // Accent-folded, lowercased title + body, for the trigram fallback. An empty
-  // string means the second statement of the upsert never ran, which is detectable.
+  // Accent-folded, lowercased title + body. An empty string means the second statement
+  // of the upsert never ran, which is detectable.
+  //
+  // NOT read by searchPublic(): a substring match over this column recovers the plural
+  // we want (loyer -> loyers) and the false positive we refuse (retrait -> retraite)
+  // with no way to tell them apart, so the public fallback enumerates controlled
+  // variants against searchVector instead. The column and its trigram index stay for
+  // the approximate search of lot 7, which owns the thresholds and the negative corpus.
   searchText String @default("")
 
   indexedAt       DateTime @default(now())

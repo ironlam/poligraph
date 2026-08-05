@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIfLocalDb } from "@/test/db-guard";
+
 import { upsertSearchDocument } from "../documents";
-import { uniqueEntityId } from "./helpers";
+import { assertSearchTestDb, describeIfSearchTestDb, uniqueEntityId } from "./helpers";
 
 // Deferred import, and not a convenience: `@/lib/db` throws at module load when
 // DATABASE_URL is unset, so a top-level import would fail the whole suite instead of
-// skipping this block. describeIfLocalDb only skips the block, it cannot undo an import.
+// skipping this block. describeIfSearchTestDb only skips the block, it cannot undo an import.
 let db: typeof import("@/lib/db").db;
 
 // The dictionary name cannot be a bound parameter of to_tsvector, and the unparameterized
@@ -20,8 +20,9 @@ async function lexemes(dictionary: "simple" | "french", word: string): Promise<s
   return rows[0]?.v ?? "";
 }
 
-describeIfLocalDb("why the french dictionary is unusable here", () => {
+describeIfSearchTestDb("why the french dictionary is unusable here", () => {
   beforeAll(async () => {
+    assertSearchTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
@@ -55,8 +56,9 @@ describeIfLocalDb("why the french dictionary is unusable here", () => {
   });
 });
 
-describeIfLocalDb("domain lexical corpus", () => {
+describeIfSearchTestDb("domain lexical corpus", () => {
   beforeAll(async () => {
+    assertSearchTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
@@ -145,14 +147,23 @@ describeIfLocalDb("domain lexical corpus", () => {
     expect(await matchesExact(entityId, "import")).toBe(false);
   });
 
-  it("recovers the plural through the trigram column", async () => {
-    const entityId = uniqueEntityId("trigram");
-    await index(entityId, "Encadrer les loyers", "Plafonner les loyers.");
+  it("shows why substring matching cannot be the morphological fallback", async () => {
+    const rent = uniqueEntityId("substring-rent");
+    const pension = uniqueEntityId("substring-pension");
+    await index(rent, "Encadrer les loyers", "Plafonner les loyers.");
+    await index(pension, "Retraite à 60 ans", "Rétablir le départ à la retraite.");
 
-    // This is the division of labour of spec 7.2: the tsvector index answers exact
-    // words with no false positive, the trigram column catches the morphological
-    // variants the simple dictionary cannot.
-    expect(await matchesExact(entityId, "loyer")).toBe(false);
-    expect(await matchesSubstring(entityId, "loyer")).toBe(true);
+    // The two relations have the exact same shape: the query is a prefix of a word in
+    // the document. A substring fallback therefore recovers the plural we want AND the
+    // false positive we refuse, with no way to tell them apart. Neither a prefix tsquery
+    // nor a trigram similarity threshold separates them either.
+    expect(await matchesSubstring(rent, "loyer")).toBe(true);
+    expect(await matchesSubstring(pension, "retrait")).toBe(true);
+
+    // The lexeme index does separate them, which is what searchPublic() builds its
+    // fallback on: it enumerates the controlled variants of a term (loyer / loyers)
+    // rather than matching loosely, so "retraite" stays out of a search for "retrait".
+    expect(await matchesExact(rent, "loyers")).toBe(true);
+    expect(await matchesExact(pension, "retrait")).toBe(false);
   });
 });

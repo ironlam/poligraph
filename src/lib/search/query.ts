@@ -10,13 +10,57 @@ export type SearchHit = {
 
 const MAX_QUERY_LENGTH = 200;
 const DEFAULT_LIMIT = 20;
-// Below three characters a trigram index degrades to a sequential scan, and a
-// one-letter substring matches almost everything.
-const MIN_TRIGRAM_TERM_LENGTH = 3;
+const MIN_LIMIT = 1;
+// A search box is not a bulk export, and PostgreSQL raises on a negative LIMIT, so an
+// unbounded caller value turns a mistake into a 500.
+const MAX_LIMIT = 50;
 
-/** Trim, collapse runs of whitespace, and cap the length. Returns "" when there is nothing to search. */
+/**
+ * Fold a raw query into terms that are safe to match on.
+ *
+ * Everything that is not a letter, a digit or a space is dropped. Two reasons, and the
+ * first one is a defect this replaced: with a substring pass, "%%%" built a LIKE pattern
+ * that matched every public document and "_" matched any character. Parameter binding
+ * protects against injection, not against the pattern semantics of the operator. The
+ * second reason is that spec 7.2 asks for punctuation normalization, so "loyers," and
+ * "loyers" have to reach the same terms.
+ *
+ * Accents survive here on purpose: unaccent runs in SQL, on both sides.
+ */
 function normalize(rawQuery: string): string {
-  return rawQuery.trim().replace(/\s+/g, " ").slice(0, MAX_QUERY_LENGTH);
+  return rawQuery
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, MAX_QUERY_LENGTH)
+    .trim();
+}
+
+function clampLimit(limit: number): number {
+  if (!Number.isFinite(limit)) return DEFAULT_LIMIT;
+  return Math.min(Math.max(Math.trunc(limit), MIN_LIMIT), MAX_LIMIT);
+}
+
+/**
+ * The controlled variants of a term: itself, plus the other side of the -s plural.
+ *
+ * Enumerated and not inferred, which is the whole point. No lexical rule separates the
+ * recall we want from the false positive we refuse: "loyer" is a prefix of "loyers" and
+ * "retrait" is a prefix of "retraite", so a substring match, a prefix tsquery and a
+ * trigram similarity threshold all treat the two pairs the same way. Deriving the plural
+ * instead of matching loosely keeps "retraite" out of a search for "retrait", because
+ * "retraite" is not "retrait" plus an s.
+ *
+ * Not covered, deliberately: the -al/-aux plurals, and typos. A transposition such as
+ * "retratite" shares no lexeme with "retraite" and no amount of suffix work finds it.
+ * That is lot 7's subject, with the vector index and its own negative corpus.
+ */
+function variantsOf(term: string): string[] {
+  if (term.endsWith("s")) {
+    const singular = term.slice(0, -1);
+    return singular.length > 0 ? [term, singular] : [term];
+  }
+  return [term, `${term}s`];
 }
 
 function key(hit: SearchHit): string {
@@ -36,18 +80,29 @@ async function searchExact(query: string, limit: number): Promise<SearchHit[]> {
 }
 
 /**
- * Morphological variants and typos, through the trigram column.
+ * Singular and plural recall, term by term.
  *
- * Term by term and not on the whole query: "loyer zk1x2" as a single substring never
- * matches "loyers zk1x2", because the plural breaks the run. Each term has to be found
- * on its own, which is also what lets the trigram index serve each condition.
+ * Term by term and not on the whole query: each term has to be found on its own, which
+ * is what makes "loyer <token>" match a document reading "loyers <token>".
+ *
+ * Each variant goes through plainto_tsquery rather than to_tsquery: the latter parses an
+ * operator syntax and raises on input it does not like, which is not something a public
+ * search box may do. The `||` operator ORs the resulting queries.
  */
-async function searchFuzzy(query: string, limit: number): Promise<SearchHit[]> {
-  const terms = query.split(" ").filter((term) => term.length >= MIN_TRIGRAM_TERM_LENGTH);
+async function searchVariants(query: string, limit: number): Promise<SearchHit[]> {
+  const terms = query.split(" ").filter((term) => term.length > 0);
   if (terms.length === 0) return [];
 
   const conditions = Prisma.join(
-    terms.map((term) => Prisma.sql`"searchText" LIKE '%' || lower(unaccent(${term})) || '%'`),
+    terms.map((term) => {
+      const alternatives = Prisma.join(
+        variantsOf(term).map(
+          (variant) => Prisma.sql`plainto_tsquery('simple', unaccent(${variant}))`
+        ),
+        " || "
+      );
+      return Prisma.sql`"searchVector" @@ (${alternatives})`;
+    }),
     " AND "
   );
 
@@ -75,10 +130,14 @@ export async function searchPublic(
   const query = normalize(rawQuery);
   if (query === "") return [];
 
-  const [exact, fuzzy] = await Promise.all([searchExact(query, limit), searchFuzzy(query, limit)]);
+  const bounded = clampLimit(limit);
+  const [exact, variants] = await Promise.all([
+    searchExact(query, bounded),
+    searchVariants(query, bounded),
+  ]);
 
   const seen = new Set(exact.map(key));
-  const merged = [...exact, ...fuzzy.filter((hit) => !seen.has(key(hit)))];
+  const merged = [...exact, ...variants.filter((hit) => !seen.has(key(hit)))];
 
-  return merged.slice(0, limit);
+  return merged.slice(0, bounded);
 }
