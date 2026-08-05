@@ -209,7 +209,9 @@ export function AdminSidebar() {
         {/* Collapse toggle — desktop only */}
         <button
           onClick={toggleCollapse}
-          className="hidden lg:flex w-full items-center gap-2 px-3 py-2 text-xs text-white/40 hover:text-white/70 rounded-md hover:bg-white/5 transition-colors"
+          // text-white/60 et pas /40 : sur le fond oklch(0.18 0.015 250), 40 % de blanc donne 4,06:1,
+          // sous le seuil AA de 4,5:1 pour du texte de 12 px. 60 % donne environ 7,9:1.
+          className="hidden lg:flex w-full items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white/90 rounded-md hover:bg-white/5 transition-colors"
           aria-label={collapsed ? "Développer la sidebar" : "Réduire la sidebar"}
         >
           {collapsed ? (
