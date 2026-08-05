@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, expectTypeOf, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import type { publishMeasureRevision as PublishFn } from "../transitions";
-import { draftInput, seedMeasureWithDraft } from "./helpers";
+import { draftInput, seedMeasureWithDraft, withIndexingRejected } from "./helpers";
 
 // Deferred: `../transitions` imports `@/lib/db` as a value, which throws at module load
 // without DATABASE_URL. The type-only import above is erased, so it costs nothing.
@@ -239,6 +239,26 @@ describeIfDisposableDb("publishMeasureRevision guards", () => {
       where: { measureId, publishedAt: null, discardedAt: null, id: { not: draft } },
     });
     expect(orphans).toHaveLength(0);
+  });
+
+  it("rolls back the whole publication when indexing fails", async () => {
+    const { measureId, revisionId } = await seedMeasureWithDraft();
+    await reviewMeasureRevision({ measureId, revisionId, reviewedBy: "relecteur" });
+
+    await withIndexingRejected(async () => {
+      await expect(publishMeasureRevision({ measureId, revisionId })).rejects.toThrow();
+    });
+
+    const measure = await db.measure.findUniqueOrThrow({ where: { id: measureId } });
+    const revision = await db.measureRevision.findUniqueOrThrow({ where: { id: revisionId } });
+
+    // Three writes precede the indexing: publishedAt on the revision, the pointer, and
+    // publicationStatus. A partial rollback here would put the measure online while the
+    // index still describes a draft, which is the exact state the same-transaction rule
+    // exists to make impossible.
+    expect(measure.publicationStatus).toBe("DRAFT");
+    expect(measure.publishedRevisionId).toBeNull();
+    expect(revision.publishedAt).toBeNull();
   });
 
   it("leaves the index untouched when a guard refuses the publication", async () => {

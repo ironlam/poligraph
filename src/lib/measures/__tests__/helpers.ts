@@ -169,3 +169,36 @@ export async function publishSeededMeasure(): Promise<{ measureId: string; revis
   await publishMeasureRevision(seeded);
   return seeded;
 }
+
+const REJECT_CONSTRAINT = "reject_measure_search_document_test";
+
+/**
+ * Runs `fn` while the database rejects every write to a MEASURE SearchDocument.
+ *
+ * The only way to observe atomicity. A test that reads the final state stays green if the
+ * indexing is moved after the commit, because the rows would still be there; making the
+ * indexing FAIL is what shows whether the rest of the transition rolled back with it.
+ *
+ * NOT VALID is required, not cosmetic: earlier tests of the same run have already written
+ * MEASURE documents, and without it the ALTER TABLE would fail on them instead of arming
+ * the guard.
+ */
+export async function withIndexingRejected<T>(fn: () => Promise<T>): Promise<T> {
+  const db = await client();
+  await db.$executeRaw`
+    ALTER TABLE "SearchDocument"
+    ADD CONSTRAINT "reject_measure_search_document_test"
+    CHECK ("entityType" <> 'MEASURE'::"SearchEntityType") NOT VALID
+  `;
+  try {
+    return await fn();
+  } finally {
+    await db.$executeRaw`
+      ALTER TABLE "SearchDocument" DROP CONSTRAINT IF EXISTS "reject_measure_search_document_test"
+    `;
+  }
+}
+
+// Named export of the constraint name so a failing test can be diagnosed without
+// searching for the string.
+export const INDEXING_REJECT_CONSTRAINT = REJECT_CONSTRAINT;

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
-import { publishSeededMeasure } from "./helpers";
+import { publishSeededMeasure, withIndexingRejected } from "./helpers";
 
 // Deferred: `../transitions` imports `@/lib/db` as a value, which throws at module load
 // without DATABASE_URL, so a static import fails the file instead of skipping the block.
@@ -59,6 +59,31 @@ describeIfDisposableDb("depublishMeasure", () => {
       where: { id: measure.publishedRevisionId! },
     });
     expect(revision.supersededAt).toBeNull();
+  });
+
+  it("rolls back the depublication when indexing fails", async () => {
+    // Seeded BEFORE arming the guard: publishSeededMeasure indexes twice on its way, so it
+    // would fail under the constraint itself.
+    const { measureId, revisionId } = await publishSeededMeasure();
+
+    await withIndexingRejected(async () => {
+      await expect(
+        depublishMeasure({ measureId, reason: "Motif qui ne doit pas survivre." })
+      ).rejects.toThrow();
+    });
+
+    const measure = await db.measure.findUniqueOrThrow({ where: { id: measureId } });
+    const doc = await db.searchDocument.findUniqueOrThrow({
+      where: { entityType_entityId: { entityType: "MEASURE", entityId: measureId } },
+    });
+
+    // A partial rollback would be the worst of both: the measure marked depublished while
+    // the index still serves it as PUBLIC.
+    expect(measure.publicationStatus).toBe("PUBLISHED");
+    expect(measure.depublishedAt).toBeNull();
+    expect(measure.depublicationReason).toBeNull();
+    expect(doc.visibility).toBe("PUBLIC");
+    expect(doc.sourceRevisionId).toBe(revisionId);
   });
 
   it("refuses a depublication with no stated reason", async () => {

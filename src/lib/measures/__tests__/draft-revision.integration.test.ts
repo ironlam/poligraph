@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
-import { draftInput, seedMeasureWithDraft } from "./helpers";
+import { draftInput, seedMeasureWithDraft, withIndexingRejected } from "./helpers";
 
 // Two deferred imports: `@/lib/db` throws at module load when DATABASE_URL is unset, and
 // `../transitions` imports it as a value, so a static import of either fails the whole
@@ -95,6 +95,26 @@ describeIfDisposableDb("draftMeasureRevision", () => {
     expect(document.visibility).toBe("PUBLIC");
     expect(document.sourceRevisionId).toBe(publishedId);
     expect(document.body).not.toContain("reformulation invisible");
+  });
+
+  it("rolls back the new draft and the discard when indexing fails", async () => {
+    const { measureId, revisionId: original } = await seedMeasureWithDraft();
+
+    await withIndexingRejected(async () => {
+      await expect(
+        draftMeasureRevision(draftInput(measureId, "Version qui ne doit pas survivre."))
+      ).rejects.toThrow();
+    });
+
+    const revisions = await db.measureRevision.findMany({ where: { measureId } });
+    const measure = await db.measure.findUniqueOrThrow({ where: { id: measureId } });
+
+    // Two writes precede the indexing here, the discard of the previous draft and the
+    // creation of the new one. Both must be gone: a partial rollback would leave the
+    // original draft discarded with nothing to replace it.
+    expect(revisions.map((r) => r.id)).toEqual([original]);
+    expect(revisions[0]?.discardedAt).toBeNull();
+    expect(measure.latestRevisionId).toBe(original);
   });
 
   it("refuses to draft on a measure that does not exist", async () => {
