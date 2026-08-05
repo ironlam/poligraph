@@ -309,8 +309,16 @@ export function deriveModerationState(row: ModerationMeasureRow): ModerationStat
   const activeDrafts = row.revisions.filter(isActiveDraft);
 
   const latest = findRevision(row, row.latestRevisionId);
+  // A pending draft is a correction waiting ON TOP of a published text, so it only exists once
+  // something is published. Without that condition, a plain unpublished draft was reported as
+  // "a correction is in progress" beside the DRAFT stage, which says there are two versions
+  // when there is one. Found by looking at the rendered queue, not by the unit tests, which
+  // asserted the wrong semantics.
   const pendingDraft =
-    latest !== null && latest.id !== row.publishedRevisionId && isActiveDraft(latest)
+    row.publishedRevisionId !== null &&
+    latest !== null &&
+    latest.id !== row.publishedRevisionId &&
+    isActiveDraft(latest)
       ? { id: latest.id, reviewed: latest.reviewedAt !== null }
       : null;
 

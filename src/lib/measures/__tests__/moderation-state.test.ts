@@ -186,7 +186,9 @@ describe("deriveModerationState : les étapes du cycle", () => {
     );
 
     expect(state.publication).toBe("DRAFT");
-    expect(state.pendingDraft).toEqual({ id: "rev-draft", reviewed: false });
+    // No pending draft: nothing is published, so this draft IS the current state and not a
+    // correction waiting on top of one. Reporting both would claim two versions exist.
+    expect(state.pendingDraft).toBeNull();
   });
 
   it("reports REVIEWED on an active draft that has been read", () => {
@@ -196,7 +198,7 @@ describe("deriveModerationState : les étapes du cycle", () => {
     );
 
     expect(state.publication).toBe("REVIEWED");
-    expect(state.pendingDraft).toEqual({ id: "rev-draft", reviewed: true });
+    expect(state.pendingDraft).toBeNull();
     expect(state.publiclyVisible).toBe(false);
   });
 
