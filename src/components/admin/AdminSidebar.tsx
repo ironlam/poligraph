@@ -29,6 +29,7 @@ import {
   Vote,
   CopyCheck,
   GitPullRequestArrow,
+  ListChecks,
 } from "lucide-react";
 
 const STORAGE_KEY = "admin-sidebar-collapsed";
@@ -50,6 +51,7 @@ const contentItems: NavItem[] = [
   { href: "/admin/maires", label: "Maires", icon: Crown },
   { href: "/admin/dossiers", label: "Dossiers", icon: FileText },
   { href: "/admin/policy-titles", label: "Titres de scrutins", icon: Vote },
+  { href: "/admin/mesures", label: "Mesures", icon: ListChecks },
   { href: "/admin/affair-matching/review", label: "Liaison affaires", icon: Fingerprint },
   { href: "/admin/affair-matching/dashboard", label: "Liaison — activité", icon: BarChart3 },
 ];

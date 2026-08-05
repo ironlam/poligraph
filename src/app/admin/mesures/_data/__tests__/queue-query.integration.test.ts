@@ -155,6 +155,7 @@ describeIfDisposableDb("queryMeasureQueue", () => {
     const result = await scoped({ publication: ["EMPTY"] });
 
     expect(result.rows.map((row) => row.id)).toEqual([corpus.measureIds.vide]);
-    expect(result.rows[0].referenceText).toBeNull();
+    // toBeNull() and not toBeUndefined(): the row is there, its reference text is not.
+    expect(result.rows[0]?.referenceText).toBeNull();
   });
 });

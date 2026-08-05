@@ -85,13 +85,68 @@ describe("deriveModerationState : visibilité publique", () => {
   });
 
   it.each([
-    ["unreviewed", { reviewedAt: null }],
-    ["never published", { publishedAt: null }],
-    ["superseded", { supersededAt: T1 }],
-    ["discarded", { discardedAt: T1 }],
-    ["without source", { sourceCount: 0 }],
-  ])("hides a measure whose pointed revision is %s", (_label, over) => {
-    expect(deriveModerationState(publishedRow(over)).publiclyVisible).toBe(false);
+    ["unreviewed", { reviewedAt: null }, "revision_unreviewed"],
+    ["never published", { publishedAt: null }, "revision_never_published"],
+    ["superseded", { supersededAt: T1 }, "revision_superseded"],
+    ["discarded", { discardedAt: T1 }, "revision_discarded"],
+    ["without source", { sourceCount: 0 }, "revision_without_source"],
+  ])("hides a measure whose pointed revision is %s, and says why", (_label, over, blocker) => {
+    const state = deriveModerationState(publishedRow(over));
+
+    expect(state.publiclyVisible).toBe(false);
+    expect(state.visibilityBlockers).toContain(blocker);
+  });
+
+  it("keeps publiclyVisible and the blocker list in agreement", () => {
+    // The flag is DEFINED as "no blocker", so the two cannot disagree. This test states the
+    // contract rather than the implementation, and it is what makes the blocker list safe to
+    // render as the explanation of the flag.
+    for (const row of [
+      publishedRow(),
+      publishedRow({ sourceCount: 0 }),
+      measureRow(),
+      publishedRow({}, { publicationStatus: "DRAFT", depublishedAt: T1 }),
+    ]) {
+      const state = deriveModerationState(row);
+      expect(state.publiclyVisible).toBe(state.visibilityBlockers.length === 0);
+    }
+  });
+
+  it("explains a depublication that carries no anomaly at all", () => {
+    // A depublished measure is not broken data: nothing to report as an anomaly, and still a
+    // reason the public does not see it. Two different questions, two different lists.
+    const state = deriveModerationState(
+      publishedRow({}, { publicationStatus: "DRAFT", depublishedAt: T1, depublicationReason: "x" })
+    );
+
+    expect(state.anomalies).toEqual([]);
+    expect(state.visibilityBlockers).toEqual(["status_not_published"]);
+  });
+
+  it("explains a discarded published revision that no anomaly rule reports", () => {
+    // Found while writing the moderation card. PUBLIC_MEASURE_WHERE filters on
+    // `discardedAt: null` on the pointed revision, and neither measures:audit nor the anomaly
+    // list has a rule for it. The narrow case is what proves the gap: with the latest pointer
+    // on a separate live draft, `latest_revision_discarded` does not fire either, so the
+    // measure is invisible to the public and reported as healthy.
+    const published = revision({
+      id: "rev-pub",
+      reviewedAt: T0,
+      publishedAt: T0,
+      discardedAt: T1,
+    });
+    const draft = revision({ id: "rev-draft" });
+    const state = deriveModerationState(
+      measureRow({
+        publicationStatus: "PUBLISHED",
+        publishedRevisionId: published.id,
+        latestRevisionId: draft.id,
+        revisions: [published, draft],
+      })
+    );
+
+    expect(state.visibilityBlockers).toEqual(["revision_discarded"]);
+    expect(state.anomalies).toEqual([]);
   });
 
   it("carries the declared status through instead of folding it into the stage", () => {

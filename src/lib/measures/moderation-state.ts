@@ -90,6 +90,8 @@ export type ModerationState = {
    */
   declaredStatus: PublicationStatus;
   publiclyVisible: boolean;
+  /** Empty exactly when `publiclyVisible` is true. Carries the why. */
+  visibilityBlockers: VisibilityBlocker[];
   withdrawal: MeasureWithdrawal | null;
   depublication: MeasureDepublication | null;
   /** The correction in flight, which the PUBLISHED stage would otherwise hide. */
@@ -162,28 +164,59 @@ function findRevision(row: ModerationMeasureRow, id: string | null): ModerationR
 }
 
 /**
- * Echoes PUBLIC_MEASURE_WHERE of `src/lib/data/measures.ts`, condition by condition.
+ * Every reason the public read would leave this measure out, one entry per unmet condition
+ * of PUBLIC_MEASURE_WHERE in `src/lib/data/measures.ts`.
  *
- * That file is the authority on what the public sees; this is a read-side echo of it, and
- * the two are crossed on the same rows by
- * `__tests__/moderation-state.integration.test.ts`. Deriving from `publicationStatus`
- * alone would make the queue announce a measure as visible while the public read returns
- * nothing for it, which is exactly the case a moderator needs to be told about.
+ * Reasons rather than a boolean, because "published but invisible" is useless to a moderator
+ * without the why. And they are NOT the anomaly list: an anomaly is data that should not
+ * exist, a blocker is a condition that is not met. A depublished measure has a blocker and
+ * no anomaly; a published revision carrying `discardedAt` has a blocker that the audit has
+ * no rule for at all.
  */
-function isPubliclyVisible(
+export const VISIBILITY_BLOCKERS = [
+  "status_not_published",
+  "no_published_pointer",
+  "pointer_not_found",
+  "revision_unreviewed",
+  "revision_never_published",
+  "revision_superseded",
+  "revision_discarded",
+  "revision_without_source",
+] as const;
+
+export type VisibilityBlocker = (typeof VISIBILITY_BLOCKERS)[number];
+
+/**
+ * Echoes PUBLIC_MEASURE_WHERE condition by condition. That file is the authority on what the
+ * public sees; this is a read-side echo of it, and the two are crossed on the same rows by
+ * `__tests__/moderation-state.integration.test.ts`.
+ *
+ * `publiclyVisible` is then defined as "no blocker", so the flag and the explanation cannot
+ * disagree: there is one list of conditions, not a boolean beside a list.
+ */
+function deriveVisibilityBlockers(
   row: ModerationMeasureRow,
   published: ModerationRevisionRow | null
-): boolean {
-  return (
-    row.publicationStatus === "PUBLISHED" &&
-    row.publishedRevisionId !== null &&
-    published !== null &&
-    published.reviewedAt !== null &&
-    published.publishedAt !== null &&
-    published.supersededAt === null &&
-    published.discardedAt === null &&
-    published.sourceCount > 0
-  );
+): VisibilityBlocker[] {
+  const blockers: VisibilityBlocker[] = [];
+
+  if (row.publicationStatus !== "PUBLISHED") blockers.push("status_not_published");
+  if (row.publishedRevisionId === null) {
+    blockers.push("no_published_pointer");
+    return blockers;
+  }
+  if (published === null) {
+    blockers.push("pointer_not_found");
+    return blockers;
+  }
+
+  if (published.reviewedAt === null) blockers.push("revision_unreviewed");
+  if (published.publishedAt === null) blockers.push("revision_never_published");
+  if (published.supersededAt !== null) blockers.push("revision_superseded");
+  if (published.discardedAt !== null) blockers.push("revision_discarded");
+  if (published.sourceCount === 0) blockers.push("revision_without_source");
+
+  return blockers;
 }
 
 function derivePublication(
@@ -281,10 +314,13 @@ export function deriveModerationState(row: ModerationMeasureRow): ModerationStat
       ? { id: latest.id, reviewed: latest.reviewedAt !== null }
       : null;
 
+  const visibilityBlockers = deriveVisibilityBlockers(row, published);
+
   return {
     publication: derivePublication(row, activeDrafts),
     declaredStatus: row.publicationStatus,
-    publiclyVisible: isPubliclyVisible(row, published),
+    publiclyVisible: visibilityBlockers.length === 0,
+    visibilityBlockers,
     withdrawal:
       row.withdrawnAt !== null
         ? {

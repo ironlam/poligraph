@@ -29,6 +29,19 @@ import type {
   PromiseExtractionStatus,
   CandidacyStatus,
 } from "@/types";
+import type {
+  MeasureAttribution,
+  MeasureExtractionMethod,
+  MeasurePrecision,
+  MeasureSourceKind,
+  QualificationKind,
+  SourceTier,
+} from "@/generated/prisma";
+import type {
+  ModerationAnomalyCode,
+  PublicationState,
+  VisibilityBlocker,
+} from "@/lib/measures/moderation-state";
 
 // Nombre de sièges à l'Assemblée nationale (XVIIe législature)
 export const AN_SEAT_COUNT = 577;
@@ -1359,4 +1372,88 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
   PRESSENTI: "Candidature pressentie",
   ENVISAGE: "Candidature évoquée",
   RETIRE: "Candidature retirée",
+};
+
+// ---------------------------------------------------------------------------
+// Mesures : le modèle éditorial versionné du hub présidentielle (lot 1 et 2).
+// ---------------------------------------------------------------------------
+
+export const MEASURE_ATTRIBUTION_LABELS: Record<MeasureAttribution, string> = {
+  PERSONAL: "Formulée personnellement",
+  PARTY_PROGRAM: "Reprise du programme du parti",
+};
+
+export const MEASURE_PRECISION_LABELS: Record<MeasurePrecision, string> = {
+  CHIFFREE: "Chiffrée",
+  OBJECTIF_SANS_CHIFFRE: "Objectif sans chiffre",
+};
+
+export const MEASURE_EXTRACTION_METHOD_LABELS: Record<MeasureExtractionMethod, string> = {
+  MANUAL: "Saisie manuelle",
+  AI_ASSISTED: "Assistée par IA",
+  IMPORTED: "Importée",
+};
+
+export const MEASURE_SOURCE_KIND_LABELS: Record<MeasureSourceKind, string> = {
+  PROGRAMME_PARTI: "Programme de parti",
+  DISCOURS_CAMPAGNE: "Discours de campagne",
+  DEBAT_TELEVISE: "Débat télévisé",
+  DISCOURS_AN: "Discours à l'Assemblée nationale",
+  DISCOURS_SENAT: "Discours au Sénat",
+  INTERVIEW_PRESSE: "Interview de presse",
+  ARTICLE_PRESSE: "Article de presse",
+  PROPOSITION_LOI: "Proposition de loi",
+};
+
+export const SOURCE_TIER_LABELS: Record<SourceTier, string> = {
+  PRIMARY: "Source primaire",
+  SECONDARY: "Source secondaire",
+};
+
+// Les quatre qualificatifs opposables. Leurs définitions complètes, avec leur cas limite,
+// vivent dans docs/editorial/qualifications-mesures.md.
+export const QUALIFICATION_KIND_LABELS: Record<QualificationKind, string> = {
+  FINANCEMENT_NON_PRECISE: "Financement non précisé",
+  DEJA_TENTEE: "Déjà tentée",
+  CALENDRIER_PRECISE: "Calendrier précisé",
+  PERIMETRE_INCERTAIN: "Périmètre incertain",
+};
+
+// L'étape du cycle éditorial, dérivée. Distincte de PUBLICATION_STATUS_LABELS, qui nomme la
+// colonne : une mesure peut être déclarée PUBLISHED sans être visible du public.
+export const PUBLICATION_STATE_LABELS: Record<PublicationState, string> = {
+  EMPTY: "Sans révision",
+  DRAFT: "Brouillon",
+  REVIEWED: "Relue",
+  PUBLISHED: "Publiée",
+  DEPUBLISHED: "Dépubliée",
+};
+
+// Le vocabulaire est celui de measures:audit. Chaque libellé dit ce qui est cassé, pas
+// seulement qu'il y a un problème : un relecteur doit pouvoir agir.
+export const MODERATION_ANOMALY_LABELS: Record<ModerationAnomalyCode, string> = {
+  published_revision_foreign: "La révision publiée n'appartient pas à cette mesure",
+  published_revision_unreviewed: "La révision publiée n'a pas été relue",
+  published_revision_unpublished: "La révision pointée n'a jamais été publiée",
+  published_revision_superseded: "La révision publiée a été remplacée",
+  published_revision_without_source: "La révision publiée n'a plus aucune source",
+  multiple_published_revisions: "Deux révisions publiées et non remplacées",
+  orphan_active_draft: "Un brouillon actif qu'aucun pointeur ne désigne",
+  latest_revision_foreign: "Le pointeur de brouillon désigne une autre mesure",
+  latest_revision_discarded: "Le pointeur de brouillon désigne un brouillon abandonné",
+  withdrawn_without_source: "Retrait sans source : ni URL ni libellé",
+  withdrawal_source_without_date: "Source de retrait sans date de retrait",
+};
+
+// Pourquoi le public ne voit pas une mesure. Distinct des anomalies : une dépublication est
+// une raison sans être un défaut de données.
+export const VISIBILITY_BLOCKER_LABELS: Record<VisibilityBlocker, string> = {
+  status_not_published: "La mesure n'est pas au statut publié",
+  no_published_pointer: "Aucune révision n'est désignée comme publiée",
+  pointer_not_found: "La révision désignée est introuvable",
+  revision_unreviewed: "La révision désignée n'a pas été relue",
+  revision_never_published: "La révision désignée n'a jamais été publiée",
+  revision_superseded: "La révision désignée a été remplacée",
+  revision_discarded: "La révision désignée a été abandonnée",
+  revision_without_source: "La révision désignée n'a aucune source",
 };
