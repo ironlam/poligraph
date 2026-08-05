@@ -11,6 +11,7 @@ import {
 } from "@/lib/ratelimit/degraded-mode";
 import { getUpstashCredentials } from "@/lib/ratelimit/upstash-credentials";
 import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
+import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
@@ -288,6 +289,17 @@ async function applyApiRateLimit(
   return response;
 }
 
+/**
+ * Whether the request carries a session token WE issued, and that has not expired.
+ *
+ * `verifySessionToken` lives in `@/lib/auth-token`, which imports no `next/headers`: the proxy and
+ * `isAuthenticated()` then share one implementation of the HMAC check instead of two that drift.
+ */
+export function hasValidAdminSession(request: NextRequest): boolean {
+  const token = request.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  return token !== undefined && verifySessionToken(token);
+}
+
 // ─── Proxy (Next 16 convention; the active middleware-like layer) ──
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
@@ -331,18 +343,20 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // Protect admin API routes (except auth endpoint)
+  // Protect admin API routes (except auth endpoint).
+  //
+  // The token is VERIFIED, not merely present (issue #647). Checking `session?.value` let
+  // `admin_session=1` through, and every admin page without its own isAuthenticated() call then
+  // rendered: four pages out of thirty-seven had one.
   if (pathname.startsWith("/api/admin") && !pathname.startsWith("/api/admin/auth")) {
-    const session = request.cookies.get("admin_session");
-    if (!session?.value) {
+    if (!hasValidAdminSession(request)) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
   }
 
-  // Protect admin pages - check session cookie
+  // Protect admin pages.
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
-    const session = request.cookies.get("admin_session");
-    if (!session?.value) {
+    if (!hasValidAdminSession(request)) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
   }

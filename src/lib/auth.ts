@@ -1,8 +1,15 @@
 import { cookies } from "next/headers";
-import { timingSafeEqual, createHmac } from "crypto";
+import { timingSafeEqual } from "crypto";
+import {
+  ADMIN_COOKIE_NAME,
+  SESSION_DURATION,
+  signSessionToken,
+  verifySessionToken,
+} from "@/lib/auth-token";
 
-const ADMIN_COOKIE_NAME = "admin_session";
-const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 days in seconds
+// La signature et la vérification vivent dans @/lib/auth-token, sans next/headers, pour que
+// src/proxy.ts puisse vérifier le jeton sans réécrire le HMAC.
+export { verifySessionToken } from "@/lib/auth-token";
 
 /**
  * Simple admin authentication using ADMIN_PASSWORD env var
@@ -22,44 +29,11 @@ export async function verifyPassword(password: string): Promise<boolean> {
 }
 
 /**
- * Create a signed session token (stateless — no server-side store needed).
- * Format: "timestamp.hmac_signature"
- * The HMAC key is ADMIN_PASSWORD, so only someone who knows the password can forge a token.
- */
-function signToken(timestamp: number): string {
-  const secret = process.env.ADMIN_PASSWORD || "";
-  const sig = createHmac("sha256", secret).update(String(timestamp)).digest("hex");
-  return `${timestamp}.${sig}`;
-}
-
-function verifyToken(token: string): boolean {
-  const secret = process.env.ADMIN_PASSWORD;
-  if (!secret) return false;
-
-  const dotIndex = token.indexOf(".");
-  if (dotIndex === -1) return false;
-
-  const timestamp = token.substring(0, dotIndex);
-  const signature = token.substring(dotIndex + 1);
-
-  // Verify HMAC signature
-  const expected = createHmac("sha256", secret).update(timestamp).digest("hex");
-  if (expected.length !== signature.length) return false;
-  if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return false;
-
-  // Check expiry
-  const created = parseInt(timestamp, 10);
-  if (isNaN(created)) return false;
-  const elapsed = (Date.now() - created) / 1000;
-  return elapsed < SESSION_DURATION;
-}
-
-/**
  * Create admin session with HMAC-signed cookie (stateless)
  */
 export async function createSession(): Promise<void> {
   const cookieStore = await cookies();
-  const token = signToken(Date.now());
+  const token = signSessionToken(Date.now());
 
   cookieStore.set(ADMIN_COOKIE_NAME, token, {
     httpOnly: true,
@@ -77,7 +51,7 @@ export async function isAuthenticated(): Promise<boolean> {
   const cookieStore = await cookies();
   const session = cookieStore.get(ADMIN_COOKIE_NAME);
   if (!session?.value) return false;
-  return verifyToken(session.value);
+  return verifySessionToken(session.value);
 }
 
 /**
