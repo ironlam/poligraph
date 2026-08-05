@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { upsertSearchDocument } from "../documents";
-import { assertSearchTestDb, describeIfSearchTestDb, uniqueEntityId } from "./helpers";
+import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
+import { uniqueEntityId } from "./helpers";
 
 // Deferred import, and not a convenience: `@/lib/db` throws at module load when
 // DATABASE_URL is unset, so a top-level import would fail the whole suite instead of
-// skipping this block. describeIfSearchTestDb only skips the block, it cannot undo an import.
+// skipping this block. describeIfDisposableDb only skips the block, it cannot undo an import.
 let db: typeof import("@/lib/db").db;
 
 // The dictionary name cannot be a bound parameter of to_tsvector, and the unparameterized
@@ -20,9 +21,9 @@ async function lexemes(dictionary: "simple" | "french", word: string): Promise<s
   return rows[0]?.v ?? "";
 }
 
-describeIfSearchTestDb("why the french dictionary is unusable here", () => {
+describeIfDisposableDb("why the french dictionary is unusable here", () => {
   beforeAll(async () => {
-    assertSearchTestDb();
+    assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
@@ -56,9 +57,9 @@ describeIfSearchTestDb("why the french dictionary is unusable here", () => {
   });
 });
 
-describeIfSearchTestDb("domain lexical corpus", () => {
+describeIfDisposableDb("domain lexical corpus", () => {
   beforeAll(async () => {
-    assertSearchTestDb();
+    assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
   });
 

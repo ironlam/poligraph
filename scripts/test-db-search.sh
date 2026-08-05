@@ -73,6 +73,9 @@ if [ "$#" -gt 0 ]; then
   echo "[test:db:search] running requested test files: $*"
   npx vitest run --no-file-parallelism "$@"
 else
-  echo "[test:db:search] running the lot 1B integration test files"
-  npx vitest run --no-file-parallelism src/lib/search
+  # db-guard is in the default set even though it is a unit test: its
+  # assertDisposableTestDb "does not throw" branch only executes when DATABASE_URL IS
+  # the disposable container, so running it outside this harness proves half the guard.
+  echo "[test:db:search] running the suites that need the disposable container"
+  npx vitest run --no-file-parallelism src/lib/search src/test/__tests__/db-guard.test.ts
 fi

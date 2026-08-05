@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { upsertSearchDocument } from "../documents";
-import { assertSearchTestDb, describeIfSearchTestDb, uniqueEntityId, uniqueToken } from "./helpers";
+import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
+import { uniqueEntityId, uniqueToken } from "./helpers";
 
 // Two deferred imports, and neither is a convenience. `@/lib/db` throws at module load
 // when DATABASE_URL is unset, and `../query` imports it as a VALUE, unlike
 // `../documents` which only imports its type. A top-level import of either would fail
-// the whole suite instead of skipping this block: describeIfSearchTestDb skips a block, it
+// the whole suite instead of skipping this block: describeIfDisposableDb skips a block, it
 // cannot undo an import.
 let db: typeof import("@/lib/db").db;
 let searchPublic: typeof import("../query").searchPublic;
@@ -30,9 +31,9 @@ async function index(
   });
 }
 
-describeIfSearchTestDb("searchPublic", () => {
+describeIfDisposableDb("searchPublic", () => {
   beforeAll(async () => {
-    assertSearchTestDb();
+    assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
     ({ searchPublic } = await import("../query"));
   });

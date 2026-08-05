@@ -64,3 +64,73 @@ export function assertLocalTestDb(): void {
     );
   }
 }
+
+// --- Destructive suites: the exact disposable container ----------------------
+//
+// `isLocalTestDb` answers "is this a local database", which is the right question
+// for a suite that only writes rows. It is not enough for suites that run DDL:
+// "local" also describes a persistent development database or an SSH tunnel to a
+// remote one. Discovered concretely on the lot 1B search substrate, whose drift
+// test ran ALTER TABLE and `prisma db push --accept-data-loss`, and whose internal
+// URL check happened AFTER the first statement, so a refusal left the added column
+// behind on someone else's database.
+//
+// Deliberately pinned to the port 55433 container only, and NOT to the #477
+// harness on 55432: the two containers are created by different compose files with
+// different extensions, so "any disposable container" would be a claim this module
+// cannot verify. The cost of pinning is that a suite launched under the wrong
+// harness skips instead of running, which is the safe direction and is visible in
+// the vitest output.
+
+/** The container from docker-compose.test-search.yml, and nothing else. */
+const DISPOSABLE_TEST_DB = {
+  hostname: "localhost",
+  port: "55433",
+  database: "poligraph_test",
+} as const;
+
+/**
+ * Whether `DATABASE_URL` names the disposable container of `npm run test:db:search`.
+ *
+ * Narrows {@link isLocalTestDb} rather than replacing it, so there stays a single
+ * definition of "local" and a single definition of "the destructible container".
+ * Parses rather than pattern-matches, so a credentialed URL and a bare one both
+ * work and the expected values cannot be smuggled in through a password or a query
+ * parameter. Anything unparseable counts as "not it": an unreadable URL is not
+ * evidence of safety.
+ */
+export function isDisposableTestDb(url: string | undefined = process.env.DATABASE_URL): boolean {
+  if (!url || !isLocalTestDb(url)) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase() === DISPOSABLE_TEST_DB.hostname &&
+      parsed.port === DISPOSABLE_TEST_DB.port &&
+      parsed.pathname.replace(/^\//, "") === DISPOSABLE_TEST_DB.database
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `describe` for destructive suites: runs on the disposable container, skips
+ * everywhere else, including on another local database.
+ */
+export const describeIfDisposableDb = isDisposableTestDb() ? describe : describe.skip;
+
+/**
+ * Hard refusal, second layer behind {@link describeIfDisposableDb}.
+ *
+ * Call it from every `beforeAll` of a destructive suite, and from fixture modules:
+ * a block can be added later with the wrong `describe`, and a helper must not
+ * depend on its caller having been careful.
+ */
+export function assertDisposableTestDb(): void {
+  if (!isDisposableTestDb()) {
+    throw new Error(
+      "Ces tests refusent de s'exécuter : DATABASE_URL ne désigne pas le conteneur jetable " +
+        "(localhost:55433/poligraph_test). Lancer npm run test:db:search."
+    );
+  }
+}

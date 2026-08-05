@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { assertSearchTestDb, describeIfSearchTestDb } from "./helpers";
+import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 
 // Deferred import, and not a convenience: `@/lib/db` throws at module load when
 // DATABASE_URL is unset, so a top-level import would fail the whole suite instead of
-// skipping this block. describeIfSearchTestDb only skips the block, it cannot undo an import.
+// skipping this block. describeIfDisposableDb only skips the block, it cannot undo an import.
 let db: typeof import("@/lib/db").db;
 
 type IndexRow = { indexname: string; indexdef: string };
@@ -18,9 +18,9 @@ async function searchDocumentIndexes(): Promise<IndexRow[]> {
   `;
 }
 
-describeIfSearchTestDb("SearchDocument schema", () => {
+describeIfDisposableDb("SearchDocument schema", () => {
   beforeAll(async () => {
-    assertSearchTestDb();
+    assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
@@ -78,7 +78,7 @@ describeIfSearchTestDb("SearchDocument schema", () => {
 
 // Runs `prisma db push` the way the harness does: explicit --url so prisma.config.ts
 // cannot retarget it, and DOTENV_CONFIG_PATH=/dev/null so its `import "dotenv/config"`
-// cannot read the real .env. The describeIfSearchTestDb gate already guarantees the URL
+// cannot read the real .env. The describeIfDisposableDb gate already guarantees the URL
 // is the throwaway container, this is the second lock.
 function dbPush(): void {
   const url = process.env["DATABASE_URL"];
@@ -96,9 +96,9 @@ function dbPush(): void {
 // a tighter one would fail on a cold npx cache rather than on a real regression.
 const DB_PUSH_TIMEOUT_MS = 60_000;
 
-describeIfSearchTestDb("db:push drift", () => {
+describeIfDisposableDb("db:push drift", () => {
   beforeAll(async () => {
-    assertSearchTestDb();
+    assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
   });
 
