@@ -83,9 +83,9 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
 }
 
 describe("SubjectComparison", () => {
-  it("annonce l'ordre alphabétique et l'absence de classement", () => {
+  it("annonce l'ordre alphabétique d'affichage", () => {
     render(<SubjectComparison data={data()} />);
-    expect(screen.getByText(/ordre alphabétique, sans classement/i)).toBeInTheDocument();
+    expect(screen.getByText(/présentées par ordre alphabétique/i)).toBeInTheDocument();
   });
 
   it("rend une absence qualifiée, jamais une cellule vide, pour un candidat sans mesure", () => {

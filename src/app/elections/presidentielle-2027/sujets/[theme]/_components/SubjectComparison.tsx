@@ -15,10 +15,9 @@ import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-
 /**
  * A public subject page: for one theme, the candidates and their measures, side by side.
  *
- * No ranking and no proximity score: candidates come in the alphabetical order the authority returns, and
- * the page says so. A candidate with no published measure on the theme is not silent, it gets a qualified
- * absence. Below the publication gate the page renders an explicit state, never a one-candidate comparison
- * dressed up as a comparison.
+ * Candidates come in the alphabetical order the authority returns. A candidate with no published measure
+ * on the theme gets a qualified absence. Below the publication gate the page renders an explicit closed
+ * state.
  */
 
 function formatDateFr(date: Date): string {
@@ -135,7 +134,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
         <p className="text-sm text-muted-foreground">Présidentielle 2027</p>
         <h1 className="font-display text-2xl font-bold tracking-tight">{themeLabel}</h1>
         <p className="text-sm text-muted-foreground">
-          Candidats par ordre alphabétique, sans classement ni score de proximité.
+          Les candidatures sont présentées par ordre alphabétique.
         </p>
       </header>
 
