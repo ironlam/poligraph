@@ -82,12 +82,17 @@ describeIfDisposableDb("maintenance de l'index de recherche", () => {
   });
 
   it("ne signale rien sur des mesures correctement indexées", async () => {
-    await publishSeededMeasure();
-    await seedMeasureWithDraft();
+    const published = await publishSeededMeasure();
+    const drafted = await seedMeasureWithDraft();
+    const mine = new Set([published.measureId, drafted.measureId]);
 
-    // Filtré sur les deux règles de cette commande : les autres fichiers du harnais construisent
-    // exprès des violations que `measures:audit` couvre.
-    const violations = await auditSearchDocuments();
+    // Filtré sur MES mesures, et ce n'est pas une commodité : le corpus lexical du lot 1B indexe des
+    // entités synthétiques (`insert-…`, `loyer-singulier-…`) qui n'ont jamais été des mesures, parce
+    // que le substrat est agnostique de l'entité par construction. Elles sont donc de vraies
+    // violations pour cette règle, dans une base partagée par tous les fichiers du harnais. Une
+    // assertion globale ici dépend de l'ordre d'exécution, ce qu'elle a fait : verte seule, rouge
+    // dans la suite complète.
+    const violations = (await auditSearchDocuments()).filter((v) => mine.has(v.entityId));
 
     expect(violations).toEqual([]);
   });
