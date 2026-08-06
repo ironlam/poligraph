@@ -137,6 +137,11 @@ describe("setCurrentParty", () => {
       startDate: new Date("2026-01-01"),
     });
 
+    expect(h.membershipFindFirst.mock.calls[0]?.[0].where).toEqual({
+      politicianId: "pol_1",
+      partyId: "p_main",
+      endDate: null,
+    });
     expect(h.membershipUpdate).toHaveBeenCalledWith({
       where: { id: "m_main" },
       data: { endDate: new Date("2026-01-01") },
