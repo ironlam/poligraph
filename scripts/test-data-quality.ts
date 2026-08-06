@@ -71,6 +71,32 @@ const CHECKS: QualityCheck[] = [
     },
   },
 
+  {
+    name: "mandate-titles-gluing-two-people",
+    description: "Titres de mandat recollant deux personnes (corruption de source)",
+    critical: false,
+    check: async () => {
+      // A lowercase letter immediately followed by an uppercase one never
+      // occurs in a real mandate title ("d'État" has an apostrophe,
+      // "Outre-mer" a hyphen). It does occur when an upstream row merges two
+      // people, as the data.gouv.fr government CSV did for Pierre Messmer
+      // (#664). The government importer now cuts at that boundary; this check
+      // catches the same corruption arriving through any other source.
+      const mandates = await db.$queryRaw<{ fullName: string; title: string }[]>`
+        SELECT p."fullName", m.title
+        FROM "Mandate" m
+        JOIN "Politician" p ON m."politicianId" = p.id
+        WHERE m.title ~ '[a-zà-ÿ][A-ZÀ-Ý]'
+        LIMIT 20
+      `;
+      return {
+        passed: mandates.length === 0,
+        count: mandates.length,
+        details: mandates.slice(0, 10).map((m) => `${m.fullName}: ${m.title.slice(0, 80)}`),
+      };
+    },
+  },
+
   // === IMPORTANT CHECKS ===
   {
     name: "deputies-without-photo",

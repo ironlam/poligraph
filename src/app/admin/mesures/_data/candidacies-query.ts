@@ -1,16 +1,24 @@
 import { db } from "@/lib/db";
 
 /**
- * The candidacies a measure can be created from.
+ * The candidacies a measure can be created from, in the 2027 hub.
  *
- * Bounded and filtered, not a full list: `Candidacy` also holds municipal candidacies (it carries a
- * `communeId`), and that table runs into the hundreds of thousands of rows. Loading it whole has
- * already produced a 19 MB page in this project.
+ * Scoped, not a full list (issue #660, decisions of 2026-08-06):
+ * - the presidential election 2027 only, by slug, not merely the PRESIDENTIELLE type (which also holds
+ *   2022 and earlier);
+ * - status `DECLARE` only: attaching a measure to a merely pressentie or envisagée candidacy would lend
+ *   a programme to someone who has not declared;
+ * - a sourced candidacy only (`sourceUrl` and `sourceLabel`), per the doctrine that a declared candidacy
+ *   is sourced.
  *
- * `politicianId` must be present. It is nullable on the model, and `createMeasure()` requires a
- * politician: a candidacy with no linked politician cannot carry a measure, so offering it would
- * only produce a failure at submit time.
+ * This is the display side of the rule. The server action re-checks the same conditions
+ * (`assertHubMeasureCandidacy`), because a selector filter is not an authorization.
+ *
+ * `politicianId` must be present: it is nullable on the model and `createMeasure()` requires a
+ * politician, so a candidacy without one would only fail at submit time. The bound stays because
+ * `Candidacy` also holds municipal rows and loading it whole has already produced a 19 MB page.
  */
+const HUB_ELECTION_SLUG = "presidentielle-2027";
 const MAX_CANDIDACIES = 200;
 
 export type CandidacyOption = {
@@ -23,7 +31,13 @@ export type CandidacyOption = {
 
 export async function listPresidentialCandidacies(): Promise<CandidacyOption[]> {
   const rows = await db.candidacy.findMany({
-    where: { election: { type: "PRESIDENTIELLE" }, politicianId: { not: null } },
+    where: {
+      election: { slug: HUB_ELECTION_SLUG },
+      status: "DECLARE",
+      sourceUrl: { not: null },
+      sourceLabel: { not: null },
+      politicianId: { not: null },
+    },
     select: {
       id: true,
       politicianId: true,

@@ -81,7 +81,7 @@ function AlignmentSpectrum({
       </div>
 
       {/* Screen reader table */}
-      <table className="sr-only" id={descId}>
+      <table className="sr-only table-fixed" id={descId}>
         <caption>Concordance des votes par groupe - {chamberLabel}</caption>
         <thead>
           <tr>

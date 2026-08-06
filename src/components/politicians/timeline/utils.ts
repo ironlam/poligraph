@@ -1,4 +1,47 @@
 import type { SerializedMandate } from "@/types";
+import { MANDATE_TYPE_LABELS } from "@/config/labels";
+import type { TimelineMandate } from "./types";
+
+/**
+ * Who the person sat with during a mandate, or what they were actually in
+ * charge of. "Député" alone says nothing about the group; "Dirigeant(e) de
+ * parti" says nothing about the party.
+ *
+ * Returns null whenever the data is missing, so the timeline silently falls
+ * back to the generic label rather than filling the gap with a guess.
+ */
+export function mandateAffiliation(mandate: TimelineMandate): string | null {
+  switch (mandate.type) {
+    case "PRESIDENT_PARTI":
+      return mandate.party?.name ?? null;
+
+    case "DEPUTE":
+    case "SENATEUR": {
+      const group = mandate.parliamentaryData?.parliamentaryGroup?.name;
+      return group ? `Groupe ${group}` : null;
+    }
+
+    case "DEPUTE_EUROPEEN": {
+      const group = mandate.europeanData?.europeanGroup?.name;
+      return group ? `Groupe ${group}` : null;
+    }
+
+    // Government titles carry the portfolio, which the mandate type does not.
+    // Restricted to these types on purpose: elsewhere the title only repeats
+    // the constituency already on screen ("Maire d'Agen").
+    case "PREMIER_MINISTRE":
+    case "MINISTRE":
+    case "MINISTRE_DELEGUE":
+    case "SECRETAIRE_ETAT": {
+      const title = mandate.title?.trim();
+      if (!title) return null;
+      return title.toLowerCase() === MANDATE_TYPE_LABELS[mandate.type].toLowerCase() ? null : title;
+    }
+
+    default:
+      return null;
+  }
+}
 
 export function computeDuration(startDate: string | Date, endDate: string | Date | null): string {
   const start = new Date(startDate);

@@ -1,11 +1,11 @@
 "use client";
 
 import type { scaleTime } from "d3-scale";
-import type { SerializedMandate } from "@/types";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS } from "@/config/labels";
 import { MANDATE_TYPE_COLORS, AFFAIR_STATUS_MARKER_COLORS } from "@/config/timeline";
 import { formatDate } from "@/lib/utils";
-import type { CareerTimelineProps, TooltipData, TimelineAffair } from "./types";
+import type { CareerTimelineProps, TooltipData, TimelineAffair, TimelineMandate } from "./types";
+import { mandateAffiliation } from "./utils";
 import {
   LEFT_MARGIN,
   RIGHT_MARGIN,
@@ -41,11 +41,11 @@ export function DesktopTimeline({
   tooltip: TooltipData | null;
   xScale: ReturnType<typeof scaleTime<number, number>>;
   yearMarkers: number[];
-  mandates: SerializedMandate[];
+  mandates: TimelineMandate[];
   mandateRows: {
     row: number;
     label: string;
-    mandates: SerializedMandate[];
+    mandates: TimelineMandate[];
     overlapOffsets: Map<string, number>;
     maxLanes: number;
   }[];
@@ -54,7 +54,7 @@ export function DesktopTimeline({
   deathDate?: Date | null;
   minDate: Date;
   maxDate: Date;
-  onMandateHover: (mandate: SerializedMandate, e: React.MouseEvent) => void;
+  onMandateHover: (mandate: TimelineMandate, e: React.MouseEvent) => void;
   onAffairHover: (affair: TimelineAffair, e: React.MouseEvent) => void;
   onHideTooltip: () => void;
 }) {
@@ -198,6 +198,7 @@ export function DesktopTimeline({
               const endX = xScale(endDate);
               const width = Math.max(endX - startX, MIN_BAR_WIDTH);
               const color = MANDATE_TYPE_COLORS[mandate.type];
+              const affiliation = mandateAffiliation(mandate);
               const laneOffset = overlapOffsets.get(mandate.id) ?? 0;
               const top =
                 rowYPositions[rowIndex]! + laneOffset * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2;
@@ -217,7 +218,7 @@ export function DesktopTimeline({
                   }}
                   role="button"
                   tabIndex={0}
-                  aria-label={`${MANDATE_TYPE_LABELS[mandate.type]}${mandate.constituency ? `, ${mandate.constituency}` : ""}, ${new Date(mandate.startDate).getFullYear()} - ${mandate.isCurrent ? "présent" : mandate.endDate ? new Date(mandate.endDate).getFullYear() : ""}`}
+                  aria-label={`${MANDATE_TYPE_LABELS[mandate.type]}${affiliation ? `, ${affiliation}` : ""}${mandate.constituency ? `, ${mandate.constituency}` : ""}, ${new Date(mandate.startDate).getFullYear()} - ${mandate.isCurrent ? "présent" : mandate.endDate ? new Date(mandate.endDate).getFullYear() : ""}`}
                   onMouseEnter={(e) => onMandateHover(mandate, e)}
                   onMouseLeave={onHideTooltip}
                 >

@@ -34,6 +34,13 @@ const assessmentsMock = {
 };
 vi.mock("@/lib/measures/assessments", () => assessmentsMock);
 
+// The hub candidacy gate (#660). Default impl returns the everyAction table's e-1/p-1 so the
+// authenticated table test still succeeds; individual tests override it. clearAllMocks keeps the impl.
+const eligibilityMock = {
+  assertHubMeasureCandidacy: vi.fn(async () => ({ electionId: "e-1", politicianId: "p-1" })),
+};
+vi.mock("../_data/candidacy-eligibility", () => eligibilityMock);
+
 const REVISION = {
   text: "Encadrer les loyers dans les zones tendues.",
   precision: "OBJECTIF_SANS_CHIFFRE" as const,
@@ -152,6 +159,58 @@ describe("actions éditoriales : la session", () => {
     for (const [name, mock] of Object.entries(transitionsMock)) {
       expect(mock, name).toHaveBeenCalledTimes(1);
     }
+  });
+});
+
+describe("createMeasureAction : garde de candidature du hub (#660)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  const call = (a: Awaited<ReturnType<typeof actions>>) =>
+    a.createMeasureAction({
+      candidacyId: "c-1",
+      politicianId: "p-1",
+      electionId: "e-1",
+      theme: "LOGEMENT_URBANISME",
+      attribution: "PERSONAL",
+      revision: REVISION,
+      sources: SOURCES,
+    });
+
+  it("crée la mesure avec l'élection et le politicien lus SUR la candidature", async () => {
+    eligibilityMock.assertHubMeasureCandidacy.mockResolvedValue({
+      electionId: "e-1",
+      politicianId: "p-1",
+    });
+    const result = await call(await actions());
+
+    expect(result).toEqual({ ok: true, measureId: "m-1" });
+    expect(transitionsMock.createMeasure).toHaveBeenCalledWith(
+      expect.objectContaining({ electionId: "e-1", politicianId: "p-1", candidacyId: "c-1" })
+    );
+  });
+
+  it("refuse et n'écrit rien quand la garde rejette la candidature", async () => {
+    eligibilityMock.assertHubMeasureCandidacy.mockRejectedValue(
+      new MeasureValidationError("La candidature doit être déclarée pour porter une mesure.")
+    );
+    const result = await call(await actions());
+
+    expect(result.ok).toBe(false);
+    expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
+  });
+
+  it("refuse quand l'élection de la candidature ne correspond pas au formulaire", async () => {
+    eligibilityMock.assertHubMeasureCandidacy.mockResolvedValue({
+      electionId: "autre-election",
+      politicianId: "p-1",
+    });
+    const result = await call(await actions());
+
+    expect(result.ok).toBe(false);
+    expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
   });
 });
 

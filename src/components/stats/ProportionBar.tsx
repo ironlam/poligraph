@@ -72,7 +72,7 @@ export function ProportionBar({ breakdown, showLabels: _showLabels = false }: Pr
           );
         })}
       </div>
-      <table className="sr-only" id={descId}>
+      <table className="sr-only table-fixed" id={descId}>
         <caption>Répartition des verdicts</caption>
         <thead>
           <tr>

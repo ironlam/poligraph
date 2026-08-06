@@ -2,8 +2,21 @@ import type { SerializedMandate, SerializedAffairWithSources, AffairStatus } fro
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
+/**
+ * A mandate plus the relations the timeline needs to say who the person sat
+ * with. `PoliticianFull.mandates` is typed as a bare `Mandate`, which is how
+ * the group could be fetched by the page query and still never reach the
+ * screen. Required (though nullable) on purpose: a missing `include` has to be
+ * a compile error, not a silently empty line.
+ */
+export type TimelineMandate = SerializedMandate & {
+  party: { name: string } | null;
+  parliamentaryData: { parliamentaryGroup: { name: string } | null } | null;
+  europeanData: { europeanGroup: { name: string } | null } | null;
+};
+
 export interface CareerTimelineProps {
-  mandates: SerializedMandate[];
+  mandates: TimelineMandate[];
   partyHistory: {
     id: string;
     startDate: Date | null;
@@ -37,8 +50,8 @@ export interface TimelineAffair {
 
 /** A chronological event for the mobile vertical timeline. */
 export type MobileEvent =
-  | { type: "mandate-start"; date: Date; mandate: SerializedMandate }
-  | { type: "mandate-end"; date: Date; mandate: SerializedMandate }
+  | { type: "mandate-start"; date: Date; mandate: TimelineMandate }
+  | { type: "mandate-end"; date: Date; mandate: TimelineMandate }
   | {
       type: "party-change";
       date: Date;

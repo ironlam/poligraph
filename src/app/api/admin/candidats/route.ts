@@ -54,6 +54,9 @@ export const POST = withAdminAuth(
           partyId: politician.currentPartyId,
           candidateName: politician.fullName,
           status: data.status,
+          // Required by the schema when status is DECLARE (#660), optional otherwise.
+          sourceUrl: data.sourceUrl,
+          sourceLabel: data.sourceLabel,
         },
       });
       const presidential = await tx.candidacyPresidential.create({
@@ -85,6 +88,8 @@ export const POST = withAdminAuth(
           electionSlug: data.electionSlug,
           politicianId: data.politicianId,
           status: data.status,
+          sourceUrl: data.sourceUrl,
+          sourceLabel: data.sourceLabel,
           slogan: data.slogan,
           accentColor: data.accentColor,
           declaredAt: data.declaredAt,

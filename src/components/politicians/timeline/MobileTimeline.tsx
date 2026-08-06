@@ -2,11 +2,11 @@
 
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import type { SerializedMandate } from "@/types";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS } from "@/config/labels";
 import { MANDATE_TYPE_COLORS, AFFAIR_STATUS_MARKER_COLORS } from "@/config/timeline";
 import { formatDate } from "@/lib/utils";
-import type { CareerTimelineProps, TimelineAffair, MobileEvent } from "./types";
+import type { CareerTimelineProps, TimelineAffair, MobileEvent, TimelineMandate } from "./types";
+import { mandateAffiliation } from "./utils";
 import { TimelineLegend } from "./TimelineLegend";
 import { ScreenReaderSummary } from "./ScreenReaderSummary";
 
@@ -16,7 +16,7 @@ export function MobileTimeline({
   timelineAffairs,
   deathDate,
 }: {
-  mandates: SerializedMandate[];
+  mandates: TimelineMandate[];
   partyHistory: CareerTimelineProps["partyHistory"];
   timelineAffairs: TimelineAffair[];
   deathDate?: Date | null;
@@ -87,11 +87,13 @@ function MobileEventCard({ event }: { event: MobileEvent }) {
   switch (event.type) {
     case "mandate-start": {
       const color = MANDATE_TYPE_COLORS[event.mandate.type];
+      const affiliation = mandateAffiliation(event.mandate);
       return (
         <div className="relative">
           <DotMarker color={color} />
           <div className="text-sm">
             <p className="font-medium">Début : {MANDATE_TYPE_LABELS[event.mandate.type]}</p>
+            {affiliation && <p className="text-xs text-foreground/80">{affiliation}</p>}
             {event.mandate.constituency && (
               <p className="text-xs text-muted-foreground">{event.mandate.constituency}</p>
             )}
@@ -106,6 +108,7 @@ function MobileEventCard({ event }: { event: MobileEvent }) {
       );
     }
     case "mandate-end": {
+      const affiliation = mandateAffiliation(event.mandate);
       return (
         <div className="relative">
           <DotMarker color="#9ca3af" />
@@ -113,6 +116,7 @@ function MobileEventCard({ event }: { event: MobileEvent }) {
             <p className="font-medium text-muted-foreground">
               Fin : {MANDATE_TYPE_LABELS[event.mandate.type]}
             </p>
+            {affiliation && <p className="text-xs text-muted-foreground">{affiliation}</p>}
             {event.mandate.constituency && (
               <p className="text-xs text-muted-foreground">{event.mandate.constituency}</p>
             )}

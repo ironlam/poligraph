@@ -62,7 +62,7 @@ export function HorizontalBars({ bars, title, maxValue: globalMax }: HorizontalB
         })}
       </div>
       {/* Screen reader table */}
-      <table className="sr-only" id={descId}>
+      <table className="sr-only table-fixed" id={descId}>
         <caption>{title}</caption>
         <thead>
           <tr>
