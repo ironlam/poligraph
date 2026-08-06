@@ -10,6 +10,7 @@ import * as path from "path";
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
+import { sanitizeGovernmentTitle } from "./government-title";
 
 const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 
@@ -182,7 +183,7 @@ async function syncGouvernementMember(
 
     const mandateData = {
       type: mandateType,
-      title: member.fonction,
+      title: sanitizeGovernmentTitle(member.fonction),
       institution: `Gouvernement ${member.gouvernement}`,
       startDate,
       endDate,
