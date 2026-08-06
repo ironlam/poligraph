@@ -19,16 +19,27 @@ function tsxFiles(dir: string): string[] {
 }
 
 /**
- * `sr-only` sets `position: absolute; width: 1px`, but a table laid out with
- * `table-layout: auto` sizes itself on its content and ignores that width. It
- * then sticks out of the body and widens the document, which reads on mobile as
- * a blank strip on the right of every page carrying such a table.
+ * `sr-only` is meant for a container, never for a table.
  *
- * The trap is invisible on review: nothing is visible on screen, and only
- * `documentElement.scrollWidth` shows it.
+ * It sets `position: absolute; width: 1px; overflow: hidden; white-space: nowrap`,
+ * but a table cannot shrink below the intrinsic width its `<caption>` and its
+ * nowrap cells demand. `table-layout: fixed` does not help: the caption box sets
+ * a floor. The table then sticks out of the body and widens the document, which
+ * reads on mobile as a blank strip on the right.
+ *
+ * Wrapping the table in `<div className="sr-only">` settles it: the div is the
+ * 1px clipping box, and the table inside can be as wide as it likes without
+ * contributing to layout.
+ *
+ * Measured on /statistiques?tab=legislatif at 412px: 503px of document width
+ * with `sr-only table-fixed` on the table, 412px once wrapped.
+ *
+ * This guard replaced a weaker one that only demanded `table-fixed`. That
+ * version passed while the bug was live, because a table whose caption happens
+ * to be shorter than the viewport fits by luck.
  */
 describe("screen-reader-only tables", () => {
-  it("all declare a fixed layout so they cannot widen the document", () => {
+  it("are wrapped in an sr-only container rather than carrying the class themselves", () => {
     const offenders: string[] = [];
 
     for (const file of tsxFiles(SRC)) {
@@ -36,14 +47,13 @@ describe("screen-reader-only tables", () => {
       for (const match of content.matchAll(/<table[^>]*className="([^"]*)"/g)) {
         const classes = match[1]!;
         if (!/\bsr-only\b/.test(classes)) continue;
-        if (/\btable-fixed\b/.test(classes)) continue;
-        offenders.push(`${relative(SRC, file)} -> className="${classes}"`);
+        offenders.push(`${relative(SRC, file)} -> <table className="${classes}">`);
       }
     }
 
     expect(
       offenders,
-      `These sr-only tables can widen the document. Add "table-fixed":\n${offenders.join("\n")}`
+      `A table must not carry "sr-only" itself. Wrap it in <div className="sr-only">:\n${offenders.join("\n")}`
     ).toEqual([]);
   });
 });

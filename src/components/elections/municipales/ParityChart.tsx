@@ -111,27 +111,29 @@ export function ParityChart({ data, title }: ParityChartProps) {
       </div>
 
       {/* Screen reader table */}
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>{title}</caption>
-        <thead>
-          <tr>
-            <th>Catégorie</th>
-            <th>Femmes (%)</th>
-            <th>Hommes (%)</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((item) => (
-            <tr key={item.label}>
-              <td>{item.label}</td>
-              <td>{Math.round(item.femaleRate * 100)}%</td>
-              <td>{100 - Math.round(item.femaleRate * 100)}%</td>
-              <td>{item.totalCount}</td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>{title}</caption>
+          <thead>
+            <tr>
+              <th>Catégorie</th>
+              <th>Femmes (%)</th>
+              <th>Hommes (%)</th>
+              <th>Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sorted.map((item) => (
+              <tr key={item.label}>
+                <td>{item.label}</td>
+                <td>{Math.round(item.femaleRate * 100)}%</td>
+                <td>{100 - Math.round(item.femaleRate * 100)}%</td>
+                <td>{item.totalCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">

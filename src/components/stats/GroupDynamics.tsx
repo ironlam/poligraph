@@ -81,27 +81,29 @@ function AlignmentSpectrum({
       </div>
 
       {/* Screen reader table */}
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>Concordance des votes par groupe - {chamberLabel}</caption>
-        <thead>
-          <tr>
-            <th>Groupe</th>
-            <th>Concordance</th>
-            <th>Cohésion</th>
-            <th>Participation</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((g) => (
-            <tr key={g.groupId}>
-              <td>{g.groupName}</td>
-              <td>{g.governmentAlignmentPct.toFixed(1)}%</td>
-              <td>{g.cohesionPct.toFixed(1)}%</td>
-              <td>{g.averageParticipationPct.toFixed(1)}%</td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>Concordance des votes par groupe - {chamberLabel}</caption>
+          <thead>
+            <tr>
+              <th>Groupe</th>
+              <th>Concordance</th>
+              <th>Cohésion</th>
+              <th>Participation</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sorted.map((g) => (
+              <tr key={g.groupId}>
+                <td>{g.groupName}</td>
+                <td>{g.governmentAlignmentPct.toFixed(1)}%</td>
+                <td>{g.cohesionPct.toFixed(1)}%</td>
+                <td>{g.averageParticipationPct.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -307,33 +307,35 @@ export function Hemicycle({ groups }: HemicycleProps) {
       )}
 
       {/* SR-only accessible table */}
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>Affaires judiciaires par groupe parlementaire</caption>
-        <thead>
-          <tr>
-            <th>Groupe</th>
-            <th>Députés</th>
-            <th>Mis en cause</th>
-            <th>Condamnés</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((g) => (
-            <tr key={g.code}>
-              <td>{g.shortName || g.name}</td>
-              <td>{g.deputies.length}</td>
-              <td>{g.deputies.filter((d) => d.activeAffairCount > 0).length}</td>
-              <td>
-                {
-                  g.deputies.filter(
-                    (d) => d.maxCertaintyLevel === "ETABLI" || d.maxCertaintyLevel === "PRONONCE"
-                  ).length
-                }
-              </td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>Affaires judiciaires par groupe parlementaire</caption>
+          <thead>
+            <tr>
+              <th>Groupe</th>
+              <th>Députés</th>
+              <th>Mis en cause</th>
+              <th>Condamnés</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <tr key={g.code}>
+                <td>{g.shortName || g.name}</td>
+                <td>{g.deputies.length}</td>
+                <td>{g.deputies.filter((d) => d.activeAffairCount > 0).length}</td>
+                <td>
+                  {
+                    g.deputies.filter(
+                      (d) => d.maxCertaintyLevel === "ETABLI" || d.maxCertaintyLevel === "PRONONCE"
+                    ).length
+                  }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

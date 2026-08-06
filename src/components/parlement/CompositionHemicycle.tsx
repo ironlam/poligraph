@@ -242,23 +242,27 @@ export function CompositionHemicycle({ anGroups, senatGroups }: Props) {
       </div>
 
       {/* Accessible data table (hidden) */}
-      <table className="sr-only table-fixed">
-        <caption>Composition {chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}</caption>
-        <thead>
-          <tr>
-            <th>Groupe</th>
-            <th>Sièges</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedGroups.map((g) => (
-            <tr key={g.code}>
-              <td>{g.name}</td>
-              <td>{g.seatCount}</td>
+      <div className="sr-only">
+        <table>
+          <caption>
+            Composition {chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}
+          </caption>
+          <thead>
+            <tr>
+              <th>Groupe</th>
+              <th>Sièges</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sortedGroups.map((g) => (
+              <tr key={g.code}>
+                <td>{g.name}</td>
+                <td>{g.seatCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

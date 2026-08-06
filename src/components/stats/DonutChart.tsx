@@ -57,25 +57,27 @@ export function DonutChart({ segments, size = 200, title }: DonutChartProps) {
         </g>
       </svg>
       {/* Screen reader table */}
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>{title}</caption>
-        <thead>
-          <tr>
-            <th>Catégorie</th>
-            <th>Nombre</th>
-            <th>Pourcentage</th>
-          </tr>
-        </thead>
-        <tbody>
-          {segments.map((s) => (
-            <tr key={s.label}>
-              <td>{s.label}</td>
-              <td>{s.value}</td>
-              <td>{total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}%</td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>{title}</caption>
+          <thead>
+            <tr>
+              <th>Catégorie</th>
+              <th>Nombre</th>
+              <th>Pourcentage</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {segments.map((s) => (
+              <tr key={s.label}>
+                <td>{s.label}</td>
+                <td>{s.value}</td>
+                <td>{total > 0 ? ((s.value / total) * 100).toFixed(1) : 0}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {/* Visual legend */}
       <div className="flex flex-wrap justify-center gap-3 mt-4">
         {segments.map((s) => (

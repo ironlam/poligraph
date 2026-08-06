@@ -72,25 +72,27 @@ export function ProportionBar({ breakdown, showLabels: _showLabels = false }: Pr
           );
         })}
       </div>
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>Répartition des verdicts</caption>
-        <thead>
-          <tr>
-            <th>Verdict</th>
-            <th>Nombre</th>
-            <th>Pourcentage</th>
-          </tr>
-        </thead>
-        <tbody>
-          {segments.map((s) => (
-            <tr key={s.key}>
-              <td>{s.label}</td>
-              <td>{s.value}</td>
-              <td>{((s.value / total) * 100).toFixed(1)}%</td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>Répartition des verdicts</caption>
+          <thead>
+            <tr>
+              <th>Verdict</th>
+              <th>Nombre</th>
+              <th>Pourcentage</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {segments.map((s) => (
+              <tr key={s.key}>
+                <td>{s.label}</td>
+                <td>{s.value}</td>
+                <td>{((s.value / total) * 100).toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

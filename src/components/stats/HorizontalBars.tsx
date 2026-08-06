@@ -62,26 +62,28 @@ export function HorizontalBars({ bars, title, maxValue: globalMax }: HorizontalB
         })}
       </div>
       {/* Screen reader table */}
-      <table className="sr-only table-fixed" id={descId}>
-        <caption>{title}</caption>
-        <thead>
-          <tr>
-            <th>Nom</th>
-            <th>Valeur</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bars.map((b) => (
-            <tr key={b.label}>
-              <td>{b.label}</td>
-              <td>
-                {b.value}
-                {b.suffix || ""}
-              </td>
+      <div className="sr-only">
+        <table id={descId}>
+          <caption>{title}</caption>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Valeur</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {bars.map((b) => (
+              <tr key={b.label}>
+                <td>{b.label}</td>
+                <td>
+                  {b.value}
+                  {b.suffix || ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
