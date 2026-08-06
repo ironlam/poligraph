@@ -1,0 +1,139 @@
+import "server-only";
+import { cacheLife, cacheTag } from "next/cache";
+import type { CandidacyStatus } from "@/generated/prisma";
+import { db } from "@/lib/db";
+import { isHubPublishable } from "@/config/publication-gates";
+import { loadThemesIndex } from "./themes-index";
+import { getPublicMeasuresByElection, getLatestPublicReviewDate } from "./measures";
+
+/**
+ * The two read authorities for the presidential hub page.
+ *
+ * The candidacy field and the published fiches are two different populations, and this file
+ * exists to keep them that way. `getHubCandidacyField` shows the whole race — every sourced
+ * candidacy (status + `sourceUrl` + `sourceLabel` non-null), pressenti/envisagé included,
+ * extension NOT required — because the hub has to show the field before anyone has a published
+ * fiche. Routing it through `getPublicPresidentialCandidates` (the PUBLISHED-extension
+ * population used by the subject pages) would empty the hub at launch.
+ *
+ * `getHubMeasureContext`, by contrast, summarizes the same subject pages the themes index
+ * gates: it is cached under the same `election-measures:${electionId}` tag as the measure
+ * authorities, so a measure write busts it exactly when it busts the pages it summarizes.
+ *
+ * `loadHubMeasureContext` is the plain async body, integration-testable the same way
+ * `loadThemesIndex`/`loadSubjectPageData` are: a `"use cache"` boundary throws outside a Next
+ * request/build context, so tests exercise the uncached loader and pages call the cached
+ * wrapper.
+ */
+
+export type HubCandidacy = {
+  id: string;
+  candidateName: string;
+  politicianSlug: string | null;
+  status: CandidacyStatus | null;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+  partyLabel: string | null;
+  partyColor: string | null;
+};
+
+export type HubMeasureContext = {
+  electionTitle: string;
+  round1Date: Date | null;
+  publishableSubjectPageCount: number;
+  hubPublishable: boolean;
+  verifiedMeasureCount: number;
+  lastReviewedAt: Date | null;
+};
+
+/**
+ * Not cached: ~11 rows today, and candidacy status/source edits have no invalidation path yet.
+ * Freshness matters more than a 24h cache backstop here.
+ */
+export async function getHubCandidacyField(electionSlug: string): Promise<HubCandidacy[]> {
+  const rows = await db.candidacy.findMany({
+    // The field is the race, not the published fiches: sourced candidacies (status + both
+    // source fields non-null), no extension required. Alphabetical order.
+    where: {
+      election: { slug: electionSlug },
+      status: { not: null },
+      sourceUrl: { not: null },
+      sourceLabel: { not: null },
+    },
+    select: {
+      id: true,
+      candidateName: true,
+      status: true,
+      sourceUrl: true,
+      sourceLabel: true,
+      partyLabel: true,
+      politician: { select: { slug: true } },
+      party: { select: { color: true } },
+    },
+    orderBy: { candidateName: "asc" },
+  });
+
+  return rows.map((c) => ({
+    id: c.id,
+    candidateName: c.candidateName,
+    politicianSlug: c.politician?.slug ?? null,
+    status: c.status,
+    sourceUrl: c.sourceUrl,
+    sourceLabel: c.sourceLabel,
+    partyLabel: c.partyLabel,
+    partyColor: c.party?.color ?? null,
+  }));
+}
+
+/**
+ * Plain async, integration-testable. Callers on a page use `getHubMeasureContext`, which
+ * caches this.
+ */
+export async function loadHubMeasureContext(
+  electionId: string,
+  electionSlug: string
+): Promise<HubMeasureContext> {
+  const [election, themesIndex, defended, lastReviewedAt] = await Promise.all([
+    db.election.findUniqueOrThrow({
+      where: { id: electionId },
+      select: { title: true, round1Date: true },
+    }),
+    loadThemesIndex(electionId, electionSlug),
+    getPublicMeasuresByElection(electionId),
+    getLatestPublicReviewDate(electionId),
+  ]);
+
+  return {
+    electionTitle: election.title,
+    round1Date: election.round1Date,
+    publishableSubjectPageCount: themesIndex.publishableSubjectPageCount,
+    hubPublishable: isHubPublishable(themesIndex.publishableSubjectPageCount),
+    verifiedMeasureCount: defended.length,
+    lastReviewedAt,
+  };
+}
+
+export async function getHubMeasureContext(
+  electionSlug: string
+): Promise<HubMeasureContext | null> {
+  const election = await db.election.findUnique({
+    where: { slug: electionSlug },
+    select: { id: true },
+  });
+  if (election === null) return null;
+  return getHubMeasureContextCached(election.id, electionSlug);
+}
+
+/**
+ * Cached read for the hub page. Tagged the same as the measure authorities, so a measure write
+ * busts it exactly when it busts the subject pages it summarizes.
+ */
+async function getHubMeasureContextCached(
+  electionId: string,
+  electionSlug: string
+): Promise<HubMeasureContext> {
+  "use cache";
+  cacheTag(`election-measures:${electionId}`);
+  cacheLife("synced");
+  return loadHubMeasureContext(electionId, electionSlug);
+}
