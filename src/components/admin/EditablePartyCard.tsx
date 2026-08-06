@@ -256,8 +256,8 @@ export function EditablePartyCard({
           >
             <p className="font-medium">Chevauchements détectés</p>
             <ul className="mt-1 list-disc pl-5">
-              {warnings.map((warning) => (
-                <li key={`${warning.partyId}-${warning.startDate ?? "start"}`}>
+              {warnings.map((warning, index) => (
+                <li key={index}>
                   {warning.partyShortName} (
                   {formatStartDate(warning.startDate ? new Date(warning.startDate) : null)} à{" "}
                   {formatEndDate(warning.endDate ? new Date(warning.endDate) : null)})

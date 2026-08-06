@@ -148,6 +148,23 @@ describe("EditablePartyCard — add affiliation form", () => {
     });
   });
 
+  it("posts mode parallel when the end date is empty and parallel affiliation is chosen", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: "Ajouter une affiliation" }));
+    await userEvent.selectOptions(screen.getByLabelText("Parti de l'affiliation"), "p_ps");
+    await userEvent.type(screen.getByLabelText("Date de début de l'affiliation"), "1997-06-03");
+    await userEvent.click(screen.getByRole("radio", { name: /en parallèle/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
+    expect(url).toBe("/api/admin/politiques/pol_1/party-membership");
+    expect(JSON.parse(init.body)).toEqual({
+      mode: "parallel",
+      partyId: "p_ps",
+      startDate: "1997-06-03",
+    });
+  });
+
   it("shows returned warnings alongside the success message", async () => {
     vi.stubGlobal(
       "fetch",

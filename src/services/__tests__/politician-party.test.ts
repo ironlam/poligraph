@@ -215,10 +215,11 @@ describe("setCurrentParty", () => {
     expect(result.membershipId).toBe("m_micro");
   });
 
-  // Protects the sync callers (deputes, senateurs, gouvernement, mep-parties, careers), which
-  // call setCurrentParty without a startDate. If the promotion overwrote it unconditionally,
-  // the daily sync would rewrite a sourced start date to today's every time it promotes a
-  // parallel affiliation.
+  // Protects the sync callers (deputes, senateurs, gouvernement, mep-parties), which call
+  // setCurrentParty without a startDate. If the promotion overwrote it unconditionally, the
+  // daily sync would rewrite a sourced start date to today's every time it promotes a
+  // parallel affiliation. Note: careers.ts DOES pass a startDate, so this guard alone does
+  // not protect that path; isPromotion (tested below) is what does.
   it("does not call update on the promoted row when no startDate option is supplied", async () => {
     h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
     h.membershipFindFirst
@@ -228,6 +229,33 @@ describe("setCurrentParty", () => {
     await setCurrentParty("pol_1", "p_ps");
 
     expect(h.membershipUpdate).not.toHaveBeenCalled();
+  });
+
+  // The critical case: careers.ts (and the admin route) always pass an explicit startDate,
+  // so hasExplicitStartDate is always true there. When the incoming party is already
+  // currentPartyId, existingOpenForParty is the very row backing it: this call must be a
+  // true no-op, or a sync/re-save would silently rewrite that row's sourced start date.
+  it("issues no update and no create when the incoming party is already the current one", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: "p_main" });
+    // 1st findFirst: open membership for currentPartyId (found -> partyId === partyId, so
+    // nothing is closed). 2nd findFirst: existingOpenForParty for the incoming party -> the
+    // same row.
+    h.membershipFindFirst
+      .mockResolvedValueOnce({ id: "m_main", partyId: "p_main", startDate: new Date("1998-01-01") })
+      .mockResolvedValueOnce({
+        id: "m_main",
+        partyId: "p_main",
+        startDate: new Date("1998-01-01"),
+      });
+
+    const result = await setCurrentParty("pol_1", "p_main", {
+      startDate: new Date("2015-01-01"),
+      role: "FONDATEUR",
+    });
+
+    expect(h.membershipUpdate).not.toHaveBeenCalled();
+    expect(h.membershipCreate).not.toHaveBeenCalled();
+    expect(result).toEqual({ membershipId: "m_main", closedMembershipId: null });
   });
 
   it("creates nothing and closes nothing when the politician has no affiliation", async () => {

@@ -144,14 +144,21 @@ export async function setCurrentParty(
         })
       : null;
 
+    // Whether the incoming party is actually replacing the current one. When the
+    // incoming party already IS currentPartyId, existingOpenForParty is the very row
+    // backing it, and this call is a no-op for that row: applying startDate/role here
+    // would silently rewrite a sourced date on every no-op re-save.
+    const isPromotion = politician?.currentPartyId !== partyId;
+
     let membershipId: string | null = existingOpenForParty?.id ?? null;
     if (partyId && existingOpenForParty) {
       // Promoting a parallel affiliation to main. Apply what the caller supplied, and
-      // nothing else: the sync callers pass no startDate, and overwriting a stored start
-      // date with today's would destroy sourced data.
+      // nothing else: four of the five sync callers pass no startDate, but careers.ts
+      // does, so the hasExplicitStartDate guard alone is not sufficient. Gating on
+      // isPromotion as well is what protects the row when it is already current.
       const promotionData: Prisma.PartyMembershipUpdateInput = {};
-      if (hasExplicitStartDate) promotionData.startDate = startDate;
-      if (role) promotionData.role = role;
+      if (isPromotion && hasExplicitStartDate) promotionData.startDate = startDate;
+      if (isPromotion && role) promotionData.role = role;
 
       if (Object.keys(promotionData).length > 0) {
         await tx.partyMembership.update({
@@ -274,6 +281,11 @@ export async function setPartyRole(
  * Use this to fix inconsistencies between the two.
  * The current party is the open affiliation matching currentPartyId, or failing that,
  * the most recent open one.
+ *
+ * Invariant to keep in mind before wiring this into a scheduled job: after removeParty,
+ * a politician can hold open affiliations with a null currentPartyId, and in that state
+ * this function promotes the most recent open one, which may be a micro-party. The admin
+ * API refuses to create that same state deliberately, so revisit this fallback first.
  */
 export async function syncAllCurrentParties(): Promise<{
   updated: number;
