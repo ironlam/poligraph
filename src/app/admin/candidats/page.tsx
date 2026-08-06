@@ -24,8 +24,9 @@ export default async function AdminCandidatsPage() {
       <CandidatesListClient initialCandidates={candidates} />
 
       <p className="text-xs text-muted-foreground">
-        Note : cette page est admin-only. La surface publique <code>/presidentielle-2027</code>{" "}
-        arrivera en Q1.
+        Note : cette page est admin-only. La surface publique{" "}
+        <code>/elections/presidentielle-2027</code> existe, et elle reste hors des index tant que
+        ses seuils de publication ne sont pas franchis.
       </p>
     </div>
   );
