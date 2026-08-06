@@ -78,15 +78,28 @@ export const POST = withAdminAuth(
       },
     });
 
-    const projected: AffiliationInterval[] = existing.map((membership) => ({
-      partyId: membership.partyId,
-      partyShortName: membership.party.shortName,
-      startDate: membership.startDate,
-      endDate:
-        body.mode === "succeeds" && membership.id === currentMembership?.id
-          ? startDate
-          : membership.endDate,
-    }));
+    // In a succession, an open membership already sitting on body.partyId is not a
+    // separate affiliation that will coexist with the candidate: it IS the candidate
+    // after the write (setCurrentParty promotes it). Drop it from the projection
+    // entirely rather than giving it a projected bound.
+    const projected: AffiliationInterval[] = existing
+      .filter(
+        (membership) =>
+          !(
+            body.mode === "succeeds" &&
+            membership.partyId === body.partyId &&
+            membership.endDate === null
+          )
+      )
+      .map((membership) => ({
+        partyId: membership.partyId,
+        partyShortName: membership.party.shortName,
+        startDate: membership.startDate,
+        endDate:
+          body.mode === "succeeds" && membership.id === currentMembership?.id
+            ? startDate
+            : membership.endDate,
+      }));
 
     const warnings = findOverlaps(
       {

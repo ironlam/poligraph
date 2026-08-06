@@ -111,6 +111,7 @@ export async function setCurrentParty(
   partyId: string | null,
   options: SetPartyOptions = {}
 ): Promise<SetCurrentPartyResult> {
+  const hasExplicitStartDate = options.startDate !== undefined;
   const { startDate = new Date(), endPreviousMembership = true, role } = options;
 
   return db.$transaction(async (tx) => {
@@ -144,7 +145,21 @@ export async function setCurrentParty(
       : null;
 
     let membershipId: string | null = existingOpenForParty?.id ?? null;
-    if (partyId && !existingOpenForParty) {
+    if (partyId && existingOpenForParty) {
+      // Promoting a parallel affiliation to main. Apply what the caller supplied, and
+      // nothing else: the sync callers pass no startDate, and overwriting a stored start
+      // date with today's would destroy sourced data.
+      const promotionData: Prisma.PartyMembershipUpdateInput = {};
+      if (hasExplicitStartDate) promotionData.startDate = startDate;
+      if (role) promotionData.role = role;
+
+      if (Object.keys(promotionData).length > 0) {
+        await tx.partyMembership.update({
+          where: { id: existingOpenForParty.id },
+          data: promotionData,
+        });
+      }
+    } else if (partyId) {
       const created = await tx.partyMembership.create({
         data: {
           politicianId,

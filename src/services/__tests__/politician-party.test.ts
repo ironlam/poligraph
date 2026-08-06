@@ -194,6 +194,42 @@ describe("setCurrentParty", () => {
     });
   });
 
+  it("applies an explicit startDate and role to the promoted row, still without a create", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
+    // 1st findFirst: findCurrentOpenMembership fallback (no currentPartyId) -> none open.
+    // 2nd findFirst: existingOpenForParty for the target party -> the row to promote.
+    h.membershipFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "m_micro", partyId: "p_ps", startDate: new Date("2022-01-01") });
+
+    const result = await setCurrentParty("pol_1", "p_ps", {
+      startDate: new Date("2026-01-01"),
+      role: "FONDATEUR",
+    });
+
+    expect(h.membershipUpdate).toHaveBeenCalledWith({
+      where: { id: "m_micro" },
+      data: { startDate: new Date("2026-01-01"), role: "FONDATEUR" },
+    });
+    expect(h.membershipCreate).not.toHaveBeenCalled();
+    expect(result.membershipId).toBe("m_micro");
+  });
+
+  // Protects the sync callers (deputes, senateurs, gouvernement, mep-parties, careers), which
+  // call setCurrentParty without a startDate. If the promotion overwrote it unconditionally,
+  // the daily sync would rewrite a sourced start date to today's every time it promotes a
+  // parallel affiliation.
+  it("does not call update on the promoted row when no startDate option is supplied", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
+    h.membershipFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "m_micro", partyId: "p_ps", startDate: new Date("2022-01-01") });
+
+    await setCurrentParty("pol_1", "p_ps");
+
+    expect(h.membershipUpdate).not.toHaveBeenCalled();
+  });
+
   it("creates nothing and closes nothing when the politician has no affiliation", async () => {
     h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
     h.membershipFindFirst.mockResolvedValue(null);

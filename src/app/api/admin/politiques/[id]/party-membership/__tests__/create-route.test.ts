@@ -63,7 +63,7 @@ beforeEach(() => {
   h.setCurrentParty.mockResolvedValue({ membershipId: "m_new", closedMembershipId: "m_tdp" });
 });
 
-describe("POST party-membership — creation", () => {
+describe("POST party-membership: creation", () => {
   it("creates a closed affiliation without touching the current party", async () => {
     const response = await call({
       mode: "closed",
@@ -122,11 +122,14 @@ describe("POST party-membership — creation", () => {
   it("returns 404 for an unknown politician", async () => {
     h.politicianFindUnique.mockResolvedValue(null);
 
-    expect((await call({ mode: "parallel", partyId: "p_ps" })).status).toBe(404);
+    const response = await call({ mode: "parallel", partyId: "p_ps" });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Politicien non trouvé" });
   });
 });
 
-describe("POST party-membership — refusals", () => {
+describe("POST party-membership: refusals", () => {
   it("refuses a start date on or after the end date", async () => {
     const response = await call({
       mode: "closed",
@@ -136,45 +139,68 @@ describe("POST party-membership — refusals", () => {
     });
 
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "La date de début doit être antérieure à la date de fin",
+    });
     expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses closed mode without an end date", async () => {
-    expect((await call({ mode: "closed", partyId: "p_ps", startDate: "1997-06-03" })).status).toBe(
-      400
-    );
+    const response = await call({ mode: "closed", partyId: "p_ps", startDate: "1997-06-03" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Une affiliation close exige une date de fin",
+    });
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses an end date in an open mode", async () => {
-    expect(
-      (
-        await call({
-          mode: "parallel",
-          partyId: "p_ps",
-          startDate: "2022-01-01",
-          endDate: "2024-01-01",
-        })
-      ).status
-    ).toBe(400);
+    const response = await call({
+      mode: "parallel",
+      partyId: "p_ps",
+      startDate: "2022-01-01",
+      endDate: "2024-01-01",
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Une affiliation en cours ne peut pas porter de date de fin",
+    });
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses a succession without a start date", async () => {
-    expect((await call({ mode: "succeeds", partyId: "p_ps" })).status).toBe(400);
+    const response = await call({ mode: "succeeds", partyId: "p_ps" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Une succession exige une date de début",
+    });
     expect(h.setCurrentParty).not.toHaveBeenCalled();
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses succeeding to the party that is already current", async () => {
-    expect(
-      (await call({ mode: "succeeds", partyId: "p_tdp", startDate: "2026-01-01" })).status
-    ).toBe(400);
+    const response = await call({ mode: "succeeds", partyId: "p_tdp", startDate: "2026-01-01" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Ce parti est déjà l'affiliation actuelle",
+    });
     expect(h.setCurrentParty).not.toHaveBeenCalled();
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses a succession starting before the affiliation it would close", async () => {
-    expect(
-      (await call({ mode: "succeeds", partyId: "p_ps", startDate: "1999-01-01" })).status
-    ).toBe(400);
+    const response = await call({ mode: "succeeds", partyId: "p_ps", startDate: "1999-01-01" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "La succession ne peut pas commencer avant l'affiliation qu'elle remplace",
+    });
     expect(h.setCurrentParty).not.toHaveBeenCalled();
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 
   it("refuses parallel mode when there is no current party", async () => {
@@ -184,13 +210,17 @@ describe("POST party-membership — refusals", () => {
       currentPartyId: null,
     });
 
-    expect(
-      (await call({ mode: "parallel", partyId: "p_ps", startDate: "2022-01-01" })).status
-    ).toBe(400);
+    const response = await call({ mode: "parallel", partyId: "p_ps", startDate: "2022-01-01" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Une affiliation en parallèle exige un parti actuel. Utilisez la succession.",
+    });
+    expect(h.membershipCreate).not.toHaveBeenCalled();
   });
 });
 
-describe("POST party-membership — warnings and audit", () => {
+describe("POST party-membership: warnings and audit", () => {
   it("reports an overlap without blocking the creation", async () => {
     h.membershipFindMany.mockResolvedValue([
       {
@@ -227,6 +257,32 @@ describe("POST party-membership — warnings and audit", () => {
         startDate: new Date("2020-01-01"),
         endDate: null,
         party: { shortName: "TDP" },
+      },
+    ]);
+
+    const response = await call({ mode: "succeeds", partyId: "p_ps", startDate: "2026-01-01" });
+
+    expect(await response.json()).toEqual({ success: true, warnings: [] });
+  });
+
+  // setCurrentParty promotes an already-open affiliation for the target party instead of
+  // creating a new row, so that row IS the candidate after the write, not a coexisting
+  // one. Without dropping it from the projection, every promotion would collide with itself.
+  it("reports no overlap for a succession onto a party with an already-open affiliation", async () => {
+    h.membershipFindMany.mockResolvedValue([
+      {
+        id: "m_tdp",
+        partyId: "p_tdp",
+        startDate: new Date("2020-01-01"),
+        endDate: null,
+        party: { shortName: "TDP" },
+      },
+      {
+        id: "m_ps",
+        partyId: "p_ps",
+        startDate: new Date("2022-01-01"),
+        endDate: null,
+        party: { shortName: "PS" },
       },
     ]);
 
