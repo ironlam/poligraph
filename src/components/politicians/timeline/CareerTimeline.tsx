@@ -8,7 +8,7 @@ import { AFFAIR_STATUS_MARKER_COLORS, getMandateRow, MANDATE_ROW_LABELS } from "
 import { formatDate } from "@/lib/utils";
 import type { CareerTimelineProps, TooltipData, TimelineAffair } from "./types";
 import { LEFT_MARGIN, RIGHT_MARGIN } from "./types";
-import { computeDuration, computeOverlapOffsets } from "./utils";
+import { computeDuration, computeOverlapOffsets, mandateAffiliation } from "./utils";
 import { DesktopTimeline } from "./DesktopTimeline";
 import { MobileTimeline } from "./MobileTimeline";
 
@@ -174,10 +174,12 @@ export function CareerTimeline({
 
   const handleMandateHover = useCallback(
     (mandate: (typeof mandates)[number], event: React.MouseEvent) => {
+      const affiliation = mandateAffiliation(mandate);
       showTooltip(
         event,
         <div className="text-left">
           <p className="font-semibold">{MANDATE_TYPE_LABELS[mandate.type]}</p>
+          {affiliation && <p className="text-xs">{affiliation}</p>}
           {mandate.constituency && (
             <p className="text-xs text-muted-foreground">{mandate.constituency}</p>
           )}

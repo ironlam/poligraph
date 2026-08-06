@@ -14,11 +14,21 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
       mandates: {
         orderBy: { startDate: "desc" },
         include: {
+          // Who the person sat with, shown on the career timeline: the party
+          // for a party leadership, the group for a parliamentary mandate.
+          party: {
+            select: { name: true },
+          },
           parliamentaryData: {
             select: {
               parliamentaryGroup: {
                 select: { code: true, name: true, color: true },
               },
+            },
+          },
+          europeanData: {
+            select: {
+              europeanGroup: { select: { name: true } },
             },
           },
           // Commune population feeds the SEO richness predicate (politician-robots).

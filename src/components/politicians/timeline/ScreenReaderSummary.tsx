@@ -1,7 +1,7 @@
-import type { SerializedMandate } from "@/types";
 import { MANDATE_TYPE_LABELS, AFFAIR_STATUS_LABELS } from "@/config/labels";
 import { formatDate } from "@/lib/utils";
-import type { TimelineAffair } from "./types";
+import type { TimelineAffair, TimelineMandate } from "./types";
+import { mandateAffiliation } from "./utils";
 
 export function ScreenReaderSummary({
   mandates,
@@ -9,7 +9,7 @@ export function ScreenReaderSummary({
   minYear,
   maxYear,
 }: {
-  mandates: SerializedMandate[];
+  mandates: TimelineMandate[];
   timelineAffairs: TimelineAffair[];
   minYear: number;
   maxYear: number;
@@ -22,13 +22,17 @@ export function ScreenReaderSummary({
       </p>
       <h4>Mandats ({mandates.length})</h4>
       <ul>
-        {mandates.map((m) => (
-          <li key={m.id}>
-            {MANDATE_TYPE_LABELS[m.type]}
-            {m.constituency && `, ${m.constituency}`} : {new Date(m.startDate).getFullYear()} -{" "}
-            {m.isCurrent ? "présent" : m.endDate ? new Date(m.endDate).getFullYear() : ""}
-          </li>
-        ))}
+        {mandates.map((m) => {
+          const affiliation = mandateAffiliation(m);
+          return (
+            <li key={m.id}>
+              {MANDATE_TYPE_LABELS[m.type]}
+              {affiliation && `, ${affiliation}`}
+              {m.constituency && `, ${m.constituency}`} : {new Date(m.startDate).getFullYear()} -{" "}
+              {m.isCurrent ? "présent" : m.endDate ? new Date(m.endDate).getFullYear() : ""}
+            </li>
+          );
+        })}
       </ul>
       {timelineAffairs.length > 0 && (
         <>
