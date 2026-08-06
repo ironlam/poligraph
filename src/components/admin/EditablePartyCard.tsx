@@ -47,7 +47,12 @@ const EMPTY_PARTY_FORM = {
 };
 const EMPTY_MEMBERSHIP_FORM = { startDate: "", endDate: "", role: "" };
 
-function formatDateDisplay(date: Date | null): string {
+function formatStartDate(date: Date | null): string {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("fr-FR");
+}
+
+function formatEndDate(date: Date | null): string {
   if (!date) return "En cours";
   return new Date(date).toLocaleDateString("fr-FR");
 }
@@ -458,8 +463,8 @@ function MembershipRow({
       <td className="py-2 pr-3">
         <Badge variant="outline">{roleLabel}</Badge>
       </td>
-      <td className="py-2 pr-3">{formatDateDisplay(membership.startDate)}</td>
-      <td className="py-2 pr-3">{formatDateDisplay(membership.endDate)}</td>
+      <td className="py-2 pr-3">{formatStartDate(membership.startDate)}</td>
+      <td className="py-2 pr-3">{formatEndDate(membership.endDate)}</td>
       <td className="py-2">
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 text-xs">
