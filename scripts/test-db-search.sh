@@ -93,6 +93,7 @@ else
     src/lib/search \
     src/lib/measures \
     src/app/admin/mesures \
+    "src/app/elections/[slug]/__tests__/static-params.integration.test.ts" \
     src/test/fixtures/__tests__ \
     src/test/__tests__/db-guard.test.ts
 fi

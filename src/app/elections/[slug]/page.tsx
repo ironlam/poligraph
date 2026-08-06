@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -32,7 +33,7 @@ export const revalidate = 3600; // ISR: revalidate every hour
 export async function generateStaticParams() {
   const elections = await db.election.findMany({
     select: { slug: true },
-    where: { type: { not: "MUNICIPALES" } },
+    where: { type: { not: "MUNICIPALES" }, slug: { not: PRESIDENTIELLE_2027_SLUG } },
     take: 50,
     orderBy: { round1Date: "desc" },
   });
