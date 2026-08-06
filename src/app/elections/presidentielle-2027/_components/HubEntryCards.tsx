@@ -51,7 +51,7 @@ export function HubEntryCards() {
         </Card>
       </a>
 
-      <Card className="h-full opacity-70">
+      <Card className="h-full border-dashed">
         <CardContent className="flex items-start gap-3 p-4">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Radio className="h-5 w-5" aria-hidden="true" />
