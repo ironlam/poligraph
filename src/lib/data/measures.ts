@@ -173,6 +173,27 @@ export async function getMeasureForModeration(measureId: string) {
 }
 
 /**
+ * Hub stat 4.3: when the most recently reviewed public measure was reviewed, on an
+ * election and optionally narrowed to one theme.
+ *
+ * Orders on `publishedRevision.reviewedAt`, which PUBLIC_MEASURE_WHERE already requires to
+ * be non-null on every row this can select: a depublished or discarded measure can carry a
+ * later reviewedAt on its (former) published revision, and reusing the predicate rather than
+ * a hand-rolled one is what keeps it out.
+ */
+export async function getLatestPublicReviewDate(
+  electionId: string,
+  theme?: ThemeCategory
+): Promise<Date | null> {
+  const row = await db.measure.findFirst({
+    where: { electionId, ...(theme ? { theme } : {}), ...PUBLIC_MEASURE_WHERE },
+    orderBy: { publishedRevision: { reviewedAt: "desc" } },
+    select: { publishedRevision: { select: { reviewedAt: true } } },
+  });
+  return row?.publishedRevision?.reviewedAt ?? null;
+}
+
+/**
  * The revision publicly in force on a given day. The condition on publishedAt is not
  * optional: without it the query can select a draft that was never published, and make the
  * site report a text it never displayed.
