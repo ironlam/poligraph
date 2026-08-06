@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("next/navigation", () => ({
@@ -44,7 +44,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("EditablePartyCard — affiliation dates", () => {
   it("renders an ongoing affiliation as such", () => {
@@ -87,11 +90,11 @@ describe("EditablePartyCard — add affiliation form", () => {
     setup();
     await userEvent.click(screen.getByRole("button", { name: "Ajouter une affiliation" }));
 
-    expect(screen.getByRole("radio", { name: /parti actuel/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^Ce parti devient/i })).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("Date de fin de l'affiliation"), "2018-01-01");
 
-    expect(screen.queryByRole("radio", { name: /parti actuel/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /^Ce parti devient/i })).not.toBeInTheDocument();
   });
 
   it("hides the parallel option when there is no current party", async () => {
@@ -126,6 +129,22 @@ describe("EditablePartyCard — add affiliation form", () => {
       startDate: "1997-06-03",
       endDate: "2018-01-01",
       role: "MEMBRE",
+    });
+  });
+
+  it("posts mode succeeds when the end date is empty and succession is chosen", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: "Ajouter une affiliation" }));
+    await userEvent.selectOptions(screen.getByLabelText("Parti de l'affiliation"), "p_ps");
+    await userEvent.type(screen.getByLabelText("Date de début de l'affiliation"), "1997-06-03");
+    await userEvent.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    const [url, init] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] ?? [];
+    expect(url).toBe("/api/admin/politiques/pol_1/party-membership");
+    expect(JSON.parse(init.body)).toEqual({
+      mode: "succeeds",
+      partyId: "p_ps",
+      startDate: "1997-06-03",
     });
   });
 
@@ -206,5 +225,50 @@ describe("EditablePartyCard — add affiliation form", () => {
 
     await submitClosed("p_tdp");
     expect(screen.queryByText(/Chevauchements détectés/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the amber banner past the 3-second status auto-clear", async () => {
+    // shouldAdvanceTime is required here: plain fake timers make userEvent's
+    // internal pointer/keyboard mechanics hang (no way to make them progress).
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          warnings: [
+            {
+              type: "OVERLAP",
+              partyId: "p_modem",
+              partyShortName: "MODEM",
+              startDate: null,
+              endDate: null,
+            },
+          ],
+        }),
+      }))
+    );
+    setup();
+    await user.click(screen.getByRole("button", { name: "Ajouter une affiliation" }));
+    await user.selectOptions(screen.getByLabelText("Parti de l'affiliation"), "p_ps");
+    await user.type(screen.getByLabelText("Date de début de l'affiliation"), "1997-06-03");
+    await user.type(screen.getByLabelText("Date de fin de l'affiliation"), "2018-01-01");
+    await user.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    expect(screen.getByText(/Chevauchements détectés/)).toBeInTheDocument();
+    expect(screen.getByText("Affiliation ajoutée")).toBeInTheDocument();
+
+    // vi.advanceTimersByTimeAsync does not reliably fire the pending timer once
+    // shouldAdvanceTime is on (silently no-ops); wrapping a sync advance in act()
+    // does.
+    await act(async () => {
+      vi.advanceTimersByTime(3100);
+    });
+
+    expect(screen.getByText(/Chevauchements détectés/)).toBeInTheDocument();
+    expect(screen.queryByText("Affiliation ajoutée")).not.toBeInTheDocument();
   });
 });

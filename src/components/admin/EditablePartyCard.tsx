@@ -507,7 +507,7 @@ export function EditablePartyCard({
                       <span>
                         Affiliation en parallèle
                         <span className="block text-xs text-muted-foreground">
-                          Le parti affiché reste {currentParty.shortName || currentParty.name}, rien
+                          Le parti actuel reste {currentParty.shortName || currentParty.name}, rien
                           n&apos;est clôturé.
                         </span>
                       </span>
