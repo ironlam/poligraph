@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Seeds a fictional, publishable subject page for the presidential 2027 hub, so the public route
- * /presidentielle-2027/sujets/logement-urbanisme can be reviewed in a browser (responsive + axe).
+ * /elections/presidentielle-2027/sujets/logement-urbanisme can be reviewed in a browser (responsive + axe).
  *
  * The seeding itself lives in src/lib/data/__tests__/presidentielle-subject-demo.ts (a test fixture,
  * where writing PUBLISHED directly is allowed); this script is the thin, guarded entry point.
