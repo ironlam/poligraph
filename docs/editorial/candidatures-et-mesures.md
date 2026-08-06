@@ -173,8 +173,11 @@ couverture, adossé à cette réalité, vaut mieux qu'une façade de complétude
    section Rattachement). Règle de la chaîne du hub, pas contrainte universelle du modèle `Measure`. Résout
    l'anomalie #660.
 
-3. **Capture de la source, à traiter avant la première candidature réelle.** La route admin de création de
-   candidature (et le passage à `DECLARE`) doit capturer `sourceUrl` et `sourceLabel` ; aujourd'hui elle ne
-   le fait pas, donc la règle « une candidature `DECLARE` est sourcée » n'est pas tenue à l'écriture. À
-   corriger dans la PR de #660 si le périmètre reste petit, sinon dans une PR dédiée explicitement bloquante
-   avant toute alimentation de la production.
+3. **Capture de la source à l'écriture : en place (#660).** La chaîne de création de candidature du hub
+   exige et enregistre `sourceUrl` et `sourceLabel` dès que le statut est `DECLARE`. Le schéma du picker
+   les rend obligatoires par un `refine`, la route les écrit sur la `Candidacy`, et une garde serveur
+   revérifie le périmètre 2027 + `DECLARE` + sourcée avant toute création de mesure : la règle « une
+   candidature `DECLARE` est sourcée » est tenue à l'écriture, pas seulement à l'affichage. Le seul point
+   d'entrée d'une candidature en `DECLARE` est aujourd'hui la création ; aucun chemin de transition depuis
+   un autre statut n'existe. S'il en est ajouté un, il devra porter la même exigence de source. `declaredAt`
+   reste facultatif dans cette chaîne (voir « Date et source »).
