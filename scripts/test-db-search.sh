@@ -88,6 +88,7 @@ else
   echo "[test:db:search] running the suites that need the disposable container"
   npx vitest run --no-file-parallelism \
     src/lib/data/__tests__/measures.integration.test.ts \
+    src/lib/data/__tests__/presidential-candidates-public.integration.test.ts \
     src/lib/search \
     src/lib/measures \
     src/app/admin/mesures \
