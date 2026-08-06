@@ -962,6 +962,7 @@ model Scrutin {
   importance        ScrutinImportance?
   groupPositions    ScrutinGroupPosition[]
   analysis          ScrutinAnalysis?
+  measureVoteLinks  MeasureVoteLink[]
   debateTranscripts DebateTranscript[]
 
   // Policy-title feature
@@ -2838,6 +2839,7 @@ model Measure {
   followingMeasures  Measure[] @relation("MeasureLineage")
 
   revisions MeasureRevision[] @relation("MeasureRevisions")
+  voteLinks MeasureVoteLink[] @relation("MeasureVoteLinks")
 
   latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
   latestRevisionId    String?          @unique
@@ -2893,10 +2895,11 @@ model MeasureRevision {
   extractionConfidence Float?
   extractorVersion     String?
 
-  sources        MeasureSource[]
-  qualifications MeasureQualification[]
-  assessments    MeasureSimilarityAssessment[]
-  equivalentOf   MeasureSimilarityMatch[]      @relation("EquivalentRevision")
+  sources             MeasureSource[]
+  qualifications      MeasureQualification[]
+  assessments         MeasureSimilarityAssessment[]
+  equivalentOf        MeasureSimilarityMatch[]      @relation("EquivalentRevision")
+  applicableVoteLinks MeasureVoteLink[]             @relation("ApplicableRevisionVoteLinks")
 
   latestOf    Measure? @relation("MeasureLatest")
   publishedOf Measure? @relation("MeasurePublished")
@@ -2907,6 +2910,57 @@ model MeasureRevision {
   @@index([measureId, validFrom])
   @@index([measureId, supersededAt])
   @@index([measureId, discardedAt])
+}
+
+enum MeasureVoteLinkKind {
+  SAME_OBJECT
+  BROADER_TEXT
+  NO_VOTE_IDENTIFIED
+}
+
+// The candidate's relation to the measure on a scrutin, RECORDED by the reviewer, never derived from
+// the raw vote: on a suppression amendment, voting POUR is DEFAVORABLE to the measure. This field is
+// beyond the minimal §5.8 table and exists precisely for the polarity trap the spec flags. Manual by
+// design (§5.8: the attachment is an editorial judgment made explicit by rationale).
+enum MeasureVoteRelation {
+  FAVORABLE
+  DEFAVORABLE
+  ABSTENTION
+  ABSENCE
+}
+
+// The link between a measure and a scrutin (spec 5.8). Rattached to the Measure, but applicableRevisionId
+// records the formulation the link was judged applicable to. Written only in admin, never by a script.
+model MeasureVoteLink {
+  id String @id @default(cuid())
+
+  measure   Measure @relation("MeasureVoteLinks", fields: [measureId], references: [id], onDelete: Cascade)
+  measureId String
+
+  applicableRevision   MeasureRevision @relation("ApplicableRevisionVoteLinks", fields: [applicableRevisionId], references: [id], onDelete: Cascade)
+  applicableRevisionId String
+
+  scrutin   Scrutin? @relation(fields: [scrutinId], references: [id], onDelete: SetNull)
+  scrutinId String?
+
+  linkKind MeasureVoteLinkKind
+  // Set only on a SAME_OBJECT link tied to a scrutin. Reviewer-recorded, never derived.
+  relation    MeasureVoteRelation?
+  isReference Boolean              @default(false)
+
+  rationale        String    @db.Text
+  checkedAt        DateTime
+  institutionScope Chamber[]
+  legislatureScope String[]
+  searchMethod     String
+  reviewedBy       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([measureId])
+  @@index([applicableRevisionId])
+  @@index([scrutinId])
 }
 
 // Attached to the revision and not to the measure: this is what represents the ordinary
