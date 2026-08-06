@@ -49,6 +49,10 @@ vi.mock("../_data/detail-query", () => ({
   getMeasureContext: vi.fn(async () => null),
 }));
 
+vi.mock("../_data/vote-links-query", () => ({
+  getMeasureVoteLinksForModeration: vi.fn(async () => []),
+}));
+
 vi.mock("../_data/candidacies-query", () => ({
   listPresidentialCandidacies: vi.fn(async () => []),
 }));

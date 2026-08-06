@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Chamber } from "@/generated/prisma";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 
 /**
@@ -40,6 +41,12 @@ const eligibilityMock = {
   assertHubMeasureCandidacy: vi.fn(async () => ({ electionId: "e-1", politicianId: "p-1" })),
 };
 vi.mock("../_data/candidacy-eligibility", () => eligibilityMock);
+
+// The measure vote-link writer (#662). Mocked so importing actions does not pull the real @/lib/db.
+const voteLinksMock = {
+  createMeasureVoteLink: vi.fn(async () => ({ id: "vl-1" })),
+};
+vi.mock("@/lib/measures/vote-links", () => voteLinksMock);
 
 const REVISION = {
   text: "Encadrer les loyers dans les zones tendues.",
@@ -447,5 +454,124 @@ describe("conclusions éditoriales : pas de jeton de version, une révision expl
       ok: false,
       message: "Une conclusion EQUIVALENT_FOUND exige au moins un équivalent identifié",
     });
+  });
+});
+
+describe("attachVoteLinkAction : rattachement manuel à un scrutin (#662)", () => {
+  const base = {
+    measureId: "m-1",
+    applicableRevisionId: "rev-1",
+    rationale: "Vérifié sur les scrutins d'amendement du texte.",
+    checkedAt: "2026-05-20T00:00:00.000Z",
+    institutionScope: ["AN"] as Chamber[],
+    legislatureScope: ["17"],
+    searchMethod: "Filtre par thème",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  it("refuse sans session, sans rien écrire", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { attachVoteLinkAction } = await actions();
+
+    await expect(
+      attachVoteLinkAction({ ...base, situation: { kind: "NO_VOTE_IDENTIFIED" } })
+    ).rejects.toThrow("Non autorisé");
+    expect(voteLinksMock.createMeasureVoteLink).not.toHaveBeenCalled();
+  });
+
+  it("« aucun vote identifié » n'écrit ni scrutin ni relation", async () => {
+    const { attachVoteLinkAction } = await actions();
+
+    const result = await attachVoteLinkAction({
+      ...base,
+      situation: { kind: "NO_VOTE_IDENTIFIED" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(voteLinksMock.createMeasureVoteLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        linkKind: "NO_VOTE_IDENTIFIED",
+        scrutinId: null,
+        relation: null,
+        isReference: false,
+        checkedAt: new Date("2026-05-20T00:00:00.000Z"),
+        reviewedBy: "admin",
+      })
+    );
+  });
+
+  it("une absence est une relation ABSENCE sur un scrutin sur le même objet", async () => {
+    const { attachVoteLinkAction } = await actions();
+
+    await attachVoteLinkAction({
+      ...base,
+      situation: {
+        kind: "SAME_OBJECT",
+        scrutinId: "s-42",
+        relation: "ABSENCE",
+        isReference: false,
+      },
+    });
+
+    expect(voteLinksMock.createMeasureVoteLink).toHaveBeenCalledWith(
+      expect.objectContaining({ linkKind: "SAME_OBJECT", scrutinId: "s-42", relation: "ABSENCE" })
+    );
+  });
+
+  it("un texte plus large ne porte aucune relation", async () => {
+    const { attachVoteLinkAction } = await actions();
+
+    await attachVoteLinkAction({ ...base, situation: { kind: "BROADER_TEXT", scrutinId: "s-7" } });
+
+    expect(voteLinksMock.createMeasureVoteLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        linkKind: "BROADER_TEXT",
+        scrutinId: "s-7",
+        relation: null,
+        isReference: false,
+      })
+    );
+  });
+
+  it("rend l'erreur métier du backend au lieu de la jeter", async () => {
+    voteLinksMock.createMeasureVoteLink.mockRejectedValueOnce(
+      new MeasureValidationError("Une référence existe déjà pour cette révision applicable")
+    );
+    const { attachVoteLinkAction } = await actions();
+
+    const result = await attachVoteLinkAction({
+      ...base,
+      situation: {
+        kind: "SAME_OBJECT",
+        scrutinId: "s-1",
+        relation: "FAVORABLE",
+        isReference: true,
+      },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Une référence existe déjà pour cette révision applicable",
+    });
+  });
+
+  it("refuse une date de vérification invalide avant d'écrire", async () => {
+    const { attachVoteLinkAction } = await actions();
+
+    const result = await attachVoteLinkAction({
+      ...base,
+      checkedAt: "pas une date",
+      situation: { kind: "NO_VOTE_IDENTIFIED" },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "La date de vérification n'est pas une date valide",
+    });
+    expect(voteLinksMock.createMeasureVoteLink).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
   CANDIDACY_STATUS_LABELS,
+  CHAMBER_SHORT_LABELS,
   MEASURE_ATTRIBUTION_LABELS,
+  MEASURE_VOTE_LINK_KIND_LABELS,
+  MEASURE_VOTE_RELATION_LABELS,
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import { isAuthenticated } from "@/lib/auth";
@@ -14,8 +17,10 @@ import { MeasureMetadataPanel } from "../_components/MeasureMetadataPanel";
 import { ModerationStateBadge } from "../_components/ModerationStateBadge";
 import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
+import { VoteLinkForm } from "../_components/VoteLinkForm";
 import { availableActions, hasAmbiguousPointers } from "../_data/available-actions";
 import { getMeasureContext } from "../_data/detail-query";
+import { getMeasureVoteLinksForModeration } from "../_data/vote-links-query";
 
 export const metadata = {
   title: "Fiche de modération d'une mesure (admin) | Poligraph",
@@ -55,6 +60,10 @@ function toRow(measure: ModerationRead): ModerationMeasureRow {
   };
 }
 
+function shorten(text: string): string {
+  return text.length > 70 ? `${text.slice(0, 70)}…` : text;
+}
+
 export default async function AdminMeasureDetailPage({ params }: PageProps) {
   if (!(await isAuthenticated())) redirect("/admin/login");
 
@@ -62,10 +71,11 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
 
   // Three reads, three different questions: the moderation read applies no filter, the public
   // read applies both, and the context read carries who and which election.
-  const [measure, context, publicMeasure] = await Promise.all([
+  const [measure, context, publicMeasure, voteLinks] = await Promise.all([
     getMeasureForModeration(id),
     getMeasureContext(id),
     getPublicMeasure(id),
+    getMeasureVoteLinksForModeration(id),
   ]);
 
   if (measure === null || context === null) notFound();
@@ -214,6 +224,94 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
             revisions={measure.revisions}
             publishedRevisionId={measure.publishedRevisionId}
             latestRevisionId={measure.latestRevisionId}
+          />
+        </div>
+      </section>
+
+      <section aria-labelledby="votelinks-heading">
+        <h2 id="votelinks-heading" className="text-base font-semibold">
+          Rattachement à des scrutins
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            manuel, jamais dérivé d&apos;un vote automatiquement
+          </span>
+        </h2>
+
+        <div className="mt-3 space-y-4">
+          {voteLinks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Aucun scrutin rattaché. Tant qu&apos;aucun lien n&apos;existe, la relation aux votes
+              s&apos;affiche comme « recherche non effectuée ».
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {voteLinks.map((link) => (
+                <li key={link.id} className="rounded border border-border p-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      {MEASURE_VOTE_LINK_KIND_LABELS[link.linkKind]}
+                    </span>
+                    {link.relation !== null && (
+                      <span className="text-muted-foreground">
+                        · {MEASURE_VOTE_RELATION_LABELS[link.relation]}
+                      </span>
+                    )}
+                    {link.isReference && (
+                      <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+                        référence
+                      </span>
+                    )}
+                  </div>
+                  <dl className="mt-2 grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
+                    {link.scrutinId !== null && (
+                      <div className="flex gap-2">
+                        <dt className="font-medium">Scrutin</dt>
+                        <dd>{link.scrutinId}</dd>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <dt className="font-medium">Révision visée</dt>
+                      <dd>
+                        {shorten(
+                          revisionTexts[link.applicableRevisionId] ?? link.applicableRevisionId
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="font-medium">Vérifié le</dt>
+                      <dd>{dateFormat.format(link.checkedAt)}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="font-medium">Chambres</dt>
+                      <dd>
+                        {link.institutionScope.map((c) => CHAMBER_SHORT_LABELS[c]).join(", ") ||
+                          "—"}
+                      </dd>
+                    </div>
+                    {link.legislatureScope.length > 0 && (
+                      <div className="flex gap-2">
+                        <dt className="font-medium">Législatures</dt>
+                        <dd>{link.legislatureScope.join(", ")}</dd>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <dt className="font-medium">Méthode</dt>
+                      <dd>{link.searchMethod}</dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-xs text-muted-foreground">{link.rationale}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <VoteLinkForm
+            measureId={id}
+            defaultRevisionId={referenceRevisionId}
+            revisions={measure.revisions.map((revision) => ({
+              id: revision.id,
+              text: revision.text,
+              validFrom: dateFormat.format(revision.validFrom),
+            }))}
           />
         </div>
       </section>

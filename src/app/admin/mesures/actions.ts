@@ -3,10 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { QUALIFICATION_KIND_LABELS } from "@/config/labels";
 import type {
+  Chamber,
   MeasureAttribution,
   MeasureExtractionMethod,
   MeasurePrecision,
   MeasureSourceKind,
+  MeasureVoteRelation,
   QualificationKind,
   SimilarityConclusion,
   SourceTier,
@@ -15,6 +17,7 @@ import type {
 import { isAuthenticated } from "@/lib/auth";
 import { createQualification, createSimilarityAssessment } from "@/lib/measures/assessments";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
+import { createMeasureVoteLink } from "@/lib/measures/vote-links";
 import {
   createMeasure,
   depublishMeasure,
@@ -351,6 +354,87 @@ export async function createSimilarityAssessmentAction(input: {
     });
     revalidate(input.measureId);
     return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/**
+ * The manual attachment of the measure to a scrutin (spec §5.8), the only writer of MeasureVoteLink from
+ * the UI. The input is a discriminated `situation`, so the three cases the reviewer must keep apart are
+ * unrepresentable as a mix: "no scrutin found" carries neither a scrutinId nor a relation, an absence is a
+ * relation on a chosen scrutin, and a broader-text vote carries no relation at all. createMeasureVoteLink
+ * re-checks every one of these in its transaction: the type here is convenience, the transaction is the law.
+ */
+export type VoteLinkSituation =
+  | { kind: "NO_VOTE_IDENTIFIED" }
+  | { kind: "SAME_OBJECT"; scrutinId: string; relation: MeasureVoteRelation; isReference: boolean }
+  | { kind: "BROADER_TEXT"; scrutinId: string };
+
+export async function attachVoteLinkAction(input: {
+  measureId: string;
+  applicableRevisionId: string;
+  situation: VoteLinkSituation;
+  rationale: string;
+  /** ISO date of the review that produced this link. */
+  checkedAt: string;
+  institutionScope: Chamber[];
+  legislatureScope: string[];
+  searchMethod: string;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const base = {
+      measureId: input.measureId,
+      applicableRevisionId: input.applicableRevisionId,
+      rationale: input.rationale,
+      checkedAt: parseDate(input.checkedAt, "La date de vérification"),
+      institutionScope: input.institutionScope,
+      legislatureScope: input.legislatureScope,
+      searchMethod: input.searchMethod,
+      reviewedBy: ACTOR,
+    };
+
+    switch (input.situation.kind) {
+      case "NO_VOTE_IDENTIFIED":
+        await createMeasureVoteLink({
+          ...base,
+          linkKind: "NO_VOTE_IDENTIFIED",
+          scrutinId: null,
+          relation: null,
+          isReference: false,
+        });
+        break;
+      case "SAME_OBJECT":
+        await createMeasureVoteLink({
+          ...base,
+          linkKind: "SAME_OBJECT",
+          scrutinId: input.situation.scrutinId,
+          relation: input.situation.relation,
+          isReference: input.situation.isReference,
+        });
+        break;
+      case "BROADER_TEXT":
+        await createMeasureVoteLink({
+          ...base,
+          linkKind: "BROADER_TEXT",
+          scrutinId: input.situation.scrutinId,
+          relation: null,
+          isReference: false,
+        });
+        break;
+      default: {
+        // Exhaustiveness: a new situation kind must add its branch here, not fall through silently.
+        const exhaustive: never = input.situation;
+        throw new MeasureValidationError(
+          `Situation de rattachement inconnue : ${JSON.stringify(exhaustive)}`
+        );
+      }
+    }
+
+    revalidate(input.measureId);
+    return { ok: true, measureId: input.measureId };
   } catch (error) {
     return toFailure(error);
   }

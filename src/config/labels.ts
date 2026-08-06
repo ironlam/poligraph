@@ -34,6 +34,8 @@ import type {
   MeasureExtractionMethod,
   MeasurePrecision,
   MeasureSourceKind,
+  MeasureVoteLinkKind,
+  MeasureVoteRelation,
   QualificationKind,
   SimilarityConclusion,
   SourceTier,
@@ -690,6 +692,24 @@ export const VOTE_RELATION_PILL_CLASS: Record<VoteRelation, string> = {
   NOT_RECHECKED_SINCE_REFORMULATION: "",
   NO_VOTE_IN_SCOPE: "",
   SEARCH_NOT_DONE: "",
+};
+
+// The reviewer-recorded relation of the candidate to the measure on an identified scrutin (raw
+// MeasureVoteRelation, spec §5.8), for the admin attachment screen. ABSENCE means "an existing scrutin
+// on the same object, in which the person did not take part": it is a relation on a chosen scrutin,
+// never "no scrutin found". That other case is a MeasureVoteLinkKind (NO_VOTE_IDENTIFIED), not a relation.
+export const MEASURE_VOTE_RELATION_LABELS: Record<MeasureVoteRelation, string> = {
+  FAVORABLE: "Favorable à la mesure",
+  DEFAVORABLE: "Défavorable à la mesure",
+  ABSTENTION: "Abstention",
+  ABSENCE: "Absent(e) au scrutin",
+};
+
+// The object relationship between a scrutin and the measure (MeasureVoteLinkKind, spec §5.8).
+export const MEASURE_VOTE_LINK_KIND_LABELS: Record<MeasureVoteLinkKind, string> = {
+  SAME_OBJECT: "Scrutin sur le même objet que la mesure",
+  BROADER_TEXT: "Scrutin sur un texte plus large contenant la mesure",
+  NO_VOTE_IDENTIFIED: "Aucun scrutin pertinent trouvé dans le périmètre",
 };
 
 export const VOTING_RESULT_LABELS: Record<VotingResult, string> = {
