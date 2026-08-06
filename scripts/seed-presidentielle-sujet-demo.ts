@@ -9,6 +9,10 @@
  * Refuses to run against anything but the disposable container, and that refusal is the point:
  * `.env` and `.env.prod` point at the same Supabase database.
  *
+ * Expects a fresh database: this and scripts/seed-presidentielle-hub-demo.ts both create the
+ * `presidentielle-2027` election, so running one after the other on the same container fails on
+ * the slug's unique constraint.
+ *
  * Usage, with the container from docker-compose.test-search.yml running and its schema pushed:
  *   DATABASE_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test?sslmode=disable \
  *     npx tsx scripts/seed-presidentielle-sujet-demo.ts

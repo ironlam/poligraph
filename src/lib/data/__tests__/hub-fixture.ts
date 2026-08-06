@@ -1,15 +1,18 @@
 import type { ThemeCategory } from "@/generated/prisma";
+import { assertDisposableTestDb } from "@/test/disposable-db";
 
 /**
  * Seeds the fixture for the `hub` read authorities test.
  *
- * Two populations coexist on purpose:
+ * Three populations coexist on purpose:
  * - Alpha and Bravo carry a PUBLISHED `CandidacyPresidential` extension plus a defended
  *   LOGEMENT_URBANISME measure each, so the subject page reaches its two-candidacy gate and
  *   `getHubMeasureContext` reports `hubPublishable: true`.
- * - Charlie is PRESSENTI, has a complete source (`sourceUrl` + `sourceLabel`) and NO extension
- *   at all. The hub field shows the whole race, not just published fiches, so Charlie must
- *   still surface from `getHubCandidacyField`.
+ * - Charlie is ENVISAGE, has a complete source (`sourceUrl` + `sourceLabel`), and a DRAFT
+ *   `CandidacyPresidential` extension carrying a published LOGEMENT_URBANISME measure. The hub
+ *   field shows the whole race, not just published fiches, so Charlie must still surface from
+ *   `getHubCandidacyField`, but the DRAFT extension means the measure is unreachable from any
+ *   subject page, so `verifiedMeasureCount` must not count it either (I7).
  * - Delta has a source URL but no `sourceLabel`: an incomplete source, which must stay absent
  *   from the field.
  *
@@ -26,6 +29,10 @@ export async function seedHubFixture(
   db: typeof import("@/lib/db").db,
   options: { electionSlug: string }
 ): Promise<string> {
+  // Defense in depth: the callers of this fixture already gate on the disposable container,
+  // but the fixture writes on its own, so it checks again rather than trusting them.
+  assertDisposableTestDb();
+
   const { createMeasure, reviewMeasureRevision, publishMeasureRevision } =
     await import("@/lib/measures/transitions");
 
@@ -34,7 +41,7 @@ export async function seedHubFixture(
       slug: options.electionSlug,
       type: "PRESIDENTIELLE",
       scope: "NATIONAL",
-      title: "Élection de test — hub",
+      title: "Élection de test (hub)",
     },
   });
 
@@ -123,10 +130,12 @@ export async function seedHubFixture(
     "Construire 500 000 logements sociaux sur le quinquennat."
   );
 
-  // Charlie: pressenti, source complète, SANS extension CandidacyPresidential. Doit apparaître
-  // au champ du hub (le champ ≠ les fiches publiées).
+  // Charlie: envisagé, complete source, DRAFT CandidacyPresidential extension carrying a
+  // published measure. Must surface in the hub field (the field != the published fiches), but
+  // the measure must not count in verifiedMeasureCount: the extension never publishes, so no
+  // subject page can ever reach it (I7).
   const charlie = await politician("Charlie");
-  await db.candidacy.create({
+  const charlieCandidacy = await db.candidacy.create({
     data: {
       electionId: election.id,
       politicianId: charlie.id,
@@ -136,8 +145,17 @@ export async function seedHubFixture(
       sourceLabel: "Presse",
     },
   });
+  await db.candidacyPresidential.create({
+    data: { candidacyId: charlieCandidacy.id, publicationStatus: "DRAFT" },
+  });
+  await publishMeasure(
+    charlie.id,
+    charlieCandidacy.id,
+    THEME_LOGEMENT,
+    "Mesure logement rattachée à une candidature non publiée."
+  );
 
-  // Delta: source incomplète (pas de sourceLabel). Doit rester absente du champ.
+  // Delta: incomplete source (no sourceLabel). Must stay absent from the field.
   const delta = await politician("Delta");
   await db.candidacy.create({
     data: {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { formatDate } from "@/lib/utils";
 import { DataProvenance } from "./_components/DataProvenance";
 import { HubCandidacyField } from "./_components/HubCandidacyField";
 import { HubEntryCards } from "./_components/HubEntryCards";
@@ -10,10 +11,6 @@ import { HubStats } from "./_components/HubStats";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
-
-function formatDateFr(date: Date): string {
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   const context = await getHubMeasureContext(PRESIDENTIELLE_2027_SLUG);
@@ -25,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Présidentielle 2027 : programmes, votes, bilans | Poligraph",
     description:
       "Les candidatures à la présidentielle 2027, leurs mesures documentées par sujet et les votes qui les éclairent.",
-    robots: publishable ? undefined : { index: false, follow: false },
+    robots: publishable ? undefined : { index: false, follow: true },
   };
 }
 
@@ -54,7 +51,7 @@ export default async function PresidentialHubPage() {
               <span className="font-semibold text-primary">J-{daysUntil}</span>
             </>
           )}
-          {context.round1Date && <> · 1er tour le {formatDateFr(context.round1Date)}</>}
+          {context.round1Date && <> · 1er tour le {formatDate(context.round1Date)}</>}
         </p>
         <h1 className="text-3xl font-display font-extrabold tracking-tight">
           Qu&apos;est-ce qui changerait pour vous ?

@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (theme === null) {
     return {
       title: "Sujet introuvable | Présidentielle 2027",
-      robots: { index: false, follow: false },
+      robots: { index: false, follow: true },
     };
   }
 
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${label} : les mesures des candidats | Présidentielle 2027`,
     description: `Ce que les candidats à la présidentielle 2027 proposent sur le thème ${label}.`,
-    robots: publishable ? undefined : { index: false, follow: false },
+    robots: publishable ? undefined : { index: false, follow: true },
   };
 }
 
@@ -43,5 +43,9 @@ export default async function SubjectPage({ params }: PageProps) {
   const data = await getSubjectPageData(PRESIDENTIELLE_2027_SLUG, theme);
   if (data === null) notFound();
 
-  return <SubjectComparison data={data} />;
+  return (
+    <div className="container mx-auto px-4 pt-4 pb-8">
+      <SubjectComparison data={data} />
+    </div>
+  );
 }

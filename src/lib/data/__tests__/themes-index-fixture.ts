@@ -1,4 +1,5 @@
 import type { ThemeCategory } from "@/generated/prisma";
+import { assertDisposableTestDb } from "@/test/disposable-db";
 
 /**
  * Seeds the fixture for the `themes-index` parity test.
@@ -26,6 +27,10 @@ export async function seedThemesIndexFixture(
   db: typeof import("@/lib/db").db,
   options: { electionSlug: string }
 ): Promise<string> {
+  // Defense in depth: the callers of this fixture already gate on the disposable container,
+  // but the fixture writes on its own, so it checks again rather than trusting them.
+  assertDisposableTestDb();
+
   const { createMeasure, reviewMeasureRevision, publishMeasureRevision, withdrawMeasure } =
     await import("@/lib/measures/transitions");
 
@@ -34,7 +39,7 @@ export async function seedThemesIndexFixture(
       slug: options.electionSlug,
       type: "PRESIDENTIELLE",
       scope: "NATIONAL",
-      title: "Élection de test — index des sujets",
+      title: "Élection de test (index des sujets)",
     },
   });
 

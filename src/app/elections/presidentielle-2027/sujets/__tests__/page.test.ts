@@ -31,7 +31,7 @@ describe("generateMetadata de l'index des sujets", () => {
       publishableSubjectPageCount: 0,
     });
     const meta = await generateMetadata();
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 
   it("indexable une fois au moins une page sujet publiable", async () => {
@@ -47,6 +47,6 @@ describe("generateMetadata de l'index des sujets", () => {
   it("noindex quand l'élection n'existe pas", async () => {
     mockGet.mockResolvedValue(null);
     const meta = await generateMetadata();
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 });

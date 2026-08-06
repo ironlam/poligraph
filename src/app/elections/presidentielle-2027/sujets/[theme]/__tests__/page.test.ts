@@ -20,7 +20,7 @@ beforeEach(() => {
 describe("generateMetadata de la page sujet", () => {
   it("noindex et titre explicite pour un thème inconnu, sans lire les données", async () => {
     const meta = await generateMetadata(props("pas-un-theme"));
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
     expect(String(meta.title)).toMatch(/introuvable/i);
     expect(mockGet).not.toHaveBeenCalled();
   });
@@ -35,12 +35,12 @@ describe("generateMetadata de la page sujet", () => {
   it("noindex tant que le seuil n'est pas franchi", async () => {
     mockGet.mockResolvedValue({ publishable: false } as never);
     const meta = await generateMetadata(props("logement-urbanisme"));
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 
   it("noindex quand l'élection n'existe pas", async () => {
     mockGet.mockResolvedValue(null);
     const meta = await generateMetadata(props("sante"));
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 });

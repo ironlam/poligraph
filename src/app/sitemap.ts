@@ -8,6 +8,9 @@ import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
+import { loadThemesIndex } from "@/lib/data/themes-index";
+import { isHubPublishable } from "@/config/publication-gates";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import {
   SIGNIFICANT_MANDATE_TYPES,
   MAIRE_MIN_COMMUNE_POPULATION,
@@ -361,10 +364,24 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       select: { slug: true, updatedAt: true },
     }),
     db.election.findMany({
-      select: { slug: true, updatedAt: true },
+      select: { id: true, slug: true, updatedAt: true },
       orderBy: { round1Date: "desc" },
     }),
   ]);
+
+  // The presidentielle-2027 hub is noindex,follow until it clears its own publication gate
+  // (spec §4, PUBLICATION_GATES.hub): below the gate there is nothing indexable to send
+  // crawlers to, so announcing the URL here would spend crawl budget to reach a noindex.
+  // Calls the plain loader rather than the cached getThemesIndex (the same choice
+  // loadHubMeasureContext makes for the same authority), and imports isHubPublishable rather
+  // than re-deriving its threshold.
+  const presidentielle2027 = elections.find((e) => e.slug === PRESIDENTIELLE_2027_SLUG);
+  const presidentielleHubPublishable =
+    presidentielle2027 !== undefined &&
+    isHubPublishable(
+      (await loadThemesIndex(presidentielle2027.id, PRESIDENTIELLE_2027_SLUG))
+        .publishableSubjectPageCount
+    );
 
   const affairPages: MetadataRoute.Sitemap = affairs.map((a) => ({
     url: `${SITE_URL}/affaires/${a.slug}`,
@@ -391,12 +408,14 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       priority: 0.7,
     }));
 
-  const electionPages: MetadataRoute.Sitemap = elections.map((e) => ({
-    url: `${SITE_URL}/elections/${e.slug}`,
-    lastModified: e.updatedAt,
-    changeFrequency: "weekly" as const,
-    priority: 0.7,
-  }));
+  const electionPages: MetadataRoute.Sitemap = elections
+    .filter((e) => e.slug !== PRESIDENTIELLE_2027_SLUG || presidentielleHubPublishable)
+    .map((e) => ({
+      url: `${SITE_URL}/elections/${e.slug}`,
+      lastModified: e.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
 
   const departmentPages: MetadataRoute.Sitemap = Object.values(DEPARTMENTS).map((dept) => ({
     url: `${SITE_URL}/departements/${getDepartmentSlug(dept.name)}`,

@@ -279,6 +279,41 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
   });
 });
 
+describe("doctrine — presidentielle-2027 hub stays out of the sitemap while unpublishable", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+
+  it("imports isHubPublishable rather than a hardcoded threshold", () => {
+    expect(src).toContain('from "@/config/publication-gates"');
+    expect(src).toContain("isHubPublishable");
+  });
+
+  // Scoped to the shard, comments stripped, the same guard as the scrutin shard above: the
+  // election shard must actually gate the URL on isHubPublishable, not merely import it.
+  const electionShard = (() => {
+    const start = src.indexOf("async function buildAffairsPartiesElectionsDepartmentsSitemap");
+    expect(start).toBeGreaterThan(-1);
+    const end = src.indexOf("\nasync function", start + 1);
+    return src
+      .slice(start, end)
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+  })();
+
+  it("filters the election shard on isHubPublishable before mapping to URLs", () => {
+    expect(electionShard).toContain("PRESIDENTIELLE_2027_SLUG");
+    expect(electionShard).toContain("isHubPublishable(");
+    // Scoped past `const electionPages`: parties and partiesWithAffairs above it also
+    // filter-then-map, so an unscoped search would pass on the wrong pair.
+    const electionPagesAt = electionShard.indexOf("const electionPages");
+    expect(electionPagesAt).toBeGreaterThan(-1);
+    const filterAt = electionShard.indexOf(".filter(", electionPagesAt);
+    const mapAt = electionShard.indexOf(".map(", electionPagesAt);
+    expect(filterAt).toBeGreaterThan(electionPagesAt);
+    expect(mapAt).toBeGreaterThan(filterAt);
+  });
+});
+
 describe("doctrine — opengraph-image assets stay noindexed", () => {
   const require = createRequire(import.meta.url);
   const { pathToRegexp } = require("next/dist/compiled/path-to-regexp") as {

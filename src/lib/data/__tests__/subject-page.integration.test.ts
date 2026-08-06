@@ -191,6 +191,42 @@ describeIfDisposableDb("page sujet publique : agrégation des données", () => {
     bruno = await publishedCandidate("Bruno");
     await publishMeasure(bruno.politicianId, bruno.candidacyId, "Construire 500 000 logements.");
 
+    // A measure published on OTHER_THEME, then depublished for cause (I3): publicationStatus
+    // falls back to DRAFT, exactly like a never-published draft, but this is a retraction, not
+    // a submission awaiting a first review. pendingReviewMeasureCount must not count it.
+    const depublishedSeed = await transitions.createMeasure({
+      politicianId: bruno.politicianId,
+      electionId,
+      candidacyId: bruno.candidacyId,
+      programEditionId: null,
+      attribution: "PERSONAL",
+      theme: OTHER_THEME,
+      precedingMeasureId: null,
+      revision: {
+        text: "Mesure santé publiée puis retirée pour motif factuel.",
+        precision: null,
+        validFrom: new Date("2027-01-07T00:00:00Z"),
+        extractionMethod: "MANUAL",
+        extractionConfidence: null,
+        extractorVersion: null,
+      },
+      sources: [
+        {
+          sourceKind: "ARTICLE_PRESSE",
+          tier: "SECONDARY",
+          url: "https://example.org/article-sante-retiree",
+          page: null,
+          publishedAt: new Date("2027-01-07T00:00:00Z"),
+        },
+      ],
+    });
+    await transitions.reviewMeasureRevision({ ...depublishedSeed, reviewedBy: "relecteur" });
+    await transitions.publishMeasureRevision(depublishedSeed);
+    await transitions.depublishMeasure({
+      measureId: depublishedSeed.measureId,
+      reason: "Information inexacte, retirée après vérification.",
+    });
+
     // Chloe: a published candidacy with no measure on the theme, so a qualified absence.
     await publishedCandidate("Chloe");
 
@@ -274,6 +310,16 @@ describeIfDisposableDb("page sujet publique : agrégation des données", () => {
     expect(data.publishable).toBe(false);
     expect(data.pendingReviewMeasureCount).toBe(1);
     expect(JSON.stringify(data)).not.toContain("Brouillon santé non publié.");
+  });
+
+  it("ne compte pas une mesure publiée puis dépubliée dans pendingReviewMeasureCount", async () => {
+    // The draft SANTE measure alone brings the count to 1: depublishMeasure() also leaves
+    // publicationStatus at DRAFT, and without depublishedAt in the filter this would read 2.
+    const data = await loadSubjectPageData(electionId, SLUG, OTHER_THEME);
+    expect(data.pendingReviewMeasureCount).toBe(1);
+    expect(JSON.stringify(data)).not.toContain(
+      "Mesure santé publiée puis retirée pour motif factuel."
+    );
   });
 
   it("date la dernière revue publique du thème, et jamais relu quand aucune n'existe", async () => {

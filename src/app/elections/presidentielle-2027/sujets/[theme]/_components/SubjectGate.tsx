@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SubjectPageData } from "@/lib/data/subject-page";
+import { formatDate } from "@/lib/utils";
 
 /**
  * The closed state of a subject page (spec §4.1): what is missing to compare, laid out as
@@ -7,13 +8,16 @@ import type { SubjectPageData } from "@/lib/data/subject-page";
  * counters are out of scope here and render "—" with an explicit note, never a misleading zero.
  */
 
-function formatDateFr(date: Date): string {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(date);
-}
-
+/**
+ * `covered` (candidacies with a verified measure, published-extension only) is not a subset of
+ * `total` (sourced candidacies of the election, extension not required): nothing forces the
+ * source fields to publish an extension. So the ratio can exceed 100 %, which this clamps, and
+ * at a zero denominator this renders "—" like the ProgramEdition counters beside it, never a
+ * misleading "0 %".
+ */
 function formatCoverageRate(covered: number, total: number): string {
-  const rate = total > 0 ? Math.round((covered / total) * 100) : 0;
-  return `${rate} %`;
+  if (total === 0) return "—";
+  return `${Math.min(100, Math.round((covered / total) * 100))} %`;
 }
 
 export function SubjectGate({ data }: { data: SubjectPageData }) {
@@ -56,7 +60,7 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
           <div>
             <dt>Dernière revue publique</dt>
             <dd className="font-medium text-foreground">
-              {data.lastReviewedAt !== null ? formatDateFr(data.lastReviewedAt) : "jamais relu"}
+              {data.lastReviewedAt !== null ? formatDate(data.lastReviewedAt) : "jamais relu"}
             </dd>
           </div>
           <div>

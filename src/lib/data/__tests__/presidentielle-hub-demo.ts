@@ -122,11 +122,11 @@ export async function seedPresidentielleHubDemo(
     return candidacy.id;
   }
 
-  // Le champ : sourcées, sans extension, visibles au hub avant toute fiche publiée.
+  // The field: sourced, no extension, visible at the hub before any fiche is published.
   await sourcedCandidacy("A", "PRESSENTI");
   await sourcedCandidacy("B", "ENVISAGE");
 
-  // La page sujet publiable : deux candidatures publiées défendent chacune une mesure Logement.
+  // The publishable subject page: two published candidacies each defend a Logement measure.
   await publishedCandidacyWithMeasure(
     "C",
     THEME_LOGEMENT,
@@ -138,7 +138,7 @@ export async function seedPresidentielleHubDemo(
     "Construire 500 000 logements sociaux sur le quinquennat."
   );
 
-  // La page sujet sous seuil : une seule candidature publiée défend une mesure Numérique.
+  // The subject page below threshold: only one published candidacy defends a Numérique measure.
   await publishedCandidacyWithMeasure(
     "E",
     THEME_NUMERIQUE,

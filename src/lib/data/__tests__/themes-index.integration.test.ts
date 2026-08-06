@@ -42,8 +42,8 @@ describeIfDisposableDb("loadThemesIndex", () => {
 
     expect(logement?.candidaciesWithVerifiedMeasure).toBe(2);
     expect(logement?.publishable).toBe(true);
-    // Alpha défendue + Alpha retirée + Bravo défendue = 3. La mesure de Charlie est exclue car
-    // sa candidature n'est pas dans la population publique.
+    // Alpha defended + Alpha withdrawn + Bravo defended = 3. Charlie's measure is excluded
+    // because its candidacy is not in the public population.
     expect(logement?.documentedMeasureCount).toBe(3);
     expect(logement?.currentlyDefendedMeasureCount).toBe(2);
   });

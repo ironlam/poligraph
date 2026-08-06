@@ -2,8 +2,8 @@ import Link from "next/link";
 
 /**
  * What the hub is built from, and where to check the method. No claim of neutrality here
- * (no "sans jugement", no "nous ne classons pas") : the provenance and the dates carry that
- * weight on their own.
+ * (no "sans jugement", no "nous ne classons pas") : the provenance carries that weight on
+ * its own.
  */
 export function DataProvenance() {
   return (

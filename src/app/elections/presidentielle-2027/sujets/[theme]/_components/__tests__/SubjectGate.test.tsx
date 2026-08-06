@@ -33,11 +33,20 @@ describe("SubjectGate", () => {
     expect(screen.getByText("25 %")).toBeInTheDocument();
   });
 
-  it("garde le taux à 0 % sans division par zéro quand aucune candidature n'est sourcée", () => {
+  it("rend un tiret, jamais un faux 0 %, quand aucune candidature n'est sourcée", () => {
     render(
       <SubjectGate data={data({ candidaciesWithVerifiedMeasure: 0, totalSourcedCandidacies: 0 })} />
     );
-    expect(screen.getByText("0 %")).toBeInTheDocument();
+    expect(screen.queryByText("0 %")).not.toBeInTheDocument();
+    // Three dashes now: the coverage rate joins the two ProgramEdition placeholders.
+    expect(screen.getAllByText("—")).toHaveLength(3);
+  });
+
+  it("borne le taux à 100 % quand le numérateur dépasse le dénominateur", () => {
+    render(
+      <SubjectGate data={data({ candidaciesWithVerifiedMeasure: 5, totalSourcedCandidacies: 3 })} />
+    );
+    expect(screen.getByText("100 %")).toBeInTheDocument();
   });
 
   it("affiche le nombre de mesures extraites en attente de relecture", () => {

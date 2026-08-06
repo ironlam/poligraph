@@ -4,7 +4,7 @@ import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
 import { loadThemesIndex } from "./themes-index";
-import { getPublicMeasuresByElection, getLatestPublicReviewDate } from "./measures";
+import { getLatestPublicReviewDate } from "./measures";
 
 /**
  * The two read authorities for the presidential hub page.
@@ -47,8 +47,10 @@ export type HubMeasureContext = {
 };
 
 /**
- * Not cached: ~11 rows today, and candidacy status/source edits have no invalidation path yet.
- * Freshness matters more than a 24h cache backstop here.
+ * Not cached: ~11 rows today, and candidacy status/source edits have no invalidation path yet, so
+ * caching this read would have nothing to bust it on a write. Real freshness still tops out at the
+ * page's own `revalidate = 86400`: this function itself always reads live, but the rendered page
+ * that calls it is only as fresh as its ISR backstop.
  */
 export async function getHubCandidacyField(electionSlug: string): Promise<HubCandidacy[]> {
   const rows = await db.candidacy.findMany({
@@ -93,22 +95,30 @@ export async function loadHubMeasureContext(
   electionId: string,
   electionSlug: string
 ): Promise<HubMeasureContext> {
-  const [election, themesIndex, defended, lastReviewedAt] = await Promise.all([
+  const [election, themesIndex, lastReviewedAt] = await Promise.all([
     db.election.findUniqueOrThrow({
       where: { id: electionId },
       select: { title: true, round1Date: true },
     }),
     loadThemesIndex(electionId, electionSlug),
-    getPublicMeasuresByElection(electionId),
     getLatestPublicReviewDate(electionId),
   ]);
+
+  // Derived from the themes index rather than a fresh getPublicMeasuresByElection() read: the
+  // subject pages are the only surface that renders a measure, and only for candidacies with a
+  // PUBLISHED extension. A measure on a DRAFT-extension candidacy is unreachable there, so
+  // counting it here would announce more measures than the hub can actually lead a reader to.
+  const verifiedMeasureCount = themesIndex.themes.reduce(
+    (n, t) => n + t.currentlyDefendedMeasureCount,
+    0
+  );
 
   return {
     electionTitle: election.title,
     round1Date: election.round1Date,
     publishableSubjectPageCount: themesIndex.publishableSubjectPageCount,
     hubPublishable: isHubPublishable(themesIndex.publishableSubjectPageCount),
-    verifiedMeasureCount: defended.length,
+    verifiedMeasureCount,
     lastReviewedAt,
   };
 }

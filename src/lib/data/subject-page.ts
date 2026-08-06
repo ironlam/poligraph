@@ -20,10 +20,13 @@ import { loadThemesIndex } from "./themes-index";
  * The data of a public subject page: for one theme, each publicly visible candidacy and its published
  * measures on that theme, with the measure's relation to recorded votes.
  *
- * Every read goes through a public authority: `getPublicPresidentialCandidates` (drops DRAFT/missing
+ * Content reads go through a public authority: `getPublicPresidentialCandidates` (drops DRAFT/missing
  * extensions), `getPublicMeasuresByTheme` (the single measure authority), and `getPublicMeasureVoteRelation`
- * (which never selects `rationale`/`reviewedBy`). Nothing here reads `db.measure`/`db.candidacy` directly.
- * The only direct read is the election slug -> id resolution, which is not gated.
+ * (which never selects `rationale`/`reviewedBy`). Two direct reads bypass those authorities, but only to
+ * produce a number, never content: `db.candidacy.count` (sourced candidacies of the election, the coverage
+ * denominator) and `db.measure.count` (draft measures of the theme, for `pendingReviewMeasureCount`). The
+ * election slug -> id resolution is a third direct read, and is not gated. No unpublished text ever crosses
+ * this surface.
  *
  * `publishable` is the section 4 gate, not a rendering detail: below it the page shows an explicit state
  * and is noindex, never a silently degraded one-candidate "comparison".
@@ -89,8 +92,12 @@ export async function loadSubjectPageData(
         sourceLabel: { not: null },
       },
     }),
-    // Count only: never expose the text of an unpublished revision here.
-    db.measure.count({ where: { electionId, theme, publicationStatus: { not: "PUBLISHED" } } }),
+    // Count only: never expose the text of an unpublished revision here. DRAFT and never
+    // depublished, not merely "not PUBLISHED": depublishMeasure() also sets publicationStatus
+    // back to DRAFT, and a measure we withdrew for cause is not "awaiting review".
+    db.measure.count({
+      where: { electionId, theme, publicationStatus: "DRAFT", depublishedAt: null },
+    }),
     getLatestPublicReviewDate(electionId, theme),
     loadThemesIndex(electionId, electionSlug),
   ]);

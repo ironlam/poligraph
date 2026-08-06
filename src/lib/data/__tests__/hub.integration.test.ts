@@ -13,7 +13,9 @@ const SLUG = "hub-test";
  * The hub field is the whole race (every sourced candidacy, pressenti/envisagé included),
  * never routed through `getPublicPresidentialCandidates` — that population is the published
  * fiches, and it would empty the hub at launch. The measure context, by contrast, mirrors the
- * subject-page gate exactly, because it summarizes the same subject pages.
+ * subject-page gate exactly, because it summarizes the same subject pages: Charlie's
+ * DRAFT-extension candidacy carries a published measure that must surface in the field but
+ * never in `verifiedMeasureCount` (I7).
  */
 describeIfDisposableDb("hub", () => {
   let electionId: string;
@@ -62,6 +64,21 @@ describeIfDisposableDb("hub", () => {
       expect(context.publishableSubjectPageCount).toBeGreaterThanOrEqual(1);
       expect(context.verifiedMeasureCount).toBe(2);
       expect(context.lastReviewedAt).not.toBeNull();
+    });
+
+    it("ne compte pas la mesure de Charlie, dont l'extension CandidacyPresidential est DRAFT (I7)", async () => {
+      // The measure genuinely exists and is PUBLISHED: this is not a fixture that forgot to
+      // create it, it is one whose owning candidacy never clears the extension gate.
+      const charlieMeasure = await db.measure.findFirst({
+        where: { election: { slug: SLUG }, candidacy: { candidateName: "Charlie Fixture" } },
+        select: { publicationStatus: true },
+      });
+      expect(charlieMeasure?.publicationStatus).toBe("PUBLISHED");
+
+      // Alpha and Bravo each defend one measure; Charlie's is unreachable from any subject
+      // page, so the context reports 2, never 3.
+      const context = await loadHubMeasureContext(electionId, SLUG);
+      expect(context.verifiedMeasureCount).toBe(2);
     });
 
     it("rend null pour une élection inconnue (getHubMeasureContext, avant la frontière cache)", async () => {

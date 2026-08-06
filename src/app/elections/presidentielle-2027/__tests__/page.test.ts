@@ -41,7 +41,7 @@ describe("generateMetadata du hub présidentielle", () => {
   it("noindex quand le hub n'est pas encore publiable", async () => {
     mockGetContext.mockResolvedValue(context({ hubPublishable: false }));
     const meta = await generateMetadata();
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 
   it("indexable une fois le hub publiable", async () => {
@@ -53,6 +53,6 @@ describe("generateMetadata du hub présidentielle", () => {
   it("noindex quand l'élection n'existe pas", async () => {
     mockGetContext.mockResolvedValue(null);
     const meta = await generateMetadata();
-    expect(meta.robots).toEqual({ index: false, follow: false });
+    expect(meta.robots).toEqual({ index: false, follow: true });
   });
 });

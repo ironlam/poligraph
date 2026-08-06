@@ -11,6 +11,7 @@ import type { ThemeCategory } from "@/generated/prisma";
 import type { PublicMeasure } from "@/lib/data/measures";
 import type { PublicVoteReference } from "@/lib/measures/vote-links";
 import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-page";
+import { formatDate } from "@/lib/utils";
 import { SubjectGate } from "./SubjectGate";
 
 /**
@@ -20,10 +21,6 @@ import { SubjectGate } from "./SubjectGate";
  * on the theme gets a qualified absence. Below the publication gate the page renders an explicit closed
  * state.
  */
-
-function formatDateFr(date: Date): string {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(date);
-}
 
 function composeVoteBasis(reference: PublicVoteReference): string {
   const parts: string[] = [];
@@ -36,7 +33,7 @@ function composeVoteBasis(reference: PublicVoteReference): string {
   if (reference.legislatureScope.length > 0) {
     parts.push(`législature ${reference.legislatureScope.join(", ")}`);
   }
-  parts.push(`vérifié le ${formatDateFr(reference.checkedAt)}`);
+  parts.push(`vérifié le ${formatDate(reference.checkedAt)}`);
   return parts.join(" · ");
 }
 
@@ -60,7 +57,7 @@ function MeasureSources({ sources }: { sources: PublicMeasure["sources"] }) {
           {" · "}
           {SOURCE_TIER_LABELS[source.tier]}
           {" · "}
-          {formatDateFr(source.publishedAt)}
+          {formatDate(source.publishedAt)}
         </li>
       ))}
     </ul>
@@ -98,7 +95,7 @@ function CandidateColumn({ entry, theme }: { entry: SubjectCandidateEntry; theme
               <MeasureSources sources={measure.sources} />
               {measure.withdrawal !== null && (
                 <p className="text-xs text-muted-foreground">
-                  Mesure retirée le {formatDateFr(measure.withdrawal.withdrawnAt)}
+                  Mesure retirée le {formatDate(measure.withdrawal.withdrawnAt)}
                   {measure.withdrawal.sourceUrl !== null &&
                     measure.withdrawal.sourceLabel !== null && (
                       <>
