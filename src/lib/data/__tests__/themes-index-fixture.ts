@@ -147,7 +147,7 @@ export async function seedThemesIndexFixture(
     "Construire 500 000 logements sociaux sur le quinquennat."
   );
 
-  // Charlie: a published LOGEMENT measure, but the extension is DRAFT — must never count.
+  // Charlie: a published LOGEMENT measure, but the extension is DRAFT, so it must never count.
   await publishMeasure(
     charlie.politicianId,
     charlie.candidacyId,
