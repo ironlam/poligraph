@@ -116,11 +116,14 @@ une interprétation de notre part.
 
 ### Rattachement
 
-Une mesure se rattache à une candidature, et, quand elle existe, à une édition de programme. **Proposition
-de doctrine** : une mesure ne se rattache qu'à une candidature `DECLARE`. Rattacher une mesure à une
-candidature seulement `PRESSENTI` ou `ENVISAGE` reviendrait à prêter un programme à quelqu'un qui n'a pas
-déclaré, ce qui transforme une rumeur en position. Cette proposition répond directement à l'anomalie du
-sélecteur de création relevée en production (issue #660).
+Une mesure se rattache à une candidature, et, quand elle existe, à une édition de programme. **Règle
+arbitrée le 2026-08-06** : dans la chaîne du hub 2027, une mesure ne peut être créée que pour une
+candidature **de l'élection présidentielle 2027**, au statut **`DECLARE`**, dont **`sourceUrl` et
+`sourceLabel`** sont renseignés. Rattacher une mesure à une candidature seulement `PRESSENTI` ou
+`ENVISAGE` reviendrait à prêter un programme à quelqu'un qui n'a pas déclaré, ce qui transforme une rumeur
+en position. Cette règle vit dans la chaîne du hub, pas comme contrainte universelle du modèle `Measure` :
+une mesure d'un autre contexte garde ses propres règles. Elle fixe le filtre du sélecteur de création et
+résout l'anomalie #660.
 
 ### Contradictions et évolutions
 
@@ -152,19 +155,21 @@ couverture, adossé à cette réalité, vaut mieux qu'une façade de complétude
 
 ---
 
-## Ce que ce document ne tranche pas : arbitrages
+## Décisions arbitrées le 2026-08-06
 
-1. **Un état pour la validation administrative.** Faut-il représenter « déclarée politiquement mais non
-   encore validée par le Conseil constitutionnel » ? Le modèle ne le peut pas aujourd'hui : les quatre
-   valeurs de `CandidacyStatus` gradent le signal politique, pas l'étape administrative. Une piste est un
-   champ distinct sur `CandidacyPresidential`, ajouté à côté du statut, pas une cinquième valeur d'enum qui
-   mélangerait deux axes.
+1. **Pas d'état pour la validation administrative maintenant.** `DECLARE` décrit une déclaration politique
+   publique et sourcée, pas une validation administrative (parrainages, Conseil constitutionnel). Aucun
+   statut de parrainage ni de validation n'est ajouté à ce stade. Cette dimension sera modélisée
+   séparément quand elle deviendra nécessaire, par un champ distinct sur `CandidacyPresidential`, jamais
+   une cinquième valeur d'enum qui mélangerait deux axes.
 
-2. **Le seuil de rattachement des mesures.** La proposition « une mesure ne se rattache qu'à une
-   candidature `DECLARE` » demande ta validation. Elle résout l'anomalie #660 et fixe le filtre du
-   sélecteur de création.
+2. **Rattachement des mesures : arbitré.** Dans la chaîne du hub 2027, une mesure ne peut être créée que
+   pour une candidature de l'élection 2027, au statut `DECLARE`, avec `sourceUrl` et `sourceLabel` (voir la
+   section Rattachement). Règle de la chaîne du hub, pas contrainte universelle du modèle `Measure`. Résout
+   l'anomalie #660.
 
-3. **Une lacune d'application constatée en production.** La route admin de création de candidature ne
-   capture pas `sourceUrl` ni `sourceLabel`. Tant qu'elle ne les capture pas, la règle « une candidature
-   `DECLARE` est sourcée » n'est pas tenue à l'écriture. À corriger dans le formulaire de candidature, hors
-   périmètre de ce document.
+3. **Capture de la source, à traiter avant la première candidature réelle.** La route admin de création de
+   candidature (et le passage à `DECLARE`) doit capturer `sourceUrl` et `sourceLabel` ; aujourd'hui elle ne
+   le fait pas, donc la règle « une candidature `DECLARE` est sourcée » n'est pas tenue à l'écriture. À
+   corriger dans la PR de #660 si le périmètre reste petit, sinon dans une PR dédiée explicitement bloquante
+   avant toute alimentation de la production.
