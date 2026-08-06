@@ -22,6 +22,7 @@ function state(over: Partial<ModerationState> = {}): ModerationState {
 function publicMeasure(over: Partial<PublicMeasure> = {}): PublicMeasure {
   return {
     id: "m-1",
+    publishedRevisionId: "rev-1",
     text: "Encadrer les loyers dans les zones tendues.",
     precision: "OBJECTIF_SANS_CHIFFRE",
     theme: "LOGEMENT_URBANISME",

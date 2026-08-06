@@ -59,6 +59,8 @@ export type MeasureWithdrawal = {
  */
 export type PublicMeasure = {
   id: string;
+  /** The published revision this measure points at. Non-null here: the where clause requires it. */
+  publishedRevisionId: string;
   text: string;
   precision: PublishedRevision["precision"];
   theme: MeasureRow["theme"];
@@ -78,6 +80,7 @@ function toPublicMeasure(row: MeasureRow): PublicMeasure | null {
 
   return {
     id: row.id,
+    publishedRevisionId: revision.id,
     text: revision.text,
     precision: revision.precision,
     theme: row.theme,
