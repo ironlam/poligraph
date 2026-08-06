@@ -242,7 +242,7 @@ export function CompositionHemicycle({ anGroups, senatGroups }: Props) {
       </div>
 
       {/* Accessible data table (hidden) */}
-      <table className="sr-only">
+      <table className="sr-only table-fixed">
         <caption>Composition {chamber === "AN" ? "de l'Assemblée nationale" : "du Sénat"}</caption>
         <thead>
           <tr>

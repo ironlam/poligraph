@@ -57,7 +57,7 @@ export function DonutChart({ segments, size = 200, title }: DonutChartProps) {
         </g>
       </svg>
       {/* Screen reader table */}
-      <table className="sr-only" id={descId}>
+      <table className="sr-only table-fixed" id={descId}>
         <caption>{title}</caption>
         <thead>
           <tr>
