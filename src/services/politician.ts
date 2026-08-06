@@ -69,13 +69,20 @@ export async function findCurrentOpenMembership(
   });
 }
 
+export interface SetCurrentPartyResult {
+  /** The membership now backing currentPartyId, created or promoted. */
+  membershipId: string | null;
+  /** The membership this call closed, if any. */
+  closedMembershipId: string | null;
+}
+
 /**
  * Set the current party for a politician.
  *
  * This function:
- * 1. Ends the current party membership (if any)
- * 2. Creates a new party membership
- * 3. Updates the politician's currentPartyId
+ * 1. Ends the open membership matching currentPartyId (if any), promoting an existing
+ *    parallel affiliation for the incoming party instead of duplicating it
+ * 2. Updates the politician's currentPartyId
  *
  * @example
  * await politicianService.setCurrentParty("politician-id", "party-id");
@@ -85,30 +92,42 @@ export async function setCurrentParty(
   politicianId: string,
   partyId: string | null,
   options: SetPartyOptions = {}
-): Promise<void> {
+): Promise<SetCurrentPartyResult> {
   const { startDate = new Date(), endPreviousMembership = true, role } = options;
 
-  await db.$transaction(async (tx) => {
-    // 1. Get current party membership
-    const currentMembership = await tx.partyMembership.findFirst({
-      where: {
-        politicianId,
-        endDate: null,
-      },
-      orderBy: { startDate: "desc" },
+  return db.$transaction(async (tx) => {
+    const politician = await tx.politician.findUnique({
+      where: { id: politicianId },
+      select: { currentPartyId: true },
     });
 
-    // 2. End current membership if different party
+    const currentMembership = await findCurrentOpenMembership(
+      politicianId,
+      politician?.currentPartyId ?? null,
+      tx as unknown as PartyMembershipReader
+    );
+
+    let closedMembershipId: string | null = null;
     if (endPreviousMembership && currentMembership && currentMembership.partyId !== partyId) {
       await tx.partyMembership.update({
         where: { id: currentMembership.id },
         data: { endDate: startDate },
       });
+      closedMembershipId = currentMembership.id;
     }
 
-    // 3. Create new membership if party is set and different
-    if (partyId && (!currentMembership || currentMembership.partyId !== partyId)) {
-      await tx.partyMembership.create({
+    // An open membership for the incoming party may already exist as a parallel
+    // affiliation. Promote it rather than adding a second open row for the same party.
+    const existingOpenForParty = partyId
+      ? await tx.partyMembership.findFirst({
+          where: { politicianId, partyId, endDate: null },
+          orderBy: OPEN_MEMBERSHIP_ORDER_BY,
+        })
+      : null;
+
+    let membershipId: string | null = existingOpenForParty?.id ?? null;
+    if (partyId && !existingOpenForParty) {
+      const created = await tx.partyMembership.create({
         data: {
           politicianId,
           partyId,
@@ -116,13 +135,15 @@ export async function setCurrentParty(
           ...(role && { role }),
         },
       });
+      membershipId = created.id;
     }
 
-    // 4. Update currentPartyId
     await tx.politician.update({
       where: { id: politicianId },
       data: { currentPartyId: partyId },
     });
+
+    return { membershipId, closedMembershipId };
   });
 }
 

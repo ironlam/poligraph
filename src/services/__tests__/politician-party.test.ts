@@ -42,7 +42,11 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { findCurrentOpenMembership, OPEN_MEMBERSHIP_ORDER_BY } from "@/services/politician";
+import {
+  findCurrentOpenMembership,
+  OPEN_MEMBERSHIP_ORDER_BY,
+  setCurrentParty,
+} from "@/services/politician";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -116,5 +120,80 @@ describe("findCurrentOpenMembership", () => {
       { startDate: { sort: "desc", nulls: "last" } },
       { createdAt: "desc" },
     ]);
+  });
+});
+
+describe("setCurrentParty", () => {
+  it("closes the affiliation matching currentPartyId, not a more recent parallel one", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: "p_main" });
+    // 1st findFirst: open membership for currentPartyId. 2nd: open membership for the
+    // incoming party, to avoid creating a duplicate.
+    h.membershipFindFirst
+      .mockResolvedValueOnce({ id: "m_main", partyId: "p_main", startDate: new Date("2015-01-01") })
+      .mockResolvedValueOnce(null);
+    h.membershipCreate.mockResolvedValue({ id: "m_new" });
+
+    const result = await setCurrentParty("pol_1", "p_new", {
+      startDate: new Date("2026-01-01"),
+    });
+
+    expect(h.membershipUpdate).toHaveBeenCalledWith({
+      where: { id: "m_main" },
+      data: { endDate: new Date("2026-01-01") },
+    });
+    expect(result).toEqual({ membershipId: "m_new", closedMembershipId: "m_main" });
+  });
+
+  it("promotes an existing open affiliation instead of duplicating it", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: "p_main" });
+    h.membershipFindFirst
+      .mockResolvedValueOnce({ id: "m_main", partyId: "p_main", startDate: new Date("2015-01-01") })
+      .mockResolvedValueOnce({
+        id: "m_micro",
+        partyId: "p_micro",
+        startDate: new Date("2022-01-01"),
+      });
+
+    const result = await setCurrentParty("pol_1", "p_micro", {
+      startDate: new Date("2026-01-01"),
+    });
+
+    expect(h.membershipCreate).not.toHaveBeenCalled();
+    expect(result.membershipId).toBe("m_micro");
+    expect(h.politicianUpdate).toHaveBeenCalledWith({
+      where: { id: "pol_1" },
+      data: { currentPartyId: "p_micro" },
+    });
+  });
+
+  it("passes the role through to the created membership", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
+    h.membershipFindFirst.mockResolvedValue(null);
+    h.membershipCreate.mockResolvedValue({ id: "m_new" });
+
+    await setCurrentParty("pol_1", "p_new", {
+      startDate: new Date("2026-01-01"),
+      role: "FONDATEUR",
+    });
+
+    expect(h.membershipCreate).toHaveBeenCalledWith({
+      data: {
+        politicianId: "pol_1",
+        partyId: "p_new",
+        startDate: new Date("2026-01-01"),
+        role: "FONDATEUR",
+      },
+    });
+  });
+
+  it("creates nothing and closes nothing when the politician has no affiliation", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
+    h.membershipFindFirst.mockResolvedValue(null);
+
+    const result = await setCurrentParty("pol_1", null, { startDate: new Date("2026-01-01") });
+
+    expect(h.membershipCreate).not.toHaveBeenCalled();
+    expect(h.membershipUpdate).not.toHaveBeenCalled();
+    expect(result).toEqual({ membershipId: null, closedMembershipId: null });
   });
 });
