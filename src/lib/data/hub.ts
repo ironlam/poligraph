@@ -40,6 +40,9 @@ export type HubCandidacy = {
 export type HubMeasureContext = {
   electionTitle: string;
   round1Date: Date | null;
+  round2Date: Date | null;
+  dateConfirmed: boolean;
+  electionDescription: string | null;
   publishableSubjectPageCount: number;
   hubPublishable: boolean;
   verifiedMeasureCount: number;
@@ -98,7 +101,13 @@ export async function loadHubMeasureContext(
   const [election, themesIndex, lastReviewedAt] = await Promise.all([
     db.election.findUniqueOrThrow({
       where: { id: electionId },
-      select: { title: true, round1Date: true },
+      select: {
+        title: true,
+        round1Date: true,
+        round2Date: true,
+        dateConfirmed: true,
+        description: true,
+      },
     }),
     loadThemesIndex(electionId, electionSlug),
     getLatestPublicReviewDate(electionId),
@@ -116,6 +125,9 @@ export async function loadHubMeasureContext(
   return {
     electionTitle: election.title,
     round1Date: election.round1Date,
+    round2Date: election.round2Date,
+    dateConfirmed: election.dateConfirmed,
+    electionDescription: election.description,
     publishableSubjectPageCount: themesIndex.publishableSubjectPageCount,
     hubPublishable: isHubPublishable(themesIndex.publishableSubjectPageCount),
     verifiedMeasureCount,

@@ -85,5 +85,23 @@ describeIfDisposableDb("hub", () => {
       const context = await getHubMeasureContext("inconnue");
       expect(context).toBeNull();
     });
+
+    it("remonte round2Date, dateConfirmed et electionDescription", async () => {
+      const round2Date = new Date("2027-04-25T00:00:00Z");
+      await db.election.update({
+        where: { id: electionId },
+        data: {
+          round2Date,
+          dateConfirmed: true,
+          description: "Élection de test (hub) pour le second tour.",
+        },
+      });
+
+      const context = await loadHubMeasureContext(electionId, SLUG);
+
+      expect(context.round2Date).toEqual(round2Date);
+      expect(context.dateConfirmed).toBe(true);
+      expect(context.electionDescription).toBe("Élection de test (hub) pour le second tour.");
+    });
   });
 });

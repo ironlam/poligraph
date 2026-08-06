@@ -17,6 +17,9 @@ function context(over: Partial<HubMeasureContext> = {}): HubMeasureContext {
   return {
     electionTitle: "Présidentielle 2027",
     round1Date: new Date("2027-04-11"),
+    round2Date: new Date("2027-04-25"),
+    dateConfirmed: true,
+    electionDescription: null,
     publishableSubjectPageCount: 0,
     hubPublishable: false,
     verifiedMeasureCount: 0,
@@ -54,5 +57,11 @@ describe("generateMetadata du hub présidentielle", () => {
     mockGetContext.mockResolvedValue(null);
     const meta = await generateMetadata();
     expect(meta.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("canonical pointe vers l'URL du hub", async () => {
+    mockGetContext.mockResolvedValue(context({ hubPublishable: true }));
+    const meta = await generateMetadata();
+    expect(meta.alternates?.canonical).toBe("/elections/presidentielle-2027");
   });
 });
