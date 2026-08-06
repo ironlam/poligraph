@@ -1,20 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { getSubjectPageData } from "@/lib/data/subject-page";
+import { parseThemeSlug, PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { SubjectComparison } from "./_components/SubjectComparison";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
-
-const ELECTION_SLUG = "presidentielle-2027";
-
-/** URL slug (logement-urbanisme) <-> enum (LOGEMENT_URBANISME), deterministic in both directions. */
-function parseThemeParam(param: string): ThemeCategory | null {
-  const candidate = param.toUpperCase().replace(/-/g, "_");
-  return candidate in THEME_CATEGORY_LABELS ? (candidate as ThemeCategory) : null;
-}
 
 interface PageProps {
   params: Promise<{ theme: string }>;
@@ -22,7 +14,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { theme: themeParam } = await params;
-  const theme = parseThemeParam(themeParam);
+  const theme = parseThemeSlug(themeParam);
   if (theme === null) {
     return {
       title: "Sujet introuvable | Présidentielle 2027",
@@ -30,7 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const data = await getSubjectPageData(ELECTION_SLUG, theme);
+  const data = await getSubjectPageData(PRESIDENTIELLE_2027_SLUG, theme);
   const label = THEME_CATEGORY_LABELS[theme];
   // The subject page stays out of the index until it clears its publication gate (spec §4): below the
   // gate there is no comparison to index, only an explicit "not yet available" state.
@@ -45,10 +37,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function SubjectPage({ params }: PageProps) {
   const { theme: themeParam } = await params;
-  const theme = parseThemeParam(themeParam);
+  const theme = parseThemeSlug(themeParam);
   if (theme === null) notFound();
 
-  const data = await getSubjectPageData(ELECTION_SLUG, theme);
+  const data = await getSubjectPageData(PRESIDENTIELLE_2027_SLUG, theme);
   if (data === null) notFound();
 
   return <SubjectComparison data={data} />;

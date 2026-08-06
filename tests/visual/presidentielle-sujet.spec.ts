@@ -18,7 +18,7 @@ import { expect, test, type Page } from "@playwright/test";
  */
 
 const WCAG = ["wcag2a", "wcag2aa", "wcag21aa"];
-const SUBJECT_PATH = "/presidentielle-2027/sujets/logement-urbanisme";
+const SUBJECT_PATH = "/elections/presidentielle-2027/sujets/logement-urbanisme";
 const WIDTHS = [375, 768, 1440];
 
 /**
@@ -47,6 +47,11 @@ test.describe("page sujet publique de la présidentielle 2027", () => {
     await expect(page.getByRole("link", { name: "Discours de campagne" }).first()).toBeVisible();
     // Chloé has no measure on the theme: a qualified absence, never a silent blank.
     await expect(page.locator('[data-absence-kind="no_measure_published"]').first()).toBeVisible();
+  });
+
+  test("l'ancienne URL ne répond plus", async ({ page }) => {
+    const response = await page.goto("/presidentielle-2027/sujets/logement-urbanisme");
+    expect(response?.status()).toBe(404);
   });
 
   for (const width of WIDTHS) {
