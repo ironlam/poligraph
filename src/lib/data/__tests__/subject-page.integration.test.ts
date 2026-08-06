@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
+import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import { themeToSlug } from "@/lib/theme-utils";
 
 // Deferred: these modules import @/lib/db as a value, which throws at module load without DATABASE_URL.
 let db: typeof import("@/lib/db").db;
@@ -9,6 +11,9 @@ let createMeasureVoteLink: typeof import("@/lib/measures/vote-links").createMeas
 
 const SLUG = "presidentielle-sujet-test";
 const THEME = "LOGEMENT_URBANISME" as const;
+// Below the gate throughout this fixture: no measure is ever attached to this theme, other
+// than the one draft added below to exercise pendingReviewMeasureCount.
+const OTHER_THEME = "SANTE" as const;
 
 /**
  * The subject page reads only through public authorities. The violation is built first: a DRAFT-extension
@@ -153,6 +158,35 @@ describeIfDisposableDb("page sujet publique : agrégation des données", () => {
       ],
     });
 
+    // A draft measure on a different theme, never reviewed nor published: exercises
+    // pendingReviewMeasureCount on a theme that otherwise carries no measure at all.
+    await transitions.createMeasure({
+      politicianId: a.politicianId,
+      electionId,
+      candidacyId: a.candidacyId,
+      programEditionId: null,
+      attribution: "PERSONAL",
+      theme: OTHER_THEME,
+      precedingMeasureId: null,
+      revision: {
+        text: "Brouillon santé non publié.",
+        precision: null,
+        validFrom: new Date("2027-01-06T00:00:00Z"),
+        extractionMethod: "MANUAL",
+        extractionConfidence: null,
+        extractorVersion: null,
+      },
+      sources: [
+        {
+          sourceKind: "ARTICLE_PRESSE",
+          tier: "SECONDARY",
+          url: "https://example.org/article-sante",
+          page: null,
+          publishedAt: new Date("2027-01-06T00:00:00Z"),
+        },
+      ],
+    });
+
     // Bruno: one defended measure, so the gate reaches two candidacies.
     bruno = await publishedCandidate("Bruno");
     await publishMeasure(bruno.politicianId, bruno.candidacyId, "Construire 500 000 logements.");
@@ -224,5 +258,46 @@ describeIfDisposableDb("page sujet publique : agrégation des données", () => {
     // Alix and Bruno each defend a measure; Chloe has none; the withdrawn one does not count.
     expect(data.candidaciesWithVerifiedMeasure).toBe(2);
     expect(data.publishable).toBe(true);
+  });
+
+  it("expose le seuil requis et le total de candidatures sourcées de l'élection", async () => {
+    const data = await loadSubjectPageData(electionId, SLUG, THEME);
+    expect(data.requiredCandidaciesWithVerifiedMeasure).toBe(2);
+    // Alix, Bruno and Chloe are sourced (status + sourceUrl + sourceLabel); Dora (DRAFT
+    // extension, no source) is not. The count is election-wide, not scoped to the theme.
+    expect(data.totalSourcedCandidacies).toBe(3);
+  });
+
+  it("compte les mesures en attente de relecture d'un thème sous le seuil, sans exposer leur texte", async () => {
+    const data = await loadSubjectPageData(electionId, SLUG, OTHER_THEME);
+    expect(data.candidaciesWithVerifiedMeasure).toBe(0);
+    expect(data.publishable).toBe(false);
+    expect(data.pendingReviewMeasureCount).toBe(1);
+    expect(JSON.stringify(data)).not.toContain("Brouillon santé non publié.");
+  });
+
+  it("date la dernière revue publique du thème, et jamais relu quand aucune n'existe", async () => {
+    const onTheme = await loadSubjectPageData(electionId, SLUG, THEME);
+    const brunoRevision = await db.measureRevision.findFirst({
+      where: { measure: { candidacyId: bruno.candidacyId } },
+      select: { reviewedAt: true },
+    });
+    expect(onTheme.lastReviewedAt?.getTime()).toBe(brunoRevision?.reviewedAt?.getTime());
+
+    const otherTheme = await loadSubjectPageData(electionId, SLUG, OTHER_THEME);
+    expect(otherTheme.lastReviewedAt).toBeNull();
+  });
+
+  it("sous le seuil, renvoie un thème publiable différent du thème courant", async () => {
+    const data = await loadSubjectPageData(electionId, SLUG, OTHER_THEME);
+    expect(data.fallbackPublishableTheme).toEqual({
+      slug: themeToSlug(THEME),
+      label: THEME_CATEGORY_LABELS[THEME],
+    });
+  });
+
+  it("au-dessus du seuil, ne propose aucun renvoi quand aucun autre thème n'est publiable", async () => {
+    const data = await loadSubjectPageData(electionId, SLUG, THEME);
+    expect(data.fallbackPublishableTheme).toBeNull();
   });
 });

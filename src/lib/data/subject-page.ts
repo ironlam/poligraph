@@ -2,14 +2,19 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { isSubjectPagePublishable } from "@/config/publication-gates";
+import { PUBLICATION_GATES, isSubjectPagePublishable } from "@/config/publication-gates";
 import { getPublicMeasureVoteRelations, type PublicVoteReference } from "@/lib/measures/vote-links";
 import type { VoteRelation } from "@/lib/measures/vote-relation";
-import { getPublicMeasuresByTheme, type PublicMeasure } from "./measures";
+import {
+  getLatestPublicReviewDate,
+  getPublicMeasuresByTheme,
+  type PublicMeasure,
+} from "./measures";
 import {
   getPublicPresidentialCandidates,
   type PublicPresidentialCandidate,
 } from "./presidential-candidates-public";
+import { loadThemesIndex } from "./themes-index";
 
 /**
  * The data of a public subject page: for one theme, each publicly visible candidacy and its published
@@ -44,6 +49,16 @@ export type SubjectPageData = {
   /** Candidacies with at least one currently-defended (non-withdrawn) published measure on the theme. */
   candidaciesWithVerifiedMeasure: number;
   publishable: boolean;
+  /** The publication gate this theme is measured against (spec §4, `PUBLICATION_GATES.pageSujet`). */
+  requiredCandidaciesWithVerifiedMeasure: number;
+  /** Candidacies of the election with a sourced editorial status, the denominator of the coverage rate. */
+  totalSourcedCandidacies: number;
+  /** Measures of the theme not yet published (count only: never the draft text itself). */
+  pendingReviewMeasureCount: number;
+  /** When the most recently reviewed public measure on this theme was reviewed, if any. */
+  lastReviewedAt: Date | null;
+  /** Another theme that already clears the gate, to redirect to when this one does not. */
+  fallbackPublishableTheme: { slug: string; label: string } | null;
 };
 
 /**
@@ -54,12 +69,34 @@ export async function loadSubjectPageData(
   electionSlug: string,
   theme: ThemeCategory
 ): Promise<SubjectPageData> {
-  const [candidates, measures] = await Promise.all([
+  const [
+    candidates,
+    measures,
+    totalSourcedCandidacies,
+    pendingReviewMeasureCount,
+    lastReviewedAt,
+    themesIndex,
+  ] = await Promise.all([
     getPublicPresidentialCandidates(electionSlug),
     // Withdrawn measures stay visible on a subject page (a dropped position is still information), so the
     // read includes them; the gate below counts only the ones still defended.
     getPublicMeasuresByTheme(electionId, theme, { includeWithdrawn: true }),
+    db.candidacy.count({
+      where: {
+        electionId,
+        status: { not: null },
+        sourceUrl: { not: null },
+        sourceLabel: { not: null },
+      },
+    }),
+    // Count only: never expose the text of an unpublished revision here.
+    db.measure.count({ where: { electionId, theme, publicationStatus: { not: "PUBLISHED" } } }),
+    getLatestPublicReviewDate(electionId, theme),
+    loadThemesIndex(electionId, electionSlug),
   ]);
+
+  const fallback = themesIndex.themes.find((t) => t.publishable && t.theme !== theme) ?? null;
+  const fallbackPublishableTheme = fallback ? { slug: fallback.slug, label: fallback.label } : null;
 
   const measuresByCandidacy = new Map<string, PublicMeasure[]>();
   for (const measure of measures) {
@@ -103,6 +140,12 @@ export async function loadSubjectPageData(
     candidates: entries,
     candidaciesWithVerifiedMeasure,
     publishable: isSubjectPagePublishable(candidaciesWithVerifiedMeasure),
+    requiredCandidaciesWithVerifiedMeasure:
+      PUBLICATION_GATES.pageSujet.minCandidaciesWithVerifiedMeasure,
+    totalSourcedCandidacies,
+    pendingReviewMeasureCount,
+    lastReviewedAt,
+    fallbackPublishableTheme,
   };
 }
 

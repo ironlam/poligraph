@@ -11,6 +11,7 @@ import type { ThemeCategory } from "@/generated/prisma";
 import type { PublicMeasure } from "@/lib/data/measures";
 import type { PublicVoteReference } from "@/lib/measures/vote-links";
 import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-page";
+import { SubjectGate } from "./SubjectGate";
 
 /**
  * A public subject page: for one theme, the candidates and their measures, side by side.
@@ -139,19 +140,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
       </header>
 
       {!data.publishable ? (
-        <section
-          aria-labelledby="gate-heading"
-          className="rounded-lg border border-border bg-muted/40 p-4"
-        >
-          <h2 id="gate-heading" className="text-base font-semibold">
-            Comparaison pas encore disponible sur ce sujet
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Une comparaison n&apos;est publiée que lorsqu&apos;au moins deux candidatures portent
-            une mesure vérifiée sur ce sujet. Ce seuil n&apos;est pas encore atteint, la page reste
-            hors des index tant qu&apos;il ne l&apos;est pas.
-          </p>
-        </section>
+        <SubjectGate data={data} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.candidates.map((entry) => (

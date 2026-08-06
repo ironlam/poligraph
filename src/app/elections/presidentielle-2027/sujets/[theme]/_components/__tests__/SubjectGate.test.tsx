@@ -1,0 +1,81 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { SubjectPageData } from "@/lib/data/subject-page";
+import { SubjectGate } from "../SubjectGate";
+
+function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
+  return {
+    theme: "LOGEMENT_URBANISME",
+    electionSlug: "presidentielle-2027",
+    candidates: [],
+    candidaciesWithVerifiedMeasure: 1,
+    publishable: false,
+    requiredCandidaciesWithVerifiedMeasure: 2,
+    totalSourcedCandidacies: 4,
+    pendingReviewMeasureCount: 3,
+    lastReviewedAt: new Date("2027-02-10T00:00:00Z"),
+    fallbackPublishableTheme: null,
+    ...over,
+  };
+}
+
+describe("SubjectGate", () => {
+  it("nomme l'état et affiche le compte de candidatures avec mesure vérifiée sur le seuil requis", () => {
+    render(<SubjectGate data={data()} />);
+    expect(screen.getByText(/Comparaison pas encore disponible/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 sur 2 requises/)).toBeInTheDocument();
+  });
+
+  it("calcule le taux de couverture à partir des candidatures sourcées", () => {
+    render(
+      <SubjectGate data={data({ candidaciesWithVerifiedMeasure: 1, totalSourcedCandidacies: 4 })} />
+    );
+    expect(screen.getByText("25 %")).toBeInTheDocument();
+  });
+
+  it("garde le taux à 0 % sans division par zéro quand aucune candidature n'est sourcée", () => {
+    render(
+      <SubjectGate data={data({ candidaciesWithVerifiedMeasure: 0, totalSourcedCandidacies: 0 })} />
+    );
+    expect(screen.getByText("0 %")).toBeInTheDocument();
+  });
+
+  it("affiche le nombre de mesures extraites en attente de relecture", () => {
+    render(<SubjectGate data={data({ pendingReviewMeasureCount: 3 })} />);
+    expect(screen.getByText(/3 mesures extraites en attente de relecture/)).toBeInTheDocument();
+  });
+
+  it("accorde au singulier quand une seule mesure est en attente", () => {
+    render(<SubjectGate data={data({ pendingReviewMeasureCount: 1 })} />);
+    expect(screen.getByText(/1 mesure extraite en attente de relecture/)).toBeInTheDocument();
+  });
+
+  it("affiche la date de dernière revue publique, au format français", () => {
+    render(<SubjectGate data={data({ lastReviewedAt: new Date("2027-02-10T00:00:00Z") })} />);
+    expect(screen.getByText(/10 février 2027/)).toBeInTheDocument();
+  });
+
+  it("affiche « jamais relu » quand aucune revue publique n'a eu lieu", () => {
+    render(<SubjectGate data={data({ lastReviewedAt: null })} />);
+    expect(screen.getByText(/jamais relu/i)).toBeInTheDocument();
+  });
+
+  it("rend les deux compteurs ProgramEdition en tiret, jamais en zéro trompeur", () => {
+    render(<SubjectGate data={data()} />);
+    expect(screen.getAllByText("—")).toHaveLength(2);
+    expect(screen.getByText(/donnée programme à venir/i)).toBeInTheDocument();
+  });
+
+  it("propose un renvoi vers un sujet comparable quand fallbackPublishableTheme est fourni", () => {
+    render(
+      <SubjectGate data={data({ fallbackPublishableTheme: { slug: "sante", label: "Santé" } })} />
+    );
+    const link = screen.getByRole("link", { name: "Santé" });
+    expect(link).toHaveAttribute("href", "/elections/presidentielle-2027/sujets/sante");
+  });
+
+  it("n'affiche aucun lien de renvoi quand fallbackPublishableTheme est nul", () => {
+    render(<SubjectGate data={data({ fallbackPublishableTheme: null })} />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+});

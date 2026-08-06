@@ -78,6 +78,11 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
     candidates: [],
     candidaciesWithVerifiedMeasure: 2,
     publishable: true,
+    requiredCandidaciesWithVerifiedMeasure: 2,
+    totalSourcedCandidacies: 3,
+    pendingReviewMeasureCount: 0,
+    lastReviewedAt: null,
+    fallbackPublishableTheme: null,
     ...over,
   };
 }
