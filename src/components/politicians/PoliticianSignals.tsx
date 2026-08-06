@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   Vote,
   Landmark,
@@ -11,6 +10,7 @@ import {
   FileText,
 } from "lucide-react";
 import type { Signal, SignalIconKey, SignalTone } from "@/lib/politicians/signals";
+import { TabShortcutLink } from "./TabShortcutLink";
 
 const ICONS: Record<
   SignalIconKey,
@@ -43,11 +43,9 @@ export function PoliticianSignals({ signals }: { signals: Signal[] }) {
       {cards.map((s) => {
         const Icon = ICONS[s.iconKey];
         return (
-          <Link
+          <TabShortcutLink
             key={s.key}
             href={s.href}
-            prefetch={false}
-            scroll={false}
             className="flex min-h-11 flex-col justify-between rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
           >
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -60,7 +58,7 @@ export function PoliticianSignals({ signals }: { signals: Signal[] }) {
                 →
               </span>
             </span>
-          </Link>
+          </TabShortcutLink>
         );
       })}
     </div>

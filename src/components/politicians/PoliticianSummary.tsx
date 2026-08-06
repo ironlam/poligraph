@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Signal, SignalIconKey, SignalTone } from "@/lib/politicians/signals";
 import type { SourceLink } from "@/lib/politicians/external-sources";
+import { TabShortcutLink } from "./TabShortcutLink";
 
 const ICONS: Record<
   SignalIconKey,
@@ -59,10 +60,8 @@ export function PoliticianSummary({
             const Icon = ICONS[s.iconKey];
             return (
               <li key={s.key}>
-                <Link
+                <TabShortcutLink
                   href={s.href}
-                  prefetch={false}
-                  scroll={false}
                   className="flex items-center justify-between gap-2 py-1 text-foreground hover:underline"
                 >
                   <span className="flex items-center gap-1.5">
@@ -70,7 +69,7 @@ export function PoliticianSummary({
                     {s.label}
                   </span>
                   <span className={`font-semibold ${TONE[s.tone]}`}>{s.value} ›</span>
-                </Link>
+                </TabShortcutLink>
               </li>
             );
           })}

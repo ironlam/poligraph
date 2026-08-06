@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { ReactNode } from "react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { User, Briefcase, Vote, Wallet, FileCheck, Scale } from "lucide-react";
+import { PROFILE_TABS_ANCHOR_ID } from "./profile-tabs-anchor";
 
 const VALID_TABS = ["profil", "carriere", "votes", "patrimoine", "factchecks", "affaires"] as const;
 type TabValue = (typeof VALID_TABS)[number];
@@ -82,51 +83,55 @@ function ProfileTabsInner({
   }
 
   return (
-    <Tabs value={tab} onValueChange={onTabChange}>
-      <TabsList variant="line" className="w-full justify-start">
-        <TabsTrigger value="profil">
-          <User className="size-4" />
-          Profil
-        </TabsTrigger>
-        <TabsTrigger value="carriere">
-          <Briefcase className="size-4" />
-          Carrière
-        </TabsTrigger>
-        {votesContent && (
-          <TabsTrigger value="votes">
-            <Vote className="size-4" />
-            Votes
+    // Target of the "En bref" shortcuts. Mounted once, unlike the summary that
+    // links here, so the id stays unique. scroll-mt clears the sticky header.
+    <div id={PROFILE_TABS_ANCHOR_ID} tabIndex={-1} className="scroll-mt-20 outline-none">
+      <Tabs value={tab} onValueChange={onTabChange}>
+        <TabsList variant="line" className="w-full justify-start">
+          <TabsTrigger value="profil">
+            <User className="size-4" />
+            Profil
           </TabsTrigger>
-        )}
-        {patrimoineContent && (
-          <TabsTrigger value="patrimoine">
-            <Wallet className="size-4" />
-            Patrimoine
+          <TabsTrigger value="carriere">
+            <Briefcase className="size-4" />
+            Carrière
           </TabsTrigger>
-        )}
-        {factchecksContent && (
-          <TabsTrigger value="factchecks">
-            <FileCheck className="size-4" />
-            Fact-checks
-          </TabsTrigger>
-        )}
-        <TabsTrigger value="affaires">
-          <Scale className="size-4" />
-          Affaires
-          {affairsCount != null && affairsCount > 0 && (
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium min-w-[1.25rem] h-5 px-1.5">
-              {affairsCount}
-            </span>
+          {votesContent && (
+            <TabsTrigger value="votes">
+              <Vote className="size-4" />
+              Votes
+            </TabsTrigger>
           )}
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="profil">{profileContent}</TabsContent>
-      <TabsContent value="carriere">{careerContent}</TabsContent>
-      {votesContent && <TabsContent value="votes">{votesContent}</TabsContent>}
-      {patrimoineContent && <TabsContent value="patrimoine">{patrimoineContent}</TabsContent>}
-      {factchecksContent && <TabsContent value="factchecks">{factchecksContent}</TabsContent>}
-      <TabsContent value="affaires">{affairsContent}</TabsContent>
-    </Tabs>
+          {patrimoineContent && (
+            <TabsTrigger value="patrimoine">
+              <Wallet className="size-4" />
+              Patrimoine
+            </TabsTrigger>
+          )}
+          {factchecksContent && (
+            <TabsTrigger value="factchecks">
+              <FileCheck className="size-4" />
+              Fact-checks
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="affaires">
+            <Scale className="size-4" />
+            Affaires
+            {affairsCount != null && affairsCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium min-w-[1.25rem] h-5 px-1.5">
+                {affairsCount}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="profil">{profileContent}</TabsContent>
+        <TabsContent value="carriere">{careerContent}</TabsContent>
+        {votesContent && <TabsContent value="votes">{votesContent}</TabsContent>}
+        {patrimoineContent && <TabsContent value="patrimoine">{patrimoineContent}</TabsContent>}
+        {factchecksContent && <TabsContent value="factchecks">{factchecksContent}</TabsContent>}
+        <TabsContent value="affaires">{affairsContent}</TabsContent>
+      </Tabs>
+    </div>
   );
 }
 
