@@ -3,7 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
-import { getPublicMeasureVoteRelation, type PublicVoteReference } from "@/lib/measures/vote-links";
+import { getPublicMeasureVoteRelations, type PublicVoteReference } from "@/lib/measures/vote-links";
 import type { VoteRelation } from "@/lib/measures/vote-relation";
 import { getPublicMeasuresByTheme, type PublicMeasure } from "./measures";
 import {
@@ -70,20 +70,27 @@ export async function loadSubjectPageData(
     measuresByCandidacy.set(measure.candidacyId, list);
   }
 
+  // One batched read for every measure's vote relation, instead of one query per measure (N+1).
+  const relations = await getPublicMeasureVoteRelations(
+    measures.map((measure) => ({
+      measureId: measure.id,
+      publishedRevisionId: measure.publishedRevisionId,
+    }))
+  );
+
   const entries: SubjectCandidateEntry[] = [];
   let candidaciesWithVerifiedMeasure = 0;
 
   for (const candidate of candidates) {
     const candidateMeasures = measuresByCandidacy.get(candidate.id) ?? [];
-    const subjectMeasures: SubjectMeasure[] = [];
-    for (const measure of candidateMeasures) {
-      const relation = await getPublicMeasureVoteRelation(measure.id, measure.publishedRevisionId);
-      subjectMeasures.push({
+    const subjectMeasures: SubjectMeasure[] = candidateMeasures.map((measure) => {
+      const relation = relations.get(measure.id);
+      return {
         measure,
-        voteRelation: relation.relation,
-        voteReference: relation.reference,
-      });
-    }
+        voteRelation: relation?.relation ?? "SEARCH_NOT_DONE",
+        voteReference: relation?.reference ?? null,
+      };
+    });
     if (candidateMeasures.some((measure) => measure.withdrawal === null)) {
       candidaciesWithVerifiedMeasure += 1;
     }

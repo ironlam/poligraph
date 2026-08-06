@@ -7,6 +7,7 @@ import type {
 } from "@/generated/prisma";
 import { lockMeasure } from "./lock";
 import { MeasureValidationError } from "./errors";
+import { invalidateMeasureTags } from "./cache";
 import { deriveVoteRelation, type VoteRelation } from "./vote-relation";
 
 /**
@@ -41,13 +42,14 @@ export async function createMeasureVoteLink(
   const isReference = input.isReference ?? false;
   const isSameObjectVote = input.linkKind === "SAME_OBJECT" && scrutinId !== null;
 
-  return db.$transaction(async (tx: DbTransactionClient) => {
+  const { link, electionId } = await db.$transaction(async (tx: DbTransactionClient) => {
     await lockMeasure(tx, input.measureId);
 
-    // Constraint 1: the link's measure must be the measure of the targeted revision.
+    // Constraint 1: the link's measure must be the measure of the targeted revision. The measure's
+    // electionId is read here too, to bust the public subject-page cache tag after the commit.
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.applicableRevisionId },
-      select: { measureId: true },
+      select: { measureId: true, measure: { select: { electionId: true } } },
     });
     if (!revision) throw new MeasureValidationError("La révision applicable est introuvable");
     if (revision.measureId !== input.measureId) {
@@ -91,7 +93,7 @@ export async function createMeasureVoteLink(
       }
     }
 
-    return tx.measureVoteLink.create({
+    const created = await tx.measureVoteLink.create({
       data: {
         measureId: input.measureId,
         applicableRevisionId: input.applicableRevisionId,
@@ -107,7 +109,13 @@ export async function createMeasureVoteLink(
         reviewedBy: input.reviewedBy,
       },
     });
+    return { link: created, electionId: revision.measure.electionId };
   });
+
+  // Not part of the transaction: revalidateTag is a platform call, best effort, exactly as the lot 1
+  // transitions do. Without it, the public subject page keeps a stale badge until its 24h cacheLife.
+  invalidateMeasureTags(input.measureId, electionId);
+  return link;
 }
 
 /** The sourced basis of the reference link, safe to show publicly. Never carries rationale/reviewedBy. */
@@ -124,19 +132,22 @@ export type PublicMeasureVoteRelation = {
 };
 
 /**
- * The public relation of a measure to recorded votes, and the sourced basis of its reference.
+ * The public vote relations of several measures at once, keyed by measureId.
  *
- * Constraint 5 (§5.8): the badge only uses links whose applicableRevisionId equals publishedRevisionId,
- * which deriveVoteRelation() enforces. The select deliberately omits `rationale` and `reviewedBy`: they
- * are internal editorial judgment and must never reach the public surface.
+ * One query for all the links (`measureId in [...]`), then the derivation runs in memory per measure:
+ * this is what a subject page with N measures needs, instead of N sequential reads. Constraint 5 (§5.8):
+ * only links whose applicableRevisionId equals a measure's publishedRevisionId count, which
+ * deriveVoteRelation() enforces. The select omits `rationale` and `reviewedBy`, internal editorial
+ * judgment that must never reach the public surface.
  */
-export async function getPublicMeasureVoteRelation(
-  measureId: string,
-  publishedRevisionId: string
-): Promise<PublicMeasureVoteRelation> {
+export async function getPublicMeasureVoteRelations(
+  inputs: { measureId: string; publishedRevisionId: string }[]
+): Promise<Map<string, PublicMeasureVoteRelation>> {
+  const measureIds = inputs.map((i) => i.measureId);
   const links = await db.measureVoteLink.findMany({
-    where: { measureId },
+    where: { measureId: { in: measureIds } },
     select: {
+      measureId: true,
       linkKind: true,
       applicableRevisionId: true,
       relation: true,
@@ -148,27 +159,52 @@ export async function getPublicMeasureVoteRelation(
     },
   });
 
-  const relation = deriveVoteRelation(
-    links.map((l) => ({
-      linkKind: l.linkKind,
-      applicableRevisionId: l.applicableRevisionId,
-      position: l.relation,
-    })),
-    publishedRevisionId
-  );
+  const linksByMeasure = new Map<string, typeof links>();
+  for (const link of links) {
+    const list = linksByMeasure.get(link.measureId) ?? [];
+    list.push(link);
+    linksByMeasure.set(link.measureId, list);
+  }
 
-  const ref =
-    links.find((l) => l.applicableRevisionId === publishedRevisionId && l.isReference) ?? null;
+  const result = new Map<string, PublicMeasureVoteRelation>();
+  for (const { measureId, publishedRevisionId } of inputs) {
+    const measureLinks = linksByMeasure.get(measureId) ?? [];
+    const relation = deriveVoteRelation(
+      measureLinks.map((l) => ({
+        linkKind: l.linkKind,
+        applicableRevisionId: l.applicableRevisionId,
+        position: l.relation,
+      })),
+      publishedRevisionId
+    );
+    const ref =
+      measureLinks.find((l) => l.applicableRevisionId === publishedRevisionId && l.isReference) ??
+      null;
+    result.set(measureId, {
+      relation,
+      reference: ref
+        ? {
+            scrutinId: ref.scrutinId,
+            institutionScope: ref.institutionScope,
+            legislatureScope: ref.legislatureScope,
+            checkedAt: ref.checkedAt,
+          }
+        : null,
+    });
+  }
 
-  return {
-    relation,
-    reference: ref
-      ? {
-          scrutinId: ref.scrutinId,
-          institutionScope: ref.institutionScope,
-          legislatureScope: ref.legislatureScope,
-          checkedAt: ref.checkedAt,
-        }
-      : null,
-  };
+  return result;
+}
+
+/**
+ * The public relation of a single measure to recorded votes. Delegates to the batched read so the
+ * derivation and the public projection have exactly one definition.
+ */
+export async function getPublicMeasureVoteRelation(
+  measureId: string,
+  publishedRevisionId: string
+): Promise<PublicMeasureVoteRelation> {
+  const relations = await getPublicMeasureVoteRelations([{ measureId, publishedRevisionId }]);
+  // Always present: getPublicMeasureVoteRelations sets one entry per input.
+  return relations.get(measureId)!;
 }

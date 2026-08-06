@@ -1,11 +1,14 @@
 import {
   CANDIDACY_STATUS_LABELS,
   CHAMBER_SHORT_LABELS,
+  MEASURE_SOURCE_KIND_LABELS,
+  SOURCE_TIER_LABELS,
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import { QualifiedEmptyCell } from "@/components/measures/QualifiedEmptyCell";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import type { ThemeCategory } from "@/generated/prisma";
+import type { PublicMeasure } from "@/lib/data/measures";
 import type { PublicVoteReference } from "@/lib/measures/vote-links";
 import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-page";
 
@@ -37,6 +40,33 @@ function composeVoteBasis(reference: PublicVoteReference): string {
   return parts.join(" · ");
 }
 
+/**
+ * The evidence behind a measure: its sources, primary first (the doctrine's reference source), each with
+ * its nature, its primary/secondary tier and its publication date, and a clickable link. A measure text
+ * without its sources on screen would ask the reader to trust it; the whole point is that they don't have to.
+ */
+function MeasureSources({ sources }: { sources: PublicMeasure["sources"] }) {
+  if (sources.length === 0) return null;
+  const ordered = [...sources].sort(
+    (a, b) => (a.tier === "PRIMARY" ? 0 : 1) - (b.tier === "PRIMARY" ? 0 : 1)
+  );
+  return (
+    <ul aria-label="Sources de la mesure" className="space-y-1 text-xs text-muted-foreground">
+      {ordered.map((source) => (
+        <li key={source.id}>
+          <a href={source.url} className="underline" rel="nofollow noopener">
+            {MEASURE_SOURCE_KIND_LABELS[source.sourceKind]}
+          </a>
+          {" · "}
+          {SOURCE_TIER_LABELS[source.tier]}
+          {" · "}
+          {formatDateFr(source.publishedAt)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CandidateColumn({ entry, theme }: { entry: SubjectCandidateEntry; theme: ThemeCategory }) {
   const { candidate, measures } = entry;
   const statusLabel = candidate.status === null ? null : CANDIDACY_STATUS_LABELS[candidate.status];
@@ -49,6 +79,14 @@ function CandidateColumn({ entry, theme }: { entry: SubjectCandidateEntry; theme
       {statusLabel !== null && (
         <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{statusLabel}</p>
       )}
+      {candidate.sourceUrl !== null && candidate.sourceLabel !== null && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Candidature :{" "}
+          <a href={candidate.sourceUrl} className="underline" rel="nofollow noopener">
+            {candidate.sourceLabel}
+          </a>
+        </p>
+      )}
 
       <div className="mt-3 space-y-4">
         {measures.length === 0 ? (
@@ -57,6 +95,7 @@ function CandidateColumn({ entry, theme }: { entry: SubjectCandidateEntry; theme
           measures.map(({ measure, voteRelation, voteReference }) => (
             <div key={measure.id} className="space-y-2">
               <p className="text-sm">{measure.text}</p>
+              <MeasureSources sources={measure.sources} />
               {measure.withdrawal !== null && (
                 <p className="text-xs text-muted-foreground">
                   Mesure retirée le {formatDateFr(measure.withdrawal.withdrawnAt)}

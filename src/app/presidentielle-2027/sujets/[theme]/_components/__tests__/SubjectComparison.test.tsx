@@ -22,7 +22,26 @@ function measure(over: Partial<PublicMeasure> = {}): PublicMeasure {
   };
 }
 
-function candidate(name: string): SubjectCandidateEntry["candidate"] {
+function source(
+  over: Partial<PublicMeasure["sources"][number]> = {}
+): PublicMeasure["sources"][number] {
+  return {
+    id: "s-1",
+    measureRevisionId: "rev-1",
+    sourceKind: "PROGRAMME_PARTI",
+    tier: "PRIMARY",
+    url: "https://example.org/programme.pdf",
+    page: null,
+    publishedAt: new Date("2027-01-15T00:00:00Z"),
+    createdAt: new Date("2027-01-16T00:00:00Z"),
+    ...over,
+  };
+}
+
+function candidate(
+  name: string,
+  over: Partial<SubjectCandidateEntry["candidate"]> = {}
+): SubjectCandidateEntry["candidate"] {
   return {
     id: `cand-${name}`,
     candidateName: name,
@@ -33,11 +52,16 @@ function candidate(name: string): SubjectCandidateEntry["candidate"] {
     slogan: null,
     accentColor: null,
     declaredAt: null,
+    ...over,
   };
 }
 
-function entry(name: string, measures: SubjectCandidateEntry["measures"]): SubjectCandidateEntry {
-  return { candidate: candidate(name), measures };
+function entry(
+  name: string,
+  measures: SubjectCandidateEntry["measures"],
+  candidateOver: Partial<SubjectCandidateEntry["candidate"]> = {}
+): SubjectCandidateEntry {
+  return { candidate: candidate(name, candidateOver), measures };
 }
 
 function subjectMeasure(
@@ -162,5 +186,43 @@ describe("SubjectComparison", () => {
     expect(
       within(alix as HTMLElement).getByText(/périmètre examiné sans résultat/)
     ).toBeInTheDocument();
+  });
+
+  it("affiche les preuves d'une mesure : source cliquable, nature, niveau et date", () => {
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [
+              subjectMeasure(measure({ id: "m-s", sources: [source()] }), "SEARCH_NOT_DONE"),
+            ]),
+          ],
+        })}
+      />
+    );
+    const link = screen.getByRole("link", { name: "Programme de parti" });
+    expect(link).toHaveAttribute("href", "https://example.org/programme.pdf");
+    const li = link.closest("li");
+    expect(li).toHaveTextContent("Source primaire");
+    expect(li).toHaveTextContent(/janvier 2027/);
+  });
+
+  it("rend la source de déclaration de la candidature depuis sa colonne", () => {
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [subjectMeasure(measure(), "SEARCH_NOT_DONE")], {
+              sourceUrl: "https://example.org/annonce",
+              sourceLabel: "Discours du 1er mars",
+            }),
+          ],
+        })}
+      />
+    );
+    expect(screen.getByRole("link", { name: "Discours du 1er mars" })).toHaveAttribute(
+      "href",
+      "https://example.org/annonce"
+    );
   });
 });
