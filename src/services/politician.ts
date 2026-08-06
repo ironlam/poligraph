@@ -69,6 +69,24 @@ export async function findCurrentOpenMembership(
   });
 }
 
+/**
+ * In-memory twin of findCurrentOpenMembership, for the two functions that sweep every
+ * politician in one query. Calling the query-based helper per politician would turn a
+ * single findMany into tens of thousands of round trips.
+ *
+ * `openMemberships` must already be ordered by OPEN_MEMBERSHIP_ORDER_BY.
+ */
+function pickCurrentOpenMembership<T extends { partyId: string }>(
+  openMemberships: T[],
+  currentPartyId: string | null
+): T | null {
+  if (currentPartyId) {
+    const matching = openMemberships.find((m) => m.partyId === currentPartyId);
+    if (matching) return matching;
+  }
+  return openMemberships[0] ?? null;
+}
+
 export interface SetCurrentPartyResult {
   /** The membership now backing currentPartyId, created or promoted. */
   membershipId: string | null;
@@ -228,8 +246,8 @@ export async function setPartyRole(
  * Sync currentPartyId from PartyMembership for all politicians.
  *
  * Use this to fix inconsistencies between the two.
- * The current party is determined by the membership with no endDate
- * (or the most recent one if multiple exist).
+ * The current party is the open affiliation matching currentPartyId, or failing that,
+ * the most recent open one.
  */
 export async function syncAllCurrentParties(): Promise<{
   updated: number;
@@ -241,8 +259,7 @@ export async function syncAllCurrentParties(): Promise<{
       currentPartyId: true,
       partyHistory: {
         where: { endDate: null },
-        orderBy: { startDate: "desc" },
-        take: 1,
+        orderBy: OPEN_MEMBERSHIP_ORDER_BY,
         select: { partyId: true },
       },
     },
@@ -252,7 +269,8 @@ export async function syncAllCurrentParties(): Promise<{
   const errors: string[] = [];
 
   for (const p of politicians) {
-    const expectedPartyId = p.partyHistory[0]?.partyId ?? null;
+    const expectedPartyId =
+      pickCurrentOpenMembership(p.partyHistory, p.currentPartyId)?.partyId ?? null;
 
     if (p.currentPartyId !== expectedPartyId) {
       try {
@@ -273,8 +291,9 @@ export async function syncAllCurrentParties(): Promise<{
 /**
  * Audit party consistency for all politicians.
  *
- * Returns a list of politicians where currentPartyId doesn't match
- * the current PartyMembership.
+ * Returns a list of politicians where currentPartyId doesn't match the current
+ * PartyMembership. The current party is the open affiliation matching currentPartyId,
+ * or failing that, the most recent open one.
  */
 export async function auditPartyConsistency(): Promise<
   Array<{
@@ -294,8 +313,7 @@ export async function auditPartyConsistency(): Promise<
       currentParty: { select: { shortName: true } },
       partyHistory: {
         where: { endDate: null },
-        orderBy: { startDate: "desc" },
-        take: 1,
+        orderBy: OPEN_MEMBERSHIP_ORDER_BY,
         select: {
           partyId: true,
           party: { select: { shortName: true } },
@@ -307,7 +325,8 @@ export async function auditPartyConsistency(): Promise<
   const inconsistencies = [];
 
   for (const p of politicians) {
-    const expectedPartyId = p.partyHistory[0]?.partyId ?? null;
+    const expected = pickCurrentOpenMembership(p.partyHistory, p.currentPartyId);
+    const expectedPartyId = expected?.partyId ?? null;
 
     if (p.currentPartyId !== expectedPartyId) {
       inconsistencies.push({
@@ -316,7 +335,7 @@ export async function auditPartyConsistency(): Promise<
         currentPartyId: p.currentPartyId,
         expectedPartyId,
         currentPartyName: p.currentParty?.shortName ?? null,
-        expectedPartyName: p.partyHistory[0]?.party.shortName ?? null,
+        expectedPartyName: expected?.party.shortName ?? null,
       });
     }
   }

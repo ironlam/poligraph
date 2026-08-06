@@ -46,6 +46,8 @@ import {
   findCurrentOpenMembership,
   OPEN_MEMBERSHIP_ORDER_BY,
   setCurrentParty,
+  syncAllCurrentParties,
+  auditPartyConsistency,
 } from "@/services/politician";
 
 beforeEach(() => {
@@ -200,5 +202,98 @@ describe("setCurrentParty", () => {
     expect(h.membershipCreate).not.toHaveBeenCalled();
     expect(h.membershipUpdate).not.toHaveBeenCalled();
     expect(result).toEqual({ membershipId: null, closedMembershipId: null });
+  });
+});
+
+describe("syncAllCurrentParties", () => {
+  it("leaves a currentPartyId that matches an open affiliation alone", async () => {
+    h.politicianFindMany.mockResolvedValue([
+      {
+        id: "pol_1",
+        currentPartyId: "p_main",
+        partyHistory: [
+          { partyId: "p_micro", party: { shortName: "MICRO" } },
+          { partyId: "p_main", party: { shortName: "MAIN" } },
+        ],
+      },
+    ]);
+
+    const result = await syncAllCurrentParties();
+
+    expect(h.politicianUpdate).not.toHaveBeenCalled();
+    expect(result).toEqual({ updated: 0, errors: [] });
+  });
+
+  it("repairs a currentPartyId that no longer matches any open affiliation", async () => {
+    h.politicianFindMany.mockResolvedValue([
+      {
+        id: "pol_1",
+        currentPartyId: "p_gone",
+        partyHistory: [{ partyId: "p_micro", party: { shortName: "MICRO" } }],
+      },
+    ]);
+
+    const result = await syncAllCurrentParties();
+
+    expect(h.politicianUpdate).toHaveBeenCalledWith({
+      where: { id: "pol_1" },
+      data: { currentPartyId: "p_micro" },
+    });
+    expect(result.updated).toBe(1);
+  });
+
+  it("clears currentPartyId when no affiliation is open", async () => {
+    h.politicianFindMany.mockResolvedValue([
+      { id: "pol_1", currentPartyId: "p_gone", partyHistory: [] },
+    ]);
+
+    await syncAllCurrentParties();
+
+    expect(h.politicianUpdate).toHaveBeenCalledWith({
+      where: { id: "pol_1" },
+      data: { currentPartyId: null },
+    });
+  });
+});
+
+describe("auditPartyConsistency", () => {
+  it("does not flag a parallel affiliation as an inconsistency", async () => {
+    h.politicianFindMany.mockResolvedValue([
+      {
+        id: "pol_1",
+        fullName: "Jeanne Exemple",
+        currentPartyId: "p_main",
+        currentParty: { shortName: "MAIN" },
+        partyHistory: [
+          { partyId: "p_micro", party: { shortName: "MICRO" } },
+          { partyId: "p_main", party: { shortName: "MAIN" } },
+        ],
+      },
+    ]);
+
+    expect(await auditPartyConsistency()).toEqual([]);
+  });
+
+  it("flags a currentPartyId that matches no open affiliation", async () => {
+    h.politicianFindMany.mockResolvedValue([
+      {
+        id: "pol_1",
+        fullName: "Jeanne Exemple",
+        currentPartyId: "p_gone",
+        currentParty: { shortName: "GONE" },
+        partyHistory: [{ partyId: "p_micro", party: { shortName: "MICRO" } }],
+      },
+    ]);
+
+    expect(await auditPartyConsistency()).toEqual([
+      {
+        politicianId: "pol_1",
+        fullName: "Jeanne Exemple",
+        currentPartyId: "p_gone",
+        expectedPartyId: "p_micro",
+        currentPartyName: "GONE",
+        expectedPartyName: "MICRO",
+      },
+    ]);
   });
 });
