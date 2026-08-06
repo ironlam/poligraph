@@ -48,6 +48,7 @@ import {
   setCurrentParty,
   syncAllCurrentParties,
   auditPartyConsistency,
+  removeParty,
 } from "@/services/politician";
 
 beforeEach(() => {
@@ -295,5 +296,30 @@ describe("auditPartyConsistency", () => {
         expectedPartyName: "MICRO",
       },
     ]);
+  });
+});
+
+describe("removeParty", () => {
+  it("closes only the affiliation of the current party", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: "p_main" });
+
+    await removeParty("pol_1", new Date("2026-02-01"));
+
+    expect(h.membershipUpdateMany).toHaveBeenCalledWith({
+      where: { politicianId: "pol_1", partyId: "p_main", endDate: null },
+      data: { endDate: new Date("2026-02-01") },
+    });
+    expect(h.politicianUpdate).toHaveBeenCalledWith({
+      where: { id: "pol_1" },
+      data: { currentPartyId: null },
+    });
+  });
+
+  it("closes nothing when there is no current party", async () => {
+    h.politicianFindUnique.mockResolvedValue({ currentPartyId: null });
+
+    await removeParty("pol_1", new Date("2026-02-01"));
+
+    expect(h.membershipUpdateMany).not.toHaveBeenCalled();
   });
 });

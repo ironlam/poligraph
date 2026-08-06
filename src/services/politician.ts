@@ -166,20 +166,31 @@ export async function setCurrentParty(
 }
 
 /**
- * Remove party affiliation from a politician.
+ * Remove the current party for a politician.
  *
- * This ends the current membership and sets currentPartyId to null.
+ * This closes the affiliation of the current party and sets currentPartyId to null.
+ * A politician can hold several open affiliations at once (a main party plus a
+ * micro-party), so we must specify partyId to close only the one backing currentPartyId.
  */
 export async function removeParty(politicianId: string, endDate: Date = new Date()): Promise<void> {
   await db.$transaction(async (tx) => {
-    // End current membership
-    await tx.partyMembership.updateMany({
-      where: {
-        politicianId,
-        endDate: null,
-      },
-      data: { endDate },
+    // Read inside the transaction: a politician can hold parallel open affiliations, and
+    // only the one backing currentPartyId is the party being removed.
+    const politician = await tx.politician.findUnique({
+      where: { id: politicianId },
+      select: { currentPartyId: true },
     });
+
+    if (politician?.currentPartyId) {
+      await tx.partyMembership.updateMany({
+        where: {
+          politicianId,
+          partyId: politician.currentPartyId,
+          endDate: null,
+        },
+        data: { endDate },
+      });
+    }
 
     // Clear currentPartyId
     await tx.politician.update({
