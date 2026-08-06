@@ -30,7 +30,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [highlightGroup, setHighlightGroup] = useState<string | null>(null);
 
-  const { seats, deputyMap, totalMisEnCause, totalCondamnes, totalDeputies } = useMemo(() => {
+  const { seats, deputyMap } = useMemo(() => {
     const activeGroups = groups.filter((g) => g.deputies.length > 0);
     const groupInputs = activeGroups.map((g) => ({
       code: g.code,
@@ -78,21 +78,30 @@ export function Hemicycle({ groups }: HemicycleProps) {
       }
     }
 
-    const total = seatPositions.length;
-    const deputies = [...dMap.values()];
-    const misEnCause = deputies.filter((d) => d.deputy.activeAffairCount > 0).length;
-    const condamnes = deputies.filter(
-      (d) => d.deputy.maxCertaintyLevel === "ETABLI" || d.deputy.maxCertaintyLevel === "PRONONCE"
-    ).length;
+    return { seats: seatPositions, deputyMap: dMap };
+  }, [groups]);
+
+  // Counts follow the legend: selecting a group without moving the numbers made
+  // the chart say "I am looking at one group" while the sentence below still
+  // described the whole chamber.
+  const summary = useMemo(() => {
+    const scoped = [...deputyMap.values()].filter(
+      (d) => !highlightGroup || d.groupCode === highlightGroup
+    );
+    const seatCount = highlightGroup
+      ? seats.filter((s) => s.groupCode === highlightGroup).length
+      : seats.length;
+    const selected = highlightGroup ? groups.find((g) => g.code === highlightGroup) : undefined;
 
     return {
-      seats: seatPositions,
-      deputyMap: dMap,
-      totalMisEnCause: misEnCause,
-      totalCondamnes: condamnes,
-      totalDeputies: total,
+      misEnCause: scoped.filter((d) => d.deputy.activeAffairCount > 0).length,
+      condamnes: scoped.filter(
+        (d) => d.deputy.maxCertaintyLevel === "ETABLI" || d.deputy.maxCertaintyLevel === "PRONONCE"
+      ).length,
+      seatCount,
+      groupLabel: selected ? selected.shortName || selected.code : null,
     };
-  }, [groups]);
+  }, [deputyMap, seats, highlightGroup, groups]);
 
   // Severity score → circle radius
   const radiusScale = useMemo(
@@ -138,7 +147,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         className="w-full h-auto"
         role="img"
-        aria-label={`Hémicycle de l'Assemblée nationale : ${totalMisEnCause} député${totalMisEnCause !== 1 ? "s" : ""} mis en cause dans une affaire judiciaire sur ${totalDeputies}`}
+        aria-label={`Hémicycle de l'Assemblée nationale : ${summary.misEnCause} député${summary.misEnCause !== 1 ? "s" : ""}${summary.groupLabel ? ` du groupe ${summary.groupLabel}` : ""} mis en cause dans une affaire judiciaire sur ${summary.seatCount}`}
         aria-describedby={descId}
       >
         {seats.map((seat, i) => {
@@ -252,6 +261,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
             key={g.code}
             className="flex items-center gap-1.5 text-xs hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded-sm"
             style={{ opacity: !highlightGroup || highlightGroup === g.code ? 1 : 0.4 }}
+            aria-pressed={highlightGroup === g.code}
             onClick={() => setHighlightGroup((prev) => (prev === g.code ? null : g.code))}
           >
             <span
@@ -265,18 +275,36 @@ export function Hemicycle({ groups }: HemicycleProps) {
       </div>
 
       {/* Summary stat */}
-      <p className="text-center text-sm text-muted-foreground mt-2">
-        <span className="font-semibold text-amber-600 dark:text-amber-400">{totalMisEnCause}</span>{" "}
-        député{totalMisEnCause !== 1 ? "s" : ""} mis en cause dans au moins une affaire judiciaire
-        sur <span className="font-semibold">{totalDeputies}</span>
-        {totalCondamnes > 0 && (
+      <p
+        className="text-center text-sm text-muted-foreground mt-2"
+        data-testid="hemicycle-summary"
+        aria-live="polite"
+      >
+        <span className="font-semibold text-amber-600 dark:text-amber-400">
+          {summary.misEnCause}
+        </span>{" "}
+        député{summary.misEnCause !== 1 ? "s" : ""}
+        {summary.groupLabel && ` du groupe ${summary.groupLabel}`} mis en cause dans au moins une
+        affaire judiciaire sur <span className="font-semibold">{summary.seatCount}</span>
+        {summary.condamnes > 0 && (
           <>
             {" "}
-            dont <span className="font-semibold">{totalCondamnes}</span> condamné
-            {totalCondamnes !== 1 ? "s" : ""}
+            dont <span className="font-semibold">{summary.condamnes}</span> condamné
+            {summary.condamnes !== 1 ? "s" : ""}
           </>
         )}
       </p>
+
+      {highlightGroup && (
+        <div className="mt-2 text-center">
+          <button
+            className="text-xs text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded-sm"
+            onClick={() => setHighlightGroup(null)}
+          >
+            Voir tous les groupes
+          </button>
+        </div>
+      )}
 
       {/* SR-only accessible table */}
       <table className="sr-only table-fixed" id={descId}>
