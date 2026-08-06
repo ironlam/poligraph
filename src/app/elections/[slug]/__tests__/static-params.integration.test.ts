@@ -1,11 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assertDisposableTestDb } from "@/test/disposable-db";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 
 // Deferred: both `@/lib/db` and `../page` throw at module load without DATABASE_URL.
 let db: typeof import("@/lib/db").db;
 let generateStaticParams: typeof import("../page").generateStaticParams;
 
-describe("elections/[slug] generateStaticParams", () => {
+describeIfDisposableDb("elections/[slug] generateStaticParams", () => {
   beforeAll(async () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));

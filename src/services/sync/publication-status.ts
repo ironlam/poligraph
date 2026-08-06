@@ -7,7 +7,7 @@
 
 import { db } from "@/lib/db";
 import { PublicationStatus } from "@/generated/prisma";
-import { STATUS_RULES } from "@/config/prominence";
+import { determineStatus, type PoliticianRow } from "./publication-status-rules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,70 +22,6 @@ export interface PublicationStatusStats {
   skippedOverride: number;
   unchanged: number;
   changes: Record<string, number>;
-}
-
-type PoliticianRow = {
-  id: string;
-  birthDate: Date | null;
-  deathDate: Date | null;
-  photoUrl: string | null;
-  biography: string | null;
-  publicationStatus: PublicationStatus;
-  statusOverride: boolean;
-  prominenceScore: number;
-  hasCurrentMandate: boolean;
-};
-
-// ---------------------------------------------------------------------------
-// Status determination
-// ---------------------------------------------------------------------------
-
-function determineStatus(p: PoliticianRow): PublicationStatus | null {
-  // Rule 1: Manual override — don't touch
-  if (p.statusOverride) return null;
-
-  const now = new Date();
-
-  // Rule 2: Deceased before 1958 → EXCLUDED
-  if (p.deathDate && p.deathDate.getFullYear() < STATUS_RULES.excludeDeathBeforeYear) {
-    return PublicationStatus.EXCLUDED;
-  }
-
-  // Rule 3: Born before 1920 AND no current mandate AND low score → EXCLUDED
-  if (
-    p.birthDate &&
-    p.birthDate.getFullYear() < STATUS_RULES.excludeBornBeforeYear &&
-    !p.hasCurrentMandate &&
-    p.prominenceScore < STATUS_RULES.publishThreshold
-  ) {
-    return PublicationStatus.EXCLUDED;
-  }
-
-  // Rule 4: Has current mandate → PUBLISHED
-  if (p.hasCurrentMandate) return PublicationStatus.PUBLISHED;
-
-  // Rule 5: High prominence AND has minimum data → PUBLISHED
-  if (p.prominenceScore >= STATUS_RULES.publishThreshold) {
-    if (!STATUS_RULES.minDataForPublished || p.photoUrl || p.biography) {
-      return PublicationStatus.PUBLISHED;
-    }
-  }
-
-  // Rule 6: Deceased > 10 years → ARCHIVED
-  if (p.deathDate) {
-    const yearsDeceased = (now.getTime() - p.deathDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-    if (yearsDeceased > STATUS_RULES.archiveDeathYears) {
-      return PublicationStatus.ARCHIVED;
-    }
-  }
-
-  // Rule 7: Low score AND no current mandate → ARCHIVED
-  if (p.prominenceScore < STATUS_RULES.archiveScoreThreshold && !p.hasCurrentMandate) {
-    return PublicationStatus.ARCHIVED;
-  }
-
-  // Rule 8: Default → DRAFT
-  return PublicationStatus.DRAFT;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +48,14 @@ export async function assignPublicationStatus(
         select: { id: true },
         take: 1,
       },
+      // Rule 3b needs to know whether we publish a judicial affair about this
+      // person. Restricted to DIRECT, matching how the prominence affairs score
+      // counts them: being merely mentioned is not a reason to publish a profile.
+      affairs: {
+        where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
 
@@ -130,6 +74,7 @@ export async function assignPublicationStatus(
       statusOverride: p.statusOverride,
       prominenceScore: p.prominenceScore,
       hasCurrentMandate: p.mandates.length > 0,
+      hasPublishedDirectAffair: p.affairs.length > 0,
     };
 
     const targetStatus = determineStatus(row);
