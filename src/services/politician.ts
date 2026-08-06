@@ -9,7 +9,7 @@
  */
 
 import { db } from "@/lib/db";
-import type { PartyRole } from "@/generated/prisma";
+import { Prisma, type PartyRole } from "@/generated/prisma";
 
 export interface SetPartyOptions {
   /** Start date of the new affiliation (defaults to now) */
@@ -18,6 +18,55 @@ export interface SetPartyOptions {
   endPreviousMembership?: boolean;
   /** Role in the party (defaults to MEMBRE) */
   role?: PartyRole;
+}
+
+/**
+ * Ordering used whenever we need "the most recent open affiliation".
+ *
+ * startDate is nullable and Postgres sorts NULLS FIRST on a descending order, so an
+ * affiliation with an unknown start date would otherwise be picked as the most recent
+ * one. createdAt breaks remaining ties deterministically.
+ */
+export const OPEN_MEMBERSHIP_ORDER_BY: Prisma.PartyMembershipOrderByWithRelationInput[] = [
+  { startDate: { sort: "desc", nulls: "last" } },
+  { createdAt: "desc" },
+];
+
+/** Minimal read surface, so this works with `db` and with a transaction client alike. */
+export type PartyMembershipReader = {
+  partyMembership: {
+    findFirst: (args: {
+      where: { politicianId: string; partyId?: string; endDate: null };
+      orderBy: Prisma.PartyMembershipOrderByWithRelationInput[];
+    }) => Promise<{ id: string; partyId: string; startDate: Date | null } | null>;
+  };
+};
+
+/**
+ * Which open affiliation is the one the current party points at.
+ *
+ * A politician can hold several open affiliations at once (a main party plus a
+ * micro-party). "The most recent open one" is therefore not a safe proxy for "the
+ * current party": promoting the wrong row silently rewrites a politician's displayed
+ * party. Deliberate editorial choices, carried by currentPartyId, win.
+ */
+export async function findCurrentOpenMembership(
+  politicianId: string,
+  currentPartyId: string | null,
+  client: PartyMembershipReader = db as unknown as PartyMembershipReader
+): Promise<{ id: string; partyId: string; startDate: Date | null } | null> {
+  if (currentPartyId) {
+    const matching = await client.partyMembership.findFirst({
+      where: { politicianId, partyId: currentPartyId, endDate: null },
+      orderBy: OPEN_MEMBERSHIP_ORDER_BY,
+    });
+    if (matching) return matching;
+  }
+
+  return client.partyMembership.findFirst({
+    where: { politicianId, endDate: null },
+    orderBy: OPEN_MEMBERSHIP_ORDER_BY,
+  });
 }
 
 /**
