@@ -24,6 +24,7 @@ import {
   reviewMeasureRevision,
   withdrawMeasure,
 } from "@/lib/measures/transitions";
+import { assertHubMeasureCandidacy } from "./_data/candidacy-eligibility";
 
 /**
  * The editorial actions of the moderation admin.
@@ -139,9 +140,20 @@ export async function createMeasureAction(input: {
   await assertAuthenticated();
 
   try {
+    // Server-side gate (#660): the candidacy must be 2027 + DECLARE + sourced. The election and
+    // politician come FROM the candidacy, not from the payload, so a stale or tampered form cannot
+    // bind the measure elsewhere.
+    const eligible = await assertHubMeasureCandidacy(input.candidacyId);
+    if (eligible.electionId !== input.electionId || eligible.politicianId !== input.politicianId) {
+      return {
+        ok: false,
+        message:
+          "La candidature sélectionnée ne correspond plus à cette élection ou ce politicien. Rechargez la page.",
+      };
+    }
     const { measureId } = await createMeasure({
-      politicianId: input.politicianId,
-      electionId: input.electionId,
+      politicianId: eligible.politicianId,
+      electionId: eligible.electionId,
       candidacyId: input.candidacyId,
       programEditionId: null,
       attribution: input.attribution,
