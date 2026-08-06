@@ -55,3 +55,44 @@ describe("createCandidacyPresidentialFromPickerSchema : source exigée pour DECL
     ).toBe(false);
   });
 });
+
+const declareSourced = {
+  ...declare,
+  sourceUrl: "https://example.org/annonce",
+  sourceLabel: "Discours du 1er mars",
+};
+
+/**
+ * declaredAt is optional for a DECLARE candidacy (correction 2026-08-06): a sourced declaration stays valid
+ * even when the exact announcement date is unknown. The schema must never inject a date on its own, and the
+ * date, when given, is neither a substitute for the source nor silently dropped.
+ */
+describe("createCandidacyPresidentialFromPickerSchema : declaredAt facultatif (correction 2026-08-06)", () => {
+  it("accepte une DECLARE sourcée sans declaredAt et n'invente aucune date", () => {
+    const result = createCandidacyPresidentialFromPickerSchema.safeParse(declareSourced);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.declaredAt).toBeUndefined();
+    }
+  });
+
+  it("conserve declaredAt quand il est fourni au format ISO", () => {
+    const result = createCandidacyPresidentialFromPickerSchema.safeParse({
+      ...declareSourced,
+      declaredAt: "2026-03-01T10:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.declaredAt).toBe("2026-03-01T10:00:00.000Z");
+    }
+  });
+
+  it("refuse une DECLARE avec declaredAt mais sans source : la date ne remplace pas la source", () => {
+    expect(
+      createCandidacyPresidentialFromPickerSchema.safeParse({
+        ...declare,
+        declaredAt: "2026-03-01T10:00:00.000Z",
+      }).success
+    ).toBe(false);
+  });
+});
