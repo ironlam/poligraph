@@ -112,6 +112,12 @@ export const NAV_SECONDARY: NavItem[] = [
     external: true,
     featureFlag: "BOUSSOLE_ENABLED",
   },
+  {
+    href: "/elections/presidentielle-2027",
+    label: "Présidentielle 2027",
+    icon: "vote",
+    description: "Candidats et positions pour l'élection présidentielle",
+  },
 ];
 
 /** @deprecated Use NAV_PRIMARY instead */
