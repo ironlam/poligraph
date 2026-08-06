@@ -43,6 +43,14 @@ export const addPartyMembershipSchema = z.object({
   role: z.enum(VALID_PARTY_ROLES).optional(),
 });
 
+export const createPartyMembershipSchema = z.object({
+  mode: z.enum(["closed", "succeeds", "parallel"]),
+  partyId: z.string().min(1),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  role: z.enum(VALID_PARTY_ROLES).nullable().optional(),
+});
+
 export const endPartyMembershipSchema = z.object({
   endDate: z.string().optional(),
 });
