@@ -47,7 +47,30 @@ const EMPTY_PARTY_FORM = {
 };
 const EMPTY_MEMBERSHIP_FORM = { startDate: "", endDate: "", role: "" };
 
-function formatDateDisplay(date: Date | null): string {
+interface OverlapWarning {
+  type: "OVERLAP";
+  partyId: string;
+  partyShortName: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+type AffiliationMode = "closed" | "succeeds" | "parallel";
+
+const EMPTY_ADD_FORM = {
+  partyId: "",
+  startDate: "",
+  endDate: "",
+  role: "",
+  openMode: "succeeds" as Exclude<AffiliationMode, "closed">,
+};
+
+function formatStartDate(date: Date | null): string {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("fr-FR");
+}
+
+function formatEndDate(date: Date | null): string {
   if (!date) return "En cours";
   return new Date(date).toLocaleDateString("fr-FR");
 }
@@ -87,6 +110,12 @@ export function EditablePartyCard({
 
   const [partyForm, setPartyForm] = useState({ ...EMPTY_PARTY_FORM });
   const [membershipForm, setMembershipForm] = useState({ ...EMPTY_MEMBERSHIP_FORM });
+
+  const [isAddingAffiliation, setIsAddingAffiliation] = useState(false);
+  const [addForm, setAddForm] = useState({ ...EMPTY_ADD_FORM });
+  // Kept out of `status`: useAdminMutation auto-clears status after 3 seconds, and an
+  // overlap notice has to outlive the green banner.
+  const [warnings, setWarnings] = useState<OverlapWarning[]>([]);
 
   // --- Section A: Change current party ---
 
@@ -165,6 +194,39 @@ export function EditablePartyCard({
     setConfirmDeleteMembershipId(null);
   }
 
+  const addMode: AffiliationMode = addForm.endDate ? "closed" : addForm.openMode;
+  const canSubmitAdd =
+    Boolean(addForm.partyId) && (addMode !== "succeeds" || Boolean(addForm.startDate));
+
+  function cancelAddAffiliation() {
+    setIsAddingAffiliation(false);
+    setAddForm({ ...EMPTY_ADD_FORM });
+  }
+
+  async function handleAddAffiliation() {
+    setWarnings([]);
+
+    const body: Record<string, string> = { mode: addMode, partyId: addForm.partyId };
+    if (addForm.startDate) body.startDate = addForm.startDate;
+    if (addForm.endDate) body.endDate = addForm.endDate;
+    if (addForm.role) body.role = addForm.role;
+
+    const response = await mutate(`/api/admin/politiques/${politicianId}/party-membership`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      successMessage: "Affiliation ajoutée",
+    });
+
+    if (!response) return;
+
+    const payload = (await response.json().catch(() => ({ warnings: [] }))) as {
+      warnings?: OverlapWarning[];
+    };
+    setWarnings(payload.warnings ?? []);
+    setIsAddingAffiliation(false);
+    setAddForm({ ...EMPTY_ADD_FORM });
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -183,6 +245,29 @@ export function EditablePartyCard({
             }
           >
             {status.message}
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-md bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            <p className="font-medium">Chevauchements détectés</p>
+            <ul className="mt-1 list-disc pl-5">
+              {warnings.map((warning, index) => (
+                <li key={index}>
+                  {warning.partyShortName} (
+                  {formatStartDate(warning.startDate ? new Date(warning.startDate) : null)} à{" "}
+                  {formatEndDate(warning.endDate ? new Date(warning.endDate) : null)})
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1">
+              L&apos;affiliation a bien été enregistrée. Vérifiez les dates si ce n&apos;est pas
+              voulu.
+            </p>
           </div>
         )}
 
@@ -305,9 +390,151 @@ export function EditablePartyCard({
 
         {/* Section B: Historique des affiliations */}
         <div>
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Historique des affiliations
-          </h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Historique des affiliations
+            </h2>
+            {!isAddingAffiliation && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsAddingAffiliation(true);
+                  setWarnings([]);
+                  clearStatus();
+                }}
+              >
+                Ajouter une affiliation
+              </Button>
+            )}
+          </div>
+
+          {isAddingAffiliation && (
+            <div className="mb-4 space-y-3 rounded-lg border p-4">
+              <div>
+                <Label htmlFor="add-party">Parti de l&apos;affiliation</Label>
+                <Select
+                  id="add-party"
+                  value={addForm.partyId}
+                  onChange={(e) => setAddForm((prev) => ({ ...prev, partyId: e.target.value }))}
+                >
+                  <option value="">— Sélectionner un parti —</option>
+                  {allParties.map((party) => (
+                    <option key={party.id} value={party.id}>
+                      {party.shortName} — {party.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor="add-start">Date de début de l&apos;affiliation</Label>
+                  <Input
+                    id="add-start"
+                    type="date"
+                    value={addForm.startDate}
+                    onChange={(e) => setAddForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="add-end">Date de fin de l&apos;affiliation</Label>
+                  <Input
+                    id="add-end"
+                    type="date"
+                    value={addForm.endDate}
+                    onChange={(e) => setAddForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Laisser vide si l&apos;affiliation est toujours en cours.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="add-role">Rôle dans l&apos;affiliation</Label>
+                  <Select
+                    id="add-role"
+                    value={addForm.role}
+                    onChange={(e) => setAddForm((prev) => ({ ...prev, role: e.target.value }))}
+                  >
+                    <option value="">— Aucun —</option>
+                    {Object.entries(PARTY_ROLE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              {!addForm.endDate && (
+                <fieldset className="space-y-2 rounded-md border p-3">
+                  <legend className="px-1 text-xs font-medium text-muted-foreground">
+                    Affiliation en cours
+                  </legend>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="add-open-mode"
+                      value="succeeds"
+                      checked={addForm.openMode === "succeeds"}
+                      onChange={() => setAddForm((prev) => ({ ...prev, openMode: "succeeds" }))}
+                      className="mt-1"
+                    />
+                    <span>
+                      Ce parti devient le parti actuel
+                      {currentParty && (
+                        <span className="block text-xs text-muted-foreground">
+                          L&apos;affiliation à {currentParty.shortName || currentParty.name} sera
+                          clôturée
+                          {addForm.startDate
+                            ? ` le ${new Date(addForm.startDate).toLocaleDateString("fr-FR")}`
+                            : ""}
+                          .
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                  {currentParty && (
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="radio"
+                        name="add-open-mode"
+                        value="parallel"
+                        checked={addForm.openMode === "parallel"}
+                        onChange={() => setAddForm((prev) => ({ ...prev, openMode: "parallel" }))}
+                        className="mt-1"
+                      />
+                      <span>
+                        Affiliation en parallèle
+                        <span className="block text-xs text-muted-foreground">
+                          Le parti actuel reste {currentParty.shortName || currentParty.name}, rien
+                          n&apos;est clôturé.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                </fieldset>
+              )}
+
+              <div className="flex items-center gap-3">
+                <Button
+                  size="sm"
+                  onClick={handleAddAffiliation}
+                  disabled={loading || !canSubmitAdd}
+                >
+                  {loading ? "Enregistrement..." : "Ajouter"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelAddAffiliation}
+                  disabled={loading}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
 
           {partyHistory.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
@@ -458,8 +685,8 @@ function MembershipRow({
       <td className="py-2 pr-3">
         <Badge variant="outline">{roleLabel}</Badge>
       </td>
-      <td className="py-2 pr-3">{formatDateDisplay(membership.startDate)}</td>
-      <td className="py-2 pr-3">{formatDateDisplay(membership.endDate)}</td>
+      <td className="py-2 pr-3">{formatStartDate(membership.startDate)}</td>
+      <td className="py-2 pr-3">{formatEndDate(membership.endDate)}</td>
       <td className="py-2">
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 text-xs">

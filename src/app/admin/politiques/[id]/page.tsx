@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { OPEN_MEMBERSHIP_ORDER_BY } from "@/services/politician";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ async function getPolitician(id: string) {
         },
       },
       partyHistory: {
-        orderBy: { startDate: "desc" },
+        orderBy: OPEN_MEMBERSHIP_ORDER_BY,
         include: {
           party: {
             select: { id: true, name: true, shortName: true, color: true },
