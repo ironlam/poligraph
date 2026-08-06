@@ -29,12 +29,14 @@ pas encore dans le modèle : voir les arbitrages en fin de document.
 
 ### Ce qui vaut déclaration
 
-Une candidature passe à `DECLARE` sur un **acte public de la personne elle-même** : un discours, un
-communiqué, une interview où elle dit qu'elle est candidate. Trois conditions, toutes vérifiables :
+Une candidature passe à `DECLARE` lorsqu'un acte public explicite de la personne est établi par une
+source. La date de déclaration est enregistrée dans `declaredAt` lorsqu'elle peut être déterminée de
+manière fiable ; son absence n'invalide pas la déclaration et ne doit jamais être compensée par une date
+supposée.
 
-1. l'acte émane de l'intéressée, pas d'un tiers ;
-2. il est sourcé, `sourceUrl` et `sourceLabel` renseignés ;
-3. sa date est enregistrée dans `declaredAt`.
+Cet acte est un geste de l'intéressée, pas d'un tiers : un discours, un communiqué, une interview où elle
+se dit candidate. La source qui l'établit renseigne `sourceUrl` et `sourceLabel` ; une candidature
+`DECLARE` sans source est un état interdit (voir « Date et source »).
 
 La source de référence est **primaire** : les mots de la personne. Un article de presse qui rapporte
 l'annonce est une source secondaire acceptable en second, jamais à la place de la source primaire quand
@@ -64,9 +66,12 @@ statut, jamais confondue avec lui.
 
 ### Date et source
 
-La date de déclaration vit dans `CandidacyPresidential.declaredAt`, la source dans `Candidacy.sourceUrl`
-et `Candidacy.sourceLabel`. Une candidature `DECLARE` sans source est un état interdit par cette doctrine :
-la source est la condition du statut, pas un ornement.
+La source vit dans `Candidacy.sourceUrl` et `Candidacy.sourceLabel`, la date de déclaration dans
+`CandidacyPresidential.declaredAt`. Les deux ne pèsent pas pareil. La source est la condition du statut :
+une candidature `DECLARE` sans source est un état interdit par cette doctrine, la source n'est pas un
+ornement. `declaredAt` est facultatif : on le renseigne quand la date de l'annonce est établie de manière
+fiable, on le laisse vide sinon. On ne le remplit jamais d'office avec la date du jour, la date de
+création de la fiche ou la date de publication de la source.
 
 ### Corriger ou retirer
 
