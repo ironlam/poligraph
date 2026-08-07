@@ -17,6 +17,7 @@ import {
   CandidateIntegrity,
   CandidateRecentVotes,
   CandidateStats,
+  CandidateSynthesis,
   CandidateThemeSpread,
   CandidateThemes,
 } from "./_components/CandidateFicheBlocks";
@@ -125,6 +126,12 @@ export default async function CandidateFichePage({ params }: PageProps) {
           </a>
         </p>
       </header>
+
+      <CandidateSynthesis
+        synthesis={candidacy.synthesis}
+        generatedAt={candidacy.synthesisGeneratedAt}
+        measureCount={candidacy.publishedMeasureCount}
+      />
 
       <CandidateStats
         measureCount={candidacy.publishedMeasureCount}

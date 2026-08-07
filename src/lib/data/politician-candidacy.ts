@@ -39,6 +39,9 @@ export type PoliticianCandidacy = {
   sourceLabel: string;
   declaredAt: Date | null;
   withdrewAt: Date | null;
+  /** Generated summary of this candidacy, null until a generation pass has produced one. */
+  synthesis: string | null;
+  synthesisGeneratedAt: Date | null;
   publishedMeasureCount: number;
   themesCoveredCount: number;
   primarySourceMeasureCount: number;
@@ -77,7 +80,14 @@ export async function loadPoliticianPresidentialCandidacy(
       election: {
         select: { slug: true, title: true, shortTitle: true, round1Date: true, round2Date: true },
       },
-      presidentialData: { select: { declaredAt: true, withdrewAt: true } },
+      presidentialData: {
+        select: {
+          declaredAt: true,
+          withdrewAt: true,
+          synthesis: true,
+          synthesisGeneratedAt: true,
+        },
+      },
     },
   });
 
@@ -100,6 +110,8 @@ export async function loadPoliticianPresidentialCandidacy(
     sourceLabel: row.sourceLabel,
     declaredAt: row.presidentialData?.declaredAt ?? null,
     withdrewAt: row.presidentialData?.withdrewAt ?? null,
+    synthesis: row.presidentialData?.synthesis ?? null,
+    synthesisGeneratedAt: row.presidentialData?.synthesisGeneratedAt ?? null,
     publishedMeasureCount: stats.measureCount,
     themesCoveredCount: stats.themesCoveredCount,
     primarySourceMeasureCount: stats.primarySourceMeasureCount,

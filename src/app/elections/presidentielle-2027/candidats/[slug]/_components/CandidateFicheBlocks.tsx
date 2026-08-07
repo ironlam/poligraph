@@ -14,6 +14,48 @@ import { formatDate } from "@/lib/utils";
  * would mean inventing a link the data does not carry.
  */
 
+/**
+ * The generated synthesis, when there is one.
+ *
+ * It renders above everything it summarises, and says so in the same breath: the
+ * reader is told the text is generated, from what, and when, before reading a word
+ * of it. That ordering is the point. A summary of someone's programme placed on
+ * their page during a campaign is only defensible if the reader can immediately see
+ * what it was built from, and the blocks below this one are exactly that.
+ *
+ * `whitespace-pre-line` because the model is asked for two paragraphs and the blank
+ * line between them is the only thing separating the career from the programme.
+ */
+export function CandidateSynthesis({
+  synthesis,
+  generatedAt,
+  measureCount,
+}: {
+  synthesis: string | null;
+  generatedAt: Date | null;
+  measureCount: number;
+}) {
+  if (synthesis === null) return null;
+
+  return (
+    <section
+      aria-labelledby="synthese-titre"
+      className="rounded-xl border border-border bg-muted/40 px-5 py-4"
+    >
+      <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
+        En résumé
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Texte généré à partir des mandats, des votes et des{" "}
+        {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
+        {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
+        information qui ne figure sur cette page.
+      </p>
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{synthesis}</p>
+    </section>
+  );
+}
+
 export function CandidateStats({
   measureCount,
   themesCoveredCount,

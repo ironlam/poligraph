@@ -1868,6 +1868,18 @@ model CandidacyPresidential {
   rank  Int?
   notes String? @db.Text
 
+  // Generated summary of the candidacy, written from what this site already holds:
+  // the mandates and votes on the politician's record, and the measures we have
+  // published for this candidacy. It asserts nothing the reader cannot check on the
+  // same page, which is why it lives beside the candidacy rather than on Politician:
+  // it is about a run for office, not about a person.
+  //
+  // Two fields rather than one, mirroring Politician.biography: the date is what tells
+  // a reader how stale the text is, and what tells a regeneration pass which rows have
+  // fallen behind the measures they summarise.
+  synthesis            String?   @db.Text
+  synthesisGeneratedAt DateTime?
+
   publicationStatus PublicationStatus @default(DRAFT)
 
   createdAt DateTime @default(now())
