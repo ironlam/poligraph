@@ -9,8 +9,10 @@ import { getAllThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
-import { isHubPublishable } from "@/config/publication-gates";
+import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { getPublicPresidentialCandidates } from "@/lib/data/presidential-candidates-public";
+import { getPublicMeasureStatsByCandidacy } from "@/lib/data/measures";
 import {
   SIGNIFICANT_MANDATE_TYPES,
   MAIRE_MIN_COMMUNE_POPULATION,
@@ -417,6 +419,36 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       priority: 0.7,
     }));
 
+  // Candidate fiches, only above their own publication gate (spec §4.1, indexation §4.2). The route
+  // redirects to /politiques/[slug] below the gate, so announcing an unpublishable slug would spend
+  // crawl budget on a redirect.
+  //
+  // Known freshness limit, and NOT an oversight: SITEMAP_SHARD_TAGS[1] is
+  // ["affairs", "parties", "elections"], while publishing a measure or an extension busts
+  // `election-measures:<id>` / `election-candidacies:<id>`. Neither is in that list, so this shard
+  // refreshes on its cacheLife rather than on the write. The condition is pre-existing and identical
+  // for the hub URL above, whose `presidentielleHubPublishable` guard already reads the themes index.
+  // Fixing it means making a parameterised tag selectable, which is its own chantier.
+  const candidateFichePages: MetadataRoute.Sitemap = [];
+  if (presidentielle2027 !== undefined) {
+    const candidates = await getPublicPresidentialCandidates(PRESIDENTIELLE_2027_SLUG);
+    for (const candidate of candidates) {
+      if (candidate.politicianSlug === null) continue;
+      const stats = await getPublicMeasureStatsByCandidacy(candidate.id);
+      const publishable = isFicheCandidatPublishable({
+        statusSourced: candidate.sourceUrl !== null && candidate.sourceLabel !== null,
+        verifiedMeasuresWithPrimarySource: stats.primarySourceMeasureCount,
+      });
+      if (!publishable) continue;
+      candidateFichePages.push({
+        url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/candidats/${candidate.politicianSlug}`,
+        lastModified: stats.lastReviewedAt ?? new Date(),
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+      });
+    }
+  }
+
   const departmentPages: MetadataRoute.Sitemap = Object.values(DEPARTMENTS).map((dept) => ({
     url: `${SITE_URL}/departements/${getDepartmentSlug(dept.name)}`,
     lastModified: new Date(),
@@ -445,6 +477,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...partyPages,
     ...partyAffairPages,
     ...electionPages,
+    ...candidateFichePages,
     ...departmentPages,
     ...themePages,
   ];

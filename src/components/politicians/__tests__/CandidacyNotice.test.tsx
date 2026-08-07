@@ -28,10 +28,20 @@ const base: PoliticianCandidacy = {
 function renderNotice(
   candidacy: PoliticianCandidacy = base,
   civility: string | null = null,
-  now: Date = BEFORE
+  now: Date = BEFORE,
+  ficheHref: string | null = null
 ) {
-  return render(<CandidacyNotice candidacy={candidacy} civility={civility} now={now} />);
+  return render(
+    <CandidacyNotice candidacy={candidacy} civility={civility} now={now} ficheHref={ficheHref} />
+  );
 }
+
+const publishable: PoliticianCandidacy = {
+  ...base,
+  publishedMeasureCount: 27,
+  themesCoveredCount: 9,
+  primarySourceMeasureCount: 20,
+};
 
 describe("CandidacyNotice", () => {
   it("féminise le titre selon la civilité", () => {
@@ -174,6 +184,31 @@ describe("CandidacyNotice", () => {
 
     renderNotice({ ...base, status: "PRESSENTI" }, null);
     expect(screen.getByText("Parmi les candidatures possibles")).toBeInTheDocument();
+  });
+
+  it("pointe vers la fiche candidat quand elle est publiable", () => {
+    renderNotice(
+      publishable,
+      "Mme",
+      BEFORE,
+      "/elections/presidentielle-2027/candidats/camille-riviere"
+    );
+
+    expect(screen.getByRole("link", { name: /Son programme, sujet par sujet/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/candidats/camille-riviere"
+    );
+  });
+
+  it("abandonne le possessif quand la destination est le hub et pas sa fiche", () => {
+    // The destination lists every candidacy, so promising "son programme" would not be honest.
+    renderNotice(publishable, "Mme", BEFORE, null);
+
+    expect(screen.getByRole("link", { name: /Le dossier, sujet par sujet/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027"
+    );
+    expect(screen.queryByText(/Son programme, sujet par sujet/)).not.toBeInTheDocument();
   });
 
   it("garde le traitement du retrait après l'élection", () => {

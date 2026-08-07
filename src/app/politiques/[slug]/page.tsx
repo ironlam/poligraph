@@ -44,6 +44,7 @@ import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
 import { DeepLinkHighlighter } from "@/components/politicians/DeepLinkHighlighter";
 import { CandidacyNotice } from "@/components/politicians/CandidacyNotice";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
+import { isFicheCandidatPublishable } from "@/config/publication-gates";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -190,6 +191,16 @@ export default async function PoliticianPage({ params }: PageProps) {
   // the notice sayable: there is no "we are not sure" state, the block simply does not appear.
   const presidentialCandidacy = await getPoliticianPresidentialCandidacy(politician.id);
   const now = new Date();
+  // Null below the gate, where the fiche route redirects back here: the notice then points at the
+  // hub and drops its possessive wording rather than promising a page that bounces.
+  const ficheHref =
+    presidentialCandidacy !== null &&
+    isFicheCandidatPublishable({
+      statusSourced: true,
+      verifiedMeasuresWithPrimarySource: presidentialCandidacy.primarySourceMeasureCount,
+    })
+      ? `/elections/${presidentialCandidacy.electionSlug}/candidats/${politician.slug}`
+      : null;
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
   const currentGroup = (
@@ -465,6 +476,7 @@ export default async function PoliticianPage({ params }: PageProps) {
               candidacy={presidentialCandidacy}
               civility={politician.civility}
               now={now}
+              ficheHref={ficheHref}
             />
           </div>
         )}

@@ -27,6 +27,14 @@ interface CandidacyNoticeProps {
   /** Drives the gender of the notice title. */
   civility: string | null;
   now: Date;
+  /**
+   * Target of the state-A footer link. Null when the fiche is below its publication gate, in which
+   * case the footer falls back to the hub rather than to a page that redirects.
+   *
+   * The distinction matters for the wording as much as for the destination: "Son programme" leads to
+   * her programme when the fiche exists, and to a six-candidate page when it does not.
+   */
+  ficheHref: string | null;
 }
 
 /** French percentage: comma as decimal separator, one decimal, non-breaking space before %. */
@@ -44,7 +52,7 @@ function plural(count: number, singular: string): string {
   return `${count} ${singular}${count > 1 ? "s" : ""}`;
 }
 
-export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticeProps) {
+export function CandidacyNotice({ candidacy, civility, now, ficheHref }: CandidacyNoticeProps) {
   const state = deriveCandidacyNoticeState(candidacy, now);
   const hubHref = `/elections/${candidacy.electionSlug}`;
   const accented = state.kind === "DECLARED_WITH_MEASURES" || state.kind === "DECLARED_EMPTY";
@@ -85,10 +93,10 @@ export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticePro
   const footer =
     state.kind === "DECLARED_WITH_MEASURES"
       ? {
-          // Until the candidate fiche route exists (PR C), the hub is the destination. The link
-          // announces the volume either way, so the reader knows what they will find.
-          href: hubHref,
-          label: "Son programme, sujet par sujet",
+          href: ficheHref ?? hubHref,
+          // The possessive wording is only honest when the destination is the person's own fiche.
+          // Without it the link lands on a page listing every candidacy, so it says so.
+          label: ficheHref ? "Son programme, sujet par sujet" : "Le dossier, sujet par sujet",
           detail: `${plural(candidacy.publishedMeasureCount, "mesure")} sur ${plural(candidacy.themesCoveredCount, "sujet")}${
             candidacy.lastReviewedAt ? ` · revue le ${formatDate(candidacy.lastReviewedAt)}` : ""
           }`,
