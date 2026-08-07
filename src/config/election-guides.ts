@@ -199,3 +199,20 @@ export const ELECTION_GUIDES: Partial<Record<ElectionType, ElectionGuideSection[
     },
   ],
 };
+
+/**
+ * Deadline to register on the electoral roll, per election, when a decree has actually set one.
+ *
+ * Absent by design for présidentielle 2027: the decree has not been published, and inventing a date
+ * would be worse than omitting the reminder. The banner renders the reminder only when a deadline
+ * exists AND has not passed.
+ */
+const VOTER_REGISTRATION_DEADLINES: Record<string, Date> = {
+  "municipales-2026": new Date("2026-02-07T00:00:00.000Z"),
+};
+
+export function getVoterRegistrationDeadline(electionSlug: string, now: Date): Date | null {
+  const deadline = VOTER_REGISTRATION_DEADLINES[electionSlug];
+  if (!deadline) return null;
+  return deadline.getTime() > now.getTime() ? deadline : null;
+}
