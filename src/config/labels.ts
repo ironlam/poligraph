@@ -1440,6 +1440,17 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
   RETIRE: "Candidature retirée",
 };
 
+/**
+ * The candidacy notice's title is a ROLE, so it agrees in gender with `civility`.
+ *
+ * Not routed through `feminizePartyRole`: that helper is a closed replacement table over four party
+ * role labels and "Candidat" is not one of them. Extending it would make it a general feminiser it
+ * was never designed to be.
+ */
+export function candidacyRoleLabel(civility: string | null | undefined): string {
+  return civility === "Mme" ? "Candidate à la présidentielle" : "Candidat à la présidentielle";
+}
+
 // ---------------------------------------------------------------------------
 // Mesures : le modèle éditorial versionné du hub présidentielle (lot 1 et 2).
 // ---------------------------------------------------------------------------
