@@ -259,4 +259,71 @@ describe("SubjectComparison", () => {
       "/elections/presidentielle-2027#candidatures"
     );
   });
+
+  it("n'affirme rien sur la carrière d'un candidat sans mesure sur le sujet", () => {
+    // Régression : la cellule vote rendait « N'a jamais siégé » dès que le thème était vide, une
+    // affirmation sur un parcours déduite de l'absence de mesure sur UN sujet. Faux pour tous ceux
+    // qui ont siégé, et indéductible de ce que cette page lit.
+    const { container } = render(
+      <SubjectComparison data={data({ candidates: [entry("Chloe", [])] })} />
+    );
+
+    expect(container.querySelector('[data-absence-kind="never_sat"]')).toBeNull();
+    expect(screen.queryByText(/jamais siégé/i)).not.toBeInTheDocument();
+    expect(
+      container.querySelectorAll('[data-absence-kind="not_applicable"]').length
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Pas de mesure publiée à rapprocher d'un scrutin/).length).toBe(2);
+  });
+
+  it("ne dit jamais d'une mesure publiée qu'elle n'est pas relue", () => {
+    // Une mesure n'est publique que si `reviewedAt` est renseigné : « Pas encore relu » y
+    // contredirait le prédicat qui l'a rendue visible. Une précision nulle se dit pour ce qu'elle
+    // est, une qualification manquante.
+    const { container } = render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [subjectMeasure(measure({ precision: null }), "SEARCH_NOT_DONE")]),
+          ],
+        })}
+      />
+    );
+
+    expect(container.querySelector('[data-absence-kind="not_reviewed"]')).toBeNull();
+    expect(screen.queryByText(/Pas encore relu/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Précision non renseignée").length).toBe(2);
+  });
+
+  it("ne compte pas une mesure retirée comme une mesure portée", () => {
+    // `entry.measures` inclut volontairement les retraits. Une candidature dont tout est retiré ne
+    // « porte » plus rien, et le compteur de l'autorité (candidaciesWithVerifiedMeasure) est seul
+    // à faire cette distinction.
+    const retiree = measure({
+      id: "m-out",
+      withdrawal: {
+        withdrawnAt: new Date("2027-03-01T00:00:00Z"),
+        sourceUrl: null,
+        sourceLabel: null,
+      },
+    });
+    render(
+      <SubjectComparison
+        data={data({
+          candidaciesWithVerifiedMeasure: 1,
+          totalMeasuresOnTheme: 1,
+          candidates: [
+            entry("Alix", [subjectMeasure(measure({ id: "m-in" }), "SEARCH_NOT_DONE")]),
+            entry("Chloe", [subjectMeasure(retiree, "SEARCH_NOT_DONE")]),
+          ],
+        })}
+      />
+    );
+
+    // Une seule candidature porte encore une mesure, pas deux.
+    expect(screen.getByText(/1 candidature porte une mesure sur ce sujet/)).toBeInTheDocument();
+    expect(screen.getByText(/réparties entre 1 candidature/)).toBeInTheDocument();
+    // Et sous le nom de celle dont la mesure est retirée, le compte tombe à zéro.
+    expect(screen.getAllByText(/aucune mesure sur ce sujet/).length).toBe(2);
+  });
 });

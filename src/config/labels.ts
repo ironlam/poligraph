@@ -1514,6 +1514,15 @@ export const MEASURE_PRECISION_LABELS: Record<MeasurePrecision, string> = {
   OBJECTIF_SANS_CHIFFRE: "Objectif sans chiffre",
 };
 
+// Deliberately NOT a green/amber pair. A traffic light reads as a verdict, and a measure carrying a
+// figure is not a better measure than one stating an objective: it is a different kind of statement,
+// and grading it would be the ranking this site does not do. Same neutral slate as the vote
+// relations that state no position, distinguished by weight rather than by hue.
+export const MEASURE_PRECISION_PILL_CLASS: Record<MeasurePrecision, string> = {
+  CHIFFREE: "bg-[#6b7078] text-white",
+  OBJECTIF_SANS_CHIFFRE: "border border-border text-muted-foreground",
+};
+
 export const MEASURE_EXTRACTION_METHOD_LABELS: Record<MeasureExtractionMethod, string> = {
   MANUAL: "Saisie manuelle",
   AI_ASSISTED: "Assistée par IA",

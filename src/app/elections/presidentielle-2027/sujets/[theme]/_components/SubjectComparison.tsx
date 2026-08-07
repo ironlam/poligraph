@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
   CHAMBER_SHORT_LABELS,
-  MEASURE_PRECISION_LABELS,
   MEASURE_SOURCE_KIND_LABELS,
   SOURCE_TIER_LABELS,
   THEME_ACCENT_BAR,
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
+import { MeasurePrecisionBadge } from "@/components/measures/MeasurePrecisionBadge";
 import { QualifiedEmptyCell } from "@/components/measures/QualifiedEmptyCell";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import type { ThemeCategory } from "@/generated/prisma";
@@ -133,9 +133,25 @@ function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: T
   );
 }
 
+/**
+ * Both cells describe THE MEASURE, so with no measure they have no subject to describe.
+ *
+ * The absence they state has to stay about this cell. An earlier version answered "N'a jamais
+ * siégé", which is a claim about a career derived from the emptiness of one theme: false for
+ * everyone who has sat, and not deducible from anything this page reads.
+ */
 function VoteCell({ entry }: { entry: SubjectCandidateEntry }) {
   const first = entry.measures[0];
-  if (first === undefined) return <QualifiedEmptyCell absence={{ kind: "never_sat" }} />;
+  if (first === undefined) {
+    return (
+      <QualifiedEmptyCell
+        absence={{
+          kind: "not_applicable",
+          reason: "Pas de mesure publiée à rapprocher d'un scrutin",
+        }}
+      />
+    );
+  }
   return (
     <VoteRelationBadge
       relation={first.voteRelation}
@@ -146,27 +162,32 @@ function VoteCell({ entry }: { entry: SubjectCandidateEntry }) {
   );
 }
 
+/**
+ * Nothing at all when there is no measure: the proposal cell on the same row already says no measure
+ * is published, and repeating it in a second column adds a line without adding a fact.
+ *
+ * A null precision is NOT "pas encore relu". Publication requires `reviewedAt` to be set
+ * (`PUBLIC_MEASURE_WHERE`), so a visible measure has been reviewed by construction and that label
+ * would contradict the very predicate that let the row appear.
+ */
 function PrecisionCell({ entry }: { entry: SubjectCandidateEntry }) {
   const first = entry.measures[0];
-  if (first === undefined || first.measure.precision === null) {
-    return <QualifiedEmptyCell absence={{ kind: "not_reviewed" }} />;
+  if (first === undefined) return null;
+  if (first.measure.precision === null) {
+    return (
+      <QualifiedEmptyCell
+        absence={{ kind: "not_applicable", reason: "Précision non renseignée" }}
+      />
+    );
   }
-  const precise = first.measure.precision === "CHIFFREE";
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-        precise
-          ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-          : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-      }`}
-    >
-      {MEASURE_PRECISION_LABELS[first.measure.precision]}
-    </span>
-  );
+  return <MeasurePrecisionBadge precision={first.measure.precision} />;
 }
 
 function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
   const { candidate, measures } = entry;
+  // Currently defended, not "ever published". `measures` includes withdrawals so the proposal cell
+  // can show them with their withdrawal line; this count says what the candidacy still stands on.
+  const defended = measures.filter((m) => m.measure.withdrawal === null).length;
   return (
     <span className="flex items-start gap-2.5">
       <span
@@ -188,9 +209,9 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
         )}
         <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
           {candidate.partyLabel !== null && <>{candidate.partyLabel} · </>}
-          {measures.length === 0
+          {defended === 0
             ? "aucune mesure sur ce sujet"
-            : `${measures.length} ${measures.length === 1 ? "mesure" : "mesures"} sur ce sujet`}
+            : `${defended} ${defended === 1 ? "mesure" : "mesures"} sur ce sujet`}
         </span>
       </span>
     </span>
@@ -210,18 +231,26 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
  * is linked to a measure.
  */
 const COLUMNS = [
-  { title: "Candidat·e", hint: "Ordre alphabétique" },
-  { title: "Ce qu'il ou elle propose", hint: "Phrase citée du programme" },
+  { title: "Candidat·e", hint: "Par nom de famille" },
+  // Not "du programme": a measure with no `programEditionId` was taken from a speech, an interview
+  // or an article, and the source line under each quote names which.
+  { title: "Ce qu'il ou elle propose", hint: "Phrase citée, avec sa source" },
   {
     title: "Déjà soumis au vote ?",
     hint: "Seulement si un texte proche a été voté et que la personne siégeait",
   },
-  { title: "Précision de la mesure", hint: "Chiffrée, datée, financée" },
+  // The enum holds two values, "Chiffrée" and "Objectif sans chiffre". There is no dated or funded
+  // criterion anywhere in the model, so naming them here promised a qualification we never make.
+  { title: "Précision de la mesure", hint: "Chiffrée ou objectif sans chiffre" },
 ];
 
 export function SubjectComparison({ data }: { data: SubjectPageData }) {
   const themeLabel = THEME_CATEGORY_LABELS[data.theme];
-  const documented = data.candidates.filter((c) => c.measures.length > 0).length;
+  // From the authority, not recomputed here. `entry.measures` carries withdrawn measures on purpose
+  // (`includeWithdrawn: true`), so counting rows with `measures.length > 0` would say a candidacy
+  // "porte une mesure" when every one of them has been withdrawn. The data layer already made that
+  // distinction on `withdrawal === null`, and it is the same distinction `totalMeasuresOnTheme` uses.
+  const documented = data.candidaciesWithVerifiedMeasure;
   const withoutMeasure = data.candidates.length - documented;
 
   return (
@@ -338,7 +367,7 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
         <table className="w-full min-w-[860px] table-fixed border-collapse text-left">
           <caption className="sr-only">
             Ce que chaque candidature propose sur {THEME_CATEGORY_LABELS[data.theme]}, avec sa
-            source, sa relation aux votes, la fonction exercée et la précision de la mesure.
+            source, sa relation aux votes et la précision de la mesure.
           </caption>
           <colgroup>
             <col className="w-[200px]" />
@@ -393,10 +422,15 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
             <div className="mt-3">
               <ProposalCell entry={entry} theme={data.theme} />
             </div>
+            {/* The precision pair drops out entirely when there is no measure. On the table an
+                empty cell sits under a header that explains it; here the term would stand alone
+                facing nothing, which reads as a value we failed to load. */}
             <dl className="mt-4 space-y-2 border-t border-border pt-3 text-sm">
               {[
                 { term: COLUMNS[2]!.title, cell: <VoteCell entry={entry} /> },
-                { term: COLUMNS[3]!.title, cell: <PrecisionCell entry={entry} /> },
+                ...(entry.measures.length > 0
+                  ? [{ term: COLUMNS[3]!.title, cell: <PrecisionCell entry={entry} /> }]
+                  : []),
               ].map(({ term, cell }) => (
                 <div key={term} className="flex flex-wrap items-start justify-between gap-2">
                   <dt className="text-xs uppercase tracking-wide text-muted-foreground">{term}</dt>
@@ -441,11 +475,15 @@ function FooterCard({
 function MethodCard() {
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* The two states quoted here are the ones the badge actually renders today
+          (VOTE_RELATION_BASIS_LABELS). An earlier version quoted "aucun vote sur cet objet", a
+          string that exists nowhere: a reader would have looked for a wording they never meet. */}
       <p className="max-w-3xl text-sm text-muted-foreground">
-        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote&nbsp;:
-        une case «&nbsp;aucun vote sur cet objet&nbsp;» est le cas le plus fréquent et ne dit rien
-        de la mesure. La colonne vote ne se remplit que pour une candidature qui siégeait au moment
-        où un texte proche a été soumis.
+        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote. Cette
+        colonne dit donc surtout où nous en sommes&nbsp;: «&nbsp;périmètre non examiné&nbsp;» tant
+        que nous n&apos;avons pas cherché de scrutin proche, «&nbsp;périmètre examiné sans
+        résultat&nbsp;» quand nous avons cherché sans rien trouver. Une position ne s&apos;affiche
+        que pour une candidature qui siégeait au moment où un texte proche a été soumis.
       </p>
       <Link
         href="/methodologie"
