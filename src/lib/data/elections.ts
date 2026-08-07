@@ -3,6 +3,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import type { ElectionType } from "@/types";
+import type { ElectionRoundScore } from "@/lib/elections/banner-state";
 
 // ============================================
 // Types
@@ -510,39 +511,145 @@ export async function getUpcomingElections() {
 }
 
 // ============================================
-// 5b. getFeaturedElection — for homepage hero CTA
+// 5b. getFeaturedElection — for the homepage banner
 // ============================================
 
-export async function getFeaturedElection() {
-  "use cache";
-  cacheTag("elections", "homepage");
-  cacheLife("synced");
+/**
+ * Days after the last round during which the election stays featured, in its archive state.
+ *
+ * Without this window the banner would vanish the moment the election completes, which is what
+ * happened to municipales-2026: `status` is derived from the round dates, so the old
+ * `status != COMPLETED` filter silently emptied the homepage banner slot. The archive state is also
+ * the only state that carries no countdown, which is what stops the banner counting toward a date
+ * in the past.
+ */
+export const FEATURED_ELECTION_ARCHIVE_DAYS = 30;
+
+export type FeaturedElection = {
+  slug: string;
+  title: string;
+  shortTitle: string | null;
+  type: ElectionType;
+  round1Date: Date | null;
+  round2Date: Date | null;
+  dateConfirmed: boolean;
+  round1Scores: ElectionRoundScore[];
+  winner: ElectionRoundScore | null;
+  /** Candidacies with a status AND both source fields. The number the banner is allowed to show. */
+  sourcedCandidacyCount: number;
+  hasResults: boolean;
+  communesDepouillees: number;
+};
+
+/**
+ * Plain async, integration-testable. Pages call `getFeaturedElection`, which caches this.
+ */
+export async function loadFeaturedElection(): Promise<FeaturedElection | null> {
+  const cutoff = new Date(Date.now() - FEATURED_ELECTION_ARCHIVE_DAYS * 24 * 60 * 60 * 1000);
 
   const election = await db.election.findFirst({
-    where: { featured: true, status: { not: "COMPLETED" } },
+    where: {
+      featured: true,
+      // The archive window replaces the former `status != COMPLETED` filter. Measured on the last
+      // known round: round2Date when there is one, round1Date otherwise.
+      OR: [
+        { round2Date: { gte: cutoff } },
+        { round2Date: null, round1Date: { gte: cutoff } },
+        { round1Date: null },
+      ],
+    },
+    // Deterministic tie-break. Nothing in the schema forbids two featured rows, and without an
+    // explicit order findFirst would arbitrate: the nearest deadline wins, and it is documented
+    // here rather than discovered in production.
+    orderBy: [{ round1Date: { sort: "asc", nulls: "last" } }, { slug: "asc" }],
     select: {
+      id: true,
       slug: true,
       title: true,
       shortTitle: true,
       type: true,
       round1Date: true,
+      round2Date: true,
+      dateConfirmed: true,
     },
   });
   if (!election) return null;
 
-  // Check if results are available
-  const resultatsSnapshot = await db.statsSnapshot.findUnique({
-    where: { key: `${election.slug}-resultats` },
-  });
-  const resultats = resultatsSnapshot?.data as {
-    communesDepouillees?: number;
-  } | null;
+  const [sourcedCandidacyCount, qualified, elected, resultatsSnapshot] = await Promise.all([
+    db.candidacy.count({
+      where: {
+        electionId: election.id,
+        status: { not: null },
+        sourceUrl: { not: null },
+        sourceLabel: { not: null },
+      },
+    }),
+    db.candidacy.findMany({
+      where: { electionId: election.id, round1Qualified: true },
+      select: {
+        candidateName: true,
+        partyLabel: true,
+        round1Pct: true,
+        politician: { select: { slug: true } },
+      },
+      orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
+      take: 2,
+    }),
+    db.candidacy.findFirst({
+      where: { electionId: election.id, isElected: true },
+      select: {
+        candidateName: true,
+        partyLabel: true,
+        round2Pct: true,
+        politician: { select: { slug: true } },
+      },
+    }),
+    db.statsSnapshot.findUnique({ where: { key: `${election.slug}-resultats` } }),
+  ]);
+
+  const resultats = resultatsSnapshot?.data as { communesDepouillees?: number } | null;
 
   return {
-    ...election,
+    slug: election.slug,
+    title: election.title,
+    shortTitle: election.shortTitle,
+    type: election.type,
+    round1Date: election.round1Date,
+    round2Date: election.round2Date,
+    dateConfirmed: election.dateConfirmed,
+    // A score is omitted rather than defaulted to zero: "0 %" would be a claim, absence is not.
+    round1Scores: qualified.flatMap((c) =>
+      c.round1Pct === null
+        ? []
+        : [
+            {
+              candidateName: c.candidateName,
+              politicianSlug: c.politician?.slug ?? null,
+              partyLabel: c.partyLabel,
+              pct: Number(c.round1Pct),
+            },
+          ]
+    ),
+    winner:
+      elected && elected.round2Pct !== null
+        ? {
+            candidateName: elected.candidateName,
+            politicianSlug: elected.politician?.slug ?? null,
+            partyLabel: elected.partyLabel,
+            pct: Number(elected.round2Pct),
+          }
+        : null,
+    sourcedCandidacyCount,
     hasResults: (resultats?.communesDepouillees ?? 0) > 0,
     communesDepouillees: resultats?.communesDepouillees ?? 0,
   };
+}
+
+export async function getFeaturedElection(): Promise<FeaturedElection | null> {
+  "use cache";
+  cacheTag("elections", "homepage");
+  cacheLife("synced");
+  return loadFeaturedElection();
 }
 
 // ============================================
