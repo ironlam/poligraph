@@ -7,7 +7,7 @@ import {
 } from "@/config/labels";
 import type { PoliticianCandidacy } from "@/lib/data/politician-candidacy";
 import { deriveCandidacyNoticeState } from "@/lib/politicians/candidacy-notice-state";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatPct } from "@/lib/utils";
 
 /**
  * Candidacy notice on a politician's fiche. Full width, under the badges, above the tabs, at both
@@ -35,11 +35,6 @@ interface CandidacyNoticeProps {
    * her programme when the fiche exists, and to a six-candidate page when it does not.
    */
   ficheHref: string | null;
-}
-
-/** French percentage: comma as decimal separator, one decimal, non-breaking space before %. */
-function formatPct(pct: number): string {
-  return `${pct.toFixed(1).replace(".", ",")} %`;
 }
 
 /**
@@ -77,6 +72,13 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
   const showStatusPill =
     state.kind !== "PAST" && CANDIDACY_STATUS_LABELS[candidacy.status] !== title;
 
+  // Agreement follows the count, not just the noun: "Les 1 mesure documentées" is bad French, and the
+  // gate opens at one measure.
+  const measuresPhrase = (suffix: string) =>
+    candidacy.publishedMeasureCount === 1
+      ? `La mesure documentée reste consultable${suffix}`
+      : `Les ${candidacy.publishedMeasureCount} mesures documentées restent consultables${suffix}`;
+
   const explanation =
     state.kind === "DECLARED_EMPTY"
       ? "Aucune mesure publiée à ce jour. Nous publions une mesure quand elle est sourcée et relue, pas à l'annonce."
@@ -86,9 +88,16 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
           ? // The date lives in the title, so the sentence can only point at it when it exists.
             // Without it, naming the gap beats implying a dating we do not hold.
             candidacy.withdrewAt
-            ? `Les ${plural(candidacy.publishedMeasureCount, "mesure")} documentées restent consultables, datées de la période de campagne.`
-            : `Les ${plural(candidacy.publishedMeasureCount, "mesure")} documentées restent consultables. Date du retrait non renseignée.`
-          : null;
+            ? measuresPhrase(", datées de la période de campagne.")
+            : measuresPhrase(". Date du retrait non renseignée.")
+          : // Deliberately OUTSIDE the results guard. Nesting it there emptied the card between the
+            // close of the second round and the import of the results: no pill, no source, no
+            // explanation, no counter, on the state that carries the strongest claim.
+            state.kind === "PAST" && candidacy.publishedMeasureCount > 0
+            ? candidacy.publishedMeasureCount === 1
+              ? "Sa mesure documentée reste liée à cette campagne."
+              : `Ses ${candidacy.publishedMeasureCount} mesures documentées restent liées à cette campagne.`
+            : null;
 
   const footer =
     state.kind === "DECLARED_WITH_MEASURES"
@@ -129,9 +138,12 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
           <Icon className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1 space-y-1.5">
+          {/* `brand-on-surface` and not `brand`: measured at 12px bold on --card in dark, the base
+              token gives 4.11:1 against the 4.5:1 AA needs. The readable variant gives 5.24:1 and
+              aliases the base in light mode. */}
           <p
             className={`text-xs font-bold uppercase tracking-widest ${
-              accented ? "text-brand" : "text-muted-foreground"
+              accented ? "text-brand-on-surface" : "text-muted-foreground"
             }`}
           >
             {candidacy.electionShortTitle}
@@ -143,27 +155,41 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
             {title}
           </p>
 
-          {state.kind !== "PAST" && (
-            <p className="flex flex-wrap items-center gap-2">
-              {showStatusPill && (
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-                  {CANDIDACY_STATUS_LABELS[candidacy.status]}
-                </span>
-              )}
-              <a
-                href={candidacy.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] underline hover:no-underline"
-              >
-                {candidacy.sourceLabel}
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
-              </a>
-            </p>
-          )}
+          {/* The source is shown in EVERY state, PAST included. The withdrawn state drops the pill
+              when it duplicates the title, and the past state drops the pill because the results
+              replace the status, but neither drops the attribution: the notice never says more than
+              its source, and PAST carries the strongest claim of the five. */}
+          <p className="flex flex-wrap items-center gap-2">
+            {showStatusPill && (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                {CANDIDACY_STATUS_LABELS[candidacy.status]}
+              </span>
+            )}
+            <a
+              href={candidacy.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] underline hover:no-underline"
+            >
+              {candidacy.sourceLabel}
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            </a>
+          </p>
 
           {state.kind === "PAST" && state.results && (
             <p className="text-xs leading-snug text-muted-foreground">
+              {/* `isElected` was read from the database, carried through the type, and rendered
+                  nowhere: an elected president's fiche did not say they had won. Agreement follows
+                  civility, and drops to a formulation that genders nobody when it is unknown. */}
+              {state.results.isElected && (
+                <>
+                  {civility === "Mme"
+                    ? "Élue."
+                    : civility === "M."
+                      ? "Élu."
+                      : "Élection remportée."}{" "}
+                </>
+              )}
               {state.results.round1Pct !== null && (
                 <>{formatPct(state.results.round1Pct)} au 1er tour</>
               )}
@@ -171,9 +197,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
               {state.results.round2Pct !== null && (
                 <>{formatPct(state.results.round2Pct)} au second</>
               )}
-              {candidacy.publishedMeasureCount > 0 && (
-                <>. Ses {candidacy.publishedMeasureCount} mesures restent liées à cette campagne.</>
-              )}
+              .
             </p>
           )}
 
@@ -190,8 +214,12 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
       >
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold text-primary">{footer.label}</span>
+          {/* `muted-foreground-strong`: measured at 12px on --muted in dark, the base token gives
+              3.83:1 against the 4.5:1 AA needs. The readable variant gives 5.25:1. */}
           {footer.detail && (
-            <span className="mt-0.5 block text-xs text-muted-foreground">{footer.detail}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground-strong">
+              {footer.detail}
+            </span>
           )}
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />

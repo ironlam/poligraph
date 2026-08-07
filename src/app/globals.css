@@ -29,6 +29,8 @@
   --color-destructive: var(--destructive);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand: var(--brand);
+  --color-brand-on-surface: var(--brand-on-surface);
+  --color-muted-foreground-strong: var(--muted-foreground-strong);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -64,6 +66,13 @@
   --secondary-foreground: oklch(0.205 0.015 260);
   --muted: oklch(0.965 0.005 260);
   --muted-foreground: oklch(0.44 0 0);
+  /* Readable variants of --brand and --muted-foreground for SMALL TEXT sitting on --card or
+     --muted. Additive: the base tokens keep their value and their uses. In light mode both already
+     clear AA (measured 5.44:1 and 7.12:1), so these alias them; only the dark block diverges. Same
+     pattern the handoff asks for on VOTE_POSITION_COLORS: a second value per role for text, the
+     first staying valid as a flat fill. */
+  --brand-on-surface: oklch(0.55 0.22 25);
+  --muted-foreground-strong: oklch(0.44 0 0);
   --accent: oklch(0.97 0.01 80);
   --accent-foreground: oklch(0.25 0.05 250);
   --brand: oklch(0.55 0.22 25);
@@ -106,6 +115,12 @@
   --accent: oklch(0.22 0.01 250);
   --accent-foreground: oklch(0.85 0.02 250);
   --brand: oklch(0.6 0.2 25);
+  /* Measured, not guessed. On --card (oklch 0.205) the base --brand gives 4.11:1 at 12px bold, below
+     the 4.5:1 AA needs; this lightness gives 5.24:1. On --muted (oklch 0.269) the base
+     --muted-foreground gives 3.83:1 at 12px; this one gives 5.25:1. Script kept out of the repo, the
+     values are reproducible from the tokens above. */
+  --brand-on-surface: oklch(0.66 0.2 25);
+  --muted-foreground-strong: oklch(0.68 0 0);
   --brand-foreground: oklch(0.15 0 0);
   --destructive: oklch(0.65 0.2 25);
   --border: oklch(1 0 0 / 10%);

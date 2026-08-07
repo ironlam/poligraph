@@ -55,6 +55,18 @@ export function stripMarkdown(text: string): string {
     .replace(/_([^_]+)_/g, "$1");
 }
 
+/**
+ * French percentage: comma as the decimal separator and a NON-BREAKING space before the sign, so the
+ * "%" never wraps to its own line.
+ *
+ * The space is a literal U+00A0 and not an escape, because two copies of this function previously
+ * documented a non-breaking space while typing an ordinary one, and nothing caught it: the only state
+ * that rendered a percentage was never rendered in a test.
+ */
+export function formatPct(pct: number, decimals = 1): string {
+  return `${pct.toFixed(decimals).replace(".", ",")} %`;
+}
+
 export function formatDate(date: Date | string | null): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;

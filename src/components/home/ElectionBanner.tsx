@@ -6,7 +6,7 @@ import type { FeaturedElection } from "@/lib/data/elections";
 import { deriveElectionBannerState } from "@/lib/elections/banner-state";
 import { getBannerPresentation, type BannerAction } from "@/lib/elections/banner-presentation";
 import { getVoterRegistrationDeadline } from "@/config/election-guides";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatPct } from "@/lib/utils";
 
 /**
  * Homepage election banner. Occupies its existing slot between HomeHero and HomeIntentGrid and does
@@ -22,11 +22,6 @@ import { formatDate } from "@/lib/utils";
 interface ElectionBannerProps {
   election: FeaturedElection;
   now: Date;
-}
-
-/** French percentage: comma as decimal separator, one decimal, non-breaking space before %. */
-function formatPct(pct: number): string {
-  return `${pct.toFixed(1).replace(".", ",")} %`;
 }
 
 function ActionLink({

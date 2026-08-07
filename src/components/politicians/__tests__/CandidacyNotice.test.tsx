@@ -211,6 +211,49 @@ describe("CandidacyNotice", () => {
     expect(screen.queryByText(/Son programme, sujet par sujet/)).not.toBeInTheDocument();
   });
 
+  it("cite sa source même après l'élection : c'est l'état qui affirme le plus", () => {
+    renderNotice({ ...base, round1Pct: 27.4, round2Pct: 47.2 }, "Mme", AFTER);
+
+    const link = screen.getByRole("link", { name: /Le Monde, 14 janvier 2026/ });
+    expect(link).toHaveAttribute("href", "https://example.org/source");
+  });
+
+  it("garde les mesures après l'élection même quand les scores ne sont pas importés", () => {
+    // The real state of the site between the close of the second round and the results import.
+    renderNotice({ ...base, publishedMeasureCount: 10 }, "Mme", AFTER);
+
+    expect(
+      screen.getByText(/10 mesures documentées restent liées à cette campagne/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it("dit que la personne a gagné, en accordant sur la civilité", () => {
+    const elected = { ...base, round1Pct: 27.4, round2Pct: 52.8, isElected: true };
+
+    renderNotice(elected, "Mme", AFTER);
+    expect(screen.getByText(/Élue\./)).toBeInTheDocument();
+  });
+
+  it("ne genre personne dans l'annonce de victoire quand la civilité manque", () => {
+    renderNotice({ ...base, round2Pct: 52.8, isElected: true }, null, AFTER);
+
+    expect(screen.getByText(/Élection remportée\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Élu\./)).not.toBeInTheDocument();
+  });
+
+  it("accorde la phrase des mesures au singulier dans l'état retiré", () => {
+    renderNotice({
+      ...base,
+      status: "RETIRE",
+      withdrewAt: new Date("2027-03-03T00:00:00.000Z"),
+      publishedMeasureCount: 1,
+    });
+
+    expect(screen.getByText(/La mesure documentée reste consultable/)).toBeInTheDocument();
+    expect(screen.queryByText(/Les 1 mesure/)).not.toBeInTheDocument();
+  });
+
   it("garde le traitement du retrait après l'élection", () => {
     renderNotice(
       { ...base, status: "RETIRE", withdrewAt: new Date("2027-03-03T00:00:00.000Z") },
