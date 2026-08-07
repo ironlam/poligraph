@@ -33,6 +33,7 @@ describe("opengraph-image noindex header", () => {
     "/parlement/dossiers/reforme-des-retraites/opengraph-image",
     "/partis/renaissance/programme/opengraph-image",
     "/politiques/jean-dupont/opengraph-image",
+    "/elections/presidentielle-2027/opengraph-image",
   ])("noindexes OG image path %s", (path) => {
     expect(source.test(path)).toBe(true);
   });
