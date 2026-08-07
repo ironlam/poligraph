@@ -83,7 +83,9 @@ export default async function PresidentialHubPage() {
         />
       )}
       <div className="container mx-auto px-4 pt-4 pb-8 space-y-8">
-        <Breadcrumb items={[{ label: "Présidentielle" }]} />
+        <Breadcrumb
+          items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
+        />
 
         <header className="space-y-6">
           {/* Mobile: compact election banner, distinct from the desktop hero card (no stats,

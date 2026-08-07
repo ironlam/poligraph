@@ -52,6 +52,8 @@ function candidate(
     sourceLabel: null,
     slogan: null,
     accentColor: null,
+    partyLabel: "Parti Fixture",
+    partyShortName: "PF",
     declaredAt: null,
     ...over,
   };
@@ -84,14 +86,25 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
     pendingReviewRevisionCount: 0,
     lastReviewedAt: null,
     fallbackPublishableTheme: null,
+    siblingThemes: [
+      {
+        theme: "LOGEMENT_URBANISME",
+        label: "Logement & Urbanisme",
+        slug: "logement-urbanisme",
+        measureCount: 4,
+        publishable: true,
+      },
+      { theme: "SANTE", label: "Santé", slug: "sante", measureCount: 0, publishable: false },
+    ],
+    totalMeasuresOnTheme: 4,
     ...over,
   };
 }
 
 describe("SubjectComparison", () => {
-  it("annonce l'ordre alphabétique d'affichage", () => {
+  it("annonce le critère de tri réellement appliqué", () => {
     render(<SubjectComparison data={data()} />);
-    expect(screen.getByText(/présentées par ordre alphabétique/i)).toBeInTheDocument();
+    expect(screen.getByText(/Classées par nom de famille/)).toBeInTheDocument();
   });
 
   it("rend une absence qualifiée, jamais une cellule vide, pour un candidat sans mesure", () => {
@@ -132,8 +145,10 @@ describe("SubjectComparison", () => {
         })}
       />
     );
-    expect(screen.getByText(/Mesure retirée le/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Communiqué de retrait" })).toBeInTheDocument();
+    // Deux rendus : le tableau au-dessus de lg, les cartes en dessous. Les deux doivent porter
+    // le retrait, sinon un lecteur mobile verrait une mesure abandonnée comme encore défendue.
+    expect(screen.getAllByText(/Mesure retirée le/)).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Communiqué de retrait" })).toHaveLength(2);
   });
 
   it("n'affiche pas de lien de source de retrait quand le libellé manque", () => {
@@ -158,8 +173,12 @@ describe("SubjectComparison", () => {
         })}
       />
     );
-    expect(screen.getByText(/Mesure retirée le/)).toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Mesure retirée le/)).toHaveLength(2);
+    // Le lien de retrait n'apparaît pas. Les autres liens de la page (sources, sujets, méthode)
+    // ne sont pas concernés, d'où la portée sur le paragraphe de retrait lui-même.
+    for (const ligne of screen.getAllByText(/Mesure retirée le/)) {
+      expect(ligne.querySelector("a")).toBeNull();
+    }
   });
 
   it("rend un état explicite sous le seuil, sans comparaison à un seul candidat", () => {
@@ -188,9 +207,10 @@ describe("SubjectComparison", () => {
         })}
       />
     );
-    const alix = screen.getByRole("heading", { level: 2, name: "Alix" }).closest("article");
+    // La fixture n'a pas de slug de politicien, donc le nom est un texte et non un lien.
+    const ligne = screen.getAllByText("Alix")[0]!.closest("tr");
     expect(
-      within(alix as HTMLElement).getByText(/périmètre examiné sans résultat/)
+      within(ligne as HTMLElement).getByText(/périmètre examiné sans résultat/)
     ).toBeInTheDocument();
   });
 
@@ -206,11 +226,15 @@ describe("SubjectComparison", () => {
         })}
       />
     );
-    const link = screen.getByRole("link", { name: "Programme de parti" });
-    expect(link).toHaveAttribute("href", "https://example.org/programme.pdf");
-    const li = link.closest("li");
-    expect(li).toHaveTextContent("Source primaire");
-    expect(li).toHaveTextContent(/janvier 2027/);
+    // Deux rendus, tableau et cartes : la preuve doit tenir dans les deux.
+    const liens = screen.getAllByRole("link", { name: "Programme de parti" });
+    expect(liens).toHaveLength(2);
+    for (const lien of liens) {
+      expect(lien).toHaveAttribute("href", "https://example.org/programme.pdf");
+      const li = lien.closest("li");
+      expect(li).toHaveTextContent("Source primaire");
+      expect(li).toHaveTextContent(/janvier 2027/);
+    }
   });
 
   it("rend la source de déclaration de la candidature depuis sa colonne", () => {
@@ -226,9 +250,13 @@ describe("SubjectComparison", () => {
         })}
       />
     );
-    expect(screen.getByRole("link", { name: "Discours du 1er mars" })).toHaveAttribute(
+    // La source de déclaration n'est plus répétée par ligne : six libellés de cent caractères
+    // écrasaient la première colonne. La page dit que le statut est sourcé et renvoie au champ,
+    // qui porte la source de chaque candidature.
+    expect(screen.queryByRole("link", { name: "Discours du 1er mars" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Voir les sources de candidature/ })).toHaveAttribute(
       "href",
-      "https://example.org/annonce"
+      "/elections/presidentielle-2027#candidatures"
     );
   });
 });

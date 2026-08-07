@@ -67,6 +67,20 @@ export type SubjectPageData = {
   lastReviewedAt: Date | null;
   /** Another theme that already clears the gate, to redirect to when this one does not. */
   fallbackPublishableTheme: { slug: string; label: string } | null;
+  /**
+   * The thirteen subjects with their currently-defended measure count, in editorial order, for the
+   * navigation the page carries alongside its own content. Read from the themes index
+   * already loaded here, so the sidebar costs no extra query.
+   */
+  siblingThemes: {
+    theme: ThemeCategory;
+    label: string;
+    slug: string;
+    measureCount: number;
+    publishable: boolean;
+  }[];
+  /** Currently-defended measures on this theme, across the whole published population. */
+  totalMeasuresOnTheme: number;
 };
 
 /**
@@ -171,6 +185,15 @@ export async function loadSubjectPageData(
     pendingReviewRevisionCount,
     lastReviewedAt,
     fallbackPublishableTheme,
+    siblingThemes: themesIndex.themes.map((t) => ({
+      theme: t.theme,
+      label: t.label,
+      slug: t.slug,
+      measureCount: t.currentlyDefendedMeasureCount,
+      publishable: t.publishable,
+    })),
+    totalMeasuresOnTheme:
+      themesIndex.themes.find((t) => t.theme === theme)?.currentlyDefendedMeasureCount ?? 0,
   };
 }
 

@@ -40,7 +40,8 @@ export default async function PrioritesPage() {
     <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
       <Breadcrumb
         items={[
-          { label: "Présidentielle", href: "/elections/presidentielle-2027" },
+          { label: "Élections", href: "/elections" },
+          { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
           { label: "Priorités" },
         ]}
       />

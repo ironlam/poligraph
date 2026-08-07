@@ -89,7 +89,8 @@ export default async function CandidateFichePage({ params }: PageProps) {
     <div className="container mx-auto space-y-8 px-4 pb-8 pt-4">
       <Breadcrumb
         items={[
-          { label: "Présidentielle", href: `/elections/${candidacy.electionSlug}` },
+          { label: "Élections", href: "/elections" },
+          { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
           { label: politician.fullName },
         ]}
       />

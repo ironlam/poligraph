@@ -31,7 +31,8 @@ export default async function ThemesIndexPage() {
     <div className="container mx-auto px-4 pt-4 pb-8">
       <Breadcrumb
         items={[
-          { label: "Présidentielle", href: "/elections/presidentielle-2027" },
+          { label: "Élections", href: "/elections" },
+          { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
           { label: "Sujets" },
         ]}
       />

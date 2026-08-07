@@ -15,6 +15,17 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
     pendingReviewRevisionCount: 3,
     lastReviewedAt: new Date("2027-02-10T00:00:00Z"),
     fallbackPublishableTheme: null,
+    siblingThemes: [
+      {
+        theme: "LOGEMENT_URBANISME",
+        label: "Logement & Urbanisme",
+        slug: "logement-urbanisme",
+        measureCount: 4,
+        publishable: true,
+      },
+      { theme: "SANTE", label: "Santé", slug: "sante", measureCount: 0, publishable: false },
+    ],
+    totalMeasuresOnTheme: 4,
     ...over,
   };
 }

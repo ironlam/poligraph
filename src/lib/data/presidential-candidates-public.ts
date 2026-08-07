@@ -30,6 +30,9 @@ export type PublicPresidentialCandidate = {
   sourceLabel: string | null;
   slogan: string | null;
   accentColor: string | null;
+  /** Wording of the source for the party, and the linked entity's sigle when there is one. */
+  partyLabel: string | null;
+  partyShortName: string | null;
   declaredAt: Date | null;
 };
 
@@ -41,6 +44,7 @@ export async function getPublicPresidentialCandidates(
     include: {
       presidentialData: true,
       politician: { select: { slug: true } },
+      party: { select: { shortName: true } },
     },
     // Alphabetical by candidate name. No ranking, no proximity score.
     orderBy: { candidateName: "asc" },
@@ -55,6 +59,8 @@ export async function getPublicPresidentialCandidates(
     sourceLabel: row.sourceLabel,
     slogan: row.presidentialData?.slogan ?? null,
     accentColor: row.presidentialData?.accentColor ?? null,
+    partyLabel: row.partyLabel,
+    partyShortName: row.party?.shortName ?? null,
     declaredAt: row.presidentialData?.declaredAt ?? null,
   }));
 }

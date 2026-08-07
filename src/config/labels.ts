@@ -956,6 +956,34 @@ export const THEME_CATEGORY_COLORS: Record<ThemeCategory, string> = {
     "bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-700",
 };
 
+/**
+ * The same thirteen hues as THEME_CATEGORY_COLORS, solid rather than tinted, for the accent bar the
+ * subject page puts before a theme in its navigation and before a candidate in its table.
+ *
+ * A separate map and not a derivation: the badge palette pairs a 100-level background with an
+ * 800-level text, and there is no rule that turns that pair into the single 500/600 fill an accent
+ * bar needs. Deriving it by string surgery on Tailwind class names would break silently the day a
+ * badge shade moves.
+ *
+ * Purely decorative wherever it is used: the theme is always named in text beside it, so the bar
+ * carries no information of its own and is `aria-hidden`.
+ */
+export const THEME_ACCENT_BAR: Record<ThemeCategory, string> = {
+  LOGEMENT_URBANISME: "bg-amber-500",
+  SANTE: "bg-rose-600",
+  SOCIAL_TRAVAIL: "bg-violet-600",
+  ECONOMIE_BUDGET: "bg-emerald-600",
+  ENVIRONNEMENT_ENERGIE: "bg-green-600",
+  SECURITE_JUSTICE: "bg-red-600",
+  EDUCATION_CULTURE: "bg-indigo-600",
+  IMMIGRATION: "bg-orange-600",
+  TRANSPORTS: "bg-teal-600",
+  AGRICULTURE_ALIMENTATION: "bg-lime-600",
+  NUMERIQUE_TECH: "bg-sky-600",
+  AFFAIRES_ETRANGERES_DEFENSE: "bg-cyan-600",
+  INSTITUTIONS: "bg-purple-600",
+};
+
 export const THEME_CATEGORY_ICONS: Record<ThemeCategory, string> = {
   ECONOMIE_BUDGET: "💰",
   SOCIAL_TRAVAIL: "👥",

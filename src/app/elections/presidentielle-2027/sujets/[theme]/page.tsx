@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { getSubjectPageData } from "@/lib/data/subject-page";
 import { parseThemeSlug, PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
@@ -44,7 +45,15 @@ export default async function SubjectPage({ params }: PageProps) {
   if (data === null) notFound();
 
   return (
-    <div className="container mx-auto px-4 pt-4 pb-8">
+    <div className="container mx-auto space-y-4 px-4 pt-4 pb-8">
+      <Breadcrumb
+        items={[
+          { label: "Élections", href: "/elections" },
+          { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
+          { label: "Sujets", href: "/elections/presidentielle-2027/sujets" },
+          { label: THEME_CATEGORY_LABELS[theme] },
+        ]}
+      />
       <SubjectComparison data={data} />
     </div>
   );
