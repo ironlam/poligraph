@@ -13,8 +13,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 const mockGetCandidacy = vi.fn();
+const mockGetDetail = vi.fn();
 vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: (id: string) => mockGetCandidacy(id),
+  getCandidateFicheDetail: (candidacyId: string, politicianId: string) =>
+    mockGetDetail(candidacyId, politicianId),
 }));
 
 const mockGetPolitician = vi.fn();
@@ -23,6 +26,7 @@ vi.mock("@/lib/data/politicians", () => ({
 }));
 
 const candidacy = (overrides: Record<string, unknown> = {}) => ({
+  candidacyId: "cand-1",
   electionSlug: "presidentielle-2027",
   electionShortTitle: "Présidentielle 2027",
   round1Date: new Date("2027-04-11T00:00:00.000Z"),
@@ -50,7 +54,10 @@ describe("page fiche candidat", () => {
       slug: "camille-riviere",
       fullName: "Camille Rivière",
       civility: "Mme",
+      declarations: [],
+      affairs: [],
     });
+    mockGetDetail.mockResolvedValue({ themes: [], recentVotes: [], mandateCount: 0 });
   });
 
   it("renvoie vers la fiche du politique quand la candidature est sous le seuil", async () => {
