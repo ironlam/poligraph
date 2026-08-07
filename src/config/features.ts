@@ -1,15 +1,14 @@
 /**
- * Feature flags - static, typed, deployed via Vercel (~1 min redeploy).
+ * Feature flags: static, typed, deployed via Vercel (~1 min redeploy).
  *
  * To toggle a feature: change the value, push, done.
- * For anticipated elections: change FEATURED_ELECTION_SLUG.
+ *
+ * The featured election is NOT here. It is `Election.featured`, read by `getFeaturedElection()`.
+ * `ELECTION_BANNER` and `FEATURED_ELECTION_SLUG` used to live here, were read by nothing, and were
+ * removed on 2026-08-07 along with the corresponding paragraph of the hub spec (§6.3).
  */
 
 export const FEATURES = {
-  /** Show featured election banner on the homepage */
-  ELECTION_BANNER: true,
-  /** Slug of the election highlighted on the homepage */
-  FEATURED_ELECTION_SLUG: "municipales-2026",
   /** Show practical guide section on election detail pages */
   ELECTION_GUIDE_SECTION: true,
 } as const;

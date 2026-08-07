@@ -31,17 +31,13 @@ export default async function HomePage() {
     getEnabledFlags(),
   ]);
 
-  const daysUntil = featuredElection?.round1Date
-    ? Math.ceil(
-        (new Date(featuredElection.round1Date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      )
-    : null;
-
   return (
     <div className="container mx-auto px-4 py-8 space-y-10">
       <HomeHero />
 
-      {featuredElection && <ElectionBanner election={featuredElection} daysUntil={daysUntil} />}
+      {/* The banner derives its own temporal state: a day count computed here was the duplication
+          that kept the other four states invisible from this page. */}
+      {featuredElection && <ElectionBanner election={featuredElection} now={now} />}
 
       <HomeIntentGrid enabledFlags={enabledFlags} />
 

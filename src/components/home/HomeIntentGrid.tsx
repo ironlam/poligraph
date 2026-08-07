@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { UserSearch, Vote, Scale, MapPinned, ChevronRight } from "lucide-react";
+import { UserSearch, Vote, Scale, Landmark, ChevronRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface IntentCard {
@@ -8,6 +8,8 @@ interface IntentCard {
   description: string;
   href: string;
   icon: LucideIcon;
+  /** The one card that speaks of the coming deadline. Accented, and only ever one. */
+  accent?: boolean;
 }
 
 interface HomeIntentGridProps {
@@ -35,10 +37,14 @@ export function HomeIntentGrid({ enabledFlags }: HomeIntentGridProps) {
       icon: Scale,
     },
     {
-      title: "Je veux suivre les municipales",
-      description: "Candidats, listes et résultats dans votre commune.",
-      href: enabledFlags.has("MUNICIPALES_2026") ? "/elections/municipales-2026" : "/elections",
-      icon: MapPinned,
+      title: "Je veux comparer les candidats à 2027",
+      description: "Programmes, votes et bilans mis côte à côte, sujet par sujet.",
+      href: "/elections/presidentielle-2027",
+      icon: Landmark,
+      // Replaces "suivre les municipales", which pointed at a completed election. Aims at the
+      // task, not at the event. The municipales pages stay reachable from the navigation, which
+      // still gates them on the MUNICIPALES_2026 flag.
+      accent: true,
     },
   ];
 
@@ -50,9 +56,17 @@ export function HomeIntentGrid({ enabledFlags }: HomeIntentGridProps) {
           const Icon = card.icon;
           return (
             <Link key={card.href + card.title} href={card.href} prefetch={false}>
-              <Card className="group h-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md">
+              <Card
+                className={`group h-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                  card.accent ? "ring-1 ring-brand/25" : ""
+                }`}
+              >
                 <CardContent className="flex items-start gap-3 p-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                      card.accent ? "bg-brand/12 text-brand" : "bg-primary/10 text-primary"
+                    }`}
+                  >
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
