@@ -8,8 +8,18 @@ import { isFicheCandidatPublishable } from "@/config/publication-gates";
 // Reuses the established politician authority rather than adding a second, lighter read for three
 // fields. It loads more than this page needs, but it is already cached under `politician:<slug>`.
 import { getPolitician } from "@/lib/data/politicians";
-import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
+import {
+  getCandidateFicheDetail,
+  getPoliticianPresidentialCandidacy,
+} from "@/lib/data/politician-candidacy";
 import { formatDate } from "@/lib/utils";
+import {
+  CandidateIntegrity,
+  CandidateRecentVotes,
+  CandidateStats,
+  CandidateThemeSpread,
+  CandidateThemes,
+} from "./_components/CandidateFicheBlocks";
 
 /**
  * Candidate fiche for the presidential hub. `[slug]` is the POLITICIAN slug, consistent with
@@ -38,11 +48,6 @@ export async function generateStaticParams(): Promise<{ slug: string }[]> {
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-/** Plural agreement: the gate opens at one measure, so "1 mesures" is reachable. */
-function plural(count: number, singular: string): string {
-  return `${count} ${singular}${count > 1 ? "s" : ""}`;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -85,6 +90,8 @@ export default async function CandidateFichePage({ params }: PageProps) {
     redirect(`/politiques/${slug}`);
   }
 
+  const detail = await getCandidateFicheDetail(candidacy.candidacyId, politician.id);
+
   return (
     <div className="container mx-auto space-y-8 px-4 pb-8 pt-4">
       <Breadcrumb
@@ -119,27 +126,39 @@ export default async function CandidateFichePage({ params }: PageProps) {
         </p>
       </header>
 
-      <section className="space-y-3 rounded-xl border bg-card p-4 md:p-6">
-        <h2 className="font-display text-xl font-bold tracking-tight">Son programme par sujet</h2>
-        <p className="text-sm text-muted-foreground">
-          {plural(candidacy.publishedMeasureCount, "mesure")} publiée
-          {candidacy.publishedMeasureCount > 1 ? "s" : ""} sur{" "}
-          {plural(candidacy.themesCoveredCount, "sujet")}
-          {candidacy.lastReviewedAt && (
-            <> · dernière revue le {formatDate(candidacy.lastReviewedAt)}</>
-          )}
-          .
-        </p>
-        <p className="text-sm">
-          <Link
-            href={`/elections/${candidacy.electionSlug}/sujets`}
-            prefetch={false}
-            className="font-bold text-primary hover:underline"
-          >
-            Parcourir les sujets
-          </Link>
-        </p>
-      </section>
+      <CandidateStats
+        measureCount={candidacy.publishedMeasureCount}
+        themesCoveredCount={candidacy.themesCoveredCount}
+        mandateCount={detail.mandateCount}
+      />
+
+      <CandidateThemes themes={detail.themes} electionSlug={candidacy.electionSlug} />
+
+      <p className="text-sm">
+        <Link
+          href={`/elections/${candidacy.electionSlug}/sujets`}
+          prefetch={false}
+          className="font-bold text-primary hover:underline"
+        >
+          Comparer ses mesures à celles des autres candidatures
+        </Link>
+        {candidacy.lastReviewedAt !== null && (
+          <span className="text-muted-foreground">
+            {" "}
+            · dernière revue le {formatDate(candidacy.lastReviewedAt)}
+          </span>
+        )}
+      </p>
+
+      <CandidateThemeSpread themes={detail.themes} />
+
+      <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
+
+      <CandidateIntegrity
+        declarationCount={politician.declarations.length}
+        affairCount={politician.affairs.length}
+        politicianSlug={slug}
+      />
 
       <section className="space-y-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground md:p-6">
         <h2 className="font-display text-base font-bold tracking-tight text-foreground">
@@ -150,6 +169,14 @@ export default async function CandidateFichePage({ params }: PageProps) {
           statut de la candidature vient de la source citée ci-dessus, à sa date. Aucun classement,
           aucun score de proximité : l&apos;ordre des candidatures est alphabétique partout sur le
           site.
+        </p>
+        {/* Named rather than hidden: a reader who sees the gap stated can tell "not built yet" from
+            "nothing to say". Neither block has a date, and promising one would be worse. */}
+        <p>
+          Deux volets manquent encore. Le rapprochement entre chaque mesure et les scrutins portant
+          sur le même objet, qui demande un rattachement que la base ne porte pas encore. Et le
+          bilan des fonctions exercées, objectifs annoncés face aux chiffres constatés, qui demande
+          un suivi post-électoral à construire.
         </p>
       </section>
     </div>

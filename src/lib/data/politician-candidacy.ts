@@ -1,9 +1,13 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { CandidacyStatus } from "@/generated/prisma";
+import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
-import { getPublicMeasureStatsByCandidacy } from "./measures";
+import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
+import {
+  getPublicMeasureStatsByCandidacy,
+  getPublicMeasuresByCandidacy,
+  type PublicMeasure,
+} from "./measures";
 
 /**
  * The reverse of `getHubCandidacyField`: "the presidential candidacy of THIS politician".
@@ -23,6 +27,8 @@ import { getPublicMeasureStatsByCandidacy } from "./measures";
  * so a generic "candidacy for the current election" would be speculative generality.
  */
 export type PoliticianCandidacy = {
+  /** The candidacy row, so the fiche can read its measures without resolving it a second time. */
+  candidacyId: string;
   electionSlug: string;
   electionShortTitle: string;
   round1Date: Date | null;
@@ -84,6 +90,7 @@ export async function loadPoliticianPresidentialCandidacy(
   const stats = await getPublicMeasureStatsByCandidacy(row.id);
 
   return {
+    candidacyId: row.id,
     electionSlug: row.election.slug,
     electionShortTitle: row.election.shortTitle ?? row.election.title,
     round1Date: row.election.round1Date,
@@ -100,6 +107,98 @@ export async function loadPoliticianPresidentialCandidacy(
     round1Pct: row.round1Pct === null ? null : Number(row.round1Pct),
     round2Pct: row.round2Pct === null ? null : Number(row.round2Pct),
     isElected: row.isElected,
+  };
+}
+
+export type CandidateThemeBreakdown = {
+  theme: ThemeCategory;
+  slug: string;
+  measureCount: number;
+  /** The first measure of the theme, quoted on the fiche. Null only if the theme has none. */
+  quote: { text: string; sourceUrl: string | null } | null;
+};
+
+export type CandidateRecentVote = {
+  id: string;
+  position: VotePosition;
+  votingDate: Date;
+  scrutinTitle: string;
+  scrutinId: string;
+};
+
+export type CandidateFicheDetail = {
+  /** Themes carrying at least one measure, most documented first. */
+  themes: CandidateThemeBreakdown[];
+  recentVotes: CandidateRecentVote[];
+  /** Every mandate ever held, for the header count. */
+  mandateCount: number;
+};
+
+/**
+ * What the fiche shows beyond the header counters, in one read.
+ *
+ * The vote list is NOT joined to the measures: no scrutin is attached to any measure yet
+ * (`MeasureVoteLink` is empty), so a "programme face aux votes" block would be an empty promise.
+ * The last votes are shown as what they are, recent parliamentary activity, and the page says so
+ * rather than implying a link the data does not carry.
+ */
+export async function loadCandidateFicheDetail(
+  candidacyId: string,
+  politicianId: string
+): Promise<CandidateFicheDetail> {
+  const [measures, votes, mandateCount] = await Promise.all([
+    getPublicMeasuresByCandidacy(candidacyId),
+    // Cheap and index-backed: `votingDate` is denormalized onto Vote precisely so a
+    // "votes for politician" sort needs no join.
+    db.vote.findMany({
+      where: { politicianId },
+      orderBy: { votingDate: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        position: true,
+        votingDate: true,
+        scrutin: { select: { id: true, title: true } },
+      },
+    }),
+    db.mandate.count({ where: { politicianId } }),
+  ]);
+
+  const byTheme = new Map<ThemeCategory, PublicMeasure[]>();
+  for (const measure of measures) {
+    const bucket = byTheme.get(measure.theme) ?? [];
+    bucket.push(measure);
+    byTheme.set(measure.theme, bucket);
+  }
+
+  const themes: CandidateThemeBreakdown[] = [...byTheme.entries()]
+    .map(([theme, list]) => {
+      const first = list[0];
+      return {
+        theme,
+        slug: themeToSlug(theme),
+        measureCount: list.length,
+        quote:
+          first === undefined
+            ? null
+            : { text: first.text, sourceUrl: first.sources[0]?.url ?? null },
+      };
+    })
+    // Most documented first: this block answers "where does this candidacy put the accent", and
+    // alphabetical order would bury the answer. It is a count of OUR extraction, not a ranking of
+    // candidacies against each other, which is why it is allowed here and not on the field.
+    .sort((a, b) => b.measureCount - a.measureCount);
+
+  return {
+    themes,
+    recentVotes: votes.map((v) => ({
+      id: v.id,
+      position: v.position,
+      votingDate: v.votingDate,
+      scrutinTitle: v.scrutin.title,
+      scrutinId: v.scrutin.id,
+    })),
+    mandateCount,
   };
 }
 
@@ -136,4 +235,34 @@ async function getPoliticianPresidentialCandidacyCached(
   cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadPoliticianPresidentialCandidacy(politicianId);
+}
+
+/**
+ * Cached companion of the read above, same tags for the same reason: the themes and their quotes
+ * move on a measure publication, and the candidacy's visibility on an extension transition. The
+ * `votes` tag as well, since the last-votes block is invalidated by a scrutin import.
+ */
+export async function getCandidateFicheDetail(
+  candidacyId: string,
+  politicianId: string
+): Promise<CandidateFicheDetail> {
+  const election = await db.election.findUnique({
+    where: { slug: PRESIDENTIELLE_2027_SLUG },
+    select: { id: true },
+  });
+  if (election === null) return { themes: [], recentVotes: [], mandateCount: 0 };
+  return getCandidateFicheDetailCached(candidacyId, politicianId, election.id);
+}
+
+async function getCandidateFicheDetailCached(
+  candidacyId: string,
+  politicianId: string,
+  electionId: string
+): Promise<CandidateFicheDetail> {
+  "use cache";
+  cacheTag(`election-measures:${electionId}`);
+  cacheTag(`election-candidacies:${electionId}`);
+  cacheTag("votes");
+  cacheLife("synced");
+  return loadCandidateFicheDetail(candidacyId, politicianId);
 }

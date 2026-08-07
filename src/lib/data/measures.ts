@@ -160,6 +160,25 @@ export async function getPublicMeasuresByTheme(
 }
 
 /**
+ * Every publicly visible measure of one candidacy, for its fiche.
+ *
+ * Same visibility rule as the two reads above, scoped to a candidacy instead of an election or a
+ * theme. Withdrawals are excluded by default here as everywhere: a fiche stating what a candidacy
+ * proposes should not count a proposal it has dropped.
+ */
+export async function getPublicMeasuresByCandidacy(
+  candidacyId: string,
+  options?: MeasureListOptions
+): Promise<PublicMeasure[]> {
+  const rows = await db.measure.findMany({
+    where: { candidacyId, ...PUBLIC_MEASURE_WHERE, ...withdrawalFilter(options) },
+    include: PUBLIC_MEASURE_INCLUDE,
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map(toPublicMeasure).filter((m): m is PublicMeasure => m !== null);
+}
+
+/**
  * Moderation read. Applies NO filter, on purpose: the admin has to see drafts, discarded
  * revisions and depublished measures, which is the whole reason the public and moderation
  * reads are two different functions in the same file.

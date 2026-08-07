@@ -6,6 +6,7 @@ const BEFORE = new Date("2026-08-07T10:00:00.000Z");
 const AFTER = new Date("2027-05-10T10:00:00.000Z");
 
 const base: PoliticianCandidacy = {
+  candidacyId: "cand-1",
   electionSlug: "presidentielle-2027",
   electionShortTitle: "Présidentielle 2027",
   round1Date: new Date("2027-04-11T00:00:00.000Z"),
