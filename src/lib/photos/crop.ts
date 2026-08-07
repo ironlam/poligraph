@@ -161,12 +161,33 @@ function chooseRegion(
     };
   }
 
-  // Largest square, centred on the attention point when we have one.
+  // Largest square, anchored to the top of the frame, centred horizontally on
+  // the attention point when we have one.
+  //
+  // The vertical axis is not sharp's to choose. Reaching this branch means no
+  // face was found, so the attention point is the only signal left, and it is
+  // routinely drawn to a lectern, a tie or a raised hand: on Jean-Luc
+  // Mélenchon's file it put the square's top edge below his chin, on Christiane
+  // Taubira's it cut the face at the nose. In a portrait the head is at the top,
+  // so anchoring there cannot decapitate the subject.
+  //
+  // That also bounds the fallback by what doing nothing would give — the same
+  // square a CSS `object-position: top` would show — which is the property the
+  // old code lacked: it could, and did, publish a framing worse than the
+  // untouched source.
+  //
+  // Horizontally the attention point still earns its keep: it is what picks the
+  // subject out of two people standing side by side.
+  //
+  // What this does not fix, and cannot: a source that is itself a tight vertical
+  // close-up, where the head fills the frame and no square holds all of it —
+  // Roselyne Bachelot's file loses the chin whatever the offset. That is a choice
+  // of photograph, not a choice of geometry, and telling the two apart needs the
+  // face detection that failed us to get here.
   const centreX = attention?.x ?? source.width / 2;
-  const centreY = attention?.y ?? source.height / 2;
   return {
     left: clamp(Math.round(centreX - maxSize / 2), 0, source.width - maxSize),
-    top: clamp(Math.round(centreY - maxSize / 2), 0, source.height - maxSize),
+    top: 0,
     size: maxSize,
   };
 }

@@ -31,8 +31,16 @@ async function syntheticPortrait(
     .toBuffer();
 }
 
-/** A source with no skin tones at all, to exercise the fallback. */
-async function greyscaleScene(width: number, height: number): Promise<Buffer> {
+/**
+ * A source with no skin tones at all, to exercise the fallback. The lone bright
+ * patch is what sharp's attention strategy locks onto, so moving it moves the
+ * attention point.
+ */
+async function greyscaleScene(
+  width: number,
+  height: number,
+  patchAt: { left: number; top: number } = { left: 40, top: 40 }
+): Promise<Buffer> {
   const patch = await sharp({
     create: { width: 200, height: 200, channels: 3, background: { r: 150, g: 150, b: 150 } },
   })
@@ -41,7 +49,7 @@ async function greyscaleScene(width: number, height: number): Promise<Buffer> {
   return sharp({
     create: { width, height, channels: 3, background: { r: 60, g: 60, b: 60 } },
   })
-    .composite([{ input: patch, left: 40, top: 40 }])
+    .composite([{ input: patch, left: patchAt.left, top: patchAt.top }])
     .jpeg()
     .toBuffer();
 }
@@ -95,13 +103,19 @@ describe("cropToPortrait", () => {
   });
 
   it("follows the head down a tall photo instead of centring", async () => {
+    // Both heads sit above MAX_HEAD_CENTRE_SHARE, so both are framed by the face
+    // strategy. Asserting that is the point: only the face strategy is allowed to
+    // move the square down the frame, and a head placed lower than this is not a
+    // head at all — it is the hand the guard exists to reject.
     const headHigh = await syntheticPortrait(600, 1800, { left: 200, top: 120, size: 200 });
-    const headLow = await syntheticPortrait(600, 1800, { left: 200, top: 1400, size: 200 });
+    const headLow = await syntheticPortrait(600, 1800, { left: 200, top: 800, size: 200 });
 
     const high = await cropToPortrait(headHigh);
     const low = await cropToPortrait(headLow);
 
-    expect(low.region.top).toBeGreaterThan(high.region.top + 800);
+    expect(high.strategy).toBe("face");
+    expect(low.strategy).toBe("face");
+    expect(low.region.top).toBeGreaterThan(high.region.top + 500);
   });
 
   it("always returns a region inside the source bounds", async () => {
@@ -138,6 +152,18 @@ describe("cropToPortrait", () => {
     expect(strategy).toBe("attention");
     // The fallback never zooms: the square is as large as the image allows.
     expect(region.size).toBe(900);
+  });
+
+  it("anchors the fallback to the top even when attention is drawn low", async () => {
+    // The failure this locks out. No face found, and the only thing in frame for
+    // sharp to lock onto sits near the bottom. Letting it choose the vertical
+    // offset published squares that started below the subject's chin, so a
+    // portrait that was correct at the source came out decapitated.
+    const scene = await greyscaleScene(900, 1600, { left: 350, top: 1350 });
+    const { strategy, region } = await cropToPortrait(scene);
+
+    expect(strategy).toBe("attention");
+    expect(region.top).toBe(0);
   });
 
   it("applies EXIF orientation before cropping", async () => {
