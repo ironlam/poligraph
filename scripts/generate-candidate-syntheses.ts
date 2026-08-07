@@ -15,6 +15,7 @@
 
 import { db } from "@/lib/db";
 import { callAnthropic } from "@/lib/api/anthropic";
+import { callMistral, extractMistralText } from "@/lib/api/mistral";
 import {
   buildCandidateSynthesisPrompt,
   screenSynthesis,
@@ -28,6 +29,51 @@ const MANDATE_LIMIT = 8;
 
 const apply = process.argv.includes("--apply");
 const only = process.argv.find((a) => a.startsWith("--only="))?.split("=")[1];
+
+/**
+ * Anthropic first, Mistral if it fails, same broad fallback as `classify-theme`.
+ *
+ * Falling back on any error rather than on a quota signal is deliberate and copied
+ * from there: telling a spent balance apart from a rate limit or a bad request is
+ * brittle, and the output goes through `screenSynthesis` whatever produced it. The
+ * failure this actually covers is the recurring one on this project, an Anthropic
+ * balance at zero, which returns a plain 400.
+ *
+ * Both errors are carried into the throw. A run that dies with only the second one
+ * would hide the reason the first provider was skipped.
+ */
+async function generate(system: string, user: string): Promise<{ text: string; provider: string }> {
+  let anthropicError: string;
+  try {
+    const response = await callAnthropic([{ role: "user", content: user }], {
+      system,
+      maxTokens: 900,
+    });
+    return {
+      text: response.content.find((c) => c.type === "text")?.text ?? "",
+      provider: "anthropic",
+    };
+  } catch (error) {
+    anthropicError = error instanceof Error ? error.message : String(error);
+    console.warn(`[synthèses] anthropic indisponible (${anthropicError}), repli sur mistral`);
+  }
+
+  try {
+    const response = await callMistral(
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      { maxTokens: 900 }
+    );
+    return { text: extractMistralText(response), provider: "mistral" };
+  } catch (error) {
+    const mistralError = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Génération impossible — anthropic : ${anthropicError} ; mistral : ${mistralError}`
+    );
+  }
+}
 
 async function main(): Promise<void> {
   const election = await db.election.findFirst({
@@ -103,14 +149,10 @@ async function main(): Promise<void> {
       ),
     };
 
-    const response = await callAnthropic(
-      [{ role: "user", content: buildCandidateSynthesisPrompt(input) }],
-      {
-        system: SYNTHESIS_SYSTEM_PROMPT,
-        maxTokens: 900,
-      }
+    const { text: raw, provider } = await generate(
+      SYNTHESIS_SYSTEM_PROMPT,
+      buildCandidateSynthesisPrompt(input)
     );
-    const raw = response.content.find((c) => c.type === "text")?.text ?? "";
     const screened = screenSynthesis(raw);
 
     if (!screened.ok) {
@@ -121,7 +163,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `OK ${candidacy.candidateName} (${mandates.length} mandats, ${input.measures.length} mesures)`
+      `OK ${candidacy.candidateName} (${mandates.length} mandats, ${input.measures.length} mesures, ${provider})`
     );
     console.log(`${screened.text}\n`);
 
