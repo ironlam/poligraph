@@ -1446,9 +1446,30 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
  * Not routed through `feminizePartyRole`: that helper is a closed replacement table over four party
  * role labels and "Candidat" is not one of them. Extending it would make it a general feminiser it
  * was never designed to be.
+ *
+ * The third branch is the one the mockup does not cover. `Politician.civility` is null on 5 of the
+ * 25 sourced presidential candidacies, and falling back to the masculine would state a gender the
+ * database does not hold, on a real person's fiche. The neutral form agrees with "candidature", a
+ * feminine noun, and says nothing about the person, which is what the notice already does in its
+ * withdrawn state.
  */
 export function candidacyRoleLabel(civility: string | null | undefined): string {
-  return civility === "Mme" ? "Candidate à la présidentielle" : "Candidat à la présidentielle";
+  if (civility === "Mme") return "Candidate à la présidentielle";
+  if (civility === "M.") return "Candidat à la présidentielle";
+  return "Candidature à la présidentielle";
+}
+
+/**
+ * Title of the notice for a candidacy the press mentions and nobody declared.
+ *
+ * Same three branches and the same reason: "Cité" is a past participle that agrees with the person,
+ * so the mockup's single wording would print "Cité" on a woman's fiche. The neutral branch drops the
+ * participle rather than guessing.
+ */
+export function candidacyPossibleLabel(civility: string | null | undefined): string {
+  if (civility === "Mme") return "Citée parmi les candidatures possibles";
+  if (civility === "M.") return "Cité parmi les candidatures possibles";
+  return "Parmi les candidatures possibles";
 }
 
 // ---------------------------------------------------------------------------

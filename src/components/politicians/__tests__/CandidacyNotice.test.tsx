@@ -78,7 +78,7 @@ describe("CandidacyNotice", () => {
   });
 
   it("traite une candidature pressentie plus faiblement, au conditionnel", () => {
-    const { container } = renderNotice({ ...base, status: "PRESSENTI" });
+    const { container } = renderNotice({ ...base, status: "PRESSENTI" }, "M.");
     expect(screen.getByText("Cité parmi les candidatures possibles")).toBeInTheDocument();
     expect(screen.getByText(/Rien n'a été déclaré/)).toBeInTheDocument();
     // No accent rule: a press mention must not look like a declaration.
@@ -111,6 +111,69 @@ describe("CandidacyNotice", () => {
   it("n'affiche aucun score après l'élection quand la base n'en a pas", () => {
     renderNotice(base, "Mme", AFTER);
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+  });
+
+  it("ne répète pas le statut quand le titre le dit déjà mot pour mot", () => {
+    // Observed on the only withdrawn candidacy in production: withdrewAt is null, so the title
+    // falls back to "Candidature retirée", which is verbatim CANDIDACY_STATUS_LABELS.RETIRE, and
+    // the page printed the same sentence twice in a row.
+    renderNotice({ ...base, status: "RETIRE", withdrewAt: null });
+
+    expect(screen.getAllByText("Candidature retirée")).toHaveLength(1);
+  });
+
+  it("garde la pastille de statut dès que le titre en diffère", () => {
+    renderNotice({
+      ...base,
+      status: "RETIRE",
+      withdrewAt: new Date("2027-03-03T00:00:00.000Z"),
+    });
+
+    expect(screen.getByText(/Candidature retirée le/)).toBeInTheDocument();
+    expect(screen.getByText("Candidature retirée")).toBeInTheDocument();
+  });
+
+  it("nomme la date de retrait manquante au lieu de sous-entendre un datage", () => {
+    renderNotice({
+      ...base,
+      status: "RETIRE",
+      withdrewAt: null,
+      publishedMeasureCount: 18,
+      primarySourceMeasureCount: 15,
+    });
+
+    expect(screen.getByText(/Date du retrait non renseignée/)).toBeInTheDocument();
+    expect(screen.queryByText(/datées de la période de campagne/)).not.toBeInTheDocument();
+  });
+
+  it("accorde les compteurs au singulier : le seuil de publication s'ouvre à une mesure", () => {
+    renderNotice({
+      ...base,
+      publishedMeasureCount: 1,
+      themesCoveredCount: 1,
+      primarySourceMeasureCount: 1,
+    });
+
+    expect(screen.getByText(/1 mesure sur 1 sujet/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 mesures/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 sujets/)).not.toBeInTheDocument();
+  });
+
+  it("ne genre pas la personne quand la civilité est inconnue", () => {
+    // 5 of the 25 sourced presidential candidacies carry a null civility. Defaulting to the
+    // masculine would state a gender the database does not hold.
+    renderNotice(base, null);
+
+    expect(screen.getByText("Candidature à la présidentielle")).toBeInTheDocument();
+    expect(screen.queryByText("Candidat à la présidentielle")).not.toBeInTheDocument();
+  });
+
+  it("accorde le participe de l'état pressenti, et le retire quand la civilité manque", () => {
+    renderNotice({ ...base, status: "PRESSENTI" }, "Mme");
+    expect(screen.getByText("Citée parmi les candidatures possibles")).toBeInTheDocument();
+
+    renderNotice({ ...base, status: "PRESSENTI" }, null);
+    expect(screen.getByText("Parmi les candidatures possibles")).toBeInTheDocument();
   });
 
   it("garde le traitement du retrait après l'élection", () => {

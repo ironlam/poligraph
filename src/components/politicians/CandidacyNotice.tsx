@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { ChevronRight, CircleX, ExternalLink, Landmark, TrendingUp } from "lucide-react";
-import { CANDIDACY_STATUS_LABELS, candidacyRoleLabel } from "@/config/labels";
+import {
+  CANDIDACY_STATUS_LABELS,
+  candidacyPossibleLabel,
+  candidacyRoleLabel,
+} from "@/config/labels";
 import type { PoliticianCandidacy } from "@/lib/data/politician-candidacy";
 import { deriveCandidacyNoticeState } from "@/lib/politicians/candidacy-notice-state";
 import { formatDate } from "@/lib/utils";
@@ -30,6 +34,16 @@ function formatPct(pct: number): string {
   return `${pct.toFixed(1).replace(".", ",")} %`;
 }
 
+/**
+ * Plural agreement on the counters.
+ *
+ * Not cosmetic: `isFicheCandidatPublishable` opens the state at ONE primary-sourced measure, so
+ * "1 mesures sur 1 sujets" is reachable the day a candidacy crosses the gate with a single measure.
+ */
+function plural(count: number, singular: string): string {
+  return `${count} ${singular}${count > 1 ? "s" : ""}`;
+}
+
 export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticeProps) {
   const state = deriveCandidacyNoticeState(candidacy, now);
   const hubHref = `/elections/${candidacy.electionSlug}`;
@@ -39,12 +53,21 @@ export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticePro
 
   const title =
     state.kind === "POSSIBLE"
-      ? "Cité parmi les candidatures possibles"
+      ? candidacyPossibleLabel(civility)
       : state.kind === "WITHDRAWN"
         ? `Candidature retirée${candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""}`
         : state.kind === "PAST"
           ? `${candidacyRoleLabel(civility)} en 2027`
           : candidacyRoleLabel(civility);
+
+  // The status pill sits next to the source link, which is why it is not simply dropped when it
+  // repeats the title. Observed on the only withdrawn candidacy in production: with `withdrewAt`
+  // null, the title falls back to "Candidature retirée", which is verbatim
+  // CANDIDACY_STATUS_LABELS.RETIRE, and the page printed the same sentence twice in a row. Guarding
+  // on equality rather than on the state kills the whole class, including a future label edit that
+  // would make another state collide.
+  const showStatusPill =
+    state.kind !== "PAST" && CANDIDACY_STATUS_LABELS[candidacy.status] !== title;
 
   const explanation =
     state.kind === "DECLARED_EMPTY"
@@ -52,7 +75,11 @@ export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticePro
       : state.kind === "POSSIBLE"
         ? "Rien n'a été déclaré. La mention vient de la presse, elle est datée, et elle disparaît si elle n'est pas confirmée."
         : state.kind === "WITHDRAWN" && candidacy.publishedMeasureCount > 0
-          ? `Les ${candidacy.publishedMeasureCount} mesures documentées restent consultables, datées de la période de campagne.`
+          ? // The date lives in the title, so the sentence can only point at it when it exists.
+            // Without it, naming the gap beats implying a dating we do not hold.
+            candidacy.withdrewAt
+            ? `Les ${plural(candidacy.publishedMeasureCount, "mesure")} documentées restent consultables, datées de la période de campagne.`
+            : `Les ${plural(candidacy.publishedMeasureCount, "mesure")} documentées restent consultables. Date du retrait non renseignée.`
           : null;
 
   const footer =
@@ -62,7 +89,7 @@ export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticePro
           // announces the volume either way, so the reader knows what they will find.
           href: hubHref,
           label: "Son programme, sujet par sujet",
-          detail: `${candidacy.publishedMeasureCount} mesures sur ${candidacy.themesCoveredCount} sujets${
+          detail: `${plural(candidacy.publishedMeasureCount, "mesure")} sur ${plural(candidacy.themesCoveredCount, "sujet")}${
             candidacy.lastReviewedAt ? ` · revue le ${formatDate(candidacy.lastReviewedAt)}` : ""
           }`,
         }
@@ -110,9 +137,11 @@ export function CandidacyNotice({ candidacy, civility, now }: CandidacyNoticePro
 
           {state.kind !== "PAST" && (
             <p className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-                {CANDIDACY_STATUS_LABELS[candidacy.status]}
-              </span>
+              {showStatusPill && (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  {CANDIDACY_STATUS_LABELS[candidacy.status]}
+                </span>
+              )}
               <a
                 href={candidacy.sourceUrl}
                 target="_blank"
