@@ -234,6 +234,66 @@ export async function getLatestPresidentialReviewDate(
 }
 
 /**
+ * Counters for ONE candidacy, without loading a single measure.
+ *
+ * Lives here and not on the calling page because `PUBLIC_MEASURE_WHERE` is private to this file and
+ * this module's doctrine is that no page reads `db.measure.*`.
+ *
+ * Composed from the two existing predicates, like `getLatestPresidentialReviewDate` above and for
+ * the same reason: a third hand-rolled copy of the publishable population is how the hub's count
+ * and its review date drifted apart.
+ *
+ * The PRIMARY-source condition is expressed on `publishedRevision`, never as a join over the
+ * measure's revisions. A draft revision that nobody published must not make its measure count as
+ * primary-sourced: these numbers feed `isFicheCandidatPublishable()`, so a looser predicate would
+ * open a candidate fiche on the strength of unpublished work.
+ */
+export type PublicMeasureStats = {
+  measureCount: number;
+  themesCoveredCount: number;
+  primarySourceMeasureCount: number;
+  lastReviewedAt: Date | null;
+};
+
+export async function getPublicMeasureStatsByCandidacy(
+  candidacyId: string
+): Promise<PublicMeasureStats> {
+  const scope: Prisma.MeasureWhereInput = {
+    candidacyId,
+    // `is` and not a bare object, as in getLatestPresidentialReviewDate: it also rules out a
+    // candidacy row that has no presidential extension at all.
+    candidacy: { is: PUBLIC_CANDIDACY_WHERE },
+    withdrawnAt: null,
+    ...PUBLIC_MEASURE_WHERE,
+  };
+
+  const [byTheme, primarySourceMeasureCount, lastReviewed] = await Promise.all([
+    db.measure.groupBy({ by: ["theme"], where: scope, _count: { _all: true } }),
+    db.measure.count({
+      where: {
+        ...scope,
+        publishedRevision: {
+          ...PUBLIC_MEASURE_WHERE.publishedRevision,
+          sources: { some: { tier: "PRIMARY" } },
+        },
+      },
+    }),
+    db.measure.findFirst({
+      where: scope,
+      orderBy: { publishedRevision: { reviewedAt: "desc" } },
+      select: { publishedRevision: { select: { reviewedAt: true } } },
+    }),
+  ]);
+
+  return {
+    measureCount: byTheme.reduce((n, row) => n + row._count._all, 0),
+    themesCoveredCount: byTheme.length,
+    primarySourceMeasureCount,
+    lastReviewedAt: lastReviewed?.publishedRevision?.reviewedAt ?? null,
+  };
+}
+
+/**
  * The revision publicly in force on a given day. The condition on publishedAt is not
  * optional: without it the query can select a draft that was never published, and make the
  * site report a text it never displayed.
