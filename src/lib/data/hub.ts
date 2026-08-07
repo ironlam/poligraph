@@ -4,6 +4,11 @@ import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
+import {
+  resolveProgrammeAbsence,
+  rollupMeasuresByCandidacy,
+} from "@/lib/presidentielle/candidacy-rollup";
+import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
 import { loadThemesIndex } from "./themes-index";
 import { getLatestPresidentialReviewDate, getPublicMeasuresByElection } from "./measures";
 
@@ -85,7 +90,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
   });
   if (election === null) return [];
 
-  const [rows, measures, editions] = await Promise.all([
+  const [rows, measures, publicCandidates, editions] = await Promise.all([
     db.candidacy.findMany({
       // The field is the race, not the published fiches: sourced candidacies (status + both
       // source fields non-null), no extension required. Alphabetical order.
@@ -110,6 +115,10 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
     // Defended measures only: `getPublicMeasuresByElection` drops withdrawals unless asked, and a
     // proposal a candidate has dropped is not one they still carry.
     getPublicMeasuresByElection(election.id),
+    // The subject-page population, used to intersect those measures. Same read and same reason as
+    // `loadThemesIndex`: a measure on a DRAFT-extension candidacy is rendered nowhere, so counting
+    // it on this row would advertise work the reader cannot reach (invariant I7).
+    getPublicPresidentialCandidates(electionSlug),
     // A programme edition owned by the candidacy OR by its party. The party case is not a
     // convenience: three socialist candidacies point at one Projet socialiste, and reading only
     // `candidacyId` would report all three as having published nothing.
@@ -119,14 +128,10 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
     }),
   ]);
 
-  const byCandidacy = new Map<string, { count: number; themes: Set<string> }>();
-  for (const measure of measures) {
-    if (measure.candidacyId === null) continue;
-    const bucket = byCandidacy.get(measure.candidacyId) ?? { count: 0, themes: new Set<string>() };
-    bucket.count += 1;
-    bucket.themes.add(measure.theme);
-    byCandidacy.set(measure.candidacyId, bucket);
-  }
+  const byCandidacy = rollupMeasuresByCandidacy(
+    measures,
+    new Set(publicCandidates.map((c) => c.id))
+  );
 
   const editionCandidacyIds = new Set(
     editions.map((e) => e.candidacyId).filter((id): id is string => id !== null)
@@ -136,8 +141,8 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
   );
 
   return sortPresidentialCandidatesBySurname(rows).map((c) => {
-    const bucket = byCandidacy.get(c.id);
-    const measureCount = bucket?.count ?? 0;
+    const rollup = byCandidacy.get(c.id);
+    const measureCount = rollup?.measureCount ?? 0;
     const hasProgramme =
       editionCandidacyIds.has(c.id) || (c.partyId !== null && editionPartyIds.has(c.partyId));
 
@@ -153,13 +158,8 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
       partyShortName: c.party?.shortName ?? null,
       partyLogoUrl: c.party?.logoUrl ?? null,
       measureCount,
-      themesCoveredCount: bucket?.themes.size ?? 0,
-      programmeAbsence:
-        measureCount > 0
-          ? null
-          : hasProgramme
-            ? ("non_depouille" as const)
-            : ("aucun_programme" as const),
+      themesCoveredCount: rollup?.themesCoveredCount ?? 0,
+      programmeAbsence: resolveProgrammeAbsence(measureCount, hasProgramme),
     };
   });
 }
