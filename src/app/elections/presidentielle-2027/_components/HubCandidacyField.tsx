@@ -1,46 +1,22 @@
-import { CandidacyCard, type CandidacyCardData } from "@/components/elections/CandidacyCard";
+import { Suspense } from "react";
 import type { HubCandidacy } from "@/lib/data/hub";
+import { CandidacyFieldBrowser } from "./CandidacyFieldBrowser";
 
 /**
- * The whole field, not the published fiches: every sourced candidacy, pressenti/envisagé
- * included. `constituencyName`/`isElected`/`round1Pct`/`round2Pct` have no meaning before a
- * first round exists, so they map to their neutral values rather than to a guess.
+ * The whole field, not the published fiches: every sourced candidacy, pressenti/envisagé included.
+ *
+ * `<Suspense>` because the browser reads `useSearchParams`, which without a boundary opts the whole
+ * route into client-side rendering and would cost the hub its ISR.
  */
-function toCandidacyCardData(candidacy: HubCandidacy): CandidacyCardData {
-  return {
-    id: candidacy.id,
-    candidateName: candidacy.candidateName,
-    partyLabel: candidacy.partyLabel,
-    constituencyName: null,
-    isElected: false,
-    round1Pct: null,
-    round2Pct: null,
-    status: candidacy.status,
-    sourceUrl: candidacy.sourceUrl,
-    sourceLabel: candidacy.sourceLabel,
-    politician: candidacy.politicianSlug !== null ? { slug: candidacy.politicianSlug } : null,
-    // Null when the candidacy is not linked to a party entity: the card then renders no mark at
-    // all rather than a grey placeholder that would look like a party we failed to identify.
-    party:
-      candidacy.partyColor !== null || candidacy.partyLogoUrl !== null
-        ? {
-            color: candidacy.partyColor,
-            shortName: candidacy.partyShortName,
-            logoUrl: candidacy.partyLogoUrl,
-          }
-        : null,
-  };
-}
-
 export function HubCandidacyField({ candidacies }: { candidacies: HubCandidacy[] }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Candidatures classées par nom de famille.</p>
-      <div className="space-y-2">
-        {candidacies.map((candidacy) => (
-          <CandidacyCard key={candidacy.id} candidacy={toCandidacyCardData(candidacy)} />
-        ))}
-      </div>
+      <Suspense
+        fallback={<div className="h-96 rounded-xl border border-border bg-card" aria-hidden />}
+      >
+        <CandidacyFieldBrowser candidacies={candidacies} />
+      </Suspense>
     </div>
   );
 }
