@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
+import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import { loadThemesIndex } from "./themes-index";
 import { getLatestPresidentialReviewDate } from "./measures";
 
@@ -84,19 +85,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
     },
   });
 
-  // Sorted by SURNAME, which is what the page announces. `candidateName` is "Prénom Nom", so ordering
-  // on it in SQL sorts by first name: "Édouard Philippe" would land under E, not P. The surname comes
-  // from the linked politician, which is where the database actually separates the two; a candidacy
-  // without a politician falls back to its full name rather than being dropped.
-  // localeCompare with "fr" so accents sort where a French reader expects (É with E, not after Z).
-  const collator = new Intl.Collator("fr", { sensitivity: "base" });
-  const sortKey = (c: (typeof rows)[number]) => c.politician?.lastName ?? c.candidateName;
-  rows.sort(
-    (a, b) =>
-      collator.compare(sortKey(a), sortKey(b)) || collator.compare(a.candidateName, b.candidateName)
-  );
-
-  return rows.map((c) => ({
+  return sortPresidentialCandidatesBySurname(rows).map((c) => ({
     id: c.id,
     candidateName: c.candidateName,
     politicianSlug: c.politician?.slug ?? null,
