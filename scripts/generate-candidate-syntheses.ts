@@ -149,18 +149,34 @@ async function main(): Promise<void> {
       ),
     };
 
-    const { text: raw, provider } = await generate(
-      SYNTHESIS_SYSTEM_PROMPT,
-      buildCandidateSynthesisPrompt(input)
-    );
-    const screened = screenSynthesis(raw);
+    const hasMeasures = input.measures.length > 0;
+    const prompt = buildCandidateSynthesisPrompt(input);
+
+    let attempt = await generate(SYNTHESIS_SYSTEM_PROMPT, prompt);
+    let screened = screenSynthesis(attempt.text, { hasMeasures });
+
+    // One retry, naming the rule that was broken. Measured on a first full run: the
+    // model obeys the rules it is reminded of and slips on the ones it is only told
+    // once, the long dash above all. Retrying blind would just roll the dice again,
+    // and retrying twice would paper over a prompt that genuinely needs fixing.
+    if (!screened.ok) {
+      console.log(
+        `   reprise ${candidacy.candidateName} : ${screened.reason} (${screened.detail})`
+      );
+      attempt = await generate(
+        SYNTHESIS_SYSTEM_PROMPT,
+        `${prompt}\n\nTa réponse précédente a été refusée : ${screened.detail}. Recommence en respectant cette règle.`
+      );
+      screened = screenSynthesis(attempt.text, { hasMeasures });
+    }
 
     if (!screened.ok) {
       rejected++;
       console.log(`REFUSÉ ${candidacy.candidateName} : ${screened.reason} (${screened.detail})`);
-      console.log(`   texte : ${raw.slice(0, 160)}\n`);
+      console.log(`   texte : ${attempt.text.slice(0, 160)}\n`);
       continue;
     }
+    const provider = attempt.provider;
 
     console.log(
       `OK ${candidacy.candidateName} (${mandates.length} mandats, ${input.measures.length} mesures, ${provider})`

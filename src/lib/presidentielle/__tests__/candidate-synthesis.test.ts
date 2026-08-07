@@ -4,6 +4,7 @@ import {
   screenSynthesis,
   SYNTHESIS_MAX_WORDS,
   SYNTHESIS_MIN_WORDS,
+  SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES,
   type CandidateSynthesisInput,
 } from "../candidate-synthesis";
 
@@ -67,6 +68,18 @@ describe("buildCandidateSynthesisPrompt", () => {
     });
     expect(prompt).not.toContain('"bravo"');
     expect(prompt.split("</programme>")).toHaveLength(2);
+  });
+
+  it("normalises long dashes coming from stored names", () => {
+    // Two party names carry a demi-cadratin. Handing one to a model told never to use
+    // one, then rejecting its faithful copy, refused the only two candidacies whose
+    // party is spelled that way.
+    const prompt = buildCandidateSynthesisPrompt({
+      ...BASE,
+      partyLabel: "Les Écologistes – Europe Écologie Les Verts",
+    });
+    expect(prompt).not.toMatch(/[—–]/);
+    expect(prompt).toContain("Les Écologistes - Europe Écologie Les Verts");
   });
 
   it("caps a very long stored value", () => {
@@ -136,5 +149,43 @@ describe("screenSynthesis", () => {
   it("accepts exactly at both bounds", () => {
     expect(screenSynthesis(words(SYNTHESIS_MIN_WORDS)).ok).toBe(true);
     expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS)).ok).toBe(true);
+  });
+
+  describe("floor follows the material", () => {
+    // The contradiction this closes: the model is told to state an empty record in one
+    // sentence rather than pad, and a single high floor then rejected it for obeying.
+    // Thirteen of twenty candidacies failed that way on the first full run.
+    const short = words(40);
+
+    it("rejects a short text when there are measures to summarise", () => {
+      expect(screenSynthesis(short, { hasMeasures: true })).toMatchObject({
+        ok: false,
+        reason: "trop_court",
+      });
+    });
+
+    it("accepts the same text when there is no measure", () => {
+      expect(screenSynthesis(short, { hasMeasures: false }).ok).toBe(true);
+    });
+
+    it("still refuses a near-empty text without measures", () => {
+      expect(
+        screenSynthesis(words(SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES - 1), { hasMeasures: false })
+      ).toMatchObject({ ok: false, reason: "trop_court" });
+    });
+
+    it("applies the ceiling and the other rules whatever the material", () => {
+      expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), { hasMeasures: false })).toMatchObject(
+        { ok: false, reason: "trop_long" }
+      );
+      expect(
+        screenSynthesis(`Une condamnation a été prononcée. ${words(40)}`, { hasMeasures: false })
+      ).toMatchObject({ ok: false, reason: "judiciaire" });
+    });
+
+    it("keeps the strict floor when the caller says nothing", () => {
+      // Defaulting to the low floor would silently accept thin texts everywhere.
+      expect(screenSynthesis(short)).toMatchObject({ ok: false, reason: "trop_court" });
+    });
   });
 });

@@ -18,7 +18,21 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 /** Longest a field may be before it goes into the prompt. */
 const FIELD_LIMIT = 240;
 
+/**
+ * Word bounds, and why there are two floors rather than one.
+ *
+ * A single high floor contradicts the instruction the model is given. It is told to
+ * state an empty record in one sentence rather than pad, and a candidacy we have not
+ * yet documented has nothing to say about its programme: on a first run, thirteen of
+ * twenty candidacies came back between 27 and 75 words, all of them correct, all of
+ * them rejected by a 90-word floor. The floor was punishing the model for obeying.
+ *
+ * So the floor follows the material. With measures to summarise, a text under 90
+ * words is thin and something went wrong. Without them, brevity is the honest answer
+ * and only an empty one is a failure.
+ */
 export const SYNTHESIS_MIN_WORDS = 90;
+export const SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES = 25;
 export const SYNTHESIS_MAX_WORDS = 200;
 
 export type SynthesisMandate = {
@@ -47,12 +61,21 @@ export type CandidateSynthesisInput = {
  * editorial content someone typed, so none of it is trusted.
  */
 function safe(value: string): string {
-  return value
-    .replace(/[<>]/g, " ")
-    .replace(/["\n\r]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, FIELD_LIMIT);
+  return (
+    value
+      .replace(/[<>]/g, " ")
+      .replace(/["\n\r]/g, " ")
+      // Long dashes are normalised on the way IN, not just refused on the way out.
+      // Two party names carry one ("Les Écologistes – Europe Écologie Les Verts",
+      // "Nouveau Parti anticapitaliste – Révolutionnaires"), the model copied them
+      // faithfully, and the output screen rejected it for that. It was punishing
+      // accuracy: the only long dash the model had ever seen was one we handed it.
+      // The database keeps the official name, this only touches the prompt.
+      .replace(/[—–]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, FIELD_LIMIT)
+  );
 }
 
 function formatMandate(mandate: SynthesisMandate): string {
@@ -136,7 +159,12 @@ export type SynthesisScreen =
  * reach a length, a model that reaches for the em dash it was told not to use.
  * A rejection is not a fallback to a degraded text: the caller stores nothing.
  */
-export function screenSynthesis(raw: string): SynthesisScreen {
+export function screenSynthesis(
+  raw: string,
+  options: { hasMeasures?: boolean } = {}
+): SynthesisScreen {
+  const minWords =
+    options.hasMeasures === false ? SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES : SYNTHESIS_MIN_WORDS;
   const text = raw.trim();
   if (text === "") return { ok: false, reason: "vide", detail: "le modèle n'a rien renvoyé" };
 
@@ -165,11 +193,11 @@ export function screenSynthesis(raw: string): SynthesisScreen {
   }
 
   const words = text.split(/\s+/).filter(Boolean).length;
-  if (words < SYNTHESIS_MIN_WORDS) {
+  if (words < minWords) {
     return {
       ok: false,
       reason: "trop_court",
-      detail: `${words} mots, minimum ${SYNTHESIS_MIN_WORDS}`,
+      detail: `${words} mots, minimum ${minWords}`,
     };
   }
   if (words > SYNTHESIS_MAX_WORDS) {
