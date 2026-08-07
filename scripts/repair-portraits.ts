@@ -37,7 +37,7 @@ import {
 import { cropToPortrait, readDimensions } from "../src/lib/photos/crop";
 import { screenFilename, screenGeometry } from "../src/lib/photos/portrait-guard";
 import { fetchP18Filenames, filenameFromThumbnailUrl } from "../src/lib/photos/wikidata-image";
-import { uploadCroppedPortrait } from "../src/lib/photos/blob";
+import { uploadCroppedPortrait, deleteCroppedPortrait } from "../src/lib/photos/blob";
 
 const client = new HTTPClient({ rateLimitMs: 150 });
 
@@ -219,6 +219,7 @@ async function runDiscover(options: Options): Promise<DiscoverEntry[]> {
     select: {
       id: true,
       fullName: true,
+      blobPhotoUrl: true,
       externalIds: { where: { source: "WIKIDATA" }, select: { externalId: true } },
     },
     orderBy: { prominenceScore: "desc" },
@@ -311,6 +312,9 @@ async function runDiscover(options: Options): Promise<DiscoverEntry[]> {
           photoCheckedAt: new Date(),
         },
       });
+      // Only after the row points at the new blob: an orphan is cheap, a dangling
+      // reference is a broken portrait.
+      await deleteCroppedPortrait(row.blobPhotoUrl);
       entry.blobUrl = blobUrl;
     }
 
@@ -349,7 +353,7 @@ async function runCrop(options: Options): Promise<CropEntry[]> {
   const total = await db.politician.count({ where });
   const rows = await db.politician.findMany({
     where,
-    select: { id: true, fullName: true, photoUrl: true },
+    select: { id: true, fullName: true, photoUrl: true, blobPhotoUrl: true },
     orderBy: { prominenceScore: "desc" },
     take: limit,
   });
@@ -417,6 +421,9 @@ async function runCrop(options: Options): Promise<CropEntry[]> {
         where: { id: row.id },
         data: { blobPhotoUrl: blobUrl },
       });
+      // Same order as in the discover phase, and the reason the re-crop is
+      // visible at all: the old blob is only dropped once nothing points at it.
+      await deleteCroppedPortrait(row.blobPhotoUrl);
       entry.blobUrl = blobUrl;
     }
 
