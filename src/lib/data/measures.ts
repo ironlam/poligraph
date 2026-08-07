@@ -1,5 +1,6 @@
 import type { Prisma, ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { PUBLIC_CANDIDACY_WHERE } from "./presidential-candidates-public";
 
 /**
  * The two cumulative publication conditions, as a reusable predicate.
@@ -194,6 +195,38 @@ export async function getLatestPublicReviewDate(
 ): Promise<Date | null> {
   const row = await db.measure.findFirst({
     where: { electionId, ...(theme ? { theme } : {}), ...PUBLIC_MEASURE_WHERE },
+    orderBy: { publishedRevision: { reviewedAt: "desc" } },
+    select: { publishedRevision: { select: { reviewedAt: true } } },
+  });
+  return row?.publishedRevision?.reviewedAt ?? null;
+}
+
+/**
+ * The same date, narrowed to the population the presidential surfaces can actually render.
+ *
+ * `getLatestPublicReviewDate` answers "the last reviewed public measure of this election", which is
+ * the right question for a generic election page and the wrong one for the hub: the hub already
+ * derives `verifiedMeasureCount` from candidacies whose `CandidacyPresidential` is PUBLISHED, so
+ * pairing it with a date drawn from a wider set states that a measure was reviewed on a day when
+ * nothing the reader can reach was. Two measures escape the hub's own count and used to move its
+ * date: one attached to a DRAFT extension, and one attached to no candidacy at all.
+ *
+ * Composed from the two existing predicates rather than a third hand-rolled one. Duplicating
+ * PUBLIC_MEASURE_WHERE is exactly how the count and the date drifted apart in the first place.
+ */
+export async function getLatestPresidentialReviewDate(
+  electionId: string,
+  theme?: ThemeCategory
+): Promise<Date | null> {
+  const row = await db.measure.findFirst({
+    where: {
+      electionId,
+      ...(theme ? { theme } : {}),
+      ...PUBLIC_MEASURE_WHERE,
+      // `is` and not a bare object: it also excludes measures with candidacyId null, which have no
+      // column on any comparison and must not carry the date either.
+      candidacy: { is: PUBLIC_CANDIDACY_WHERE },
+    },
     orderBy: { publishedRevision: { reviewedAt: "desc" } },
     select: { publishedRevision: { select: { reviewedAt: true } } },
   });

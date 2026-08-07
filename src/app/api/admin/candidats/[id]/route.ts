@@ -5,13 +5,16 @@ import { withValidation } from "@/lib/security/validate";
 import { updateCandidatePresidentialSchema } from "@/lib/security/schemas";
 import { getRequestMeta } from "@/lib/security/audit";
 import { invalidateEntity } from "@/lib/cache";
+import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
 
 export const PATCH = withAdminAuth(
   withValidation(updateCandidatePresidentialSchema, async (request, context, body) => {
     const { id } = await context.params;
     const existing = await db.candidacyPresidential.findUnique({
       where: { id },
-      select: { id: true, candidacyId: true },
+      // electionId comes along on the existence check rather than in a second query: the hub
+      // reads are tagged per election and need it to be invalidated.
+      select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
@@ -42,6 +45,9 @@ export const PATCH = withAdminAuth(
       },
     });
     invalidateEntity("election");
+    // A PATCH can flip publicationStatus, which is exactly what opens or closes the four hub
+    // surfaces. `invalidateEntity("election")` purges the `elections` tag and never reaches them.
+    invalidatePresidentialCandidacyTags(existing.candidacy.electionId);
     return NextResponse.json(updated);
   })
 );
@@ -50,7 +56,9 @@ export const DELETE = withAdminAuth(async (request, context) => {
   const { id } = await context.params;
   const existing = await db.candidacyPresidential.findUnique({
     where: { id },
-    select: { id: true, candidacyId: true },
+    // Read before the delete, because the row is gone afterwards and the election id would need
+    // a second query through the candidacy.
+    select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
   });
   if (!existing) {
     return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
@@ -71,5 +79,8 @@ export const DELETE = withAdminAuth(async (request, context) => {
     },
   });
   invalidateEntity("election");
+  // Deleting a PUBLISHED extension removes a candidacy from the subject pages, which can close a
+  // subject that was open. Same tag as publication, same reason.
+  invalidatePresidentialCandidacyTags(existing.candidacy.electionId);
   return NextResponse.json({ success: true });
 });

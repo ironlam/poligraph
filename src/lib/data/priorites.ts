@@ -8,7 +8,7 @@ import {
 } from "@/config/publication-gates";
 import { getHubCandidacyField } from "./hub";
 import {
-  getLatestPublicReviewDate,
+  getLatestPresidentialReviewDate,
   getPublicMeasuresByElection,
   type PublicMeasure,
 } from "./measures";
@@ -111,7 +111,7 @@ export async function loadPrioritesData(
       getPublicMeasuresByElection(electionId),
       getPublicPresidentialCandidates(electionSlug),
       loadThemesIndex(electionId, electionSlug),
-      getLatestPublicReviewDate(electionId),
+      getLatestPresidentialReviewDate(electionId),
       db.programEdition.findMany({
         where: { electionId, publicationStatus: "PUBLISHED" },
         select: { id: true },
@@ -246,6 +246,9 @@ async function getPrioritesDataCached(
 ): Promise<PrioritesData> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
+  // This read also filters on CandidacyPresidential.publicationStatus. Without this second tag,
+  // publishing an extension busted nothing here and the surface stayed closed for 24h.
+  cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadPrioritesData(electionId, electionSlug);
 }

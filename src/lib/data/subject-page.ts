@@ -6,7 +6,7 @@ import { PUBLICATION_GATES, isSubjectPagePublishable } from "@/config/publicatio
 import { getPublicMeasureVoteRelations, type PublicVoteReference } from "@/lib/measures/vote-links";
 import type { VoteRelation } from "@/lib/measures/vote-relation";
 import {
-  getLatestPublicReviewDate,
+  getLatestPresidentialReviewDate,
   getPublicMeasuresByTheme,
   type PublicMeasure,
 } from "./measures";
@@ -24,7 +24,8 @@ import { loadThemesIndex } from "./themes-index";
  * extensions), `getPublicMeasuresByTheme` (the single measure authority), and `getPublicMeasureVoteRelation`
  * (which never selects `rationale`/`reviewedBy`). Two direct reads bypass those authorities, but only to
  * produce a number, never content: `db.candidacy.count` (sourced candidacies of the election, the coverage
- * denominator) and `db.measure.count` (draft measures of the theme, for `pendingReviewMeasureCount`). The
+ * denominator) and `db.measure.count` (measures whose active revision awaits review, for
+ * `pendingReviewRevisionCount`). The
  * election slug -> id resolution is a third direct read, and is not gated. No unpublished text ever crosses
  * this surface.
  *
@@ -56,8 +57,12 @@ export type SubjectPageData = {
   requiredCandidaciesWithVerifiedMeasure: number;
   /** Candidacies of the election with a sourced editorial status, the denominator of the coverage rate. */
   totalSourcedCandidacies: number;
-  /** Measures of the theme not yet published (count only: never the draft text itself). */
-  pendingReviewMeasureCount: number;
+  /**
+   * Measures of the theme whose ACTIVE revision has not been reviewed yet: not reviewed, not
+   * discarded, not superseded, on a measure that was never depublished. One active revision per
+   * measure, so this counts measures and revisions alike. Count only, never the draft text.
+   */
+  pendingReviewRevisionCount: number;
   /** When the most recently reviewed public measure on this theme was reviewed, if any. */
   lastReviewedAt: Date | null;
   /** Another theme that already clears the gate, to redirect to when this one does not. */
@@ -76,7 +81,7 @@ export async function loadSubjectPageData(
     candidates,
     measures,
     totalSourcedCandidacies,
-    pendingReviewMeasureCount,
+    pendingReviewRevisionCount,
     lastReviewedAt,
     themesIndex,
   ] = await Promise.all([
@@ -92,13 +97,26 @@ export async function loadSubjectPageData(
         sourceLabel: { not: null },
       },
     }),
-    // Count only: never expose the text of an unpublished revision here. DRAFT and never
-    // depublished, not merely "not PUBLISHED": depublishMeasure() also sets publicationStatus
-    // back to DRAFT, and a measure we withdrew for cause is not "awaiting review".
+    // Count only: never expose the text of an unpublished revision here.
+    //
+    // The predicate is on the ACTIVE REVISION, not on the measure's publication status. Counting
+    // `publicationStatus: "DRAFT"` answered a different question and got both ends wrong: it
+    // missed a PUBLISHED measure carrying a new, unreviewed correction (the most common case of
+    // "awaiting review" once a subject is live), and it counted a DRAFT measure whose latest
+    // revision had already been reviewed and was merely waiting to be published.
+    //
+    // `depublishedAt: null` stays, and is not redundant with the revision predicate:
+    // depublishMeasure() sets publicationStatus back to DRAFT, and a measure we withdrew for
+    // cause is not "awaiting review" even when its active revision was never reviewed.
     db.measure.count({
-      where: { electionId, theme, publicationStatus: "DRAFT", depublishedAt: null },
+      where: {
+        electionId,
+        theme,
+        depublishedAt: null,
+        latestRevision: { is: { reviewedAt: null, discardedAt: null, supersededAt: null } },
+      },
     }),
-    getLatestPublicReviewDate(electionId, theme),
+    getLatestPresidentialReviewDate(electionId, theme),
     loadThemesIndex(electionId, electionSlug),
   ]);
 
@@ -150,7 +168,7 @@ export async function loadSubjectPageData(
     requiredCandidaciesWithVerifiedMeasure:
       PUBLICATION_GATES.pageSujet.minCandidaciesWithVerifiedMeasure,
     totalSourcedCandidacies,
-    pendingReviewMeasureCount,
+    pendingReviewRevisionCount,
     lastReviewedAt,
     fallbackPublishableTheme,
   };
@@ -179,6 +197,9 @@ async function getSubjectPageDataCached(
 ): Promise<SubjectPageData> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
+  // This read also filters on CandidacyPresidential.publicationStatus. Without this second tag,
+  // publishing an extension busted nothing here and the surface stayed closed for 24h.
+  cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadSubjectPageData(electionId, electionSlug, theme);
 }

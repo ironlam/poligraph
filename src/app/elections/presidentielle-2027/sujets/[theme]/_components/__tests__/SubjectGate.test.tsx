@@ -12,7 +12,7 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
     publishable: false,
     requiredCandidaciesWithVerifiedMeasure: 2,
     totalSourcedCandidacies: 4,
-    pendingReviewMeasureCount: 3,
+    pendingReviewRevisionCount: 3,
     lastReviewedAt: new Date("2027-02-10T00:00:00Z"),
     fallbackPublishableTheme: null,
     ...over,
@@ -38,8 +38,10 @@ describe("SubjectGate", () => {
       <SubjectGate data={data({ candidaciesWithVerifiedMeasure: 0, totalSourcedCandidacies: 0 })} />
     );
     expect(screen.queryByText("0 %")).not.toBeInTheDocument();
-    // Three dashes now: the coverage rate joins the two ProgramEdition placeholders.
-    expect(screen.getAllByText("—")).toHaveLength(3);
+    // Un seul tiret désormais : les deux compteurs programme disent « Non calculable », qui ne
+    // veut pas la même chose. Le tiret signale un rapport sans dénominateur, pas une donnée
+    // qu'on ne sait pas produire.
+    expect(screen.getAllByText("—")).toHaveLength(1);
   });
 
   it("borne le taux à 100 % quand le numérateur dépasse le dénominateur", () => {
@@ -49,14 +51,26 @@ describe("SubjectGate", () => {
     expect(screen.getByText("100 %")).toBeInTheDocument();
   });
 
-  it("affiche le nombre de mesures extraites en attente de relecture", () => {
-    render(<SubjectGate data={data({ pendingReviewMeasureCount: 3 })} />);
-    expect(screen.getByText(/3 mesures extraites en attente de relecture/)).toBeInTheDocument();
+  it("compte des révisions, et n'affirme pas une extraction que le chiffre n'atteste pas", () => {
+    render(<SubjectGate data={data({ pendingReviewRevisionCount: 3 })} />);
+    expect(screen.getByText("Révisions en attente de relecture")).toBeInTheDocument();
+    expect(screen.getByText("3 révisions")).toBeInTheDocument();
+    // Le compteur porte sur la révision active : une correction sur une mesure déjà publiée y
+    // figure, et « mesure extraite » décrirait autre chose.
+    expect(screen.queryByText(/extraite/)).not.toBeInTheDocument();
   });
 
-  it("accorde au singulier quand une seule mesure est en attente", () => {
-    render(<SubjectGate data={data({ pendingReviewMeasureCount: 1 })} />);
-    expect(screen.getByText(/1 mesure extraite en attente de relecture/)).toBeInTheDocument();
+  it("accorde au singulier quand une seule révision est en attente", () => {
+    render(<SubjectGate data={data({ pendingReviewRevisionCount: 1 })} />);
+    expect(screen.getByText("1 révision")).toBeInTheDocument();
+  });
+
+  it("dit les deux compteurs programme non calculables, sans tiret ambigu", () => {
+    render(<SubjectGate data={data()} />);
+    expect(screen.getAllByText("Non calculable")).toHaveLength(2);
+    expect(
+      screen.getByText(/tant que le suivi des programmes publiés n'est pas disponible/)
+    ).toBeInTheDocument();
   });
 
   it("affiche la date de dernière revue publique, au format français", () => {
@@ -67,12 +81,6 @@ describe("SubjectGate", () => {
   it("affiche « jamais relu » quand aucune revue publique n'a eu lieu", () => {
     render(<SubjectGate data={data({ lastReviewedAt: null })} />);
     expect(screen.getByText(/jamais relu/i)).toBeInTheDocument();
-  });
-
-  it("rend les deux compteurs ProgramEdition en tiret, jamais en zéro trompeur", () => {
-    render(<SubjectGate data={data()} />);
-    expect(screen.getAllByText("—")).toHaveLength(2);
-    expect(screen.getByText(/donnée programme à venir/i)).toBeInTheDocument();
   });
 
   it("propose un renvoi vers un sujet comparable quand fallbackPublishableTheme est fourni", () => {

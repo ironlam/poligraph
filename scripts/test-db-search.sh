@@ -90,6 +90,7 @@ else
     src/lib/data/__tests__/hub.integration.test.ts \
     src/lib/data/__tests__/latest-review-date.integration.test.ts \
     src/lib/data/__tests__/measures.integration.test.ts \
+    src/lib/data/__tests__/pending-review-and-review-date.integration.test.ts \
     src/lib/data/__tests__/presidential-candidates-public.integration.test.ts \
     src/lib/data/__tests__/priorites.integration.test.ts \
     src/lib/data/__tests__/subject-page.integration.test.ts \

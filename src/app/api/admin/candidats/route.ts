@@ -6,6 +6,7 @@ import { createCandidacyPresidentialFromPickerSchema } from "@/lib/security/sche
 import { getRequestMeta } from "@/lib/security/audit";
 import { getCandidates2027ForModeration } from "@/lib/data/candidates";
 import { invalidateEntity } from "@/lib/cache";
+import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
 
 export const GET = withAdminAuth(async () => {
   const items = await getCandidates2027ForModeration();
@@ -104,6 +105,9 @@ export const POST = withAdminAuth(
     });
 
     invalidateEntity("election");
+    // The hub reads gate on the extension's publication status, and `invalidateEntity("election")`
+    // does not reach them. The election id comes from the row just created, so this costs no query.
+    invalidatePresidentialCandidacyTags(outcome.candidacy.electionId);
     return NextResponse.json(
       { candidacy: outcome.candidacy, presidential: outcome.presidential },
       { status: 201 }

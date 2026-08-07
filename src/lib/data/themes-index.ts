@@ -100,6 +100,9 @@ async function getThemesIndexCached(
 ): Promise<ThemesIndexData> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
+  // This read also filters on CandidacyPresidential.publicationStatus. Without this second tag,
+  // publishing an extension busted nothing here and the surface stayed closed for 24h.
+  cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadThemesIndex(electionId, electionSlug);
 }

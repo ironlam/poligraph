@@ -11,6 +11,7 @@ import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
 import { DataProvenance } from "./_components/DataProvenance";
 import { HubCandidacyField } from "./_components/HubCandidacyField";
+import { HubClosedState } from "./_components/HubClosedState";
 import { HubEntryCards } from "./_components/HubEntryCards";
 import { HubStats } from "./_components/HubStats";
 
@@ -162,6 +163,14 @@ export default async function PresidentialHubPage() {
             </Card>
           </div>
         </header>
+
+        {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}
+        {!context.hubPublishable && (
+          <HubClosedState
+            verifiedMeasureCount={context.verifiedMeasureCount}
+            themeCount={themeCount}
+          />
+        )}
 
         <HubEntryCards />
 

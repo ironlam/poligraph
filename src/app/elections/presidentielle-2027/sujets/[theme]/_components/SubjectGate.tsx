@@ -21,8 +21,10 @@ function formatCoverageRate(covered: number, total: number): string {
 }
 
 export function SubjectGate({ data }: { data: SubjectPageData }) {
-  const measureWord =
-    data.pendingReviewMeasureCount === 1 ? "mesure extraite" : "mesures extraites";
+  // "révision" and not "mesure extraite": the counter is on the active revision, and a revision
+  // can be a correction to a measure that is already published. Saying "extraite" would also claim
+  // an extraction step that the number does not attest.
+  const revisionWord = data.pendingReviewRevisionCount === 1 ? "révision" : "révisions";
 
   return (
     <section
@@ -52,9 +54,9 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
             </dd>
           </div>
           <div>
-            <dt>Relecture en attente</dt>
+            <dt>Révisions en attente de relecture</dt>
             <dd className="font-medium text-foreground">
-              {data.pendingReviewMeasureCount} {measureWord} en attente de relecture
+              {data.pendingReviewRevisionCount} {revisionWord}
             </dd>
           </div>
           <div>
@@ -65,16 +67,16 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
           </div>
           <div>
             <dt>Éditions de programme ne couvrant pas ce sujet</dt>
-            <dd className="font-medium text-foreground">—</dd>
+            <dd className="font-medium text-foreground">Non calculable</dd>
           </div>
           <div>
             <dt>Candidatures sans programme publié</dt>
-            <dd className="font-medium text-foreground">—</dd>
+            <dd className="font-medium text-foreground">Non calculable</dd>
           </div>
         </dl>
         <p className="text-xs">
-          Donnée programme à venir : ces deux derniers compteurs dépendent des éditions de
-          programme, pas encore disponibles.
+          Ces deux compteurs restent non calculables tant que le suivi des programmes publiés
+          n&apos;est pas disponible.
         </p>
       </div>
       {data.fallbackPublishableTheme !== null && (

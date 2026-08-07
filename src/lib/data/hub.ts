@@ -4,7 +4,7 @@ import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
 import { loadThemesIndex } from "./themes-index";
-import { getLatestPublicReviewDate } from "./measures";
+import { getLatestPresidentialReviewDate } from "./measures";
 
 /**
  * The two read authorities for the presidential hub page.
@@ -130,7 +130,7 @@ export async function loadHubMeasureContext(
       },
     }),
     loadThemesIndex(electionId, electionSlug),
-    getLatestPublicReviewDate(electionId),
+    getLatestPresidentialReviewDate(electionId),
   ]);
 
   // Derived from the themes index rather than a fresh getPublicMeasuresByElection() read: the
@@ -176,6 +176,9 @@ async function getHubMeasureContextCached(
 ): Promise<HubMeasureContext> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
+  // This read also filters on CandidacyPresidential.publicationStatus. Without this second tag,
+  // publishing an extension busted nothing here and the surface stayed closed for 24h.
+  cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadHubMeasureContext(electionId, electionSlug);
 }
