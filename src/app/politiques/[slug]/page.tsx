@@ -42,6 +42,8 @@ import { PoliticianSignals } from "@/components/politicians/PoliticianSignals";
 import { PresumptionNotice } from "@/components/politicians/PresumptionNotice";
 import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
 import { DeepLinkHighlighter } from "@/components/politicians/DeepLinkHighlighter";
+import { CandidacyNotice } from "@/components/politicians/CandidacyNotice";
+import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -183,6 +185,11 @@ export default async function PoliticianPage({ params }: PageProps) {
   if (!politician) {
     notFound();
   }
+
+  // Returns null unless this person carries a SOURCED presidential candidacy, which is what makes
+  // the notice sayable: there is no "we are not sure" state, the block simply does not appear.
+  const presidentialCandidacy = await getPoliticianPresidentialCandidacy(politician.id);
+  const now = new Date();
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
   const currentGroup = (
@@ -449,6 +456,18 @@ export default async function PoliticianPage({ params }: PageProps) {
             )}
           </div>
         </div>
+
+        {/* Full width, under the badges, above the tabs, at both widths. Never a badge in the
+            party/mandate row: there it would read as a qualification awarded by Poligraph. */}
+        {presidentialCandidacy && (
+          <div className="mb-8">
+            <CandidacyNotice
+              candidacy={presidentialCandidacy}
+              civility={politician.civility}
+              now={now}
+            />
+          </div>
+        )}
 
         {/* Summary before the tabbed body on mobile (DOM order matches reading order). */}
         <div className="lg:hidden mb-8">
