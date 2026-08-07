@@ -117,7 +117,7 @@ export function ElectionCard({
               {totalSeats} sièges
             </span>
           )}
-          {round1Date && (
+          {round1Date && status !== "COMPLETED" && (
             <AddToCalendar
               title={title}
               round1Date={round1Date}

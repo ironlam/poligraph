@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ElectionCountdown, ElectionTimeline } from "@/components/elections";
 import { ELECTION_TYPE_LABELS, ELECTION_TYPE_ICONS } from "@/config/labels";
 import { getElections, getTypeCounts } from "@/lib/data/elections";
+import { resolveElectionStatus } from "@/lib/elections/status";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import type { ElectionType } from "@/types";
@@ -28,10 +29,14 @@ export default async function ElectionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const typeFilter = params.type as ElectionType | undefined;
 
-  const [elections, typeCounts] = await Promise.all([getElections(typeFilter), getTypeCounts()]);
+  const [rawElections, typeCounts] = await Promise.all([getElections(typeFilter), getTypeCounts()]);
+
+  // The stored status never advances on its own, so resolve it here rather than
+  // inside getElections(), which is cached for a day and would freeze `now`.
+  const now = new Date();
+  const elections = rawElections.map((e) => ({ ...e, status: resolveElectionStatus(e, now) }));
 
   // Find next upcoming election
-  const now = new Date();
   const nextElection = elections.find(
     (e) => e.round1Date && e.round1Date > now && e.status !== "COMPLETED"
   );

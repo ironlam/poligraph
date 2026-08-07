@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { buildIcsCalendar, type IcsEvent } from "@/lib/ics";
+import { isElectionOver } from "@/lib/elections/status";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 
 export const GET = withPublicRoute(async () => {
-  const elections = await db.election.findMany({
-    where: {
-      status: { not: "COMPLETED" },
-      round1Date: { not: null },
-    },
+  const rows = await db.election.findMany({
+    where: { round1Date: { not: null } },
     orderBy: { round1Date: "asc" },
     select: {
       slug: true,
@@ -19,8 +17,14 @@ export const GET = withPublicRoute(async () => {
       round2Date: true,
       dateConfirmed: true,
       scope: true,
+      status: true,
     },
   });
+
+  // The stored status lags behind reality, so filter on the resolved phase:
+  // a SQL `status != COMPLETED` still exports scrutins held months ago.
+  const now = new Date();
+  const elections = rows.filter((e) => !isElectionOver(e, now));
 
   const events: IcsEvent[] = [];
 
