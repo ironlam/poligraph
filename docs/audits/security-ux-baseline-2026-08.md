@@ -1,19 +1,21 @@
 # Security, architecture, performance, and UX baseline, August 2026
 
-This document is the versioned register of findings selected for Poligraph's agentic remediation
-program. It records risks and target invariants. It is not evidence of production exploitation,
-authorization to modify production, or a remediation of any finding.
+This document is the versioned, living register of findings selected for Poligraph's agentic
+remediation program. It records risks, target invariants, and current remediation state. Git history
+preserves the original audit snapshot and every subsequent status change. This document is not
+evidence of production exploitation, authorization to modify production, or a remediation of any
+finding.
 
 ## Baseline metadata
 
-| Field                  | Value                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| Work package           | `AGENT-00`                                                                         |
-| Baseline date          | August 8, 2026                                                                     |
-| Inspected revision     | `a24fcc13`                                                                         |
-| Reference branch       | `origin/main`                                                                      |
-| Initial finding status | To investigate                                                                     |
-| Required protocol      | [`docs/engineering/agentic-remediation.md`](../engineering/agentic-remediation.md) |
+| Field                 | Value                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Work package          | `AGENT-00`                                                                         |
+| Baseline date         | August 8, 2026                                                                     |
+| Inspected revision    | `a24fcc13`                                                                         |
+| Reference branch      | `origin/main`                                                                      |
+| Registry last updated | August 8, 2026                                                                     |
+| Required protocol     | [`docs/engineering/agentic-remediation.md`](../engineering/agentic-remediation.md) |
 
 The evidence below consists of starting points observed in the repository. The Scout for each work
 package must verify them against the current code and, when needed, an authorized measurement
@@ -31,21 +33,27 @@ environment. Any claim about production data must be confirmed by a read-only me
 A finding must not move directly from `To investigate` to `Closed`. The remediation PR must retain
 links to the before and after evidence under the finding identifier.
 
+Every remediation PR updates its finding row. It sets the status to `In remediation`, assigns an
+owner, links the evidence and PR, and refreshes `Last updated`. Before merge, it may advance the
+status to `Verified` only after independent verification. After merge, a follow-up documentation
+change marks it `Closed`. Accepted risks retain their rationale and next review date in `Evidence`.
+`Unassigned` and `None` are explicit values, not fields to leave blank.
+
 ## Overview
 
-| Identifier | Priority           | Area                  | Initial status | Primary invariant                                           |
-| ---------- | ------------------ | --------------------- | -------------- | ----------------------------------------------------------- |
-| `SEC-01`   | P0                 | Application security  | To investigate | Untrusted text cannot produce executable HTML or attributes |
-| `SEC-02`   | P0                 | Access control        | To investigate | Unpublished data has no alternative public path             |
-| `SEC-03`   | P1                 | Supabase              | To investigate | The public surface is explicitly minimal                    |
-| `SEC-04`   | P1                 | Authentication        | To investigate | Admin sessions are separated, revocable, and fail closed    |
-| `CI-01`    | P1                 | CI                    | To investigate | Every critical guard has positive and negative tests        |
-| `CI-02`    | P1                 | Quality               | To investigate | Sensitive scripts receive suitable static analysis          |
-| `SEC-05`   | P1                 | Software supply chain | To investigate | Dependencies and actions have versioned controls            |
-| `DB-01`    | Measurement-driven | Database performance  | To investigate | Compute only the necessary work                             |
-| `DB-02`    | Continuous         | Database performance  | To investigate | Prioritize frequency, cost, and user impact                 |
-| `UX-01`    | P1                 | UX and quality        | To investigate | Recurring defects become semantic contracts                 |
-| `AGENT-01` | P1                 | Governance            | To investigate | Critical rules are derivable, testable, or verified         |
+| Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                               | Remediation PR | Last updated |
+| ---------- | ------------------ | --------------------- | -------------- | ---------- | ---------------------------------------------------------------------- | -------------- | ------------ |
+| `SEC-01`   | P0                 | Application security  | To investigate | Unassigned | [Context](#sec-01-eliminate-markdown-stored-xss-path)                  | None           | 2026-08-08   |
+| `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | [Context](#sec-02-close-unintended-supabase-data-api-exposure)         | None           | 2026-08-08   |
+| `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)             | None           | 2026-08-08   |
+| `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                         | None           | 2026-08-08   |
+| `CI-01`    | P1                 | CI                    | To investigate | Unassigned | [Context](#ci-01-make-security-guards-trustworthy)                     | None           | 2026-08-08   |
+| `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                  | None           | 2026-08-08   |
+| `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                      | None           | 2026-08-08   |
+| `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)               | None           | 2026-08-08   |
+| `DB-02`    | Continuous         | Database performance  | To investigate | Unassigned | [Context](#db-02-top-sql-workload-remediation)                         | None           | 2026-08-08   |
+| `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts) | None           | 2026-08-08   |
+| `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                | None           | 2026-08-08   |
 
 ## P0 findings
 
@@ -67,8 +75,8 @@ link text and destinations.
 cases are covered, existing consumers are inventoried, and a distinct Adversary has tested
 alternative payloads.
 
-**Mapping.** OWASP A05 Injection. OWASP A08 Software and Data Integrity Failures when data comes
-from an AI pipeline.
+**Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A05:2025 Injection. A08:2025 Software or
+Data Integrity Failures when data comes from an AI pipeline.
 
 ### SEC-02: Close unintended Supabase Data API exposure
 
@@ -89,7 +97,8 @@ measurement remains read-only and excludes sensitive data from PR artifacts.
 **Closure criteria.** A test using the public role rejects unpublished fact-checks and allows only
 the approved public surface. The versioned schema, deployed state, and documentation are aligned.
 
-**Mapping.** OWASP A01 Broken Access Control. OWASP A02 Security Misconfiguration.
+**Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A01:2025 Broken Access Control. A02:2025
+Security Misconfiguration.
 
 ## P1 findings
 
@@ -160,7 +169,7 @@ thresholds, false-positive handling, and the SHA update process.
 **Closure criteria.** The repository has a reproducible baseline, alerts have a triage path, and any
 decision not to adopt a control is justified and dated.
 
-**Mapping.** OWASP A03 Software Supply Chain Failures.
+**Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A03:2025 Software Supply Chain Failures.
 
 ## Performance
 

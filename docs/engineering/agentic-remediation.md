@@ -83,9 +83,10 @@ The Verifier selects controls proportionate to the work package from:
 - axe;
 - SQL measurements.
 
-Only relevant controls run during iteration. The standard CI suite runs before the PR. The Verifier
-records exact commands, results, and any skipped control with its rationale. The Verifier also
-confirms that the diff remains within the declared scope.
+Only relevant controls run during iteration. The standard local verification suite runs before
+opening the PR. Required GitHub CI must pass before merge. The Verifier records exact commands,
+results, and any skipped control with its rationale. The Verifier also confirms that the diff
+remains within the declared scope.
 
 ## 6. PR
 
@@ -100,6 +101,9 @@ Every remediation PR documents:
 - Affected invariants;
 - Out-of-scope elements;
 - Rollback when the change is risky.
+
+Start from `.github/PULL_REQUEST_TEMPLATE/remediation.md` so these fields remain visible and
+consistent. The PR also updates the corresponding row in the living findings register.
 
 A database PR includes the metric or `EXPLAIN` before and after. A UI PR includes relevant mobile
 and desktop verification. Results from the second context are visible in the description or review.
@@ -122,14 +126,15 @@ and desktop verification. Results from the second context are visible in the des
 
 ## Sequence and minimum evidence
 
-| Phase        | Input              | Required output                            | Writes code   |
-| ------------ | ------------------ | ------------------------------------------ | ------------- |
-| Scout        | Versioned finding  | Root cause, scope, callers, measurement    | No            |
-| Reproduction | Root cause         | Red test or justified safe procedure       | Test only     |
-| Implementer  | Before-evidence    | Minimal correction and targeted tests      | Yes           |
-| Adversary    | Diff and invariant | Bypass attempts and regression scenarios   | No by default |
-| Verifier     | Revised diff       | Independent results and standard CI        | No by default |
-| PR           | All evidence       | Complete description and suitable rollback | No            |
+| Phase        | Input              | Required output                              | Writes code   |
+| ------------ | ------------------ | -------------------------------------------- | ------------- |
+| Scout        | Versioned finding  | Root cause, scope, callers, measurement      | No            |
+| Reproduction | Root cause         | Red test or justified safe procedure         | Test only     |
+| Implementer  | Before-evidence    | Minimal correction and targeted tests        | Yes           |
+| Adversary    | Diff and invariant | Bypass attempts and regression scenarios     | No by default |
+| Verifier     | Revised diff       | Independent results, local checks, GitHub CI | No by default |
+| PR           | All evidence       | Complete description and suitable rollback   | No            |
 
-A finding can be marked `Verified` only when the before-evidence fails against the vulnerable
-behavior, passes after remediation, and the second context has no unresolved blocker.
+A finding can be marked `Verified` only when the before-evidence demonstrates behavior or a metric
+that violates the invariant, the after-evidence satisfies the invariant, and the second context has
+no unresolved blocker.
