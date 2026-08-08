@@ -1,7 +1,7 @@
 "use client";
 
 import { Compass } from "lucide-react";
-import { CommandPaletteTrigger, CommandPaletteTriggerMobile } from "@/components/search";
+import { CommandPaletteTrigger, CommandPaletteTriggerCompact } from "@/components/search";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import type { NavItem } from "@/config/navigation";
 
@@ -14,7 +14,7 @@ export function NavIconBar({ tools: _tools, boussoleEnabled = false }: NavIconBa
   return (
     <div className="flex items-center gap-1">
       <CommandPaletteTrigger />
-      <CommandPaletteTriggerMobile />
+      <CommandPaletteTriggerCompact />
       <ThemeToggle />
       {boussoleEnabled && (
         <a
