@@ -13,6 +13,11 @@ export type DataApiSignal =
   | "Supabase database operation"
   | "explicit Data API configuration";
 
+export type DataApiViolation = {
+  file: string;
+  signal: DataApiSignal;
+};
+
 const SOURCE_EXTENSIONS = new Set([
   ".bash",
   ".cjs",
@@ -85,193 +90,6 @@ function scriptKind(file: string): ts.ScriptKind {
   return ts.ScriptKind.TS;
 }
 
-function detectSupabaseDatabaseOperation(sourceFile: ts.SourceFile): boolean {
-  const factoryNames = new Set<string>();
-  const factoryNamespaces = new Set<string>();
-  const clientNames = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
-      continue;
-    }
-    if (!SUPABASE_CLIENT_MODULES.has(statement.moduleSpecifier.text)) continue;
-
-    const importClause = statement.importClause;
-    if (!importClause) continue;
-    if (importClause.name) factoryNamespaces.add(importClause.name.text);
-    if (importClause.namedBindings && ts.isNamespaceImport(importClause.namedBindings)) {
-      factoryNamespaces.add(importClause.namedBindings.name.text);
-    }
-    if (importClause.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
-      for (const element of importClause.namedBindings.elements) {
-        const importedName = element.propertyName?.text ?? element.name.text;
-        if (SUPABASE_CLIENT_FACTORIES.has(importedName)) factoryNames.add(element.name.text);
-      }
-    }
-  }
-
-  const unwrap = (node: ts.Expression): ts.Expression => {
-    if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isTypeAssertionExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return unwrap(node.expression);
-    }
-    return node;
-  };
-
-  const propertyName = (node: ts.Expression): string | undefined => {
-    const expression = unwrap(node);
-    if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
-    if (
-      ts.isElementAccessExpression(expression) &&
-      expression.argumentExpression &&
-      ts.isStringLiteralLike(expression.argumentExpression)
-    ) {
-      return expression.argumentExpression.text;
-    }
-    return undefined;
-  };
-
-  const propertyReceiver = (node: ts.Expression): ts.Expression | undefined => {
-    const expression = unwrap(node);
-    if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
-      return expression.expression;
-    }
-    return undefined;
-  };
-
-  const requiredModule = (node: ts.Expression): string | undefined => {
-    const expression = unwrap(node);
-    const argument = ts.isCallExpression(expression) ? expression.arguments[0] : undefined;
-    if (
-      !ts.isCallExpression(expression) ||
-      !ts.isIdentifier(expression.expression) ||
-      expression.expression.text !== "require" ||
-      expression.arguments.length !== 1 ||
-      !argument ||
-      !ts.isStringLiteralLike(argument)
-    ) {
-      return undefined;
-    }
-    return argument.text;
-  };
-
-  const collectCommonJsFactories = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && node.initializer) {
-      const moduleName = requiredModule(node.initializer);
-      if (moduleName && SUPABASE_CLIENT_MODULES.has(moduleName)) {
-        if (ts.isIdentifier(node.name)) factoryNamespaces.add(node.name.text);
-        if (ts.isObjectBindingPattern(node.name)) {
-          for (const element of node.name.elements) {
-            if (!ts.isIdentifier(element.name)) continue;
-            const importedName = element.propertyName?.getText(sourceFile) ?? element.name.text;
-            if (SUPABASE_CLIENT_FACTORIES.has(importedName)) factoryNames.add(element.name.text);
-          }
-        }
-      }
-    }
-    ts.forEachChild(node, collectCommonJsFactories);
-  };
-  collectCommonJsFactories(sourceFile);
-
-  const isFactoryExpression = (node: ts.Expression): boolean => {
-    const expression = unwrap(node);
-    if (ts.isIdentifier(expression)) return factoryNames.has(expression.text);
-    const receiver = propertyReceiver(expression);
-    const name = propertyName(expression);
-    const unwrappedReceiver = receiver ? unwrap(receiver) : undefined;
-    const moduleName = receiver ? requiredModule(receiver) : undefined;
-    return Boolean(
-      receiver &&
-      name &&
-      SUPABASE_CLIENT_FACTORIES.has(name) &&
-      ((unwrappedReceiver &&
-        ts.isIdentifier(unwrappedReceiver) &&
-        factoryNamespaces.has(unwrappedReceiver.text)) ||
-        (moduleName && SUPABASE_CLIENT_MODULES.has(moduleName)))
-    );
-  };
-
-  const isFactoryCall = (node: ts.Expression): node is ts.CallExpression => {
-    const expression = unwrap(node);
-    return ts.isCallExpression(expression) && isFactoryExpression(expression.expression);
-  };
-
-  const factoryAliasCandidates: Array<{ name: string; value: ts.Expression }> = [];
-  const clientCandidates: Array<{ name: string; value: ts.Expression }> = [];
-
-  const collectAssignments = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-      factoryAliasCandidates.push({ name: node.name.text, value: node.initializer });
-      clientCandidates.push({ name: node.name.text, value: node.initializer });
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left)
-    ) {
-      factoryAliasCandidates.push({ name: node.left.text, value: node.right });
-      clientCandidates.push({ name: node.left.text, value: node.right });
-    }
-    ts.forEachChild(node, collectAssignments);
-  };
-  collectAssignments(sourceFile);
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const { name, value } of factoryAliasCandidates) {
-      if (!factoryNames.has(name) && isFactoryExpression(value)) {
-        factoryNames.add(name);
-        changed = true;
-      }
-    }
-  }
-
-  const isClientExpression = (node: ts.Expression): boolean => {
-    const expression = unwrap(node);
-    if (ts.isIdentifier(expression)) return clientNames.has(expression.text);
-    if (isFactoryCall(expression)) return true;
-    const receiver = ts.isCallExpression(expression)
-      ? propertyReceiver(expression.expression)
-      : undefined;
-    return (
-      ts.isCallExpression(expression) &&
-      propertyName(expression.expression) === "schema" &&
-      Boolean(receiver && isClientExpression(receiver))
-    );
-  };
-
-  changed = true;
-  while (changed) {
-    changed = false;
-    for (const { name, value } of clientCandidates) {
-      if (!clientNames.has(name) && isClientExpression(value)) {
-        clientNames.add(name);
-        changed = true;
-      }
-    }
-  }
-
-  let detected = false;
-  const inspectCalls = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const name = propertyName(node.expression);
-      const receiver = propertyReceiver(node.expression);
-      if ((name === "from" || name === "rpc") && receiver && isClientExpression(receiver)) {
-        detected = true;
-        return;
-      }
-    }
-    ts.forEachChild(node, inspectCalls);
-  };
-  inspectCalls(sourceFile);
-  return detected;
-}
-
 function sourceSyntaxValues(sourceFile: ts.SourceFile): string[] {
   const values: string[] = [];
   const constants = new Map<string, ts.Expression>();
@@ -327,6 +145,276 @@ function isJavaScriptLike(file: string): boolean {
   return /\.[cm]?[jt]sx?$/.test(file);
 }
 
+function importModuleName(node: ts.Node): string | undefined {
+  let current: ts.Node | undefined = node;
+  while (current && !ts.isImportDeclaration(current)) current = current.parent;
+  return current && ts.isStringLiteral(current.moduleSpecifier)
+    ? current.moduleSpecifier.text
+    : undefined;
+}
+
+function createVirtualProgram(
+  files: Readonly<Record<string, string>>,
+  root: string
+): { fileNames: Map<string, string>; program: ts.Program } {
+  const normalizedRoot = resolve(root).replaceAll("\\", "/");
+  const normalize = (file: string) => resolve(normalizedRoot, file).replaceAll("\\", "/");
+  const sources = new Map(
+    Object.entries(files)
+      .filter(([file]) => isJavaScriptLike(file))
+      .map(([file, content]) => [normalize(file), content])
+  );
+  const rootNames = [...sources.entries()]
+    .filter(([, content]) =>
+      /(?:supabase|postgrest|\b(?:from|rpc|schema)\s*\??\s*\()/i.test(content)
+    )
+    .map(([file]) => file);
+  const fileNames = new Map(
+    [...sources.keys()].map((file) => [file, file.slice(normalizedRoot.length + 1)])
+  );
+  const options: ts.CompilerOptions = {
+    allowJs: true,
+    baseUrl: normalizedRoot,
+    checkJs: false,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noLib: true,
+    paths: { "@/*": ["src/*"] },
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ESNext,
+  };
+  const defaultHost = ts.createCompilerHost(options);
+  const host: ts.CompilerHost = {
+    ...defaultHost,
+    directoryExists: (directory) => {
+      const prefix = `${directory.replaceAll("\\", "/").replace(/\/$/, "")}/`;
+      return [...sources.keys()].some((file) => file.startsWith(prefix));
+    },
+    fileExists: (file) => sources.has(file.replaceAll("\\", "/")),
+    getCurrentDirectory: () => normalizedRoot,
+    getSourceFile: (file, languageVersion) => {
+      const normalized = file.replaceAll("\\", "/");
+      const content = sources.get(normalized);
+      return content === undefined
+        ? undefined
+        : ts.createSourceFile(normalized, content, languageVersion, true, scriptKind(normalized));
+    },
+    readFile: (file) => sources.get(file.replaceAll("\\", "/")),
+    realpath: (file) => file.replaceAll("\\", "/"),
+  };
+
+  return {
+    fileNames,
+    program: ts.createProgram({ rootNames, options, host }),
+  };
+}
+
+function detectSharedSupabaseDatabaseOperations(program: ts.Program): Set<string> {
+  const checker = program.getTypeChecker();
+  const violations = new Set<string>();
+
+  const unwrap = (node: ts.Expression): ts.Expression => {
+    if (
+      ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isNonNullExpression(node)
+    ) {
+      return unwrap(node.expression);
+    }
+    return node;
+  };
+
+  const propertyName = (node: ts.Expression): string | undefined => {
+    const expression = unwrap(node);
+    if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+    if (
+      ts.isElementAccessExpression(expression) &&
+      expression.argumentExpression &&
+      ts.isStringLiteralLike(expression.argumentExpression)
+    ) {
+      return expression.argumentExpression.text;
+    }
+    return undefined;
+  };
+
+  const propertyReceiver = (node: ts.Expression): ts.Expression | undefined => {
+    const expression = unwrap(node);
+    return ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)
+      ? expression.expression
+      : undefined;
+  };
+
+  const requiredModule = (node: ts.Expression): string | undefined => {
+    const expression = unwrap(node);
+    const argument = ts.isCallExpression(expression) ? expression.arguments[0] : undefined;
+    return ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text === "require" &&
+      expression.arguments.length === 1 &&
+      argument &&
+      ts.isStringLiteralLike(argument)
+      ? argument.text
+      : undefined;
+  };
+
+  const assignments = new Map<ts.Symbol, ts.Expression[]>();
+  for (const sourceFile of program.getSourceFiles()) {
+    const collect = (node: ts.Node) => {
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        const symbol = checker.getSymbolAtLocation(node.left);
+        if (symbol) assignments.set(symbol, [...(assignments.get(symbol) ?? []), node.right]);
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(sourceFile);
+  }
+
+  const isSupabaseFactory = (node: ts.Expression, seen = new Set<ts.Symbol>()): boolean => {
+    const expression = unwrap(node);
+    if (ts.isPropertyAccessExpression(expression)) {
+      const receiverSymbol = checker.getSymbolAtLocation(expression.expression);
+      const receiverModule = requiredModule(expression.expression);
+      return (
+        SUPABASE_CLIENT_FACTORIES.has(expression.name.text) &&
+        (Boolean(
+          receiverSymbol?.declarations?.some((declaration) => {
+            if (ts.isNamespaceImport(declaration) || ts.isImportClause(declaration)) {
+              return SUPABASE_CLIENT_MODULES.has(importModuleName(declaration) ?? "");
+            }
+            return (
+              ts.isVariableDeclaration(declaration) &&
+              Boolean(
+                declaration.initializer &&
+                SUPABASE_CLIENT_MODULES.has(requiredModule(declaration.initializer) ?? "")
+              )
+            );
+          })
+        ) ||
+          Boolean(receiverModule && SUPABASE_CLIENT_MODULES.has(receiverModule)))
+      );
+    }
+    if (!ts.isIdentifier(expression)) return false;
+    const symbol = checker.getSymbolAtLocation(expression);
+    if (!symbol || seen.has(symbol)) return false;
+    seen.add(symbol);
+    return Boolean(
+      symbol.declarations?.some((declaration) => {
+        if (ts.isImportSpecifier(declaration)) {
+          return (
+            SUPABASE_CLIENT_FACTORIES.has(
+              declaration.propertyName?.text ?? declaration.name.text
+            ) && SUPABASE_CLIENT_MODULES.has(importModuleName(declaration) ?? "")
+          );
+        }
+        if (ts.isBindingElement(declaration)) {
+          const variable = declaration.parent.parent;
+          const name = declaration.propertyName?.getText() ?? declaration.name.getText();
+          return (
+            ts.isVariableDeclaration(variable) &&
+            Boolean(
+              variable.initializer &&
+              SUPABASE_CLIENT_FACTORIES.has(name) &&
+              SUPABASE_CLIENT_MODULES.has(requiredModule(variable.initializer) ?? "")
+            )
+          );
+        }
+        return (
+          ts.isVariableDeclaration(declaration) &&
+          Boolean(declaration.initializer && isSupabaseFactory(declaration.initializer, seen))
+        );
+      }) || assignments.get(symbol)?.some((value) => isSupabaseFactory(value, seen))
+    );
+  };
+
+  const isSupabaseClientExpression = (
+    node: ts.Expression,
+    seen = new Set<ts.Symbol>()
+  ): boolean => {
+    const expression = unwrap(node);
+    if (ts.isCallExpression(expression)) {
+      if (isSupabaseFactory(expression.expression)) return true;
+      const receiver = propertyReceiver(expression.expression);
+      return (
+        propertyName(expression.expression) === "schema" &&
+        Boolean(receiver && isSupabaseClientExpression(receiver, seen))
+      );
+    }
+    const symbol = checker.getSymbolAtLocation(expression);
+    if (!symbol || seen.has(symbol)) return false;
+    seen.add(symbol);
+
+    if (symbol.flags & ts.SymbolFlags.Alias) {
+      const target = checker.getAliasedSymbol(symbol);
+      if (target !== symbol && isSupabaseClientSymbol(target, seen)) return true;
+    }
+    return isSupabaseClientSymbol(symbol, seen);
+  };
+
+  const isSupabaseClientSymbol = (symbol: ts.Symbol, seen: Set<ts.Symbol>): boolean =>
+    Boolean(
+      symbol.declarations?.some((declaration) => {
+        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+          return isSupabaseClientExpression(declaration.initializer, seen);
+        }
+        return (
+          ts.isExportAssignment(declaration) &&
+          isSupabaseClientExpression(declaration.expression, seen)
+        );
+      }) || assignments.get(symbol)?.some((value) => isSupabaseClientExpression(value, seen))
+    );
+
+  for (const sourceFile of program.getSourceFiles()) {
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node)) {
+        const name = propertyName(node.expression);
+        const receiver = propertyReceiver(node.expression);
+        if (
+          (name === "from" || name === "rpc") &&
+          receiver &&
+          isSupabaseClientExpression(receiver)
+        ) {
+          violations.add(sourceFile.fileName);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+
+  return violations;
+}
+
+export function detectDataApiSignalsInFiles(
+  files: Readonly<Record<string, string>>,
+  root = "/virtual"
+): DataApiViolation[] {
+  const violations = Object.entries(files).flatMap(([file, content]) =>
+    detectDataApiSignals(file, content).map((signal) => ({ file, signal }))
+  );
+  const { fileNames, program } = createVirtualProgram(files, root);
+
+  for (const absoluteFile of detectSharedSupabaseDatabaseOperations(program)) {
+    const file = fileNames.get(absoluteFile);
+    if (
+      file &&
+      !violations.some(
+        (violation) => violation.file === file && violation.signal === "Supabase database operation"
+      )
+    ) {
+      violations.push({ file, signal: "Supabase database operation" });
+    }
+  }
+
+  return violations.sort((left, right) =>
+    `${left.file}:${left.signal}`.localeCompare(`${right.file}:${right.signal}`)
+  );
+}
+
 export function detectDataApiSignals(file: string, content: string): DataApiSignal[] {
   if (!/(?:supabase|postgrest|\/rest|\/graphql|data_api)/i.test(content)) return [];
 
@@ -355,9 +443,6 @@ export function detectDataApiSignals(file: string, content: string): DataApiSign
   ) {
     signals.push("PostgREST client");
   }
-  if (sourceFile && detectSupabaseDatabaseOperation(sourceFile)) {
-    signals.push("Supabase database operation");
-  }
   if (/\b(?:SUPABASE_)?(?:DATA_API|POSTGREST)_(?:URL|ENDPOINT)\b/i.test(searchableText)) {
     signals.push("explicit Data API configuration");
   }
@@ -366,9 +451,8 @@ export function detectDataApiSignals(file: string, content: string): DataApiSign
 }
 
 export function findDataApiConsumers(root: string): string[] {
-  return trackedArchitectureFiles(root).flatMap((file) =>
-    detectDataApiSignals(file, readFileSync(resolve(root, file), "utf8")).map(
-      (signal) => `${file}: ${signal}`
-    )
+  const files = Object.fromEntries(
+    trackedArchitectureFiles(root).map((file) => [file, readFileSync(resolve(root, file), "utf8")])
   );
+  return detectDataApiSignalsInFiles(files, root).map(({ file, signal }) => `${file}: ${signal}`);
 }

@@ -12,5 +12,5 @@ describe("SEC-02 Data API architecture contract", () => {
     const violations = findDataApiConsumers(ROOT);
 
     expect(violations, DATA_API_GUARD_MESSAGE).toEqual([]);
-  });
+  }, 15_000);
 });

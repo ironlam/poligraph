@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { detectDataApiSignals, selectTrackedArchitectureFiles } from "./data-api-consumer-guard";
+import {
+  detectDataApiSignalsInFiles,
+  selectTrackedArchitectureFiles,
+} from "./data-api-consumer-guard";
 
 type Fixture = {
   name: string;
@@ -205,11 +208,14 @@ const allowedFixtures: Fixture[] = [
 
 describe("SEC-02 Data API consumer scanner", () => {
   it.each(databaseFixtures)("classifies $name as $expected", ({ source, signal }) => {
-    expect(detectDataApiSignals("packages/example/consumer.ts", source)).toContain(signal);
+    expect(detectDataApiSignalsInFiles({ "consumer.ts": source })).toContainEqual({
+      file: "consumer.ts",
+      signal,
+    });
   });
 
   it.each(allowedFixtures)("classifies $name as $expected", ({ source }) => {
-    expect(detectDataApiSignals("packages/example/allowed.ts", source)).toEqual([]);
+    expect(detectDataApiSignalsInFiles({ "allowed.ts": source })).toEqual([]);
   });
 
   it("excludes documentation and the guard fixtures while retaining tracked code", () => {
@@ -237,5 +243,94 @@ describe("SEC-02 Data API consumer scanner", () => {
 
     expect(content).toContain("/rest/v1");
     expect(selectTrackedArchitectureFiles(documentation)).toEqual([]);
+  });
+});
+
+describe("SEC-02 shared Supabase client scanner", () => {
+  const clientModule = `
+    import { createClient } from "@supabase/supabase-js";
+    export const sharedClient = createClient(url, key);
+  `;
+
+  const sharedClientFixtures: Array<{ name: string; files: Record<string, string> }> = [
+    {
+      name: "named export",
+      files: {
+        "client.ts": clientModule,
+        "consumer.ts": `
+          import { sharedClient } from "./client";
+          sharedClient.from("records").select();
+        `,
+      },
+    },
+    {
+      name: "default export",
+      files: {
+        "client.ts": `${clientModule}\nexport default sharedClient;`,
+        "consumer.ts": `
+          import databaseClient from "./client";
+          databaseClient.rpc("read_records");
+        `,
+      },
+    },
+    {
+      name: "aliased named import",
+      files: {
+        "client.ts": clientModule,
+        "consumer.ts": `
+          import { sharedClient as gateway } from "./client";
+          gateway.schema("published").from("records").select();
+        `,
+      },
+    },
+    {
+      name: "simple barrel re-export",
+      files: {
+        "client.ts": clientModule,
+        "index.ts": 'export { sharedClient } from "./client";',
+        "consumer.ts": `
+          import { sharedClient } from "./index";
+          sharedClient.schema("published").rpc("read_records");
+        `,
+      },
+    },
+  ];
+
+  it.each(sharedClientFixtures)("detects a shared client through $name", ({ files }) => {
+    expect(detectDataApiSignalsInFiles(files)).toContainEqual({
+      file: "consumer.ts",
+      signal: "Supabase database operation",
+    });
+  });
+
+  it.each([
+    ["Auth", "sharedClient.auth.getUser()"],
+    ["Storage", 'sharedClient.storage.from("avatars").download("photo.jpg")'],
+    ["Realtime", 'sharedClient.channel("updates").subscribe()'],
+  ])("allows a shared %s-only client", (_service, operation) => {
+    const files = {
+      "client.ts": clientModule,
+      "consumer.ts": `
+        import { sharedClient } from "./client";
+        ${operation};
+      `,
+    };
+
+    expect(detectDataApiSignalsInFiles(files)).toEqual([]);
+  });
+
+  it("does not trust a Supabase-looking type without a createClient origin", () => {
+    const files = {
+      "client.ts": `
+        export type SupabaseClient = { from(name: string): unknown };
+        export declare const typedClient: SupabaseClient;
+      `,
+      "consumer.ts": `
+        import { typedClient } from "./client";
+        typedClient.from("records");
+      `,
+    };
+
+    expect(detectDataApiSignalsInFiles(files)).toEqual([]);
   });
 });
