@@ -79,7 +79,7 @@ scripts/            Ops scripts (sync, backfill, fix, audit)
 ```bash
 node -v                # Must be >= 22
 npm install
-# Set up .env with DATABASE_URL, ADMIN_TOKEN, ANTHROPIC_API_KEY
+# Set up .env with DATABASE_URL, ADMIN_PASSWORD, ANTHROPIC_API_KEY
 npm run db:generate    # Generate Prisma client
 npm run dev            # Dev server on localhost:3000
 ```
@@ -436,6 +436,12 @@ Beyond this file:
 - GitHub Issues — ongoing initiatives, roadmap.
 
 A personal `CLAUDE.local.md` may exist in the working directory with deploy-specific workflows (Vercel aliases, production debugging, local shortcuts). It is gitignored by design. Do not copy its content into this file.
+
+### Agentic remediation findings
+
+When a task carries a `SEC-*`, `CI-*`, `DB-*`, `UX-*`, or `AGENT-*` identifier, read
+`docs/audits/security-ux-baseline-2026-08.md` and
+`docs/engineering/agentic-remediation.md` before investigating or changing code.
 
 ---
 

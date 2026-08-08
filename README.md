@@ -152,7 +152,7 @@ npm run dev
 | `GOOGLE_FACTCHECK_API_KEY` | Clé API Google Fact Check         | Pour `sync:factchecks` |
 | `VOYAGE_API_KEY`           | Clé Voyage AI (embeddings)        | Pour le chatbot        |
 | `MAILJET_API_KEY`          | Clé Mailjet                       | Pour la newsletter     |
-| `ADMIN_TOKEN`              | Token d'authentification admin    | Pour l'admin           |
+| `ADMIN_PASSWORD`           | Mot de passe admin                | Pour l'admin           |
 
 Voir `docs/DATASOURCES.md` pour la liste complète.
 
