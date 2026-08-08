@@ -40,6 +40,22 @@ For a vulnerability:
 If an automated test is impossible, the PR explains why and provides a bounded, safe, reproducible
 manual procedure.
 
+### Public vs private security evidence
+
+For a security finding that remains exploitable:
+
+- keep the public register minimal;
+- store detailed reproduction evidence in an authorized private channel, preferably a GitHub
+  Repository Security Advisory;
+- do not include payloads, procedures, or evidence that facilitate exploitation in a public PR;
+- let `Before-proof`, `Regression or attack scenario`, and `Adversary` reference the private
+  advisory;
+- prove publicly that regression tests exist without exposing dangerous test data or procedures;
+- document details publicly after remediation when coordinated disclosure is appropriate.
+
+Security through obscurity is not the control. The objective is coordinated disclosure while a
+known vulnerability remains exploitable.
+
 ## 3. Implementer
 
 The Implementer:
@@ -103,7 +119,9 @@ Every remediation PR documents:
 - Rollback when the change is risky.
 
 Start from `.github/PULL_REQUEST_TEMPLATE/remediation.md` so these fields remain visible and
-consistent. The PR also updates the corresponding row in the living findings register.
+consistent. When creating a PR through CLI or API, explicitly read and populate that file. Do not
+assume GitHub applies it automatically. The PR also updates the corresponding row in the living
+findings register.
 
 A database PR includes the metric or `EXPLAIN` before and after. A UI PR includes relevant mobile
 and desktop verification. Results from the second context are visible in the description or review.

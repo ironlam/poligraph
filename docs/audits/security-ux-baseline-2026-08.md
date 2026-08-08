@@ -41,61 +41,48 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 
 ## Overview
 
-| Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                               | Remediation PR | Last updated |
-| ---------- | ------------------ | --------------------- | -------------- | ---------- | ---------------------------------------------------------------------- | -------------- | ------------ |
-| `SEC-01`   | P0                 | Application security  | To investigate | Unassigned | [Context](#sec-01-eliminate-markdown-stored-xss-path)                  | None           | 2026-08-08   |
-| `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | [Context](#sec-02-close-unintended-supabase-data-api-exposure)         | None           | 2026-08-08   |
-| `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)             | None           | 2026-08-08   |
-| `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                         | None           | 2026-08-08   |
-| `CI-01`    | P1                 | CI                    | To investigate | Unassigned | [Context](#ci-01-make-security-guards-trustworthy)                     | None           | 2026-08-08   |
-| `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                  | None           | 2026-08-08   |
-| `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                      | None           | 2026-08-08   |
-| `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)               | None           | 2026-08-08   |
-| `DB-02`    | Continuous         | Database performance  | To investigate | Unassigned | [Context](#db-02-top-sql-workload-remediation)                         | None           | 2026-08-08   |
-| `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts) | None           | 2026-08-08   |
-| `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                | None           | 2026-08-08   |
+| Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                                    | Remediation PR | Last updated |
+| ---------- | ------------------ | --------------------- | -------------- | ---------- | --------------------------------------------------------------------------- | -------------- | ------------ |
+| `SEC-01`   | P0                 | Application security  | To investigate | Unassigned | Tracked privately until remediation                                         | None           | 2026-08-08   |
+| `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | Tracked privately until remediation                                         | None           | 2026-08-08   |
+| `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)                  | None           | 2026-08-08   |
+| `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                              | None           | 2026-08-08   |
+| `SEC-06`   | P1                 | Database security     | To investigate | Unassigned | [Context](#sec-06-database-function-privilege-hardening)                    | None           | 2026-08-08   |
+| `SEC-07`   | P2                 | Application security  | To investigate | Unassigned | [Context](#sec-07-csp-hardening-without-sacrificing-rendering-architecture) | None           | 2026-08-08   |
+| `CI-01`    | P1                 | CI                    | To investigate | Unassigned | [Context](#ci-01-make-security-guards-trustworthy)                          | None           | 2026-08-08   |
+| `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                       | None           | 2026-08-08   |
+| `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                           | None           | 2026-08-08   |
+| `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)                    | None           | 2026-08-08   |
+| `DB-02`    | Continuous         | Database performance  | To investigate | Unassigned | [Context](#db-02-top-sql-workload-remediation)                              | None           | 2026-08-08   |
+| `DB-03`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-03-evaluate-foreign-key-indexing-from-measured-workloads)     | None           | 2026-08-08   |
+| `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts)      | None           | 2026-08-08   |
+| `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                     | None           | 2026-08-08   |
 
 ## P0 findings
 
-### SEC-01: Eliminate Markdown stored-XSS path
+### SEC-01: Prevent active content injection from rich text
 
-**Observed context.** `src/components/ui/markdown.tsx` builds an HTML string and passes it to
-`dangerouslySetInnerHTML`. The renderer currently escapes `&`, `<`, and `>`, but also creates `href`
-attributes from Markdown text without escaping quotes. It renders editorial, external, and
-AI-pipeline content. Every LLM output is untrusted data.
+**Target invariant.** Untrusted editorial, external, or AI-generated rich text must never create
+executable active content in the application.
 
-**Target invariant.** No editorial, external, or AI-generated text can inject executable HTML or
-attributes into the application.
+Exploit-enabling evidence is tracked privately until remediation.
 
-**Required before-evidence.** An automated test using harmless payloads demonstrates whether
-untrusted text can create arbitrary HTML, event handlers, or executable URLs, including through
-link text and destinations.
-
-**Closure criteria.** The renderer uses a safe construction method or proven sanitization, bypass
-cases are covered, existing consumers are inventoried, and a distinct Adversary has tested
-alternative payloads.
+**Closure criteria.** Untrusted rich text is rendered through a safe construction method, regression
+tests enforce the invariant, and a distinct Adversary has completed private bypass testing.
 
 **Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A05:2025 Injection. A08:2025 Software or
 Data Integrity Failures when data comes from an AI pipeline.
 
-### SEC-02: Close unintended Supabase Data API exposure
+### SEC-02: Prevent alternate-path disclosure of unpublished data
 
-**Observed context.** The application primarily uses PostgreSQL through Prisma, and no obvious
-application use of `supabase-js` was found. The versioned SQL files enable RLS, but
-`prisma/migrations/manual/rls-public-read-policies.sql` defines a `SELECT TO anon USING (true)`
-policy for `FactCheck`. The `FactCheck` model has a `publicationStatus` field that defaults to
-`DRAFT`. The audit reports unpublished fact-checks in production. A read-only query must confirm
-that production claim before remediation.
+**Target invariant.** Unpublished data must never become publicly accessible through an alternate
+data-access path.
 
-**Target invariant.** Unpublished data must never become publicly accessible through a path that
-bypasses the application.
+Exploit-enabling evidence and access details are tracked privately until remediation.
 
-**Required before-evidence.** Reproduce effective Data API permissions in an isolated environment
-and inventory exposed tables, views, columns, policies, grants, and RPC functions. Any production
-measurement remains read-only and excludes sensitive data from PR artifacts.
-
-**Closure criteria.** A test using the public role rejects unpublished fact-checks and allows only
-the approved public surface. The versioned schema, deployed state, and documentation are aligned.
+**Closure criteria.** Role-based tests reject unpublished data through every public path, allow only
+the intentional public surface, and confirm that versioned controls, deployed state, and
+documentation are aligned.
 
 **Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A01:2025 Broken Access Control. A02:2025
 Security Misconfiguration.
@@ -171,6 +158,29 @@ decision not to adopt a control is justified and dated.
 
 **Mapping.** [OWASP Top 10:2025](https://owasp.org/Top10/) A03:2025 Software Supply Chain Failures.
 
+### SEC-06: Database function privilege hardening
+
+**Target invariant.** Database functions must execute with explicit, least-privilege semantics and
+must not unintentionally expose privileged operations to public roles.
+
+Exploit-enabling evidence and privilege details are tracked privately until remediation.
+
+**Closure criteria.** Function behavior and effective privileges are inventoried, object resolution
+is explicit where required, unnecessary execution rights are removed, intentional public API
+behavior is preserved, and tests verify access by role.
+
+### SEC-07: CSP hardening without sacrificing rendering architecture
+
+**Target invariant.** Browser security policy should reduce the impact of injection vulnerabilities
+without introducing unjustified regressions to static rendering, ISR, caching, or performance.
+
+**Required investigation.** Evaluate the current policy and relevant sinks, nonce-based policy,
+hash and SRI options, App Router rendering and cache compatibility, performance cost, and
+architectural impact.
+
+**Closure criteria.** A measured decision is documented and covered by CSP tests. CSP remains
+defense in depth and is not treated as a substitute for correcting injection sinks.
+
 ## Performance
 
 ### DB-01: Incremental group-position computation
@@ -201,6 +211,17 @@ Every optimization documents:
 
 Production measurements are read-only. Experiments and writes use an isolated environment,
 preferably PostgreSQL 17 under Docker.
+
+### DB-03: Evaluate foreign-key indexing from measured workloads
+
+**Target invariant.** Indexes must be justified by observed workload, cardinality, write cost, and
+measured query behavior rather than advisor output alone.
+
+**Required investigation.** For every candidate, evaluate cardinality, real joins, delete and update
+patterns, frequency, write cost, and whether an existing index already covers the need.
+
+**Closure criteria.** Every adopted index has before and after measurements. Every rejected index
+has a documented rationale.
 
 ## UX and quality
 

@@ -9,10 +9,12 @@
 ## Regression or attack scenario
 
 <!-- Describe a safe, concrete scenario that violated the invariant before remediation. -->
+<!-- For an unresolved exploitable security finding, do not include exploit-enabling evidence in a public PR. Reference the private security advisory instead. -->
 
 ## Before-proof or reproduction
 
 <!-- Link the red test, measurement, or bounded manual reproduction. Exclude secrets and personal data. -->
+<!-- For an unresolved exploitable security finding, do not include exploit-enabling evidence in a public PR. Reference the private security advisory instead. -->
 
 ## Correction
 
@@ -29,6 +31,7 @@
 ## Adversary and independent verification
 
 <!-- Record the second context, bypass attempts, regressions considered, and unresolved blockers. -->
+<!-- For an unresolved exploitable security finding, do not include exploit-enabling evidence in a public PR. Reference the private security advisory instead. -->
 
 ## Out of scope
 
