@@ -41,22 +41,22 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 
 ## Overview
 
-| Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                                    | Remediation PR | Last updated |
-| ---------- | ------------------ | --------------------- | -------------- | ---------- | --------------------------------------------------------------------------- | -------------- | ------------ |
-| `SEC-01`   | P0                 | Application security  | In remediation | @ironlam   | Private Security Advisory                                                   | Pending        | 2026-08-08   |
-| `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | Tracked privately until remediation                                         | None           | 2026-08-08   |
-| `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)                  | None           | 2026-08-08   |
-| `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                              | None           | 2026-08-08   |
-| `SEC-06`   | P1                 | Database security     | To investigate | Unassigned | [Context](#sec-06-database-function-privilege-hardening)                    | None           | 2026-08-08   |
-| `SEC-07`   | P2                 | Application security  | To investigate | Unassigned | [Context](#sec-07-csp-hardening-without-sacrificing-rendering-architecture) | None           | 2026-08-08   |
-| `CI-01`    | P1                 | CI                    | To investigate | Unassigned | [Context](#ci-01-make-security-guards-trustworthy)                          | None           | 2026-08-08   |
-| `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                       | None           | 2026-08-08   |
-| `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                           | None           | 2026-08-08   |
-| `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)                    | None           | 2026-08-08   |
-| `DB-02`    | Continuous         | Database performance  | To investigate | Unassigned | [Context](#db-02-top-sql-workload-remediation)                              | None           | 2026-08-08   |
-| `DB-03`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-03-evaluate-foreign-key-indexing-from-measured-workloads)     | None           | 2026-08-08   |
-| `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts)      | None           | 2026-08-08   |
-| `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                     | None           | 2026-08-08   |
+| Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                                    | Remediation PR                                        | Last updated |
+| ---------- | ------------------ | --------------------- | -------------- | ---------- | --------------------------------------------------------------------------- | ----------------------------------------------------- | ------------ |
+| `SEC-01`   | P0                 | Application security  | In remediation | @ironlam   | Private Security Advisory                                                   | [#692](https://github.com/ironlam/poligraph/pull/692) | 2026-08-08   |
+| `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | Tracked privately until remediation                                         | None                                                  | 2026-08-08   |
+| `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)                  | None                                                  | 2026-08-08   |
+| `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                              | None                                                  | 2026-08-08   |
+| `SEC-06`   | P1                 | Database security     | To investigate | Unassigned | [Context](#sec-06-database-function-privilege-hardening)                    | None                                                  | 2026-08-08   |
+| `SEC-07`   | P2                 | Application security  | To investigate | Unassigned | [Context](#sec-07-csp-hardening-without-sacrificing-rendering-architecture) | None                                                  | 2026-08-08   |
+| `CI-01`    | P1                 | CI                    | To investigate | Unassigned | [Context](#ci-01-make-security-guards-trustworthy)                          | None                                                  | 2026-08-08   |
+| `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                       | None                                                  | 2026-08-08   |
+| `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                           | None                                                  | 2026-08-08   |
+| `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)                    | None                                                  | 2026-08-08   |
+| `DB-02`    | Continuous         | Database performance  | To investigate | Unassigned | [Context](#db-02-top-sql-workload-remediation)                              | None                                                  | 2026-08-08   |
+| `DB-03`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-03-evaluate-foreign-key-indexing-from-measured-workloads)     | None                                                  | 2026-08-08   |
+| `UX-01`    | P1                 | UX and quality        | To investigate | Unassigned | [Context](#ux-01-convert-recurring-ux-defects-into-semantic-contracts)      | None                                                  | 2026-08-08   |
+| `AGENT-01` | P1                 | Governance            | To investigate | Unassigned | [Context](#agent-01-make-agentsmd-executableverifiable)                     | None                                                  | 2026-08-08   |
 
 ## P0 findings
 
