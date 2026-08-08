@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, ExternalLink, Search } from "lucide-react";
+import { ExternalLink, Search } from "lucide-react";
 import { CANDIDACY_STATUS_LABELS } from "@/config/labels";
 import { getAccessibleTextColor } from "@/lib/contrast";
 import type { HubCandidacy } from "@/lib/data/hub";
@@ -20,15 +20,18 @@ import {
  *
  * Twenty-five homogeneous entries are a table, not a stack of cards: the old cards spent ~190px
  * each on repeating the same badge and the same "Fiche PoliGraph" button, and showed none of our
- * own work. Each row now carries what we have on that candidacy, and the row itself is the link.
+ * own work. Each row now carries what we have on that candidacy.
+ *
+ * The row is NOT itself a link any more, and that is the point of `RowLinks`: it led to a page that
+ * silently redirects elsewhere for half the field, so one gesture had two destinations and named
+ * neither.
  *
  * A client component, deliberately. Filtering through `searchParams` on the server would make the
  * hub page dynamic and cost it its ISR; the whole field is twenty-five rows already in the payload,
  * so it filters here and writes the URL back for shareability. The rows are still server-rendered.
  *
- * NOT a `<table>`: the row is one link, and a link cannot wrap a `<tr>`. Every cell therefore says
- * its own unit ("12 mesures dépouillées", "8 sujets sur 13") so a screen reader needs no column
- * header to read it, and the visual header row is decorative.
+ * NOT a `<table>`: every cell says its own unit ("12 mesures documentées", "8 sujets sur 13") so a
+ * screen reader needs no column header to read it, and the visual header row is decorative.
  */
 
 const TOTAL_THEMES = 13;
@@ -86,8 +89,13 @@ function PartyMark({ candidacy }: { candidacy: HubCandidacy }) {
  * What we have on this candidacy, and when we have nothing, why.
  *
  * The zero case is two different facts and gets two different sentences. "Aucun programme publié"
- * is about the candidacy; "Programme publié, pas encore dépouillé" is about our own backlog. Saying
+ * is about the candidacy; "Programme publié, pas encore documenté" is about our own backlog. Saying
  * the first when the second is true would blame a candidate for our delay.
+ *
+ * "Documenté" rather than "dépouillé" throughout, and the reason is specific to this site: on a
+ * page about an election, dépouillement is what happens to ballots. The word sent the reader to the
+ * count, not to the reading of a programme. It was also the minority term — the fiche and the hub
+ * cards already said "documentées" — so one screen contradicted the next.
  */
 function MeasureCell({ candidacy }: { candidacy: HubCandidacy }) {
   if (candidacy.measureCount === 0) {
@@ -97,7 +105,7 @@ function MeasureCell({ candidacy }: { candidacy: HubCandidacy }) {
         className="block text-xs leading-snug text-muted-foreground"
       >
         {candidacy.programmeAbsence === "non_depouille"
-          ? "Programme publié, pas encore dépouillé"
+          ? "Programme publié, pas encore documenté"
           : "Aucun programme publié à ce jour"}
       </span>
     );
@@ -107,7 +115,7 @@ function MeasureCell({ candidacy }: { candidacy: HubCandidacy }) {
     <span className="block leading-tight">
       <span className="font-display text-lg font-extrabold">{candidacy.measureCount}</span>{" "}
       <span className="text-xs text-muted-foreground">
-        {candidacy.measureCount === 1 ? "mesure dépouillée" : "mesures dépouillées"}
+        {candidacy.measureCount === 1 ? "mesure documentée" : "mesures documentées"}
       </span>
       <span className="mt-0.5 block text-xs text-muted-foreground">
         {candidacy.themesCoveredCount} sur {TOTAL_THEMES} sujets
@@ -144,13 +152,53 @@ function SourceLink({ candidacy }: { candidacy: HubCandidacy }) {
   );
 }
 
+/**
+ * The two destinations a row leads to, named rather than guessed.
+ *
+ * There used to be one link on the name, pointing at the candidacy fiche. That page
+ * redirects to the politician's fiche when it has no verified measure, so the same
+ * gesture landed on two different pages depending on a rule the reader cannot see, and
+ * said nothing about it. Naming both destinations costs one line and removes the
+ * surprise entirely.
+ *
+ * The unavailable case is stated, not hidden: "fiche de candidature à venir" tells the
+ * reader the page exists as an intention and is not ready, which is true, instead of
+ * quietly dropping them somewhere else.
+ */
+function RowLinks({ candidacy }: { candidacy: HubCandidacy }) {
+  if (candidacy.politicianSlug === null) return null;
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      {candidacy.ficheAvailable ? (
+        <Link
+          href={`/elections/presidentielle-2027/candidats/${candidacy.politicianSlug}`}
+          prefetch={false}
+          className="inline-flex min-h-[32px] items-center font-bold text-primary hover:underline"
+        >
+          Sa candidature
+          <span className="sr-only"> pour la présidentielle 2027, {candidacy.candidateName}</span>
+        </Link>
+      ) : (
+        <span className="inline-flex min-h-[32px] items-center text-muted-foreground">
+          Fiche de candidature à venir
+        </span>
+      )}
+      <Link
+        href={`/politiques/${candidacy.politicianSlug}`}
+        prefetch={false}
+        className="inline-flex min-h-[32px] items-center text-muted-foreground hover:text-foreground hover:underline"
+      >
+        Sa fiche Poligraph
+        <span className="sr-only">, {candidacy.candidateName}</span>
+      </Link>
+    </span>
+  );
+}
+
 function CandidacyRow({ candidacy }: { candidacy: HubCandidacy }) {
   const isRetiree = candidacy.status === "RETIRE";
   const statusLabel = candidacy.status === null ? null : CANDIDACY_STATUS_LABELS[candidacy.status];
-  const href =
-    candidacy.politicianSlug !== null
-      ? `/elections/presidentielle-2027/candidats/${candidacy.politicianSlug}`
-      : null;
 
   const identity = (
     <span className="flex min-w-0 flex-1 items-center gap-3">
@@ -184,15 +232,13 @@ function CandidacyRow({ candidacy }: { candidacy: HubCandidacy }) {
 
   return (
     <li className="border-b border-border/60 last:border-b-0">
-      <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 lg:gap-5">
-        {href !== null ? (
-          <Link href={href} prefetch={false} className="flex min-w-0 flex-1 items-center gap-3">
-            {identity}
-            <span className="sr-only">, voir la fiche</span>
-          </Link>
-        ) : (
-          identity
-        )}
+      <div className="flex items-start gap-3 px-4 pt-3 lg:items-center lg:gap-5 lg:py-3">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          {identity}
+          <span className="lg:hidden">
+            <RowLinks candidacy={candidacy} />
+          </span>
+        </span>
 
         <span className="hidden w-[168px] shrink-0 lg:block">
           <MeasureCell candidacy={candidacy} />
@@ -202,12 +248,9 @@ function CandidacyRow({ candidacy }: { candidacy: HubCandidacy }) {
           <SourceLink candidacy={candidacy} />
         </span>
 
-        {href !== null && (
-          <ChevronRight
-            aria-hidden="true"
-            className="hidden h-4 w-4 shrink-0 text-muted-foreground lg:block"
-          />
-        )}
+        <span className="hidden w-[190px] shrink-0 lg:block">
+          <RowLinks candidacy={candidacy} />
+        </span>
       </div>
 
       {/* Below lg the two columns fold under the name rather than shrinking. The source folds with
@@ -311,9 +354,9 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
         className="hidden items-center gap-5 border-b border-border bg-muted/50 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground lg:flex"
       >
         <span className="min-w-0 flex-1">Candidature</span>
-        <span className="w-[168px] shrink-0">Ce que nous avons dépouillé</span>
+        <span className="w-[168px] shrink-0">Ce que nous avons documenté</span>
         <span className="w-[220px] shrink-0">Source de la candidature</span>
-        <span className="w-4 shrink-0" />
+        <span className="w-[190px] shrink-0">Où aller</span>
       </div>
 
       {visible.length === 0 ? (

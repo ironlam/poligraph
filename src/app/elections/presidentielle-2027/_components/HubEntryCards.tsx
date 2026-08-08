@@ -36,7 +36,7 @@ export function HubEntryCards() {
           <Card className="min-h-[72px] flex-row items-center gap-3 border-l-4 border-l-brand p-4 transition-colors hover:bg-muted/40">
             <div className="min-w-0 flex-1">
               <p className="font-display text-base font-bold leading-tight">
-                Chercher une personne
+                Partir d&apos;une candidature
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Les candidatures sourcées, avec leur statut et leur origine.
@@ -77,7 +77,7 @@ export function HubEntryCards() {
           <Card className="h-full min-h-[200px] cursor-pointer border-t-4 border-t-brand transition-all hover:-translate-y-0.5 hover:shadow-md">
             <CardContent className="flex h-full flex-col gap-3">
               <h3 className="font-display text-xl font-bold tracking-tight">
-                Chercher une personne
+                Partir d&apos;une candidature
               </h3>
               <p className="flex-1 text-sm text-muted-foreground">
                 Les candidatures sourcées, avec leur statut et leur origine.

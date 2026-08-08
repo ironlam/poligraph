@@ -12,7 +12,6 @@ import {
   getCandidateFicheDetail,
   getPoliticianPresidentialCandidacy,
 } from "@/lib/data/politician-candidacy";
-import { formatDate } from "@/lib/utils";
 import {
   CandidateIntegrity,
   CandidateRecentVotes,
@@ -87,6 +86,10 @@ export default async function CandidateFichePage({ params }: PageProps) {
       verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
     });
 
+  // A safety net now, not a routing rule. The field used to link every row here and let this
+  // redirect sort them out, so one link had two destinations and named neither; the row now
+  // reads the same gate and offers the destination it can name. What is left is the hand-typed
+  // URL and the stale bookmark, for which landing on the politician's fiche beats a 404.
   if (!candidacy || !publishable) {
     redirect(`/politiques/${slug}`);
   }
@@ -133,29 +136,23 @@ export default async function CandidateFichePage({ params }: PageProps) {
         measureCount={candidacy.publishedMeasureCount}
       />
 
+      {/* Measures before the counters, everywhere and not only on mobile.
+          The three counters describe the COVERAGE of our own work; they are a caption on the
+          measures, not an introduction to them. Reading them first meant scrolling past a
+          description of the content to reach the content, which on a phone is the whole first
+          screen. One order for every width rather than two: a block that belongs after on a
+          phone does not belong before on a desktop, it was simply less costly there. */}
+      <CandidateThemes
+        themes={detail.themes}
+        electionSlug={candidacy.electionSlug}
+        lastReviewedAt={candidacy.lastReviewedAt}
+      />
+
       <CandidateStats
         measureCount={candidacy.publishedMeasureCount}
         themesCoveredCount={candidacy.themesCoveredCount}
         mandateCount={detail.mandateCount}
       />
-
-      <CandidateThemes themes={detail.themes} electionSlug={candidacy.electionSlug} />
-
-      <p className="text-sm">
-        <Link
-          href={`/elections/${candidacy.electionSlug}/sujets`}
-          prefetch={false}
-          className="font-bold text-primary hover:underline"
-        >
-          Comparer ses mesures à celles des autres candidatures
-        </Link>
-        {candidacy.lastReviewedAt !== null && (
-          <span className="text-muted-foreground">
-            {" "}
-            · dernière revue le {formatDate(candidacy.lastReviewedAt)}
-          </span>
-        )}
-      </p>
 
       <CandidateThemeSpread themes={detail.themes} />
 
@@ -186,6 +183,26 @@ export default async function CandidateFichePage({ params }: PageProps) {
           un suivi post-électoral à construire.
         </p>
       </section>
+
+      {/* The way back, at the end rather than only at the top. The breadcrumb carries the
+          hierarchy, which is not the same thing as an exit: a reader who has just finished the
+          page has to travel back up to leave it, and on a phone that is the whole page. */}
+      <nav aria-label="Suite de la navigation" className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <Link
+          href={`/elections/${candidacy.electionSlug}`}
+          prefetch={false}
+          className="font-bold text-primary hover:underline"
+        >
+          ← Toutes les candidatures
+        </Link>
+        <Link
+          href={`/politiques/${slug}`}
+          prefetch={false}
+          className="text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Sa fiche Poligraph, mandats, votes et déclarations
+        </Link>
+      </nav>
     </div>
   );
 }

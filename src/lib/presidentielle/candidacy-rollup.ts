@@ -5,9 +5,25 @@
  * database: it is the kind of rule that reads as obviously correct and is silently wrong.
  */
 
-export type RollupMeasure = { candidacyId: string | null; theme: string };
+export type RollupMeasure = {
+  candidacyId: string | null;
+  theme: string;
+  /** Whether the measure carries at least one primary source. */
+  hasPrimarySource: boolean;
+};
 
-export type CandidacyRollup = { measureCount: number; themesCoveredCount: number };
+export type CandidacyRollup = {
+  measureCount: number;
+  themesCoveredCount: number;
+  /**
+   * Measures backed by a primary source, which is what the fiche gate reads.
+   *
+   * Tracked separately from `measureCount` rather than assumed equal to it: today every
+   * measure happens to carry a primary source, so the two numbers coincide and a single
+   * count would look correct until the first measure sourced from an article alone.
+   */
+  primarySourceMeasureCount: number;
+};
 
 /**
  * Counts a candidacy's measures, but ONLY for candidacies the public surfaces can actually show.
@@ -28,11 +44,15 @@ export function rollupMeasuresByCandidacy(
 ): Map<string, CandidacyRollup> {
   const themesByCandidacy = new Map<string, Set<string>>();
   const counts = new Map<string, number>();
+  const primaryCounts = new Map<string, number>();
 
   for (const measure of measures) {
     const id = measure.candidacyId;
     if (id === null || !publicCandidacyIds.has(id)) continue;
     counts.set(id, (counts.get(id) ?? 0) + 1);
+    if (measure.hasPrimarySource) {
+      primaryCounts.set(id, (primaryCounts.get(id) ?? 0) + 1);
+    }
     const themes = themesByCandidacy.get(id) ?? new Set<string>();
     themes.add(measure.theme);
     themesByCandidacy.set(id, themes);
@@ -41,7 +61,11 @@ export function rollupMeasuresByCandidacy(
   return new Map(
     [...counts].map(([id, measureCount]) => [
       id,
-      { measureCount, themesCoveredCount: themesByCandidacy.get(id)?.size ?? 0 },
+      {
+        measureCount,
+        themesCoveredCount: themesByCandidacy.get(id)?.size ?? 0,
+        primarySourceMeasureCount: primaryCounts.get(id) ?? 0,
+      },
     ])
   );
 }

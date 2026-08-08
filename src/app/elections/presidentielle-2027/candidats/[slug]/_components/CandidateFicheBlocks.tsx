@@ -86,24 +86,46 @@ export function CandidateStats({
   );
 }
 
-/** One line per theme: how many measures, and the first of them quoted. */
+/**
+ * Every documented measure, grouped under its subject.
+ *
+ * All of them, expanded, and that is a decision rather than an oversight. A collapsed
+ * subject is a subject most readers never open, and these measures are what the page is
+ * for. Nineteen of them is a long section; it is also the entire substance of a
+ * candidacy fiche, so length here is the content doing its job.
+ *
+ * The comparison link closes this section instead of floating between two others. It
+ * acts on what was just read, so it belongs to it: on its own, between blocks, it read
+ * as an orphan the layout had nowhere else to put.
+ */
 export function CandidateThemes({
   themes,
   electionSlug,
+  lastReviewedAt,
 }: {
   themes: CandidateFicheDetail["themes"];
   electionSlug: string;
+  lastReviewedAt: Date | null;
 }) {
   if (themes.length === 0) return null;
 
+  const total = themes.reduce((sum, t) => sum + t.measureCount, 0);
+
   return (
-    <section aria-labelledby="mesures" className="space-y-3 rounded-xl border bg-card p-4 md:p-6">
-      <h2 id="mesures" className="font-display text-xl font-bold tracking-tight">
-        Ses mesures, sujet par sujet
-      </h2>
+    <section aria-labelledby="mesures" className="space-y-4 rounded-xl border bg-card p-4 md:p-6">
+      <div>
+        <h2 id="mesures" className="font-display text-xl font-bold tracking-tight">
+          Ses mesures, sujet par sujet
+        </h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {total} {total === 1 ? "mesure documentée" : "mesures documentées"} sur {themes.length}{" "}
+          {themes.length === 1 ? "sujet" : "sujets"}, chacune avec sa source.
+        </p>
+      </div>
+
       <ul className="divide-y divide-border">
         {themes.map((t) => (
-          <li key={t.theme} className="py-3 first:pt-0 last:pb-0">
+          <li key={t.theme} className="py-4 first:pt-0 last:pb-0">
             <div className="flex items-center gap-2.5">
               <span
                 aria-hidden="true"
@@ -120,28 +142,47 @@ export function CandidateThemes({
                 {t.measureCount} {t.measureCount === 1 ? "mesure" : "mesures"}
               </span>
             </div>
-            {t.quote !== null && (
-              <p className="mt-1.5 pl-4 text-sm leading-relaxed text-muted-foreground">
-                &laquo;&nbsp;{t.quote.text}&nbsp;&raquo;
-                {t.quote.sourceUrl !== null && (
-                  <>
-                    {" "}
-                    <a
-                      href={t.quote.sourceUrl}
-                      target="_blank"
-                      rel="nofollow noopener"
-                      className="inline-flex items-center gap-1 text-xs underline hover:no-underline"
-                    >
-                      source
-                      <ExternalLink aria-hidden="true" className="h-3 w-3" />
-                    </a>
-                  </>
-                )}
-              </p>
-            )}
+
+            <ul className="mt-2 space-y-2 pl-4">
+              {t.measures.map((measure) => (
+                <li key={measure.id} className="text-sm leading-relaxed">
+                  <span className="text-foreground">{measure.text}</span>
+                  {measure.sourceUrl !== null && (
+                    <>
+                      {" "}
+                      <a
+                        href={measure.sourceUrl}
+                        target="_blank"
+                        rel="nofollow noopener"
+                        className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground underline hover:text-foreground hover:no-underline"
+                      >
+                        source
+                        <ExternalLink aria-hidden="true" className="h-3 w-3" />
+                      </a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
           </li>
         ))}
       </ul>
+
+      <p className="border-t border-border pt-4 text-sm">
+        <Link
+          href={`/elections/${electionSlug}/sujets`}
+          prefetch={false}
+          className="font-bold text-primary hover:underline"
+        >
+          Comparer ces mesures à celles des autres candidatures
+        </Link>
+        {lastReviewedAt !== null && (
+          <span className="text-muted-foreground">
+            {" "}
+            · dernière revue le {formatDate(lastReviewedAt)}
+          </span>
+        )}
+      </p>
     </section>
   );
 }
@@ -180,7 +221,7 @@ export function CandidateThemeSpread({ themes }: { themes: CandidateFicheDetail[
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Compte le nombre de mesures que nous avons dépouillées par sujet. Mesure ce dont la
+        Compte le nombre de mesures que nous avons documentées par sujet. Mesure ce dont la
         candidature parle, pas ce qui a été réalisé.
       </p>
     </section>

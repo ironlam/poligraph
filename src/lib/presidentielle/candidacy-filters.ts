@@ -21,7 +21,10 @@ export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   toutes: "Toutes",
   declarees: "Déclarées",
   pressenties: "Pressenties",
-  depouillees: "Programme dépouillé",
+  // The key stays `depouillees` because it is in shared URLs; only the label changes.
+  // "Dépouillé" reads as ballot-counting on an elections page, and the rest of the site
+  // already says "documenté".
+  depouillees: "Programme documenté",
 };
 
 /** The fields a filter reads, so a caller can pass its own row type unchanged. */
