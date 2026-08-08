@@ -94,9 +94,11 @@ export function CandidateStats({
  * for. Nineteen of them is a long section; it is also the entire substance of a
  * candidacy fiche, so length here is the content doing its job.
  *
- * The comparison link closes this section instead of floating between two others. It
- * acts on what was just read, so it belongs to it: on its own, between blocks, it read
- * as an orphan the layout had nowhere else to put.
+ * The closing link acts on what was just read, so it belongs to this section rather than
+ * floating between two others. Its wording names where it goes: `/sujets` is the index of
+ * the thirteen subjects, and the comparison happens one level down, per subject. Promising
+ * "comparer ces mesures à celles des autres candidatures" and landing on a list of subjects
+ * is a promise the click does not keep.
  */
 export function CandidateThemes({
   themes,
@@ -109,17 +111,17 @@ export function CandidateThemes({
 }) {
   if (themes.length === 0) return null;
 
-  const total = themes.reduce((sum, t) => sum + t.measureCount, 0);
-
   return (
     <section aria-labelledby="mesures" className="space-y-4 rounded-xl border bg-card p-4 md:p-6">
       <div>
         <h2 id="mesures" className="font-display text-xl font-bold tracking-tight">
           Ses mesures, sujet par sujet
         </h2>
+        {/* No total here. The counters block a few centimetres below already states it, from
+            another read: two counts of the same thing on one screen invite the reader to spot a
+            disagreement, and eventually to find one. */}
         <p className="mt-1 text-xs text-muted-foreground">
-          {total} {total === 1 ? "mesure documentée" : "mesures documentées"} sur {themes.length}{" "}
-          {themes.length === 1 ? "sujet" : "sujets"}, chacune avec sa source.
+          Chaque mesure est citée avec le document dont elle est tirée.
         </p>
       </div>
 
@@ -174,7 +176,7 @@ export function CandidateThemes({
           prefetch={false}
           className="font-bold text-primary hover:underline"
         >
-          Comparer ces mesures à celles des autres candidatures
+          Explorer les mesures par sujet
         </Link>
         {lastReviewedAt !== null && (
           <span className="text-muted-foreground">

@@ -204,7 +204,13 @@ export async function loadCandidateFicheDetail(
       measures: list.map((measure) => ({
         id: measure.id,
         text: measure.text,
-        sourceUrl: measure.sources[0]?.url ?? null,
+        // A primary source first, the oldest one only as a fallback. Sources come back ordered
+        // by `publishedAt asc`, so `sources[0]` is the EARLIEST, which is the wrong one as soon
+        // as a measure carries two: a proposal announced in an interview and later written into
+        // the programme would be cited from the interview. No measure has two sources today, so
+        // this fixes nothing visible and prevents the first one that will.
+        sourceUrl:
+          (measure.sources.find((s) => s.tier === "PRIMARY") ?? measure.sources[0])?.url ?? null,
       })),
     }))
     // Most documented first: this block answers "where does this candidacy put the accent", and

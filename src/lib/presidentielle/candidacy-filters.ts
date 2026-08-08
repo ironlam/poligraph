@@ -21,10 +21,15 @@ export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   toutes: "Toutes",
   declarees: "Déclarées",
   pressenties: "Pressenties",
-  // The key stays `depouillees` because it is in shared URLs; only the label changes.
-  // "Dépouillé" reads as ballot-counting on an elections page, and the rest of the site
-  // already says "documenté".
-  depouillees: "Programme documenté",
+  // "Mesures documentées" and not "Programme documenté", because the predicate below is
+  // `measureCount > 0` and a measure does not imply a programme: `Measure.programEditionId`
+  // is nullable precisely so a proposal made in a speech, an interview or an article can be
+  // recorded. Labelling that as a documented programme would promise a published document
+  // this filter never checks.
+  //
+  // The key stays `depouillees`: it travels in shared URLs. Only the label changes, and
+  // "dépouillé" had to go anyway — on an elections page that word means counting ballots.
+  depouillees: "Mesures documentées",
 };
 
 /** The fields a filter reads, so a caller can pass its own row type unchanged. */
