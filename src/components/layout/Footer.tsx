@@ -18,7 +18,7 @@ export async function Footer() {
       <HexPattern className="absolute inset-0 text-primary opacity-[0.02] dark:opacity-[0.04] pointer-events-none" />
       <div className="relative z-10 container mx-auto px-4 py-8 md:py-10">
         {/* Main footer content */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-8 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-8 mb-8">
           {/* About */}
           <div className="col-span-2 sm:col-span-3 lg:col-span-1">
             <h3 className="font-display font-semibold text-sm mb-3">À propos</h3>
@@ -28,12 +28,14 @@ export async function Footer() {
             </p>
           </div>
 
-          {/* Navigation sections (4 columns) */}
+          {/* Navigation sections (5 columns) */}
           {filteredSections.map((section) => (
             <nav key={section.title} aria-labelledby={`footer-nav-${section.title}`}>
               <h3
                 id={`footer-nav-${section.title}`}
-                className="font-display font-semibold text-sm mb-3"
+                className={`font-display font-semibold text-sm mb-3 ${
+                  section.highlight ? "text-brand" : ""
+                }`}
               >
                 {section.title}
               </h3>

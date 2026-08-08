@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
-import { NAV_PRIMARY, NAV_SECONDARY } from "@/config/navigation";
+import { NAV_ELECTIONS, NAV_PRIMARY, NAV_SECONDARY } from "@/config/navigation";
 import {
   BarChart3,
   Users,
@@ -67,6 +67,9 @@ export function MobileMenu({ enabledFlags }: MobileMenuProps) {
     (item) => !item.featureFlag || flagSet.has(item.featureFlag)
   );
   const filteredSecondary = NAV_SECONDARY.filter(
+    (item) => !item.featureFlag || flagSet.has(item.featureFlag)
+  );
+  const filteredElections = NAV_ELECTIONS.filter(
     (item) => !item.featureFlag || flagSet.has(item.featureFlag)
   );
 
@@ -192,6 +195,56 @@ export function MobileMenu({ enabledFlags }: MobileMenuProps) {
 
             {/* Primary links */}
             <nav className="flex-1 overflow-y-auto px-4 py-6" aria-label="Navigation principale">
+              {/* Elections surfaced above the rest: upcoming first, past last */}
+              {filteredElections.length > 0 && (
+                <section aria-labelledby="mobile-menu-elections" className="mb-6">
+                  <h2
+                    id="mobile-menu-elections"
+                    className="px-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Élections
+                  </h2>
+                  <ul className="space-y-1">
+                    {filteredElections.map((item) => {
+                      const Icon = item.icon ? ICON_MAP[item.icon] : null;
+                      const isActive =
+                        pathname === item.href || pathname.startsWith(item.href + "/");
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            onClick={close}
+                            aria-current={isActive ? "page" : undefined}
+                            className={`flex items-center justify-between px-4 py-3.5 rounded-xl text-lg font-display font-semibold transition-colors ${
+                              item.past
+                                ? "text-foreground/60 hover:bg-muted hover:text-foreground"
+                                : "border border-primary/40 text-primary hover:bg-primary/5"
+                            }`}
+                          >
+                            <span className="flex items-center gap-3">
+                              {Icon && <Icon className="h-5 w-5" />}
+                              {item.label}
+                              {/* `muted-foreground-strong`: at 12px on --muted in dark, the base
+                                  token measures 3.83:1, below AA. See globals.css. */}
+                              <span
+                                className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  item.past
+                                    ? "bg-muted text-muted-foreground-strong"
+                                    : "bg-primary/15 text-primary"
+                                }`}
+                              >
+                                {item.past ? "Passée" : "À venir"}
+                              </span>
+                            </span>
+                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+
               <ul className="space-y-1">
                 {filteredPrimary.map((item) => {
                   const Icon = item.icon ? ICON_MAP[item.icon] : null;

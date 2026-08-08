@@ -98,13 +98,6 @@ export const NAV_SECONDARY: NavItem[] = [
     description: "Catalogue documenté des procédures-bâillons (SLAPP) en France",
   },
   {
-    href: "/elections/municipales-2026",
-    label: "Municipales 2026",
-    icon: "vote",
-    description: "Candidats, listes et résultats dans votre commune",
-    featureFlag: "MUNICIPALES_2026",
-  },
-  {
     href: "https://boussole.poligraph.fr",
     label: "Boussole",
     icon: "compass",
@@ -112,11 +105,36 @@ export const NAV_SECONDARY: NavItem[] = [
     external: true,
     featureFlag: "BOUSSOLE_ENABLED",
   },
+];
+
+export interface ElectionNavItem extends NavItem {
+  /** Election already held: listed after the upcoming ones, in a muted style */
+  past?: boolean;
+}
+
+// Elections surfaced ahead of the rest of the navigation, in the mobile menu
+// and in the footer. Upcoming first, past last. No date is rendered: the
+// presidential dates are not confirmed yet (Election.dateConfirmed).
+export const NAV_ELECTIONS: ElectionNavItem[] = [
+  {
+    href: "/elections/senatoriales-2026",
+    label: "Sénatoriales 2026",
+    icon: "landmark",
+    description: "178 sièges renouvelés au suffrage indirect",
+  },
   {
     href: "/elections/presidentielle-2027",
     label: "Présidentielle 2027",
     icon: "vote",
-    description: "Candidats et positions pour l'élection présidentielle",
+    description: "Candidatures, mesures et votes",
+  },
+  {
+    href: "/elections/municipales-2026",
+    label: "Municipales 2026",
+    icon: "mapPin",
+    description: "Résultats commune par commune",
+    past: true,
+    featureFlag: "MUNICIPALES_2026",
   },
 ];
 
@@ -165,9 +183,11 @@ export const CTA_MON_DEPUTE: NavItem = {
 export const CHAT_LINK = CTA_ASSISTANT;
 export const CTA_LINK = CTA_MON_DEPUTE;
 
-// Footer navigation (4 columns)
+// Footer navigation (5 columns)
 export interface FooterSection {
   title: string;
+  /** If true, the section heading is rendered in the accent colour */
+  highlight?: boolean;
   links: Array<{
     href: string;
     label: string;
@@ -178,17 +198,19 @@ export interface FooterSection {
 
 export const FOOTER_SECTIONS: FooterSection[] = [
   {
+    title: "Élections",
+    highlight: true,
+    links: [
+      ...NAV_ELECTIONS.map(({ href, label, featureFlag }) => ({ href, label, featureFlag })),
+      { href: "/elections", label: "Toutes les élections" },
+    ],
+  },
+  {
     title: "Représentants",
     links: [
       { href: "/politiques", label: "Tous les représentants" },
       { href: "/partis", label: "Partis politiques" },
       { href: "/affaires", label: "Affaires judiciaires" },
-      { href: "/elections", label: "Élections" },
-      {
-        href: "/elections/municipales-2026",
-        label: "Municipales 2026",
-        featureFlag: "MUNICIPALES_2026",
-      },
       { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
       { href: "/comparer", label: "Comparer", featureFlag: "COMPARISON_TOOL" },
       { href: "/factchecks", label: "Fact-checks" },
