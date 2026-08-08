@@ -523,11 +523,16 @@ export async function getUpcomingElections() {
  * reading "À venir" the morning after the vote until someone deploys. Same read-time derivation as
  * the homepage banner: the stored `status` is only advanced by the candidacy sync, so the round
  * dates are what actually prove the ballot happened.
+ *
+ * `hours`, not `synced`: this answer flips on the clock, not only on a database write. Nothing
+ * purges the "elections" tag on polling day (the daily sync revalidates "votes" alone), so with
+ * `synced` the menu would keep saying "À venir" for up to 24 h after the ballot. `hours` is also
+ * the profile `revalidateTag("elections", ELECTION_PROFILE)` already passes on the purge side.
  */
 export async function getPastElectionSlugs(): Promise<string[]> {
   "use cache";
   cacheTag("elections");
-  cacheLife("synced");
+  cacheLife("hours");
 
   const rows = await db.election.findMany({
     where: { slug: { in: NAV_ELECTIONS.map((item) => item.slug) } },
