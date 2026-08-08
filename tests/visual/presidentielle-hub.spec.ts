@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { horizontalScroll } from "./helpers/viewport";
 
 /**
  * Accessibility and responsive checks for the public presidential hub, its themes index, and one
@@ -29,20 +30,6 @@ const PAGES = [
     path: "/elections/presidentielle-2027/sujets/numerique-tech",
   },
 ];
-
-/**
- * How far the PAGE can actually be scrolled sideways, not `scrollWidth - clientWidth` (which also counts
- * content clipped by overflow:hidden and legitimate inner scrollers). Asking the browser to scroll and
- * reading back where it landed measures what a visitor experiences.
- */
-async function horizontalScroll(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    window.scrollTo(2000, 0);
-    const x = window.scrollX;
-    window.scrollTo(0, 0);
-    return x;
-  });
-}
 
 for (const { name, path } of PAGES) {
   test.describe(`${name} (présidentielle 2027)`, () => {

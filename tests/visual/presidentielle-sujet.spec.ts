@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { horizontalScroll } from "./helpers/viewport";
 
 /**
  * Accessibility and responsive checks for the public presidential subject page.
@@ -20,20 +21,6 @@ import { expect, test, type Page } from "@playwright/test";
 const WCAG = ["wcag2a", "wcag2aa", "wcag21aa"];
 const SUBJECT_PATH = "/elections/presidentielle-2027/sujets/logement-urbanisme";
 const WIDTHS = [375, 768, 1440];
-
-/**
- * How far the PAGE can actually be scrolled sideways, not `scrollWidth - clientWidth` (which also counts
- * content clipped by overflow:hidden and legitimate inner scrollers). Asking the browser to scroll and
- * reading back where it landed measures what a visitor experiences.
- */
-async function horizontalScroll(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    window.scrollTo(2000, 0);
-    const x = window.scrollX;
-    window.scrollTo(0, 0);
-    return x;
-  });
-}
 
 test.describe("page sujet publique de la présidentielle 2027", () => {
   test("rend la comparaison seedée avec preuves et absence qualifiée", async ({ page }) => {
