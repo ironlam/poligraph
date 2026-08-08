@@ -118,7 +118,11 @@ jobs:
 
       - name: No dangerouslySetInnerHTML without sanitization
         run: |
-          VIOLATIONS=$(grep -rn 'dangerouslySetInnerHTML' src/ --include='*.tsx' | grep -v 'DOMPurify\|sanitize\|JSON.stringify\|JsonLd\|markdown' || true)
+          if grep -q 'dangerouslySetInnerHTML' src/components/ui/markdown.tsx; then
+            echo "::error::MarkdownText must render untrusted content structurally."
+            exit 1
+          fi
+          VIOLATIONS=$(grep -rn 'dangerouslySetInnerHTML' src/ --include='*.tsx' | grep -v 'DOMPurify\|sanitize\|JSON.stringify\|JsonLd' || true)
           if [ -n "$VIOLATIONS" ]; then
             echo "::error::Found dangerouslySetInnerHTML without sanitization."
             echo "$VIOLATIONS"
