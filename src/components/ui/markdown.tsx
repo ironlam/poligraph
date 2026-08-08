@@ -34,6 +34,9 @@ interface ListItemNode {
 const LINK_CLASS = "text-primary underline decoration-primary/40 hover:decoration-primary";
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 
+/** Far above normal editorial use while keeping parsing and rendering resource-bounded. */
+export const MAX_LIST_NESTING_DEPTH = 16;
+
 /** Classify a destination before it can become a link. */
 export function classifyMarkdownUrl(destination: string): SafeLink {
   if (!destination || destination !== destination.trim() || CONTROL_CHARACTERS.test(destination)) {
@@ -88,7 +91,7 @@ function parseBlocks(text: string): BlockNode[] {
       const lines = paragraph.split("\n");
       const nonEmptyLines = lines.filter((line) => line.trim());
       if (nonEmptyLines.length > 0 && nonEmptyLines.every(isBulletLine)) {
-        return parseList(nonEmptyLines);
+        return parseList(nonEmptyLines, 1);
       }
 
       if (lines.length === 1 && /^\*\*[^*]+\*\*\s*$/.test(paragraph)) {
@@ -126,7 +129,14 @@ function indentLevel(line: string): number {
   return Math.floor(spaces / 2);
 }
 
-function parseList(lines: string[]): BlockNode & { type: "list" } {
+function parseList(lines: string[], depth: number): BlockNode & { type: "list" } {
+  if (depth >= MAX_LIST_NESTING_DEPTH) {
+    return {
+      type: "list",
+      items: lines.map((line) => ({ children: parseInline(stripBullet(line)) })),
+    };
+  }
+
   const items: ListItemNode[] = [];
   let index = 0;
 
@@ -141,7 +151,7 @@ function parseList(lines: string[]): BlockNode & { type: "list" } {
 
     items.push({
       children: parseInline(stripBullet(line)),
-      nested: nestedLines.length > 0 ? parseList(nestedLines) : undefined,
+      nested: nestedLines.length > 0 ? parseList(nestedLines, depth + 1) : undefined,
     });
     index = next;
   }

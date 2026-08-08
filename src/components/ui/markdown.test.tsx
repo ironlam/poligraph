@@ -2,7 +2,14 @@ import { render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { classifyMarkdownUrl, MarkdownText } from "./markdown";
+import { classifyMarkdownUrl, MarkdownText, MAX_LIST_NESTING_DEPTH } from "./markdown";
+
+function nestedList(depth: number): string {
+  return Array.from(
+    { length: depth },
+    (_, index) => `${"  ".repeat(index)}- Niveau ${index + 1}`
+  ).join("\n");
+}
 
 describe("classifyMarkdownUrl", () => {
   it.each([
@@ -41,6 +48,19 @@ describe("MarkdownText", () => {
     expect(within(list!).getAllByRole("listitem")).toHaveLength(3);
     expect(list!.querySelector("ul")).toBeInTheDocument();
   });
+
+  it.each([MAX_LIST_NESTING_DEPTH - 1, MAX_LIST_NESTING_DEPTH, MAX_LIST_NESTING_DEPTH + 1])(
+    "bounds list nesting while preserving every item at depth %i",
+    (depth) => {
+      const { container } = render(<MarkdownText>{nestedList(depth)}</MarkdownText>);
+
+      expect(container.querySelectorAll("ul")).toHaveLength(
+        Math.min(depth, MAX_LIST_NESTING_DEPTH)
+      );
+      expect(container.querySelectorAll("li")).toHaveLength(depth);
+      expect(container).toHaveTextContent(`Niveau ${depth}`);
+    }
+  );
 
   it("creates only explicitly allowed links", () => {
     render(
