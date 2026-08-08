@@ -226,6 +226,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Explicit, unlike the build job above: that one runs `npm run build`, which is
+      # `prisma generate && next build`. This job serves the app with `next dev`, which
+      # generates nothing, so without this step every import of `@/generated/prisma`
+      # fails to resolve and the dev server never comes up.
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Create extensions and publicId sequences
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
 
