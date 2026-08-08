@@ -341,10 +341,12 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
               )}
             </nav>
 
-            {/* Bottom section: theme toggle + boussole + CTA */}
+            {/* Bottom section: theme toggle + boussole + CTA.
+                Wraps: the three pills measure 405px side by side, which overflows every viewport
+                narrower than that, 320px included (WCAG 1.4.10). */}
             <div className="px-4 py-6 border-t border-border">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <MobileThemeToggle />
                   {enabledFlags.includes("BOUSSOLE_ENABLED") && (
                     <a
