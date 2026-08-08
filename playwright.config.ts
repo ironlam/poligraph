@@ -82,6 +82,9 @@ export default defineConfig({
     command: "npm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    // Locally 120s is plenty against a warm .next cache. On a CI runner the cache is
+    // cold and the first route still has to compile, so the old value made the job fail
+    // on its own start-up rather than on anything it was meant to measure.
+    timeout: (process.env.CI ? 300 : 120) * 1000,
   },
 });

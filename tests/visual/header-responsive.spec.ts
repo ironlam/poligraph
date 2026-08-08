@@ -19,6 +19,9 @@ import { horizontalScroll } from "./helpers/viewport";
  * `BOUSSOLE_ENABLED`) must be enabled on the database behind that server. They add two labelled links
  * and one icon, so they produce the widest header — the only configuration where this guard means
  * anything. The destinations assertion below fails loudly rather than passing on a narrower header.
+ *
+ * On a disposable database, `tests/visual/fixtures/header-flags.sql` sets them. That is what the
+ * `header-responsive` CI job runs, so a local reproduction and the pipeline read the same header.
  */
 
 /** Tailwind `lg` is 1024 and `xl` is 1280. Each is tested one pixel below and at the boundary. */
