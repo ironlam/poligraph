@@ -33,8 +33,10 @@ export async function Footer() {
             <nav key={section.title} aria-labelledby={`footer-nav-${section.title}`}>
               <h3
                 id={`footer-nav-${section.title}`}
+                // `brand-on-surface`, not `brand`: measured on the footer surface in dark, the base
+                // token gives 4.21:1 at 14px, below AA. See globals.css.
                 className={`font-display font-semibold text-sm mb-3 ${
-                  section.highlight ? "text-brand" : ""
+                  section.highlight ? "text-brand-on-surface" : ""
                 }`}
               >
                 {section.title}
