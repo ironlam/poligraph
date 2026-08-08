@@ -35,6 +35,7 @@ const SOURCE_EXTENSIONS = new Set([
 const SOURCE_BASENAMES = new Set(["Dockerfile", "Makefile", ".env.example"]);
 const GUARD_FILES = new Set([
   "scripts/guards/data-api-consumer-guard.ts",
+  "scripts/guards/data-api-consumer-guard.test.ts",
   "src/__tests__/no-data-api-consumers.test.ts",
 ]);
 const EXCLUDED_PREFIXES = ["docs/", "src/generated/"];
@@ -84,27 +85,9 @@ function scriptKind(file: string): ts.ScriptKind {
   return ts.ScriptKind.TS;
 }
 
-function sourceTextValues(sourceFile: ts.SourceFile): string[] {
-  const values: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isStringLiteralLike(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node) ||
-      ts.isTemplateMiddle(node) ||
-      ts.isTemplateTail(node) ||
-      ts.isIdentifier(node)
-    ) {
-      values.push(node.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return values;
-}
-
 function detectSupabaseDatabaseOperation(sourceFile: ts.SourceFile): boolean {
   const factoryNames = new Set<string>();
+  const factoryNamespaces = new Set<string>();
   const clientNames = new Set<string>();
 
   for (const statement of sourceFile.statements) {
@@ -113,53 +96,175 @@ function detectSupabaseDatabaseOperation(sourceFile: ts.SourceFile): boolean {
     }
     if (!SUPABASE_CLIENT_MODULES.has(statement.moduleSpecifier.text)) continue;
 
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) continue;
-    for (const element of bindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (SUPABASE_CLIENT_FACTORIES.has(importedName)) factoryNames.add(element.name.text);
+    const importClause = statement.importClause;
+    if (!importClause) continue;
+    if (importClause.name) factoryNamespaces.add(importClause.name.text);
+    if (importClause.namedBindings && ts.isNamespaceImport(importClause.namedBindings)) {
+      factoryNamespaces.add(importClause.namedBindings.name.text);
+    }
+    if (importClause.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
+      for (const element of importClause.namedBindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text;
+        if (SUPABASE_CLIENT_FACTORIES.has(importedName)) factoryNames.add(element.name.text);
+      }
     }
   }
 
-  const isFactoryCall = (node: ts.Node): node is ts.CallExpression =>
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    factoryNames.has(node.expression.text);
-
-  const collectClients = (node: ts.Node) => {
+  const unwrap = (node: ts.Expression): ts.Expression => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isFactoryCall(node.initializer)
+      ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isTypeAssertionExpression(node) ||
+      ts.isNonNullExpression(node)
     ) {
-      clientNames.add(node.name.text);
+      return unwrap(node.expression);
     }
-    ts.forEachChild(node, collectClients);
+    return node;
   };
-  collectClients(sourceFile);
 
-  const isClientExpression = (node: ts.Expression): boolean => {
-    if (ts.isIdentifier(node)) return clientNames.has(node.text);
-    if (isFactoryCall(node)) return true;
-    return (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "schema" &&
-      isClientExpression(node.expression.expression)
+  const propertyName = (node: ts.Expression): string | undefined => {
+    const expression = unwrap(node);
+    if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+    if (
+      ts.isElementAccessExpression(expression) &&
+      expression.argumentExpression &&
+      ts.isStringLiteralLike(expression.argumentExpression)
+    ) {
+      return expression.argumentExpression.text;
+    }
+    return undefined;
+  };
+
+  const propertyReceiver = (node: ts.Expression): ts.Expression | undefined => {
+    const expression = unwrap(node);
+    if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
+      return expression.expression;
+    }
+    return undefined;
+  };
+
+  const requiredModule = (node: ts.Expression): string | undefined => {
+    const expression = unwrap(node);
+    const argument = ts.isCallExpression(expression) ? expression.arguments[0] : undefined;
+    if (
+      !ts.isCallExpression(expression) ||
+      !ts.isIdentifier(expression.expression) ||
+      expression.expression.text !== "require" ||
+      expression.arguments.length !== 1 ||
+      !argument ||
+      !ts.isStringLiteralLike(argument)
+    ) {
+      return undefined;
+    }
+    return argument.text;
+  };
+
+  const collectCommonJsFactories = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const moduleName = requiredModule(node.initializer);
+      if (moduleName && SUPABASE_CLIENT_MODULES.has(moduleName)) {
+        if (ts.isIdentifier(node.name)) factoryNamespaces.add(node.name.text);
+        if (ts.isObjectBindingPattern(node.name)) {
+          for (const element of node.name.elements) {
+            if (!ts.isIdentifier(element.name)) continue;
+            const importedName = element.propertyName?.getText(sourceFile) ?? element.name.text;
+            if (SUPABASE_CLIENT_FACTORIES.has(importedName)) factoryNames.add(element.name.text);
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, collectCommonJsFactories);
+  };
+  collectCommonJsFactories(sourceFile);
+
+  const isFactoryExpression = (node: ts.Expression): boolean => {
+    const expression = unwrap(node);
+    if (ts.isIdentifier(expression)) return factoryNames.has(expression.text);
+    const receiver = propertyReceiver(expression);
+    const name = propertyName(expression);
+    const unwrappedReceiver = receiver ? unwrap(receiver) : undefined;
+    const moduleName = receiver ? requiredModule(receiver) : undefined;
+    return Boolean(
+      receiver &&
+      name &&
+      SUPABASE_CLIENT_FACTORIES.has(name) &&
+      ((unwrappedReceiver &&
+        ts.isIdentifier(unwrappedReceiver) &&
+        factoryNamespaces.has(unwrappedReceiver.text)) ||
+        (moduleName && SUPABASE_CLIENT_MODULES.has(moduleName)))
     );
   };
 
+  const isFactoryCall = (node: ts.Expression): node is ts.CallExpression => {
+    const expression = unwrap(node);
+    return ts.isCallExpression(expression) && isFactoryExpression(expression.expression);
+  };
+
+  const factoryAliasCandidates: Array<{ name: string; value: ts.Expression }> = [];
+  const clientCandidates: Array<{ name: string; value: ts.Expression }> = [];
+
+  const collectAssignments = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      factoryAliasCandidates.push({ name: node.name.text, value: node.initializer });
+      clientCandidates.push({ name: node.name.text, value: node.initializer });
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left)
+    ) {
+      factoryAliasCandidates.push({ name: node.left.text, value: node.right });
+      clientCandidates.push({ name: node.left.text, value: node.right });
+    }
+    ts.forEachChild(node, collectAssignments);
+  };
+  collectAssignments(sourceFile);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { name, value } of factoryAliasCandidates) {
+      if (!factoryNames.has(name) && isFactoryExpression(value)) {
+        factoryNames.add(name);
+        changed = true;
+      }
+    }
+  }
+
+  const isClientExpression = (node: ts.Expression): boolean => {
+    const expression = unwrap(node);
+    if (ts.isIdentifier(expression)) return clientNames.has(expression.text);
+    if (isFactoryCall(expression)) return true;
+    const receiver = ts.isCallExpression(expression)
+      ? propertyReceiver(expression.expression)
+      : undefined;
+    return (
+      ts.isCallExpression(expression) &&
+      propertyName(expression.expression) === "schema" &&
+      Boolean(receiver && isClientExpression(receiver))
+    );
+  };
+
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const { name, value } of clientCandidates) {
+      if (!clientNames.has(name) && isClientExpression(value)) {
+        clientNames.add(name);
+        changed = true;
+      }
+    }
+  }
+
   let detected = false;
   const inspectCalls = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      (node.expression.name.text === "from" || node.expression.name.text === "rpc") &&
-      isClientExpression(node.expression.expression)
-    ) {
-      detected = true;
-      return;
+    if (ts.isCallExpression(node)) {
+      const name = propertyName(node.expression);
+      const receiver = propertyReceiver(node.expression);
+      if ((name === "from" || name === "rpc") && receiver && isClientExpression(receiver)) {
+        detected = true;
+        return;
+      }
     }
     ts.forEachChild(node, inspectCalls);
   };
@@ -167,24 +272,75 @@ function detectSupabaseDatabaseOperation(sourceFile: ts.SourceFile): boolean {
   return detected;
 }
 
+function sourceSyntaxValues(sourceFile: ts.SourceFile): string[] {
+  const values: string[] = [];
+  const constants = new Map<string, ts.Expression>();
+
+  const collectConstants = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      constants.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, collectConstants);
+  };
+  collectConstants(sourceFile);
+
+  const staticText = (node: ts.Expression, seen = new Set<string>()): string => {
+    if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+    if (ts.isParenthesizedExpression(node)) return staticText(node.expression, seen);
+    if (ts.isIdentifier(node)) {
+      if (seen.has(node.text)) return "";
+      const value = constants.get(node.text);
+      if (!value) return "";
+      const nextSeen = new Set(seen).add(node.text);
+      return staticText(value, nextSeen);
+    }
+    if (ts.isTemplateExpression(node)) {
+      return (
+        node.head.text +
+        node.templateSpans
+          .map((span) => staticText(span.expression, seen) + span.literal.text)
+          .join("")
+      );
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      return staticText(node.left, seen) + staticText(node.right, seen);
+    }
+    return "";
+  };
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isTemplateExpression(node) ||
+      ts.isBinaryExpression(node)
+    ) {
+      values.push(staticText(node));
+    }
+    if (ts.isIdentifier(node)) values.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return values;
+}
+
 function isJavaScriptLike(file: string): boolean {
   return /\.[cm]?[jt]sx?$/.test(file);
 }
 
 export function detectDataApiSignals(file: string, content: string): DataApiSignal[] {
-  if (!/(?:supabase|postgrest|\/rest\/v1|\/graphql\/v1|data_api)/i.test(content)) return [];
+  if (!/(?:supabase|postgrest|\/rest|\/graphql|data_api)/i.test(content)) return [];
 
   const sourceFile = isJavaScriptLike(file)
     ? ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKind(file))
     : undefined;
-  const searchableValues = sourceFile ? sourceTextValues(sourceFile) : [content];
+  const searchableValues = sourceFile ? sourceSyntaxValues(sourceFile) : [content];
   const searchableText = searchableValues.join("\n");
   const signals: DataApiSignal[] = [];
 
-  if (/\/rest\/v1(?:\/|$)/i.test(searchableText)) {
+  if (searchableValues.some((value) => /\/rest\/v1(?:\/|$)/i.test(value))) {
     signals.push("direct REST Data API consumer");
   }
-  if (/\/graphql\/v1(?:\/|$)/i.test(searchableText)) {
+  if (searchableValues.some((value) => /\/graphql\/v1(?:\/|$)/i.test(value))) {
     signals.push("direct GraphQL Data API consumer");
   }
   if (
