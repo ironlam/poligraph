@@ -2,7 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { isHubPublishable } from "@/config/publication-gates";
+import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import {
   resolveProgrammeAbsence,
@@ -63,6 +63,15 @@ export type HubCandidacy = {
    * Null when `measureCount > 0`, since there is then no absence to qualify.
    */
   programmeAbsence: "aucun_programme" | "non_depouille" | null;
+  /**
+   * Whether `/candidats/[slug]` will actually render a fiche for this candidacy.
+   *
+   * The row needs this because that page redirects to `/politiques/[slug]` when the gate
+   * is not cleared. A single link therefore led to two different destinations depending
+   * on a rule no reader can see, which is the one thing a link must never do. With this,
+   * the row offers the destination it can name.
+   */
+  ficheAvailable: boolean;
 };
 
 export type HubMeasureContext = {
@@ -129,7 +138,11 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
   ]);
 
   const byCandidacy = rollupMeasuresByCandidacy(
-    measures,
+    measures.map((m) => ({
+      candidacyId: m.candidacyId,
+      theme: m.theme,
+      hasPrimarySource: m.sources.some((s) => s.tier === "PRIMARY"),
+    })),
     new Set(publicCandidates.map((c) => c.id))
   );
 
@@ -160,6 +173,15 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
       measureCount,
       themesCoveredCount: rollup?.themesCoveredCount ?? 0,
       programmeAbsence: resolveProgrammeAbsence(measureCount, hasProgramme),
+      // Evaluated with the gate the fiche itself uses, not re-derived from `measureCount`.
+      // The row is what decides which link to offer, so a disagreement between the two
+      // would send the reader to a page that redirects them somewhere else without a word.
+      ficheAvailable:
+        c.politician?.slug != null &&
+        isFicheCandidatPublishable({
+          statusSourced: true,
+          verifiedMeasuresWithPrimarySource: rollup?.primarySourceMeasureCount ?? 0,
+        }),
     };
   });
 }

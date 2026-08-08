@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
@@ -122,12 +123,25 @@ export async function loadPoliticianPresidentialCandidacy(
   };
 }
 
+export type CandidateThemeMeasure = {
+  id: string;
+  text: string;
+  sourceUrl: string | null;
+};
+
 export type CandidateThemeBreakdown = {
   theme: ThemeCategory;
   slug: string;
   measureCount: number;
-  /** The first measure of the theme, quoted on the fiche. Null only if the theme has none. */
-  quote: { text: string; sourceUrl: string | null } | null;
+  /**
+   * Every measure of the theme, not a sample.
+   *
+   * The fiche used to quote the first one and show a count for the rest, so a candidacy with
+   * nineteen documented measures displayed thirteen of them at most, one per subject, and the
+   * others existed only as a number. The measures ARE the fiche's subject; hiding them behind
+   * their own count made the page describe work instead of showing it.
+   */
+  measures: CandidateThemeMeasure[];
 };
 
 export type CandidateRecentVote = {
@@ -184,18 +198,16 @@ export async function loadCandidateFicheDetail(
   }
 
   const themes: CandidateThemeBreakdown[] = [...byTheme.entries()]
-    .map(([theme, list]) => {
-      const first = list[0];
-      return {
-        theme,
-        slug: themeToSlug(theme),
-        measureCount: list.length,
-        quote:
-          first === undefined
-            ? null
-            : { text: first.text, sourceUrl: first.sources[0]?.url ?? null },
-      };
-    })
+    .map(([theme, list]) => ({
+      theme,
+      slug: themeToSlug(theme),
+      measureCount: list.length,
+      measures: list.map((measure) => ({
+        id: measure.id,
+        text: measure.text,
+        sourceUrl: pickMeasureSourceUrl(measure.sources),
+      })),
+    }))
     // Most documented first: this block answers "where does this candidacy put the accent", and
     // alphabetical order would bury the answer. It is a count of OUR extraction, not a ranking of
     // candidacies against each other, which is why it is allowed here and not on the field.

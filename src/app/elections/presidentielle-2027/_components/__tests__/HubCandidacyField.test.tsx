@@ -18,12 +18,13 @@ function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
     measureCount: 0,
     themesCoveredCount: 0,
     programmeAbsence: "aucun_programme",
+    ficheAvailable: false,
     ...over,
   };
 }
 
 describe("HubCandidacyField", () => {
-  it("rend une ligne par candidature, avec son statut honnête et le lien vers sa fiche", () => {
+  it("rend une ligne par candidature, avec son statut honnête", () => {
     const candidacies: HubCandidacy[] = [
       candidacy({ id: "c1", candidateName: "Alix Dupont", politicianSlug: "alix-dupont" }),
       candidacy({
@@ -40,12 +41,43 @@ describe("HubCandidacyField", () => {
     expect(screen.getByText("Bruno Martin")).toBeInTheDocument();
     expect(screen.getByText("Candidature pressentie")).toBeInTheDocument();
     expect(screen.getByText("Candidature évoquée")).toBeInTheDocument();
+  });
 
-    // La route candidat existe depuis #679 et redirige vers /politiques/[slug] sous le seuil de
-    // publication, donc un seul href suffit pour les 25 lignes sans fabriquer de lien mort.
-    expect(screen.getByRole("link", { name: /Alix Dupont/ })).toHaveAttribute(
+  it("nomme les deux destinations quand la fiche de candidature existe", () => {
+    // La régression que ça verrouille : un lien unique sur le nom, vers une page qui redirige
+    // silencieusement vers /politiques/[slug] sous le seuil de publication. Le même geste menait
+    // à deux pages différentes selon une règle invisible, sans jamais dire laquelle.
+    render(
+      <HubCandidacyField
+        candidacies={[
+          candidacy({ politicianSlug: "alix-dupont", ficheAvailable: true, measureCount: 4 }),
+        ]}
+      />
+    );
+
+    expect(screen.getAllByRole("link", { name: /Sa candidature/ })[0]).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats/alix-dupont"
+    );
+    expect(screen.getAllByRole("link", { name: /Sa fiche Poligraph/ })[0]).toHaveAttribute(
+      "href",
+      "/politiques/alix-dupont"
+    );
+  });
+
+  it("annonce l'absence de fiche de candidature au lieu d'y mener quand même", () => {
+    render(
+      <HubCandidacyField
+        candidacies={[candidacy({ politicianSlug: "alix-dupont", ficheAvailable: false })]}
+      />
+    );
+
+    expect(screen.getAllByText("Fiche de candidature à venir").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: /Sa candidature/ })).not.toBeInTheDocument();
+    // La fiche Poligraph, elle, existe toujours : le lecteur n'est jamais laissé sans issue.
+    expect(screen.getAllByRole("link", { name: /Sa fiche Poligraph/ })[0]).toHaveAttribute(
+      "href",
+      "/politiques/alix-dupont"
     );
   });
 
@@ -57,7 +89,7 @@ describe("HubCandidacyField", () => {
     expect(screen.getByText("Alix Dupont")).toBeInTheDocument();
   });
 
-  it("distingue « aucun programme publié » de « pas encore dépouillé »", () => {
+  it("distingue « aucun programme publié » de « pas encore documenté »", () => {
     // La régression que ça verrouille : afficher le même vide dans les deux cas imputerait notre
     // propre retard au candidat.
     const { container } = render(
@@ -66,7 +98,7 @@ describe("HubCandidacyField", () => {
           candidacy({ id: "c1", candidateName: "Sans programme" }),
           candidacy({
             id: "c2",
-            candidateName: "Non dépouillé",
+            candidateName: "Non documenté",
             programmeAbsence: "non_depouille",
           }),
         ]}
@@ -74,11 +106,11 @@ describe("HubCandidacyField", () => {
     );
 
     expect(screen.getAllByText("Aucun programme publié à ce jour").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Programme publié, pas encore dépouillé").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Programme publié, pas encore documenté").length).toBeGreaterThan(0);
     expect(container.querySelector('[data-programme-absence="non_depouille"]')).not.toBeNull();
   });
 
-  it("compte les candidatures sans programme, et jamais celles que nous n'avons pas dépouillées", () => {
+  it("compte les candidatures sans programme, et jamais celles que nous n'avons pas documentées", () => {
     render(
       <HubCandidacyField
         candidacies={[
@@ -104,8 +136,8 @@ describe("HubCandidacyField", () => {
       />
     );
 
-    expect(screen.getAllByText("mesure dépouillée").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("mesures dépouillées").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("mesure documentée").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("mesures documentées").length).toBeGreaterThan(0);
     expect(screen.getAllByText("8 sur 13 sujets").length).toBeGreaterThan(0);
   });
 
