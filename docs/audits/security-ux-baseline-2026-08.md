@@ -43,7 +43,7 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 
 | Identifier | Priority           | Area                  | Current status | Owner      | Evidence                                                                    | Remediation PR                                        | Last updated |
 | ---------- | ------------------ | --------------------- | -------------- | ---------- | --------------------------------------------------------------------------- | ----------------------------------------------------- | ------------ |
-| `SEC-01`   | P0                 | Application security  | Verified       | @ironlam   | Private Security Advisory                                                   | [#692](https://github.com/ironlam/poligraph/pull/692) | 2026-08-08   |
+| `SEC-01`   | P0                 | Application security  | Closed         | @ironlam   | Private Security Advisory                                                   | [#692](https://github.com/ironlam/poligraph/pull/692) | 2026-08-08   |
 | `SEC-02`   | P0                 | Access control        | To investigate | Unassigned | Tracked privately until remediation                                         | None                                                  | 2026-08-08   |
 | `SEC-03`   | P1                 | Supabase              | To investigate | Unassigned | [Context](#sec-03-least-privilege-supabase-public-surface)                  | None                                                  | 2026-08-08   |
 | `SEC-04`   | P1                 | Authentication        | To investigate | Unassigned | [Context](#sec-04-harden-admin-authentication)                              | None                                                  | 2026-08-08   |
