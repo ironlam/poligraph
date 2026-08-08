@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
@@ -204,13 +205,7 @@ export async function loadCandidateFicheDetail(
       measures: list.map((measure) => ({
         id: measure.id,
         text: measure.text,
-        // A primary source first, the oldest one only as a fallback. Sources come back ordered
-        // by `publishedAt asc`, so `sources[0]` is the EARLIEST, which is the wrong one as soon
-        // as a measure carries two: a proposal announced in an interview and later written into
-        // the programme would be cited from the interview. No measure has two sources today, so
-        // this fixes nothing visible and prevents the first one that will.
-        sourceUrl:
-          (measure.sources.find((s) => s.tier === "PRIMARY") ?? measure.sources[0])?.url ?? null,
+        sourceUrl: pickMeasureSourceUrl(measure.sources),
       })),
     }))
     // Most documented first: this block answers "where does this candidacy put the accent", and

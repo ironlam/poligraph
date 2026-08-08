@@ -120,8 +120,12 @@ export function CandidateThemes({
         {/* No total here. The counters block a few centimetres below already states it, from
             another read: two counts of the same thing on one screen invite the reader to spot a
             disagreement, and eventually to find one. */}
+        {/* "Sa source" and not "le document dont elle est tirée": a measure may come from a
+            speech, a debate, an interview or an article, which is why `programEditionId` is
+            nullable. Naming a document would be the same over-promise as the filter that
+            announced a documented programme on a bare measure count. */}
         <p className="mt-1 text-xs text-muted-foreground">
-          Chaque mesure est citée avec le document dont elle est tirée.
+          Chaque mesure est citée avec sa source.
         </p>
       </div>
 
