@@ -3,7 +3,6 @@ import { FOOTER_SECTIONS, NAV_ELECTIONS, NAV_SECONDARY } from "@/config/navigati
 
 const HUB = "/elections/presidentielle-2027";
 const SENATORIALES = "/elections/senatoriales-2026";
-const MUNICIPALES = "/elections/municipales-2026";
 
 const footerHrefs = FOOTER_SECTIONS.flatMap((s) => s.links.map((l) => l.href));
 
@@ -20,14 +19,22 @@ describe("nav élections", () => {
     expect(e?.label).toBe("Sénatoriales 2026");
   });
 
-  it("lists upcoming elections before past ones", () => {
-    const firstPast = NAV_ELECTIONS.findIndex((i) => i.past);
-    const lastUpcoming = NAV_ELECTIONS.map((i) => Boolean(i.past)).lastIndexOf(false);
-    expect(firstPast).toBeGreaterThan(lastUpcoming);
+  /**
+   * `getPastElectionSlugs` queries Election.slug with these values. A slug that does not match its
+   * own href matches no row, so the entry would silently stay "À venir" forever: the exact failure
+   * the database lookup exists to prevent.
+   */
+  it("keeps each slug in step with its href", () => {
+    for (const item of NAV_ELECTIONS) {
+      expect(item.href).toBe(`/elections/${item.slug}`);
+    }
   });
 
-  it("marks the 2026 municipal election as past", () => {
-    expect(NAV_ELECTIONS.find((i) => i.href === MUNICIPALES)?.past).toBe(true);
+  it("carries no hardcoded temporal state", () => {
+    for (const item of NAV_ELECTIONS) {
+      expect(item).not.toHaveProperty("past");
+      expect(item).not.toHaveProperty("when");
+    }
   });
 
   it("surfaces every election in the footer", () => {

@@ -5,6 +5,7 @@ import { NavIconBar } from "./NavIconBar";
 import { NAV_PRIMARY, NAV_TOOLS } from "@/config/navigation";
 import { BarChart3, Users, Scale, Vote, Landmark, BookOpen, Compass } from "lucide-react";
 import { getEnabledFlags } from "@/lib/feature-flags";
+import { getPastElectionSlugs } from "@/lib/data/elections";
 import type { LucideIcon } from "lucide-react";
 
 const PRIMARY_ICONS: Record<string, LucideIcon> = {
@@ -18,7 +19,10 @@ const PRIMARY_ICONS: Record<string, LucideIcon> = {
 };
 
 export async function Header() {
-  const enabledFlags = await getEnabledFlags();
+  const [enabledFlags, pastElectionSlugs] = await Promise.all([
+    getEnabledFlags(),
+    getPastElectionSlugs(),
+  ]);
 
   const filteredPrimary = NAV_PRIMARY.filter(
     (item) => !item.featureFlag || enabledFlags.has(item.featureFlag)
@@ -80,7 +84,7 @@ export async function Header() {
           </nav>
 
           {/* Mobile navigation */}
-          <MobileMenu enabledFlags={[...enabledFlags]} />
+          <MobileMenu enabledFlags={[...enabledFlags]} pastElectionSlugs={pastElectionSlugs} />
         </div>
       </div>
     </header>

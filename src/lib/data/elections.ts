@@ -4,6 +4,8 @@ import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import type { ElectionType } from "@/types";
 import type { ElectionRoundScore } from "@/lib/elections/banner-state";
+import { isElectionOver } from "@/lib/elections/status";
+import { NAV_ELECTIONS } from "@/config/navigation";
 
 // ============================================
 // Types
@@ -508,6 +510,31 @@ export async function getUpcomingElections() {
     orderBy: { round1Date: "asc" },
     take: 4,
   });
+}
+
+// ============================================
+// 5a. getPastElectionSlugs — for the navigation
+// ============================================
+
+/**
+ * Slugs, among the elections surfaced in the navigation, whose ballot has been held.
+ *
+ * Resolved here rather than written in `NAV_ELECTIONS` because a boolean in the config would keep
+ * reading "À venir" the morning after the vote until someone deploys. Same read-time derivation as
+ * the homepage banner: the stored `status` is only advanced by the candidacy sync, so the round
+ * dates are what actually prove the ballot happened.
+ */
+export async function getPastElectionSlugs(): Promise<string[]> {
+  "use cache";
+  cacheTag("elections");
+  cacheLife("synced");
+
+  const rows = await db.election.findMany({
+    where: { slug: { in: NAV_ELECTIONS.map((item) => item.slug) } },
+    select: { slug: true, status: true, round1Date: true, round2Date: true },
+  });
+
+  return rows.filter((election) => isElectionOver(election)).map((election) => election.slug);
 }
 
 // ============================================

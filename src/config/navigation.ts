@@ -108,32 +108,39 @@ export const NAV_SECONDARY: NavItem[] = [
 ];
 
 export interface ElectionNavItem extends NavItem {
-  /** Election already held: listed after the upcoming ones, in a muted style */
-  past?: boolean;
+  /** Election.slug, so the renderer can ask the database whether the ballot has been held */
+  slug: string;
 }
 
-// Elections surfaced ahead of the rest of the navigation, in the mobile menu
-// and in the footer. Upcoming first, past last. No date is rendered: the
-// presidential dates are not confirmed yet (Election.dateConfirmed).
+// Elections surfaced ahead of the rest of the navigation, in the mobile menu and in the footer.
+//
+// Whether an election is over is NOT written here. A boolean in this file would still read
+// "À venir" the morning after the vote, until someone deploys. The renderer resolves it from
+// Election.round1Date / round2Date through `isElectionOver`, which is the same read-time
+// derivation the homepage banner uses. See src/lib/elections/status.ts.
+//
+// No date is rendered either: the presidential dates carry dateConfirmed = false.
 export const NAV_ELECTIONS: ElectionNavItem[] = [
   {
     href: "/elections/senatoriales-2026",
+    slug: "senatoriales-2026",
     label: "Sénatoriales 2026",
     icon: "landmark",
     description: "178 sièges renouvelés au suffrage indirect",
   },
   {
     href: "/elections/presidentielle-2027",
+    slug: "presidentielle-2027",
     label: "Présidentielle 2027",
     icon: "vote",
     description: "Candidatures, mesures et votes",
   },
   {
     href: "/elections/municipales-2026",
+    slug: "municipales-2026",
     label: "Municipales 2026",
     icon: "mapPin",
     description: "Résultats commune par commune",
-    past: true,
     featureFlag: "MUNICIPALES_2026",
   },
 ];
