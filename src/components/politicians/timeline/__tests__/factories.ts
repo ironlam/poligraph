@@ -11,6 +11,7 @@ export function mandate(over: Partial<TimelineMandate> & { type: MandateType }):
     role: null,
     constituency: null,
     departmentCode: null,
+    senateSeries: null,
     startDate: new Date("2022-06-22"),
     endDate: null,
     isCurrent: true,

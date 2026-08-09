@@ -5,6 +5,7 @@ import { SenateurAPI, NosSenateursAPI, SenatSyncResult } from "./types";
 import { politicianService } from "@/services/politician";
 import { SENATE_GROUPS, type ParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import { findDepartmentCode } from "@/config/departments";
+import { parseSenateSeries, getSeriesTermStart } from "@/config/senatoriales";
 import { HTTPClient } from "@/lib/api/http-client";
 import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
@@ -12,7 +13,7 @@ import { shouldUpdatePhoto } from "@/config/photos";
 
 const client = new HTTPClient({ rateLimitMs: SENAT_RATE_LIMIT_MS });
 
-const SENAT_API_URL = "https://www.senat.fr/api-senat/senateurs.json";
+export const SENAT_API_URL = "https://www.senat.fr/api-senat/senateurs.json";
 const NOSSENATEURS_API_URL = "https://archive.nossenateurs.fr/senateurs/json";
 
 /**
@@ -178,6 +179,10 @@ async function syncSenator(
       birthPlace = extraData.lieu_naissance;
     }
 
+    // Renewal series, straight from the Senate API. Authoritative: neither the
+    // start date nor the department can stand in for it.
+    const senateSeries = parseSenateSeries(sen.serie);
+
     // Parse mandate start date
     let mandateStart: Date | null = null;
     const hasApiDate = Boolean(extraData?.mandat_debut);
@@ -185,11 +190,11 @@ async function syncSenator(
       mandateStart = new Date(extraData.mandat_debut);
       if (isNaN(mandateStart.getTime())) mandateStart = null;
     }
-    // Fallback: derive from senate renewal series (only for new senators;
-    // for existing senators without API date, we preserve their existing startDate)
-    // Serie 1 → elected Sept 24, 2023 | Serie 2 → elected Sept 27, 2020
-    if (!mandateStart && sen.serie) {
-      mandateStart = sen.serie === 1 ? new Date("2023-10-01") : new Date("2020-10-01");
+    // Fallback for a senator we have no individual date for: the day their series
+    // last took office. Approximate by construction, and wrong for anyone who took
+    // over mid-cycle, which is why `audit:senateurs-series` reports on it.
+    if (!mandateStart && senateSeries) {
+      mandateStart = getSeriesTermStart(senateSeries);
     }
 
     // Photo URL from senat.fr (urlAvatar is a relative path like /senimg/xxx.jpg)
@@ -249,6 +254,7 @@ async function syncSenator(
       departmentCode: sen.circonscription?.libelle
         ? findDepartmentCode(sen.circonscription.libelle)
         : null,
+      senateSeries,
       startDate: mandateStart || new Date(),
       isCurrent: true,
       source: DataSource.SENAT,

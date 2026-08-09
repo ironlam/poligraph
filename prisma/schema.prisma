@@ -334,6 +334,10 @@ model Mandate {
   role           String? // Ex: "Président de l'Assemblée nationale", "Vice-président du Sénat"
   constituency   String? // Ex: "Rhône (3ème)"
   departmentCode String? // Code département (01-95, 2A, 2B, 971-976, 977, 978, 987, 988)
+  // Senate renewal series (1 or 2), filled by sync:senat from the Senate API.
+  // Null outside senatorial mandates. Neither the start date nor the department
+  // code can derive it: see src/config/senatoriales.ts.
+  senateSeries   Int?
 
   startDate DateTime
   endDate   DateTime?

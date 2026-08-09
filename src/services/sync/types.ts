@@ -85,7 +85,9 @@ export interface SenateurAPI {
   civilite: string; // "M." or "Mme"
   feminise: boolean;
   tri: string;
-  serie: number; // 1 or 2
+  // The API returns the series as a string ("1" / "2"). It was typed `number`,
+  // which made `serie === 1` always false. Normalise with `parseSenateSeries()`.
+  serie: string | number;
   siege: number;
   url: string;
   urlAvatar: string;
