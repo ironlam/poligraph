@@ -24,12 +24,14 @@ interface ElectionSeed {
   totalSeats: number | null;
   suffrage: SuffrageType;
   registrationDeadline?: Date;
+  candidacyOpenDate?: Date;
   candidacyDeadline?: Date;
   campaignStartDate?: Date;
   sourceUrl?: string;
+  decreeUrl?: string;
 }
 
-const ELECTIONS: ElectionSeed[] = [
+export const ELECTIONS: ElectionSeed[] = [
   {
     slug: "municipales-2026",
     type: "MUNICIPALES",
@@ -56,12 +58,26 @@ const ELECTIONS: ElectionSeed[] = [
     type: "SENATORIALES",
     title: "Élections sénatoriales de 2026",
     shortTitle: "Sénatoriales 2026",
+    description:
+      "Le 27 septembre 2026, la série 2 du Sénat est renouvelée : 178 sièges sur 348, " +
+      "répartis sur 64 circonscriptions. Les sénateurs y sont désignés par 93 469 grands " +
+      "électeurs, dont 88 937 délégués des conseils municipaux, soit 95,2 % du collège. " +
+      "Les conseils municipaux ont désigné leurs délégués le 5 juin 2026. Les candidatures " +
+      "se déposent du 7 au 11 septembre 2026.",
     scope: "NATIONAL",
-    round1Date: new Date("2026-09-28"),
+    // Date set by décret n° 2026-301 of 21 April 2026. The seed carried 28
+    // September with dateConfirmed false: since `update` rewrites both fields
+    // unconditionally, every run reinstated a wrong "provisional dates" badge on
+    // top of a wrong date.
+    round1Date: new Date("2026-09-27"),
     round2Date: null,
-    dateConfirmed: false,
+    dateConfirmed: true,
     totalSeats: 178,
     suffrage: "INDIRECT",
+    candidacyOpenDate: new Date("2026-09-07"),
+    candidacyDeadline: new Date("2026-09-11"),
+    sourceUrl: "https://senatoriales2026.senat.fr/",
+    decreeUrl: "https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000053925339",
   },
   {
     slug: "presidentielle-2027",
@@ -144,9 +160,11 @@ async function main() {
       totalSeats: election.totalSeats,
       suffrage: election.suffrage,
       ...(election.registrationDeadline && { registrationDeadline: election.registrationDeadline }),
+      ...(election.candidacyOpenDate && { candidacyOpenDate: election.candidacyOpenDate }),
       ...(election.candidacyDeadline && { candidacyDeadline: election.candidacyDeadline }),
       ...(election.campaignStartDate && { campaignStartDate: election.campaignStartDate }),
       ...(election.sourceUrl && { sourceUrl: election.sourceUrl }),
+      ...(election.decreeUrl && { decreeUrl: election.decreeUrl }),
     };
 
     const result = await db.election.upsert({
@@ -169,11 +187,15 @@ async function main() {
   console.log(`\nTerminé : ${created} créées, ${updated} mises à jour`);
 }
 
-main()
-  .catch((error) => {
-    console.error("Erreur:", error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await db.$disconnect();
-  });
+// Guarded so importing this module (for the seed-data regression test) never
+// touches the database: main() only runs when this file is the process entry point.
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      console.error("Erreur:", error);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await db.$disconnect();
+    });
+}
