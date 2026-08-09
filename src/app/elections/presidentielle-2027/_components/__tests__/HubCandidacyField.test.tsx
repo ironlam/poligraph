@@ -133,13 +133,18 @@ describe("HubCandidacyField", () => {
   });
 
   it("ne suppose jamais « aucun programme » quand la raison du vide est inconnue", () => {
-    // `programmeAbsence` nul avec zéro mesure ne devrait pas arriver, mais le repli doit porter
-    // sur NOTRE retard : affirmer qu'un candidat n'a rien publié, faute de donnée, serait une
-    // affirmation fausse sur une personne réelle.
+    // `resolveProgrammeAbsence` ne rend jamais `null` à zéro mesure, donc ce cas ne sort pas de
+    // `getHubCandidacyField` aujourd'hui. Le garde reste nécessaire parce qu'il ne coûte rien et
+    // qu'il tient la doctrine : affirmer qu'un candidat n'a rien publié, faute de donnée de notre
+    // côté, serait une affirmation fausse sur une personne réelle. La troisième phrase ne parle
+    // que de nous.
     render(<HubCandidacyField candidacies={[candidacy({ programmeAbsence: null })]} />);
 
     expect(screen.getByText("Pressentie · non documenté")).toBeInTheDocument();
-    expect(screen.queryByText(/aucun programme/)).not.toBeInTheDocument();
+    expect(screen.getByText("Pas encore documenté par Poligraph")).toBeInTheDocument();
+    // `i` : sans lui la regex ne voit pas « Aucun programme publié à ce jour » et le test passe
+    // en ne vérifiant rien, ce qui était le cas dans la première version de cette PR.
+    expect(screen.queryByText(/aucun programme/i)).not.toBeInTheDocument();
   });
 
   it("compte les candidatures sans programme, et jamais celles que nous n'avons pas documentées", () => {

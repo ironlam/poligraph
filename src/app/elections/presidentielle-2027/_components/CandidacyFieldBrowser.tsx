@@ -29,8 +29,8 @@ import { CandidacyStatusBadge } from "./CandidacyStatusBadge";
  * ZERO flat fill in the list, which is what the third pass of the handoff turns on. A navy button
  * repeated twenty-eight times stops reading as an action and becomes the only pattern the eye
  * sees; the name of the candidate, which is what the reader came for, drops to second place. The
- * links are now found by their INVARIABLE POSITION — the "Consulter" column above lg, the footer
- * band below — and by their navy colour, not by their weight. The one coloured element left is the
+ * links are now found by their INVARIABLE POSITION (the "Consulter" column above lg, the footer
+ * band below) and by their navy colour, not by their weight. The one coloured element left is the
  * status badge, and that is information rather than an action.
  *
  * A client component, deliberately. Filtering through `searchParams` on the server would make the
@@ -133,14 +133,24 @@ function PartyMark({ candidacy }: { candidacy: HubCandidacy }) {
  */
 function ProgrammeLine({ candidacy }: { candidacy: HubCandidacy }) {
   if (candidacy.measureCount === 0) {
+    // Three branches, not a binary. `resolveProgrammeAbsence` never returns null at zero measures,
+    // so the third one is unreachable through `getHubCandidacyField` today; it exists because a
+    // two-branch fallback puts "Aucun programme publié" on a candidacy whose data we simply do not
+    // have, which is a false claim about a person made out of a missing field. The third sentence
+    // speaks only about us.
+    const absence =
+      candidacy.programmeAbsence === "aucun_programme"
+        ? "Aucun programme publié à ce jour"
+        : candidacy.programmeAbsence === "non_depouille"
+          ? "Programme publié, pas encore documenté"
+          : "Pas encore documenté par Poligraph";
+
     return (
       <span
         data-programme-absence={candidacy.programmeAbsence}
         className="block text-xs leading-snug text-muted-foreground-strong"
       >
-        {candidacy.programmeAbsence === "non_depouille"
-          ? "Programme publié, pas encore documenté"
-          : "Aucun programme publié à ce jour"}
+        {absence}
       </span>
     );
   }
@@ -167,7 +177,7 @@ function FichePlaceholder({ withDivider }: { withDivider: boolean }) {
   return (
     <span
       // `lg:pl-[23px]`: the two links start after a 15px icon and a 8px gap, and a note that
-      // begins 23px to their left turns the column into a ragged edge — which is the opposite of
+      // begins 23px to their left turns the column into a ragged edge, which is the opposite of
       // the invariable position the whole variant rests on.
       className={`${SLOT} flex-col gap-px leading-tight text-muted-foreground-strong lg:flex-col lg:items-start lg:pl-[23px] ${
         withDivider ? "border-r border-border/60 lg:border-r-0" : ""
@@ -176,7 +186,7 @@ function FichePlaceholder({ withDivider }: { withDivider: boolean }) {
       <span className="font-display text-[13px] font-bold">Fiche candidature à venir</span>
       {/* `lg:sr-only`, not `lg:hidden`: the second line is what the 44px half of the mobile band
           is for, and above lg it would push the Poligraph link 13px below the one on the row
-          next door — the exact zigzag the fixed slot height exists to prevent. Kept in the
+          next door, the exact zigzag the fixed slot height exists to prevent. Kept in the
           accessibility tree at every width rather than dropped from it. */}
       <span className="text-[11px] lg:sr-only">dès que nous l&apos;aurons documentée</span>
     </span>

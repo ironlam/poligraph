@@ -72,11 +72,40 @@ describe("CandidacyStatusBadge", () => {
     const lien = screen.getByRole("link", { name: /Le Monde, 4 juin 2026/ });
     expect(lien).toHaveAttribute("href", "https://example.org/declaration");
     expect(lien).toHaveAttribute("title", "Le Monde, 4 juin 2026");
+    // AGENTS.md §accessibilité : tout lien externe porte `noopener noreferrer`. `nofollow` s'y
+    // ajoute parce que la destination est une source non maîtrisée.
+    expect(lien).toHaveAttribute("rel", "nofollow noopener noreferrer");
+    expect(lien).toHaveAttribute("target", "_blank");
     // Le nom accessible porte les deux : ce que dit la pastille ET où elle mène. Un lien nommé
     // « Déclarée · 3 mesures » qui ouvre un site externe sans dire lequel est la surprise à retirer.
     expect(lien).toHaveAccessibleName(
       "Déclarée · 3 mesures, source de la candidature : Le Monde, 4 juin 2026"
     );
+  });
+
+  it("garde une cible tactile de 44 px sur mobile dès qu'elle devient cliquable", () => {
+    // La pastille est devenue le lien vers la source, donc elle tombe sous la règle des 44 px
+    // (AGENTS.md). L'ancien lien de source portait `min-h-11` ; la perdre en fusionnant les deux
+    // éléments serait une régression tactile déguisée en simplification visuelle.
+    render(
+      <CandidacyStatusBadge
+        status="DECLARE"
+        measureCount={3}
+        programmeAbsence={null}
+        sourceUrl="https://example.org/declaration"
+        sourceLabel="Le Monde"
+      />
+    );
+    const lien = screen.getByRole("link");
+    expect(lien.className).toContain("min-h-11");
+    expect(lien.className).toContain("lg:min-h-[26px]");
+
+    // La géométrie de la maquette tient quand même : l'aplat coloré reste une pastille de 26 px,
+    // c'est la zone de contact qui grandit autour d'elle.
+    const aplat = lien.querySelector("span");
+    expect(aplat?.className).toContain("min-h-[26px]");
+    expect(aplat?.className).toContain("rounded-full");
+    expect(lien.className).not.toContain("rounded-full");
   });
 
   it("reste un simple texte quand la source manque, jamais un lien mort", () => {
