@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { CANDIDACY_STATUS_LABELS, candidacyRoleLabel } from "@/config/labels";
+import { candidacyRoleLabel } from "@/config/labels";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 // Reuses the established politician authority rather than adding a second, lighter read for three
 // fields. It loads more than this page needs, but it is already cached under `politician:<slug>`.
@@ -12,6 +12,8 @@ import {
   getCandidateFicheDetail,
   getPoliticianPresidentialCandidacy,
 } from "@/lib/data/politician-candidacy";
+import { CandidacyStatusBadge } from "../../_components/CandidacyStatusBadge";
+import { CandidacyBackBar } from "./_components/CandidacyBackBar";
 import {
   CandidateIntegrity,
   CandidateRecentVotes,
@@ -97,112 +99,121 @@ export default async function CandidateFichePage({ params }: PageProps) {
   const detail = await getCandidateFicheDetail(candidacy.candidacyId, politician.id);
 
   return (
-    <div className="container mx-auto space-y-8 px-4 pb-8 pt-4">
-      <Breadcrumb
-        items={[
-          { label: "Élections", href: "/elections" },
-          { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
-          { label: politician.fullName },
-        ]}
-      />
+    <>
+      <CandidacyBackBar electionSlug={candidacy.electionSlug} />
+      <div className="container mx-auto space-y-8 px-4 pb-8 pt-4">
+        <Breadcrumb
+          items={[
+            { label: "Élections", href: "/elections" },
+            { label: "Présidentielle 2027", href: `/elections/${candidacy.electionSlug}` },
+            { label: politician.fullName },
+          ]}
+        />
 
-      <header className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand">
-          {candidacy.electionShortTitle}
-        </p>
-        <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-          {politician.fullName}
-        </h1>
-        <p className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold">{candidacyRoleLabel(politician.civility)}</span>
-          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-            {CANDIDACY_STATUS_LABELS[candidacy.status]}
-          </span>
-          <a
-            href={candidacy.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs underline hover:no-underline"
+        <header className="space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand">
+            {candidacy.electionShortTitle}
+          </p>
+          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+            {politician.fullName}
+          </h1>
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold">{candidacyRoleLabel(politician.civility)}</span>
+            {/* The same badge language as the field, so a reader arriving from the list sees the
+                pastille they clicked, unchanged. Not a link here: the source is a full line just
+                below, and two controls to the same URL name one destination twice. */}
+            <CandidacyStatusBadge
+              status={candidacy.status}
+              measureCount={candidacy.publishedMeasureCount}
+              programmeAbsence={null}
+            />
+            <a
+              href={candidacy.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs underline hover:no-underline"
+            >
+              {candidacy.sourceLabel}
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            </a>
+          </p>
+        </header>
+
+        <CandidateSynthesis
+          synthesis={candidacy.synthesis}
+          generatedAt={candidacy.synthesisGeneratedAt}
+          measureCount={candidacy.publishedMeasureCount}
+        />
+
+        {/* Measures before the counters, everywhere and not only on mobile.
+            The three counters describe the COVERAGE of our own work; they are a caption on the
+            measures, not an introduction to them. Reading them first meant scrolling past a
+            description of the content to reach the content, which on a phone is the whole first
+            screen. One order for every width rather than two: a block that belongs after on a
+            phone does not belong before on a desktop, it was simply less costly there. */}
+        <CandidateThemes
+          themes={detail.themes}
+          electionSlug={candidacy.electionSlug}
+          lastReviewedAt={candidacy.lastReviewedAt}
+        />
+
+        <CandidateStats
+          measureCount={candidacy.publishedMeasureCount}
+          themesCoveredCount={candidacy.themesCoveredCount}
+          mandateCount={detail.mandateCount}
+        />
+
+        <CandidateThemeSpread themes={detail.themes} />
+
+        <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
+
+        <CandidateIntegrity
+          declarationCount={politician.declarations.length}
+          affairCount={politician.affairs.length}
+          politicianSlug={slug}
+        />
+
+        <section className="space-y-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground md:p-6">
+          <h2 className="font-display text-base font-bold tracking-tight text-foreground">
+            D&apos;où viennent ces données
+          </h2>
+          <p>
+            Chaque mesure est extraite d&apos;un document daté, relue, et publiée avec sa source. Le
+            statut de la candidature vient de la source citée ci-dessus, à sa date. Aucun
+            classement, aucun score de proximité : l&apos;ordre des candidatures est alphabétique
+            partout sur le site.
+          </p>
+          {/* Named rather than hidden: a reader who sees the gap stated can tell "not built yet"
+              from "nothing to say". Neither block has a date, and promising one would be worse. */}
+          <p>
+            Deux volets manquent encore. Le rapprochement entre chaque mesure et les scrutins
+            portant sur le même objet, qui demande un rattachement que la base ne porte pas encore.
+            Et le bilan des fonctions exercées, objectifs annoncés face aux chiffres constatés, qui
+            demande un suivi post-électoral à construire.
+          </p>
+        </section>
+
+        {/* The one filled-weight control of the page, and it is an outline: the fiche is about the
+            candidacy, so what lies outside it gets a single named exit rather than a navy block
+            competing with the measures. The way back to the field is no longer repeated here, it
+            is in the bar that stays on screen throughout. */}
+        <section className="rounded-xl border bg-card p-4 md:p-6">
+          <h2 className="font-display text-[11px] font-bold uppercase tracking-[0.09em] text-muted-foreground-strong">
+            Aller plus loin
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground-strong">
+            Mandats, votes, patrimoine et procédures : hors périmètre de la candidature.
+          </p>
+          <Link
+            href={`/politiques/${slug}`}
+            prefetch={false}
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-border px-4 font-display text-sm font-bold text-primary hover:border-primary hover:bg-muted md:min-h-[40px]"
           >
-            {candidacy.sourceLabel}
-            <ExternalLink className="h-3 w-3" aria-hidden="true" />
-          </a>
-        </p>
-      </header>
-
-      <CandidateSynthesis
-        synthesis={candidacy.synthesis}
-        generatedAt={candidacy.synthesisGeneratedAt}
-        measureCount={candidacy.publishedMeasureCount}
-      />
-
-      {/* Measures before the counters, everywhere and not only on mobile.
-          The three counters describe the COVERAGE of our own work; they are a caption on the
-          measures, not an introduction to them. Reading them first meant scrolling past a
-          description of the content to reach the content, which on a phone is the whole first
-          screen. One order for every width rather than two: a block that belongs after on a
-          phone does not belong before on a desktop, it was simply less costly there. */}
-      <CandidateThemes
-        themes={detail.themes}
-        electionSlug={candidacy.electionSlug}
-        lastReviewedAt={candidacy.lastReviewedAt}
-      />
-
-      <CandidateStats
-        measureCount={candidacy.publishedMeasureCount}
-        themesCoveredCount={candidacy.themesCoveredCount}
-        mandateCount={detail.mandateCount}
-      />
-
-      <CandidateThemeSpread themes={detail.themes} />
-
-      <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
-
-      <CandidateIntegrity
-        declarationCount={politician.declarations.length}
-        affairCount={politician.affairs.length}
-        politicianSlug={slug}
-      />
-
-      <section className="space-y-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground md:p-6">
-        <h2 className="font-display text-base font-bold tracking-tight text-foreground">
-          D&apos;où viennent ces données
-        </h2>
-        <p>
-          Chaque mesure est extraite d&apos;un document daté, relue, et publiée avec sa source. Le
-          statut de la candidature vient de la source citée ci-dessus, à sa date. Aucun classement,
-          aucun score de proximité : l&apos;ordre des candidatures est alphabétique partout sur le
-          site.
-        </p>
-        {/* Named rather than hidden: a reader who sees the gap stated can tell "not built yet" from
-            "nothing to say". Neither block has a date, and promising one would be worse. */}
-        <p>
-          Deux volets manquent encore. Le rapprochement entre chaque mesure et les scrutins portant
-          sur le même objet, qui demande un rattachement que la base ne porte pas encore. Et le
-          bilan des fonctions exercées, objectifs annoncés face aux chiffres constatés, qui demande
-          un suivi post-électoral à construire.
-        </p>
-      </section>
-
-      {/* The way back, at the end rather than only at the top. The breadcrumb carries the
-          hierarchy, which is not the same thing as an exit: a reader who has just finished the
-          page has to travel back up to leave it, and on a phone that is the whole page. */}
-      <nav aria-label="Suite de la navigation" className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <Link
-          href={`/elections/${candidacy.electionSlug}`}
-          prefetch={false}
-          className="font-bold text-primary hover:underline"
-        >
-          ← Toutes les candidatures
-        </Link>
-        <Link
-          href={`/politiques/${slug}`}
-          prefetch={false}
-          className="text-muted-foreground hover:text-foreground hover:underline"
-        >
-          Sa fiche Poligraph, mandats, votes et déclarations
-        </Link>
-      </nav>
-    </div>
+            <UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />
+            Sa fiche Poligraph
+          </Link>
+        </section>
+      </div>
+    </>
   );
 }

@@ -1469,6 +1469,21 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
 };
 
 /**
+ * The same four levels, without the noun, for the merged status + programme badge.
+ *
+ * The badge reads "Déclarée · 19 mesures" in a 230px column: repeating "Candidature" in a list
+ * whose column is titled "Candidature" would cost a third of the width to say nothing. The
+ * adjectives agree with "candidature", so the short form states no gender for the person, which
+ * is the same reason `candidacyRoleLabel` has a neutral branch.
+ */
+export const CANDIDACY_STATUS_SHORT_LABELS: Record<CandidacyStatus, string> = {
+  DECLARE: "Déclarée",
+  PRESSENTI: "Pressentie",
+  ENVISAGE: "Évoquée",
+  RETIRE: "Retirée",
+};
+
+/**
  * The candidacy notice's title is a ROLE, so it agrees in gender with `civility`.
  *
  * Not routed through `feminizePartyRole`: that helper is a closed replacement table over four party

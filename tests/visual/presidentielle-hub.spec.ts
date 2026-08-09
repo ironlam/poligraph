@@ -29,6 +29,13 @@ const PAGES = [
     name: "page sujet sous seuil (numérique & tech)",
     path: "/elections/presidentielle-2027/sujets/numerique-tech",
   },
+  // La fiche candidature porte la barre de retour persistante : son bouton doit garder sa cible
+  // tactile et son contraste aux trois largeurs, et la barre ne doit pas provoquer de débordement.
+  // `presidentielle-hub-demo-c` est la première candidature publiée du seed.
+  {
+    name: "fiche candidature publiée",
+    path: "/elections/presidentielle-2027/candidats/presidentielle-hub-demo-c",
+  },
 ];
 
 for (const { name, path } of PAGES) {
