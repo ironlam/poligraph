@@ -77,12 +77,14 @@ async function main() {
       startDate: true,
       constituency: true,
       senateSeries: true,
+      source: true,
       politician: { select: { fullName: true } },
     },
     orderBy: { startDate: "asc" },
   });
 
   const stale: string[] = [];
+  let staleOutsideSyncReach = 0;
   const missingInDb = new Set(apiSeries.keys());
   const seriesNotStored: string[] = [];
   const implausible: AuditRow[] = [];
@@ -93,9 +95,14 @@ async function main() {
 
     if (!series) {
       // Marked current in the database but absent from the API: seat since vacated.
+      // The source matters: the sync's closing step is scoped to source = SENAT, so
+      // a mandate from any other lineage stays current forever, no matter how many
+      // times sync:senat runs.
       stale.push(
-        `${mandate.politician.fullName} (${mandate.constituency ?? "circonscription inconnue"})`
+        `${mandate.politician.fullName} (${mandate.constituency ?? "circonscription inconnue"}) ` +
+          `source=${mandate.source ?? "inconnue"}`
       );
+      if (mandate.source !== "SENAT") staleOutsideSyncReach++;
       continue;
     }
 
@@ -135,6 +142,13 @@ async function main() {
   if (stale.length > 0) {
     console.log("  Sièges probablement libérés : isCurrent à revoir.");
     for (const line of stale) console.log(`  ${line}`);
+    if (staleOutsideSyncReach > 0) {
+      console.log(
+        `  Dont ${staleOutsideSyncReach} hors source SENAT : l'étape de fermeture du sync ` +
+          "étant filtrée sur cette source, elle ne les verra jamais. Les rejouer ne suffit pas, " +
+          "et leur attribuer une date de fin aujourd'hui inventerait la date de départ."
+      );
+    }
   }
 
   console.log(`\n--- Sénateurs de l'API sans mandat courant en base : ${missingInDb.size} ---`);
