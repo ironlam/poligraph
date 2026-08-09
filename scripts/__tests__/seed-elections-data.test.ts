@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ELECTIONS } from "../seed-elections";
+import { ELECTIONS } from "../lib/elections-seed";
 
 /**
  * The seed is idempotent and its `update` rewrites `round1Date` and
