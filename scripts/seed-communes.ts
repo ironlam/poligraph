@@ -14,6 +14,7 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { COMMUNE_DATA_SYNC_KEY, COMMUNE_POPULATION_SOURCE } from "@/config/communes";
 
 // --- Dedicated pool for bulk operations (more generous than serverless default) ---
 
@@ -153,6 +154,24 @@ async function main() {
       );
     }
   }
+
+  // Record when we asked geo.api.gouv.fr, since the API publishes no population
+  // vintage. Surfaces that render a population date the import, not a vintage
+  // they cannot verify. See src/config/communes.ts.
+  await db.syncMetadata.upsert({
+    where: { sourceKey: COMMUNE_DATA_SYNC_KEY },
+    create: {
+      sourceKey: COMMUNE_DATA_SYNC_KEY,
+      lastSyncAt: new Date(),
+      itemCount: upserted,
+      extra: { source: COMMUNE_POPULATION_SOURCE.via, url: COMMUNE_POPULATION_SOURCE.url },
+    },
+    update: {
+      lastSyncAt: new Date(),
+      itemCount: upserted,
+      extra: { source: COMMUNE_POPULATION_SOURCE.via, url: COMMUNE_POPULATION_SOURCE.url },
+    },
+  });
 
   // Final report
   const countAfter = await db.commune.count();
