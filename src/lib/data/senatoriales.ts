@@ -21,6 +21,7 @@ import { resolveElectionStatus } from "@/lib/elections/status";
 import { getMisEnCauseWhere } from "@/lib/affairs/public-filters";
 import { COMMUNE_DATA_SYNC_KEY } from "@/config/communes";
 import { CANDIDACY_PERIOD } from "@/config/senatoriales";
+import { DEPARTMENTS } from "@/config/departments";
 import { computeCommuneCollege, type CommuneCollege } from "@/lib/senatoriales/college";
 import {
   deriveCandidacyPhase,
@@ -260,6 +261,21 @@ export const getSittingSenators = cache(async function getSittingSenators(
 
 // ─── Commune lookup ────────────────────────────────────────────────
 
+/**
+ * Department label for a code.
+ *
+ * `Commune.departmentName` is not read: it holds the *code* on all 34,969 rows, so a panel
+ * trusting it renders "93 (93)" and a sentence reading "dans le département 93". Resolved
+ * from `DEPARTMENTS` instead, which covers 107 of the 109 codes present in the table. The
+ * two it misses, 984 and 989, have no permanent population and designate no senatorial
+ * delegate, so falling back to the code there shows a code rather than inventing a name.
+ *
+ * What that column should hold is a separate question, and this hub does not settle it.
+ */
+function departmentLabel(code: string): string {
+  return DEPARTMENTS[code]?.name ?? code;
+}
+
 export interface CommuneCollegeView {
   id: string;
   name: string;
@@ -286,12 +302,16 @@ export async function findCommunesByPostalCode(
   postalCode: string
 ): Promise<Array<{ id: string; name: string; departmentCode: string; departmentName: string }>> {
   if (!/^[0-9]{5}$/.test(postalCode)) return [];
-  return db.commune.findMany({
+  const communes = await db.commune.findMany({
     where: { postalCodes: { has: postalCode } },
-    select: { id: true, name: true, departmentCode: true, departmentName: true },
+    select: { id: true, name: true, departmentCode: true },
     orderBy: [{ population: "desc" }, { name: "asc" }],
     take: 50,
   });
+  return communes.map((commune) => ({
+    ...commune,
+    departmentName: departmentLabel(commune.departmentCode),
+  }));
 }
 
 /** Seats up for renewal in a department, counted from the sitting senators. */
@@ -315,7 +335,6 @@ export const getCommuneCollege = cache(async function getCommuneCollege(
       id: true,
       name: true,
       departmentCode: true,
-      departmentName: true,
       population: true,
       totalSeats: true,
     },
@@ -331,7 +350,7 @@ export const getCommuneCollege = cache(async function getCommuneCollege(
     id: commune.id,
     name: commune.name,
     departmentCode: commune.departmentCode,
-    departmentName: commune.departmentName,
+    departmentName: departmentLabel(commune.departmentCode),
     college: computeCommuneCollege({
       communeId: commune.id,
       population: commune.population,
