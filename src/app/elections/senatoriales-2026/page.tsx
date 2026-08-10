@@ -116,10 +116,18 @@ export default async function SenatorialesHubPage() {
                   <div className="min-w-0 flex-1">
                     {/* First mention of "série" on the page. The tooltip is a shortcut,
                         not the explanation: the full definition sits in `ScrutinRules`
-                        as text, because a hover is unreachable on touch. */}
+                        as text, because a hover is unreachable on touch.
+
+                        `min-h-11 min-w-11` because AGENTS.md requires 44 px and forbids
+                        shipping a bare icon as a standalone target; the shared
+                        `InfoTooltip` renders a 14 px icon with `p-0.5`, so it measures
+                        18 px on its own. The negative margin keeps the enlarged hit area
+                        from stretching this line: it overflows into the card's own padding
+                        and the non-interactive status line below, so it swallows no other
+                        control. */}
                     <p className="flex items-center gap-1 text-sm font-semibold leading-tight">
                       Renouvellement de la série 2
-                      <InfoTooltip term="serieSenatoriale" />
+                      <InfoTooltip term="serieSenatoriale" className="-my-3 min-h-11 min-w-11" />
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       {isBallotDay ? (
