@@ -125,7 +125,7 @@ describe("CommuneLookup : désambiguïsation", () => {
         "insee=33036": BAZAS_ANSWER,
       })
     );
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     const user = await search("33430");
 
     await screen.findByText(/couvre 2 communes/);
@@ -145,7 +145,7 @@ describe("CommuneLookup : désambiguïsation", () => {
         "insee=33036": BAZAS_ANSWER,
       })
     );
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
 
     await screen.findByText("Bazas");
@@ -154,7 +154,7 @@ describe("CommuneLookup : désambiguïsation", () => {
 
   it("dit qu'aucune commune ne correspond plutôt que de rester muet", async () => {
     vi.stubGlobal("fetch", mockFetch({ "cp=99999": { postalCode: "99999", communes: [] } }));
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("99999");
 
     await screen.findByText(/Aucune commune trouvée/);
@@ -173,14 +173,14 @@ describe("CommuneLookup : département renouvelable", () => {
   });
 
   it("accorde la préposition du département au lieu d'un « en » figé", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     await screen.findByText(/6 sièges à pourvoir en Gironde le 27 septembre/);
     expect(screen.getByRole("heading", { name: "Vos sénateurs en Gironde" })).toBeInTheDocument();
   });
 
   it("montre le barème et le poids par habitant", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     await screen.findByText("27");
     expect(screen.getByText("15")).toBeInTheDocument();
@@ -188,13 +188,13 @@ describe("CommuneLookup : département renouvelable", () => {
   });
 
   it("marque chaque siège remis en jeu", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     await waitFor(() => expect(screen.getAllByText("Siège en jeu")).toHaveLength(2));
   });
 
   it("nomme l'autorité quand aucune déclaration n'est publiée", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     await screen.findByText(/Aucune déclaration publiée par la HATVP à ce jour/);
     expect(screen.getByText(/Déclaration de patrimoine 2026/)).toBeInTheDocument();
@@ -202,14 +202,14 @@ describe("CommuneLookup : département renouvelable", () => {
 
   // Signal discret, jamais un filtre, jamais un tri, jamais un compteur agrégé.
   it("mentionne la présomption d'innocence à chaque procédure signalée", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     const signal = await screen.findByText(/2 procédures en cours/);
     expect(signal.textContent).toMatch(/présomption d'innocence/);
   });
 
   it("n'affiche ni ancienneté ni participation, faute de provenance fiable", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
     await screen.findByText("Bazas");
     expect(screen.queryByText(/sénatrice depuis|sénateur depuis/i)).toBeNull();
@@ -233,27 +233,88 @@ describe("CommuneLookup : département non renouvelable", () => {
 
   // La moitié des visiteurs est dans ce cas : le bloc doit répondre, pas se fermer.
   it("montre quand même les grands électeurs et dit quand ils voteront", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("75011");
 
     await screen.findByText(/Aucun siège à pourvoir à Paris cette année/);
     expect(screen.getByText("2 755")).toBeInTheDocument();
     expect(screen.getByText(/série renouvelée en 2029/)).toBeInTheDocument();
-    expect(screen.getByText(/désignés le 5 juin/)).toBeInTheDocument();
+  });
+
+  /**
+   * Régression : le décret du 21 avril 2026 ne convoque le 5 juin que les conseils
+   * municipaux des départements renouvelés, plus la Guyane et la Polynésie française.
+   * Une commune de série 1 n'a désigné personne ce jour-là, et le chiffre affiché est
+   * ce que donne le barème aujourd'hui, pas un décompte de délégués déjà nommés.
+   */
+  it("n'attribue aucune désignation du 5 juin à un département non renouvelé", async () => {
+    render(<CommuneLookup phase="before" />);
+    await search("75011");
+
+    await screen.findByText(/Aucun siège à pourvoir à Paris cette année/);
+    expect(screen.queryByText(/5 juin/)).toBeNull();
+    expect(screen.queryByText(/ont bien été désignés/)).toBeNull();
+    expect(
+      screen.getByText(/le barème donne aujourd'hui 2 755 grands électeurs/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/sera constitué pour ce renouvellement/)).toBeInTheDocument();
   });
 
   it("emploie « à Paris », jamais « en Paris »", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("75011");
     await screen.findByText(/à Paris cette année/);
     expect(screen.queryByText(/en Paris/)).toBeNull();
   });
 
   it("applique l'effectif réel du Conseil de Paris, pas le barème générique", async () => {
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("75011");
     await screen.findByText("163");
     expect(screen.queryByText("69")).toBeNull();
+  });
+});
+
+/**
+ * La formulation suit la phase résolue, jamais une date comparée dans le composant.
+ * Après le scrutin, une page qui lit encore « à pourvoir le 27 septembre » n'est pas
+ * seulement périmée : elle affirme quelque chose de faux.
+ */
+describe("CommuneLookup : formulation selon la phase du scrutin", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "cp=33430": { postalCode: "33430", communes: [BAZAS] },
+        "insee=33036": BAZAS_ANSWER,
+      })
+    );
+  });
+
+  it("avant le scrutin : au futur, avec la date", async () => {
+    render(<CommuneLookup phase="before" />);
+    await search("33430");
+    await screen.findByText(/6 sièges à pourvoir en Gironde le 27 septembre/);
+    expect(screen.getByText(/voteront ce jour-là/)).toBeInTheDocument();
+  });
+
+  it("le jour du scrutin : au présent, sans renvoyer à une date à venir", async () => {
+    render(<CommuneLookup phase="polling-day" />);
+    await search("33430");
+    await screen.findByText(/6 sièges sont à pourvoir en Gironde aujourd'hui/);
+    expect(screen.getByText(/votent aujourd'hui/)).toBeInTheDocument();
+    expect(screen.queryByText(/le 27 septembre/)).toBeNull();
+  });
+
+  it("après le scrutin : au passé, et aucun résultat annoncé", async () => {
+    render(<CommuneLookup phase="after" />);
+    await search("33430");
+    await screen.findByText(/faisait partie du renouvellement du 27 septembre/);
+    expect(screen.getByText(/y ont pris part/)).toBeInTheDocument();
+    expect(screen.queryByText(/à pourvoir/)).toBeNull();
+    expect(screen.queryByText(/voteront|votent aujourd'hui/)).toBeNull();
+    // Rien ne doit ressembler à une proclamation tant que l'état 4 n'existe pas.
+    expect(screen.queryByText(/élu|réélu|résultat/i)).toBeNull();
   });
 });
 
@@ -270,7 +331,7 @@ describe("CommuneLookup : absences", () => {
         },
       })
     );
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
 
     await screen.findByText(/Nombre de délégués inconnu/);
@@ -285,7 +346,7 @@ describe("CommuneLookup : absences", () => {
         "insee=33036": { ...BAZAS_ANSWER, renewal: "unknown", seatsAtStake: null },
       })
     );
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
 
     await screen.findByText(/Série de renouvellement inconnue/);
@@ -298,7 +359,7 @@ describe("CommuneLookup : absences", () => {
       "fetch",
       vi.fn(() => Promise.reject(new Error("offline")))
     );
-    render(<CommuneLookup />);
+    render(<CommuneLookup phase="before" />);
     await search("33430");
 
     await screen.findByText(/La recherche a échoué/);

@@ -27,6 +27,7 @@ import {
   SENATE_SEATS_TOTAL,
   SOURCE_DECREE,
   SOURCE_SENAT,
+  getBallotPhase,
 } from "./_content";
 
 /**
@@ -60,7 +61,8 @@ export default async function SenatorialesHubPage() {
   // Phase resolved at read time by the data layer: the stored column never
   // transitions on its own, so a page trusting it would still say "à venir" on
   // 28 September.
-  const isOver = election.status === "COMPLETED";
+  const phase = getBallotPhase(election.status);
+  const isOver = phase === "after";
   const now = new Date();
   const daysUntil =
     election.round1Date && !isOver
@@ -162,9 +164,9 @@ export default async function SenatorialesHubPage() {
               seats: it is the answer to "why does this concern me". */}
           <MunicipalBridge />
 
-          <CommuneLookup />
+          <CommuneLookup phase={phase} />
 
-          <SeatsAtStake groups={groups} />
+          <SeatsAtStake groups={groups} phase={phase} />
 
           <ScrutinRules />
 

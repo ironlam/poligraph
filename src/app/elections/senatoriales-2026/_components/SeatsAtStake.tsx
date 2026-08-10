@@ -1,7 +1,12 @@
 import { SourceLine } from "@/components/ui/SourceLine";
 import { MissingData } from "@/components/ui/MissingData";
 import type { GroupExposure } from "@/lib/data/senatoriales";
-import { SENATE_SEATS_AT_STAKE, SENATE_SEATS_TOTAL, SOURCE_SENAT } from "../_content";
+import {
+  SENATE_SEATS_AT_STAKE,
+  SENATE_SEATS_TOTAL,
+  SOURCE_SENAT,
+  type BallotPhase,
+} from "../_content";
 
 /**
  * How exposed each Senate group is to this renewal.
@@ -14,8 +19,39 @@ import { SENATE_SEATS_AT_STAKE, SENATE_SEATS_TOTAL, SOURCE_SENAT } from "../_con
  *
  * No projection of any kind: the bars measure seats *at stake*, never seats expected.
  */
-export function SeatsAtStake({ groups }: { groups: GroupExposure[] }) {
+export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase: BallotPhase }) {
   const ranked = groups.filter((g) => g.held > 0).sort((a, b) => b.atStake - a.atStake);
+
+  /**
+   * After the ballot this query stops describing what it claims to.
+   *
+   * `getGroupExposure()` counts `isCurrent` mandates, so the first `sync:senat` that
+   * follows 27 September replaces the outgoing senators with the incoming ones. The
+   * bars would then show the *new* composition under the heading "remis en jeu",
+   * turning a correct query into a false statement without anything failing.
+   *
+   * The block therefore withdraws instead of relabelling: nothing captured the
+   * pre-ballot composition, so there is nothing honest to show yet. A snapshot taken
+   * before 27 September is the real fix, and it has a deadline.
+   */
+  if (phase === "after") {
+    return (
+      <section aria-labelledby="enjeu-heading" className="space-y-4">
+        <h2
+          id="enjeu-heading"
+          className="font-display text-xl font-bold tracking-tight md:text-2xl"
+        >
+          Ce qui était remis en jeu
+        </h2>
+        <MissingData title="Composition sortante non conservée">
+          Le scrutin a eu lieu. La répartition par groupe que nous calculons décrit désormais le
+          Sénat renouvelé, pas celui qui se présentait devant les grands électeurs : nous préférons
+          ne rien afficher plutôt que de présenter l{"'"}une pour l{"'"}autre.
+        </MissingData>
+        <SourceLine sources={[SOURCE_SENAT]} reportHref={null} />
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="enjeu-heading" className="space-y-4">

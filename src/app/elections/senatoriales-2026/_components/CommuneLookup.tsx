@@ -11,7 +11,7 @@ import { SourceLine } from "@/components/ui/SourceLine";
 import { getDepartmentLocative } from "@/config/department-prepositions";
 import type { CommuneCollege } from "@/lib/senatoriales/college";
 import type { DepartmentRenewal, SittingSenator } from "@/lib/data/senatoriales";
-import { SOURCE_ELECTORAL_CODE, SOURCE_SENAT } from "../_content";
+import { SOURCE_ELECTORAL_CODE, SOURCE_SENAT, type BallotPhase } from "../_content";
 
 interface CommuneStub {
   id: string;
@@ -43,6 +43,39 @@ function formatInt(value: number): string {
 }
 
 /**
+ * The block's tense follows the resolved phase, not a date compared here.
+ *
+ * Once the ballot is held it says the department took part, and stops there: no
+ * result is announced while nothing feeds one. A page that still reads "à pourvoir le
+ * 27 septembre" on 28 September is not merely stale, it asserts something false.
+ */
+function renewedHeadline(phase: BallotPhase, seats: number | null, where: string): string {
+  const count = seats !== null && seats > 0 ? seats : null;
+  const seatWord = count !== null && count > 1 ? "sièges" : "siège";
+  if (phase === "after") {
+    return `Ce département faisait partie du renouvellement du 27 septembre`;
+  }
+  if (phase === "polling-day") {
+    return count !== null
+      ? `${count} ${seatWord} sont à pourvoir ${where} aujourd'hui`
+      : `Des sièges sont à pourvoir ${where} aujourd'hui`;
+  }
+  return count !== null
+    ? `${count} ${seatWord} à pourvoir ${where} le 27 septembre`
+    : `Des sièges sont à pourvoir ${where} le 27 septembre`;
+}
+
+function renewedDetail(phase: BallotPhase, delegates: number, communeName: string): string {
+  if (phase === "after") {
+    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} y ont pris part.`;
+  }
+  if (phase === "polling-day") {
+    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} votent aujourd'hui.`;
+  }
+  return `Les ${formatInt(delegates)} grands électeurs de ${communeName} voteront ce jour-là.`;
+}
+
+/**
  * "Vos grands électeurs" : the only interactive block of the hub.
  *
  * Three things it must get right, each of which the obvious implementation gets wrong.
@@ -59,7 +92,7 @@ function formatInt(value: number): string {
  * are in that case, so the block shows their delegates and says they will vote at the
  * next renewal, rather than turning into a dead end.
  */
-export function CommuneLookup() {
+export function CommuneLookup({ phase }: { phase: BallotPhase }) {
   const inputId = useId();
   const errorId = useId();
   const [postalCode, setPostalCode] = useState("");
@@ -175,13 +208,13 @@ export function CommuneLookup() {
           </div>
         )}
 
-        {state.kind === "answer" && <CommuneAnswerPanel answer={state.answer} />}
+        {state.kind === "answer" && <CommuneAnswerPanel answer={state.answer} phase={phase} />}
       </div>
     </section>
   );
 }
 
-function CommuneAnswerPanel({ answer }: { answer: CommuneAnswer }) {
+function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: BallotPhase }) {
   const { commune, college, inhabitantsPerDelegate, renewal, seatsAtStake, senators } = answer;
   const locative = getDepartmentLocative(commune.departmentCode);
   const where = locative ?? `dans le département ${commune.departmentName}`;
@@ -232,15 +265,10 @@ function CommuneAnswerPanel({ answer }: { answer: CommuneAnswer }) {
         <div className="mt-3 rounded-lg border border-border p-3">
           {renewal === "renewed" && (
             <>
-              <p className="font-semibold">
-                {seatsAtStake !== null && seatsAtStake > 0
-                  ? `${seatsAtStake} ${seatsAtStake > 1 ? "sièges" : "siège"} à pourvoir ${where} le 27 septembre`
-                  : `Des sièges sont à pourvoir ${where} le 27 septembre`}
-              </p>
+              <p className="font-semibold">{renewedHeadline(phase, seatsAtStake, where)}</p>
               {college !== null && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Les {formatInt(college.total)} grands électeurs de {commune.name} voteront ce
-                  jour-là.
+                  {renewedDetail(phase, college.total, commune.name)}
                 </p>
               )}
             </>
@@ -248,11 +276,16 @@ function CommuneAnswerPanel({ answer }: { answer: CommuneAnswer }) {
           {renewal === "not-renewed" && (
             <>
               <p className="font-semibold">Aucun siège à pourvoir {where} cette année</p>
+              {/* The 21 April decree convened only the councils of the renewed
+                  departments (plus Guyane and Polynésie française) on 5 June, so a
+                  série-1 commune designated nothing that day. The figure is therefore
+                  what the barème gives on today's population and council, not a count
+                  of people already appointed. */}
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Ce département relève de la série renouvelée en 2029.
                 {college !== null
-                  ? ` Ses ${formatInt(college.total)} grands électeurs ont bien été désignés le 5 juin : ils voteront au prochain renouvellement.`
-                  : " Ses grands électeurs ont bien été désignés le 5 juin : ils voteront au prochain renouvellement."}
+                  ? ` Avec sa population et l'effectif actuel du conseil, le barème donne aujourd'hui ${formatInt(college.total)} grands électeurs pour ${commune.name} ; le collège appelé à voter en 2029 sera constitué pour ce renouvellement.`
+                  : " Son collège sera constitué pour ce renouvellement."}
               </p>
             </>
           )}

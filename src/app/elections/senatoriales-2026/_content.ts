@@ -14,6 +14,23 @@
  * so it is not stated at all rather than stated loosely.
  */
 
+import type { ElectionStatus } from "@/types";
+
+/**
+ * Where the ballot stands, reduced to what changes the wording.
+ *
+ * Derived from the phase the data layer resolves at read time, never from a date
+ * compared in a component: two surfaces comparing the same date independently drift
+ * apart the moment one of them is cached differently.
+ */
+export type BallotPhase = "before" | "polling-day" | "after";
+
+export function getBallotPhase(status: ElectionStatus): BallotPhase {
+  if (status === "ROUND_1" || status === "ROUND_2") return "polling-day";
+  if (status === "BETWEEN_ROUNDS" || status === "COMPLETED") return "after";
+  return "before";
+}
+
 export const SENATE_SEATS_TOTAL = 348;
 export const SENATE_SEATS_AT_STAKE = 178;
 
@@ -140,7 +157,12 @@ export const MILESTONES: Milestone[] = [
   {
     label: "Désignation des délégués",
     when: "5 juin 2026",
-    note: "Les conseils municipaux élisent leurs délégués et leurs suppléants.",
+    // The decree convened only the councils of the renewed departments, plus Guyane
+    // and Polynésie française. Saying "les conseils municipaux" flat would credit a
+    // designation to série-1 communes that never took part.
+    note:
+      "Les conseils municipaux des départements renouvelés élisent leurs délégués et leurs " +
+      "suppléants.",
     confirmed: true,
   },
   {
