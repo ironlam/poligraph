@@ -3,32 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { acquireDocument } from "../acquisition";
-import { parseDocument, parseHtml } from "../parser";
-
-function buildTextPdf(text: string): Buffer {
-  const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  for (const [index, object] of objects.entries()) {
-    offsets.push(Buffer.byteLength(pdf));
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  }
-  const xrefOffset = Buffer.byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  pdf += offsets
-    .slice(1)
-    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
-    .join("");
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-  return Buffer.from(pdf);
-}
+import { parseDocument, parseHtml, parsePdfText } from "../parser";
 
 describe("parsing documentaire", () => {
   it("segmente un document HTML", () => {
@@ -48,16 +23,16 @@ describe("parsing documentaire", () => {
     );
   });
 
-  it("extrait un PDF texte en conservant les pages", async () => {
-    const bytes = buildTextPdf(
-      "Reduire la TVA sur electricite a cinq virgule cinq pour cent. ".repeat(5)
+  it("segmente le texte natif extrait d'un PDF en conservant les pages", () => {
+    const parsed = parsePdfText(
+      [
+        "Réduire la TVA sur l'électricité à cinq virgule cinq pour cent.",
+        "Construire de nouveaux logements dans les zones tendues.",
+      ].join("\f")
     );
-    const parsed = await parseDocument(bytes, "application/pdf");
     expect(parsed.mediaType).toBe("pdf");
     expect(parsed.scannedPdf).toBe(false);
-    expect(parsed.segments.some((segment) => segment.page === 1 && segment.text.length > 20)).toBe(
-      true
-    );
+    expect(parsed.segments.map((segment) => segment.page)).toEqual([1, 2]);
   });
 
   it("signale un timeout réseau", async () => {

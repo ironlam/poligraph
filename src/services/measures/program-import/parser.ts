@@ -37,17 +37,7 @@ export function parseHtml(html: string): ParsedDocument {
   return { mediaType: "html", segments, scannedPdf: false };
 }
 
-export async function parsePdf(bytes: Buffer): Promise<ParsedDocument> {
-  const directory = await mkdtemp(path.join(tmpdir(), "poligraph-program-"));
-  const pdfPath = path.join(directory, "document.pdf");
-  const textPath = path.join(directory, "document.txt");
-  await writeFile(pdfPath, bytes);
-  try {
-    await execFileAsync("pdftotext", ["-layout", pdfPath, textPath], { timeout: 30_000 });
-  } catch (error) {
-    throw new Error(`PDF invalide ou illisible: ${error instanceof Error ? error.message : error}`);
-  }
-  const text = await readFile(textPath, "utf8");
+export function parsePdfText(text: string): ParsedDocument {
   const pages = text.split("\f");
   const segments = pages.flatMap((pageText, pageIndex) => {
     const blocks = compact(pageText)
@@ -64,6 +54,20 @@ export async function parsePdf(bytes: Buffer): Promise<ParsedDocument> {
   // Flag only PDFs from which pdftotext recovered no meaningful sentence.
   const scannedPdf = segments.reduce((sum, segment) => sum + segment.text.length, 0) < 20;
   return { mediaType: "pdf", segments, scannedPdf };
+}
+
+export async function parsePdf(bytes: Buffer): Promise<ParsedDocument> {
+  const directory = await mkdtemp(path.join(tmpdir(), "poligraph-program-"));
+  const pdfPath = path.join(directory, "document.pdf");
+  const textPath = path.join(directory, "document.txt");
+  await writeFile(pdfPath, bytes);
+  try {
+    await execFileAsync("pdftotext", ["-layout", pdfPath, textPath], { timeout: 30_000 });
+  } catch (error) {
+    throw new Error(`PDF invalide ou illisible: ${error instanceof Error ? error.message : error}`);
+  }
+  const text = await readFile(textPath, "utf8");
+  return parsePdfText(text);
 }
 
 export async function parseDocument(bytes: Buffer, contentType: string): Promise<ParsedDocument> {
