@@ -3,10 +3,13 @@ import { ChevronRight } from "lucide-react";
 import { SourceLine } from "@/components/ui/SourceLine";
 import {
   FEHF_NOTE,
+  POLL_EARLY_CLOSE_NOTE,
   SCRUTIN_RULES,
   SERIES_EXPLAINER,
   SOURCE_DECREE,
   SOURCE_ELECTORAL_CODE,
+  SOURCE_R168,
+  SOURCE_SCRUTIN_MODE,
 } from "../_content";
 
 /**
@@ -64,13 +67,21 @@ export function ScrutinRules() {
         <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
 
+      {/* R. 168 lets the president close the poll early once every elector has voted, in both
+          systems. Without this the closing hours read as guaranteed, and a grand électeur
+          could believe turning up at 17 h is possible. */}
+      <p className="text-sm leading-relaxed text-muted-foreground">{POLL_EARLY_CLOSE_NOTE}</p>
+
       {/* The hours above cover the 63 departments and collectivities. Stated here rather
           than beside the polling-day block so there is one caveat to keep true. */}
       <p className="text-sm leading-relaxed text-muted-foreground">{FEHF_NOTE}</p>
 
+      {/* Three ranges, because the block draws on three: the collège (L. 280 à L. 293), the
+          mode de scrutin and its thresholds (L. 294), and the early close (R. 168). Citing
+          only the first would show a source that does not carry the claims above it. */}
       <SourceLine
-        sources={[SOURCE_ELECTORAL_CODE, SOURCE_DECREE]}
-        note="Horaires fixés par l'article 3 du décret"
+        sources={[SOURCE_ELECTORAL_CODE, SOURCE_SCRUTIN_MODE, SOURCE_DECREE, SOURCE_R168]}
+        note="Horaires fixés par l'article 3 du décret, clôture anticipée par l'article R. 168"
         reportHref={null}
       />
     </section>

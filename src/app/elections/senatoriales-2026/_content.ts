@@ -44,7 +44,9 @@ export const SENATE_SEATS_OTHER_SERIES = SENATE_SEATS_TOTAL - SENATE_SEATS_AT_ST
  * not only in a tooltip: information behind a hover is unreachable on touch and by anyone
  * who does not know there is something to hover.
  *
- * Both figures are our own count, 348 = 178 + 170, not a quoted total.
+ * The figures are statutory, not a count of our rows: 348 senators, and the split between
+ * series comes from tableau n° 5 annexed to the code électoral. Our own data reproduces
+ * 178 + 170, which is a check on the import, not the source of the claim.
  */
 export const SERIES_EXPLAINER =
   "Le Sénat se renouvelle par moitié tous les trois ans. Chaque département appartient à " +
@@ -74,6 +76,28 @@ export const SOURCE_DECREE = { label: DECREE_LABEL, url: DECREE_URL };
 export const SOURCE_ELECTORAL_CODE = {
   label: "Code électoral, art. L. 280 à L. 293",
   url: ELECTORAL_CODE_URL,
+};
+
+/**
+ * Separate source entry, because `SOURCE_ELECTORAL_CODE` covers L. 280 to L. 293 and the
+ * early-closing rule is a regulatory article outside that range. Citing the L range under a
+ * claim drawn from R. 168 would show a source that does not carry it.
+ */
+export const SOURCE_R168 = {
+  label: "Code électoral, art. R. 168",
+  url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042535572",
+};
+
+/**
+ * Mode de scrutin, L. 294 to L. 295, also outside the L. 280 to L. 293 range.
+ *
+ * `ScrutinRules` describes the majority and proportional systems, which live here, while
+ * citing only the collège section. The thresholds it states are L. 294's, so the source
+ * shown under them has to be L. 294's too.
+ */
+export const SOURCE_SCRUTIN_MODE = {
+  label: "Code électoral, art. L. 294 à L. 295",
+  url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000027804524",
 };
 
 // ─── The thesis ─────────────────────────────────────────────────────
@@ -150,13 +174,26 @@ export interface ScrutinRuleWithHours extends ScrutinRule {
  * heures trente et clos à dix-sept heures trente" for the proportional one.
  *
  * The design mockup closed the proportional ballot at 17 h. The decree says 17 h 30.
+ *
+ * These are the hours the decree fixes, and article 3 applies the same ones to Guyane,
+ * Polynésie française, Saint-Barthélemy, Saint-Martin and Wallis-et-Futuna as to the other
+ * majority-ballot departments. Since those territories span UTC+12 to UTC-10, a single
+ * uniform pair of hours can only be read as local hours, which is the same reading the
+ * candidacy period rests on.
+ *
+ * They are also **upper bounds, not guaranteed hours**: see `POLL_EARLY_CLOSE_NOTE`.
  */
 export const SCRUTIN_RULES: ScrutinRuleWithHours[] = [
   {
     seats: "1 ou 2 sièges",
     mode: "Scrutin majoritaire",
+    // L. 294 pose DEUX conditions cumulatives au premier tour, pas une. Le texte antérieur
+    // ne citait que la majorité absolue, ce qui présentait une condition nécessaire comme
+    // suffisante : un lecteur en concluait qu'une majorité absolue élit au premier tour.
     detail:
-      "Deux tours dans la journée : majorité absolue au premier, majorité relative au second.",
+      "Deux tours dans la journée. Au premier il faut à la fois la majorité absolue des " +
+      "suffrages exprimés et un nombre de voix égal au quart des électeurs inscrits ; au " +
+      "second, la majorité relative suffit.",
     hours: "1er tour de 8 h 30 à 11 h, second tour s'il y a lieu de 15 h 30 à 17 h 30",
   },
   {
@@ -166,6 +203,25 @@ export const SCRUTIN_RULES: ScrutinRuleWithHours[] = [
     hours: "Scrutin de 8 h 30 à 17 h 30",
   },
 ];
+
+/**
+ * The closing hours are maximums, and saying only "clos à 17 h 30" invites a reader to
+ * believe a grand électeur may turn up at 17 h.
+ *
+ * Article R. 168, third paragraph, in force since 20 November 2020: "Dans les deux cas, si
+ * le président du bureau du collège électoral constate que dans toutes les sections de vote
+ * tous les électeurs ont pris part au vote, il peut déclarer le scrutin clos avant les
+ * heures fixées ci-dessus." The decree's article 3 refers to it explicitly.
+ *
+ * This is not a marginal case. Voting is compulsory for senatorial electors (article
+ * L. 318, a 100 euro fine for unjustified abstention) and a college runs from a few hundred
+ * to a few thousand electors, so every elector having voted before the closing hour is
+ * ordinary rather than exceptional.
+ */
+export const POLL_EARLY_CLOSE_NOTE =
+  "Ces heures sont des bornes, pas des horaires garantis : dès que tous les électeurs ont " +
+  "voté dans toutes les sections, le président du collège peut déclarer le scrutin clos " +
+  "plus tôt.";
 
 /**
  * The hours above cover the 63 departments and collectivities. They are not extended to
@@ -178,8 +234,11 @@ export const SCRUTIN_RULES: ScrutinRuleWithHours[] = [
  * Saying "the decree does not fix them" therefore survives that publication, where "no
  * hours are known" would have become false the day it appears.
  *
- * Six of the twelve seats belong to the renewed series, counted from our own senatorial
- * mandates rather than quoted.
+ * The six seats are statutory, not a count of our rows: loi organique n° 83-499 of 17 June
+ * 1983 raised this representation from 6 to 12 seats, and the loi organique of 30 July 2003
+ * provides that six of them are elected at each partial renewal. Our own data holds six
+ * série-2 mandates with a null `departmentCode`, which confirms the import; it is not the
+ * source. A count would publish five the day a seat fell vacant.
  */
 export const FEHF_SEATS_AT_STAKE = 6;
 export const FEHF_NOTE =
@@ -204,7 +263,14 @@ export const FEHF_NOTE =
 export const CANDIDACY_WINDOW_LABEL =
   "du 7 au 11 septembre 2026, jusqu'à 18 h auprès des services du représentant de " +
   "l'État dans la circonscription concernée";
-export const CANDIDACY_SECOND_ROUND_LABEL = "le jour du scrutin jusqu'à 15 h";
+/**
+ * The 15 h is as local as the 18 h. The "before" and "open" wordings locate their hour at
+ * the services of the State's representative; this one carried no location at all, so a
+ * reader in Paris could read it as 15 h Paris. Qualified explicitly rather than repeating
+ * the long formula a second time in the same block.
+ */
+export const CANDIDACY_SECOND_ROUND_LABEL =
+  "le jour du scrutin jusqu'à 15 h, heure locale de la circonscription";
 
 export const CANDIDACY_HEADING = "Le dépôt des candidatures";
 
@@ -249,7 +315,7 @@ export const CANDIDACY_LEDE_AFTER_BALLOT = {
   body:
     "Les déclarations pour le premier tour ont été reçues du 7 au 11 septembre 2026. Un " +
     "second tour au scrutin majoritaire pouvait recevoir de nouvelles déclarations le jour " +
-    "du scrutin jusqu'à 15 h.",
+    "du scrutin jusqu'à 15 h, heure locale de la circonscription.",
 };
 
 /**
@@ -269,7 +335,17 @@ export const CANDIDACY_MISSING_BODY =
 
 // ─── État 3 : le jour du scrutin ────────────────────────────────────
 
-export const BALLOT_DAY_HEADING = "Le scrutin a lieu aujourd'hui";
+/**
+ * "Aujourd'hui" is reader-relative and we compute it on the Paris calendar.
+ *
+ * The decree convenes everyone on one calendar date, which each territory observes locally,
+ * so "le dimanche 27 septembre" is universally true while a bare "aujourd'hui" is not: at
+ * the start of the Paris day it is still the 26th in Polynésie française (UTC-10), and
+ * during its last hours it is already the 28th in Wallis-et-Futuna (UTC+12). The date is
+ * therefore stated alongside, so a reader whose local day differs sees the discrepancy
+ * instead of being told something false without a way to notice.
+ */
+export const BALLOT_DAY_HEADING = "Le scrutin a lieu aujourd'hui, dimanche 27 septembre";
 export const BALLOT_DAY_LEDE =
   "Les grands électeurs votent dans les 63 départements et collectivités concernés, plus " +
   "le collège distinct des Français établis hors de France. Le vote y est obligatoire.";

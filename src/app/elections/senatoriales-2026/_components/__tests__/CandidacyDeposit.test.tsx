@@ -66,6 +66,31 @@ describe("CandidacyDeposit : l'heure est située, jamais nationale", () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * Les 15 h du second tour sont aussi locales que les 18 h. Elles ne portaient aucune
+   * localisation, donc un lecteur à Paris pouvait les lire comme 15 h heure de Paris.
+   */
+  it("qualifie les 15 h du second tour d'heure locale", () => {
+    render(<CandidacyDeposit phase="closed" ballotPhase="before" />);
+    expect(
+      screen.getByText(/jusqu'à 15 h, heure locale de la circonscription/)
+    ).toBeInTheDocument();
+  });
+
+  it("ne laisse aucune heure sans localisation dans les états qui en citent une", () => {
+    for (const phase of ["before", "open", "closed"] as const) {
+      const { container, unmount } = render(
+        <CandidacyDeposit phase={phase} ballotPhase="before" />
+      );
+      const text = container.textContent ?? "";
+      // Toute mention d'une heure doit être accompagnée d'une localisation.
+      if (/\d+ h\b/.test(text)) {
+        expect(text, phase).toMatch(/circonscription|représentant de l'État/);
+      }
+      unmount();
+    }
+  });
+
   it("n'annonce jamais une clôture à l'heure de Paris", () => {
     for (const phase of ALL_PHASES) {
       const { container, unmount } = render(

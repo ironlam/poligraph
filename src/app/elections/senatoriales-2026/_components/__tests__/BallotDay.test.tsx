@@ -4,9 +4,17 @@ import { BallotDay } from "../BallotDay";
 import { ScrutinRules } from "../ScrutinRules";
 
 describe("BallotDay : le jour du scrutin", () => {
-  it("dit que le scrutin a lieu aujourd'hui", () => {
+  /**
+   * « Aujourd'hui » est relatif au lecteur et calculé sur le calendrier de Paris. Au début de
+   * la journée parisienne il est encore le 26 en Polynésie française (UTC-10), et sur sa fin
+   * il est déjà le 28 à Wallis-et-Futuna (UTC+12). La date accompagne donc le mot, pour qu'un
+   * lecteur dont le jour local diffère puisse le constater.
+   */
+  it("accompagne « aujourd'hui » de la date, jamais seul", () => {
     render(<BallotDay />);
-    expect(screen.getByRole("heading", { name: /Le scrutin a lieu aujourd'hui/ })).toBeVisible();
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading.textContent).toContain("aujourd'hui");
+    expect(heading.textContent).toContain("dimanche 27 septembre");
   });
 
   it("sépare explicitement les 63 départements du collège des Français de l'étranger", () => {
@@ -58,6 +66,24 @@ describe("ScrutinRules : les horaires du décret", () => {
   });
 
   /**
+   * L. 294 pose deux conditions cumulatives au premier tour : majorité absolue des suffrages
+   * exprimés ET quart des électeurs inscrits. N'en citer qu'une présentait une condition
+   * nécessaire comme suffisante.
+   */
+  it("énonce les deux conditions cumulatives du premier tour, pas seulement la majorité absolue", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByText(/majorité absolue des suffrages exprimés/)).toBeInTheDocument();
+    expect(screen.getByText(/quart des électeurs inscrits/)).toBeInTheDocument();
+  });
+
+  it("cite la section du mode de scrutin, dont les seuils affichés proviennent", () => {
+    render(<ScrutinRules />);
+    expect(
+      screen.getByRole("link", { name: /Code électoral, art\. L\. 294 à L\. 295/ })
+    ).toBeInTheDocument();
+  });
+
+  /**
    * Le décret du 21 avril ne convoque pas ce collège, donc il n'en fixe pas les horaires.
    * Ce n'est pas la même chose que « aucun horaire officiel n'existe » : un texte
    * spécifique en fixera, comme en 2023. La formulation doit survivre à sa publication.
@@ -87,6 +113,25 @@ describe("ScrutinRules : les horaires du décret", () => {
    * texte, pas seulement dans l'infobulle de l'en-tête : une explication derrière un survol
    * est hors d'atteinte au doigt.
    */
+  /**
+   * R. 168 alinéa 3, en vigueur depuis le 20 novembre 2020 : « Dans les deux cas, si le
+   * président du bureau du collège électoral constate que dans toutes les sections de vote
+   * tous les électeurs ont pris part au vote, il peut déclarer le scrutin clos avant les
+   * heures fixées ci-dessus. » Les heures affichées sont donc des bornes. Avec le vote
+   * obligatoire (L. 318) et des collèges de quelques centaines à quelques milliers
+   * d'électeurs, la clôture anticipée est ordinaire, pas théorique.
+   */
+  it("dit que les heures de clôture sont des bornes, pas des horaires garantis", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByText(/Ces heures sont des bornes, pas des horaires garantis/)).toBeVisible();
+    expect(screen.getByText(/peut déclarer le scrutin clos plus tôt/)).toBeInTheDocument();
+  });
+
+  it("cite R. 168 sous l'affirmation qui en découle, et pas seulement la plage L. 280 à L. 293", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByRole("link", { name: /Code électoral, art\. R\. 168/ })).toBeInTheDocument();
+  });
+
   it("définit ce qu'est une série, en clair et dans la page", () => {
     render(<ScrutinRules />);
     expect(screen.getByText(/Le Sénat se renouvelle par moitié tous les trois ans/)).toBeVisible();

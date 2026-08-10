@@ -61,10 +61,27 @@ describe("SeatsAtStake avant le scrutin", () => {
 describe("SeatsAtStake après le scrutin", () => {
   it("ne présente plus la composition courante comme la composition sortante", () => {
     render(<SeatsAtStake groups={GROUPS} phase="after" />);
-    expect(screen.getByText(/Composition sortante non conservée/)).toBeInTheDocument();
+    expect(screen.getByText(/Comparaison avant et après non encore publiée/)).toBeInTheDocument();
     expect(screen.queryByText("77")).toBeNull();
     expect(screen.queryByText(/sur 131 sièges/)).toBeNull();
     expect(screen.queryByText("Ce qui est remis en jeu")).toBeNull();
+  });
+
+  /**
+   * Régression sur la véracité du `MissingData` lui-même.
+   *
+   * Une version antérieure titrait « Composition sortante non conservée ». C'est devenu faux
+   * le jour où la capture a tourné (clé write-once `senatoriales-2026-outgoing-composition`,
+   * 10 août 2026, 178 sièges), et cette phrase se serait affichée à partir du 28 septembre
+   * comme une affirmation fausse sur nos propres données. Une absence affichée doit rester
+   * vraie après les lots suivants.
+   */
+  it("n'affirme pas que la composition sortante a été perdue, puisqu'elle est relevée", () => {
+    const { container } = render(<SeatsAtStake groups={GROUPS} phase="after" />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/non conservée/i);
+    expect(text).not.toMatch(/n'a pas été (conservée|relevée|capturée)/i);
+    expect(text).toMatch(/relevée avant le scrutin/i);
   });
 
   it("emploie le passé dans son titre", () => {
