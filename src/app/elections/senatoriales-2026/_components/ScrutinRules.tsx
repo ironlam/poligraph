@@ -8,6 +8,7 @@ import {
   SERIES_EXPLAINER,
   SOURCE_DECREE,
   SOURCE_ELECTORAL_CODE,
+  SOURCE_FEHF_POLL,
   SOURCE_R168,
   SOURCE_SCRUTIN_MODE,
 } from "../_content";
@@ -80,8 +81,14 @@ export function ScrutinRules() {
           mode de scrutin and its thresholds (L. 294), and the early close (R. 168). Citing
           only the first would show a source that does not carry the claims above it. */}
       <SourceLine
-        sources={[SOURCE_ELECTORAL_CODE, SOURCE_SCRUTIN_MODE, SOURCE_DECREE, SOURCE_R168]}
-        note="Horaires fixés par l'article 3 du décret, clôture anticipée par l'article R. 168"
+        sources={[
+          SOURCE_ELECTORAL_CODE,
+          SOURCE_SCRUTIN_MODE,
+          SOURCE_DECREE,
+          SOURCE_R168,
+          SOURCE_FEHF_POLL,
+        ]}
+        note="Article 3 du décret et R. 168 pour les 63 circonscriptions, article 50 du décret de 2014 pour les Français de l'étranger"
         reportHref={null}
       />
     </section>

@@ -112,9 +112,35 @@ describe("CandidacyDeposit : les absences assumées", () => {
         screen.getByText(/Nous ne publions aucune liste de candidats/),
         phase
       ).toBeInTheDocument();
-      expect(screen.getByText(/préfecture par préfecture/), phase).toBeInTheDocument();
+      // « préfecture par préfecture » était faux pour les collectivités à haut-commissariat
+      // et pour la 64e circonscription, qui dépose au ministère.
+      expect(screen.getByText(/circonscription par circonscription/), phase).toBeInTheDocument();
       unmount();
     }
+  });
+
+  /**
+   * L'article 1 du décret ne convoque pas les Français de l'étranger. Appliquer le 7 au
+   * 11 septembre aux 64 circonscriptions attribuait à ce collège une période qui n'est pas la
+   * sienne : l'article 46 de la loi de 2013 fixe un dépôt au ministère des Affaires
+   * étrangères, au plus tard le troisième lundi précédant le scrutin à 18 h.
+   */
+  it("borne la période aux 63 circonscriptions convoquées par le décret", () => {
+    for (const phase of ["before", "open"] as const) {
+      const { unmount } = render(<CandidacyDeposit phase={phase} ballotPhase="before" />);
+      expect(
+        screen.getByText(/Dans les 63 départements et collectivités convoqués par le décret/),
+        phase
+      ).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("traite le régime des Français de l'étranger séparément, avec son lieu et sa date", () => {
+    render(<CandidacyDeposit phase="open" ballotPhase="before" />);
+    expect(screen.getByText(/ne sont pas convoqués par ce décret/)).toBeInTheDocument();
+    expect(screen.getByText(/au ministère des Affaires étrangères/)).toBeInTheDocument();
+    expect(screen.getByText(/le lundi 7 septembre 2026 à 18 h/)).toBeInTheDocument();
   });
 
   /**

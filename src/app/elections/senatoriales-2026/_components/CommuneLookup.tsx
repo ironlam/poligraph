@@ -356,19 +356,21 @@ function SenatorsList({ senators, where }: { senators: SittingSenator[]; where: 
                 <>Aucune déclaration publiée par la HATVP à ce jour</>
               )}
             </p>
-            {/* Discreet signal, never a filter, never a sort key, never an aggregate.
-                The presumption of innocence is stated at every occurrence. No link of
-                its own: the card already leads to the profile through the name, and a
-                second link to the same place would compete with it while adding a
-                target too small to hit. */}
-            {senator.ongoingProceedings > 0 && (
+            {/* Discreet signal, never a filter, never a sort key, never an aggregate and
+                never a counter. The earlier version rendered "N procédures en cours", which
+                is a counter: it invites the reader to rank people by a number that says
+                nothing about gravity or outcome. The data layer now exposes a boolean, so no
+                cardinality reaches this component to be printed.
+
+                The presumption of innocence is stated at every occurrence. No link of its
+                own: the card already leads to the profile through the name, and a second link
+                to the same place would compete with it while adding a target too small to
+                hit. */}
+            {senator.hasOngoingProceedings && (
               <p className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground">
                 <Scale className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>
-                  {senator.ongoingProceedings === 1
-                    ? "1 procédure en cours"
-                    : `${senator.ongoingProceedings} procédures en cours`}
-                  , présomption d{"'"}innocence. Détail sur la fiche.
+                  Procédure judiciaire en cours, présomption d{"'"}innocence. Détail sur la fiche.
                 </span>
               </p>
             )}

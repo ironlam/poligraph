@@ -17,32 +17,69 @@ function paris(day: number, hour: number, minute = 0): Date {
   return new Date(Date.UTC(2026, 8, day, hour - 2, minute));
 }
 
+/**
+ * Instant correspondant à une heure locale sous un décalage donné.
+ *
+ * Sert à écrire les fuseaux extrêmes des circonscriptions convoquées : Wallis-et-Futuna à
+ * UTC+12 ouvre la journée le plus tôt, la Polynésie française à UTC-10 la ferme le plus tard.
+ */
+function atOffset(day: number, hour: number, offsetHours: number): Date {
+  return new Date(Date.UTC(2026, 8, day, hour - offsetHours));
+}
+
+const WALLIS = 12;
+const POLYNESIE = -10;
+
 const ROUND_1 = new Date("2026-09-27T00:00:00Z");
 
 describe("deriveCandidacyPhase : la période de dépôt", () => {
-  it("le 6 septembre, le dépôt n'est pas ouvert", () => {
-    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(6, 12))).toBe("before");
-    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(6, 23, 59))).toBe("before");
+  it("porte les dates de l'article 2 du décret", () => {
+    expect(CANDIDACY_PERIOD.firstDay).toBe("2026-09-07");
+    expect(CANDIDACY_PERIOD.lastDay).toBe("2026-09-11");
   });
 
-  it("le 7 septembre, dès minuit, le dépôt est en cours", () => {
+  /**
+   * Les bornes doivent être l'union des fenêtres locales, dérivée des fuseaux extrêmes des
+   * circonscriptions convoquées, et non une heure nationale inventée.
+   */
+  it("s'ouvre au premier 0 h local et se ferme au dernier 18 h local", () => {
+    expect(CANDIDACY_PERIOD.opensAt.toISOString()).toBe(atOffset(7, 0, WALLIS).toISOString());
+    expect(CANDIDACY_PERIOD.closesAt.toISOString()).toBe(atOffset(11, 18, POLYNESIE).toISOString());
+  });
+
+  it("annonce le dépôt à venir tant qu'il n'est ouvert nulle part", () => {
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(6, 12))).toBe("before");
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, atOffset(6, 23, WALLIS))).toBe("before");
+  });
+
+  it("est en cours dès que le 7 commence à Wallis-et-Futuna", () => {
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, atOffset(7, 0, WALLIS))).toBe("open");
     expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(7, 0))).toBe("open");
-    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(7, 1))).toBe("open");
     expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(7, 9))).toBe("open");
   });
 
   /**
-   * Le cœur de la correction, et le test qui l'empêche de régresser.
+   * Le blocage que le raisonnement en jours de Paris n'avait pas résolu.
    *
-   * L'article 2 fixe 18 h, mais **localement** auprès du représentant de l'État dans la
-   * circonscription de dépôt, et l'article 1 convoque des territoires de UTC+12 à UTC-10.
-   * Il n'existe donc aucun instant national de clôture. À 18 h à Paris le 11, le dépôt est
-   * encore ouvert six heures en Polynésie française : la phase ne doit pas bouger d'un
-   * bout à l'autre de cette journée.
-   *
-   * Ce test échoue si quelqu'un réintroduit une coupure à l'instant, quel qu'il soit.
+   * À minuit à Paris le 12, il est midi le 11 en Polynésie française et le dépôt y reste
+   * ouvert six heures. Passer à « terminé » à ce moment publiait une affirmation fausse pour
+   * la circonscription concernée. La période reste ouverte tant qu'elle l'est quelque part.
    */
-  it("ne change pas d'état au cours du 11 septembre, faute d'instant national de clôture", () => {
+  it("reste en cours à minuit à Paris le 12, car la Polynésie a encore six heures", () => {
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 0))).toBe("open");
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 5, 59))).toBe("open");
+    // 17 h le 11 en Polynésie française : une heure avant sa clôture locale.
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, atOffset(11, 17, POLYNESIE))).toBe("open");
+  });
+
+  it("ne se ferme qu'au dernier 18 h local, en Polynésie française", () => {
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, atOffset(11, 18, POLYNESIE))).toBe("closed");
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 6))).toBe("closed");
+    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 12))).toBe("closed");
+  });
+
+  /** Aucune coupure ne doit apparaître à l'intérieur du 11, quel que soit le fuseau. */
+  it("ne change pas d'état au cours du 11 septembre à Paris", () => {
     for (const [hour, minute] of [
       [0, 0],
       [12, 0],
@@ -58,36 +95,54 @@ describe("deriveCandidacyPhase : la période de dépôt", () => {
     }
   });
 
-  it("le 12 septembre, dès minuit, le dépôt du premier tour est terminé", () => {
-    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 0))).toBe("closed");
-    expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(12, 12))).toBe("closed");
-  });
-
   it("le 26, le 27 et le 28 septembre, le dépôt reste terminé", () => {
     expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(26, 12))).toBe("closed");
     expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(27, 12))).toBe("closed");
     expect(deriveCandidacyPhase(CANDIDACY_PERIOD, paris(28, 12))).toBe("closed");
   });
-
-  it("porte les dates de l'article 2 du décret", () => {
-    expect(CANDIDACY_PERIOD.firstDay).toBe("2026-09-07");
-    expect(CANDIDACY_PERIOD.lastDay).toBe("2026-09-11");
-  });
 });
 
 describe("deriveCandidacyPhase : données insuffisantes", () => {
-  it("dit ne pas savoir sur une borne malformée", () => {
+  const bounds = { opensAt: CANDIDACY_PERIOD.opensAt, closesAt: CANDIDACY_PERIOD.closesAt };
+
+  it("dit ne pas savoir sur une borne calendaire malformée", () => {
     expect(
-      deriveCandidacyPhase({ firstDay: "7 septembre", lastDay: "2026-09-11" }, paris(8, 12))
+      deriveCandidacyPhase(
+        { ...bounds, firstDay: "7 septembre", lastDay: "2026-09-11" },
+        paris(8, 12)
+      )
     ).toBe("unknown");
-    expect(deriveCandidacyPhase({ firstDay: "2026-09-07", lastDay: "" }, paris(8, 12))).toBe(
-      "unknown"
-    );
+    expect(
+      deriveCandidacyPhase({ ...bounds, firstDay: "2026-09-07", lastDay: "" }, paris(8, 12))
+    ).toBe("unknown");
   });
 
   it("dit ne pas savoir quand la période se termine avant de commencer", () => {
     expect(
-      deriveCandidacyPhase({ firstDay: "2026-09-11", lastDay: "2026-09-07" }, paris(8, 12))
+      deriveCandidacyPhase(
+        { ...bounds, firstDay: "2026-09-11", lastDay: "2026-09-07" },
+        paris(8, 12)
+      )
+    ).toBe("unknown");
+  });
+
+  it("dit ne pas savoir quand les instants sont incohérents", () => {
+    expect(
+      deriveCandidacyPhase(
+        {
+          firstDay: "2026-09-07",
+          lastDay: "2026-09-11",
+          opensAt: CANDIDACY_PERIOD.closesAt,
+          closesAt: CANDIDACY_PERIOD.opensAt,
+        },
+        paris(8, 12)
+      )
+    ).toBe("unknown");
+  });
+
+  it("dit ne pas savoir sur un instant invalide", () => {
+    expect(
+      deriveCandidacyPhase({ ...CANDIDACY_PERIOD, opensAt: new Date("nope") }, paris(8, 12))
     ).toBe("unknown");
   });
 

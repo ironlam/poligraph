@@ -14,6 +14,7 @@
  * so it is not stated at all rather than stated loosely.
  */
 
+import { FEHF_REGIME } from "@/config/senatoriales";
 import type { ElectionStatus } from "@/types";
 
 /**
@@ -98,6 +99,21 @@ export const SOURCE_R168 = {
 export const SOURCE_SCRUTIN_MODE = {
   label: "Code électoral, art. L. 294 à L. 295",
   url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000027804524",
+};
+
+/**
+ * The two standing texts governing the Français établis hors de France.
+ *
+ * Décret n° 2026-301 does not convene that college, so its articles cannot be cited for
+ * anything about it. These can, and both are in force.
+ */
+export const SOURCE_FEHF_CANDIDACY = {
+  label: "Loi n° 2013-659, art. 46",
+  url: "https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000027736547",
+};
+export const SOURCE_FEHF_POLL = {
+  label: "Décret n° 2014-290, art. 50",
+  url: "https://www.legifrance.gouv.fr/loda/article_lc/LEGIARTI000028685555",
 };
 
 // ─── The thesis ─────────────────────────────────────────────────────
@@ -231,8 +247,10 @@ export const POLL_EARLY_CLOSE_NOTE =
  * exist. A dedicated text set 9 h to 15 h in 2023, the Sénat announces the same for 2026,
  * and France Diplomatie states its own arrangements are still to be published.
  *
- * Saying "the decree does not fix them" therefore survives that publication, where "no
- * hours are known" would have become false the day it appears.
+ * Saying only "the 21 April decree does not fix them" was true and concealed a rule that is
+ * published and in force. Article 50 of décret n° 2014-290 of 4 March 2014 fixes 9 h to 15 h
+ * for this college, with the same early-closing faculty. Stating the real hours with their
+ * own source is both more useful and more honest than reporting an absence that is not one.
  *
  * The six seats are statutory, not a count of our rows: loi organique n° 83-499 of 17 June
  * 1983 raised this representation from 6 to 12 seats, and the loi organique of 30 July 2003
@@ -240,11 +258,13 @@ export const POLL_EARLY_CLOSE_NOTE =
  * série-2 mandates with a null `departmentCode`, which confirms the import; it is not the
  * source. A count would publish five the day a seat fell vacant.
  */
-export const FEHF_SEATS_AT_STAKE = 6;
+export const FEHF_SEATS_AT_STAKE = FEHF_REGIME.seatsAtStake;
 export const FEHF_NOTE =
-  "Pour les Français établis hors de France, le scrutin relève d'un dispositif distinct. " +
-  "Le décret du 21 avril 2026 ne fixe pas les horaires de ce collège, auquel reviennent " +
-  "6 des 178 sièges renouvelés.";
+  "Les Français établis hors de France relèvent d'un dispositif distinct, que le décret du " +
+  "21 avril 2026 ne convoque pas. Leur collège élit 6 des 178 sièges renouvelés, et son " +
+  "scrutin est ouvert " +
+  FEHF_REGIME.pollHours +
+  ", avec la même possibilité de clôture anticipée une fois que tous ses membres ont voté.";
 
 // ─── État 2 : dépôt des candidatures ────────────────────────────────
 
@@ -259,6 +279,12 @@ export const FEHF_NOTE =
  * UTC-10, so neither hour is a national instant. Every phrasing below therefore describes
  * the period and locates the hour, and none of them asserts a to-the-minute status: "le
  * dépôt est clos" read in Paris would be false in Polynésie française for six more hours.
+ *
+ * The period is also **scoped to the 63 circonscriptions the decree convenes**. Article 1
+ * does not convene the Français établis hors de France, so applying 7 to 11 September to all
+ * 64 would attribute to that college a period that is not theirs: their declarations go to
+ * the ministère des Affaires étrangères by the third Monday before the ballot, which is
+ * Monday 7 September, the very day the general period opens. See `CANDIDACY_FEHF_NOTE`.
  */
 export const CANDIDACY_WINDOW_LABEL =
   "du 7 au 11 septembre 2026, jusqu'à 18 h auprès des services du représentant de " +
@@ -280,11 +306,19 @@ export const CANDIDACY_LEDE: Record<
 > = {
   before: {
     headline: "Le dépôt des candidatures n'est pas encore ouvert",
-    body: "Les déclarations pour le premier tour seront reçues " + CANDIDACY_WINDOW_LABEL + ".",
+    body:
+      "Dans les 63 départements et collectivités convoqués par le décret, les déclarations " +
+      "pour le premier tour seront reçues " +
+      CANDIDACY_WINDOW_LABEL +
+      ".",
   },
   open: {
     headline: "Le dépôt des candidatures est en cours",
-    body: "Les déclarations pour le premier tour sont reçues " + CANDIDACY_WINDOW_LABEL + ".",
+    body:
+      "Dans les 63 départements et collectivités convoqués par le décret, les déclarations " +
+      "pour le premier tour sont reçues " +
+      CANDIDACY_WINDOW_LABEL +
+      ".",
   },
   closed: {
     headline: "Le dépôt pour le premier tour est terminé",
@@ -301,6 +335,26 @@ export const CANDIDACY_LEDE: Record<
       "pas du calendrier.",
   },
 };
+
+/**
+ * The sixty-fourth circonscription files somewhere else, on another date, by another text.
+ *
+ * Article 46 of loi n° 2013-659: "Les déclarations de candidature sont déposées au ministère
+ * des affaires étrangères au plus tard le troisième lundi qui précède le scrutin, à
+ * 18 heures." Third Monday before Sunday 27 September 2026 is Monday 7 September.
+ *
+ * Two things worth stating plainly. That deadline falls on the day the general period opens,
+ * so the two regimes barely overlap. And it really is a single instant, because there is one
+ * filing place: 18 h at the ministère is 18 h in Paris, with none of the locality that makes
+ * the other 63 impossible to reduce to one moment.
+ */
+export const CANDIDACY_FEHF_NOTE =
+  "Les Français établis hors de France ne sont pas convoqués par ce décret et suivent leur " +
+  "propre régime : les candidatures se déposent " +
+  FEHF_REGIME.candidacyPlace +
+  ", au plus tard " +
+  FEHF_REGIME.candidacyDeadlineLabel +
+  ", soit le troisième lundi précédant le scrutin.";
 
 /**
  * Once the ballot is behind us the deposit period is not merely over, it is spent.
@@ -321,31 +375,36 @@ export const CANDIDACY_LEDE_AFTER_BALLOT = {
 /**
  * Why no candidate appears here, in any phase.
  *
- * Declarations are filed préfecture by préfecture. We hold no verified source listing
- * them constituency by constituency, so the block says that instead of showing a
+ * Declarations are filed circonscription by circonscription, and not all at a préfecture:
+ * the earlier wording said "préfecture par préfecture", which is wrong for the collectivities
+ * that have a haut-commissariat and wrong for the sixty-fourth, which files at the ministère.
+ * "Circonscription par circonscription" covers all of them.
+ *
+ * We hold no verified source listing them, so the block says that instead of showing a
  * partial list, and no counter of collected departments appears: a gauge reading "21 sur
  * 63" would turn our own collection progress into an apparent fact about the ballot.
  */
 export const CANDIDACY_MISSING_TITLE = "Nous ne publions aucune liste de candidats";
 export const CANDIDACY_MISSING_BODY =
-  "Les déclarations sont déposées et publiées préfecture par préfecture. Nous ne disposons " +
-  "d'aucune source vérifiée qui les recense circonscription par circonscription, et nous " +
-  "préférons ne rien afficher plutôt qu'une liste incomplète dont rien n'indiquerait ce qui " +
-  "manque.";
+  "Les déclarations sont reçues et publiées circonscription par circonscription, chacune par " +
+  "les services qui les enregistrent. Nous ne disposons d'aucune source vérifiée qui les " +
+  "recense toutes, et nous préférons ne rien afficher plutôt qu'une liste incomplète dont " +
+  "rien n'indiquerait ce qui manque.";
 
 // ─── État 3 : le jour du scrutin ────────────────────────────────────
 
 /**
- * "Aujourd'hui" is reader-relative and we compute it on the Paris calendar.
+ * No reader-relative term at all.
  *
- * The decree convenes everyone on one calendar date, which each territory observes locally,
- * so "le dimanche 27 septembre" is universally true while a bare "aujourd'hui" is not: at
- * the start of the Paris day it is still the 26th in Polynésie française (UTC-10), and
- * during its last hours it is already the 28th in Wallis-et-Futuna (UTC+12). The date is
- * therefore stated alongside, so a reader whose local day differs sees the discrepancy
- * instead of being told something false without a way to notice.
+ * "Aujourd'hui" was computed on the Paris calendar, so it was false for a reader whose local
+ * day was still the 26th in Polynésie française (UTC-10) or already the 28th in
+ * Wallis-et-Futuna (UTC+12). Adding the date beside it made the contradiction visible without
+ * making the word true, and a visible contradiction is still a false statement.
+ *
+ * "Ce dimanche 27 septembre" keeps the immediacy and the Paris-side temporal guard that
+ * decides when the block appears, while publishing only a date that every territory observes.
  */
-export const BALLOT_DAY_HEADING = "Le scrutin a lieu aujourd'hui, dimanche 27 septembre";
+export const BALLOT_DAY_HEADING = "Le scrutin a lieu ce dimanche 27 septembre";
 export const BALLOT_DAY_LEDE =
   "Les grands électeurs votent dans les 63 départements et collectivités concernés, plus " +
   "le collège distinct des Français établis hors de France. Le vote y est obligatoire.";

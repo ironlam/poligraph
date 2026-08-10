@@ -17,10 +17,18 @@
 
 export type CandidacyPhase = "before" | "open" | "closed" | "unknown";
 
-/** Inclusive calendar bounds, ISO YYYY-MM-DD. */
+/**
+ * Calendar bounds for display, and the union of every local window for the phase.
+ *
+ * `opensAt` and `closesAt` are the extremes of the local windows, not a national hour: the
+ * earliest local start among the convened circonscriptions and the latest local end. See
+ * `CANDIDACY_PERIOD` in `src/config/senatoriales.ts` for the offsets they come from.
+ */
 export interface CandidacyPeriod {
   firstDay: string;
   lastDay: string;
+  opensAt: Date;
+  closesAt: Date;
 }
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,25 +44,36 @@ function parisDay(date: Date): string {
 }
 
 /**
- * Which side of the deposit period today falls on.
+ * Which side of the deposit period `now` falls on.
  *
- * Both bounds are inclusive: the period is "open" for the whole of 11 September, because
- * saying "terminé" at any point during that day would be false in every circonscription
- * whose local 18 h has not yet passed. The reference calendar is Paris, a convention for a
- * national page rather than a claim about each territory, which is why the copy states the
- * period and its local hour instead of a live per-reader status.
+ * **The period is open while it is open anywhere.** Comparing the Paris calendar day was
+ * still wrong: it announced "terminé" at midnight in Paris while a deposit in Polynésie
+ * française had six hours left. Comparing against the union of the local windows means the
+ * page can never deny a window that is genuinely still open.
+ *
+ * The cost is the mirror image, and it is the acceptable one: for a few hours the phase says
+ * "en cours" while only the earliest or latest territory is open. That statement is true, and
+ * the copy alongside it gives the 7 to 11 September dates and locates the hour, so a reader
+ * is never left with a false negative about their own circonscription.
  *
  * Returns "unknown" rather than a guess when the bounds cannot support an answer.
  */
 export function deriveCandidacyPhase(period: CandidacyPeriod, now: Date): CandidacyPhase {
-  const { firstDay, lastDay } = period;
+  const { firstDay, lastDay, opensAt, closesAt } = period;
   if (!ISO_DAY.test(firstDay) || !ISO_DAY.test(lastDay)) return "unknown";
   if (lastDay < firstDay) return "unknown";
-  if (!Number.isFinite(now.getTime())) return "unknown";
+  if (!opensAt || !closesAt) return "unknown";
 
-  const today = parisDay(now);
-  if (today < firstDay) return "before";
-  if (today <= lastDay) return "open";
+  const opens = opensAt.getTime();
+  const closes = closesAt.getTime();
+  const current = now.getTime();
+  if (!Number.isFinite(opens) || !Number.isFinite(closes) || !Number.isFinite(current)) {
+    return "unknown";
+  }
+  if (closes <= opens) return "unknown";
+
+  if (current < opens) return "before";
+  if (current < closes) return "open";
   return "closed";
 }
 

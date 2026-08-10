@@ -2,12 +2,14 @@ import { MissingData } from "@/components/ui/MissingData";
 import { SourceLine } from "@/components/ui/SourceLine";
 import type { CandidacyPhase } from "@/lib/senatoriales/timing";
 import {
+  CANDIDACY_FEHF_NOTE,
   CANDIDACY_HEADING,
   CANDIDACY_LEDE,
   CANDIDACY_LEDE_AFTER_BALLOT,
   CANDIDACY_MISSING_BODY,
   CANDIDACY_MISSING_TITLE,
   SOURCE_DECREE,
+  SOURCE_FEHF_CANDIDACY,
   type BallotPhase,
 } from "../_content";
 
@@ -63,11 +65,18 @@ export function CandidacyDeposit({
         </div>
       )}
 
+      {/* The decree convenes 63 circonscriptions, so the period above is theirs alone. The
+          sixty-fourth files elsewhere, on another date, under another text: leaving it out
+          would silently extend a regime to a college it does not govern. */}
+      {phase !== "unknown" && (
+        <p className="text-sm leading-relaxed text-muted-foreground">{CANDIDACY_FEHF_NOTE}</p>
+      )}
+
       <MissingData title={CANDIDACY_MISSING_TITLE}>{CANDIDACY_MISSING_BODY}</MissingData>
 
       <SourceLine
-        sources={[SOURCE_DECREE]}
-        note="Dates de dépôt fixées par l'article 2 du décret"
+        sources={[SOURCE_DECREE, SOURCE_FEHF_CANDIDACY]}
+        note="Article 2 du décret pour les 63 circonscriptions, article 46 de la loi de 2013 pour les Français de l'étranger"
         reportHref={null}
       />
     </section>

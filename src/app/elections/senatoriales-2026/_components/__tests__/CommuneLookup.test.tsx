@@ -53,7 +53,7 @@ const BAZAS_ANSWER = {
       groupShortName: "LR",
       groupColor: null,
       declarationYear: 2026,
-      ongoingProceedings: 0,
+      hasOngoingProceedings: false,
     },
     {
       slug: "temoin-procedure",
@@ -66,7 +66,7 @@ const BAZAS_ANSWER = {
       groupShortName: null,
       groupColor: null,
       declarationYear: null,
-      ongoingProceedings: 2,
+      hasOngoingProceedings: true,
     },
   ],
 };
@@ -200,12 +200,26 @@ describe("CommuneLookup : département renouvelable", () => {
     expect(screen.getByText(/Déclaration de patrimoine 2026/)).toBeInTheDocument();
   });
 
-  // Signal discret, jamais un filtre, jamais un tri, jamais un compteur agrégé.
-  it("mentionne la présomption d'innocence à chaque procédure signalée", async () => {
+  /**
+   * Signal discret, jamais un filtre, jamais un tri, jamais un agrégat, **jamais un
+   * compteur**. Le rendu affichait « 2 procédures en cours » : un nombre invite à classer les
+   * personnes alors qu'il ne dit rien de la gravité ni de l'issue. La couche données expose
+   * désormais un booléen, donc aucune cardinalité n'atteint le composant.
+   */
+  it("signale une procédure sans la compter, avec la présomption d'innocence", async () => {
     render(<CommuneLookup phase="before" />);
     await search("33430");
-    const signal = await screen.findByText(/2 procédures en cours/);
+    const signal = await screen.findByText(/Procédure judiciaire en cours/);
     expect(signal.textContent).toMatch(/présomption d'innocence/);
+  });
+
+  it("ne rend aucun nombre de procédures", async () => {
+    const { container } = render(<CommuneLookup phase="before" />);
+    await search("33430");
+    await screen.findByText(/Procédure judiciaire en cours/);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/\d+\s*procédures?/i);
+    expect(text).not.toMatch(/procédures? en cours\s*:\s*\d/i);
   });
 
   it("n'affiche ni ancienneté ni participation, faute de provenance fiable", async () => {

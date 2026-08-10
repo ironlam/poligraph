@@ -30,11 +30,66 @@ export type SenateSeries = 1 | 2;
  * not settle it by side effect. A test pins these dates against the seeded column so the
  * two cannot drift apart at day precision.
  */
-export const CANDIDACY_PERIOD = {
-  /** First day declarations are received, ISO YYYY-MM-DD. */
+export interface CandidacyPeriodConfig {
+  firstDay: string;
+  lastDay: string;
+  opensAt: Date;
+  closesAt: Date;
+}
+
+export const CANDIDACY_PERIOD: CandidacyPeriodConfig = {
+  /** First day declarations are received, ISO YYYY-MM-DD, for display. */
   firstDay: "2026-09-07",
-  /** Last day declarations are received, until 18 h local. */
+  /** Last day declarations are received, until 18 h local, for display. */
   lastDay: "2026-09-11",
+
+  /**
+   * Bounds of the union of every local window, not a national hour.
+   *
+   * Comparing the Paris calendar day was still wrong, just wrong by less: it flipped to
+   * "terminé" at midnight in Paris while a deposit in Polynésie française had six hours
+   * left. The rule now is that the period is open while it is open **anywhere**, so the
+   * page can never deny a window that is genuinely still open.
+   *
+   * `opensAt` is 7 September 00:00 in Wallis-et-Futuna (UTC+12), the earliest the day
+   * begins among the convened circonscriptions. `closesAt` is 11 September 18:00 in
+   * Polynésie française (UTC-10), where the haut-commissariat receiving the declarations
+   * sits, the latest the hour falls.
+   *
+   * These are instants, unlike the earlier attempt, but they are derived from the extremes
+   * of the local windows instead of inventing one national 18 h.
+   */
+  opensAt: new Date("2026-09-06T12:00:00Z"),
+  closesAt: new Date("2026-09-12T04:00:00Z"),
+};
+
+/**
+ * The Français établis hors de France are a separate regime at every step.
+ *
+ * Article 1 of décret n° 2026-301 does not convene them, so nothing above applies to them.
+ * Their own standing texts do, and both are in force:
+ *
+ * - article 46 of loi n° 2013-659 of 22 July 2013: "Les déclarations de candidature sont
+ *   déposées au ministère des affaires étrangères au plus tard le troisième lundi qui
+ *   précède le scrutin, à 18 heures." Third Monday before Sunday 27 September 2026 is
+ *   Monday 7 September, the very day the general period opens elsewhere.
+ * - article 50 of décret n° 2014-290 of 4 March 2014: "Le scrutin est ouvert à 9 heures et
+ *   clos à 15 heures. Toutefois, si le président du bureau de vote constate que tous les
+ *   membres du collège électoral ont pris part au vote, il peut déclarer le scrutin clos
+ *   avant l'heure fixée ci-dessus."
+ *
+ * Unlike the 63 other circonscriptions, this deadline **is** a single instant: there is one
+ * filing place, the ministère in Paris, so 18 h there is 16:00 UTC and nothing is local
+ * about it. The asymmetry is the point.
+ */
+export const FEHF_REGIME = {
+  /** Single instant: one filing place, in Paris. */
+  candidacyDeadline: new Date("2026-09-07T16:00:00Z"),
+  candidacyDeadlineLabel: "le lundi 7 septembre 2026 à 18 h",
+  candidacyPlace: "au ministère des Affaires étrangères",
+  pollHours: "de 9 h à 15 h",
+  /** Six of the twelve FEHF seats are renewed at each partial renewal. */
+  seatsAtStake: 6,
 } as const;
 
 /**

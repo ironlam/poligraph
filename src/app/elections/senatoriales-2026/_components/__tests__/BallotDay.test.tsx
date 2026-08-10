@@ -5,16 +5,20 @@ import { ScrutinRules } from "../ScrutinRules";
 
 describe("BallotDay : le jour du scrutin", () => {
   /**
-   * « Aujourd'hui » est relatif au lecteur et calculé sur le calendrier de Paris. Au début de
-   * la journée parisienne il est encore le 26 en Polynésie française (UTC-10), et sur sa fin
-   * il est déjà le 28 à Wallis-et-Futuna (UTC+12). La date accompagne donc le mot, pour qu'un
-   * lecteur dont le jour local diffère puisse le constater.
+   * Aucun terme relatif au lecteur.
+   *
+   * « Aujourd'hui » était calculé sur le calendrier de Paris : faux pour un lecteur dont le
+   * jour local était encore le 26 en Polynésie française (UTC-10) ou déjà le 28 à
+   * Wallis-et-Futuna (UTC+12). Afficher la date à côté rendait la contradiction visible sans
+   * rendre le mot vrai. Le garde temporel parisien reste, l'affirmation publiée est une date.
    */
-  it("accompagne « aujourd'hui » de la date, jamais seul", () => {
+  it("ne publie aucun terme relatif au lecteur, seulement la date", () => {
     render(<BallotDay />);
     const heading = screen.getByRole("heading", { level: 2 });
-    expect(heading.textContent).toContain("aujourd'hui");
-    expect(heading.textContent).toContain("dimanche 27 septembre");
+    expect(heading.textContent).toContain("ce dimanche 27 septembre");
+    for (const relative of ["aujourd'hui", "actuellement", "en ce moment", "maintenant"]) {
+      expect(heading.textContent?.toLowerCase(), relative).not.toContain(relative);
+    }
   });
 
   it("sépare explicitement les 63 départements du collège des Français de l'étranger", () => {
@@ -84,23 +88,29 @@ describe("ScrutinRules : les horaires du décret", () => {
   });
 
   /**
-   * Le décret du 21 avril ne convoque pas ce collège, donc il n'en fixe pas les horaires.
-   * Ce n'est pas la même chose que « aucun horaire officiel n'existe » : un texte
-   * spécifique en fixera, comme en 2023. La formulation doit survivre à sa publication.
+   * Le collège des Français de l'étranger a bien un horaire légal, et il est en vigueur :
+   * article 50 du décret n° 2014-290, 9 h à 15 h, avec la même faculté de clôture anticipée.
+   * Dire seulement que le décret du 21 avril ne le fixe pas était vrai et masquait une règle
+   * publiée. On publie donc l'horaire réel avec sa source.
    */
-  it("n'étend pas ces horaires au collège des Français de l'étranger", () => {
+  it("publie les horaires propres au collège des Français de l'étranger", () => {
     render(<ScrutinRules />);
-    expect(screen.getByText(/relève d'un dispositif distinct/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Le décret du 21 avril 2026 ne fixe pas les horaires de ce collège/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/relèvent d'un dispositif distinct/)).toBeInTheDocument();
+    expect(screen.getByText(/de 9 h à 15 h/)).toBeInTheDocument();
+    expect(screen.getByText(/que le décret du 21 avril 2026 ne convoque pas/)).toBeInTheDocument();
   });
 
-  it("ne prétend pas qu'aucun horaire officiel n'existe pour ce collège", () => {
+  it("ne prétend plus qu'aucun horaire n'existe pour ce collège", () => {
     const { container } = render(<ScrutinRules />);
     const text = container.textContent ?? "";
     expect(text).not.toMatch(/aucun horaire n'est (connu|publié|fixé)/i);
+    expect(text).not.toMatch(/ne fixe pas les horaires de ce collège/i);
     expect(text).not.toMatch(/nous n'en affichons donc aucun/i);
+  });
+
+  it("cite le décret de 2014, dont proviennent ces horaires", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByRole("link", { name: /Décret n° 2014-290, art\. 50/ })).toBeInTheDocument();
   });
 
   it("cite le décret, puisqu'il est la source des horaires", () => {
@@ -108,11 +118,6 @@ describe("ScrutinRules : les horaires du décret", () => {
     expect(screen.getByRole("link", { name: /Décret n° 2026-301/ })).toBeInTheDocument();
   });
 
-  /**
-   * « Série » porte toute la page et n'était défini nulle part. La définition est dans le
-   * texte, pas seulement dans l'infobulle de l'en-tête : une explication derrière un survol
-   * est hors d'atteinte au doigt.
-   */
   /**
    * R. 168 alinéa 3, en vigueur depuis le 20 novembre 2020 : « Dans les deux cas, si le
    * président du bureau du collège électoral constate que dans toutes les sections de vote

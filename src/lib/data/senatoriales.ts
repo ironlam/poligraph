@@ -195,10 +195,15 @@ export interface SittingSenator {
   /** Latest published HATVP declaration year, null when none is published. */
   declarationYear: number | null;
   /**
-   * Ongoing published proceedings where the person is mis en cause. A discreet signal
-   * on the card, never a filter, never a sort key, never an aggregate.
+   * Whether published proceedings are ongoing where the person is mis en cause.
+   *
+   * A boolean, not a count, and deliberately so. The editorial rule is that a judicial case
+   * may be a discreet signal and never a filter, a sort key, a score, an aggregate or a
+   * **counter**; "3 procédures en cours" is a counter, and ranks people by it in the reader's
+   * head whether or not the code sorts. The cardinality therefore never leaves this module:
+   * exposing a number here is what made rendering one possible.
    */
-  ongoingProceedings: number;
+  hasOngoingProceedings: boolean;
 }
 
 export const getSittingSenators = cache(async function getSittingSenators(
@@ -234,15 +239,16 @@ export const getSittingSenators = cache(async function getSittingSenators(
 
   if (mandates.length === 0) return [];
 
-  // One grouped count instead of one query per senator. The where-builder is the
-  // centralised one: no hand-rolled publicationStatus filter on a public surface.
+  // Existence, not cardinality: `distinct` on politicianId answers "are there any" without
+  // ever producing a number that a surface could render. The where-builder is the centralised
+  // one: no hand-rolled publicationStatus filter on a public surface.
   const politicianIds = mandates.map((m) => m.politician.id);
-  const proceedings = await db.affair.groupBy({
-    by: ["politicianId"],
+  const proceedings = await db.affair.findMany({
     where: { politicianId: { in: politicianIds }, ...getMisEnCauseWhere() },
-    _count: { _all: true },
+    select: { politicianId: true },
+    distinct: ["politicianId"],
   });
-  const byPolitician = new Map(proceedings.map((p) => [p.politicianId, p._count._all]));
+  const withProceedings = new Set(proceedings.map((p) => p.politicianId));
 
   return mandates.map((m) => ({
     slug: m.politician.slug,
@@ -255,7 +261,7 @@ export const getSittingSenators = cache(async function getSittingSenators(
     groupShortName: m.parliamentaryData?.parliamentaryGroup.shortName ?? null,
     groupColor: m.parliamentaryData?.parliamentaryGroup.color ?? null,
     declarationYear: m.politician.declarations[0]?.year ?? null,
-    ongoingProceedings: byPolitician.get(m.politician.id) ?? 0,
+    hasOngoingProceedings: withProceedings.has(m.politician.id),
   }));
 });
 
