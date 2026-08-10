@@ -30,9 +30,34 @@ export function normalizedTextAddsInformation(source: string, normalized: string
   return [...tokens(normalized)].some((token) => !sourceTokens.has(token));
 }
 
+function isRateLimitError(error: unknown): boolean {
+  return error instanceof Error && /Mistral API error 429|rate limit/i.test(error.message);
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function callMistralWithRateLimitRetry(
+  messages: Parameters<typeof callMistral>[0],
+  options: Parameters<typeof callMistral>[1]
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await callMistral(messages, options);
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimitError(error) || attempt === 4) throw error;
+      await wait(2 ** attempt * 2_000);
+    }
+  }
+  throw lastError;
+}
+
 export async function extractSegment(segment: DocumentSegment): Promise<ExtractedProposal[]> {
   const sanitized = segment.text.replace(/["\n\r]/g, " ").slice(0, 8_000);
-  const response = await callMistral(
+  const response = await callMistralWithRateLimitRetry(
     [{ role: "user", content: `${OUTPUT_FORMAT}\n\n<document>${sanitized}</document>` }],
     {
       system: EXTRACTION_SYSTEM_PROMPT,

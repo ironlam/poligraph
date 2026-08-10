@@ -77,4 +77,16 @@ describe("extracteur Mistral", () => {
     });
     expect(proposal).toMatchObject({ classification: "AMBIGUOUS", normalizedText: null });
   });
+
+  it("retente une réponse 429 avant de réussir", async () => {
+    vi.useFakeTimers();
+    vi.mocked(callMistral)
+      .mockRejectedValueOnce(new Error("Mistral API error 429: rate limit exceeded"))
+      .mockResolvedValueOnce(response({ proposals: [] }));
+    const promise = extractSegment({ id: "x", heading: null, page: 1, text: "Texte politique." });
+    await vi.runAllTimersAsync();
+    await expect(promise).resolves.toEqual([]);
+    expect(callMistral).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });

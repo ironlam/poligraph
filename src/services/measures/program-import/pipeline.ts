@@ -239,9 +239,10 @@ export async function runProgramImport(
         continue;
       }
 
-      const proposals = (
-        await Promise.all(chunkSegments(parsed.segments).map(extractSegment))
-      ).flat();
+      const proposals: ExtractedProposal[] = [];
+      for (const segment of chunkSegments(parsed.segments)) {
+        proposals.push(...(await extractSegment(segment)));
+      }
       candidate.detected += proposals.length;
       report.propositions.detected += proposals.length;
       const exactSeen = new Set<string>();
