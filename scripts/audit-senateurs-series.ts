@@ -11,6 +11,12 @@
  * This script fixes nothing. It measures the gap between the API and the database
  * so we can decide what to correct, and from which source.
  *
+ * It deliberately does NOT flag "start date earlier than the series renewal" as
+ * wrong: a re-elected senator legitimately carries an older date (95 of the 170
+ * series-1 seats went to a re-elected senator in 2023). What it flags is a date
+ * sitting on one of the two exact values the fallback could write, which makes its
+ * provenance indistinguishable from the fallback.
+ *
  * Usage:
  *   npm run audit:senateurs-series
  *   npm run audit:senateurs-series -- --verbose   (list every suspect mandate)
@@ -31,8 +37,14 @@ interface AuditRow {
   constituency: string | null;
   series: SenateSeries;
   startDate: Date;
-  termStart: Date;
+  impossibleForSeries: boolean;
 }
+
+/** The two exact values the broken series fallback could ever write. */
+const FALLBACK_TIMESTAMPS = new Set<number>([
+  getSeriesTermStart(1).getTime(),
+  getSeriesTermStart(2).getTime(),
+]);
 
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -87,7 +99,7 @@ async function main() {
   let staleOutsideSyncReach = 0;
   const missingInDb = new Set(apiSeries.keys());
   const seriesNotStored: string[] = [];
-  const implausible: AuditRow[] = [];
+  const onFallbackDate: AuditRow[] = [];
   const dbCounts = { 1: 0, 2: 0 };
 
   for (const mandate of mandates) {
@@ -115,14 +127,21 @@ async function main() {
       );
     }
 
-    const termStart = getSeriesTermStart(series);
-    if (mandate.startDate < termStart) {
-      implausible.push({
+    // The fallback wrote one of two exact timestamps. A date sitting precisely on
+    // one of them is indistinguishable from it, whatever its real provenance: that
+    // is what needs checking, not "earlier than the renewal". A re-elected senator
+    // legitimately carries a date older than their series' last renewal (95 of the
+    // 170 series-1 seats were held by a re-elected senator in 2023), so an earlier
+    // date proves nothing on its own.
+    if (FALLBACK_TIMESTAMPS.has(mandate.startDate.getTime())) {
+      onFallbackDate.push({
         fullName: mandate.politician.fullName,
         constituency: mandate.constituency,
         series,
         startDate: mandate.startDate,
-        termStart,
+        // A series-1 seat was never renewed on 1 October 2020, so that value cannot
+        // be an election-driven start for this series.
+        impossibleForSeries: mandate.startDate.getTime() !== getSeriesTermStart(series).getTime(),
       });
     }
   }
@@ -156,34 +175,50 @@ async function main() {
     for (const externalId of missingInDb) console.log(`  ${externalId}`);
   }
 
-  console.log(`\n--- Dates de début invraisemblables : ${implausible.length} ---`);
-  console.log("  Un sénateur ne peut pas occuper son siège avant que sa série ne l'ait pourvu.");
-  if (implausible.length > 0) {
+  console.log(
+    `\n--- Dates de début dont la provenance reste à vérifier : ${onFallbackDate.length} sur ${dbCounts[1] + dbCounts[2]} ---`
+  );
+  console.log(
+    "  Ces dates valent exactement une des deux valeurs que le repli de série écrivait.\n" +
+      "  Certaines sont donc peut-être justes : elles sont seulement indiscernables du repli.\n" +
+      "  Un sénateur réélu porte légitimement une date antérieure au dernier renouvellement\n" +
+      "  de sa série, donc « antérieure au renouvellement » ne prouve rien en soi."
+  );
+  if (onFallbackDate.length > 0) {
     const bySeries = { 1: 0, 2: 0 };
-    for (const row of implausible) bySeries[row.series]++;
-    console.log(`  série 1 : ${bySeries[1]} sur ${dbCounts[1]}`);
-    console.log(`  série 2 : ${bySeries[2]} sur ${dbCounts[2]}`);
+    const impossible = { 1: 0, 2: 0 };
+    for (const row of onFallbackDate) {
+      bySeries[row.series]++;
+      if (row.impossibleForSeries) impossible[row.series]++;
+    }
+    for (const series of [1, 2] as const) {
+      console.log(
+        `  série ${series} : ${bySeries[series]} sur ${dbCounts[series]}, dont ` +
+          `${impossible[series]} portant une date qui n'est pas une prise de fonction de cette série`
+      );
+    }
     console.log(
-      "  Ces dates viennent du repli de série, pas d'une source individuelle. Elles ne " +
-        "seront pas corrigées par un simple sync:senat, qui préserve toute date existante."
+      "  Une concentration sur un seul jour n'est pas une distribution de réélections :\n" +
+        "  c'est la signature du repli. Aucun sync:senat ne la corrigera, il préserve\n" +
+        "  toute date existante. Voir l'issue #698."
     );
-    const shown = verbose ? implausible : implausible.slice(0, 10);
+    const shown = verbose ? onFallbackDate : onFallbackDate.slice(0, 10);
     for (const row of shown) {
       console.log(
         `  ${row.fullName} (${row.constituency ?? "?"}) série ${row.series} : ` +
-          `${formatDate(row.startDate)} < ${formatDate(row.termStart)}`
+          `${formatDate(row.startDate)}${row.impossibleForSeries ? " (impossible pour cette série)" : ""}`
       );
     }
-    if (!verbose && implausible.length > shown.length) {
+    if (!verbose && onFallbackDate.length > shown.length) {
       console.log(
-        `  ... et ${implausible.length - shown.length} autres (--verbose pour tout voir)`
+        `  ... et ${onFallbackDate.length - shown.length} autres (--verbose pour tout voir)`
       );
     }
   }
 
   console.log(
-    "\nTant que ces dates ne sont pas corrigées, aucune surface publique ne doit rendre " +
-      "« sénateur depuis <startDate> » pour la série 1."
+    "\nAucune surface publique ne doit rendre « sénateur depuis <startDate> » tant que la\n" +
+      "provenance de ces dates n'est pas établie, séries 1 et 2 confondues."
   );
 
   await db.$disconnect();

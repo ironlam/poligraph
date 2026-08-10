@@ -155,6 +155,32 @@ async function main() {
     }
   }
 
+  // Final report
+  const countAfter = await db.commune.count();
+  const newlyCreated = countAfter - countBefore;
+
+  console.log("\n=== Done ===");
+  console.log(`  API communes: ${communes.length}`);
+  console.log(`  Upserted: ${upserted}`);
+  console.log(`  New: ~${newlyCreated}`);
+  console.log(`  Updated: ~${upserted - newlyCreated}`);
+  if (errors > 0) {
+    console.log(`  Errors: ${errors}`);
+  }
+  console.log(`  Communes in DB: ${countAfter}`);
+
+  // A partial import must not be dated. A commune whose upsert failed keeps its
+  // previous population, and stamping lastSyncAt would present that stale figure as
+  // freshly imported: the provenance line would then vouch for a number it never
+  // fetched. Fail loudly and leave the previous date standing, rather than move it
+  // forward over data we did not refresh.
+  if (errors > 0) {
+    throw new Error(
+      `Import incomplet : ${errors} erreur(s) sur ${communes.length}. ` +
+        `Provenance non datée, ${COMMUNE_DATA_SYNC_KEY} laissé inchangé.`
+    );
+  }
+
   // Record when we asked geo.api.gouv.fr, since the API publishes no population
   // vintage. Surfaces that render a population date the import, not a vintage
   // they cannot verify. See src/config/communes.ts.
@@ -172,20 +198,6 @@ async function main() {
       extra: { source: COMMUNE_POPULATION_SOURCE.via, url: COMMUNE_POPULATION_SOURCE.url },
     },
   });
-
-  // Final report
-  const countAfter = await db.commune.count();
-  const newlyCreated = countAfter - countBefore;
-
-  console.log("\n=== Done ===");
-  console.log(`  API communes: ${communes.length}`);
-  console.log(`  Upserted: ${upserted}`);
-  console.log(`  New: ~${newlyCreated}`);
-  console.log(`  Updated: ~${upserted - newlyCreated}`);
-  if (errors > 0) {
-    console.log(`  Errors: ${errors}`);
-  }
-  console.log(`  Communes in DB: ${countAfter}`);
 }
 
 main()
