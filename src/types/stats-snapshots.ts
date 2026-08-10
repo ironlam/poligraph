@@ -47,6 +47,51 @@ export type DeptPartyRow = z.infer<typeof DeptPartyRowSchema>;
 export const DeptPartyDataSchema = z.array(DeptPartyRowSchema);
 export type DeptPartyData = z.infer<typeof DeptPartyDataSchema>;
 
+// ─── senatoriales-2026-outgoing-composition ───────────────
+/**
+ * The Senate as it stood before the 27 September 2026 ballot.
+ *
+ * Unlike every other snapshot here, this one is not a cache: it is the only record of
+ * a state that stops existing. All reads of the Senate go through `Mandate` with
+ * `isCurrent = true`, so the first `sync:senat` after the ballot replaces the 178
+ * outgoing senators with the incoming ones, and nothing can reconstruct what was.
+ *
+ * It is therefore written once and never recomputed. Seats are stored individually
+ * rather than pre-aggregated: the post-ballot comparison (re-elected, newcomers,
+ * share of women) needs to join seat by seat, and aggregates cannot be un-summed.
+ */
+export const OutgoingSenateSeatSchema = z.object({
+  politicianId: z.string(),
+  /** Name as captured, so the record survives a later rename or merge. */
+  fullName: z.string(),
+  slug: z.string(),
+  departmentCode: z.string().nullable(),
+  constituency: z.string().nullable(),
+  series: z.number().int(),
+  groupName: z.string().nullable(),
+  groupShortName: z.string().nullable(),
+});
+export type OutgoingSenateSeat = z.infer<typeof OutgoingSenateSeatSchema>;
+
+export const OutgoingSenateGroupSchema = z.object({
+  groupName: z.string(),
+  shortName: z.string().nullable(),
+  held: z.number().int(),
+  atStake: z.number().int(),
+});
+export type OutgoingSenateGroup = z.infer<typeof OutgoingSenateGroupSchema>;
+
+export const OutgoingSenateCompositionSchema = z.object({
+  capturedAt: z.string(),
+  /** Total sitting senators at capture time, both series. */
+  totalSeats: z.number().int(),
+  /** Seats of the renewed series, which the ballot puts back in play. */
+  seatsAtStake: z.number().int(),
+  seats: z.array(OutgoingSenateSeatSchema),
+  groups: z.array(OutgoingSenateGroupSchema),
+});
+export type OutgoingSenateComposition = z.infer<typeof OutgoingSenateCompositionSchema>;
+
 // ─── Key registry ─────────────────────────────────────────
 export const MUNICIPALES_SNAPSHOT_KEYS = {
   parityOutliers: "municipales-2026-parite-outliers",
@@ -56,6 +101,12 @@ export const MUNICIPALES_SNAPSHOT_KEYS = {
 
 export type MunicipalesSnapshotKey =
   (typeof MUNICIPALES_SNAPSHOT_KEYS)[keyof typeof MUNICIPALES_SNAPSHOT_KEYS];
+
+/**
+ * Write-once key. `scripts/capture-senate-composition.ts` refuses to run if a row
+ * already carries it, so a second capture cannot overwrite the first.
+ */
+export const SENATE_OUTGOING_COMPOSITION_KEY = "senatoriales-2026-outgoing-composition";
 
 /**
  * Parse a `StatsSnapshot.data` JSON value with the right schema.

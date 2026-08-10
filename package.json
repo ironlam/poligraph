@@ -116,6 +116,7 @@
     "visual": "tsx scripts/visual-test-runner.ts",
     "audit:affairs": "tsx scripts/audit-affairs.ts",
     "audit:senateurs-series": "tsx scripts/audit-senateurs-series.ts",
+    "senat:capture-composition": "tsx scripts/capture-senate-composition.ts",
     "audit:compliance": "tsx scripts/audit-affairs-compliance.ts",
     "remediate:unverified": "tsx scripts/remediate-unverified-published-affairs.ts",
     "purge:restricted-text": "tsx scripts/purge-restricted-source-text.ts",
