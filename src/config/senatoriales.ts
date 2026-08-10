@@ -79,3 +79,36 @@ export const PLM_COUNCIL_SEATS: Record<string, number> = {
 export function getCouncilSeats(communeId: string, totalSeats: number | null): number | null {
   return PLM_COUNCIL_SEATS[communeId] ?? totalSeats;
 }
+
+/**
+ * Article L. 284: below 9,000 inhabitants the council elects delegates from among
+ * its members, on a scale keyed on the council size, not on the population.
+ *
+ * Text in force since 23 March 2014: one delegate for councils of seven and eleven
+ * members, three for fifteen, five for nineteen, seven for twenty-three, fifteen for
+ * twenty-seven and twenty-nine. The sizes match the L. 2121-2 CGCT scale that
+ * `scripts/seed-communes.ts` applies, so every commune under 9,000 lands on one of
+ * these keys.
+ *
+ * @see https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000027433875
+ */
+export const SENATE_DELEGATE_SCALE: Record<number, number> = {
+  7: 1,
+  11: 1,
+  15: 3,
+  19: 5,
+  23: 7,
+  27: 15,
+  29: 15,
+};
+
+/**
+ * Article L. 285 thresholds: at or above this population every councillor is a
+ * delegate by right, and above `SUPPLEMENTARY_DELEGATE_FLOOR` the council elects one
+ * extra delegate per complete `SUPPLEMENTARY_DELEGATE_STEP` inhabitants beyond it.
+ *
+ * @see https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000027804508
+ */
+export const DELEGATES_BY_RIGHT_THRESHOLD = 9000;
+export const SUPPLEMENTARY_DELEGATE_FLOOR = 30000;
+export const SUPPLEMENTARY_DELEGATE_STEP = 800;
