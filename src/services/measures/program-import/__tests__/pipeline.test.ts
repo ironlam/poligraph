@@ -40,6 +40,15 @@ describe("classification éditoriale", () => {
 describe("attribution documentaire", () => {
   it("autorise le programme d'une candidature", () =>
     expect(classifyEdition("CANDIDACY", "Programme 2027")).toBe("CANDIDATE_PROGRAM_2027"));
+  it("ne présente pas des priorités provisoires comme le programme officiel", () => {
+    expect(
+      classifyEdition(
+        "CANDIDACY",
+        "Le projet",
+        "Le programme officiel pour l'élection présidentielle de 2027 arrive très prochainement."
+      )
+    ).toBe("CANDIDATE_PROPOSALS_2027");
+  });
   it("conserve une plateforme de parti hors attribution personnelle", () =>
     expect(classifyEdition("PARTY", "Notre projet actuel")).toBe("PARTY_PLATFORM_CURRENT"));
   it("identifie une plateforme historique", () =>

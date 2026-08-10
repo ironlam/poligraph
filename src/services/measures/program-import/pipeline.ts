@@ -203,7 +203,7 @@ export async function runProgramImport(
     };
     reports.set(reportKey, candidate);
     candidate.sources.push(edition.documentUrl);
-    const documentType = classifyEdition(edition.ownerType, edition.label);
+    let documentType = classifyEdition(edition.ownerType, edition.label);
     candidate.sourceTypes.push(documentType);
 
     if (edition.ownerType === "PARTY" || !edition.candidacyId) {
@@ -231,6 +231,12 @@ export async function runProgramImport(
       });
       report.documents.fetched += 1;
       const parsed = await parseDocument(acquired.bytes, acquired.contentType);
+      documentType = classifyEdition(
+        edition.ownerType,
+        edition.label,
+        parsed.segments.map((segment) => segment.text).join("\n")
+      );
+      candidate.sourceTypes[candidate.sourceTypes.length - 1] = documentType;
       report.documents.parsed += 1;
       report.documents.scannedPdf += Number(parsed.scannedPdf);
       candidate.documentsAnalyzed += 1;
