@@ -12,6 +12,7 @@
     "search:reindex": "tsx scripts/search-reindex.ts",
     "measures:migrate-promises": "tsx scripts/migrate-promises-to-measures.ts",
     "measures:extract-press": "tsx scripts/measures-extract-from-press.ts",
+    "measures:import-programs": "tsx scripts/import-presidential-programs.ts",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
