@@ -14,21 +14,28 @@ import {
 } from "../_content";
 
 /**
- * État 2: the candidacy deposit window.
+ * État 2: the candidacy deposit period.
  *
  * The block exists to answer "can someone still stand, and who is standing", and it can
  * only answer the first half. So it says the second half is missing rather than
  * approximating it.
  *
- * Two things it deliberately does not have. There is no counter of departments whose
- * candidacies we have collected: a gauge reading "21 sur 63" describes our own import
- * progress, and on a page about a ballot it would read as a fact about the ballot. And
- * there is no candidate list, partial or otherwise, because declarations are filed
- * préfecture by préfecture and we hold no verified source that spans them.
+ * Two regimes, never merged. The decree convenes 63 circonscriptions, where declarations go
+ * to the services of the State's representative from 7 to 11 September at 18 h local. The
+ * sixty-fourth, the Français établis hors de France, is not convened by it: article 46 of loi
+ * n° 2013-659 sends its declarations to the ministère des Affaires étrangères by the third
+ * Monday before the ballot, which is Monday 7 September.
  *
- * The phase comes from the two instants the decree fixes, resolved at read time. The
- * stored `Election.status` column cannot serve here: nothing transitions it, so a page
- * trusting it would still announce a deposit window in October.
+ * Two things it deliberately does not have. There is no counter of circonscriptions whose
+ * candidacies we have collected: a gauge reading "21 sur 63" describes our own import
+ * progress, and on a page about a ballot it would read as a fact about the ballot. And there
+ * is no candidate list, partial or otherwise, because declarations are received
+ * circonscription by circonscription and we hold no verified source that spans them.
+ *
+ * The phase is resolved at read time against the union of the local windows, not against a
+ * national hour: see `deriveCandidacyPhase`. The stored `Election.status` column cannot serve
+ * here either, because nothing transitions it, so a page trusting it would still announce a
+ * deposit period in October.
  */
 export function CandidacyDeposit({
   phase,

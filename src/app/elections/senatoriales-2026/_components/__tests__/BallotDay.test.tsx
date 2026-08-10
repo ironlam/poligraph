@@ -2,6 +2,36 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BallotDay } from "../BallotDay";
 import { ScrutinRules } from "../ScrutinRules";
+import * as content from "../../_content";
+
+/**
+ * Aucun terme relatif au lecteur dans le contenu éditorial du hub.
+ *
+ * Le premier correctif n'avait traité que le titre de `BallotDay` ; le badge de `page.tsx` et
+ * trois phrases de `CommuneLookup` portaient le même défaut et y ont survécu parce qu'ils
+ * vivent dans d'autres fichiers. Ce test balaie le module de contenu, qui centralise la prose,
+ * pour qu'un « aujourd'hui » ne puisse pas rentrer par une porte latérale.
+ */
+describe("contenu du hub : aucun terme relatif au lecteur", () => {
+  const RELATIVE = ["aujourd'hui", "actuellement", "en ce moment", "à cette heure"];
+
+  it("n'emploie aucun terme relatif dans les chaînes publiées", () => {
+    const strings: string[] = [];
+    const walk = (value: unknown) => {
+      if (typeof value === "string") strings.push(value);
+      else if (Array.isArray(value)) value.forEach(walk);
+      else if (value && typeof value === "object") Object.values(value).forEach(walk);
+    };
+    walk(content);
+
+    expect(strings.length).toBeGreaterThan(20);
+    for (const s of strings) {
+      for (const term of RELATIVE) {
+        expect(s.toLowerCase(), `"${s.slice(0, 70)}"`).not.toContain(term);
+      }
+    }
+  });
+});
 
 describe("BallotDay : le jour du scrutin", () => {
   /**

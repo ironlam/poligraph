@@ -45,9 +45,10 @@ export const SENATE_SEATS_OTHER_SERIES = SENATE_SEATS_TOTAL - SENATE_SEATS_AT_ST
  * not only in a tooltip: information behind a hover is unreachable on touch and by anyone
  * who does not know there is something to hover.
  *
- * The figures are statutory, not a count of our rows: 348 senators, and the split between
- * series comes from tableau n° 5 annexed to the code électoral. Our own data reproduces
- * 178 + 170, which is a check on the import, not the source of the claim.
+ * The figures are statutory, not a count of our rows: tableau n° 5 annexé au code électoral
+ * gives série 1 at 170 and série 2 at 178. Our own data reproduces the same split, which is a
+ * check on the import, not the source of the claim, and `SOURCE_TABLEAU_5` is cited wherever
+ * the numbers appear.
  */
 export const SERIES_EXPLAINER =
   "Le Sénat se renouvelle par moitié tous les trois ans. Chaque département appartient à " +
@@ -99,6 +100,20 @@ export const SOURCE_R168 = {
 export const SOURCE_SCRUTIN_MODE = {
   label: "Code électoral, art. L. 294 à L. 295",
   url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000027804524",
+};
+
+/**
+ * The table that actually establishes every seat figure this page displays.
+ *
+ * Tableau n° 5 annexé au code électoral, "Répartition des sièges de sénateurs entre les
+ * séries", version in force since 31 March 2011, gives série 1 at **170**, série 2 at **178**
+ * and the Français établis hors de France at **6 seats in each série**. One primary source
+ * carries the three numbers, so they no longer rest on a comment explaining their provenance
+ * while the rendered source line pointed at texts that do not state them.
+ */
+export const SOURCE_TABLEAU_5 = {
+  label: "Code électoral, tableau n° 5 annexé",
+  url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000023260785",
 };
 
 /**
@@ -252,11 +267,12 @@ export const POLL_EARLY_CLOSE_NOTE =
  * for this college, with the same early-closing faculty. Stating the real hours with their
  * own source is both more useful and more honest than reporting an absence that is not one.
  *
- * The six seats are statutory, not a count of our rows: loi organique n° 83-499 of 17 June
- * 1983 raised this representation from 6 to 12 seats, and the loi organique of 30 July 2003
- * provides that six of them are elected at each partial renewal. Our own data holds six
+ * The six seats are statutory, not a count of our rows: tableau n° 5 annexé au code électoral
+ * lists "Français établis hors de France" with 6 seats in each série. Our own data holds six
  * série-2 mandates with a null `departmentCode`, which confirms the import; it is not the
- * source. A count would publish five the day a seat fell vacant.
+ * source, and a count would publish five the day a seat fell vacant. `SOURCE_TABLEAU_5` is
+ * cited under the note, because article 50 establishes the hours and says nothing about how
+ * many seats are renewed.
  */
 export const FEHF_SEATS_AT_STAKE = FEHF_REGIME.seatsAtStake;
 export const FEHF_NOTE =

@@ -5,6 +5,7 @@ import {
   SENATE_SEATS_AT_STAKE,
   SENATE_SEATS_TOTAL,
   SOURCE_SENAT,
+  SOURCE_TABLEAU_5,
   type BallotPhase,
 } from "../_content";
 
@@ -123,9 +124,11 @@ export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase
         </ul>
       )}
 
+      {/* Two sources because two kinds of number appear: the 178 sur 348 of the lede comes
+          from tableau n° 5, the per-group breakdown from our own count of sitting mandates. */}
       <SourceLine
-        sources={[SOURCE_SENAT]}
-        note="Sièges comptés par série sur les mandats sénatoriaux en cours"
+        sources={[SOURCE_TABLEAU_5, SOURCE_SENAT]}
+        note="Tableau n° 5 pour les 178 sièges de la série 2, répartition par groupe comptée sur les mandats sénatoriaux en cours"
       />
     </section>
   );

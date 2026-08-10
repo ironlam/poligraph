@@ -30,6 +30,7 @@ import {
   SENATE_SEATS_TOTAL,
   SOURCE_DECREE,
   SOURCE_SENAT,
+  SOURCE_TABLEAU_5,
   getBallotPhase,
 } from "./_content";
 
@@ -130,9 +131,14 @@ export default async function SenatorialesHubPage() {
                       <InfoTooltip term="serieSenatoriale" className="-my-3 min-h-11 min-w-11" />
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {/* "Jour du scrutin", not "Aujourd'hui": `isBallotDay` is the Paris
+                          calendar day, so a relative term here is false for a reader whose
+                          local day is still the 26th in Polynésie française or already the
+                          28th in Wallis-et-Futuna. Same defect as the heading of `BallotDay`,
+                          and it survived that fix because it lives in another file. */}
                       {isBallotDay ? (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">
-                          Aujourd{"'"}hui
+                          Jour du scrutin
                         </span>
                       ) : (
                         daysUntil !== null &&
@@ -176,8 +182,10 @@ export default async function SenatorialesHubPage() {
                   </div>
                 </dl>
 
+                {/* Tableau n° 5 is what establishes the 178 of 348 shown above; the decree
+                    convenes the circonscriptions but states no seat total. */}
                 <SourceLine
-                  sources={[SOURCE_DECREE, SOURCE_SENAT]}
+                  sources={[SOURCE_TABLEAU_5, SOURCE_DECREE, SOURCE_SENAT]}
                   note="63 départements et collectivités, plus les Français établis hors de France"
                   reportHref={null}
                 />

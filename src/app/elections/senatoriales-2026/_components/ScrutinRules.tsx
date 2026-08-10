@@ -11,6 +11,7 @@ import {
   SOURCE_FEHF_POLL,
   SOURCE_R168,
   SOURCE_SCRUTIN_MODE,
+  SOURCE_TABLEAU_5,
 } from "../_content";
 
 /**
@@ -82,13 +83,14 @@ export function ScrutinRules() {
           only the first would show a source that does not carry the claims above it. */}
       <SourceLine
         sources={[
+          SOURCE_TABLEAU_5,
           SOURCE_ELECTORAL_CODE,
           SOURCE_SCRUTIN_MODE,
           SOURCE_DECREE,
           SOURCE_R168,
           SOURCE_FEHF_POLL,
         ]}
-        note="Article 3 du décret et R. 168 pour les 63 circonscriptions, article 50 du décret de 2014 pour les Français de l'étranger"
+        note="Tableau n° 5 pour les 178, 170 et 6 sièges ; article 3 du décret et R. 168 pour les horaires des 63 circonscriptions ; article 50 du décret de 2014 pour ceux des Français de l'étranger"
         reportHref={null}
       />
     </section>

@@ -57,8 +57,8 @@ function renewedHeadline(phase: BallotPhase, seats: number | null, where: string
   }
   if (phase === "polling-day") {
     return count !== null
-      ? `${count} ${seatWord} sont à pourvoir ${where} aujourd'hui`
-      : `Des sièges sont à pourvoir ${where} aujourd'hui`;
+      ? `${count} ${seatWord} sont à pourvoir ${where} ce 27 septembre`
+      : `Des sièges sont à pourvoir ${where} ce 27 septembre`;
   }
   return count !== null
     ? `${count} ${seatWord} à pourvoir ${where} le 27 septembre`
@@ -70,7 +70,7 @@ function renewedDetail(phase: BallotPhase, delegates: number, communeName: strin
     return `Les ${formatInt(delegates)} grands électeurs de ${communeName} y ont pris part.`;
   }
   if (phase === "polling-day") {
-    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} votent aujourd'hui.`;
+    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} votent ce 27 septembre.`;
   }
   return `Les ${formatInt(delegates)} grands électeurs de ${communeName} voteront ce jour-là.`;
 }
@@ -284,7 +284,7 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Ce département relève de la série renouvelée en 2029.
                 {college !== null
-                  ? ` Avec sa population et l'effectif actuel du conseil, le barème donne aujourd'hui ${formatInt(college.total)} grands électeurs pour ${commune.name} ; le collège appelé à voter en 2029 sera constitué pour ce renouvellement.`
+                  ? ` Avec sa population et l'effectif actuel du conseil, le barème donne ${formatInt(college.total)} grands électeurs pour ${commune.name} ; le collège appelé à voter en 2029 sera constitué pour ce renouvellement.`
                   : " Son collège sera constitué pour ce renouvellement."}
               </p>
             </>

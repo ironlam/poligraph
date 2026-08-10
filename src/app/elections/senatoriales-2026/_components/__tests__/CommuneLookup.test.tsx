@@ -268,9 +268,7 @@ describe("CommuneLookup : département non renouvelable", () => {
     await screen.findByText(/Aucun siège à pourvoir à Paris cette année/);
     expect(screen.queryByText(/5 juin/)).toBeNull();
     expect(screen.queryByText(/ont bien été désignés/)).toBeNull();
-    expect(
-      screen.getByText(/le barème donne aujourd'hui 2 755 grands électeurs/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/le barème donne 2 755 grands électeurs/)).toBeInTheDocument();
     expect(screen.getByText(/sera constitué pour ce renouvellement/)).toBeInTheDocument();
   });
 
@@ -312,12 +310,17 @@ describe("CommuneLookup : formulation selon la phase du scrutin", () => {
     expect(screen.getByText(/voteront ce jour-là/)).toBeInTheDocument();
   });
 
-  it("le jour du scrutin : au présent, sans renvoyer à une date à venir", async () => {
+  /**
+   * Au présent, mais sans terme relatif au lecteur : la phase `polling-day` vient de
+   * `resolveElectionStatus`, qui couvre 2 h à 2 h heure de Paris, et le 27 à Paris n'est pas
+   * le 27 partout. « ce 27 septembre » est présent sans rien affirmer sur le jour local.
+   */
+  it("le jour du scrutin : au présent, sans terme relatif au lecteur", async () => {
     render(<CommuneLookup phase="polling-day" />);
     await search("33430");
-    await screen.findByText(/6 sièges sont à pourvoir en Gironde aujourd'hui/);
-    expect(screen.getByText(/votent aujourd'hui/)).toBeInTheDocument();
-    expect(screen.queryByText(/le 27 septembre/)).toBeNull();
+    await screen.findByText(/6 sièges sont à pourvoir en Gironde ce 27 septembre/);
+    expect(screen.getByText(/votent ce 27 septembre/)).toBeInTheDocument();
+    expect(screen.queryByText(/aujourd'hui/)).toBeNull();
   });
 
   it("après le scrutin : au passé, et aucun résultat annoncé", async () => {
@@ -326,7 +329,7 @@ describe("CommuneLookup : formulation selon la phase du scrutin", () => {
     await screen.findByText(/faisait partie du renouvellement du 27 septembre/);
     expect(screen.getByText(/y ont pris part/)).toBeInTheDocument();
     expect(screen.queryByText(/à pourvoir/)).toBeNull();
-    expect(screen.queryByText(/voteront|votent aujourd'hui/)).toBeNull();
+    expect(screen.queryByText(/voteront|votent ce 27 septembre/)).toBeNull();
     // Rien ne doit ressembler à une proclamation tant que l'état 4 n'existe pas.
     expect(screen.queryByText(/élu|réélu|résultat/i)).toBeNull();
   });
