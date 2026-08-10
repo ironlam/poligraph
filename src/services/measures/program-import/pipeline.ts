@@ -8,7 +8,7 @@ import { jaccardSimilarity, normalizeForDeduplication } from "./deduplication";
 import { extractSegment, EXTRACTOR_VERSION } from "./extractor";
 import { parseDocument } from "./parser";
 import { classifyEdition, isAcceptedProposal } from "./policy";
-import type { DocumentSegment, ProgramDocumentType } from "./types";
+import type { DocumentSegment, ExtractedProposal, ProgramDocumentType } from "./types";
 
 export type ProgramImportOptions = {
   apply: boolean;
@@ -31,6 +31,16 @@ type CandidateReport = {
   published: number;
   primaryShare: number;
   themes: string[];
+  proposals: Array<{
+    sourceText: string;
+    normalizedText: string | null;
+    classification: ExtractedProposal["classification"];
+    theme: string | null;
+    confidence: number;
+    page: number | null;
+    rationale: string;
+    accepted: boolean;
+  }>;
   errors: string[];
   blockers: string[];
   status:
@@ -157,6 +167,7 @@ export async function runProgramImport(
           ).length,
           primaryShare: 0,
           themes: [],
+          proposals: [],
           errors: [],
           blockers: eligible
             ? []
@@ -185,6 +196,7 @@ export async function runProgramImport(
       published: 0,
       primaryShare: 100,
       themes: [],
+      proposals: [],
       errors: [],
       blockers: [],
       status: "PARTIAL" as const,
@@ -238,6 +250,7 @@ export async function runProgramImport(
         else if (proposal.classification === "OBJECTIVE") report.propositions.objectives += 1;
         else if (proposal.classification === "AMBIGUOUS") report.propositions.ambiguous += 1;
         else report.propositions.rejected += 1;
+        candidate.proposals.push({ ...proposal, accepted: isAcceptedProposal(proposal) });
         if (!isAcceptedProposal(proposal)) continue;
         const text = proposal.normalizedText!;
         const exact = normalizeForDeduplication(text);
@@ -336,5 +349,17 @@ export function renderMarkdownReport(report: ProgramImportReport): string {
         `| ${c.candidate} | ${c.documentsAnalyzed} | ${c.detected} | ${c.draftsAdded} | ${c.themes.join(", ") || "-"} | ${c.status} |`
     )
     .join("\n");
-  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs: ${report.documents.failed}\n\n## Extraction\n\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Drafts ajoutés | Thèmes | État |\n|---|---:|---:|---:|---|---|\n${rows}\n`;
+  const proposalDetails = report.candidates
+    .filter((candidate) => candidate.proposals.length > 0)
+    .map((candidate) => {
+      const items = candidate.proposals
+        .map(
+          (proposal) =>
+            `- ${proposal.accepted ? "RETENUE" : "ÉCARTÉE"} [${proposal.classification}, confiance ${proposal.confidence}, page ${proposal.page ?? "HTML"}] ${proposal.normalizedText ?? proposal.sourceText}`
+        )
+        .join("\n");
+      return `### ${candidate.candidate}\n\n${items}`;
+    })
+    .join("\n\n");
+  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs: ${report.documents.failed}\n\n## Extraction\n\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Drafts ajoutés | Thèmes | État |\n|---|---:|---:|---:|---|---|\n${rows}\n\n## Détail des propositions\n\n${proposalDetails || "Aucune proposition extraite."}\n`;
 }

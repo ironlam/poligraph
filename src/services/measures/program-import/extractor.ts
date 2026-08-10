@@ -1,7 +1,7 @@
-import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
+import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { extractionSchema, type DocumentSegment, type ExtractedProposal } from "./types";
 
-export const EXTRACTOR_VERSION = "presidential-program-import/1";
+export const EXTRACTOR_VERSION = "mistral-large-latest/presidential-program-import-2";
 
 export const EXTRACTION_SYSTEM_PROMPT = `Tu extrais des propositions politiques sans interprétation.
 Ton travail consiste à reconnaître les engagements présents dans le texte, pas à reconstituer le programme que l'auteur aurait pu vouloir écrire.
@@ -11,59 +11,9 @@ Toute information absente de la source doit rester absente de la formulation nor
 En cas de doute, classe AMBIGUOUS plutôt que MEASURE.
 Exemples : « rendre du pouvoir d'achat » est GENERAL_INTENT ; « réduire la TVA sur l'électricité à 5,5 % » est MEASURE ; « retrouver notre souveraineté » est VALUE ; « organiser un référendum sur la primauté du droit national » est MEASURE.`;
 
-const tool = {
-  name: "classer_propositions",
-  description: "Classe les propositions présentes, sans ajout d'information.",
-  input_schema: {
-    type: "object",
-    properties: {
-      proposals: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            sourceText: { type: "string" },
-            normalizedText: { type: ["string", "null"] },
-            classification: {
-              type: "string",
-              enum: ["MEASURE", "OBJECTIVE", "VALUE", "DIAGNOSIS", "GENERAL_INTENT", "AMBIGUOUS"],
-            },
-            theme: {
-              type: ["string", "null"],
-              enum: [
-                "ECONOMIE_BUDGET",
-                "SOCIAL_TRAVAIL",
-                "SECURITE_JUSTICE",
-                "ENVIRONNEMENT_ENERGIE",
-                "SANTE",
-                "EDUCATION_CULTURE",
-                "INSTITUTIONS",
-                "AFFAIRES_ETRANGERES_DEFENSE",
-                "NUMERIQUE_TECH",
-                "IMMIGRATION",
-                "AGRICULTURE_ALIMENTATION",
-                "LOGEMENT_URBANISME",
-                "TRANSPORTS",
-                null,
-              ],
-            },
-            confidence: { type: "number", minimum: 0, maximum: 1 },
-            rationale: { type: "string" },
-          },
-          required: [
-            "sourceText",
-            "normalizedText",
-            "classification",
-            "theme",
-            "confidence",
-            "rationale",
-          ],
-        },
-      },
-    },
-    required: ["proposals"],
-  },
-};
+const OUTPUT_FORMAT = `Réponds uniquement avec un objet JSON de cette forme :
+{"proposals":[{"sourceText":"citation exacte","normalizedText":"formulation fidèle ou null","classification":"MEASURE|OBJECTIVE|VALUE|DIAGNOSIS|GENERAL_INTENT|AMBIGUOUS","theme":"une valeur ThemeCategory ou null","confidence":0.0,"rationale":"raison courte"}]}
+Les seules valeurs de thème sont ECONOMIE_BUDGET, SOCIAL_TRAVAIL, SECURITE_JUSTICE, ENVIRONNEMENT_ENERGIE, SANTE, EDUCATION_CULTURE, INSTITUTIONS, AFFAIRES_ETRANGERES_DEFENSE, NUMERIQUE_TECH, IMMIGRATION, AGRICULTURE_ALIMENTATION, LOGEMENT_URBANISME et TRANSPORTS.`;
 
 function tokens(text: string): Set<string> {
   return new Set(
@@ -82,16 +32,17 @@ export function normalizedTextAddsInformation(source: string, normalized: string
 
 export async function extractSegment(segment: DocumentSegment): Promise<ExtractedProposal[]> {
   const sanitized = segment.text.replace(/["\n\r]/g, " ").slice(0, 8_000);
-  const response = await callAnthropic(
-    [{ role: "user", content: `<document>${sanitized}</document>` }],
+  const response = await callMistral(
+    [{ role: "user", content: `${OUTPUT_FORMAT}\n\n<document>${sanitized}</document>` }],
     {
       system: EXTRACTION_SYSTEM_PROMPT,
-      tools: [tool],
-      toolChoice: { type: "tool", name: tool.name },
+      model: "mistral-large-latest",
       maxTokens: 3000,
+      temperature: 0,
+      responseFormat: { type: "json_object" },
     }
   );
-  const parsed = extractionSchema.parse(extractToolUse(response));
+  const parsed = extractionSchema.parse(parseMistralJSON<unknown>(extractMistralText(response)));
   return parsed.proposals.map((proposal) => {
     if (
       proposal.normalizedText &&
