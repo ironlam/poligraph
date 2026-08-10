@@ -12,6 +12,8 @@ import {
   getSenatorialesElection,
   SENATORIALES_2026_SLUG,
 } from "@/lib/data/senatoriales";
+import { BallotDay } from "./_components/BallotDay";
+import { CandidacyDeposit } from "./_components/CandidacyDeposit";
 import { CommuneLookup } from "./_components/CommuneLookup";
 import { MunicipalBridge } from "./_components/MunicipalBridge";
 import { ScrutinRules } from "./_components/ScrutinRules";
@@ -63,6 +65,9 @@ export default async function SenatorialesHubPage() {
   // 28 September.
   const phase = getBallotPhase(election.status);
   const isOver = phase === "after";
+  // Narrower than the phase on purpose: `isBallotDay` is the ballot's own Paris day, so
+  // the "aujourd'hui" wording cannot outlive it by the two hours the UTC window adds.
+  const isBallotDay = phase === "polling-day" && election.isBallotDay;
   const now = new Date();
   const daysUntil =
     election.round1Date && !isOver
@@ -112,10 +117,17 @@ export default async function SenatorialesHubPage() {
                       Renouvellement de la série 2
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {daysUntil !== null && daysUntil > 0 && (
+                      {isBallotDay ? (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">
-                          J-{daysUntil}
+                          Aujourd{"'"}hui
                         </span>
+                      ) : (
+                        daysUntil !== null &&
+                        daysUntil > 0 && (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+                            J-{daysUntil}
+                          </span>
+                        )
                       )}
                       {election.round1Date && (
                         <span>
@@ -164,9 +176,18 @@ export default async function SenatorialesHubPage() {
               seats: it is the answer to "why does this concern me". */}
           <MunicipalBridge />
 
+          {/* État 3, on the ballot's own day only. Placed after the bridge so the
+              "why this concerns you" block stays the first content of the page. */}
+          {isBallotDay && <BallotDay />}
+
           <CommuneLookup phase={phase} />
 
           <SeatsAtStake groups={groups} phase={phase} />
+
+          {/* État 2. Present in every phase: before the window it gives the dates, after
+              it says what is still possible, and throughout it says why no candidate is
+              listed. */}
+          <CandidacyDeposit phase={election.candidacyPhase} ballotPhase={phase} />
 
           <ScrutinRules />
 

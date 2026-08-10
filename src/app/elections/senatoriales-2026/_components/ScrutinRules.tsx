@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { SourceLine } from "@/components/ui/SourceLine";
-import { SCRUTIN_RULES, SOURCE_ELECTORAL_CODE } from "../_content";
+import { FEHF_NOTE, SCRUTIN_RULES, SOURCE_DECREE, SOURCE_ELECTORAL_CODE } from "../_content";
 
 /**
  * How the ballot works, and the door to the college page.
@@ -28,7 +28,12 @@ export function ScrutinRules() {
               </span>
               <span className="mt-1 block font-semibold">{rule.mode}</span>
             </dt>
-            <dd className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{rule.detail}</dd>
+            <dd className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {rule.detail}
+              {/* The mockup closed the proportional ballot at 17 h; article 3 of the
+                  decree says 17 h 30. */}
+              <span className="mt-1.5 block text-foreground">{rule.hours}</span>
+            </dd>
           </div>
         ))}
       </dl>
@@ -48,7 +53,15 @@ export function ScrutinRules() {
         <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
 
-      <SourceLine sources={[SOURCE_ELECTORAL_CODE]} reportHref={null} />
+      {/* The hours above cover the 63 departments and collectivities. Stated here rather
+          than beside the polling-day block so there is one caveat to keep true. */}
+      <p className="text-sm leading-relaxed text-muted-foreground">{FEHF_NOTE}</p>
+
+      <SourceLine
+        sources={[SOURCE_ELECTORAL_CODE, SOURCE_DECREE]}
+        note="Horaires fixés par l'article 3 du décret"
+        reportHref={null}
+      />
     </section>
   );
 }

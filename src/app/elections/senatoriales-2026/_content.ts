@@ -117,19 +117,157 @@ export interface ScrutinRule {
   detail: string;
 }
 
-export const SCRUTIN_RULES: ScrutinRule[] = [
+export interface ScrutinRuleWithHours extends ScrutinRule {
+  /** Opening and closing hours fixed by article 3 of the decree. */
+  hours: string;
+}
+
+/**
+ * The two modes and their hours.
+ *
+ * Hours quoted from article 3 of the decree, which writes them out: "le premier tour de
+ * scrutin sera ouvert à huit heures trente et clos à onze heures. S'il y a lieu d'y
+ * procéder, le second tour de scrutin sera ouvert à quinze heures trente et clos à
+ * dix-sept heures trente" for the majority ballot, and "le scrutin sera ouvert à huit
+ * heures trente et clos à dix-sept heures trente" for the proportional one.
+ *
+ * The design mockup closed the proportional ballot at 17 h. The decree says 17 h 30.
+ */
+export const SCRUTIN_RULES: ScrutinRuleWithHours[] = [
   {
     seats: "1 ou 2 sièges",
     mode: "Scrutin majoritaire",
     detail:
       "Deux tours dans la journée : majorité absolue au premier, majorité relative au second.",
+    hours: "1er tour de 8 h 30 à 11 h, second tour s'il y a lieu de 15 h 30 à 17 h 30",
   },
   {
     seats: "3 sièges et plus",
     mode: "Proportionnelle de liste",
     detail: "Un seul tour, listes paritaires, répartition à la plus forte moyenne.",
+    hours: "Scrutin de 8 h 30 à 17 h 30",
   },
 ];
+
+/**
+ * The hours above cover the 63 departments and collectivities. They are not extended to
+ * the sixty-fourth constituency, and the wording says only what is verifiable today: the
+ * 21 April decree convenes the listed departments and collectivities, so it fixes nothing
+ * for the Français établis hors de France. It does not follow that no official hour will
+ * exist. A dedicated text set 9 h to 15 h in 2023, the Sénat announces the same for 2026,
+ * and France Diplomatie states its own arrangements are still to be published.
+ *
+ * Saying "the decree does not fix them" therefore survives that publication, where "no
+ * hours are known" would have become false the day it appears.
+ *
+ * Six of the twelve seats belong to the renewed series, counted from our own senatorial
+ * mandates rather than quoted.
+ */
+export const FEHF_SEATS_AT_STAKE = 6;
+export const FEHF_NOTE =
+  "Pour les Français établis hors de France, le scrutin relève d'un dispositif distinct. " +
+  "Le décret du 21 avril 2026 ne fixe pas les horaires de ce collège, auquel reviennent " +
+  "6 des 178 sièges renouvelés.";
+
+// ─── État 2 : dépôt des candidatures ────────────────────────────────
+
+/**
+ * Article 2 of the decree: declarations are received from Monday 7 September 2026 to
+ * Friday 11 September at 18 h, and for a second round until 15 h on polling day. That last
+ * deadline is what makes the 15 h 30 opening possible, so it belongs here rather than being
+ * dropped as a detail.
+ *
+ * Both hours are **local to the circonscription where the declaration is filed**, at the
+ * services of the State's representative. The decree convenes territories from UTC+12 to
+ * UTC-10, so neither hour is a national instant. Every phrasing below therefore describes
+ * the period and locates the hour, and none of them asserts a to-the-minute status: "le
+ * dépôt est clos" read in Paris would be false in Polynésie française for six more hours.
+ */
+export const CANDIDACY_WINDOW_LABEL =
+  "du 7 au 11 septembre 2026, jusqu'à 18 h auprès des services du représentant de " +
+  "l'État dans la circonscription concernée";
+export const CANDIDACY_SECOND_ROUND_LABEL = "le jour du scrutin jusqu'à 15 h";
+
+export const CANDIDACY_HEADING = "Le dépôt des candidatures";
+
+export const CANDIDACY_LEDE: Record<
+  "before" | "open" | "closed" | "unknown",
+  { headline: string; body: string }
+> = {
+  before: {
+    headline: "Le dépôt des candidatures n'est pas encore ouvert",
+    body: "Les déclarations pour le premier tour seront reçues " + CANDIDACY_WINDOW_LABEL + ".",
+  },
+  open: {
+    headline: "Le dépôt des candidatures est en cours",
+    body: "Les déclarations pour le premier tour sont reçues " + CANDIDACY_WINDOW_LABEL + ".",
+  },
+  closed: {
+    headline: "Le dépôt pour le premier tour est terminé",
+    body:
+      "En cas de second tour au scrutin majoritaire, de nouvelles déclarations peuvent " +
+      "être déposées " +
+      CANDIDACY_SECOND_ROUND_LABEL +
+      ".",
+  },
+  unknown: {
+    headline: "Période de dépôt non renseignée",
+    body:
+      "Les dates de dépôt ne sont pas enregistrées pour ce scrutin. Nous ne les déduisons " +
+      "pas du calendrier.",
+  },
+};
+
+/**
+ * Once the ballot is behind us the deposit period is not merely over, it is spent.
+ *
+ * The `closed` copy above holds from 12 September onwards, including on polling day, but on
+ * 28 September it still describes a second round as something that can receive
+ * declarations. Same failure as the outgoing-composition block: nothing breaks, the page
+ * simply starts asserting a thing that has stopped being true.
+ */
+export const CANDIDACY_LEDE_AFTER_BALLOT = {
+  headline: "Le dépôt des candidatures est terminé",
+  body:
+    "Les déclarations pour le premier tour ont été reçues du 7 au 11 septembre 2026. Un " +
+    "second tour au scrutin majoritaire pouvait recevoir de nouvelles déclarations le jour " +
+    "du scrutin jusqu'à 15 h.",
+};
+
+/**
+ * Why no candidate appears here, in any phase.
+ *
+ * Declarations are filed préfecture by préfecture. We hold no verified source listing
+ * them constituency by constituency, so the block says that instead of showing a
+ * partial list, and no counter of collected departments appears: a gauge reading "21 sur
+ * 63" would turn our own collection progress into an apparent fact about the ballot.
+ */
+export const CANDIDACY_MISSING_TITLE = "Nous ne publions aucune liste de candidats";
+export const CANDIDACY_MISSING_BODY =
+  "Les déclarations sont déposées et publiées préfecture par préfecture. Nous ne disposons " +
+  "d'aucune source vérifiée qui les recense circonscription par circonscription, et nous " +
+  "préférons ne rien afficher plutôt qu'une liste incomplète dont rien n'indiquerait ce qui " +
+  "manque.";
+
+// ─── État 3 : le jour du scrutin ────────────────────────────────────
+
+export const BALLOT_DAY_HEADING = "Le scrutin a lieu aujourd'hui";
+export const BALLOT_DAY_LEDE =
+  "Les grands électeurs votent dans les 63 départements et collectivités concernés, plus " +
+  "le collège distinct des Français établis hors de France. Le vote y est obligatoire.";
+
+/**
+ * What this page will not do on the evening of the ballot.
+ *
+ * Stated explicitly rather than left as an absence, because the absence is the editorial
+ * choice: no live count, no trend, no projection, nothing before the official
+ * proclamation by the commission de recensement des votes.
+ */
+export const BALLOT_DAY_NO_RESULTS_TITLE = "Aucun résultat avant la proclamation";
+export const BALLOT_DAY_NO_RESULTS_BODY =
+  "Nous ne publions ni estimation, ni tendance, ni décompte en cours de journée. Les " +
+  "sièges sont attribués par la proclamation officielle des résultats, et c'est elle que " +
+  "nous attendons pour mettre à jour les mandats.";
 
 // ─── Milestones ─────────────────────────────────────────────────────
 

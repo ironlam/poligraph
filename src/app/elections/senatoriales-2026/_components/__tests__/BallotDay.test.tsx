@@ -1,0 +1,84 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { BallotDay } from "../BallotDay";
+import { ScrutinRules } from "../ScrutinRules";
+
+describe("BallotDay : le jour du scrutin", () => {
+  it("dit que le scrutin a lieu aujourd'hui", () => {
+    render(<BallotDay />);
+    expect(screen.getByRole("heading", { name: /Le scrutin a lieu aujourd'hui/ })).toBeVisible();
+  });
+
+  it("sépare explicitement les 63 départements du collège des Français de l'étranger", () => {
+    render(<BallotDay />);
+    expect(screen.getByText(/63 départements et collectivités/)).toBeInTheDocument();
+    expect(screen.getByText(/collège distinct des Français établis hors de France/)).toBeVisible();
+  });
+
+  /**
+   * Le refus est écrit, pas seulement appliqué. Le soir d'un scrutin, un espace vide se
+   * lit comme un résultat qui n'a pas fini de charger.
+   */
+  it("annonce qu'aucun résultat ne sera publié avant la proclamation", () => {
+    render(<BallotDay />);
+    expect(screen.getByText(/Aucun résultat avant la proclamation/)).toBeInTheDocument();
+    expect(screen.getByText(/ni estimation, ni tendance, ni décompte/)).toBeInTheDocument();
+  });
+
+  /**
+   * Garde-fou sur la donnée plutôt que sur le vocabulaire : le bloc énonce son refus, donc
+   * les mots « estimation » et « tendance » y figurent légitimement. Ce qui ne doit jamais
+   * apparaître, c'est un chiffre qui ressemble à un résultat.
+   */
+  it("ne rend aucun pourcentage ni décompte de sièges", () => {
+    const { container } = render(<BallotDay />);
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("%");
+    expect(text).not.toMatch(/\d+\s*sièges?\b/);
+    expect(text).not.toMatch(/\d+\s*(?:voix|suffrages)\b/);
+  });
+});
+
+/**
+ * Les horaires vivent dans `ScrutinRules` et nulle part ailleurs : ils portent une réserve
+ * sur la 64e circonscription, et une réserve affichée deux fois est une réserve qui
+ * finira par diverger.
+ */
+describe("ScrutinRules : les horaires du décret", () => {
+  it("ferme la proportionnelle à 17 h 30, et non à 17 h comme la maquette", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByText(/Scrutin de 8 h 30 à 17 h 30/)).toBeInTheDocument();
+  });
+
+  it("donne les deux tours du scrutin majoritaire", () => {
+    render(<ScrutinRules />);
+    expect(
+      screen.getByText(/1er tour de 8 h 30 à 11 h, second tour s'il y a lieu de 15 h 30 à 17 h 30/)
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * Le décret du 21 avril ne convoque pas ce collège, donc il n'en fixe pas les horaires.
+   * Ce n'est pas la même chose que « aucun horaire officiel n'existe » : un texte
+   * spécifique en fixera, comme en 2023. La formulation doit survivre à sa publication.
+   */
+  it("n'étend pas ces horaires au collège des Français de l'étranger", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByText(/relève d'un dispositif distinct/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Le décret du 21 avril 2026 ne fixe pas les horaires de ce collège/)
+    ).toBeInTheDocument();
+  });
+
+  it("ne prétend pas qu'aucun horaire officiel n'existe pour ce collège", () => {
+    const { container } = render(<ScrutinRules />);
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/aucun horaire n'est (connu|publié|fixé)/i);
+    expect(text).not.toMatch(/nous n'en affichons donc aucun/i);
+  });
+
+  it("cite le décret, puisqu'il est la source des horaires", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByRole("link", { name: /Décret n° 2026-301/ })).toBeInTheDocument();
+  });
+});
