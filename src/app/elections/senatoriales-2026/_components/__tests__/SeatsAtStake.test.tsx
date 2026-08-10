@@ -4,8 +4,8 @@ import { SeatsAtStake } from "../SeatsAtStake";
 import { getBallotPhase } from "../../_content";
 
 const GROUPS = [
-  { groupName: "Les Républicains", shortName: "LR", color: null, held: 131, atStake: 77 },
-  { groupName: "Union Centriste", shortName: "UC", color: null, held: 59, atStake: 30 },
+  { groupName: "Les Républicains", shortName: "LR", color: "#0066CC", held: 131, atStake: 77 },
+  { groupName: "Union Centriste", shortName: "UC", color: "#FF9900", held: 59, atStake: 30 },
   { groupName: "CRCE-K", shortName: null, color: null, held: 18, atStake: 4 },
 ];
 
@@ -28,6 +28,27 @@ describe("SeatsAtStake avant le scrutin", () => {
   it("dit l'absence quand la série n'est pas encore renseignée", () => {
     render(<SeatsAtStake groups={[]} phase="before" />);
     expect(screen.getByText(/Répartition par groupe indisponible/)).toBeInTheDocument();
+  });
+
+  /**
+   * `ParliamentaryGroup.color` était sélectionné par la requête, typé dans `GroupExposure`,
+   * puis jamais rendu : les neuf barres sortaient de la même couleur et se lisaient comme
+   * une seule série. Même règle pour tous les groupes, chacun la sienne.
+   */
+  it("donne à chaque barre la couleur du groupe", () => {
+    const { container } = render(<SeatsAtStake groups={GROUPS} phase="before" />);
+    const bars = [...container.querySelectorAll("li div[style]")];
+    expect(bars).toHaveLength(3);
+    expect(bars[0]!.getAttribute("style")).toContain("rgb(0, 102, 204)");
+    expect(bars[1]!.getAttribute("style")).toContain("rgb(255, 153, 0)");
+  });
+
+  it("retombe sur la couleur de marque pour un groupe sans couleur, jamais sur celle d'un autre", () => {
+    const { container } = render(<SeatsAtStake groups={GROUPS} phase="before" />);
+    const bars = [...container.querySelectorAll("li div[style]")];
+    // CRCE-K porte color: null dans la fixture.
+    expect(bars[2]!.getAttribute("style")).not.toContain("rgb(");
+    expect(bars[2]!.className).toContain("bg-brand-on-surface");
   });
 });
 

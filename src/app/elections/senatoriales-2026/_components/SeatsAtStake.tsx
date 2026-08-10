@@ -86,15 +86,25 @@ export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase
                     <span> sur {group.held} sièges</span>
                   </p>
                 </div>
-                {/* Proportion of the group's own seats being renewed. Decorative:
-                    the figures above already state it for screen readers. */}
+                {/* Proportion of the group's own seats being renewed. Decorative: the
+                    figures above already state it for screen readers.
+
+                    Each group's own registered colour, which is the same rule for all nine
+                    and the convention already used for parties elsewhere on the site. A
+                    single colour for every bar made the nine rows read as one series, and
+                    left `ParliamentaryGroup.color` fetched and unused. Falls back to the
+                    brand colour when a group has none, rather than to a colour borrowed
+                    from another group. */}
                 <div
                   aria-hidden="true"
                   className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
                 >
                   <div
-                    className="h-full rounded-full bg-brand-on-surface"
-                    style={{ width: `${Math.round(share)}%` }}
+                    className={`h-full rounded-full ${group.color ? "" : "bg-brand-on-surface"}`}
+                    style={{
+                      width: `${Math.round(share)}%`,
+                      backgroundColor: group.color ?? undefined,
+                    }}
                   />
                 </div>
               </li>
