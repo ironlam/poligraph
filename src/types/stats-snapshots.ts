@@ -68,12 +68,15 @@ export const OutgoingSenateSeatSchema = z.object({
   departmentCode: z.string().nullable(),
   constituency: z.string().nullable(),
   series: z.number().int(),
+  /** `ParliamentaryGroup.code`, the stable identity a display name does not give. */
+  groupCode: z.string().nullable(),
   groupName: z.string().nullable(),
   groupShortName: z.string().nullable(),
 });
 export type OutgoingSenateSeat = z.infer<typeof OutgoingSenateSeatSchema>;
 
 export const OutgoingSenateGroupSchema = z.object({
+  groupCode: z.string(),
   groupName: z.string(),
   shortName: z.string().nullable(),
   held: z.number().int(),
