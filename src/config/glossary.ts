@@ -44,6 +44,8 @@ export const PARLIAMENTARY_TERMS = {
     "Les électeurs votent directement pour élire leurs représentants (ex : présidentielle, législatives).",
   suffrageIndirect:
     "Les représentants sont élus par des grands électeurs, eux-mêmes élus (ex : sénatoriales).",
+  serieSenatoriale:
+    "Le Sénat se renouvelle par moitié tous les trois ans. Chaque département appartient à une série et à une seule : la série 2 est renouvelée en septembre 2026, la série 1 l'a été en 2023 et le sera en 2029. La série d'un siège ne dépend donc pas du sénateur qui l'occupe.",
   concordance:
     "Pourcentage de votes identiques entre deux parlementaires sur les scrutins auxquels ils ont tous les deux participé.",
   concordanceVotesGroupes:

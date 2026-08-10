@@ -81,4 +81,16 @@ describe("ScrutinRules : les horaires du décret", () => {
     render(<ScrutinRules />);
     expect(screen.getByRole("link", { name: /Décret n° 2026-301/ })).toBeInTheDocument();
   });
+
+  /**
+   * « Série » porte toute la page et n'était défini nulle part. La définition est dans le
+   * texte, pas seulement dans l'infobulle de l'en-tête : une explication derrière un survol
+   * est hors d'atteinte au doigt.
+   */
+  it("définit ce qu'est une série, en clair et dans la page", () => {
+    render(<ScrutinRules />);
+    expect(screen.getByText(/Le Sénat se renouvelle par moitié tous les trois ans/)).toBeVisible();
+    expect(screen.getByText(/les 170 de la série 1/)).toBeInTheDocument();
+    expect(screen.getByText(/ne dépend pas du sénateur qui l'occupe/)).toBeInTheDocument();
+  });
 });

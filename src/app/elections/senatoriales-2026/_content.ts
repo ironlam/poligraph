@@ -33,6 +33,24 @@ export function getBallotPhase(status: ElectionStatus): BallotPhase {
 
 export const SENATE_SEATS_TOTAL = 348;
 export const SENATE_SEATS_AT_STAKE = 178;
+export const SENATE_SEATS_OTHER_SERIES = SENATE_SEATS_TOTAL - SENATE_SEATS_AT_STAKE;
+
+/**
+ * "Série" carries the whole page and nothing on it defined the word.
+ *
+ * The hub says "Renouvellement de la série 2", badges a seat "Jusqu'en 2029", and explains
+ * that a group's exposure follows the series of its seats. A reader who does not know what
+ * a series is cannot use any of that. The definition therefore appears in the page itself,
+ * not only in a tooltip: information behind a hover is unreachable on touch and by anyone
+ * who does not know there is something to hover.
+ *
+ * Both figures are our own count, 348 = 178 + 170, not a quoted total.
+ */
+export const SERIES_EXPLAINER =
+  "Le Sénat se renouvelle par moitié tous les trois ans. Chaque département appartient à " +
+  "une série et à une seule : les 178 sièges de la série 2 sont remis en jeu cette année, " +
+  "les 170 de la série 1 l'ont été en 2023 et le seront en 2029. La série d'un siège ne " +
+  "dépend pas du sénateur qui l'occupe.";
 
 /**
  * 64 constituencies, not 63 departments: the Sénat counts the 63 renewable

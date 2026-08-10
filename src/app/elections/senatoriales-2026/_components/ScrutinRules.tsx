@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { SourceLine } from "@/components/ui/SourceLine";
-import { FEHF_NOTE, SCRUTIN_RULES, SOURCE_DECREE, SOURCE_ELECTORAL_CODE } from "../_content";
+import {
+  FEHF_NOTE,
+  SCRUTIN_RULES,
+  SERIES_EXPLAINER,
+  SOURCE_DECREE,
+  SOURCE_ELECTORAL_CODE,
+} from "../_content";
 
 /**
  * How the ballot works, and the door to the college page.
@@ -18,6 +24,11 @@ export function ScrutinRules() {
       >
         Comment fonctionne ce scrutin
       </h2>
+
+      {/* The word "série" runs through the whole page and was defined nowhere. Stated in
+          the page rather than only in the header tooltip: a definition behind a hover is
+          unreachable on touch. */}
+      <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{SERIES_EXPLAINER}</p>
 
       <dl className="grid gap-3 sm:grid-cols-2">
         {SCRUTIN_RULES.map((rule) => (
