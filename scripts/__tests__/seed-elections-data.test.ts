@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ELECTIONS } from "../lib/elections-seed";
+import { CANDIDACY_PERIOD } from "@/config/senatoriales";
 
 /**
  * The seed is idempotent and its `update` rewrites `round1Date` and
@@ -26,7 +27,7 @@ describe("seed élections : sénatoriales 2026", () => {
     expect(senatoriales?.round2Date).toBeNull();
   });
 
-  it("ouvre le dépôt des candidatures du 7 au 11 septembre", () => {
+  it("ouvre le dépôt du 7 au 11 septembre", () => {
     expect(senatoriales?.candidacyOpenDate?.toISOString().slice(0, 10)).toBe("2026-09-07");
     expect(senatoriales?.candidacyDeadline?.toISOString().slice(0, 10)).toBe("2026-09-11");
   });
@@ -40,6 +41,37 @@ describe("seed élections : sénatoriales 2026", () => {
   it("remet en jeu 178 sièges au suffrage indirect", () => {
     expect(senatoriales?.totalSeats).toBe(178);
     expect(senatoriales?.suffrage).toBe("INDIRECT");
+  });
+});
+
+/**
+ * Le hub ne lit pas `candidacyDeadline` pour décider de sa phase : l'heure de l'article 2
+ * est locale à la circonscription de dépôt, et aucun instant ne la représente à l'échelle
+ * nationale. Ce que doit stocker ce champ générique reste une question ouverte, tranchée
+ * ailleurs qu'ici.
+ *
+ * Deux sources de vérité coexistent donc le temps de cette question, et c'est exactement
+ * ce qui dérive en silence. Ce test l'interdit : les dates de `CANDIDACY_PERIOD` et celles
+ * du seed doivent désigner le même jour.
+ */
+describe("seed élections : le seed et CANDIDACY_PERIOD ne peuvent pas diverger", () => {
+  const senatoriales = ELECTIONS.find((e) => e.slug === "senatoriales-2026");
+
+  it("désigne le même premier jour de dépôt", () => {
+    expect(senatoriales?.candidacyOpenDate?.toISOString().slice(0, 10)).toBe(
+      CANDIDACY_PERIOD.firstDay
+    );
+  });
+
+  it("désigne le même dernier jour de dépôt", () => {
+    expect(senatoriales?.candidacyDeadline?.toISOString().slice(0, 10)).toBe(
+      CANDIDACY_PERIOD.lastDay
+    );
+  });
+
+  it("place la fin du dépôt avant le scrutin", () => {
+    expect(CANDIDACY_PERIOD.lastDay < "2026-09-27").toBe(true);
+    expect(senatoriales!.round1Date!.toISOString().slice(0, 10)).toBe("2026-09-27");
   });
 });
 

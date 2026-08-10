@@ -20,7 +20,13 @@ import { Prisma } from "@/generated/prisma";
 import { resolveElectionStatus } from "@/lib/elections/status";
 import { getMisEnCauseWhere } from "@/lib/affairs/public-filters";
 import { COMMUNE_DATA_SYNC_KEY } from "@/config/communes";
+import { CANDIDACY_PERIOD } from "@/config/senatoriales";
 import { computeCommuneCollege, type CommuneCollege } from "@/lib/senatoriales/college";
+import {
+  deriveCandidacyPhase,
+  isBallotDayInParis,
+  type CandidacyPhase,
+} from "@/lib/senatoriales/timing";
 import type { ElectionStatus } from "@/types";
 
 export const SENATORIALES_2026_SLUG = "senatoriales-2026";
@@ -44,6 +50,22 @@ export interface SenatorialesElection {
   sourceUrl: string | null;
   /** Phase derived at read time: the stored column never transitions on its own. */
   status: ElectionStatus;
+  /**
+   * Deposit period, compared as calendar dates against the same clock reading as
+   * `status`. Resolving both here rather than in the page keeps them from being computed
+   * a few milliseconds apart, which is the only way they could disagree.
+   *
+   * Derived from `CANDIDACY_PERIOD`, not from `candidacyDeadline`: article 2 fixes 18 h
+   * locally in each circonscription, and the decree convenes territories twenty-two hours
+   * apart, so no instant in that column could decide this for the whole country.
+   */
+  candidacyPhase: CandidacyPhase;
+  /**
+   * True only on the ballot's own calendar day in Paris. Narrows the polling-day phase,
+   * whose 24-hour UTC window would otherwise keep an "aujourd'hui" claim up until
+   * 02:00 Paris the next morning.
+   */
+  isBallotDay: boolean;
 }
 
 export const getSenatorialesElection = cache(
@@ -68,8 +90,16 @@ export const getSenatorialesElection = cache(
     });
     if (!election) return null;
 
+    // One clock reading for both phases: two `new Date()` calls could straddle a
+    // boundary and render a page whose two axes disagree.
+    const now = new Date();
     const { round2Date, ...rest } = election;
-    return { ...rest, status: resolveElectionStatus({ ...election, round2Date }) };
+    return {
+      ...rest,
+      status: resolveElectionStatus({ ...election, round2Date }, now),
+      candidacyPhase: deriveCandidacyPhase(CANDIDACY_PERIOD, now),
+      isBallotDay: isBallotDayInParis(election.round1Date, now),
+    };
   }
 );
 

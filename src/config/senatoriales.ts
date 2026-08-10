@@ -13,6 +13,31 @@
 export type SenateSeries = 1 | 2;
 
 /**
+ * Candidacy deposit period for the 27 September 2026 renewal, as calendar dates.
+ *
+ * Article 2 of décret n° 2026-301 fixes "le vendredi 11 septembre 2026 à dix-huit heures",
+ * but that hour is *local* to the services of the State's representative where the
+ * declaration is filed. Article 1 convenes circonscriptions spanning Wallis-et-Futuna
+ * (UTC+12) to Polynésie française (UTC-10), so 18 h falls about twenty-two hours apart
+ * between the two extremes and no single instant closes the period nationally.
+ *
+ * Encoding one universal instant would therefore assert something false somewhere for most
+ * of a day. The hub reasons on calendar dates instead, and the 18 h appears only in the
+ * copy, attached to the circonscription where the deposit happens.
+ *
+ * Deliberately not read from `Election.candidacyDeadline`: what that generic column should
+ * hold for a ballot with per-territory local hours is an open question, and this hub must
+ * not settle it by side effect. A test pins these dates against the seeded column so the
+ * two cannot drift apart at day precision.
+ */
+export const CANDIDACY_PERIOD = {
+  /** First day declarations are received, ISO YYYY-MM-DD. */
+  firstDay: "2026-09-07",
+  /** Last day declarations are received, until 18 h local. */
+  lastDay: "2026-09-11",
+} as const;
+
+/**
  * Normalise the series returned by the Senate API.
  *
  * The API returns a string ("1" / "2") while `SenateurAPI.serie` was typed
