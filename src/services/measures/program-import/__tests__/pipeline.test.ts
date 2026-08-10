@@ -38,8 +38,18 @@ describe("classification éditoriale", () => {
 });
 
 describe("attribution documentaire", () => {
-  it("autorise le programme d'une candidature", () =>
-    expect(classifyEdition("CANDIDACY", "Programme 2027")).toBe("CANDIDATE_PROGRAM_2027"));
+  it("autorise un programme officiel établi positivement", () =>
+    expect(
+      classifyEdition(
+        "CANDIDACY",
+        "Programme 2027",
+        "Voici notre programme officiel pour l'élection présidentielle de 2027."
+      )
+    ).toBe("CANDIDATE_PROGRAM_2027"));
+  it("classe par défaut un projet comme propositions de candidature", () =>
+    expect(classifyEdition("CANDIDACY", "Le projet", "Nos priorités pour la France.")).toBe(
+      "CANDIDATE_PROPOSALS_2027"
+    ));
   it("ne présente pas des priorités provisoires comme le programme officiel", () => {
     expect(
       classifyEdition(

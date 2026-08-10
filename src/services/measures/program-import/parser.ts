@@ -60,7 +60,9 @@ export async function parsePdf(bytes: Buffer): Promise<ParsedDocument> {
       text: block,
     }));
   });
-  const scannedPdf = segments.reduce((sum, segment) => sum + segment.text.length, 0) < 200;
+  // A short, text-native leaflet can legitimately contain fewer than 200 characters.
+  // Flag only PDFs from which pdftotext recovered no meaningful sentence.
+  const scannedPdf = segments.reduce((sum, segment) => sum + segment.text.length, 0) < 20;
   return { mediaType: "pdf", segments, scannedPdf };
 }
 

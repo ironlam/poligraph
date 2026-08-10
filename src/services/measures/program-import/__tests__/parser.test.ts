@@ -1,7 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
-import { readFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { acquireDocument } from "../acquisition";
 import { parseDocument, parseHtml } from "../parser";
+
+function buildTextPdf(text: string): Buffer {
+  const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
+    .join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}
 
 describe("parsing documentaire", () => {
   it("segmente un document HTML", () => {
@@ -22,8 +49,8 @@ describe("parsing documentaire", () => {
   });
 
   it("extrait un PDF texte en conservant les pages", async () => {
-    const bytes = await readFile(
-      "docs/superpowers/audits/2026-06-07-poligraph-dossier-rgpd-article10.pdf"
+    const bytes = buildTextPdf(
+      "Reduire la TVA sur electricite a cinq virgule cinq pour cent. ".repeat(5)
     );
     const parsed = await parseDocument(bytes, "application/pdf");
     expect(parsed.mediaType).toBe("pdf");
@@ -60,6 +87,47 @@ describe("parsing documentaire", () => {
         forceRefetch: true,
       })
     ).rejects.toThrow("vide");
+    vi.unstubAllGlobals();
+  });
+
+  it("invalide le cache lorsque l'URL de l'édition change", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "program-cache-url-"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("ancien", { status: 200 }))
+      .mockResolvedValueOnce(new Response("nouveau", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await acquireDocument({ id: "edition", url: "https://example.test/v1", cacheDir });
+    const acquired = await acquireDocument({
+      id: "edition",
+      url: "https://example.test/v2",
+      cacheDir,
+    });
+    expect(acquired.bytes.toString()).toBe("nouveau");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it("revalide un cache périmé avec son ETag", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "program-cache-etag-"));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("stable", { status: 200, headers: { ETag: '"version-1"' } })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 304 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await acquireDocument({ id: "edition", url: "https://example.test/programme", cacheDir });
+    const acquired = await acquireDocument({
+      id: "edition",
+      url: "https://example.test/programme",
+      cacheDir,
+      cacheMaxAgeMs: -1,
+    });
+    expect(acquired.fromCache).toBe(true);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      headers: expect.objectContaining({ "If-None-Match": '"version-1"' }),
+    });
     vi.unstubAllGlobals();
   });
 });

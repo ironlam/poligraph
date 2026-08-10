@@ -2794,6 +2794,8 @@ enum MeasureExtractionMethod {
 // can carry tier = PRIMARY.
 enum MeasureSourceKind {
   PROGRAMME_PARTI
+  PROGRAMME_CANDIDAT
+  PROPOSITIONS_CANDIDAT
   DISCOURS_CAMPAGNE
   DEBAT_TELEVISE
   DISCOURS_AN

@@ -309,7 +309,10 @@ export async function runProgramImport(
             },
             sources: [
               {
-                sourceKind: "PROGRAMME_PARTI",
+                sourceKind:
+                  documentType === "CANDIDATE_PROGRAM_2027"
+                    ? "PROGRAMME_CANDIDAT"
+                    : "PROPOSITIONS_CANDIDAT",
                 tier: "PRIMARY",
                 url: edition.documentUrl,
                 page: proposal.page === null ? null : String(proposal.page),

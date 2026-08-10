@@ -25,6 +25,25 @@ function tokens(text: string): Set<string> {
   );
 }
 
+export function normalizeForGrounding(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[‘’‛`´]/g, "'")
+    .replace(/[«»“”„]/g, '"')
+    .replace(/[‐‑‒–—―]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("fr");
+}
+
+export function sourceTextIsGrounded(documentText: string, sourceText: string): boolean {
+  const normalizedSource = normalizeForGrounding(sourceText);
+  return (
+    normalizedSource.length >= 10 && normalizeForGrounding(documentText).includes(normalizedSource)
+  );
+}
+
 export function normalizedTextAddsInformation(source: string, normalized: string): boolean {
   const sourceTokens = tokens(source);
   return [...tokens(normalized)].some((token) => !sourceTokens.has(token));
@@ -69,6 +88,15 @@ export async function extractSegment(segment: DocumentSegment): Promise<Extracte
   );
   const parsed = extractionSchema.parse(parseMistralJSON<unknown>(extractMistralText(response)));
   return parsed.proposals.map((proposal) => {
+    if (!sourceTextIsGrounded(segment.text, proposal.sourceText)) {
+      return {
+        ...proposal,
+        normalizedText: null,
+        classification: "AMBIGUOUS",
+        rationale: "Citation introuvable dans le segment documentaire source.",
+        page: segment.page,
+      };
+    }
     if (
       proposal.normalizedText &&
       normalizedTextAddsInformation(proposal.sourceText, proposal.normalizedText)

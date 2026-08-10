@@ -1546,6 +1546,8 @@ export const MEASURE_EXTRACTION_METHOD_LABELS: Record<MeasureExtractionMethod, s
 
 export const MEASURE_SOURCE_KIND_LABELS: Record<MeasureSourceKind, string> = {
   PROGRAMME_PARTI: "Programme de parti",
+  PROGRAMME_CANDIDAT: "Programme de candidature",
+  PROPOSITIONS_CANDIDAT: "Propositions de candidature",
   DISCOURS_CAMPAGNE: "Discours de campagne",
   DEBAT_TELEVISE: "Débat télévisé",
   DISCOURS_AN: "Discours à l'Assemblée nationale",

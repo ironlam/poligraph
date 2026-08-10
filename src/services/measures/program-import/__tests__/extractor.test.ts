@@ -7,7 +7,7 @@ vi.mock("@/lib/api/mistral", async (importActual) => {
 });
 
 import { callMistral } from "@/lib/api/mistral";
-import { extractSegment } from "../extractor";
+import { extractSegment, sourceTextIsGrounded } from "../extractor";
 
 function response(value: unknown): MistralResponse {
   return {
@@ -76,6 +76,43 @@ describe("extracteur Mistral", () => {
       text: "Réduire la TVA.",
     });
     expect(proposal).toMatchObject({ classification: "AMBIGUOUS", normalizedText: null });
+  });
+
+  it("tolère les différences typographiques pour retrouver une citation", () => {
+    expect(
+      sourceTextIsGrounded(
+        "L’État veut garantir l’accès aux soins — partout.",
+        "L'Etat veut garantir l'accès aux soins - partout."
+      )
+    ).toBe(true);
+  });
+
+  it("déclasse une citation inventée même si sa normalisation est cohérente", async () => {
+    vi.mocked(callMistral).mockResolvedValue(
+      response({
+        proposals: [
+          {
+            sourceText: "Porter le SMIC à 2 000 euros.",
+            normalizedText: "Porter le SMIC à 2 000 euros.",
+            classification: "MEASURE",
+            theme: "SOCIAL_TRAVAIL",
+            confidence: 0.99,
+            rationale: "Action chiffrée.",
+          },
+        ],
+      })
+    );
+    const [proposal] = await extractSegment({
+      id: "x",
+      heading: null,
+      page: 3,
+      text: "Le document parle uniquement de démocratie locale.",
+    });
+    expect(proposal).toMatchObject({
+      classification: "AMBIGUOUS",
+      normalizedText: null,
+      rationale: "Citation introuvable dans le segment documentaire source.",
+    });
   });
 
   it("retente une réponse 429 avant de réussir", async () => {

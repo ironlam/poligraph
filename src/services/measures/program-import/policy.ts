@@ -17,7 +17,10 @@ export function classifyEdition(
   ) {
     return "CANDIDATE_PROPOSALS_2027";
   }
-  return /programme|projet/i.test(label) ? "CANDIDATE_PROGRAM_2027" : "CANDIDATE_PROPOSALS_2027";
+  const positiveProgramEvidence =
+    /programme (?:présidentiel|officiel)[^.]{0,120}(?:présidentielle|2027)/i.test(documentText) ||
+    /(?:présidentielle|2027)[^.]{0,120}programme (?:présidentiel|officiel)/i.test(documentText);
+  return positiveProgramEvidence ? "CANDIDATE_PROGRAM_2027" : "CANDIDATE_PROPOSALS_2027";
 }
 
 export function isAcceptedProposal(proposal: ExtractedProposal): boolean {

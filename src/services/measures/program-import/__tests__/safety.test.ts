@@ -19,7 +19,8 @@ describe("sécurité de l'import", () => {
   });
 
   it("attache chaque création à une source", () => {
-    expect(pipeline).toContain('sourceKind: "PROGRAMME_PARTI"');
+    expect(pipeline).toContain('"PROGRAMME_CANDIDAT"');
+    expect(pipeline).toContain('"PROPOSITIONS_CANDIDAT"');
     expect(pipeline).toContain('tier: "PRIMARY"');
   });
 });
