@@ -60,7 +60,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SenatorialesHubPage() {
-  const [election, groups] = await Promise.all([getSenatorialesElection(), getGroupExposure()]);
+  const [election, groupExposure] = await Promise.all([
+    getSenatorialesElection(),
+    getGroupExposure(),
+  ]);
   if (!election) notFound();
 
   // Phase resolved at read time by the data layer: the stored column never
@@ -204,7 +207,7 @@ export default async function SenatorialesHubPage() {
 
           <CommuneLookup phase={phase} />
 
-          <SeatsAtStake groups={groups} phase={phase} />
+          <SeatsAtStake exposure={groupExposure} phase={phase} />
 
           {/* État 2. Present in every phase: before the window it gives the dates, after
               it says what is still possible, and throughout it says why no candidate is

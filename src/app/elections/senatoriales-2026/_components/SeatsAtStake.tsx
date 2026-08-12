@@ -1,6 +1,6 @@
 import { SourceLine } from "@/components/ui/SourceLine";
 import { MissingData } from "@/components/ui/MissingData";
-import type { GroupExposure } from "@/lib/data/senatoriales";
+import type { GroupExposureSummary } from "@/lib/data/senatoriales";
 import {
   SENATE_SEATS_AT_STAKE,
   SENATE_SEATS_TOTAL,
@@ -12,15 +12,19 @@ import {
 /**
  * How exposed each Senate group is to this renewal.
  *
- * Computed from `Mandate.senateSeries`, so the Sénat is the only source needed: the
- * design quoted a press tally for the same figures, and this query reproduces them
- * (107 of 190 for the outgoing majority, 77 of 131 for Les Républicains, 4 of 18 for
- * the communists). A group's exposure follows the series its seats belong to, not its
- * size, which is the point worth showing.
+ * Group attribution is computed from current mandates. The statutory total remains
+ * separate: any gap is displayed without assigning a vacant or incomplete seat to a group.
  *
  * No projection of any kind: the bars measure seats *at stake*, never seats expected.
  */
-export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase: BallotPhase }) {
+export function SeatsAtStake({
+  exposure,
+  phase,
+}: {
+  exposure: GroupExposureSummary;
+  phase: BallotPhase;
+}) {
+  const { groups, unattributedAtStake, isConsistent } = exposure;
   const ranked = groups.filter((g) => g.held > 0).sort((a, b) => b.atStake - a.atStake);
 
   /**
@@ -79,7 +83,12 @@ export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase
         </p>
       </div>
 
-      {ranked.length === 0 ? (
+      {!isConsistent ? (
+        <MissingData title="Répartition par groupe incohérente">
+          Nos mandats attribuent plus de sièges aux groupes que le total légal de la série 2. La
+          ventilation est retirée tant que les données ne sont pas corrigées.
+        </MissingData>
+      ) : ranked.length === 0 ? (
         <MissingData title="Répartition par groupe indisponible">
           La série de renouvellement n{"'"}est pas encore renseignée sur les mandats sénatoriaux.
           Elle est reprise de l{"'"}open data du Sénat à chaque synchronisation.
@@ -121,6 +130,21 @@ export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase
               </li>
             );
           })}
+          {unattributedAtStake > 0 && (
+            <li className="rounded-lg border border-dashed border-border p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-medium">Non attribué à un groupe dans nos données</p>
+                <p className="text-sm tabular-nums text-muted-foreground">
+                  <span className="font-semibold text-foreground">{unattributedAtStake}</span>
+                  <span> siège{unattributedAtStake > 1 ? "s" : ""} de la série 2</span>
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Siège vacant ou mandat sans série ou groupe renseigné. Aucun groupe n{"'"}est
+                déduit.
+              </p>
+            </li>
+          )}
         </ul>
       )}
 
@@ -128,7 +152,7 @@ export function SeatsAtStake({ groups, phase }: { groups: GroupExposure[]; phase
           from tableau n° 5, the per-group breakdown from our own count of sitting mandates. */}
       <SourceLine
         sources={[SOURCE_TABLEAU_5, SOURCE_SENAT]}
-        note="Tableau n° 5 pour les 178 sièges de la série 2, répartition par groupe comptée sur les mandats sénatoriaux en cours"
+        note="Tableau n° 5 pour les 178 sièges de la série 2, attribution aux groupes comptée sur les mandats sénatoriaux en cours ; tout écart reste non attribué"
       />
     </section>
   );

@@ -115,6 +115,12 @@ export const SOURCE_TABLEAU_5 = {
   url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000023260785",
 };
 
+/** Individual statutory seat count for each department. */
+export const SOURCE_TABLEAU_6 = {
+  label: "Code électoral, tableau n° 6 annexé",
+  url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006354327",
+};
+
 /**
  * The two standing texts governing the Français établis hors de France.
  *

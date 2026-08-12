@@ -21,6 +21,12 @@ import { resolveElectionStatus } from "@/lib/elections/status";
 import { getMisEnCauseWhere } from "@/lib/affairs/public-filters";
 import { COMMUNE_DATA_SYNC_KEY } from "@/config/communes";
 import { CANDIDACY_PERIOD } from "@/config/senatoriales";
+import {
+  getSenateRenewal,
+  getSenateSeatsAtStake,
+  SENATE_STATUTORY_SEATS_BY_SERIES,
+  type SenateRenewalStatus,
+} from "@/config/senate-seats";
 import { DEPARTMENTS } from "@/config/departments";
 import { computeCommuneCollege, type CommuneCollege } from "@/lib/senatoriales/college";
 import {
@@ -28,6 +34,7 @@ import {
   isBallotDayInParis,
   type CandidacyPhase,
 } from "@/lib/senatoriales/timing";
+import { getGroupAttributionCoverage } from "@/lib/senatoriales/group-exposure";
 import type { ElectionStatus } from "@/types";
 
 export const SENATORIALES_2026_SLUG = "senatoriales-2026";
@@ -116,6 +123,14 @@ export interface GroupExposure {
   atStake: number;
 }
 
+export interface GroupExposureSummary {
+  groups: GroupExposure[];
+  /** Statutory series-2 seats with no current group attribution in our mandate data. */
+  unattributedAtStake: number;
+  /** False when dynamic group rows exceed the statutory series-2 total. */
+  isConsistent: boolean;
+}
+
 /**
  * How exposed each group is to this renewal.
  *
@@ -124,16 +139,17 @@ export interface GroupExposure {
  * (107/190 for the outgoing majority, 77/131 for Les Républicains, 4/18 for the
  * communists) fall out of this query exactly.
  */
-export const getGroupExposure = cache(async function getGroupExposure(): Promise<GroupExposure[]> {
-  const rows = await db.$queryRaw<
-    Array<{
-      groupName: string;
-      shortName: string | null;
-      color: string | null;
-      held: number;
-      atStake: number;
-    }>
-  >(Prisma.sql`
+export const getGroupExposure = cache(
+  async function getGroupExposure(): Promise<GroupExposureSummary> {
+    const rows = await db.$queryRaw<
+      Array<{
+        groupName: string;
+        shortName: string | null;
+        color: string | null;
+        held: number;
+        atStake: number;
+      }>
+    >(Prisma.sql`
     SELECT g.name AS "groupName",
            g."shortName",
            g.color,
@@ -148,36 +164,30 @@ export const getGroupExposure = cache(async function getGroupExposure(): Promise
     GROUP BY 1, 2, 3
     ORDER BY held DESC
   `);
-  return rows;
-});
+    const coverage = getGroupAttributionCoverage(
+      rows,
+      SENATE_STATUTORY_SEATS_BY_SERIES[RENEWED_SERIES]
+    );
+    return {
+      groups: rows,
+      // This deliberately remains unattributed. The gap may be a vacancy, a missing current
+      // mandate, a null series or a missing parliamentary group; none licenses inventing one.
+      ...coverage,
+    };
+  }
+);
 
 // ─── Department series ──────────────────────────────────────────────
 
-export type DepartmentRenewal = "renewed" | "not-renewed" | "unknown";
+export type DepartmentRenewal = SenateRenewalStatus;
 
 /**
  * Whether a department's seats are up on 27 September.
  *
- * A department belongs entirely to one series, so the series of its sitting senators
- * settles it. When a department carries both values, the data is inconsistent and we
- * return "unknown" rather than picking a side: the page then says it does not know.
+ * This is a statutory property of the constituency, independent of its current holders.
+ * "unknown" is reserved for a code genuinely absent from the legal reference.
  */
-export const getDepartmentRenewal = cache(async function getDepartmentRenewal(
-  departmentCode: string
-): Promise<DepartmentRenewal> {
-  const rows = await db.mandate.findMany({
-    where: {
-      type: "SENATEUR",
-      isCurrent: true,
-      departmentCode,
-      senateSeries: { not: null },
-    },
-    select: { senateSeries: true },
-    distinct: ["senateSeries"],
-  });
-  if (rows.length !== 1) return "unknown";
-  return rows[0]!.senateSeries === RENEWED_SERIES ? "renewed" : "not-renewed";
-});
+export const getDepartmentRenewal = getSenateRenewal;
 
 // ─── Sitting senators of a department ───────────────────────────────
 
@@ -320,17 +330,8 @@ export async function findCommunesByPostalCode(
   }));
 }
 
-/** Seats up for renewal in a department, counted from the sitting senators. */
-async function countSeatsAtStake(departmentCode: string): Promise<number> {
-  return db.mandate.count({
-    where: {
-      type: "SENATEUR",
-      isCurrent: true,
-      departmentCode,
-      senateSeries: RENEWED_SERIES,
-    },
-  });
-}
+/** Statutory seats renewed in 2026, independent of current holders. */
+export const getStatutorySeatsAtStake = getSenateSeatsAtStake;
 
 export const getCommuneCollege = cache(async function getCommuneCollege(
   communeId: string
@@ -347,10 +348,8 @@ export const getCommuneCollege = cache(async function getCommuneCollege(
   });
   if (!commune) return null;
 
-  const [renewal, seats] = await Promise.all([
-    getDepartmentRenewal(commune.departmentCode),
-    countSeatsAtStake(commune.departmentCode),
-  ]);
+  const renewal = getDepartmentRenewal(commune.departmentCode);
+  const seats = getStatutorySeatsAtStake(commune.departmentCode);
 
   return {
     id: commune.id,
@@ -363,7 +362,7 @@ export const getCommuneCollege = cache(async function getCommuneCollege(
       totalSeats: commune.totalSeats,
     }),
     renewal,
-    seatsAtStake: renewal === "renewed" ? seats : null,
+    seatsAtStake: seats,
   };
 });
 
