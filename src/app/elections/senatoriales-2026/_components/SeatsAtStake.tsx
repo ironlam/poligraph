@@ -13,7 +13,7 @@ import {
  * How exposed each Senate group is to this renewal.
  *
  * Group attribution is computed from current mandates. The statutory total remains
- * separate: any gap is displayed without assigning a vacant or incomplete seat to a group.
+ * separate: each gap is displayed without assigning a vacant or incomplete seat to a group.
  *
  * No projection of any kind: the bars measure seats *at stake*, never seats expected.
  */
