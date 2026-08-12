@@ -14,6 +14,7 @@ trap cleanup EXIT
 
 # Targeted migration guard. An intentional future public grant must change this
 # security contract explicitly instead of silently broadening the application surface.
+node --test scripts/guards/sec-03-public-grants-guard.test.mjs
 node scripts/guards/sec-03-public-grants-guard.mjs
 
 docker run --detach --rm \
