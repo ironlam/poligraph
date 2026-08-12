@@ -120,6 +120,18 @@ jobs:
       - name: Verify public and server database roles
         run: npm run test:security:data-path
 
+  sec-03-least-privilege-contract:
+    name: SEC-03 least-privilege contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify application database privileges
+        run: npm run test:security:least-privilege
+
   build:
     name: Build
     runs-on: ubuntu-latest
