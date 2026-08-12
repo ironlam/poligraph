@@ -15,6 +15,10 @@
  */
 
 import { FEHF_REGIME } from "@/config/senatoriales";
+import {
+  SENATE_STATUTORY_SEATS_BY_SERIES,
+  SENATE_STATUTORY_SEATS_TOTAL,
+} from "@/config/senate-seats";
 import type { ElectionStatus } from "@/types";
 
 /**
@@ -32,8 +36,8 @@ export function getBallotPhase(status: ElectionStatus): BallotPhase {
   return "before";
 }
 
-export const SENATE_SEATS_TOTAL = 348;
-export const SENATE_SEATS_AT_STAKE = 178;
+export const SENATE_SEATS_TOTAL = SENATE_STATUTORY_SEATS_TOTAL;
+export const SENATE_SEATS_AT_STAKE = SENATE_STATUTORY_SEATS_BY_SERIES[2];
 export const SENATE_SEATS_OTHER_SERIES = SENATE_SEATS_TOTAL - SENATE_SEATS_AT_STAKE;
 
 /**
@@ -119,6 +123,12 @@ export const SOURCE_TABLEAU_5 = {
 export const SOURCE_TABLEAU_6 = {
   label: "Code électoral, tableau n° 6 annexé",
   url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006354327",
+};
+
+/** Mayotte's individual count and series, which neither table gives separately. */
+export const SOURCE_MAYOTTE_SEATS = {
+  label: "Code électoral, art. LO473 et L474",
+  url: "https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006070239/LEGISCTA000006148536",
 };
 
 /**

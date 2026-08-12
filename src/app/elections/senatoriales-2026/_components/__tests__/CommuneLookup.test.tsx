@@ -25,6 +25,12 @@ const BERNOS = {
   departmentName: "Gironde",
 };
 const PARIS = { id: "75056", name: "Paris", departmentCode: "75", departmentName: "Paris" };
+const MAMOUDZOU = {
+  id: "97611",
+  name: "Mamoudzou",
+  departmentCode: "976",
+  departmentName: "Mayotte",
+};
 
 const BAZAS_ANSWER = {
   commune: BAZAS,
@@ -84,6 +90,15 @@ const PARIS_ANSWER = {
     total: 2755,
   },
   inhabitantsPerDelegate: 763.6,
+  renewal: "not-renewed",
+  seatsAtStake: null,
+  senators: [],
+};
+
+const MAMOUDZOU_ANSWER = {
+  commune: MAMOUDZOU,
+  college: null,
+  inhabitantsPerDelegate: null,
   renewal: "not-renewed",
   seatsAtStake: null,
   senators: [],
@@ -380,5 +395,26 @@ describe("CommuneLookup : absences", () => {
     await search("33430");
 
     await screen.findByText(/La recherche a échoué/);
+  });
+});
+
+describe("CommuneLookup : provenance statutaire", () => {
+  it("source précisément les deux sièges et la série de Mayotte", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "cp=97600": { postalCode: "97600", communes: [MAMOUDZOU] },
+        "insee=97611": MAMOUDZOU_ANSWER,
+      })
+    );
+    render(<CommuneLookup phase="before" />);
+    await search("97600");
+
+    expect(await screen.findByText(/Mayotte : 2 sièges selon LO473/)).toBeVisible();
+    expect(screen.getByRole("link", { name: /LO473 et L474/ })).toHaveAttribute(
+      "href",
+      expect.stringContaining("LEGISCTA000006148536")
+    );
+    expect(screen.queryByRole("link", { name: /tableau n° 6/ })).toBeNull();
   });
 });

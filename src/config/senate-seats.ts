@@ -13,8 +13,9 @@
  *
  * Tableau n° 5 gives department ranges and aggregate totals, not every department's seat
  * count. Tableau n° 6 supplies those individual counts. The special constituencies listed
- * individually in tableau n° 5 complete the reference. Mayotte has two seats: its count is
- * included in the 11 series-1 overseas seats in tableau n° 5 and is fixed by article LO 334-1.
+ * individually in tableau n° 5 complete the reference. Mayotte has two seats under article
+ * LO473 and renews them with series 1 under article L474. Its count is included in the 11
+ * series-1 overseas seats in tableau n° 5, but neither table states that individual figure.
  */
 
 import type { SenateSeries } from "@/config/senatoriales";

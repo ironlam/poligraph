@@ -44,6 +44,14 @@ describe("référentiel statutaire des sièges du Sénat", () => {
     expect(getSenateTerritorialConstituency("13")).toEqual({ code: "13", series: 2, seats: 8 });
   });
 
+  it("fixe Mayotte à deux sièges de série 1", () => {
+    expect(getSenateTerritorialConstituency("976")).toEqual({
+      code: "976",
+      series: 1,
+      seats: 2,
+    });
+  });
+
   it("ne comble pas une vraie absence du référentiel", () => {
     expect(getSenateTerritorialConstituency("984")).toBeUndefined();
   });

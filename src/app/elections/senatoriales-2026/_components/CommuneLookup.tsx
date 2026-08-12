@@ -13,6 +13,7 @@ import type { CommuneCollege } from "@/lib/senatoriales/college";
 import type { DepartmentRenewal, SittingSenator } from "@/lib/data/senatoriales";
 import {
   SOURCE_ELECTORAL_CODE,
+  SOURCE_MAYOTTE_SEATS,
   SOURCE_SENAT,
   SOURCE_TABLEAU_5,
   SOURCE_TABLEAU_6,
@@ -224,6 +225,10 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
   const { commune, college, inhabitantsPerDelegate, renewal, seatsAtStake, senators } = answer;
   const locative = getDepartmentLocative(commune.departmentCode);
   const where = locative ?? `dans le département ${commune.departmentName}`;
+  const statutorySources =
+    commune.departmentCode === "976"
+      ? [SOURCE_TABLEAU_5, SOURCE_MAYOTTE_SEATS]
+      : [SOURCE_TABLEAU_5, SOURCE_TABLEAU_6];
 
   return (
     <div className="space-y-4">
@@ -314,8 +319,12 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
       <SenatorsList senators={senators} where={where} />
 
       <SourceLine
-        sources={[SOURCE_TABLEAU_5, SOURCE_TABLEAU_6, SOURCE_SENAT, SOURCE_ELECTORAL_CODE]}
-        note="Série et sièges issus des tableaux légaux ; titulaires issus du Sénat ; barème appliqué à la population municipale et à l'effectif du conseil"
+        sources={[...statutorySources, SOURCE_SENAT, SOURCE_ELECTORAL_CODE]}
+        note={
+          commune.departmentCode === "976"
+            ? "Mayotte : 2 sièges selon LO473, renouvelés avec la série 1 selon L474 ; titulaires issus du Sénat ; barème appliqué à la population municipale et à l'effectif du conseil"
+            : "Série et sièges issus des tableaux légaux ; titulaires issus du Sénat ; barème appliqué à la population municipale et à l'effectif du conseil"
+        }
       />
     </div>
   );
