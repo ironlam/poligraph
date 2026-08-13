@@ -124,6 +124,13 @@ describe("SEC-04 admin session policy", () => {
     expect(verifySessionToken(historical)).toBe(false);
   });
 
+  it("fails closed on an incomplete rotation configuration", () => {
+    const token = signSessionToken();
+    process.env.ADMIN_SESSION_PREVIOUS_SECRET = "incomplete-previous-session-secret-for-tests-only";
+    expect(() => signSessionToken()).toThrow();
+    expect(verifySessionToken(token)).toBe(false);
+  });
+
   it("requires full assurance while exposing the future MFA states", () => {
     const primary = signSessionToken(NOW, "primary_authenticated");
     const full = signSessionToken(NOW, "fully_authenticated");
