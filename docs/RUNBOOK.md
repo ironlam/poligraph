@@ -44,6 +44,39 @@ Pour recevoir un email à chaque nouvelle issue, activer les notifications GitHu
     - aucun en-tête public ne révèle l'état dégradé (ne pas signaler aux clients que la limitation est désactivée).
 - **Réaction à l'alerte** : restaurer `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (Vercel → Settings → Environment Variables), puis redéployer ou attendre le prochain cold start. Vérifier l'état d'Upstash (https://status.upstash.com). Tant que la configuration manque, les exports restent en 503 ; le reste du site fonctionne sans limitation.
 
+Le login admin applique en plus une limite distribuée stricte de 5 tentatives par 30 minutes. En
+production, il répond 503 avant toute vérification du mot de passe si Upstash est absent ou
+indisponible. Cette dépendance concerne le login seulement. La validation d'une session existante
+reste locale et ne contacte pas Upstash.
+
+### 1.4 Sessions administrateur
+
+Les sessions administrateur sont stateless, signées avec une clé distincte de `ADMIN_PASSWORD` et
+expirent exactement 12 heures après le login. Elles ne sont jamais renouvelées silencieusement.
+La production requiert `ADMIN_SESSION_SECRET`, `ADMIN_SESSION_KEY_ID` et
+`ADMIN_SESSION_EPOCH`. Générer chaque secret avec `openssl rand -base64 48` et ne jamais le
+réutiliser comme mot de passe.
+
+Pour une rotation sans déconnexion immédiate, déployer une nouvelle clé courante et placer
+l'ancienne dans `ADMIN_SESSION_PREVIOUS_SECRET` avec son identifiant dans
+`ADMIN_SESSION_PREVIOUS_KEY_ID`. `ADMIN_SESSION_PREVIOUS_ISSUED_BEFORE` fixe l'instant de bascule:
+une ancienne clé ne valide que les sessions émises avant cet instant. Retirer les trois variables
+précédentes après l'expiration de la fenêtre historique. Changer `ADMIN_PASSWORD` ne change pas les
+sessions existantes.
+
+L'invalidation globale consiste à augmenter `ADMIN_SESSION_EPOCH` puis à redéployer. Cet epoch est
+monotone: un rollback applicatif doit conserver la valeur la plus haute déjà déployée. Le réduire
+pourrait réactiver des copies de sessions invalidées sur une nouvelle instance. Une clé retirée ne
+doit pas être restaurée lors d'un rollback. Le logout supprime seulement le cookie du navigateur,
+il ne révoque pas une copie externe du jeton. Utiliser une augmentation d'epoch pour un incident qui
+exige une révocation globale.
+
+Ordre de cutover: configurer d'abord les trois variables de session et les identifiants Upstash,
+puis déployer le code. Les anciens cookies ne sont pas compatibles et une reconnexion est attendue.
+Une configuration incomplète ferme l'émission et la validation des sessions, tandis qu'un Upstash
+indisponible ferme le login. Pour rollback, conserver l'epoch maximal et les clés autorisées par le
+déploiement le plus récent, puis restaurer uniquement le code.
+
 ---
 
 ## 2. Variables d'environnement Sentry

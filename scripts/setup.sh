@@ -27,6 +27,13 @@ if [ ! -f .env ]; then
   else
     echo "   ⚠ Docker not found. Edit .env manually with your PostgreSQL URL."
   fi
+  if command -v openssl &> /dev/null; then
+    session_secret=$(openssl rand -base64 48)
+    sed -i "s|^ADMIN_SESSION_SECRET=.*|ADMIN_SESSION_SECRET=\"${session_secret}\"|" .env
+    echo "   ✓ Generated an independent local admin session secret"
+  else
+    echo "   ⚠ OpenSSL not found. Set ADMIN_SESSION_SECRET manually before using the admin."
+  fi
 else
   echo "📝 .env already exists, skipping..."
 fi
@@ -66,4 +73,5 @@ echo "  Prisma Studio:         npm run db:studio"
 echo ""
 echo "  Default admin password: your-secure-admin-password"
 echo "  (change ADMIN_PASSWORD in .env)"
+echo "  Admin sessions also require ADMIN_SESSION_SECRET, ADMIN_SESSION_KEY_ID and ADMIN_SESSION_EPOCH."
 echo ""

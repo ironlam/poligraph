@@ -1,7 +1,7 @@
-import { createHmac } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { horizontalScroll } from "./helpers/viewport";
+import { signSessionToken } from "../../src/lib/auth-token";
 
 /**
  * Accessibility and responsive checks for the measure moderation screens.
@@ -21,7 +21,10 @@ import { horizontalScroll } from "./helpers/viewport";
  * markup of the login page.
  */
 
-const PASSWORD = process.env.ADMIN_PASSWORD;
+const SESSION_CONFIGURED =
+  process.env.ADMIN_SESSION_SECRET &&
+  process.env.ADMIN_SESSION_KEY_ID &&
+  process.env.ADMIN_SESSION_EPOCH;
 const WCAG = ["wcag2a", "wcag2aa", "wcag21aa"];
 
 /**
@@ -33,13 +36,11 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21aa"];
  * garder cacherait une régression future du layout.
  */
 
-async function signIn(context: BrowserContext, password: string): Promise<void> {
-  const timestamp = Date.now();
-  const signature = createHmac("sha256", password).update(String(timestamp)).digest("hex");
+async function signIn(context: BrowserContext): Promise<void> {
   await context.addCookies([
     {
       name: "admin_session",
-      value: `${timestamp}.${signature}`,
+      value: signSessionToken(),
       domain: "localhost",
       path: "/",
     },
@@ -60,10 +61,10 @@ async function openFirstDetail(page: Page): Promise<void> {
 }
 
 test.describe("/admin/mesures — modération des mesures", () => {
-  test.skip(!PASSWORD, "ADMIN_PASSWORD doit valoir le mot de passe du serveur de dev local");
+  test.skip(!SESSION_CONFIGURED, "La configuration de session admin locale doit être définie");
 
   test.beforeEach(async ({ context }) => {
-    await signIn(context, PASSWORD as string);
+    await signIn(context);
   });
 
   test("la file rend le corpus de démonstration", async ({ page }) => {
@@ -148,10 +149,10 @@ test.describe("/admin/mesures — parcours éditorial", () => {
   // gênent et les échecs deviennent aléatoires.
   test.describe.configure({ mode: "serial" });
 
-  test.skip(!PASSWORD, "ADMIN_PASSWORD doit valoir le mot de passe du serveur de dev local");
+  test.skip(!SESSION_CONFIGURED, "La configuration de session admin locale doit être définie");
 
   test.beforeEach(async ({ context }) => {
-    await signIn(context, PASSWORD as string);
+    await signIn(context);
   });
 
   async function createMeasure(page: Page, text: string): Promise<void> {

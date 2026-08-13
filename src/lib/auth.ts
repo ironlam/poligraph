@@ -32,8 +32,8 @@ export async function verifyPassword(password: string): Promise<boolean> {
  * Create admin session with HMAC-signed cookie (stateless)
  */
 export async function createSession(): Promise<void> {
-  const cookieStore = await cookies();
   const token = signSessionToken(Date.now());
+  const cookieStore = await cookies();
 
   cookieStore.set(ADMIN_COOKIE_NAME, token, {
     httpOnly: true,

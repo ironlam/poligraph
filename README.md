@@ -153,6 +153,9 @@ npm run dev
 | `VOYAGE_API_KEY`           | Clé Voyage AI (embeddings)        | Pour le chatbot        |
 | `MAILJET_API_KEY`          | Clé Mailjet                       | Pour la newsletter     |
 | `ADMIN_PASSWORD`           | Mot de passe admin                | Pour l'admin           |
+| `ADMIN_SESSION_SECRET`     | Clé de session indépendante       | Pour l'admin           |
+| `ADMIN_SESSION_KEY_ID`     | Identifiant de clé de session     | Pour l'admin           |
+| `ADMIN_SESSION_EPOCH`      | Epoch global monotone             | Pour l'admin           |
 
 Voir `docs/DATASOURCES.md` pour la liste complète.
 

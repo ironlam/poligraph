@@ -15,6 +15,7 @@ import { hasValidAdminSession } from "../proxy";
  */
 
 const PASSWORD = "mot-de-passe-de-test";
+const SESSION_SECRET = "session-secret-for-admin-guard-tests-only";
 
 function requestWith(cookie?: string) {
   return {
@@ -28,6 +29,9 @@ function requestWith(cookie?: string) {
 describe("hasValidAdminSession", () => {
   beforeEach(() => {
     process.env.ADMIN_PASSWORD = PASSWORD;
+    process.env.ADMIN_SESSION_SECRET = SESSION_SECRET;
+    process.env.ADMIN_SESSION_KEY_ID = "guard-test-key";
+    process.env.ADMIN_SESSION_EPOCH = "1";
   });
 
   it("refuse un cookie posé à la main, qui passait avant", () => {
@@ -40,11 +44,11 @@ describe("hasValidAdminSession", () => {
     expect(hasValidAdminSession(requestWith(token))).toBe(false);
   });
 
-  it("refuse un jeton signé avec un autre mot de passe", () => {
+  it("ne couple pas un jeton au mot de passe", () => {
     const token = signSessionToken(Date.now());
     process.env.ADMIN_PASSWORD = "un-autre-mot-de-passe";
 
-    expect(hasValidAdminSession(requestWith(token))).toBe(false);
+    expect(hasValidAdminSession(requestWith(token))).toBe(true);
   });
 
   it("refuse un jeton expiré", () => {
@@ -67,6 +71,9 @@ describe("hasValidAdminSession", () => {
 describe("verifySessionToken : les formes dégénérées", () => {
   beforeEach(() => {
     process.env.ADMIN_PASSWORD = PASSWORD;
+    process.env.ADMIN_SESSION_SECRET = SESSION_SECRET;
+    process.env.ADMIN_SESSION_KEY_ID = "guard-test-key";
+    process.env.ADMIN_SESSION_EPOCH = "1";
   });
 
   it.each(["", ".", "sans-point", "12345", `${Date.now()}.`, ".signature-seule"])(
@@ -76,11 +83,11 @@ describe("verifySessionToken : les formes dégénérées", () => {
     }
   );
 
-  it("refuse tout quand ADMIN_PASSWORD est absent", () => {
+  it("refuse tout quand le secret de session est absent", () => {
     // Sinon une instance mal configurée signerait et vérifierait avec la clé vide, donc accepterait
     // un jeton que n'importe qui peut calculer.
     const token = signSessionToken(Date.now());
-    delete process.env.ADMIN_PASSWORD;
+    delete process.env.ADMIN_SESSION_SECRET;
 
     expect(verifySessionToken(token)).toBe(false);
   });

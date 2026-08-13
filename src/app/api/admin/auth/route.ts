@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPassword, createSession, destroySession } from "@/lib/auth";
-import { checkRateLimit, recordFailedAttempt, clearAttempts, getClientIp } from "@/lib/rate-limit";
+import { checkLoginRateLimit, clearLoginRateLimit } from "@/lib/rate-limit";
+import { resolveTrustedClientIdentity } from "@/lib/trusted-client-identity";
 
 export async function POST(request: NextRequest) {
-  const ip = getClientIp(request);
+  let identity: string;
+  let rateLimit;
+  try {
+    identity = resolveTrustedClientIdentity(request);
+    rateLimit = await checkLoginRateLimit(identity);
+  } catch {
+    return NextResponse.json({ error: "Service temporairement indisponible" }, { status: 503 });
+  }
 
-  // Check rate limit before processing
-  const rateLimit = checkRateLimit(ip);
-  if (rateLimit.limited) {
+  if (!rateLimit.allowed) {
     return NextResponse.json(
       {
-        error: `Trop de tentatives. Réessayez dans ${rateLimit.retryAfter} secondes.`,
+        error: "Trop de tentatives. Réessayez plus tard.",
         retryAfter: rateLimit.retryAfter,
       },
       {
@@ -32,21 +38,12 @@ export async function POST(request: NextRequest) {
     const isValid = await verifyPassword(password);
 
     if (!isValid) {
-      // Record failed attempt
-      recordFailedAttempt(ip);
-
-      const newLimit = checkRateLimit(ip);
-      const message =
-        newLimit.remaining > 0
-          ? `Mot de passe incorrect. ${newLimit.remaining} tentative(s) restante(s).`
-          : "Mot de passe incorrect. Compte temporairement bloqué.";
-
-      return NextResponse.json({ error: message }, { status: 401 });
+      return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
     }
 
     // Success - clear rate limit and create session
-    clearAttempts(ip);
     await createSession();
+    await clearLoginRateLimit(identity);
 
     return NextResponse.json({ success: true });
   } catch (error) {
