@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPassword, createSession, destroySession } from "@/lib/auth";
-import { checkLoginRateLimit, clearLoginRateLimit, recordLoginFailure } from "@/lib/rate-limit";
+import { clearLoginRateLimit, reserveLoginAttempt } from "@/lib/rate-limit";
 import { resolveTrustedClientIdentity } from "@/lib/trusted-client-identity";
 
 export async function POST(request: NextRequest) {
@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   let rateLimit;
   try {
     identity = resolveTrustedClientIdentity(request);
-    rateLimit = await checkLoginRateLimit(identity);
+    rateLimit = await reserveLoginAttempt(identity);
   } catch {
     return NextResponse.json({ error: "Service temporairement indisponible" }, { status: 503 });
   }
@@ -38,11 +38,6 @@ export async function POST(request: NextRequest) {
     const isValid = await verifyPassword(password);
 
     if (!isValid) {
-      try {
-        await recordLoginFailure(identity);
-      } catch {
-        return NextResponse.json({ error: "Service temporairement indisponible" }, { status: 503 });
-      }
       return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
     }
 

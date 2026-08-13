@@ -44,10 +44,12 @@ Pour recevoir un email à chaque nouvelle issue, activer les notifications GitHu
     - aucun en-tête public ne révèle l'état dégradé (ne pas signaler aux clients que la limitation est désactivée).
 - **Réaction à l'alerte** : restaurer `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (Vercel → Settings → Environment Variables), puis redéployer ou attendre le prochain cold start. Vérifier l'état d'Upstash (https://status.upstash.com). Tant que la configuration manque, les exports restent en 503 ; le reste du site fonctionne sans limitation.
 
-Le login admin applique en plus une limite distribuée stricte. Les échecs sont comptés pendant 15
-minutes. Le cinquième échec déclenche un blocage de 30 minutes, ce qui conserve la politique
-historique tout en partageant son état entre les instances. Un login réussi prouve la connaissance
-du credential et remet à zéro la fenêtre d'échecs ainsi qu'un éventuel blocage apparu en concurrence.
+Le login admin applique en plus une limite distribuée stricte. Chaque vérification primaire réserve
+atomiquement une place dans un budget de 5 tentatives pendant 15 minutes. La cinquième réservation
+reste admise et arme un blocage de 30 minutes avant qu'une sixième puisse passer. Un login réussi
+prouve la connaissance du credential et remet à zéro le budget ainsi que le blocage. Une requête
+interrompue ou une erreur après réservation conserve sa place jusqu'au TTL: aucun mécanisme sans
+credential prouvé ne peut rouvrir le budget.
 En production, le login répond 503 avant toute émission de session si Upstash est absent ou
 indisponible. Cette dépendance concerne le login seulement. La validation d'une session existante
 reste locale et ne contacte pas Upstash.

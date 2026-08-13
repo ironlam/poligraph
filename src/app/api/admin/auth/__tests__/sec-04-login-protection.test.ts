@@ -7,8 +7,7 @@ const auth = vi.hoisted(() => ({
   destroySession: vi.fn(async () => undefined),
 }));
 const limiter = vi.hoisted(() => ({
-  checkLoginRateLimit: vi.fn(async () => ({ allowed: true, remaining: 4, retryAfter: 0 })),
-  recordLoginFailure: vi.fn(async () => ({ allowed: true, remaining: 3, retryAfter: 0 })),
+  reserveLoginAttempt: vi.fn(async () => ({ allowed: true, remaining: 4, retryAfter: 0 })),
   clearLoginRateLimit: vi.fn(async () => undefined),
   LoginRateLimitUnavailableError: class extends Error {},
 }));
@@ -35,14 +34,15 @@ describe("SEC-04 distributed login protection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     auth.verifyPassword.mockResolvedValue(true);
-    limiter.checkLoginRateLimit.mockResolvedValue({ allowed: true, remaining: 4, retryAfter: 0 });
+    limiter.reserveLoginAttempt.mockResolvedValue({ allowed: true, remaining: 4, retryAfter: 0 });
+    limiter.clearLoginRateLimit.mockResolvedValue(undefined);
     identity.resolveTrustedClientIdentity.mockReturnValue("trusted-test-client");
   });
 
   it("allows a normal login and clears the distributed failure budget", async () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
-    expect(limiter.checkLoginRateLimit).toHaveBeenCalledWith("trusted-test-client");
+    expect(limiter.reserveLoginAttempt).toHaveBeenCalledWith("trusted-test-client");
     expect(auth.createSession).toHaveBeenCalledOnce();
     expect(limiter.clearLoginRateLimit).toHaveBeenCalledWith("trusted-test-client");
     expect(limiter.clearLoginRateLimit.mock.invocationCallOrder[0]).toBeLessThan(
@@ -54,12 +54,13 @@ describe("SEC-04 distributed login protection", () => {
     auth.verifyPassword.mockResolvedValue(false);
     const response = await POST(request("wrong"));
     expect(response.status).toBe(401);
-    expect(limiter.recordLoginFailure).toHaveBeenCalledWith("trusted-test-client");
+    expect(limiter.reserveLoginAttempt).toHaveBeenCalledOnce();
+    expect(limiter.clearLoginRateLimit).not.toHaveBeenCalled();
     expect(auth.createSession).not.toHaveBeenCalled();
   });
 
   it("stops before credential validation when the distributed limit denies", async () => {
-    limiter.checkLoginRateLimit.mockResolvedValue({ allowed: false, remaining: 0, retryAfter: 60 });
+    limiter.reserveLoginAttempt.mockResolvedValue({ allowed: false, remaining: 0, retryAfter: 60 });
     const response = await POST(request());
     expect(response.status).toBe(429);
     expect(response.headers.get("retry-after")).toBe("60");
@@ -68,7 +69,7 @@ describe("SEC-04 distributed login protection", () => {
   });
 
   it("fails closed before authentication when limiter infrastructure is unavailable", async () => {
-    limiter.checkLoginRateLimit.mockRejectedValue(new limiter.LoginRateLimitUnavailableError());
+    limiter.reserveLoginAttempt.mockRejectedValue(new limiter.LoginRateLimitUnavailableError());
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(auth.verifyPassword).not.toHaveBeenCalled();
@@ -89,7 +90,51 @@ describe("SEC-04 distributed login protection", () => {
     });
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(limiter.checkLoginRateLimit).not.toHaveBeenCalled();
+    expect(limiter.reserveLoginAttempt).not.toHaveBeenCalled();
     expect(auth.verifyPassword).not.toHaveBeenCalled();
+  });
+
+  it("admits no more than five primary verifications during a concurrent burst", async () => {
+    const requestCount = 8;
+    let reservations = 0;
+    limiter.reserveLoginAttempt.mockImplementation(async () => {
+      reservations += 1;
+      return reservations <= 5
+        ? { allowed: true, remaining: 5 - reservations, retryAfter: 0 }
+        : { allowed: false, remaining: 0, retryAfter: 60 };
+    });
+
+    let releaseVerification!: () => void;
+    const verificationBarrier = new Promise<void>((resolve) => {
+      releaseVerification = resolve;
+    });
+    let notifyFiveVerifications!: () => void;
+    const fiveVerificationsReached = new Promise<void>((resolve) => {
+      notifyFiveVerifications = resolve;
+    });
+    auth.verifyPassword.mockImplementation(async () => {
+      if (auth.verifyPassword.mock.calls.length === 5) notifyFiveVerifications();
+      await verificationBarrier;
+      return false;
+    });
+
+    const responses = Array.from({ length: requestCount }, () => POST(request("test-invalid")));
+    await fiveVerificationsReached;
+    expect(auth.verifyPassword).toHaveBeenCalledTimes(5);
+
+    releaseVerification();
+    const statuses = (await Promise.all(responses)).map((response) => response.status);
+    expect(statuses.filter((status) => status === 401)).toHaveLength(5);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(3);
+    expect(auth.verifyPassword).toHaveBeenCalledTimes(5);
+  });
+
+  it("keeps a reserved attempt when credential verification errors", async () => {
+    auth.verifyPassword.mockRejectedValueOnce(new Error("test verification error"));
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(limiter.reserveLoginAttempt).toHaveBeenCalledOnce();
+    expect(limiter.clearLoginRateLimit).not.toHaveBeenCalled();
+    expect(auth.createSession).not.toHaveBeenCalled();
   });
 });

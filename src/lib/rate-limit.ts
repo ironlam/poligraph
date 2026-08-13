@@ -33,7 +33,7 @@ local failureTtl = redis.call("PTTL", KEYS[1])
 return {1, math.max(0, tonumber(ARGV[1]) - failures), math.max(0, failureTtl)}
 `;
 
-const FAILURE_SCRIPT = `
+const ADMISSION_SCRIPT = `
 local blockedTtl = redis.call("PTTL", KEYS[2])
 if blockedTtl > 0 then
   return {0, 0, blockedTtl}
@@ -45,7 +45,7 @@ end
 if failures >= tonumber(ARGV[1]) then
   redis.call("SET", KEYS[2], "1", "PX", ARGV[3])
   redis.call("DEL", KEYS[1])
-  return {0, 0, tonumber(ARGV[3])}
+  return {1, 0, tonumber(ARGV[3])}
 end
 return {1, tonumber(ARGV[1]) - failures, redis.call("PTTL", KEYS[1])}
 `;
@@ -57,12 +57,12 @@ return 1
 
 export class DistributedLoginRateLimiter {
   private readonly checkScript: RedisScript<[number, number, number]>;
-  private readonly failureScript: RedisScript<[number, number, number]>;
+  private readonly admissionScript: RedisScript<[number, number, number]>;
   private readonly resetScript: RedisScript<number>;
 
   constructor(redis: LoginRedis) {
     this.checkScript = redis.createScript(CHECK_SCRIPT);
-    this.failureScript = redis.createScript(FAILURE_SCRIPT);
+    this.admissionScript = redis.createScript(ADMISSION_SCRIPT);
     this.resetScript = redis.createScript(RESET_SCRIPT);
   }
 
@@ -76,8 +76,8 @@ export class DistributedLoginRateLimiter {
     return this.toResult(result);
   }
 
-  async recordFailure(identity: string): Promise<LoginRateLimitResult> {
-    const result = await this.failureScript.exec(this.keys(identity), [
+  async reserveAttempt(identity: string): Promise<LoginRateLimitResult> {
+    const result = await this.admissionScript.exec(this.keys(identity), [
       String(LOGIN_MAX_FAILURES),
       String(LOGIN_FAILURE_WINDOW_MS),
       String(LOGIN_BLOCK_DURATION_MS),
@@ -129,11 +129,11 @@ export async function checkLoginRateLimit(identity: string): Promise<LoginRateLi
   }
 }
 
-export async function recordLoginFailure(identity: string): Promise<LoginRateLimitResult> {
+export async function reserveLoginAttempt(identity: string): Promise<LoginRateLimitResult> {
   const limiter = requireLoginLimiter();
   if (!limiter) return { allowed: true, remaining: LOGIN_MAX_FAILURES, retryAfter: 0 };
   try {
-    return await limiter.recordFailure(identity);
+    return await limiter.reserveAttempt(identity);
   } catch {
     throw new LoginRateLimitUnavailableError("Login rate limiter unavailable");
   }
@@ -143,7 +143,7 @@ export async function clearLoginRateLimit(identity: string): Promise<void> {
   const limiter = requireLoginLimiter();
   if (!limiter) return;
   try {
-    // A proven credential resets both the failure window and any concurrent block.
+    // A proven credential resets both the reserved-attempt window and any concurrent block.
     await limiter.resetAfterSuccess(identity);
   } catch {
     throw new LoginRateLimitUnavailableError("Login rate limiter unavailable");

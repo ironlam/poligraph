@@ -17,7 +17,7 @@ import {
   LOGIN_BLOCK_DURATION_MS,
   LOGIN_FAILURE_WINDOW_MS,
   LoginRateLimitUnavailableError,
-  recordLoginFailure,
+  reserveLoginAttempt,
   resetLoginRateLimiterForTests,
 } from "@/lib/rate-limit";
 
@@ -40,7 +40,7 @@ class SharedFakeRedis {
         const key = keys[0]!;
         const entry = this.getEntry(key);
         if (operation === 0) return this.check(entry) as TResult;
-        if (operation === 1) return this.recordFailure(entry) as TResult;
+        if (operation === 1) return this.reserveAttempt(entry) as TResult;
         this.entries.delete(key);
         return 1 as TResult;
       },
@@ -66,7 +66,7 @@ class SharedFakeRedis {
     ];
   }
 
-  private recordFailure(entry: Entry): [number, number, number] {
+  private reserveAttempt(entry: Entry): [number, number, number] {
     if (entry.blockedUntil > Date.now()) return [0, 0, entry.blockedUntil - Date.now()];
     if (entry.failures === 0) entry.failureExpiresAt = Date.now() + LOGIN_FAILURE_WINDOW_MS;
     entry.failures += 1;
@@ -74,7 +74,7 @@ class SharedFakeRedis {
       entry.failures = 0;
       entry.failureExpiresAt = 0;
       entry.blockedUntil = Date.now() + LOGIN_BLOCK_DURATION_MS;
-      return [0, 0, LOGIN_BLOCK_DURATION_MS];
+      return [1, 0, LOGIN_BLOCK_DURATION_MS];
     }
     return [1, 5 - entry.failures, entry.failureExpiresAt - Date.now()];
   }
@@ -94,20 +94,19 @@ describe("distributed admin login limiter policy", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("allows failures one through four within the 15-minute budget", async () => {
+  it("atomically reserves attempts one through four within the 15-minute budget", async () => {
     for (let attempt = 1; attempt <= 4; attempt++) {
-      await expect(limiter.check("client")).resolves.toMatchObject({ allowed: true });
-      await expect(limiter.recordFailure("client")).resolves.toMatchObject({
+      await expect(limiter.reserveAttempt("client")).resolves.toMatchObject({
         allowed: true,
         remaining: 5 - attempt,
       });
     }
   });
 
-  it("starts a 30-minute block at the fifth failure and denies following requests", async () => {
-    for (let attempt = 1; attempt <= 4; attempt++) await limiter.recordFailure("client");
-    await expect(limiter.recordFailure("client")).resolves.toEqual({
-      allowed: false,
+  it("admits the fifth reservation, arms a 30-minute block, and denies the sixth", async () => {
+    for (let attempt = 1; attempt <= 4; attempt++) await limiter.reserveAttempt("client");
+    await expect(limiter.reserveAttempt("client")).resolves.toEqual({
+      allowed: true,
       remaining: 0,
       retryAfter: 30 * 60,
     });
@@ -123,8 +122,8 @@ describe("distributed admin login limiter policy", () => {
   });
 
   it("expires a sub-threshold failure window after 15 minutes", async () => {
-    await limiter.recordFailure("client");
-    await limiter.recordFailure("client");
+    await limiter.reserveAttempt("client");
+    await limiter.reserveAttempt("client");
     vi.advanceTimersByTime(LOGIN_FAILURE_WINDOW_MS);
     await expect(limiter.check("client")).resolves.toEqual({
       allowed: true,
@@ -135,12 +134,28 @@ describe("distributed admin login limiter policy", () => {
 
   it("shares state across limiter instances and cold starts", async () => {
     const otherInstance = new DistributedLoginRateLimiter(backend);
-    for (let attempt = 1; attempt <= 5; attempt++) await limiter.recordFailure("client");
+    for (let attempt = 1; attempt <= 5; attempt++) await limiter.reserveAttempt("client");
     await expect(otherInstance.check("client")).resolves.toMatchObject({ allowed: false });
   });
 
+  it("admits at most five concurrent reservations for one identity", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => limiter.reserveAttempt("client"))
+    );
+    expect(results.filter((result) => result.allowed)).toHaveLength(5);
+    expect(results.filter((result) => !result.allowed)).toHaveLength(3);
+    expect([...backend.entries.values()][0]?.blockedUntil).toBe(now + LOGIN_BLOCK_DURATION_MS);
+  });
+
+  it("bounds every temporary state with the policy TTL", async () => {
+    await limiter.reserveAttempt("client");
+    expect([...backend.entries.values()][0]?.failureExpiresAt).toBe(now + LOGIN_FAILURE_WINDOW_MS);
+    for (let attempt = 2; attempt <= 5; attempt++) await limiter.reserveAttempt("client");
+    expect([...backend.entries.values()][0]?.blockedUntil).toBe(now + LOGIN_BLOCK_DURATION_MS);
+  });
+
   it("clears failures and a concurrent block after a proven successful login", async () => {
-    for (let attempt = 1; attempt <= 5; attempt++) await limiter.recordFailure("client");
+    for (let attempt = 1; attempt <= 5; attempt++) await limiter.reserveAttempt("client");
     await limiter.resetAfterSuccess("client");
     await expect(limiter.check("client")).resolves.toEqual({
       allowed: true,
@@ -170,14 +185,14 @@ describe("distributed admin login limiter availability", () => {
     );
   });
 
-  it("fails closed for checks, failure recording, and reset when the backend errors", async () => {
+  it("fails closed for checks, admission, and reset when the backend errors", async () => {
     const backend = new SharedFakeRedis();
     backend.unavailable = true;
     redisBackend.createScript.mockImplementation(() => backend.createScript());
     await expect(checkLoginRateLimit("client")).rejects.toBeInstanceOf(
       LoginRateLimitUnavailableError
     );
-    await expect(recordLoginFailure("client")).rejects.toBeInstanceOf(
+    await expect(reserveLoginAttempt("client")).rejects.toBeInstanceOf(
       LoginRateLimitUnavailableError
     );
     await expect(clearLoginRateLimit("client")).rejects.toBeInstanceOf(
