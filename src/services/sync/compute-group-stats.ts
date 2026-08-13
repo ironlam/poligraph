@@ -104,8 +104,6 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
       })
     : [];
 
-  let groupsProcessed = 0;
-
   for (const group of groups) {
     const positions = await db.scrutinGroupPosition.findMany({
       where: { groupId: group.id },
@@ -123,22 +121,28 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
       govGroupPositions: govPositions,
     });
 
-    // The legacy participation column is non-nullable. Do not create a row with a
-    // numeric sentinel: unknown participation is neither 0 nor publishable. Existing
-    // rows can still receive the independent cohesion and alignment metrics while all
-    // public loaders fail closed on averageParticipationPct.
-    const result = await db.parliamentaryGroupStats.updateMany({
-      where: { groupId: group.id, legislature: config.statsLegislature },
-      data: {
+    await db.parliamentaryGroupStats.upsert({
+      where: {
+        groupId_legislature: { groupId: group.id, legislature: config.statsLegislature },
+      },
+      create: {
+        groupId: group.id,
+        legislature: config.statsLegislature,
         cohesionPct,
         governmentAlignmentPct,
         finalVoteAlignmentPct,
+        averageParticipationPct: null,
+      },
+      update: {
+        cohesionPct,
+        governmentAlignmentPct,
+        finalVoteAlignmentPct,
+        averageParticipationPct: null,
       },
     });
-    groupsProcessed += result.count;
   }
 
-  return groupsProcessed;
+  return groups.length;
 }
 
 export async function computeGroupStats(): Promise<{

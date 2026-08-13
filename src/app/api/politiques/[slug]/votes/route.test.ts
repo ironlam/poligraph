@@ -57,4 +57,41 @@ describe("GET /api/politiques/[slug]/votes", () => {
     expect(payload.stats.participationStatus).toBe("SOURCE_INSUFFICIENT");
     expect(typeof payload.stats.participationRate).not.toBe("number");
   });
+
+  it("ne publie aucun taux quand les mandats parlementaires courants sont ambigus", async () => {
+    mocks.findUnique.mockResolvedValue({
+      id: "mandats-ambigus",
+      slug: "mandats-ambigus",
+      fullName: "Mandats ambigus",
+      firstName: "Mandats",
+      lastName: "Ambigus",
+      photoUrl: null,
+      currentParty: null,
+    });
+    mocks.findMany.mockResolvedValue([]);
+    mocks.count.mockResolvedValue(0);
+    mocks.getVotingStats.mockResolvedValue({
+      total: 12,
+      pour: 10,
+      contre: 2,
+      abstention: 0,
+      nonVotant: 0,
+      eligibleScrutins: null,
+      scrutinsSansVoteEnregistre: null,
+      participationRate: null,
+      participationStatus: "COMPUTATION_INCOMPLETE",
+    });
+
+    const response = await GET(
+      new NextRequest("https://poligraph.fr/api/politiques/mandats-ambigus/votes"),
+      { params: Promise.resolve({ slug: "mandats-ambigus" }) }
+    );
+    const payload = await response.json();
+
+    expect(payload.stats).toMatchObject({
+      participationRate: null,
+      participationStatus: "COMPUTATION_INCOMPLETE",
+    });
+    expect(typeof payload.stats.participationRate).not.toBe("number");
+  });
 });

@@ -5,7 +5,9 @@ import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
 import {
   participationStatusFor,
+  resolveCurrentParliamentaryMandate,
   resolveParticipationStatus,
+  roundParticipationRate,
   type ParticipationStatus,
 } from "@/lib/votes/participation-publication";
 
@@ -345,20 +347,32 @@ export async function getPoliticianVotingStats(
   cacheTag("votes", "politicians");
   cacheLife("synced");
 
-  // A current parliamentary mandate is the only applicable perimeter for #701-A.
-  const currentMandate = await db.mandate.findFirst({
+  // Resolve the complete current parliamentary perimeter before applying a requested view.
+  // `take: 2` is sufficient to distinguish zero, exactly one, and multiple mandates.
+  const currentParliamentaryMandates = await db.mandate.findMany({
     where: {
       politicianId,
       isCurrent: true,
-      type: mandateType ?? { in: ["DEPUTE", "SENATEUR"] },
+      type: { in: ["DEPUTE", "SENATEUR"] },
     },
-    select: { startDate: true, endDate: true, type: true, isCurrent: true },
+    select: { startDate: true, endDate: true, type: true },
+    take: 2,
   });
+  const currentResolution = resolveCurrentParliamentaryMandate(
+    currentParliamentaryMandates,
+    mandateType
+  );
+  const currentMandate = currentResolution.applicableMandate;
+  const currentMandatesAreAmbiguous = currentParliamentaryMandates.length > 1;
+  const explicitMandateContradictsCurrent =
+    currentParliamentaryMandates.length === 1 &&
+    mandateType !== undefined &&
+    currentParliamentaryMandates[0]?.type !== mandateType;
 
   // A historical mandate resolves the chamber only. It does not make the historical
   // participation computation publishable because its eligibility perimeter is not audited.
   const historicalMandate =
-    currentMandate || mandateType
+    currentParliamentaryMandates.length > 0 || mandateType
       ? null
       : await db.mandate.findFirst({
           where: {
@@ -368,18 +382,20 @@ export async function getPoliticianVotingStats(
           orderBy: { startDate: "desc" },
           select: { type: true },
         });
-  const resolvedMandateType = currentMandate?.type ?? mandateType ?? historicalMandate?.type;
-  const chamber = resolvedMandateType
-    ? resolvedMandateType === "DEPUTE"
+  // The chamber used to display vote rows is intentionally independent from the
+  // applicable participation mandate. An explicit historical view may still show votes.
+  const displayMandateType = mandateType ?? currentMandate?.type ?? historicalMandate?.type;
+  const displayChamber = displayMandateType
+    ? displayMandateType === "DEPUTE"
       ? ("AN" as const)
       : ("SENAT" as const)
     : undefined;
-  const stats = chamber
+  const stats = displayChamber
     ? await db.vote.groupBy({
         by: ["position"],
         where: {
           politicianId,
-          chamber,
+          chamber: displayChamber,
           ...(currentMandate?.startDate && {
             votingDate: {
               gte: currentMandate.startDate,
@@ -400,7 +416,12 @@ export async function getPoliticianVotingStats(
     eligibleScrutins: null,
     scrutinsSansVoteEnregistre: null,
     participationRate: null,
-    participationStatus: participationStatusFor(chamber),
+    participationStatus:
+      currentMandatesAreAmbiguous || explicitMandateContradictsCurrent
+        ? "COMPUTATION_INCOMPLETE"
+        : currentMandate
+          ? currentResolution.status
+          : participationStatusFor(displayChamber),
   };
 
   for (const s of stats) {
@@ -422,18 +443,18 @@ export async function getPoliticianVotingStats(
   }
 
   // Compute participation only for an applicable AN mandate with a valid denominator.
-  if (currentMandate?.startDate && chamber === "AN") {
+  if (currentMandate?.startDate && currentMandate.type === "DEPUTE") {
     const eligibleRows = await db.$queryRaw<[{ count: number }]>`
       SELECT COUNT(*)::int as "count"
       FROM "Scrutin" s
-      WHERE s.chamber = ${chamber!}::"Chamber"
+      WHERE s.chamber = 'AN'::"Chamber"
         AND s."votingDate" >= ${currentMandate.startDate}
         AND (${currentMandate.endDate}::timestamp IS NULL OR s."votingDate" <= ${currentMandate.endDate})
     `;
     const eligibleScrutins = eligibleRows[0]?.count ?? 0;
     votingStats.eligibleScrutins = eligibleScrutins;
     votingStats.participationStatus = resolveParticipationStatus({
-      chamber,
+      chamber: "AN",
       hasApplicableMandate: true,
       eligibleScrutins,
       methodSupported: true,
@@ -442,7 +463,7 @@ export async function getPoliticianVotingStats(
     if (votingStats.participationStatus === "AVAILABLE") {
       votingStats.scrutinsSansVoteEnregistre = Math.max(0, eligibleScrutins - votingStats.total);
       const expressed = votingStats.pour + votingStats.contre + votingStats.abstention;
-      votingStats.participationRate = Math.round((expressed / eligibleScrutins) * 100);
+      votingStats.participationRate = roundParticipationRate(expressed, eligibleScrutins);
     }
   }
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   isParticipationPublishable,
   participationStatusFor,
+  resolveCurrentParliamentaryMandate,
   resolveParticipationStatus,
+  roundParticipationRate,
 } from "@/lib/votes/participation-publication";
 
 describe("politique de publication de la participation", () => {
@@ -68,5 +70,49 @@ describe("politique de publication de la participation", () => {
     ],
   ] as const)("résout la matrice %#", (context, expected) => {
     expect(resolveParticipationStatus(context)).toBe(expected);
+  });
+
+  const depute = {
+    type: "DEPUTE" as const,
+    startDate: new Date("2024-07-08"),
+    endDate: null,
+  };
+  const senateur = {
+    type: "SENATEUR" as const,
+    startDate: new Date("2023-10-02"),
+    endDate: null,
+  };
+
+  it.each([
+    [[depute], undefined, "DEPUTE", "COMPUTATION_INCOMPLETE"],
+    [[senateur], undefined, "SENATEUR", "SOURCE_INSUFFICIENT"],
+    [[], undefined, null, "COMPUTATION_INCOMPLETE"],
+    [[depute, senateur], undefined, null, "COMPUTATION_INCOMPLETE"],
+    [[depute, depute], undefined, null, "COMPUTATION_INCOMPLETE"],
+    [[senateur, senateur], undefined, null, "COMPUTATION_INCOMPLETE"],
+    [[depute, senateur], "DEPUTE", null, "COMPUTATION_INCOMPLETE"],
+    [[depute, senateur], "SENATEUR", null, "COMPUTATION_INCOMPLETE"],
+    [[senateur], "DEPUTE", null, "COMPUTATION_INCOMPLETE"],
+    [[{ ...depute, startDate: new Date("invalid") }], undefined, null, "COMPUTATION_INCOMPLETE"],
+  ] as const)(
+    "résout le périmètre courant %# sans masquer les ambiguïtés",
+    (mandates, requested, expectedType, expectedStatus) => {
+      const result = resolveCurrentParliamentaryMandate([...mandates], requested);
+
+      expect(result.applicableMandate?.type ?? null).toBe(expectedType);
+      expect(result.status).toBe(expectedStatus);
+    }
+  );
+
+  it.each([
+    [0, 10, 0],
+    [2244, 8434, 27],
+    [493, 5380, 9],
+    [1762, 8434, 21],
+    [1049, 10000, 10],
+    [1050, 10000, 11],
+    [10, 10, 100],
+  ])("arrondit %s / %s au pourcentage entier %s", (expressed, eligible, expected) => {
+    expect(roundParticipationRate(expressed, eligible)).toBe(expected);
   });
 });

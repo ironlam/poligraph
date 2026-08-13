@@ -1,4 +1,4 @@
-import type { Chamber } from "@/generated/prisma";
+import type { Chamber, MandateType } from "@/generated/prisma";
 
 export const PARTICIPATION_SOURCE_INSUFFICIENT = "SOURCE_INSUFFICIENT" as const;
 export const PARTICIPATION_AVAILABLE = "AVAILABLE" as const;
@@ -14,6 +14,61 @@ export interface ParticipationPublicationContext {
   hasApplicableMandate: boolean;
   eligibleScrutins?: number | null;
   methodSupported: boolean;
+}
+
+export interface CurrentParliamentaryMandate {
+  type: MandateType;
+  startDate: Date;
+  endDate: Date | null;
+}
+
+export interface CurrentMandateResolution {
+  applicableMandate: CurrentParliamentaryMandate | null;
+  status: Exclude<ParticipationStatus, "AVAILABLE">;
+}
+
+/**
+ * Resolve the publication perimeter before considering the requested view.
+ * A caller-provided mandate type cannot hide a second current parliamentary mandate.
+ */
+export function resolveCurrentParliamentaryMandate(
+  mandates: CurrentParliamentaryMandate[],
+  requestedMandateType?: MandateType
+): CurrentMandateResolution {
+  if (mandates.length !== 1) {
+    return {
+      applicableMandate: null,
+      status: PARTICIPATION_COMPUTATION_INCOMPLETE,
+    };
+  }
+
+  const mandate = mandates[0];
+  const hasValidParliamentaryPerimeter =
+    mandate !== undefined &&
+    (mandate.type === "DEPUTE" || mandate.type === "SENATEUR") &&
+    Number.isFinite(mandate.startDate.getTime());
+  if (
+    !hasValidParliamentaryPerimeter ||
+    (requestedMandateType !== undefined && mandate.type !== requestedMandateType)
+  ) {
+    return {
+      applicableMandate: null,
+      status: PARTICIPATION_COMPUTATION_INCOMPLETE,
+    };
+  }
+
+  return {
+    applicableMandate: mandate,
+    status: participationStatusFor(mandate.type === "DEPUTE" ? "AN" : "SENAT"),
+  };
+}
+
+/** Public participation rates use an integer percentage in every producer. */
+export function roundParticipationRate(expressed: number, eligibleScrutins: number): number {
+  if (eligibleScrutins <= 0) {
+    throw new RangeError("eligibleScrutins must be greater than zero");
+  }
+  return Math.round((expressed / eligibleScrutins) * 100);
 }
 
 /**

@@ -21,6 +21,10 @@ import { Prisma } from "@/generated/prisma";
 import type { Chamber, ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
 import {
+  resolveCurrentParliamentaryMandate,
+  roundParticipationRate,
+} from "@/lib/votes/participation-publication";
+import {
   findGroupMajority,
   computePoliticianDissidence,
   aggregateDissidenceByGroup,
@@ -52,6 +56,15 @@ interface PoliticianRow {
   votesCount: number;
   eligibleScrutins: number;
   participationRate: number;
+}
+
+type RawPoliticianRow = Omit<PoliticianRow, "participationRate">;
+
+interface CurrentParliamentaryMandateRow {
+  politicianId: string;
+  type: "DEPUTE" | "SENATEUR";
+  startDate: Date;
+  endDate: Date | null;
 }
 
 interface PartyAggRow {
@@ -151,29 +164,40 @@ export interface ComputeStatsResult {
 // ============================================
 
 /**
- * Compute per-politician participation using the mandate-group deduplication approach.
+ * Compute participation only for an unambiguous current parliamentary mandate.
  *
  * Strategy:
  * 1. Pre-compute eligible scrutins per unique (startDate, endDate, type) group (~20 groups)
  * 2. For each politician, count votes via LATERAL subquery using indexes
  * 3. Return all rows with denormalized display fields
  */
-async function computePoliticianParticipation(verbose = false): Promise<PoliticianRow[]> {
+export async function computePoliticianParticipation(verbose = false): Promise<PoliticianRow[]> {
   if (verbose) console.log("  Computing per-politician participation...");
 
-  const rows = await db.$queryRaw<PoliticianRow[]>`
-    WITH mandate_eligible AS (
+  const [rawRows, currentMandates] = await Promise.all([
+    db.$queryRaw<RawPoliticianRow[]>`
+    WITH current_parliamentary_scope AS (
+      SELECT m."politicianId"
+      FROM "Mandate" m
+      WHERE m."isCurrent" = true
+        AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+      GROUP BY m."politicianId"
+      HAVING COUNT(*) = 1
+        AND COUNT(*) FILTER (WHERE m.type = 'DEPUTE'::"MandateType") = 1
+    ), mandate_eligible AS (
       SELECT
         md."startDate", md."endDate", md.type,
-        (CASE WHEN md.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber" ELSE 'SENAT'::"Chamber" END) as chamber,
+        'AN'::"Chamber" as chamber,
         (SELECT COUNT(*) FROM "Scrutin" s
-         WHERE s.chamber = (CASE WHEN md.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber" ELSE 'SENAT'::"Chamber" END)
+         WHERE s.chamber = 'AN'::"Chamber"
            AND s."votingDate" >= md."startDate"
            AND (md."endDate" IS NULL OR s."votingDate" <= md."endDate"))::int as eligible
       FROM (
         SELECT DISTINCT m."startDate", m."endDate", m.type
         FROM "Mandate" m
-        WHERE m."isCurrent" = true AND m.type = 'DEPUTE'::"MandateType"
+        JOIN current_parliamentary_scope cps ON cps."politicianId" = m."politicianId"
+        WHERE m."isCurrent" = true
+          AND m.type = 'DEPUTE'::"MandateType"
       ) md
     )
     SELECT
@@ -193,9 +217,9 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
       m.type::text as "mandateType",
       me.chamber,
       vote_sub.expressed as "votesCount",
-      me.eligible as "eligibleScrutins",
-      ROUND(vote_sub.expressed::numeric / NULLIF(me.eligible::numeric, 0) * 100, 1)::float as "participationRate"
+      me.eligible as "eligibleScrutins"
     FROM "Politician" pol
+    JOIN current_parliamentary_scope cps ON cps."politicianId" = pol.id
     JOIN "Mandate" m ON m."politicianId" = pol.id AND m."isCurrent" = true
       AND m.type = 'DEPUTE'::"MandateType"
     JOIN mandate_eligible me ON me."startDate" = m."startDate"
@@ -215,7 +239,42 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
     LEFT JOIN "ParliamentaryGroup" pg ON pg.id = mp."parliamentaryGroupId"
     WHERE pol."publicationStatus" = 'PUBLISHED'
       AND me.eligible > 0
-  `;
+  `,
+    db.mandate.findMany({
+      where: {
+        isCurrent: true,
+        type: { in: ["DEPUTE", "SENATEUR"] },
+      },
+      select: {
+        politicianId: true,
+        type: true,
+        startDate: true,
+        endDate: true,
+      },
+    }) as Promise<CurrentParliamentaryMandateRow[]>,
+  ]);
+
+  // Defense in depth and a testable mirror of the SQL cardinality guard. The SQL
+  // already excludes ambiguous rows; this filter prevents a future query edit from
+  // silently turning duplicate or cross-chamber mandates into publishable data.
+  const mandatesByPolitician = new Map<string, CurrentParliamentaryMandateRow[]>();
+  for (const mandate of currentMandates) {
+    const mandates = mandatesByPolitician.get(mandate.politicianId) ?? [];
+    mandates.push(mandate);
+    mandatesByPolitician.set(mandate.politicianId, mandates);
+  }
+
+  const rows = rawRows
+    .filter((row) => {
+      const resolution = resolveCurrentParliamentaryMandate(
+        mandatesByPolitician.get(row.politicianId) ?? []
+      );
+      return resolution.applicableMandate?.type === "DEPUTE";
+    })
+    .map((row) => ({
+      ...row,
+      participationRate: roundParticipationRate(row.votesCount, row.eligibleScrutins),
+    }));
 
   if (verbose) console.log(`  → ${rows.length} politicians computed`);
   return rows;
@@ -433,30 +492,14 @@ async function upsertPoliticianParticipation(
     return;
   }
 
-  // Deduplicate by politicianId: keep the row with most eligible scrutins
-  const deduped = [
-    ...rows
-      .reduce((map, r) => {
-        const existing = map.get(r.politicianId);
-        if (!existing || r.eligibleScrutins > existing.eligibleScrutins) {
-          map.set(r.politicianId, r);
-        }
-        return map;
-      }, new Map<string, PoliticianRow>())
-      .values(),
-  ];
-
-  if (verbose && deduped.length < rows.length)
-    console.log(`  → Deduplicated ${rows.length} rows to ${deduped.length} (by politicianId)`);
-
   // Atomic delete+insert in a transaction to prevent readers seeing partial data
   const CHUNK_SIZE = 200;
   await db.$transaction(
     async (tx) => {
       await tx.politicianParticipation.deleteMany();
 
-      for (let i = 0; i < deduped.length; i += CHUNK_SIZE) {
-        const chunk = deduped.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
         await tx.politicianParticipation.createMany({
           data: chunk.map((r) => {
             const diss = dissidenceMap.get(r.politicianId);
@@ -494,7 +537,7 @@ async function upsertPoliticianParticipation(
     { timeout: 60_000 }
   );
 
-  if (verbose) console.log(`  → Inserted ${deduped.length} PoliticianParticipation rows`);
+  if (verbose) console.log(`  → Inserted ${rows.length} PoliticianParticipation rows`);
 }
 
 async function upsertStatsSnapshot(

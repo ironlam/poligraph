@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dbMock = vi.hoisted(() => ({
-  mandate: { findFirst: vi.fn() },
+  mandate: { findFirst: vi.fn(), findMany: vi.fn() },
   vote: { groupBy: vi.fn(), count: vi.fn() },
   scrutin: { aggregate: vi.fn() },
   parliamentaryGroupStats: { findMany: vi.fn() },
@@ -21,17 +21,19 @@ vi.mock("@/lib/db", () => ({ db: dbMock }));
 import { getPoliticianVotingStats, voteStatsService } from "@/services/voteStats";
 
 function currentMandate(type: "DEPUTE" | "SENATEUR", startDate = new Date("2024-07-08")) {
-  return { type, startDate, endDate: null, isCurrent: true };
+  return { type, startDate, endDate: null };
 }
 
 describe("publication de la participation individuelle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMock.mandate.findMany.mockResolvedValue([]);
+    dbMock.mandate.findFirst.mockResolvedValue(null);
     dbMock.vote.groupBy.mockResolvedValue([]);
   });
 
   it("fail closed pour un scrutin Sénat contenant p, c, a et n", async () => {
-    dbMock.mandate.findFirst.mockResolvedValue(currentMandate("SENATEUR"));
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("SENATEUR")]);
     dbMock.vote.groupBy.mockResolvedValue([
       { position: "POUR", _count: 1 },
       { position: "CONTRE", _count: 1 },
@@ -53,7 +55,6 @@ describe("publication de la participation individuelle", () => {
   });
 
   it("ne transforme pas la période gouvernementale de Nathalie Delattre en absence", async () => {
-    dbMock.mandate.findFirst.mockResolvedValue(null);
     dbMock.vote.groupBy.mockResolvedValue([{ position: "POUR", _count: 18 }]);
 
     const result = await getPoliticianVotingStats("nathalie-delattre", "SENATEUR");
@@ -65,7 +66,7 @@ describe("publication de la participation individuelle", () => {
 
   it("borne l'AN au mandat courant et exclut NON_VOTANT du numérateur", async () => {
     const startDate = new Date("2024-10-22");
-    dbMock.mandate.findFirst.mockResolvedValue(currentMandate("DEPUTE", startDate));
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("DEPUTE", startDate)]);
     dbMock.vote.groupBy.mockResolvedValue([
       { position: "POUR", _count: 2 },
       { position: "NON_VOTANT", _count: 1 },
@@ -85,7 +86,7 @@ describe("publication de la participation individuelle", () => {
   });
 
   it("fail closed pour un député courant sans scrutin éligible", async () => {
-    dbMock.mandate.findFirst.mockResolvedValue(currentMandate("DEPUTE"));
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("DEPUTE")]);
     dbMock.$queryRaw.mockResolvedValue([{ count: 0 }]);
 
     const result = await getPoliticianVotingStats("depute-zero", "DEPUTE");
@@ -99,7 +100,7 @@ describe("publication de la participation individuelle", () => {
   });
 
   it("distingue un vrai taux AN de 0 d'un calcul incomplet", async () => {
-    dbMock.mandate.findFirst.mockResolvedValue(currentMandate("DEPUTE"));
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("DEPUTE")]);
     dbMock.$queryRaw.mockResolvedValue([{ count: 3 }]);
 
     const result = await getPoliticianVotingStats("depute-sans-vote", "DEPUTE");
@@ -118,7 +119,7 @@ describe("publication de la participation individuelle", () => {
     ["François-Noël Buffet", "SENATEUR", "SOURCE_INSUFFICIENT"],
     ["Christophe Barthès", "DEPUTE", "COMPUTATION_INCOMPLETE"],
   ] as const)("ne publie aucun fallback pour l'ancien mandat de %s", async (_, type, status) => {
-    dbMock.mandate.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ type });
+    dbMock.mandate.findFirst.mockResolvedValue({ type });
     dbMock.vote.groupBy.mockResolvedValue([{ position: "POUR", _count: 100 }]);
 
     const result = await getPoliticianVotingStats(`ancien-${type.toLowerCase()}`);
@@ -139,8 +140,6 @@ describe("publication de la participation individuelle", () => {
   ] as const)(
     "fail closed sans mandat courant avec mandateType=%s",
     async (mandateType, status) => {
-      dbMock.mandate.findFirst.mockResolvedValue(null);
-
       const result = await getPoliticianVotingStats("sans-mandat", mandateType);
 
       expect(result.participationRate).toBeNull();
@@ -148,6 +147,54 @@ describe("publication de la participation individuelle", () => {
       if (mandateType === undefined) expect(dbMock.vote.groupBy).not.toHaveBeenCalled();
     }
   );
+
+  it.each([
+    ["DEPUTE + SENATEUR", [currentMandate("DEPUTE"), currentMandate("SENATEUR")]],
+    ["deux DEPUTE", [currentMandate("DEPUTE"), currentMandate("DEPUTE")]],
+    ["deux SENATEUR", [currentMandate("SENATEUR"), currentMandate("SENATEUR")]],
+  ] as const)("fail closed pour des mandats courants ambigus: %s", async (_, mandates) => {
+    dbMock.mandate.findMany.mockResolvedValue([...mandates]);
+
+    const result = await getPoliticianVotingStats("mandats-ambigus");
+
+    expect(result).toMatchObject({
+      eligibleScrutins: null,
+      participationRate: null,
+      participationStatus: "COMPUTATION_INCOMPLETE",
+    });
+    expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it.each(["DEPUTE", "SENATEUR"] as const)(
+    "mandateType=%s ne masque pas un cumul DEPUTE + SENATEUR",
+    async (mandateType) => {
+      dbMock.mandate.findMany.mockResolvedValue([
+        currentMandate("DEPUTE"),
+        currentMandate("SENATEUR"),
+      ]);
+
+      const result = await getPoliticianVotingStats("cumul-courant", mandateType);
+
+      expect(result.participationRate).toBeNull();
+      expect(result.participationStatus).toBe("COMPUTATION_INCOMPLETE");
+      expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+      expect(dbMock.vote.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ chamber: mandateType === "DEPUTE" ? "AN" : "SENAT" }),
+        })
+      );
+    }
+  );
+
+  it("fail closed quand mandateType contredit l'unique mandat courant", async () => {
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("SENATEUR")]);
+
+    const result = await getPoliticianVotingStats("contradiction", "DEPUTE");
+
+    expect(result.participationRate).toBeNull();
+    expect(result.participationStatus).toBe("COMPUTATION_INCOMPLETE");
+    expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
 });
 
 describe("agrégats et données persistées hostiles", () => {

@@ -24,7 +24,10 @@ describe("architecture de publication de la participation", () => {
 
     expect(producer).toBeDefined();
     expect(producer).toContain("m.type = 'DEPUTE'");
-    expect(producer).not.toContain("SENATEUR");
+    expect(producer).toContain("m.type IN ('DEPUTE'::\"MandateType\", 'SENATEUR'");
+    expect(producer).toContain("HAVING COUNT(*) = 1");
+    expect(producer).toContain("COUNT(*) FILTER (WHERE m.type = 'DEPUTE'::\"MandateType\") = 1");
+    expect(producer).not.toMatch(/ROUND\([^)]*participationRate/);
   });
 
   it("la frontière API réutilise le service fail-closed sans recalcul local", () => {
@@ -44,8 +47,8 @@ describe("architecture de publication de la participation", () => {
 
     expect(producer).not.toMatch(/voteCount\s*\/\s*maxVotes/);
     expect(producer).not.toContain("scrutinCount * memberCount");
-    expect(producer).not.toContain("parliamentaryGroupStats.upsert");
-    expect(producer).not.toMatch(/averageParticipationPct\s*:/);
+    expect(producer).toContain("parliamentaryGroupStats.upsert");
+    expect(producer.match(/averageParticipationPct:\s*null/g)).toHaveLength(2);
     expect(comparator).not.toMatch(/activeVotes\s*\/\s*totalVotes/);
   });
 
