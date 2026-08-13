@@ -192,8 +192,8 @@ an additional index is not the default conclusion.
 **Goal.** Reduce the amount of executed work, potentially through incremental computation,
 projection, or materialization when measurements justify it.
 
-**Closure criteria.** The work package preserves the reference query and dataset, measures before and
-after, verifies result freshness, and demonstrates no functional regression.
+**Closure criteria.** The work package preserves the reference query and dataset, measures before
+and after, verifies result freshness, and demonstrates no functional regression.
 
 ### DB-02: Top SQL workload remediation
 
