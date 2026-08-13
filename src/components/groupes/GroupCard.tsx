@@ -59,9 +59,7 @@ export function GroupCard({ group }: GroupCardProps) {
                 <p className="text-xs text-muted-foreground">Concordance</p>
               </div>
               <div>
-                <p className="text-lg font-bold">
-                  {Math.round(group.stats.averageParticipationPct)}%
-                </p>
+                <p className="text-sm font-semibold text-muted-foreground">Indisponible</p>
                 <p className="text-xs text-muted-foreground">Participation</p>
               </div>
             </div>

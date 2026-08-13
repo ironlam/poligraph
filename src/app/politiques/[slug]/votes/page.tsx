@@ -205,8 +205,13 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
 
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <Link href={`/politiques/${slug}`} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
+        <Link
+          href={`/politiques/${slug}`}
+          className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+          aria-label={`Retour au profil de ${politician.fullName}`}
+          title={`Retour au profil de ${politician.fullName}`}
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
         <PoliticianAvatar
           photoUrl={politician.photoUrl}
@@ -289,8 +294,10 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-1 hover:text-foreground"
+                                aria-label="Consulter le scrutin à la source (ouvre un nouvel onglet)"
+                                title="Consulter le scrutin à la source"
                               >
-                                <ExternalLink className="h-3 w-3" />
+                                <ExternalLink className="h-3 w-3" aria-hidden="true" />
                               </a>
                             )}
                           </div>

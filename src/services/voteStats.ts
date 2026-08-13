@@ -4,8 +4,8 @@ import { Chamber, MandateType, Prisma } from "@/generated/prisma";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
 import {
-  PARTICIPATION_AVAILABLE,
   participationStatusFor,
+  resolveParticipationStatus,
   type ParticipationStatus,
 } from "@/lib/votes/participation-publication";
 
@@ -24,9 +24,10 @@ export interface PartyVoteStats {
   contre: number;
   abstention: number;
   nonVotant: number;
-  absent: number;
+  absentVoteRows: number;
   cohesionRate: number;
   participationRate: number | null;
+  participationStatus: ParticipationStatus;
 }
 
 export interface DivisiveScrutin {
@@ -73,37 +74,37 @@ async function getVoteStats(
   const partyLimit = options?.partyLimit ?? 15;
   const divisiveLimit = options?.divisiveLimit ?? 10;
 
-  const [partyRows, divisiveScrutins, globalStats, participationRow, chamberCounts] =
-    await Promise.all([
-      // 1. Party vote stats — single query replaces 165 N+1 queries
-      getPartyVoteRows(chamber),
+  const [partyRows, divisiveScrutins, globalStats, chamberCounts] = await Promise.all([
+    // 1. Party vote stats: single query replaces 165 N+1 queries
+    getPartyVoteRows(chamber),
 
-      // 2. Divisive scrutins
-      getDivisiveScrutins(chamber, divisiveLimit),
+    // 2. Divisive scrutins
+    getDivisiveScrutins(chamber, divisiveLimit),
 
-      // 3. Global aggregate stats
-      db.scrutin.aggregate({
-        where: chamber ? { chamber } : {},
-        _count: true,
-        _sum: {
-          votesFor: true,
-          votesAgainst: true,
-          votesAbstain: true,
-        },
-      }),
+    // 3. Global aggregate stats
+    db.scrutin.aggregate({
+      where: chamber ? { chamber } : {},
+      _count: true,
+      _sum: {
+        votesFor: true,
+        votesAgainst: true,
+        votesAbstain: true,
+      },
+    }),
 
-      // 4. Global participation rate
-      getGlobalParticipation(chamber),
-
-      // 5. Chamber breakdown + adopted/rejected
-      getChamberCounts(chamber),
-    ]);
+    // 4. Chamber breakdown + adopted/rejected
+    getChamberCounts(chamber),
+  ]);
 
   // Aggregate party rows into stats
   const parties = aggregatePartyStats(partyRows, partyLimit);
-  if (chamber !== "AN") {
-    for (const party of parties) party.participationRate = null;
-  }
+  const aggregateParticipationStatus = resolveParticipationStatus({
+    chamber,
+    hasApplicableMandate: false,
+    eligibleScrutins: null,
+    methodSupported: false,
+  });
+  for (const party of parties) party.participationStatus = aggregateParticipationStatus;
 
   return {
     global: {
@@ -111,11 +112,8 @@ async function getVoteStats(
       totalVotesFor: globalStats._sum.votesFor || 0,
       totalVotesAgainst: globalStats._sum.votesAgainst || 0,
       totalVotesAbstain: globalStats._sum.votesAbstain || 0,
-      participationRate:
-        participationRow !== null && participationRow.total > 0
-          ? Math.round((participationRow.participating / participationRow.total) * 100)
-          : null,
-      participationStatus: participationStatusFor(chamber),
+      participationRate: null,
+      participationStatus: aggregateParticipationStatus,
       anScrutins: chamberCounts.an,
       senatScrutins: chamberCounts.senat,
       adoptes: chamberCounts.adoptes,
@@ -195,9 +193,10 @@ function aggregatePartyStats(rows: PartyVoteRow[], limit: number): PartyVoteStat
         contre: 0,
         abstention: 0,
         nonVotant: 0,
-        absent: 0,
+        absentVoteRows: 0,
         cohesionRate: 0,
-        participationRate: 0,
+        participationRate: null,
+        participationStatus: participationStatusFor(undefined),
       });
     }
 
@@ -219,7 +218,7 @@ function aggregatePartyStats(rows: PartyVoteRow[], limit: number): PartyVoteStat
         stats.nonVotant = count;
         break;
       case "ABSENT":
-        stats.absent = count;
+        stats.absentVoteRows = count;
         break;
     }
   }
@@ -227,10 +226,6 @@ function aggregatePartyStats(rows: PartyVoteRow[], limit: number): PartyVoteStat
   // Calculate rates
   for (const stats of partyMap.values()) {
     const participating = stats.pour + stats.contre + stats.abstention;
-    const countedForParticipation = stats.totalVotes - stats.nonVotant;
-    stats.participationRate =
-      countedForParticipation > 0 ? Math.round((participating / countedForParticipation) * 100) : 0;
-
     const maxPosition = Math.max(stats.pour, stats.contre, stats.abstention);
     stats.cohesionRate = participating > 0 ? Math.round((maxPosition / participating) * 100) : 0;
   }
@@ -303,27 +298,6 @@ async function getDivisiveScrutins(
   }));
 }
 
-/**
- * Get global participation from pre-computed PoliticianParticipation table.
- * Sums votesCount and eligibleScrutins across all politicians.
- */
-async function getGlobalParticipation(
-  chamber?: Chamber
-): Promise<{ participating: number; total: number } | null> {
-  if (chamber === "SENAT") return null;
-
-  const result = await db.politicianParticipation.aggregate({
-    // Historical SENAT rows are hostile input. Global participation means published AN data.
-    where: { chamber: "AN" },
-    _sum: { votesCount: true, eligibleScrutins: true },
-  });
-
-  return {
-    participating: result._sum.votesCount ?? 0,
-    total: result._sum.eligibleScrutins ?? 0,
-  };
-}
-
 async function getChamberCounts(chamber?: Chamber) {
   const rows = await db.$queryRaw<
     [{ an: number; senat: number; adoptes: number; rejetes: number }]
@@ -349,7 +323,8 @@ export interface PoliticianVotingStats {
   contre: number;
   abstention: number;
   nonVotant: number;
-  absent: number;
+  eligibleScrutins: number | null;
+  scrutinsSansVoteEnregistre: number | null;
   participationRate: number | null;
   participationStatus: ParticipationStatus;
 }
@@ -370,38 +345,51 @@ export async function getPoliticianVotingStats(
   cacheTag("votes", "politicians");
   cacheLife("synced");
 
-  // Find current parliamentary mandate first — we need it to scope vote counts
-  const mandate = await db.mandate.findFirst({
+  // A current parliamentary mandate is the only applicable perimeter for #701-A.
+  const currentMandate = await db.mandate.findFirst({
     where: {
       politicianId,
       isCurrent: true,
       type: mandateType ?? { in: ["DEPUTE", "SENATEUR"] },
     },
-    select: { startDate: true, endDate: true, type: true },
+    select: { startDate: true, endDate: true, type: true, isCurrent: true },
   });
 
-  // Scope votes to the current mandate period to avoid mixing legislatures
-  const chamber = mandate
-    ? mandate.type === "DEPUTE"
+  // A historical mandate resolves the chamber only. It does not make the historical
+  // participation computation publishable because its eligibility perimeter is not audited.
+  const historicalMandate =
+    currentMandate || mandateType
+      ? null
+      : await db.mandate.findFirst({
+          where: {
+            politicianId,
+            type: { in: ["DEPUTE", "SENATEUR"] },
+          },
+          orderBy: { startDate: "desc" },
+          select: { type: true },
+        });
+  const resolvedMandateType = currentMandate?.type ?? mandateType ?? historicalMandate?.type;
+  const chamber = resolvedMandateType
+    ? resolvedMandateType === "DEPUTE"
       ? ("AN" as const)
       : ("SENAT" as const)
     : undefined;
-  const voteWhere = {
-    politicianId,
-    ...(mandate && {
-      chamber,
-      votingDate: {
-        gte: mandate.startDate!,
-        ...(mandate.endDate ? { lte: mandate.endDate } : {}),
-      },
-    }),
-  };
-
-  const stats = await db.vote.groupBy({
-    by: ["position"],
-    where: voteWhere,
-    _count: true,
-  });
+  const stats = chamber
+    ? await db.vote.groupBy({
+        by: ["position"],
+        where: {
+          politicianId,
+          chamber,
+          ...(currentMandate?.startDate && {
+            votingDate: {
+              gte: currentMandate.startDate,
+              ...(currentMandate.endDate ? { lte: currentMandate.endDate } : {}),
+            },
+          }),
+        },
+        _count: true,
+      })
+    : [];
 
   const votingStats: PoliticianVotingStats = {
     total: 0,
@@ -409,7 +397,8 @@ export async function getPoliticianVotingStats(
     contre: 0,
     abstention: 0,
     nonVotant: 0,
-    absent: 0,
+    eligibleScrutins: null,
+    scrutinsSansVoteEnregistre: null,
     participationRate: null,
     participationStatus: participationStatusFor(chamber),
   };
@@ -429,35 +418,32 @@ export async function getPoliticianVotingStats(
       case "NON_VOTANT":
         votingStats.nonVotant = s._count;
         break;
-      case "ABSENT":
-        votingStats.absent = s._count;
-        break;
     }
   }
 
-  // Compute participation based on eligible scrutins during mandate period
-  if (mandate && chamber === "AN") {
+  // Compute participation only for an applicable AN mandate with a valid denominator.
+  if (currentMandate?.startDate && chamber === "AN") {
     const eligibleRows = await db.$queryRaw<[{ count: number }]>`
       SELECT COUNT(*)::int as "count"
       FROM "Scrutin" s
       WHERE s.chamber = ${chamber!}::"Chamber"
-        AND s."votingDate" >= ${mandate.startDate}
-        AND (${mandate.endDate}::timestamp IS NULL OR s."votingDate" <= ${mandate.endDate})
+        AND s."votingDate" >= ${currentMandate.startDate}
+        AND (${currentMandate.endDate}::timestamp IS NULL OR s."votingDate" <= ${currentMandate.endDate})
     `;
     const eligibleScrutins = eligibleRows[0]?.count ?? 0;
+    votingStats.eligibleScrutins = eligibleScrutins;
+    votingStats.participationStatus = resolveParticipationStatus({
+      chamber,
+      hasApplicableMandate: true,
+      eligibleScrutins,
+      methodSupported: true,
+    });
 
-    if (eligibleScrutins > 0) {
-      votingStats.absent = Math.max(0, eligibleScrutins - votingStats.total);
+    if (votingStats.participationStatus === "AVAILABLE") {
+      votingStats.scrutinsSansVoteEnregistre = Math.max(0, eligibleScrutins - votingStats.total);
       const expressed = votingStats.pour + votingStats.contre + votingStats.abstention;
       votingStats.participationRate = Math.round((expressed / eligibleScrutins) * 100);
     }
-  } else if (!mandate && mandateType !== "SENATEUR") {
-    // Fallback: no active parliamentary mandate — use old ratio
-    const expressed = votingStats.pour + votingStats.contre + votingStats.abstention;
-    const countedForParticipation = votingStats.total - votingStats.nonVotant;
-    votingStats.participationRate =
-      countedForParticipation > 0 ? Math.round((expressed / countedForParticipation) * 100) : 0;
-    votingStats.participationStatus = PARTICIPATION_AVAILABLE;
   }
 
   return votingStats;
@@ -517,38 +503,17 @@ export interface ParticipationRankingResult {
   total: number;
 }
 
-/**
- * Get participation ranking from pre-computed PoliticianParticipation table.
- * Returns empty results if table has not been populated yet (run sync:compute-stats).
- */
+/** Fail closed until persisted rows carry a trusted computation version. */
 async function getParticipationRanking(
-  chamber?: Chamber,
-  partyId?: string,
-  page: number = 1,
-  pageSize: number = 50,
-  sortDirection: "ASC" | "DESC" = "ASC"
+  _chamber?: Chamber,
+  _partyId?: string,
+  _page: number = 1,
+  _pageSize: number = 50,
+  _sortDirection: "ASC" | "DESC" = "ASC"
 ): Promise<ParticipationRankingResult> {
-  const offset = (page - 1) * pageSize;
-
-  // Build Prisma where filter
-  if (chamber === "SENAT") return { entries: [], total: 0 };
-  const where: Record<string, unknown> = { chamber: "AN" };
-  if (partyId) where.partyId = partyId;
-
-  const [entries, total] = await Promise.all([
-    db.politicianParticipation.findMany({
-      where,
-      orderBy: [
-        { participationRate: sortDirection === "DESC" ? "desc" : "asc" },
-        { eligibleScrutins: "desc" },
-      ],
-      skip: offset,
-      take: pageSize,
-    }),
-    db.politicianParticipation.count({ where }),
-  ]);
-
-  return { entries, total };
+  // Historical rows have no computation version. Publishing a ranking before a
+  // trusted AN recompute could reuse the former numerator, so the reader fails closed.
+  return { entries: [], total: 0 };
 }
 
 // ============================================
@@ -565,19 +530,9 @@ export interface PartyParticipationStats {
   memberCount: number;
 }
 
-/**
- * Get average participation rate per party from pre-computed StatsSnapshot.
- */
-async function getPartyParticipationStats(chamber?: Chamber): Promise<PartyParticipationStats[]> {
-  if (chamber === "SENAT") return [];
-  const key = "party-participation-AN";
-  const snapshot = await db.statsSnapshot.findUnique({ where: { key } });
-
-  if (snapshot) {
-    return snapshot.data as unknown as PartyParticipationStats[];
-  }
-
-  // Fallback: empty array if not yet computed
+/** Fail closed until snapshots carry a trusted computation version. */
+async function getPartyParticipationStats(_chamber?: Chamber): Promise<PartyParticipationStats[]> {
+  // Snapshots are unversioned and may contain the former participation definition.
   return [];
 }
 
@@ -648,19 +603,9 @@ export interface LegislativeStatsResult {
   keyVotesSENAT: KeyVote[];
 }
 
-/**
- * Get average participation rate per parliamentary group from pre-computed StatsSnapshot.
- */
-async function getGroupParticipationStats(chamber?: Chamber): Promise<GroupParticipationStats[]> {
-  if (chamber === "SENAT") return [];
-  const key = "group-participation-AN";
-  const snapshot = await db.statsSnapshot.findUnique({ where: { key } });
-
-  if (snapshot) {
-    return snapshot.data as unknown as GroupParticipationStats[];
-  }
-
-  // Fallback: empty array if not yet computed
+/** Fail closed until snapshots carry a trusted computation version. */
+async function getGroupParticipationStats(_chamber?: Chamber): Promise<GroupParticipationStats[]> {
+  // Snapshots are unversioned and may contain the former participation definition.
   return [];
 }
 
@@ -682,65 +627,30 @@ export interface PoliticianParliamentaryCardData {
   dissidenceTotal: number | null;
 }
 
-/**
- * Get participation rank and stats for a single politician.
- * Uses the pre-computed PoliticianParticipation table with window functions.
- */
+/** Compute the individual card from the live, chamber-bounded publication policy. */
 export async function getPoliticianParliamentaryCard(
   politicianId: string,
   mandateType: "DEPUTE" | "SENATEUR"
 ): Promise<PoliticianParliamentaryCardData | null> {
   const chamber: Chamber = mandateType === "DEPUTE" ? "AN" : "SENAT";
 
-  if (chamber === "SENAT") {
-    const [votesCount, dissidence] = await Promise.all([
-      db.vote.count({ where: { politicianId, chamber: "SENAT" } }),
-      getPoliticianDissidence(politicianId),
-    ]);
-    return {
-      chamber,
-      mandateType,
-      votesCount,
-      eligibleScrutins: null,
-      participationRate: null,
-      participationStatus: participationStatusFor(chamber),
-      rank: null,
-      totalPeers: null,
-      dissidenceRate: dissidence?.rate ?? null,
-      dissidenceCount: dissidence?.count ?? null,
-      dissidenceTotal: dissidence?.total ?? null,
-    };
-  }
-
-  const entry = await db.politicianParticipation.findUnique({
-    where: { politicianId },
-  });
-
-  if (!entry || entry.chamber !== chamber) return null;
-
-  // Count how many have higher participation (= rank)
-  const [higherCount, totalPeers] = await Promise.all([
-    db.politicianParticipation.count({
-      where: {
-        chamber,
-        participationRate: { gt: entry.participationRate },
-      },
-    }),
-    db.politicianParticipation.count({ where: { chamber } }),
+  const [stats, dissidence] = await Promise.all([
+    getPoliticianVotingStats(politicianId, mandateType),
+    getPoliticianDissidence(politicianId),
   ]);
 
   return {
     chamber,
     mandateType,
-    votesCount: entry.votesCount,
-    eligibleScrutins: entry.eligibleScrutins,
-    participationRate: entry.participationRate,
-    participationStatus: PARTICIPATION_AVAILABLE,
-    rank: higherCount + 1,
-    totalPeers,
-    dissidenceRate: entry.dissidenceRate,
-    dissidenceCount: entry.dissidenceCount,
-    dissidenceTotal: entry.dissidenceTotal,
+    votesCount: stats.pour + stats.contre + stats.abstention,
+    eligibleScrutins: stats.eligibleScrutins,
+    participationRate: stats.participationRate,
+    participationStatus: stats.participationStatus,
+    rank: null,
+    totalPeers: null,
+    dissidenceRate: dissidence?.rate ?? null,
+    dissidenceCount: dissidence?.count ?? null,
+    dissidenceTotal: dissidence?.total ?? null,
   };
 }
 
@@ -756,6 +666,10 @@ async function getPoliticianDissidence(
         AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
       JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
       WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+        AND v.chamber = CASE
+          WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
+          ELSE 'SENAT'::"Chamber"
+        END
         AND v."votingDate" >= m."startDate"
         AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
     ), majorities AS (
@@ -787,6 +701,74 @@ async function getPoliticianDissidence(
   return row && row.total > 0 && row.rate !== null
     ? { count: row.count, total: row.total, rate: row.rate }
     : null;
+}
+
+/**
+ * Rank current parliamentarians by dissidence without depending on participation rows.
+ * Only expressed positions enter this independent metric.
+ */
+export async function getPoliticianDissidenceRanking(
+  chamber?: Chamber,
+  page: number = 1,
+  pageSize: number = 24
+): Promise<{ politicianIds: string[]; total: number }> {
+  const rows = await db.$queryRaw<{ politicianId: string; totalRows: number }[]>`
+    WITH current_votes AS (
+      SELECT
+        v."politicianId",
+        v."scrutinId",
+        v.position,
+        mp."parliamentaryGroupId" as "groupId"
+      FROM "Vote" v
+      JOIN "Mandate" m ON m."politicianId" = v."politicianId"
+        AND m."isCurrent" = true
+        AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+      JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
+      WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+        AND v.chamber = CASE
+          WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
+          ELSE 'SENAT'::"Chamber"
+        END
+        AND v."votingDate" >= m."startDate"
+        AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
+        ${chamber ? Prisma.sql`AND v.chamber = ${chamber}::"Chamber"` : Prisma.empty}
+    ), position_counts AS (
+      SELECT "scrutinId", "groupId", position, COUNT(*)::int AS count
+      FROM current_votes
+      GROUP BY "scrutinId", "groupId", position
+    ), majorities AS (
+      SELECT "scrutinId", "groupId", position
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY "scrutinId", "groupId"
+          ORDER BY count DESC, position ASC
+        ) AS rank
+        FROM position_counts
+      ) ranked
+      WHERE rank = 1
+    ), rates AS (
+      SELECT
+        cv."politicianId",
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE cv.position <> ma.position)::int AS dissident
+      FROM current_votes cv
+      JOIN majorities ma USING ("scrutinId", "groupId")
+      GROUP BY cv."politicianId"
+    )
+    SELECT
+      "politicianId",
+      COUNT(*) OVER()::int AS "totalRows"
+    FROM rates
+    WHERE total > 0
+    ORDER BY dissident::numeric / total DESC, "politicianId" ASC
+    OFFSET ${(page - 1) * pageSize}
+    LIMIT ${pageSize}
+  `;
+
+  return {
+    politicianIds: rows.map((row) => row.politicianId),
+    total: rows[0]?.totalRows ?? 0,
+  };
 }
 
 // ============================================
@@ -907,7 +889,7 @@ export interface GroupDynamicsStats {
   chamber: string;
   cohesionPct: number;
   governmentAlignmentPct: number;
-  averageParticipationPct: number;
+  averageParticipationPct: number | null;
 }
 
 async function getGroupDynamicsStats(chamber: "AN" | "SENAT"): Promise<GroupDynamicsStats[]> {
@@ -932,7 +914,8 @@ async function getGroupDynamicsStats(chamber: "AN" | "SENAT"): Promise<GroupDyna
     chamber: s.group.chamber,
     cohesionPct: s.cohesionPct,
     governmentAlignmentPct: s.governmentAlignmentPct,
-    averageParticipationPct: s.averageParticipationPct,
+    // ParliamentaryGroupStats contains an independent legacy formula. It is never public.
+    averageParticipationPct: null,
   }));
 }
 
@@ -947,6 +930,7 @@ export const voteStatsService = {
   getPartyParticipationStats,
   getGroupParticipationStats,
   getPoliticianParliamentaryCard,
+  getPoliticianDissidenceRanking,
   getLegislativeStats,
   getPoliticianThemeDistribution,
   getGroupDissidenceStats,

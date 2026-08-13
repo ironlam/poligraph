@@ -192,7 +192,7 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
       pg.color as "groupColor",
       m.type::text as "mandateType",
       me.chamber,
-      vote_sub.cnt as "votesCount",
+      vote_sub.expressed as "votesCount",
       me.eligible as "eligibleScrutins",
       ROUND(vote_sub.expressed::numeric / NULLIF(me.eligible::numeric, 0) * 100, 1)::float as "participationRate"
     FROM "Politician" pol
@@ -203,7 +203,6 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
       AND me.type = m.type
     CROSS JOIN LATERAL (
       SELECT
-        COUNT(*)::int as cnt,
         COUNT(*) FILTER (WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION'))::int as expressed
       FROM "Vote" v
       WHERE v."politicianId" = pol.id

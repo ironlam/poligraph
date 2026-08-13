@@ -32,10 +32,6 @@ function countByMaturity(affairs: { status: string }[]): Record<string, number> 
   return counts;
 }
 
-function presenceRate(data: PoliticianComparisonData["voteStats"]): number {
-  return Math.round(data.presenceRate ?? 0);
-}
-
 export function DeputesComparison({ left, right }: Props) {
   const concordance = computeVoteConcordance(left.votes, right.votes);
 
@@ -51,11 +47,8 @@ export function DeputesComparison({ left, right }: Props) {
       </section>
 
       <ParticipationSection
-        left={{ ...left.voteStats, presenceRate: presenceRate(left.voteStats) }}
-        right={{
-          ...right.voteStats,
-          presenceRate: presenceRate(right.voteStats),
-        }}
+        left={left.voteStats}
+        right={right.voteStats}
         leftLabel={left.fullName}
         rightLabel={right.fullName}
       />

@@ -266,29 +266,7 @@ async function generateStatsAngle(angle: string, entityId: string): Promise<Twee
     }
 
     case "participation-groupes": {
-      const topGroups = await db.politicianParticipation.groupBy({
-        by: ["groupName", "groupCode"],
-        where: { eligibleScrutins: { gte: 50 }, chamber: "AN" },
-        _avg: { participationRate: true },
-        _count: true,
-      });
-
-      const sorted = topGroups
-        .filter((g) => g._count >= 5 && g.groupName && g._avg.participationRate !== null)
-        .sort((a, b) => (b._avg.participationRate ?? 0) - (a._avg.participationRate ?? 0))
-        .slice(0, 6);
-
-      if (sorted.length === 0) return null;
-
-      let content = `📊 Participation moyenne par groupe à l'Assemblée :\n\n`;
-      for (const g of sorted) {
-        content += `• ${g.groupName} — ${Math.round(g._avg.participationRate!)}%\n`;
-      }
-
-      const link = `${SITE_URL}/statistiques`;
-      content += `\n→ ${link}`;
-
-      return { content, link, entityId };
+      return null;
     }
 
     case "elus-par-parti": {
@@ -500,7 +478,6 @@ async function deputySpotlight(recent: RecentlyPosted): Promise<TweetDraft[]> {
           affairs: { where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" } },
         },
       },
-      participation: true,
     },
     orderBy: { prominenceScore: "desc" },
     take: 50,
@@ -516,14 +493,6 @@ async function deputySpotlight(recent: RecentlyPosted): Promise<TweetDraft[]> {
 
     // Build hook — skip this politician if no factual hook
     let hook = "";
-
-    if (politician.participation?.chamber === "AN") {
-      const rate = Math.round(politician.participation.participationRate);
-      hook = `Participation : ${rate}%`;
-      if (politician.participation.eligibleScrutins >= 50) {
-        hook += ` sur ${politician.participation.eligibleScrutins} scrutins`;
-      }
-    }
 
     if (politician._count.affairs > 0) {
       const affairCount = politician._count.affairs;
@@ -601,54 +570,8 @@ async function elections(recent: RecentlyPosted): Promise<TweetDraft[]> {
 }
 
 async function participationRanking(recent: RecentlyPosted): Promise<TweetDraft[]> {
-  // Alternate bottom 5 / top 5 based on day parity
-  const dayOfYear = Math.floor(
-    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
-  );
-  const showBottom = dayOfYear % 2 === 0;
-
-  const entityId = `presence:${showBottom ? "bottom5" : "top5"}`;
-  if (wasRecentlyPosted(recent, entityId)) {
-    // Try the other variant
-    const altEntityId = `presence:${showBottom ? "top5" : "bottom5"}`;
-    if (wasRecentlyPosted(recent, altEntityId)) return [];
-    return generateParticipationDraft(!showBottom, altEntityId);
-  }
-
-  return generateParticipationDraft(showBottom, entityId);
-}
-
-async function generateParticipationDraft(
-  showBottom: boolean,
-  entityId: string
-): Promise<TweetDraft[]> {
-  const ranking = await db.politicianParticipation.findMany({
-    where: { eligibleScrutins: { gte: 50 }, chamber: "AN" },
-    orderBy: { participationRate: showBottom ? "asc" : "desc" },
-    take: 5,
-    select: {
-      firstName: true,
-      lastName: true,
-      participationRate: true,
-      groupName: true,
-    },
-  });
-
-  if (ranking.length < 3) return [];
-
-  const emoji = showBottom ? "📉" : "📈";
-  const label = showBottom ? "les moins assidus" : "les plus assidus";
-
-  let content = `${emoji} Les 5 députés ${label} ce mois :\n\n`;
-  ranking.forEach((p, i) => {
-    const group = p.groupName ? ` (${p.groupName})` : "";
-    content += `${i + 1}. ${p.firstName} ${p.lastName}${group} — ${Math.round(p.participationRate)}%\n`;
-  });
-
-  const link = `${SITE_URL}/statistiques`;
-  content += `\n→ ${link}`;
-
-  return [{ content, link, entityId }];
+  void recent;
+  return [];
 }
 
 async function methodoPost(recent: RecentlyPosted): Promise<TweetDraft[]> {

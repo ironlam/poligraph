@@ -13,6 +13,7 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { getPoliticianDissidenceRanking } from "@/services/voteStats";
 
 // Minimum members to show a party in filters (avoid cluttering with old/small parties)
 const MIN_PARTY_MEMBERS = 2;
@@ -184,25 +185,12 @@ async function queryPoliticians(
 
   const where = conditions.length > 0 ? { AND: conditions } : {};
 
-  // Special path for dissidence sort — queries PoliticianParticipation for ordered IDs
+  // Dissidence is computed from expressed vote positions, independently of participation rows.
   if (sortOption === "dissidence") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ppWhere: Record<string, any> = { dissidenceRate: { not: null } };
-    if (mandateFilter === "depute") ppWhere.chamber = "AN";
-    else if (mandateFilter === "senateur") ppWhere.chamber = "SENAT";
-
-    const [ppRows, ppTotal] = await Promise.all([
-      db.politicianParticipation.findMany({
-        where: ppWhere,
-        orderBy: [{ dissidenceRate: "desc" }, { lastName: "asc" }],
-        select: { politicianId: true },
-        skip,
-        take: limit,
-      }),
-      db.politicianParticipation.count({ where: ppWhere }),
-    ]);
-
-    const orderedIds = ppRows.map((p) => p.politicianId);
+    const chamber =
+      mandateFilter === "depute" ? "AN" : mandateFilter === "senateur" ? "SENAT" : undefined;
+    const dissidenceRanking = await getPoliticianDissidenceRanking(chamber, page, limit);
+    const orderedIds = dissidenceRanking.politicianIds;
 
     const dissidentPoliticians = await db.politician.findMany({
       where: { id: { in: orderedIds }, publicationStatus: "PUBLISHED" },
@@ -239,9 +227,9 @@ async function queryPoliticians(
 
     return {
       politicians: dissidentsWithConviction,
-      total: ppTotal,
+      total: dissidenceRanking.total,
       page,
-      totalPages: Math.ceil(ppTotal / limit),
+      totalPages: Math.ceil(dissidenceRanking.total / limit),
     };
   }
 

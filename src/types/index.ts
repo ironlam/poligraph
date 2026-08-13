@@ -236,9 +236,10 @@ export type PoliticianVoteStats = {
   contre: number;
   abstention: number;
   nonVotant: number;
-  absent: number;
+  eligibleScrutins: number | null;
+  scrutinsSansVoteEnregistre: number | null;
   participationRate: number | null;
-  participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT";
+  participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT" | "COMPUTATION_INCOMPLETE";
 };
 
 export type ScrutinFilters = {

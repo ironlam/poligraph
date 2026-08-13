@@ -154,14 +154,14 @@ function GroupStatsCard({ data }: { data: GroupComparisonData }) {
         <div>
           <div className="flex items-baseline justify-between mb-1">
             <span className="text-sm text-muted-foreground">Participation moyenne</span>
-            <span className="text-2xl font-bold">{stats.avgParticipation}%</span>
+            <span className="text-sm font-semibold text-muted-foreground">Indisponible</span>
           </div>
-          <div className="h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-            <div
-              className="h-full bg-blue-500 transition-all"
-              style={{ width: `${stats.avgParticipation}%` }}
-            />
-          </div>
+          {group.chamber === "SENAT" && (
+            <p className="text-xs text-muted-foreground">
+              Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+              individuelle de façon suffisamment fiable.
+            </p>
+          )}
         </div>
 
         {/* Cohesion */}

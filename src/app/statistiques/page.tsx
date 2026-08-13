@@ -108,14 +108,9 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
           }
           participationContent={
             <ParticipationSection
-              ranking={participationData.ranking}
-              groupStatsAN={participationData.groupStatsAN}
-              groupStatsSENAT={participationData.groupStatsSENAT}
               groupDissidenceAN={participationData.groupDissidenceAN}
               groupDissidenceSENAT={participationData.groupDissidenceSENAT}
               chamber={pChamber}
-              page={pPage}
-              sortDirection={pSort}
             />
           }
         />

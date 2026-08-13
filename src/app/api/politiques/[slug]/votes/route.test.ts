@@ -41,7 +41,8 @@ describe("GET /api/politiques/[slug]/votes", () => {
       contre: 0,
       abstention: 0,
       nonVotant: 0,
-      absent: 0,
+      eligibleScrutins: null,
+      scrutinsSansVoteEnregistre: null,
       participationRate: null,
       participationStatus: "SOURCE_INSUFFICIENT",
     });

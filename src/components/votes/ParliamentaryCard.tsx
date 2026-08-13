@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Info } from "lucide-react";
 import type { PoliticianParliamentaryCardData } from "@/services/voteStats";
-import { statsHref } from "@/config/routes";
 
 interface ParliamentaryCardProps {
   data: PoliticianParliamentaryCardData;
@@ -70,12 +68,6 @@ function ParticipationGauge({ rate }: { rate: number }) {
   );
 }
 
-function rateColor(rate: number): string {
-  if (rate >= 75) return "text-emerald-600 dark:text-emerald-400";
-  if (rate >= 50) return "text-amber-600 dark:text-amber-400";
-  return "text-red-600 dark:text-red-400";
-}
-
 export function ParliamentaryCard({
   data,
   groupCode,
@@ -85,6 +77,8 @@ export function ParliamentaryCard({
   mandateTitle,
   isChamberPresident,
 }: ParliamentaryCardProps) {
+  const publishedParticipationRate =
+    data.participationStatus === "AVAILABLE" ? data.participationRate : null;
   const chamberLabel = data.chamber === "AN" ? "Assemblée nationale" : "Sénat";
   const chamberColor =
     data.chamber === "AN"
@@ -126,14 +120,20 @@ export function ParliamentaryCard({
       </div>
 
       <CardContent className="pt-5 pb-4">
-        {data.participationRate === null ? (
+        {publishedParticipationRate === null ? (
           <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
             <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
             <div className="text-sm text-muted-foreground">
-              <p>
-                Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
-                individuelle de façon suffisamment fiable.
-              </p>
+              {data.participationStatus === "SOURCE_INSUFFICIENT" ? (
+                <p>
+                  Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+                  individuelle de façon suffisamment fiable.
+                </p>
+              ) : (
+                <p>
+                  Le périmètre nécessaire au calcul de la participation n&apos;est pas disponible.
+                </p>
+              )}
               <p className="mt-1 text-xs">
                 {data.votesCount.toLocaleString("fr-FR")} votes enregistrés restent consultables.
               </p>
@@ -157,7 +157,7 @@ export function ParliamentaryCard({
           <div className="flex items-start gap-5">
             {/* Gauge */}
             <div className="flex flex-col items-center shrink-0">
-              <ParticipationGauge rate={data.participationRate} />
+              <ParticipationGauge rate={publishedParticipationRate} />
               <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5">
                 Participation <InfoTooltip term="participationRate" size="sm" />
               </span>
@@ -165,25 +165,10 @@ export function ParliamentaryCard({
 
             {/* Stats grid */}
             <div className="flex-1 space-y-3 min-w-0">
-              {/* Rank */}
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={`text-2xl font-bold tabular-nums ${rateColor(data.participationRate)}`}
-                >
-                  {data.rank}
-                  <span className="text-sm font-normal text-muted-foreground align-super">
-                    {data.rank === 1 ? "er" : "e"}
-                  </span>
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  / {data.totalPeers} {data.mandateType === "DEPUTE" ? "députés" : "sénateurs"}
-                </span>
-              </div>
-
               {/* Votes fraction */}
               <div>
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">Scrutins votés</span>
+                  <span className="text-muted-foreground">Votes exprimés</span>
                   <span className="font-medium tabular-nums">
                     {data.votesCount.toLocaleString("fr-FR")} /{" "}
                     {data.eligibleScrutins?.toLocaleString("fr-FR")}
@@ -192,27 +177,18 @@ export function ParliamentaryCard({
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
-                      data.participationRate >= 75
+                      publishedParticipationRate >= 75
                         ? "bg-emerald-500"
-                        : data.participationRate >= 50
+                        : publishedParticipationRate >= 50
                           ? "bg-amber-500"
                           : "bg-red-500"
                     }`}
                     style={{
-                      width: `${Math.min(data.participationRate, 100)}%`,
+                      width: `${Math.min(publishedParticipationRate, 100)}%`,
                     }}
                   />
                 </div>
               </div>
-
-              {/* CTA */}
-              <Link
-                href={statsHref("participation")}
-                prefetch={false}
-                className="inline-flex items-center text-xs text-primary hover:underline"
-              >
-                Voir le classement complet →
-              </Link>
             </div>
           </div>
         )}

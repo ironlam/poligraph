@@ -33,8 +33,9 @@ export const LEGAL_TERMS = {
 
 export const PARLIAMENTARY_TERMS = {
   nonVotant:
-    "Parlementaire présent en séance mais qui ne prend pas part au vote (souvent le président de séance, qui ne vote qu'en cas d'égalité).",
-  absent: "Parlementaire qui n'était pas présent lors du vote et n'a pas donné de procuration.",
+    "Code de vote indiquant que le parlementaire ne prend pas part au scrutin. Ce code ne suffit pas à établir sa présence physique.",
+  absent:
+    "Code fourni par une source pour un scrutin donné. Il n'est jamais déduit de la seule absence d'une ligne de vote.",
   abstention:
     "Vote exprimé mais ni pour ni contre. L'abstention est comptabilisée dans les suffrages exprimés.",
   scrutin: "Vote formel des parlementaires sur un texte de loi, un amendement ou une motion.",
@@ -91,7 +92,7 @@ export const METRIC_TERMS = {
   prominence:
     "Score de notoriété calculé à partir de l'activité parlementaire, de la couverture médiatique et du rôle institutionnel.",
   participationRate:
-    "Pourcentage de parlementaires ayant voté (pour, contre ou abstention) par rapport au nombre total de membres.",
+    "Pour l'Assemblée nationale, part des scrutins éligibles du mandat avec un vote pour, contre ou une abstention enregistré. Cet indicateur est indisponible sans périmètre applicable.",
   portefeuilleTotal:
     "Valeur totale des participations financières déclarées à la HATVP : actions, parts de sociétés (SCI, SARL…). Ce montant est une photographie à la date de déclaration, il ne comprend pas l'immobilier ni les comptes bancaires.",
   participationsHatvp:

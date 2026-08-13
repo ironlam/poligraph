@@ -122,7 +122,7 @@ export interface GroupListingItem {
     cohesionPct: number;
     governmentAlignmentPct: number;
     finalVoteAlignmentPct: number;
-    averageParticipationPct: number;
+    averageParticipationPct: number | null;
   } | null;
 }
 
@@ -177,7 +177,7 @@ export async function getGroupesListing(
           cohesionPct: g.stats[0].cohesionPct,
           governmentAlignmentPct: g.stats[0].governmentAlignmentPct,
           finalVoteAlignmentPct: g.stats[0].finalVoteAlignmentPct,
-          averageParticipationPct: g.stats[0].averageParticipationPct,
+          averageParticipationPct: null,
         }
       : null,
   }));
@@ -257,6 +257,7 @@ export async function getGroupeDetail(slug: string) {
 
   return {
     ...group,
+    stats: group.stats.map((stats) => ({ ...stats, averageParticipationPct: null })),
     seatCount: group.mandates.length,
     members: group.mandates.map((m) => m.mandate.politician),
   };

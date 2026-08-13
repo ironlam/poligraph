@@ -290,23 +290,14 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
     orderBy: [{ listName: "asc" }, { listPosition: "asc" }],
   });
 
-  // After candidacies fetch, load participation stats for linked politicians
+  // After candidacies fetch, load public auxiliary data for linked politicians.
   const politicianIds = candidacies
     .filter((c) => c.politicianId != null)
     .map((c) => c.politicianId!);
 
-  const participationMap = new Map<string, number>();
   const affairsCountMap = new Map<string, number>();
 
   if (politicianIds.length > 0) {
-    const participations = await db.politicianParticipation.findMany({
-      where: { politicianId: { in: politicianIds }, chamber: "AN" },
-      select: { politicianId: true, participationRate: true },
-    });
-    for (const p of participations) {
-      participationMap.set(p.politicianId, p.participationRate);
-    }
-
     // Count affairs per politician
     const affairsCounts = await db.affair.groupBy({
       by: ["politicianId"],
@@ -321,7 +312,7 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
   // Fetch incumbent maire (sequential to respect pool limit of 2)
   const incumbentMaire = await getIncumbentMaire(inseeCode, election.id);
 
-  // Fetch participation (T2 if available, otherwise T1)
+  // Fetch municipal-election participation (T2 if available, otherwise T1).
   const communeRounds = await db.communeElectionRound.findMany({
     where: { communeId: inseeCode, electionId: election.id },
     orderBy: { round: "desc" },
@@ -342,7 +333,8 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
     const list = listsMap.get(key) || [];
     const enriched: EnrichedCandidacy = {
       ...c,
-      participationRate: c.politicianId ? (participationMap.get(c.politicianId) ?? null) : null,
+      // Historical participation rows are unversioned and cannot be reused safely here.
+      participationRate: null,
       affairsCount: c.politicianId ? (affairsCountMap.get(c.politicianId) ?? 0) : 0,
     };
     list.push(enriched);

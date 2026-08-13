@@ -313,15 +313,20 @@
  *           type: integer
  *         nonVotant:
  *           type: integer
- *         absent:
+ *         eligibleScrutins:
  *           type: integer
+ *           nullable: true
+ *         scrutinsSansVoteEnregistre:
+ *           type: integer
+ *           nullable: true
+ *           description: Scrutins éligibles sans ligne Vote enregistrée. Ne prouve pas une absence physique.
  *         participationRate:
  *           type: number
  *           format: float
  *           nullable: true
  *         participationStatus:
  *           type: string
- *           enum: [AVAILABLE, SOURCE_INSUFFICIENT]
+ *           enum: [AVAILABLE, SOURCE_INSUFFICIENT, COMPUTATION_INCOMPLETE]
  *
  *     SearchResult:
  *       type: object

@@ -98,7 +98,7 @@ function AlignmentSpectrum({
                 <td>{g.groupName}</td>
                 <td>{g.governmentAlignmentPct.toFixed(1)}%</td>
                 <td>{g.cohesionPct.toFixed(1)}%</td>
-                <td>{g.averageParticipationPct.toFixed(1)}%</td>
+                <td>Indisponible</td>
               </tr>
             ))}
           </tbody>

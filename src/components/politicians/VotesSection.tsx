@@ -90,7 +90,7 @@ export function VotesSection({
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Stats summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div className="p-2 bg-green-50 rounded-lg">
                 <p className="text-lg font-bold text-green-600">{voteData.stats.pour}</p>
                 <p className="text-xs text-muted-foreground">Pour</p>
@@ -107,40 +107,43 @@ export function VotesSection({
                 <p className="text-lg font-bold text-slate-600">{voteData.stats.nonVotant}</p>
                 <p className="text-xs text-muted-foreground">Non-votant</p>
               </div>
-              <div className="p-2 bg-gray-50 rounded-lg">
-                <p className="text-lg font-bold text-gray-600">{voteData.stats.absent}</p>
-                <p className="text-xs text-muted-foreground">Absent</p>
-              </div>
             </div>
 
             {/* Participation bar (hidden for chamber presidents) */}
-            {!isChamberPresident && voteData.stats.participationRate !== null && (
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span id="participation-label" className="text-muted-foreground">
-                    Participation
-                  </span>
-                  <span className="font-medium">{voteData.stats.participationRate}%</span>
-                </div>
-                <div
-                  className="h-2 bg-gray-100 rounded-full overflow-hidden"
-                  role="progressbar"
-                  aria-labelledby="participation-label"
-                  aria-valuenow={voteData.stats.participationRate}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
+            {!isChamberPresident &&
+              voteData.stats.participationStatus === "AVAILABLE" &&
+              voteData.stats.participationRate !== null && (
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span id="participation-label" className="text-muted-foreground">
+                      Participation
+                    </span>
+                    <span className="font-medium">{voteData.stats.participationRate}%</span>
+                  </div>
                   <div
-                    className="h-full bg-primary"
-                    style={{ width: `${voteData.stats.participationRate}%` }}
-                  />
+                    className="h-2 bg-gray-100 rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-labelledby="participation-label"
+                    aria-valuenow={voteData.stats.participationRate}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className="h-full bg-primary"
+                      style={{ width: `${voteData.stats.participationRate}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
-            {voteData.stats.participationRate === null && (
+              )}
+            {voteData.stats.participationStatus === "SOURCE_INSUFFICIENT" && (
               <p className="text-sm text-muted-foreground">
                 Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
                 individuelle de façon suffisamment fiable.
+              </p>
+            )}
+            {voteData.stats.participationStatus === "COMPUTATION_INCOMPLETE" && (
+              <p className="text-sm text-muted-foreground">
+                Le périmètre nécessaire au calcul de la participation n&apos;est pas disponible.
               </p>
             )}
 

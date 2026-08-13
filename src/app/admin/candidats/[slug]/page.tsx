@@ -102,7 +102,6 @@ export default async function AdminCandidatProfilePage({ params }: PageProps) {
     mandates,
     affairsCount,
     declarationsCount,
-    participation,
     crossCycle,
     probityStats,
   ] = await Promise.all([
@@ -132,18 +131,12 @@ export default async function AdminCandidatProfilePage({ params }: PageProps) {
       where: { politicianId: politician.id, publicationStatus: "PUBLISHED" },
     }),
     db.declaration.count({ where: { politicianId: politician.id } }),
-    db.politicianParticipation.findFirst({
-      where: { politicianId: politician.id, chamber: "AN" },
-    }),
     getCandidateCrossCycle(politician.id, "presidentielle-2027"),
     getProbityStats(politician.id),
   ]);
 
   const promisesCount = promiseGroups.reduce((s, g) => s + g._count._all, 0);
-  const participationPct =
-    participation && participation.eligibleScrutins > 0
-      ? (participation.votesCount / participation.eligibleScrutins) * 100
-      : null;
+  const participationPct = null;
 
   const radarItems = promiseGroups.map((g) => ({
     theme: g.theme as ThemeCategory,
@@ -213,8 +206,9 @@ export default async function AdminCandidatProfilePage({ params }: PageProps) {
         />
         <div className="rounded-md border border-slate-200 bg-white p-4 text-sm dark:border-slate-700 dark:bg-slate-900">
           <p className="text-slate-600 dark:text-slate-300">
-            L{"'"}analyse des votes parlementaires (taux de participation, prises de position par
-            thème) sera reliée ici depuis la fiche politicien.
+            L{"'"}analyse des votes parlementaires (votes enregistrés et prises de position par
+            thème) sera reliée ici depuis la fiche politicien. Un taux de participation ne peut être
+            affiché que lorsque son périmètre d{"'"}éligibilité est résolu.
           </p>
           <Link
             href={`/politiques/${politicianSlug}#votes`}

@@ -7,7 +7,11 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 
 export const GET = withPublicRoute(async (request: NextRequest) => {
   const searchParams = request.nextUrl.searchParams;
-  const chamber = searchParams.get("chamber") as Chamber | null;
+  const chamberParam = searchParams.get("chamber");
+  if (chamberParam !== null && chamberParam !== "AN" && chamberParam !== "SENAT") {
+    return NextResponse.json({ error: "Chambre invalide" }, { status: 400 });
+  }
+  const chamber = chamberParam as Chamber | null;
   const { limit } = parsePagination(searchParams, { defaultLimit: 20, maxLimit: 100 });
 
   const stats = await voteStatsService.getVoteStats(chamber || undefined, {

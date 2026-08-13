@@ -11,19 +11,18 @@ interface VoteStatsProps {
     contre: number;
     abstention: number;
     nonVotant?: number;
-    absent: number;
+    eligibleScrutins: number | null;
+    scrutinsSansVoteEnregistre: number | null;
     participationRate: number | null;
-    participationStatus?: "AVAILABLE" | "SOURCE_INSUFFICIENT";
+    participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT" | "COMPUTATION_INCOMPLETE";
   };
   isChamberPresident?: boolean;
 }
 
 export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
-  const { total, pour, contre, abstention, nonVotant = 0, absent, participationRate } = stats;
-
-  if (total === 0) {
-    return null;
-  }
+  const { total, pour, contre, abstention, nonVotant = 0, participationRate } = stats;
+  const participationAvailable =
+    stats.participationStatus === "AVAILABLE" && participationRate !== null;
 
   const expressed = pour + contre + abstention;
   const pourPercent = expressed > 0 ? (pour / expressed) * 100 : 0;
@@ -37,7 +36,7 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Participation (hidden for chamber presidents) */}
-        {!isChamberPresident && participationRate !== null && (
+        {!isChamberPresident && participationAvailable && (
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span className="text-muted-foreground flex items-center gap-1">
@@ -53,36 +52,45 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
             </div>
           </div>
         )}
-        {participationRate === null && (
+        {stats.participationStatus === "SOURCE_INSUFFICIENT" && (
           <p className="text-sm text-muted-foreground">
             Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
             individuelle de façon suffisamment fiable.
           </p>
         )}
+        {stats.participationStatus === "COMPUTATION_INCOMPLETE" && (
+          <p className="text-sm text-muted-foreground">
+            Le périmètre nécessaire au calcul de la participation n&apos;est pas disponible.
+          </p>
+        )}
 
         {/* Distribution des votes */}
-        <div>
-          <p className="text-sm text-muted-foreground mb-2">
-            Répartition des votes ({expressed} exprimés sur {total})
-          </p>
-          <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
-            <div
-              className={VOTE_POSITION_DOT_COLORS.POUR}
-              style={{ width: `${pourPercent}%` }}
-              title={`Pour: ${pour}`}
-            />
-            <div
-              className={VOTE_POSITION_DOT_COLORS.CONTRE}
-              style={{ width: `${contrePercent}%` }}
-              title={`Contre: ${contre}`}
-            />
-            <div
-              className={VOTE_POSITION_DOT_COLORS.ABSTENTION}
-              style={{ width: `${abstentionPercent}%` }}
-              title={`Abstention: ${abstention}`}
-            />
+        {total > 0 ? (
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">
+              Répartition des votes ({expressed} exprimés sur {total})
+            </p>
+            <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+              <div
+                className={VOTE_POSITION_DOT_COLORS.POUR}
+                style={{ width: `${pourPercent}%` }}
+                title={`Pour: ${pour}`}
+              />
+              <div
+                className={VOTE_POSITION_DOT_COLORS.CONTRE}
+                style={{ width: `${contrePercent}%` }}
+                title={`Contre: ${contre}`}
+              />
+              <div
+                className={VOTE_POSITION_DOT_COLORS.ABSTENTION}
+                style={{ width: `${abstentionPercent}%` }}
+                title={`Abstention: ${abstention}`}
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Aucun vote enregistré</p>
+        )}
 
         {/* Détails */}
         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -110,12 +118,6 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
               <span className="ml-auto font-medium">{nonVotant}</span>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${VOTE_POSITION_DOT_COLORS.ABSENT}`} />
-            <span className="text-muted-foreground">Absent</span>
-            <InfoTooltip term="absent" />
-            <span className="ml-auto font-medium">{absent}</span>
-          </div>
         </div>
       </CardContent>
     </Card>

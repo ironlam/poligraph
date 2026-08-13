@@ -14,6 +14,10 @@ export const CURRENT_GROUP_VOTES_FROM = Prisma.sql`
     AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
   JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
   WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+    AND v.chamber = CASE
+      WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
+      ELSE 'SENAT'::"Chamber"
+    END
     AND v."votingDate" >= m."startDate"
     AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
 `;

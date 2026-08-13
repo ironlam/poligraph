@@ -48,8 +48,9 @@ describe("VotesSection : liens des derniers votes", () => {
         contre: 1,
         abstention: 1,
         nonVotant: 1,
-        absent: 0,
-        participationRate: null,
+        eligibleScrutins: null,
+        scrutinsSansVoteEnregistre: null,
+        participationRate: 100,
         participationStatus: "SOURCE_INSUFFICIENT",
       },
     } as never;
@@ -65,6 +66,7 @@ describe("VotesSection : liens des derniers votes", () => {
     );
 
     expect(getByText(/ne publie pas actuellement une donnée/)).toBeInTheDocument();
+    expect(container).not.toHaveTextContent("100%");
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
   });
 

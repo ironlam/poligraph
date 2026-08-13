@@ -68,25 +68,19 @@ export function computeAlignmentRates(params: {
 }
 
 interface ChamberConfig {
-  chamber: Chamber;
   govGroupCode: string;
-  scrutinLegislature: number;
   statsLegislature: number;
   groupFilter: { chamber: Chamber; legislature: number } | { chamber: Chamber; legislature: null };
 }
 
 const CHAMBER_CONFIGS: ChamberConfig[] = [
   {
-    chamber: "AN",
     govGroupCode: GOVERNMENT_GROUP_CODE,
-    scrutinLegislature: CURRENT_LEGISLATURE,
     statsLegislature: CURRENT_LEGISLATURE,
     groupFilter: { chamber: "AN", legislature: CURRENT_LEGISLATURE },
   },
   {
-    chamber: "SENAT",
     govGroupCode: SENATE_GOVERNMENT_GROUP_CODE,
-    scrutinLegislature: CURRENT_SENATE_SESSION,
     statsLegislature: CURRENT_SENATE_SESSION,
     groupFilter: { chamber: "SENAT", legislature: null },
   },
@@ -110,6 +104,8 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
       })
     : [];
 
+  let groupsProcessed = 0;
+
   for (const group of groups) {
     const positions = await db.scrutinGroupPosition.findMany({
       where: { groupId: group.id },
@@ -127,56 +123,22 @@ async function computeForChamber(config: ChamberConfig): Promise<number> {
       govGroupPositions: govPositions,
     });
 
-    const memberCount = await db.mandateParliamentary.count({
-      where: {
-        parliamentaryGroupId: group.id,
-        mandate: { isCurrent: true },
-      },
-    });
-
-    const scrutinCount = await db.scrutin.count({
-      where: { legislature: config.scrutinLegislature, chamber: config.chamber },
-    });
-    const voteCount = await db.vote.count({
-      where: {
-        chamber: config.chamber,
-        scrutin: { legislature: config.scrutinLegislature },
-        politician: {
-          mandates: {
-            some: {
-              parliamentaryData: { parliamentaryGroupId: group.id },
-            },
-          },
-        },
-        position: { in: ["POUR", "CONTRE", "ABSTENTION"] },
-      },
-    });
-    const maxVotes = scrutinCount * memberCount;
-    const averageParticipationPct =
-      maxVotes > 0 ? Math.round((voteCount / maxVotes) * 1000) / 10 : 0;
-
-    await db.parliamentaryGroupStats.upsert({
-      where: {
-        groupId_legislature: { groupId: group.id, legislature: config.statsLegislature },
-      },
-      create: {
-        groupId: group.id,
-        legislature: config.statsLegislature,
+    // The legacy participation column is non-nullable. Do not create a row with a
+    // numeric sentinel: unknown participation is neither 0 nor publishable. Existing
+    // rows can still receive the independent cohesion and alignment metrics while all
+    // public loaders fail closed on averageParticipationPct.
+    const result = await db.parliamentaryGroupStats.updateMany({
+      where: { groupId: group.id, legislature: config.statsLegislature },
+      data: {
         cohesionPct,
         governmentAlignmentPct,
         finalVoteAlignmentPct,
-        averageParticipationPct,
-      },
-      update: {
-        cohesionPct,
-        governmentAlignmentPct,
-        finalVoteAlignmentPct,
-        averageParticipationPct,
       },
     });
+    groupsProcessed += result.count;
   }
 
-  return groups.length;
+  return groupsProcessed;
 }
 
 export async function computeGroupStats(): Promise<{

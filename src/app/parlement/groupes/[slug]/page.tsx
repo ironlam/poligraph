@@ -129,7 +129,7 @@ export default async function GroupeDetailPage({ params }: PageProps) {
           <Card>
             <CardContent className="p-4 text-center">
               <Activity className="h-5 w-5 mx-auto mb-1 text-muted-foreground" aria-hidden="true" />
-              <p className="text-2xl font-bold">{Math.round(stats.averageParticipationPct)}%</p>
+              <p className="text-sm font-semibold text-muted-foreground">Indisponible</p>
               <p className="text-xs text-muted-foreground">Participation</p>
             </CardContent>
           </Card>
