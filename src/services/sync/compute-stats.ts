@@ -4,12 +4,12 @@
  * Replaces expensive real-time CTE+LATERAL queries (~20s) with pre-computed
  * tables that serve instantly (<100ms).
  *
- * Methodology (matching AN/Sénat official approach):
+ * Methodology (Assemblée nationale only):
  *   participation = (votes cast during mandate) / (eligible scrutins during mandate) × 100
  *   - "eligible scrutins" = scrutins in the correct chamber between mandate startDate and endDate
  *   - "votes cast" = Vote records for the politician on eligible scrutins
- *   - NON_VOTANT counts as a vote (politician was present)
- *   - Only politicians without a Vote record for a scrutin are considered absent
+ * Senate participation is deliberately excluded: its vote rows do not provide a reliable
+ * individual-presence denominator.
  *
  * Tables populated:
  *   - PoliticianParticipation: per-politician stats for ranking/pagination
@@ -106,6 +106,15 @@ interface DissidenceRow {
   dissidenceRate: number;
 }
 
+interface DissidencePoliticianRow {
+  politicianId: string;
+  groupId: string | null;
+  groupCode: string | null;
+  groupName: string | null;
+  groupColor: string | null;
+  groupChamber: Chamber;
+}
+
 interface ThemeVoteRow {
   politicianId: string;
   theme: string;
@@ -164,7 +173,7 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
       FROM (
         SELECT DISTINCT m."startDate", m."endDate", m.type
         FROM "Mandate" m
-        WHERE m."isCurrent" = true AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+        WHERE m."isCurrent" = true AND m.type = 'DEPUTE'::"MandateType"
       ) md
     )
     SELECT
@@ -185,15 +194,17 @@ async function computePoliticianParticipation(verbose = false): Promise<Politici
       me.chamber,
       vote_sub.cnt as "votesCount",
       me.eligible as "eligibleScrutins",
-      ROUND(vote_sub.cnt::numeric / NULLIF(me.eligible::numeric, 0) * 100, 1)::float as "participationRate"
+      ROUND(vote_sub.expressed::numeric / NULLIF(me.eligible::numeric, 0) * 100, 1)::float as "participationRate"
     FROM "Politician" pol
     JOIN "Mandate" m ON m."politicianId" = pol.id AND m."isCurrent" = true
-      AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+      AND m.type = 'DEPUTE'::"MandateType"
     JOIN mandate_eligible me ON me."startDate" = m."startDate"
       AND ((me."endDate" IS NULL AND m."endDate" IS NULL) OR me."endDate" = m."endDate")
       AND me.type = m.type
     CROSS JOIN LATERAL (
-      SELECT COUNT(*)::int as cnt
+      SELECT
+        COUNT(*)::int as cnt,
+        COUNT(*) FILTER (WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION'))::int as expressed
       FROM "Vote" v
       WHERE v."politicianId" = pol.id
         AND v.chamber = me.chamber
@@ -253,6 +264,25 @@ async function computeDissidenceData(verbose = false): Promise<Map<string, Dissi
     result.set(id, { politicianId: id, ...d });
   }
   return result;
+}
+
+async function getDissidencePoliticians(): Promise<DissidencePoliticianRow[]> {
+  return db.$queryRaw<DissidencePoliticianRow[]>`
+    SELECT
+      pol.id as "politicianId",
+      pg.id as "groupId",
+      pg.code as "groupCode",
+      pg.name as "groupName",
+      pg.color as "groupColor",
+      pg.chamber as "groupChamber"
+    FROM "Politician" pol
+    JOIN "Mandate" m ON m."politicianId" = pol.id
+      AND m."isCurrent" = true
+      AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+    JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
+    JOIN "ParliamentaryGroup" pg ON pg.id = mp."parliamentaryGroupId"
+    WHERE pol."publicationStatus" = 'PUBLISHED'
+  `;
 }
 
 async function computeThemeDistributionPerPolitician(
@@ -684,9 +714,10 @@ export async function computeStats(
   // 1b. Compute dissidence + theme distribution
   if (verbose) console.log("\n[1b/8] Computing dissidence + theme distribution...");
   const t1b = Date.now();
-  const [dissidenceMap, themeMap] = await Promise.all([
+  const [dissidenceMap, themeMap, dissidencePoliticians] = await Promise.all([
     computeDissidenceData(verbose),
     computeThemeDistributionPerPolitician(verbose),
+    getDissidencePoliticians(),
   ]);
   const d1b = Date.now() - t1b;
   if (verbose) console.log(`  Duration: ${(d1b / 1000).toFixed(1)}s`);
@@ -697,9 +728,7 @@ export async function computeStats(
 
   // 3. Aggregate and persist party participation (by chamber variants)
   if (verbose) console.log("\n[3/8] Computing party & group participation aggregates...");
-  const allPartyAgg = aggregateByParty(politicians);
-  const anPartyAgg = aggregateByParty(politicians.filter((r) => r.chamber === "AN"));
-  const senatPartyAgg = aggregateByParty(politicians.filter((r) => r.chamber === "SENAT"));
+  const anPartyAgg = aggregateByParty(politicians);
 
   // Also need party full names — fetch them
   const partyNames = await db.party.findMany({
@@ -711,34 +740,32 @@ export async function computeStats(
   const partyNameMap = new Map(partyNames.map((p) => [p.id, p.name]));
 
   // Enrich party aggregations with full names
-  for (const agg of [...allPartyAgg, ...anPartyAgg, ...senatPartyAgg]) {
+  for (const agg of anPartyAgg) {
     agg.partyName = partyNameMap.get(agg.partyId) || agg.partyShortName;
   }
 
-  await upsertStatsSnapshot("party-participation", allPartyAgg, d1, dryRun, verbose);
+  await upsertStatsSnapshot("party-participation", anPartyAgg, d1, dryRun, verbose);
   await upsertStatsSnapshot("party-participation-AN", anPartyAgg, d1, dryRun, verbose);
-  await upsertStatsSnapshot("party-participation-SENAT", senatPartyAgg, d1, dryRun, verbose);
+  await upsertStatsSnapshot("party-participation-SENAT", [], d1, dryRun, verbose);
 
   // 4. Aggregate and persist group participation
   if (verbose) console.log("\n[4/8] Computing group participation aggregates...");
-  const allGroupAgg = aggregateByGroup(politicians);
-  const anGroupAgg = aggregateByGroup(politicians.filter((r) => r.chamber === "AN"));
-  const senatGroupAgg = aggregateByGroup(politicians.filter((r) => r.chamber === "SENAT"));
+  const anGroupAgg = aggregateByGroup(politicians);
 
-  await upsertStatsSnapshot("group-participation", allGroupAgg, d1, dryRun, verbose);
+  await upsertStatsSnapshot("group-participation", anGroupAgg, d1, dryRun, verbose);
   await upsertStatsSnapshot("group-participation-AN", anGroupAgg, d1, dryRun, verbose);
-  await upsertStatsSnapshot("group-participation-SENAT", senatGroupAgg, d1, dryRun, verbose);
+  await upsertStatsSnapshot("group-participation-SENAT", [], d1, dryRun, verbose);
 
   // 4b. Aggregate and persist group dissidence
   if (verbose) console.log("\n[4b/8] Computing group dissidence aggregates...");
-  const dissidenceAggData = politicians
+  const dissidenceAggData = dissidencePoliticians
     .filter((r) => r.groupId)
     .map((r) => ({
       groupId: r.groupId,
       groupCode: r.groupCode,
       groupName: r.groupName,
       groupColor: r.groupColor,
-      groupChamber: r.chamber,
+      groupChamber: r.groupChamber,
       dissidenceRate: dissidenceMap.get(r.politicianId)?.dissidenceRate ?? null,
     }));
 
@@ -780,16 +807,16 @@ export async function computeStats(
   if (verbose) {
     console.log(`\n[8/8] Done in ${(totalDuration / 1000).toFixed(1)}s`);
     console.log(`  Politicians: ${politicians.length}`);
-    console.log(`  Party aggregates: ${allPartyAgg.length}`);
-    console.log(`  Group aggregates: ${allGroupAgg.length}`);
+    console.log(`  Party aggregates: ${anPartyAgg.length}`);
+    console.log(`  Group aggregates: ${anGroupAgg.length}`);
     console.log(`  Dissidence data: ${dissidenceMap.size} politicians`);
     console.log(`  Theme data: ${themeMap.size} politicians`);
   }
 
   return {
     politicians: politicians.length,
-    parties: allPartyAgg.length,
-    groups: allGroupAgg.length,
+    parties: anPartyAgg.length,
+    groups: anGroupAgg.length,
     durationMs: totalDuration,
   };
 }

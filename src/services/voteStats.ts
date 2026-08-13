@@ -3,6 +3,11 @@ import { db } from "@/lib/db";
 import { Chamber, MandateType, Prisma } from "@/generated/prisma";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
+import {
+  PARTICIPATION_AVAILABLE,
+  participationStatusFor,
+  type ParticipationStatus,
+} from "@/lib/votes/participation-publication";
 
 // ============================================
 // Types
@@ -21,7 +26,7 @@ export interface PartyVoteStats {
   nonVotant: number;
   absent: number;
   cohesionRate: number;
-  participationRate: number;
+  participationRate: number | null;
 }
 
 export interface DivisiveScrutin {
@@ -42,7 +47,8 @@ export interface VoteStatsResult {
     totalVotesFor: number;
     totalVotesAgainst: number;
     totalVotesAbstain: number;
-    participationRate: number;
+    participationRate: number | null;
+    participationStatus: ParticipationStatus;
     anScrutins: number;
     senatScrutins: number;
     adoptes: number;
@@ -95,6 +101,9 @@ async function getVoteStats(
 
   // Aggregate party rows into stats
   const parties = aggregatePartyStats(partyRows, partyLimit);
+  if (chamber !== "AN") {
+    for (const party of parties) party.participationRate = null;
+  }
 
   return {
     global: {
@@ -103,9 +112,10 @@ async function getVoteStats(
       totalVotesAgainst: globalStats._sum.votesAgainst || 0,
       totalVotesAbstain: globalStats._sum.votesAbstain || 0,
       participationRate:
-        participationRow.total > 0
+        participationRow !== null && participationRow.total > 0
           ? Math.round((participationRow.participating / participationRow.total) * 100)
-          : 0,
+          : null,
+      participationStatus: participationStatusFor(chamber),
       anScrutins: chamberCounts.an,
       senatScrutins: chamberCounts.senat,
       adoptes: chamberCounts.adoptes,
@@ -299,12 +309,12 @@ async function getDivisiveScrutins(
  */
 async function getGlobalParticipation(
   chamber?: Chamber
-): Promise<{ participating: number; total: number }> {
-  const where: Record<string, unknown> = {};
-  if (chamber) where.chamber = chamber;
+): Promise<{ participating: number; total: number } | null> {
+  if (chamber === "SENAT") return null;
 
   const result = await db.politicianParticipation.aggregate({
-    where,
+    // Historical SENAT rows are hostile input. Global participation means published AN data.
+    where: { chamber: "AN" },
     _sum: { votesCount: true, eligibleScrutins: true },
   });
 
@@ -340,7 +350,8 @@ export interface PoliticianVotingStats {
   abstention: number;
   nonVotant: number;
   absent: number;
-  participationRate: number;
+  participationRate: number | null;
+  participationStatus: ParticipationStatus;
 }
 
 /**
@@ -399,7 +410,8 @@ export async function getPoliticianVotingStats(
     abstention: 0,
     nonVotant: 0,
     absent: 0,
-    participationRate: 0,
+    participationRate: null,
+    participationStatus: participationStatusFor(chamber),
   };
 
   for (const s of stats) {
@@ -424,7 +436,7 @@ export async function getPoliticianVotingStats(
   }
 
   // Compute participation based on eligible scrutins during mandate period
-  if (mandate) {
+  if (mandate && chamber === "AN") {
     const eligibleRows = await db.$queryRaw<[{ count: number }]>`
       SELECT COUNT(*)::int as "count"
       FROM "Scrutin" s
@@ -436,14 +448,16 @@ export async function getPoliticianVotingStats(
 
     if (eligibleScrutins > 0) {
       votingStats.absent = Math.max(0, eligibleScrutins - votingStats.total);
-      votingStats.participationRate = Math.round((votingStats.total / eligibleScrutins) * 100);
+      const expressed = votingStats.pour + votingStats.contre + votingStats.abstention;
+      votingStats.participationRate = Math.round((expressed / eligibleScrutins) * 100);
     }
-  } else {
+  } else if (!mandate && mandateType !== "SENATEUR") {
     // Fallback: no active parliamentary mandate — use old ratio
     const expressed = votingStats.pour + votingStats.contre + votingStats.abstention;
     const countedForParticipation = votingStats.total - votingStats.nonVotant;
     votingStats.participationRate =
       countedForParticipation > 0 ? Math.round((expressed / countedForParticipation) * 100) : 0;
+    votingStats.participationStatus = PARTICIPATION_AVAILABLE;
   }
 
   return votingStats;
@@ -517,8 +531,8 @@ async function getParticipationRanking(
   const offset = (page - 1) * pageSize;
 
   // Build Prisma where filter
-  const where: Record<string, unknown> = {};
-  if (chamber) where.chamber = chamber;
+  if (chamber === "SENAT") return { entries: [], total: 0 };
+  const where: Record<string, unknown> = { chamber: "AN" };
   if (partyId) where.partyId = partyId;
 
   const [entries, total] = await Promise.all([
@@ -555,7 +569,8 @@ export interface PartyParticipationStats {
  * Get average participation rate per party from pre-computed StatsSnapshot.
  */
 async function getPartyParticipationStats(chamber?: Chamber): Promise<PartyParticipationStats[]> {
-  const key = chamber ? `party-participation-${chamber}` : "party-participation";
+  if (chamber === "SENAT") return [];
+  const key = "party-participation-AN";
   const snapshot = await db.statsSnapshot.findUnique({ where: { key } });
 
   if (snapshot) {
@@ -637,7 +652,8 @@ export interface LegislativeStatsResult {
  * Get average participation rate per parliamentary group from pre-computed StatsSnapshot.
  */
 async function getGroupParticipationStats(chamber?: Chamber): Promise<GroupParticipationStats[]> {
-  const key = chamber ? `group-participation-${chamber}` : "group-participation";
+  if (chamber === "SENAT") return [];
+  const key = "group-participation-AN";
   const snapshot = await db.statsSnapshot.findUnique({ where: { key } });
 
   if (snapshot) {
@@ -656,10 +672,11 @@ export interface PoliticianParliamentaryCardData {
   chamber: "AN" | "SENAT";
   mandateType: "DEPUTE" | "SENATEUR";
   votesCount: number;
-  eligibleScrutins: number;
-  participationRate: number;
-  rank: number;
-  totalPeers: number;
+  eligibleScrutins: number | null;
+  participationRate: number | null;
+  participationStatus: ParticipationStatus;
+  rank: number | null;
+  totalPeers: number | null;
   dissidenceRate: number | null;
   dissidenceCount: number | null;
   dissidenceTotal: number | null;
@@ -674,6 +691,26 @@ export async function getPoliticianParliamentaryCard(
   mandateType: "DEPUTE" | "SENATEUR"
 ): Promise<PoliticianParliamentaryCardData | null> {
   const chamber: Chamber = mandateType === "DEPUTE" ? "AN" : "SENAT";
+
+  if (chamber === "SENAT") {
+    const [votesCount, dissidence] = await Promise.all([
+      db.vote.count({ where: { politicianId, chamber: "SENAT" } }),
+      getPoliticianDissidence(politicianId),
+    ]);
+    return {
+      chamber,
+      mandateType,
+      votesCount,
+      eligibleScrutins: null,
+      participationRate: null,
+      participationStatus: participationStatusFor(chamber),
+      rank: null,
+      totalPeers: null,
+      dissidenceRate: dissidence?.rate ?? null,
+      dissidenceCount: dissidence?.count ?? null,
+      dissidenceTotal: dissidence?.total ?? null,
+    };
+  }
 
   const entry = await db.politicianParticipation.findUnique({
     where: { politicianId },
@@ -698,12 +735,58 @@ export async function getPoliticianParliamentaryCard(
     votesCount: entry.votesCount,
     eligibleScrutins: entry.eligibleScrutins,
     participationRate: entry.participationRate,
+    participationStatus: PARTICIPATION_AVAILABLE,
     rank: higherCount + 1,
     totalPeers,
     dissidenceRate: entry.dissidenceRate,
     dissidenceCount: entry.dissidenceCount,
     dissidenceTotal: entry.dissidenceTotal,
   };
+}
+
+async function getPoliticianDissidence(
+  politicianId: string
+): Promise<{ count: number; total: number; rate: number } | null> {
+  const rows = await db.$queryRaw<[{ count: number; total: number; rate: number | null }]>`
+    WITH current_votes AS (
+      SELECT v."politicianId", v."scrutinId", v.position, mp."parliamentaryGroupId" as "groupId"
+      FROM "Vote" v
+      JOIN "Mandate" m ON m."politicianId" = v."politicianId"
+        AND m."isCurrent" = true
+        AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+      JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
+      WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+        AND v."votingDate" >= m."startDate"
+        AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
+    ), majorities AS (
+      SELECT "scrutinId", "groupId", position
+      FROM (
+        SELECT "scrutinId", "groupId", position,
+          ROW_NUMBER() OVER (
+            PARTITION BY "scrutinId", "groupId"
+            ORDER BY COUNT(*) DESC, position ASC
+          ) as rank
+        FROM current_votes
+        GROUP BY "scrutinId", "groupId", position
+      ) ranked
+      WHERE rank = 1
+    )
+    SELECT
+      COUNT(*) FILTER (WHERE cv.position <> m.position)::int as count,
+      COUNT(*)::int as total,
+      ROUND(
+        COUNT(*) FILTER (WHERE cv.position <> m.position)::numeric
+        / NULLIF(COUNT(*)::numeric, 0) * 100,
+        1
+      )::float as rate
+    FROM current_votes cv
+    JOIN majorities m ON m."scrutinId" = cv."scrutinId" AND m."groupId" = cv."groupId"
+    WHERE cv."politicianId" = ${politicianId}
+  `;
+  const row = rows[0];
+  return row && row.total > 0 && row.rate !== null
+    ? { count: row.count, total: row.total, rate: row.rate }
+    : null;
 }
 
 // ============================================
@@ -763,24 +846,29 @@ export interface PoliticianThemeDistribution {
 export async function getPoliticianThemeDistribution(
   politicianId: string
 ): Promise<PoliticianThemeDistribution[]> {
-  const entry = await db.politicianParticipation.findUnique({
-    where: { politicianId },
-    select: { themeDistribution: true },
-  });
+  // Theme distribution is computed from expressed votes, not from participation. Reading it
+  // directly keeps historical Senate participation rows out of this unrelated public feature.
+  const rows = await db.$queryRaw<
+    { theme: string; pour: number; contre: number; abstention: number; total: number }[]
+  >`
+    SELECT s.theme::text,
+      COUNT(*) FILTER (WHERE v.position = 'POUR')::int as pour,
+      COUNT(*) FILTER (WHERE v.position = 'CONTRE')::int as contre,
+      COUNT(*) FILTER (WHERE v.position = 'ABSTENTION')::int as abstention,
+      COUNT(*)::int as total
+    FROM "Vote" v
+    JOIN "Scrutin" s ON s.id = v."scrutinId"
+    WHERE v."politicianId" = ${politicianId}
+      AND s.theme IS NOT NULL
+      AND v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+    GROUP BY s.theme
+  `;
 
-  if (!entry?.themeDistribution) return [];
-
-  const dist = entry.themeDistribution as Record<
-    string,
-    { pour: number; contre: number; abstention: number; total: number }
-  >;
-
-  return Object.entries(dist)
-    .map(([theme, counts]) => ({
-      theme,
-      label: THEME_CATEGORY_LABELS[theme as ThemeCategory] || theme,
-      icon: THEME_CATEGORY_ICONS[theme as ThemeCategory] || "",
-      ...counts,
+  return rows
+    .map((row) => ({
+      ...row,
+      label: THEME_CATEGORY_LABELS[row.theme as ThemeCategory] || row.theme,
+      icon: THEME_CATEGORY_ICONS[row.theme as ThemeCategory] || "",
     }))
     .sort((a, b) => b.total - a.total);
 }

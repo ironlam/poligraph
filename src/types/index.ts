@@ -237,7 +237,8 @@ export type PoliticianVoteStats = {
   abstention: number;
   nonVotant: number;
   absent: number;
-  participationRate: number;
+  participationRate: number | null;
+  participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT";
 };
 
 export type ScrutinFilters = {

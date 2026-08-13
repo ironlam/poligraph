@@ -5,7 +5,6 @@ import type { AffairStatus } from "@/types";
 import { AffairsSection } from "../sections/AffairsSection";
 import { FactchecksSection } from "../sections/FactchecksSection";
 import { VoteConcordanceSection } from "../sections/VoteConcordanceSection";
-import { ParticipationSection } from "../sections/ParticipationSection";
 import { PatrimoineSection } from "../sections/PatrimoineSection";
 import { computeVoteConcordance, type PoliticianComparisonData } from "@/lib/data/compare";
 
@@ -32,10 +31,6 @@ function countByMaturity(affairs: { status: string }[]): Record<string, number> 
   return counts;
 }
 
-function presenceRate(data: PoliticianComparisonData["voteStats"]): number {
-  return Math.round(data.presenceRate);
-}
-
 export function SenateursComparison({ left, right }: Props) {
   const concordance = computeVoteConcordance(left.votes, right.votes);
 
@@ -50,15 +45,15 @@ export function SenateursComparison({ left, right }: Props) {
         </div>
       </section>
 
-      <ParticipationSection
-        left={{ ...left.voteStats, presenceRate: presenceRate(left.voteStats) }}
-        right={{
-          ...right.voteStats,
-          presenceRate: presenceRate(right.voteStats),
-        }}
-        leftLabel={left.fullName}
-        rightLabel={right.fullName}
-      />
+      <section aria-labelledby="senat-participation-heading">
+        <h3 id="senat-participation-heading" className="text-lg font-display font-semibold mb-2">
+          Participation aux votes
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+          individuelle de façon suffisamment fiable.
+        </p>
+      </section>
 
       {concordance.stats.total > 0 && (
         <VoteConcordanceSection

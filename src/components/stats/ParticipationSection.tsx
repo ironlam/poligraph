@@ -46,7 +46,7 @@ function chamberLabel(mandateType: string): { label: string; variant: "default" 
 export function ParticipationSection({
   ranking,
   groupStatsAN,
-  groupStatsSENAT,
+  groupStatsSENAT: _groupStatsSENAT,
   groupDissidenceAN,
   groupDissidenceSENAT,
   chamber,
@@ -56,11 +56,7 @@ export function ParticipationSection({
   const sortedGroupsAN = [...groupStatsAN].sort(
     (a, b) => b.avgParticipationRate - a.avgParticipationRate
   );
-  const sortedGroupsSENAT = [...groupStatsSENAT].sort(
-    (a, b) => b.avgParticipationRate - a.avgParticipationRate
-  );
-
-  const allGroups = [...groupStatsAN, ...groupStatsSENAT];
+  const allGroups = groupStatsAN;
   const avgRate =
     allGroups.length > 0
       ? allGroups.reduce((sum, g) => sum + g.avgParticipationRate, 0) / allGroups.length
@@ -135,20 +131,10 @@ export function ParticipationSection({
               <CardTitle className="text-base">Sénat</CardTitle>
             </CardHeader>
             <CardContent>
-              {sortedGroupsSENAT.length > 0 ? (
-                <HorizontalBars
-                  title="Groupes parlementaires Sénat"
-                  maxValue={100}
-                  bars={sortedGroupsSENAT.map((g) => ({
-                    label: g.groupCode,
-                    value: g.avgParticipationRate,
-                    color: g.groupColor || undefined,
-                    suffix: "%",
-                  }))}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">Aucune donnée</p>
-              )}
+              <p className="text-sm text-muted-foreground">
+                Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+                individuelle de façon suffisamment fiable.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -223,6 +209,12 @@ export function ParticipationSection({
           </div>
         </CardHeader>
         <CardContent>
+          {chamber === "SENAT" && (
+            <p className="text-sm text-muted-foreground mb-4">
+              La participation individuelle est indisponible pour le Sénat. Aucun sénateur
+              n&apos;entre dans ce classement.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -335,12 +327,9 @@ export function ParticipationSection({
             <div>
               <p className="font-medium mb-1">Sources et calcul</p>
               <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
-                <li>Données : scrutins publics de l&apos;Assemblée nationale et du Sénat</li>
+                <li>Participation : scrutins publics de l&apos;Assemblée nationale uniquement</li>
                 <li>Formule : votes enregistrés / scrutins éligibles durant le mandat × 100</li>
-                <li>
-                  NON_VOTANT = présent (le parlementaire était en séance, ex : président de séance)
-                </li>
-                <li>Seuls les parlementaires sans enregistrement de vote sont comptés absents</li>
+                <li>Les données Sénat ne permettent pas de mesurer assez fiablement la présence</li>
               </ul>
             </div>
             <div>
@@ -359,8 +348,8 @@ export function ParticipationSection({
         }
       >
         Le taux de participation est calculé en comparant le nombre de votes enregistrés pour chaque
-        parlementaire au nombre total de scrutins pendant la durée de son mandat. Source :
-        data.assemblee-nationale.fr, data.senat.fr.
+        député au nombre total de scrutins de l&apos;Assemblée nationale pendant la durée de son
+        mandat. Les taux du Sénat ne sont pas publiés. Source : data.assemblee-nationale.fr.
       </MethodologyDisclaimer>
     </section>
   );

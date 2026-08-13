@@ -114,7 +114,7 @@ export function VotesSection({
             </div>
 
             {/* Participation bar (hidden for chamber presidents) */}
-            {!isChamberPresident && (
+            {!isChamberPresident && voteData.stats.participationRate !== null && (
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span id="participation-label" className="text-muted-foreground">
@@ -136,6 +136,12 @@ export function VotesSection({
                   />
                 </div>
               </div>
+            )}
+            {voteData.stats.participationRate === null && (
+              <p className="text-sm text-muted-foreground">
+                Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+                individuelle de façon suffisamment fiable.
+              </p>
             )}
 
             {/* Dissidence bar (only if group data available) */}

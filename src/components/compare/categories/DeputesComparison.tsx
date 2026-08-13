@@ -33,7 +33,7 @@ function countByMaturity(affairs: { status: string }[]): Record<string, number> 
 }
 
 function presenceRate(data: PoliticianComparisonData["voteStats"]): number {
-  return Math.round(data.presenceRate);
+  return Math.round(data.presenceRate ?? 0);
 }
 
 export function DeputesComparison({ left, right }: Props) {

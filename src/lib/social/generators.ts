@@ -517,7 +517,7 @@ async function deputySpotlight(recent: RecentlyPosted): Promise<TweetDraft[]> {
     // Build hook — skip this politician if no factual hook
     let hook = "";
 
-    if (politician.participation) {
+    if (politician.participation?.chamber === "AN") {
       const rate = Math.round(politician.participation.participationRate);
       hook = `Participation : ${rate}%`;
       if (politician.participation.eligibleScrutins >= 50) {

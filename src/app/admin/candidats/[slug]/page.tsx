@@ -133,7 +133,7 @@ export default async function AdminCandidatProfilePage({ params }: PageProps) {
     }),
     db.declaration.count({ where: { politicianId: politician.id } }),
     db.politicianParticipation.findFirst({
-      where: { politicianId: politician.id },
+      where: { politicianId: politician.id, chamber: "AN" },
     }),
     getCandidateCrossCycle(politician.id, "presidentielle-2027"),
     getProbityStats(politician.id),

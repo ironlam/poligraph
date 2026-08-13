@@ -341,13 +341,14 @@ async function getPoliticianForComparison(slug: string, mandateType: string) {
   // Reuse the single source of truth for vote stats (same as politician profile page)
   const stats = await getPoliticianVotingStats(politician.id, mandateType as MandateType);
   const voteStats = {
-    total: stats.total + stats.absent, // eligible scrutins = votes cast + absent
+    total: stats.participationRate === null ? stats.total : stats.total + stats.absent,
     pour: stats.pour,
     contre: stats.contre,
     abstention: stats.abstention,
     nonVotant: stats.nonVotant,
     absent: stats.absent,
     presenceRate: stats.participationRate,
+    participationStatus: stats.participationStatus,
   };
 
   return {

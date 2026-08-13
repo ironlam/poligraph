@@ -126,7 +126,20 @@ export function ParliamentaryCard({
       </div>
 
       <CardContent className="pt-5 pb-4">
-        {isChamberPresident ? (
+        {data.participationRate === null ? (
+          <div className="flex items-start gap-3 p-3 bg-muted rounded-lg">
+            <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
+            <div className="text-sm text-muted-foreground">
+              <p>
+                Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+                individuelle de façon suffisamment fiable.
+              </p>
+              <p className="mt-1 text-xs">
+                {data.votesCount.toLocaleString("fr-FR")} votes enregistrés restent consultables.
+              </p>
+            </div>
+          </div>
+        ) : isChamberPresident ? (
           <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
             <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" aria-hidden="true" />
             <div className="text-sm text-muted-foreground">
@@ -173,7 +186,7 @@ export function ParliamentaryCard({
                   <span className="text-muted-foreground">Scrutins votés</span>
                   <span className="font-medium tabular-nums">
                     {data.votesCount.toLocaleString("fr-FR")} /{" "}
-                    {data.eligibleScrutins.toLocaleString("fr-FR")}
+                    {data.eligibleScrutins?.toLocaleString("fr-FR")}
                   </span>
                 </div>
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">

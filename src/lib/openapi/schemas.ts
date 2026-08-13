@@ -318,6 +318,10 @@
  *         participationRate:
  *           type: number
  *           format: float
+ *           nullable: true
+ *         participationStatus:
+ *           type: string
+ *           enum: [AVAILABLE, SOURCE_INSUFFICIENT]
  *
  *     SearchResult:
  *       type: object

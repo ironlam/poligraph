@@ -12,7 +12,8 @@ interface VoteStatsProps {
     abstention: number;
     nonVotant?: number;
     absent: number;
-    participationRate: number;
+    participationRate: number | null;
+    participationStatus?: "AVAILABLE" | "SOURCE_INSUFFICIENT";
   };
   isChamberPresident?: boolean;
 }
@@ -36,7 +37,7 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Participation (hidden for chamber presidents) */}
-        {!isChamberPresident && (
+        {!isChamberPresident && participationRate !== null && (
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span className="text-muted-foreground flex items-center gap-1">
@@ -51,6 +52,12 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
               />
             </div>
           </div>
+        )}
+        {participationRate === null && (
+          <p className="text-sm text-muted-foreground">
+            Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence
+            individuelle de façon suffisamment fiable.
+          </p>
         )}
 
         {/* Distribution des votes */}

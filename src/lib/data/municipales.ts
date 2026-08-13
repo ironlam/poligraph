@@ -300,7 +300,7 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
 
   if (politicianIds.length > 0) {
     const participations = await db.politicianParticipation.findMany({
-      where: { politicianId: { in: politicianIds } },
+      where: { politicianId: { in: politicianIds }, chamber: "AN" },
       select: { politicianId: true, participationRate: true },
     });
     for (const p of participations) {
