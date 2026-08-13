@@ -10,15 +10,14 @@ import { signSessionToken } from "../../src/lib/auth-token";
  * pointed at it:
  *
  *   docker compose -f docker-compose.test-search.yml up -d
- *   DATABASE_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test?sslmode=disable \
- *     npx prisma db push --url "$DATABASE_URL" --accept-data-loss
- *   DATABASE_URL=... npx tsx scripts/seed-measures-demo.ts
- *   DATABASE_URL=... ADMIN_PASSWORD=<choix local> npm run dev
- *   ADMIN_PASSWORD=<le même> npx playwright test mesures-moderation --project=chromium
+ *   export DATABASE_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test?sslmode=disable
+ *   npx prisma db push --url "$DATABASE_URL" --accept-data-loss
+ *   npx tsx scripts/seed-measures-demo.ts
+ *   node --env-file=.env node_modules/@playwright/test/cli.js test mesures-moderation --project=chromium
  *
- * The session cookie is forged rather than typed into the login form: it is the exact token
- * `isAuthenticated()` verifies, so the test depends on the auth contract instead of on the
- * markup of the login page.
+ * Playwright loads the local, gitignored .env file before it starts the inherited dev server. The
+ * session cookie is issued through the official signing primitive rather than through the login
+ * form, so the test depends on the auth contract instead of on the markup of the login page.
  */
 
 const SESSION_CONFIGURED =

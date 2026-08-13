@@ -8,6 +8,7 @@ const auth = vi.hoisted(() => ({
 }));
 const limiter = vi.hoisted(() => ({
   checkLoginRateLimit: vi.fn(async () => ({ allowed: true, remaining: 4, retryAfter: 0 })),
+  recordLoginFailure: vi.fn(async () => ({ allowed: true, remaining: 3, retryAfter: 0 })),
   clearLoginRateLimit: vi.fn(async () => undefined),
   LoginRateLimitUnavailableError: class extends Error {},
 }));
@@ -44,12 +45,16 @@ describe("SEC-04 distributed login protection", () => {
     expect(limiter.checkLoginRateLimit).toHaveBeenCalledWith("trusted-test-client");
     expect(auth.createSession).toHaveBeenCalledOnce();
     expect(limiter.clearLoginRateLimit).toHaveBeenCalledWith("trusted-test-client");
+    expect(limiter.clearLoginRateLimit.mock.invocationCallOrder[0]).toBeLessThan(
+      auth.createSession.mock.invocationCallOrder[0]!
+    );
   });
 
   it("returns a generic credential failure", async () => {
     auth.verifyPassword.mockResolvedValue(false);
     const response = await POST(request("wrong"));
     expect(response.status).toBe(401);
+    expect(limiter.recordLoginFailure).toHaveBeenCalledWith("trusted-test-client");
     expect(auth.createSession).not.toHaveBeenCalled();
   });
 
@@ -67,6 +72,14 @@ describe("SEC-04 distributed login protection", () => {
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(auth.verifyPassword).not.toHaveBeenCalled();
+    expect(auth.createSession).not.toHaveBeenCalled();
+  });
+
+  it("does not emit a session when the successful-login reset is unavailable", async () => {
+    limiter.clearLoginRateLimit.mockRejectedValueOnce(new Error("test outage"));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(auth.verifyPassword).toHaveBeenCalledOnce();
     expect(auth.createSession).not.toHaveBeenCalled();
   });
 

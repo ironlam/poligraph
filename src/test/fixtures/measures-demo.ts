@@ -78,14 +78,16 @@ async function seedContext(): Promise<SeedContext> {
   const db = await client();
   const unique = suffix();
 
-  const election = await db.election.create({
-    data: {
-      slug: `${CORPUS_PREFIX}-election-${unique}`,
+  const election = await db.election.upsert({
+    where: { slug: "presidentielle-2027" },
+    create: {
+      slug: "presidentielle-2027",
       type: "PRESIDENTIELLE",
       scope: "NATIONAL",
       title: "Élection de démonstration 2027",
       round1Date: new Date("2027-04-11T00:00:00Z"),
     },
+    update: {},
   });
 
   const politicianIds: string[] = [];
@@ -104,6 +106,9 @@ async function seedContext(): Promise<SeedContext> {
         electionId: election.id,
         politicianId: politician.id,
         candidateName: `${candidate.firstName} ${candidate.lastName}`,
+        status: "DECLARE",
+        sourceUrl: "https://example.org/candidature-demonstration",
+        sourceLabel: "Source de démonstration",
       },
     });
     politicianIds.push(politician.id);
