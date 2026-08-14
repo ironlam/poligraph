@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import type { CandidacyStatus, Prisma } from "@/generated/prisma";
 
@@ -30,6 +31,12 @@ export type PublicPresidentialCandidate = {
   sourceUrl: string | null;
   sourceLabel: string | null;
   slogan: string | null;
+  /**
+   * The colour code of the candidacy, already resolved: editorial accent, else the party it is filed
+   * under, else the linked politician's current party when the candidacy's own label names it.
+   * Null when none of the three answers, and a caller renders a neutral slot rather than a colour.
+   * See `resolveCandidateAccentColor` for why the last step is guarded.
+   */
   accentColor: string | null;
   /** Wording of the source for the party, and the linked entity's sigle when there is one. */
   partyLabel: string | null;
@@ -44,8 +51,16 @@ export async function getPublicPresidentialCandidates(
     where: { election: { slug: electionSlug }, ...PUBLIC_CANDIDACY_WHERE },
     include: {
       presidentialData: true,
-      politician: { select: { slug: true, lastName: true } },
-      party: { select: { shortName: true } },
+      // `currentParty` is read for its colour only, and only ever used when the candidacy's own
+      // `partyLabel` names that same party (see `resolveCandidateAccentColor`).
+      politician: {
+        select: {
+          slug: true,
+          lastName: true,
+          currentParty: { select: { color: true, name: true, shortName: true } },
+        },
+      },
+      party: { select: { shortName: true, color: true } },
     },
     // No `orderBy`: the order is a presidential policy, not a column. Sorting here on
     // `candidateName` would file "Édouard Philippe" under E, and would disagree with the hub field,
@@ -60,7 +75,12 @@ export async function getPublicPresidentialCandidates(
     sourceUrl: row.sourceUrl,
     sourceLabel: row.sourceLabel,
     slogan: row.presidentialData?.slogan ?? null,
-    accentColor: row.presidentialData?.accentColor ?? null,
+    accentColor: resolveCandidateAccentColor({
+      accentColor: row.presidentialData?.accentColor ?? null,
+      candidacyParty: row.party,
+      partyLabel: row.partyLabel,
+      currentParty: row.politician?.currentParty ?? null,
+    }),
     partyLabel: row.partyLabel,
     partyShortName: row.party?.shortName ?? null,
     declaredAt: row.presidentialData?.declaredAt ?? null,

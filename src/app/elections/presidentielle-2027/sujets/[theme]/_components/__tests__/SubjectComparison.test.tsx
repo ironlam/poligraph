@@ -326,4 +326,38 @@ describe("SubjectComparison", () => {
     // Et sous le nom de celle dont la mesure est retirée, le compte tombe à zéro.
     expect(screen.getAllByText(/aucune mesure sur ce sujet/).length).toBe(2);
   });
+
+  it("porte le code couleur de chaque candidature, dans le tableau comme sur les cartes", () => {
+    // Régression : la pastille existait mais n'était alimentée que par l'accent éditorial, nul sur
+    // toutes les candidatures semées, donc chaque ligne rendait le même gris. La couleur est
+    // désormais résolue par l'autorité de lecture (`resolveCandidateAccentColor`).
+    const { container } = render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [subjectMeasure(measure({ id: "m-1" }), "SEARCH_NOT_DONE")], {
+              accentColor: "#cc2443",
+            }),
+            entry("Chloe", [subjectMeasure(measure({ id: "m-2" }), "SEARCH_NOT_DONE")]),
+          ],
+        })}
+      />
+    );
+
+    // Deux rendus, tableau et cartes : la pastille doit tenir dans les deux.
+    const colorees = container.querySelectorAll('[data-accent="#cc2443"]');
+    expect(colorees).toHaveLength(2);
+    for (const pastille of colorees) {
+      expect(pastille).toHaveStyle({ backgroundColor: "#cc2443" });
+      // Décorative : le nom du parti est écrit à côté, la couleur ne porte jamais seule un fait.
+      expect(pastille).toHaveAttribute("aria-hidden", "true");
+    }
+
+    // Sans couleur résolue, la pastille reste neutre plutôt que d'emprunter celle d'un autre parti.
+    const neutres = container.querySelectorAll('[data-accent="neutre"]');
+    expect(neutres).toHaveLength(2);
+    for (const pastille of neutres) {
+      expect((pastille as HTMLElement).style.backgroundColor).toBe("");
+    }
+  });
 });

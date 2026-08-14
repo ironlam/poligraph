@@ -3,6 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
+import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import {
   resolveProgrammeAbsence,
@@ -41,9 +42,8 @@ export type HubCandidacy = {
   sourceLabel: string | null;
   partyLabel: string | null;
   /**
-   * The party as an ENTITY, when the candidacy is linked to one. `partyLabel` is the wording of
-   * the source and stays authoritative for the text; these three carry the visual identity, and
-   * they are all null on a candidacy whose `partyId` was never resolved.
+   * The visual identity. The colour follows the same resolver as the subject pages, while the short
+   * name and logo still require a linked party entity.
    */
   partyColor: string | null;
   partyShortName: string | null;
@@ -117,7 +117,14 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
         sourceLabel: true,
         partyLabel: true,
         partyId: true,
-        politician: { select: { slug: true, lastName: true } },
+        presidentialData: { select: { accentColor: true, publicationStatus: true } },
+        politician: {
+          select: {
+            slug: true,
+            lastName: true,
+            currentParty: { select: { color: true, name: true, shortName: true } },
+          },
+        },
         party: { select: { color: true, shortName: true, logoUrl: true } },
       },
     }),
@@ -167,7 +174,18 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
       sourceUrl: c.sourceUrl,
       sourceLabel: c.sourceLabel,
       partyLabel: c.partyLabel,
-      partyColor: c.party?.color ?? null,
+      partyColor: resolveCandidateAccentColor({
+        // The hub includes candidacies without a published presidential extension. Use an editorial
+        // accent only after that extension clears its publication gate, otherwise fall back to the
+        // candidacy's public party data.
+        accentColor:
+          c.presidentialData?.publicationStatus === "PUBLISHED"
+            ? c.presidentialData.accentColor
+            : null,
+        candidacyParty: c.party,
+        partyLabel: c.partyLabel,
+        currentParty: c.politician?.currentParty ?? null,
+      }),
       partyShortName: c.party?.shortName ?? null,
       partyLogoUrl: c.party?.logoUrl ?? null,
       measureCount,

@@ -105,6 +105,13 @@ describeIfDisposableDb("hub", () => {
         await db.politician.deleteMany({ where: { id: { in: [zoe.id, aaron.id] } } });
       }
     });
+
+    it("utilise uniquement les accents éditoriaux publiés", async () => {
+      const field = await getHubCandidacyField(SLUG);
+
+      expect(field.find((c) => c.candidateName === "Alpha Fixture")?.partyColor).toBe("#123456");
+      expect(field.find((c) => c.candidateName === "Charlie Fixture")?.partyColor).toBeNull();
+    });
   });
 
   describe("getHubMeasureContext / loadHubMeasureContext", () => {

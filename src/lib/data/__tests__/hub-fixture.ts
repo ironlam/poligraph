@@ -7,7 +7,8 @@ import { assertDisposableTestDb } from "@/test/disposable-db";
  * Three populations coexist on purpose:
  * - Alpha and Bravo carry a PUBLISHED `CandidacyPresidential` extension plus a defended
  *   LOGEMENT_URBANISME measure each, so the subject page reaches its two-candidacy gate and
- *   `getHubMeasureContext` reports `hubPublishable: true`.
+ *   `getHubMeasureContext` reports `hubPublishable: true`. Alpha also carries a published
+ *   editorial accent used to verify that the hub and subject pages share the same colour priority.
  * - Charlie is ENVISAGE, has a complete source (`sourceUrl` + `sourceLabel`), and a DRAFT
  *   `CandidacyPresidential` extension carrying a published LOGEMENT_URBANISME measure. The hub
  *   field shows the whole race, not just published fiches, so Charlie must still surface from
@@ -58,7 +59,8 @@ export async function seedHubFixture(
 
   async function candidacyWithPublishedExtension(
     name: string,
-    status: "PRESSENTI" | "DECLARE"
+    status: "PRESSENTI" | "DECLARE",
+    accentColor: string | null = null
   ): Promise<{ candidacyId: string; politicianId: string }> {
     const pol = await politician(name);
     const candidacy = await db.candidacy.create({
@@ -72,7 +74,7 @@ export async function seedHubFixture(
       },
     });
     await db.candidacyPresidential.create({
-      data: { candidacyId: candidacy.id, publicationStatus: "PUBLISHED" },
+      data: { candidacyId: candidacy.id, publicationStatus: "PUBLISHED", accentColor },
     });
     return { candidacyId: candidacy.id, politicianId: pol.id };
   }
@@ -114,7 +116,7 @@ export async function seedHubFixture(
     return seeded;
   }
 
-  const alpha = await candidacyWithPublishedExtension("Alpha", "PRESSENTI");
+  const alpha = await candidacyWithPublishedExtension("Alpha", "PRESSENTI", "#123456");
   const bravo = await candidacyWithPublishedExtension("Bravo", "DECLARE");
 
   await publishMeasure(
@@ -146,7 +148,11 @@ export async function seedHubFixture(
     },
   });
   await db.candidacyPresidential.create({
-    data: { candidacyId: charlieCandidacy.id, publicationStatus: "DRAFT" },
+    data: {
+      candidacyId: charlieCandidacy.id,
+      publicationStatus: "DRAFT",
+      accentColor: "#abcdef",
+    },
   });
   await publishMeasure(
     charlie.id,

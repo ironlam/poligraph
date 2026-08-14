@@ -32,8 +32,23 @@ describeIfDisposableDb("autorité de lecture publique des candidatures présiden
     });
     electionId = election.id;
 
+    // Deux partis colorés : celui qu'Alix porte réellement, et celui dont Dana est encartée mais
+    // sous lequel elle ne se présente pas.
+    const partiAlix = await db.party.create({
+      data: { name: `${SLUG} Parti A`, shortName: `${SLUG}-PA`, color: "#cc2443" },
+    });
+    const partiDana = await db.party.create({
+      data: { name: `${SLUG} Parti D`, shortName: `${SLUG}-PD`, color: "#0d378a" },
+    });
+
     const polPub = await db.politician.create({
-      data: { slug: `${SLUG}-a`, firstName: "Alix", lastName: "Publiee", fullName: "Alix Publiee" },
+      data: {
+        slug: `${SLUG}-a`,
+        firstName: "Alix",
+        lastName: "Publiee",
+        fullName: "Alix Publiee",
+        currentPartyId: partiAlix.id,
+      },
     });
     const polDraft = await db.politician.create({
       data: { slug: `${SLUG}-b`, firstName: "Bo", lastName: "Brouillon", fullName: "Bo Brouillon" },
@@ -50,10 +65,36 @@ describeIfDisposableDb("autorité de lecture publique des candidatures présiden
         status: "DECLARE",
         sourceUrl: "https://example.org/a",
         sourceLabel: "Source A",
+        // Étiquette texte sans `partyId`, l'état réel des candidatures semées : la couleur ne peut
+        // venir que du parti actuel de la personne, et seulement parce que l'étiquette le nomme.
+        partyLabel: `${SLUG}-PA`,
       },
     });
     await db.candidacyPresidential.create({
       data: { candidacyId: candPub.id, publicationStatus: "PUBLISHED", slogan: "Slogan A" },
+    });
+
+    // Dana se présente sous une autre bannière que le parti dont elle est encartée.
+    const polDivergente = await db.politician.create({
+      data: {
+        slug: `${SLUG}-d`,
+        firstName: "Dana",
+        lastName: "Divergente",
+        fullName: "Dana Divergente",
+        currentPartyId: partiDana.id,
+      },
+    });
+    const candDivergente = await db.candidacy.create({
+      data: {
+        electionId,
+        politicianId: polDivergente.id,
+        candidateName: "Dana Divergente",
+        status: "DECLARE",
+        partyLabel: "Mouvement local",
+      },
+    });
+    await db.candidacyPresidential.create({
+      data: { candidacyId: candDivergente.id, publicationStatus: "PUBLISHED" },
     });
 
     const candDraft = await db.candidacy.create({
@@ -83,19 +124,30 @@ describeIfDisposableDb("autorité de lecture publique des candidatures présiden
     await db.candidacy.deleteMany({ where: { electionId } });
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { slug: SLUG } });
+    await db.party.deleteMany({ where: { shortName: { startsWith: SLUG } } });
     await db.$disconnect();
   });
 
   it("ne renvoie que les candidatures dont l'extension est PUBLISHED", async () => {
     const result = await getPublicPresidentialCandidates(SLUG);
-    expect(result.map((c) => c.candidateName)).toEqual(["Alix Publiee"]);
+    // Par nom de famille : Divergente avant Publiee.
+    expect(result.map((c) => c.candidateName)).toEqual(["Dana Divergente", "Alix Publiee"]);
   });
 
   it("expose slogan et source, jamais un brouillon ni une candidature sans extension", async () => {
     const result = await getPublicPresidentialCandidates(SLUG);
-    expect(result).toHaveLength(1);
-    expect(result[0]?.slogan).toBe("Slogan A");
-    expect(result[0]?.sourceLabel).toBe("Source A");
-    expect(result[0]?.status).toBe("DECLARE");
+    const alix = result.find((c) => c.candidateName === "Alix Publiee");
+    expect(alix?.slogan).toBe("Slogan A");
+    expect(alix?.sourceLabel).toBe("Source A");
+    expect(alix?.status).toBe("DECLARE");
+  });
+
+  it("résout la couleur de la candidature, sans emprunter celle d'un parti qu'elle ne porte pas", async () => {
+    const result = await getPublicPresidentialCandidates(SLUG);
+
+    // Étiquette texte seule : la couleur vient du parti actuel, parce que l'étiquette le nomme.
+    expect(result.find((c) => c.candidateName === "Alix Publiee")?.accentColor).toBe("#cc2443");
+    // Étiquette divergente : rien plutôt qu'une couleur fausse.
+    expect(result.find((c) => c.candidateName === "Dana Divergente")?.accentColor).toBeNull();
   });
 });

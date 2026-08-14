@@ -190,8 +190,13 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
   const defended = measures.filter((m) => m.measure.withdrawal === null).length;
   return (
     <span className="flex items-start gap-2.5">
+      {/* The colour code, and the neutral bar is a state of its own, not a failure: the accent is
+          resolved by `resolveCandidateAccentColor`, which returns null rather than borrowing the
+          colour of a party the candidacy is not filed under. Decorative (`aria-hidden`), because
+          the party name is written on the line below: the colour never carries a fact alone. */}
       <span
         aria-hidden="true"
+        data-accent={candidate.accentColor ?? "neutre"}
         className="mt-0.5 h-7 w-2 shrink-0 rounded-sm bg-border"
         style={candidate.accentColor !== null ? { backgroundColor: candidate.accentColor } : {}}
       />
