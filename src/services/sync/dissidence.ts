@@ -1,5 +1,30 @@
 import { Prisma } from "@/generated/prisma";
 
+export const DISSIDENCE_POSITIONS = ["POUR", "CONTRE", "ABSTENTION"] as const;
+
+export function isDissidencePosition(position: string): boolean {
+  return DISSIDENCE_POSITIONS.some((candidate) => candidate === position);
+}
+
+/** Shared joins for every current-mandate dissidence computation. */
+export const CURRENT_GROUP_VOTES_JOINS = Prisma.sql`
+  JOIN "Mandate" m ON m."politicianId" = v."politicianId"
+    AND m."isCurrent" = true
+    AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
+  JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
+`;
+
+/** Shared applicability predicate for every current-mandate dissidence computation. */
+export const CURRENT_GROUP_VOTES_PREDICATE = Prisma.sql`
+  v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
+    AND v.chamber = CASE
+      WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
+      ELSE 'SENAT'::"Chamber"
+    END
+    AND v."votingDate" >= m."startDate"
+    AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
+`;
+
 /**
  * Shared FROM/JOIN/WHERE for BOTH dissidence scans (compute-stats.ts): the group
  * majority aggregation AND the per-politician vote scan. Both MUST run on the same
@@ -9,17 +34,8 @@ import { Prisma } from "@/generated/prisma";
  */
 export const CURRENT_GROUP_VOTES_FROM = Prisma.sql`
   FROM "Vote" v
-  JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-    AND m."isCurrent" = true
-    AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
-  JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
-  WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
-    AND v.chamber = CASE
-      WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
-      ELSE 'SENAT'::"Chamber"
-    END
-    AND v."votingDate" >= m."startDate"
-    AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
+  ${CURRENT_GROUP_VOTES_JOINS}
+  WHERE ${CURRENT_GROUP_VOTES_PREDICATE}
 `;
 
 export interface GroupVoteEntry {
@@ -60,6 +76,7 @@ export interface GroupDissidenceAgg {
 export function findGroupMajority(entries: GroupVoteEntry[]): Map<string, string> {
   const grouped = new Map<string, { position: string; count: number }[]>();
   for (const e of entries) {
+    if (!isDissidencePosition(e.position)) continue;
     const key = `${e.scrutinId}:${e.groupId}`;
     const arr = grouped.get(key) ?? [];
     arr.push({ position: e.position, count: e.count });
@@ -84,6 +101,7 @@ export function computePoliticianDissidence(
 ): Map<string, DissidenceResult> {
   const stats = new Map<string, { dissident: number; total: number }>();
   for (const v of votes) {
+    if (!isDissidencePosition(v.position)) continue;
     const key = `${v.scrutinId}:${v.groupId}`;
     const majority = groupMajority.get(key);
     if (!majority) continue;

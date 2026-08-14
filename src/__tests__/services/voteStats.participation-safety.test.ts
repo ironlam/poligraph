@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dbMock = vi.hoisted(() => ({
   mandate: { findFirst: vi.fn(), findMany: vi.fn() },
   vote: { groupBy: vi.fn(), count: vi.fn() },
-  scrutin: { aggregate: vi.fn() },
+  scrutin: { aggregate: vi.fn(), count: vi.fn() },
   parliamentaryGroupStats: { findMany: vi.fn() },
   politicianParticipation: {
     aggregate: vi.fn(),
@@ -195,6 +195,30 @@ describe("publication de la participation individuelle", () => {
     expect(result.participationStatus).toBe("COMPUTATION_INCOMPLETE");
     expect(dbMock.$queryRaw).not.toHaveBeenCalled();
   });
+
+  it("fail closed quand mandateType=SENATEUR contredit l'unique mandat DEPUTE", async () => {
+    dbMock.mandate.findMany.mockResolvedValue([currentMandate("DEPUTE")]);
+
+    const result = await getPoliticianVotingStats("contradiction-inverse", "SENATEUR");
+
+    expect(result.participationRate).toBeNull();
+    expect(result.participationStatus).toBe("COMPUTATION_INCOMPLETE");
+    expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("fail closed avec plus de deux mandats parlementaires courants", async () => {
+    dbMock.mandate.findMany.mockResolvedValue([
+      currentMandate("DEPUTE"),
+      currentMandate("SENATEUR"),
+      currentMandate("DEPUTE"),
+    ]);
+
+    const result = await getPoliticianVotingStats("trois-mandats", "DEPUTE");
+
+    expect(result.participationRate).toBeNull();
+    expect(result.participationStatus).toBe("COMPUTATION_INCOMPLETE");
+    expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
 });
 
 describe("agrégats et données persistées hostiles", () => {
@@ -203,6 +227,21 @@ describe("agrégats et données persistées hostiles", () => {
     dbMock.scrutin.aggregate.mockResolvedValue({
       _count: 1,
       _sum: { votesFor: 10, votesAgainst: 4, votesAbstain: 2 },
+    });
+    dbMock.scrutin.count.mockImplementation(async ({ where }) => {
+      if (where.chamber === "AN" && where.result === undefined) return 101;
+      if (where.chamber === "SENAT" && where.result === undefined) return 202;
+      if (where.result === "ADOPTED") {
+        if (where.chamber === "AN") return 61;
+        if (where.chamber === "SENAT") return 71;
+        return 132;
+      }
+      if (where.result === "REJECTED") {
+        if (where.chamber === "AN") return 40;
+        if (where.chamber === "SENAT") return 131;
+        return 171;
+      }
+      throw new Error(`Unexpected count scope: ${JSON.stringify(where)}`);
     });
   });
 
@@ -219,8 +258,7 @@ describe("agrégats et données persistées hostiles", () => {
           count: BigInt(120),
         },
       ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ an: 1, senat: 1, adoptes: 1, rejetes: 0 }]);
+      .mockResolvedValueOnce([]);
     return voteStatsService.getVoteStats(chamber);
   }
 
@@ -238,6 +276,12 @@ describe("agrégats et données persistées hostiles", () => {
     expect(result.parties[0]).toMatchObject({
       participationRate: null,
       participationStatus: status,
+    });
+    expect(result.global).toMatchObject({
+      anScrutins: 101,
+      senatScrutins: 202,
+      adoptes: chamber === "AN" ? 61 : chamber === "SENAT" ? 71 : 132,
+      rejetes: chamber === "AN" ? 40 : chamber === "SENAT" ? 131 : 171,
     });
     expect(dbMock.politicianParticipation.aggregate).not.toHaveBeenCalled();
   });

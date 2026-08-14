@@ -15,6 +15,13 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
+function sourceSection(source: string, start: string, end: string): string {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  if (startIndex < 0 || endIndex < 0) return "";
+  return source.slice(startIndex, endIndex);
+}
+
 describe("architecture de publication de la participation", () => {
   it("borne le producteur persistant de participation à l'Assemblée nationale", () => {
     const source = withoutComments(readFileSync("src/services/sync/compute-stats.ts", "utf8"));
@@ -86,5 +93,42 @@ describe("architecture de publication de la participation", () => {
       .filter(([, source]) => /(?:party|group)-participation/.test(source));
 
     expect(consumers).toEqual([]);
+  });
+
+  it("utilise des comptages Prisma explicites pour les résultats par chambre", () => {
+    const source = withoutComments(readFileSync("src/services/voteStats.ts", "utf8"));
+    const counts = sourceSection(
+      source,
+      "async function getChamberCounts",
+      "export interface PoliticianVotingStats"
+    );
+
+    expect(counts).not.toBe("");
+    expect(counts).not.toContain("$queryRaw");
+    expect(counts.match(/db\.scrutin\.count/g)).toHaveLength(4);
+  });
+
+  it("borne la dissidence live aux couples scrutin/groupe du politicien cible", () => {
+    const source = withoutComments(readFileSync("src/services/politician-dissidence.ts", "utf8"));
+    const start = source.indexOf("export async function computeTargetedPoliticianDissidence");
+    const dissidence = start >= 0 ? source.slice(start) : "";
+
+    expect(dissidence).not.toBe("");
+    expect(dissidence).toContain('WHERE v."politicianId" = ${politicianId}');
+    expect(dissidence).toContain("jsonb_to_recordset(${relevantPairsJson}::jsonb)");
+    expect(dissidence).toContain("group_members AS MATERIALIZED");
+    expect(dissidence).toContain("JOIN relevant_pairs rp");
+    expect(dissidence).not.toContain("WITH current_votes AS");
+    expect(dissidence).not.toContain("CURRENT_GROUP_VOTES_PREDICATE}");
+    expect(dissidence.match(/v\.position IN \('POUR', 'CONTRE', 'ABSTENTION'\)/g)).toHaveLength(3);
+    expect(dissidence.match(/v\."votingDate" >= m\."startDate"/g)).toHaveLength(3);
+    expect(
+      dissidence.match(/m\."endDate" IS NULL OR v\."votingDate" <= m\."endDate"/g)
+    ).toHaveLength(3);
+    expect(dissidence.match(/WHEN m\.type = 'DEPUTE'.*THEN 'AN'/g)).toHaveLength(3);
+    expect(dissidence).not.toContain("NON_VOTANT");
+    expect(dissidence).not.toContain("ABSENT");
+    expect(dissidence).toContain("computePoliticianDissidence");
+    expect(dissidence).toContain("findGroupMajority");
   });
 });

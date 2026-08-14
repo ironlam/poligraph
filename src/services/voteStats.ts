@@ -1,6 +1,6 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import { Chamber, MandateType, Prisma } from "@/generated/prisma";
+import { Chamber, MandateType } from "@/generated/prisma";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
 import {
@@ -10,6 +10,7 @@ import {
   roundParticipationRate,
   type ParticipationStatus,
 } from "@/lib/votes/participation-publication";
+import { computeTargetedPoliticianDissidence } from "@/services/politician-dissidence";
 
 // ============================================
 // Types
@@ -301,18 +302,15 @@ async function getDivisiveScrutins(
 }
 
 async function getChamberCounts(chamber?: Chamber) {
-  const rows = await db.$queryRaw<
-    [{ an: number; senat: number; adoptes: number; rejetes: number }]
-  >`
-    SELECT
-      COUNT(*) FILTER (WHERE chamber = 'AN'::"Chamber")::int as an,
-      COUNT(*) FILTER (WHERE chamber = 'SENAT'::"Chamber")::int as senat,
-      COUNT(*) FILTER (WHERE result = 'ADOPTED' ${chamber ? Prisma.sql`AND chamber = ${chamber}::"Chamber"` : Prisma.sql``})::int as adoptes,
-      COUNT(*) FILTER (WHERE result = 'REJECTED' ${chamber ? Prisma.sql`AND chamber = ${chamber}::"Chamber"` : Prisma.sql``})::int as rejetes
-    FROM "Scrutin"
-  `;
+  const resultScope = chamber ? { chamber } : {};
+  const [an, senat, adoptes, rejetes] = await Promise.all([
+    db.scrutin.count({ where: { chamber: "AN" } }),
+    db.scrutin.count({ where: { chamber: "SENAT" } }),
+    db.scrutin.count({ where: { result: "ADOPTED", ...resultScope } }),
+    db.scrutin.count({ where: { result: "REJECTED", ...resultScope } }),
+  ]);
 
-  return rows[0];
+  return { an, senat, adoptes, rejetes };
 }
 
 // ============================================
@@ -675,53 +673,10 @@ export async function getPoliticianParliamentaryCard(
   };
 }
 
-async function getPoliticianDissidence(
+export async function getPoliticianDissidence(
   politicianId: string
 ): Promise<{ count: number; total: number; rate: number } | null> {
-  const rows = await db.$queryRaw<[{ count: number; total: number; rate: number | null }]>`
-    WITH current_votes AS (
-      SELECT v."politicianId", v."scrutinId", v.position, mp."parliamentaryGroupId" as "groupId"
-      FROM "Vote" v
-      JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-        AND m."isCurrent" = true
-        AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
-      JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
-      WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
-        AND v.chamber = CASE
-          WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
-          ELSE 'SENAT'::"Chamber"
-        END
-        AND v."votingDate" >= m."startDate"
-        AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
-    ), majorities AS (
-      SELECT "scrutinId", "groupId", position
-      FROM (
-        SELECT "scrutinId", "groupId", position,
-          ROW_NUMBER() OVER (
-            PARTITION BY "scrutinId", "groupId"
-            ORDER BY COUNT(*) DESC, position ASC
-          ) as rank
-        FROM current_votes
-        GROUP BY "scrutinId", "groupId", position
-      ) ranked
-      WHERE rank = 1
-    )
-    SELECT
-      COUNT(*) FILTER (WHERE cv.position <> m.position)::int as count,
-      COUNT(*)::int as total,
-      ROUND(
-        COUNT(*) FILTER (WHERE cv.position <> m.position)::numeric
-        / NULLIF(COUNT(*)::numeric, 0) * 100,
-        1
-      )::float as rate
-    FROM current_votes cv
-    JOIN majorities m ON m."scrutinId" = cv."scrutinId" AND m."groupId" = cv."groupId"
-    WHERE cv."politicianId" = ${politicianId}
-  `;
-  const row = rows[0];
-  return row && row.total > 0 && row.rate !== null
-    ? { count: row.count, total: row.total, rate: row.rate }
-    : null;
+  return computeTargetedPoliticianDissidence(politicianId);
 }
 
 /**
@@ -733,6 +688,7 @@ export async function getPoliticianDissidenceRanking(
   page: number = 1,
   pageSize: number = 24
 ): Promise<{ politicianIds: string[]; total: number }> {
+  const chamberScope = chamber ?? null;
   const rows = await db.$queryRaw<{ politicianId: string; totalRows: number }[]>`
     WITH current_votes AS (
       SELECT
@@ -752,7 +708,7 @@ export async function getPoliticianDissidenceRanking(
         END
         AND v."votingDate" >= m."startDate"
         AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
-        ${chamber ? Prisma.sql`AND v.chamber = ${chamber}::"Chamber"` : Prisma.empty}
+        AND (${chamberScope}::text IS NULL OR v.chamber = ${chamberScope}::"Chamber")
     ), position_counts AS (
       SELECT "scrutinId", "groupId", position, COUNT(*)::int AS count
       FROM current_votes

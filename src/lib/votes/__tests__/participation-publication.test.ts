@@ -93,6 +93,8 @@ describe("politique de publication de la participation", () => {
     [[depute, senateur], "DEPUTE", null, "COMPUTATION_INCOMPLETE"],
     [[depute, senateur], "SENATEUR", null, "COMPUTATION_INCOMPLETE"],
     [[senateur], "DEPUTE", null, "COMPUTATION_INCOMPLETE"],
+    [[depute], "SENATEUR", null, "COMPUTATION_INCOMPLETE"],
+    [[depute, senateur, depute], "DEPUTE", null, "COMPUTATION_INCOMPLETE"],
     [[{ ...depute, startDate: new Date("invalid") }], undefined, null, "COMPUTATION_INCOMPLETE"],
   ] as const)(
     "résout le périmètre courant %# sans masquer les ambiguïtés",

@@ -4,6 +4,8 @@ import {
   computePoliticianDissidence,
   aggregateDissidenceByGroup,
   CURRENT_GROUP_VOTES_FROM,
+  CURRENT_GROUP_VOTES_JOINS,
+  CURRENT_GROUP_VOTES_PREDICATE,
   type GroupVoteEntry,
   type PoliticianVoteWithGroup,
 } from "../dissidence";
@@ -13,17 +15,26 @@ describe("CURRENT_GROUP_VOTES_FROM (shared dissidence scan)", () => {
   // same population. The mandate date filter has to stay in the shared fragment,
   // otherwise the majority is computed on out-of-mandate votes (past bug: 333
   // majorities flipped, ~140 politicians judged against a wrong majority).
-  const sql = CURRENT_GROUP_VOTES_FROM.sql;
+  const joins = CURRENT_GROUP_VOTES_JOINS.sql;
+  const predicate = CURRENT_GROUP_VOTES_PREDICATE.sql;
 
   it("filters votes to the current mandate date range", () => {
-    expect(sql).toContain('v."votingDate" >= m."startDate"');
-    expect(sql).toContain('m."endDate" IS NULL OR v."votingDate" <= m."endDate"');
+    expect(predicate).toContain('v."votingDate" >= m."startDate"');
+    expect(predicate).toContain('m."endDate" IS NULL OR v."votingDate" <= m."endDate"');
   });
 
   it("scopes to current DEPUTE/SENATEUR mandates and real positions", () => {
-    expect(sql).toContain('m."isCurrent" = true');
-    expect(sql).toContain("'DEPUTE'::\"MandateType\", 'SENATEUR'::\"MandateType\"");
-    expect(sql).toContain("v.position IN ('POUR', 'CONTRE', 'ABSTENTION')");
+    expect(joins).toContain('m."isCurrent" = true');
+    expect(joins).toContain("'DEPUTE'::\"MandateType\", 'SENATEUR'::\"MandateType\"");
+    expect(predicate).toContain("v.position IN ('POUR', 'CONTRE', 'ABSTENTION')");
+    expect(predicate).toContain("WHEN m.type = 'DEPUTE'::\"MandateType\" THEN 'AN'");
+    expect(predicate).toContain("ELSE 'SENAT'");
+    expect(predicate).not.toContain("NON_VOTANT");
+    expect(predicate).not.toContain("ABSENT");
+    expect(CURRENT_GROUP_VOTES_FROM.sql).toContain('JOIN "Mandate" m');
+    expect(CURRENT_GROUP_VOTES_FROM.sql).toContain(
+      "v.position IN ('POUR', 'CONTRE', 'ABSTENTION')"
+    );
   });
 });
 
@@ -78,6 +89,29 @@ describe("computePoliticianDissidence", () => {
     ];
     const result = computePoliticianDissidence(votes, majority);
     expect(result.size).toBe(0);
+  });
+
+  it("ignore défensivement NON_VOTANT et ABSENT", () => {
+    const majority = findGroupMajority([
+      { scrutinId: "s1", groupId: "g1", position: "POUR", count: 2 },
+      { scrutinId: "s1", groupId: "g1", position: "NON_VOTANT", count: 100 },
+      { scrutinId: "s1", groupId: "g1", position: "ABSENT", count: 100 },
+    ]);
+    const result = computePoliticianDissidence(
+      [
+        { politicianId: "p1", scrutinId: "s1", groupId: "g1", position: "POUR" },
+        { politicianId: "p1", scrutinId: "s1", groupId: "g1", position: "NON_VOTANT" },
+        { politicianId: "p1", scrutinId: "s1", groupId: "g1", position: "ABSENT" },
+      ],
+      majority
+    );
+
+    expect(majority.get("s1:g1")).toBe("POUR");
+    expect(result.get("p1")).toEqual({
+      dissidenceCount: 0,
+      dissidenceTotal: 1,
+      dissidenceRate: 0,
+    });
   });
 });
 

@@ -50,6 +50,7 @@ describe("producteur persistant de participation", () => {
     ["DEPUTE + SENATEUR", ["DEPUTE", "SENATEUR"], false],
     ["deux DEPUTE", ["DEPUTE", "DEPUTE"], false],
     ["deux SENATEUR", ["SENATEUR", "SENATEUR"], false],
+    ["plus de deux mandats", ["DEPUTE", "SENATEUR", "DEPUTE"], false],
   ] as const)("%s: ligne publiable=%s", async (_, types, expected) => {
     const politicianId = "politician-matrix";
     dbMock.$queryRaw.mockResolvedValue([rawRow(politicianId)]);
