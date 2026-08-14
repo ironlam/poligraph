@@ -21,9 +21,8 @@ import { SubjectSidebar } from "./SubjectSidebar";
  * A public subject page: for one theme, every publicly visible candidacy on one row, with what it
  * proposes, whether a close text was ever voted, and how precise the measure is.
  *
- * One measure per candidacy is quoted, the rest fold into a disclosure. Six rows each carrying a
- * dozen measures is a wall, and the comparison this page exists for happens between candidacies,
- * not inside one.
+ * Up to three measures per candidacy are quoted, the rest fold into a disclosure. The comparison
+ * this page exists for happens between candidacies, not inside one.
  *
  * Candidates come in the alphabetical order the authority returns. Below the publication gate the
  * page renders an explicit closed state.
@@ -89,11 +88,45 @@ function WithdrawalLine({ withdrawal }: { withdrawal: NonNullable<PublicMeasure[
   );
 }
 
-/** One quoted measure: its text, its source, and its withdrawal when there is one. */
+/**
+ * How precise a measure is, and whether a close text was ever voted.
+ *
+ * Both qualify ONE measure, so they sit with the measure they qualify. They used to be two columns
+ * of the table, reading `measures[0]`, which was true only as long as a row quoted exactly one
+ * measure; quoting three under a "Précision" column showing a single badge would have attributed
+ * the first measure's qualification to the two below it.
+ *
+ * A null precision is NOT "pas encore relu". Publication requires `reviewedAt` to be set
+ * (`PUBLIC_MEASURE_WHERE`), so a visible measure has been reviewed by construction and that label
+ * would contradict the very predicate that let it appear.
+ */
+function MeasureQualifiers({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
+  return (
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+      {entry.measure.precision !== null ? (
+        <MeasurePrecisionBadge precision={entry.measure.precision} />
+      ) : (
+        <QualifiedEmptyCell
+          absence={{ kind: "not_applicable", reason: "Précision non renseignée" }}
+          className="text-xs"
+        />
+      )}
+      <VoteRelationBadge
+        relation={entry.voteRelation}
+        basisDetails={
+          entry.voteReference !== null ? composeVoteBasis(entry.voteReference) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+/** One quoted measure: its text, what qualifies it, its sources, and its withdrawal when there is one. */
 function QuotedMeasure({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
   return (
     <div className="space-y-1.5">
       <p className="text-sm leading-relaxed">&laquo;&nbsp;{entry.measure.text}&nbsp;&raquo;</p>
+      <MeasureQualifiers entry={entry} />
       <MeasureSources sources={entry.measure.sources} />
       {entry.measure.withdrawal !== null && (
         <WithdrawalLine withdrawal={entry.measure.withdrawal} />
@@ -103,27 +136,38 @@ function QuotedMeasure({ entry }: { entry: SubjectCandidateEntry["measures"][num
 }
 
 /**
- * The proposal cell: the first measure quoted, the others behind a disclosure.
+ * How many measures a row quotes before folding the rest.
+ *
+ * One exposed whichever measure happened to be imported first as if it were an editorial choice.
+ * Three gives a broader view without turning the comparison into a full programme listing.
+ */
+const QUOTED_MEASURE_LIMIT = 3;
+
+/**
+ * The proposal cell: up to three measures quoted, the rest behind a disclosure.
  *
  * `<details>` rather than a state hook: the page is a server component, and the browser's own
  * disclosure is keyboard-operable and announced correctly without a line of JavaScript.
  */
 function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: ThemeCategory }) {
-  const [first, ...rest] = entry.measures;
-  if (first === undefined) {
+  if (entry.measures.length === 0) {
     return <QualifiedEmptyCell absence={{ kind: "no_measure_published", theme }} />;
   }
+  const quoted = entry.measures.slice(0, QUOTED_MEASURE_LIMIT);
+  const folded = entry.measures.slice(QUOTED_MEASURE_LIMIT);
 
   return (
-    <div className="space-y-2">
-      <QuotedMeasure entry={first} />
-      {rest.length > 0 && (
+    <div className="space-y-3">
+      {quoted.map((measure) => (
+        <QuotedMeasure key={measure.measure.id} entry={measure} />
+      ))}
+      {folded.length > 0 && (
         <details className="group">
           <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
-            + {rest.length} {rest.length === 1 ? "autre mesure" : "autres mesures"} sur ce sujet
+            + {folded.length} {folded.length === 1 ? "autre mesure" : "autres mesures"} sur ce sujet
           </summary>
           <div className="mt-2 space-y-3 border-l-2 border-border pl-3">
-            {rest.map((other) => (
+            {folded.map((other) => (
               <QuotedMeasure key={other.measure.id} entry={other} />
             ))}
           </div>
@@ -131,56 +175,6 @@ function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: T
       )}
     </div>
   );
-}
-
-/**
- * Both cells describe THE MEASURE, so with no measure they have no subject to describe.
- *
- * The absence they state has to stay about this cell. An earlier version answered "N'a jamais
- * siégé", which is a claim about a career derived from the emptiness of one theme: false for
- * everyone who has sat, and not deducible from anything this page reads.
- */
-function VoteCell({ entry }: { entry: SubjectCandidateEntry }) {
-  const first = entry.measures[0];
-  if (first === undefined) {
-    return (
-      <QualifiedEmptyCell
-        absence={{
-          kind: "not_applicable",
-          reason: "Pas de mesure publiée à rapprocher d'un scrutin",
-        }}
-      />
-    );
-  }
-  return (
-    <VoteRelationBadge
-      relation={first.voteRelation}
-      basisDetails={
-        first.voteReference !== null ? composeVoteBasis(first.voteReference) : undefined
-      }
-    />
-  );
-}
-
-/**
- * Nothing at all when there is no measure: the proposal cell on the same row already says no measure
- * is published, and repeating it in a second column adds a line without adding a fact.
- *
- * A null precision is NOT "pas encore relu". Publication requires `reviewedAt` to be set
- * (`PUBLIC_MEASURE_WHERE`), so a visible measure has been reviewed by construction and that label
- * would contradict the very predicate that let the row appear.
- */
-function PrecisionCell({ entry }: { entry: SubjectCandidateEntry }) {
-  const first = entry.measures[0];
-  if (first === undefined) return null;
-  if (first.measure.precision === null) {
-    return (
-      <QualifiedEmptyCell
-        absence={{ kind: "not_applicable", reason: "Précision non renseignée" }}
-      />
-    );
-  }
-  return <MeasurePrecisionBadge precision={first.measure.precision} />;
 }
 
 function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
@@ -224,29 +218,27 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
 }
 
 /**
- * Four columns, and the office one is deliberately not among them.
+ * Two columns, and what used to be the other two now travels with the measure.
  *
  * "A exercé sur ce sujet" is gone: linking a mandate to a subject needs a mapping the model does not
  * carry, so the cell held the same sentence on every row. It distinguished nothing and took 190px
  * from the only column with content, which at anything under a very wide viewport squeezed the
  * quoted measure down to one word per line. It comes back the day the mapping exists.
  *
- * "Déjà soumis au vote ?" stays although it is empty today, and the difference is not arbitrary:
- * its nine states and their badge already exist, so the column starts varying the moment a scrutin
- * is linked to a measure.
+ * "Déjà soumis au vote ?" and "Précision de la mesure" are gone as COLUMNS, not as content: a column
+ * holds one value per row, and a row now quotes up to three measures with a precision and a vote
+ * relation each. Both are rendered by `MeasureQualifiers` under the sentence they qualify, which is
+ * also where a reader looks for them. The vote states keep their nine values and their badge, so
+ * they still start varying the moment a scrutin is linked to a measure.
  */
 const COLUMNS = [
   { title: "Candidat·e", hint: "Par nom de famille" },
   // Not "du programme": a measure with no `programEditionId` was taken from a speech, an interview
   // or an article, and the source line under each quote names which.
-  { title: "Ce qu'il ou elle propose", hint: "Phrase citée, avec sa source" },
   {
-    title: "Déjà soumis au vote ?",
-    hint: "Seulement si un texte proche a été voté et que la personne siégeait",
+    title: "Ce qu'il ou elle propose",
+    hint: "Jusqu'à trois mesures citées, chacune avec sa source, sa précision et sa relation aux votes",
   },
-  // The enum holds two values, "Chiffrée" and "Objectif sans chiffre". There is no dated or funded
-  // criterion anywhere in the model, so naming them here promised a qualification we never make.
-  { title: "Précision de la mesure", hint: "Chiffrée ou objectif sans chiffre" },
 ];
 
 export function SubjectComparison({ data }: { data: SubjectPageData }) {
@@ -364,21 +356,20 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
     <>
       {/* lg and up: the full table. `table-fixed` with explicit widths, so a long quote
           widens its own cell's line count instead of stretching the table past the viewport. */}
-      {/* `min-w-[860px]` is the fix for a table that crushed itself. With `table-fixed`, the three
-          side columns keep their pixel widths whatever happens, so on a container narrower than
-          their sum the flexible column collapsed towards zero and wrapped the quote one word per
-          line, headers overlapping. A minimum width makes the wrapper scroll instead. */}
+      {/* `min-w-[560px]` is what is left of the fix for a table that crushed itself. With
+          `table-fixed` the identity column keeps its pixel width whatever happens, so on a narrow
+          enough container the flexible column collapsed towards zero and wrapped the quote one word
+          per line. A minimum width makes the wrapper scroll instead. The floor came down with the
+          two side columns it used to have to fit. */}
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-card lg:block">
-        <table className="w-full min-w-[860px] table-fixed border-collapse text-left">
+        <table className="w-full min-w-[560px] table-fixed border-collapse text-left">
           <caption className="sr-only">
-            Ce que chaque candidature propose sur {THEME_CATEGORY_LABELS[data.theme]}, avec sa
-            source, sa relation aux votes et la précision de la mesure.
+            Ce que chaque candidature propose sur {THEME_CATEGORY_LABELS[data.theme]}, chaque mesure
+            citée avec sa source, sa précision et sa relation aux votes.
           </caption>
           <colgroup>
             <col className="w-[200px]" />
             <col />
-            <col className="w-[180px]" />
-            <col className="w-[150px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-muted/50 align-top">
@@ -406,20 +397,20 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
                 <td className="px-4 py-4">
                   <ProposalCell entry={entry} theme={data.theme} />
                 </td>
-                <td className="px-4 py-4">
-                  <VoteCell entry={entry} />
-                </td>
-                <td className="px-4 py-4">
-                  <PrecisionCell entry={entry} />
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Below lg: one card per candidacy. Five columns cannot be read at 390px, and shrinking the
-          type to fit would make the quote unreadable, so the layout changes rather than the content. */}
+      {/* Below lg: one card per candidacy. The two columns cannot be read side by side at 390px, and
+          shrinking the type to fit would make the quote unreadable, so the layout changes rather
+          than the content: the card carries exactly what the row carries, stacked.
+
+          The definition list of vote relation and precision is gone from here too. It used to
+          restate at the bottom of the card what the table said in its side columns; now that both
+          travel under the sentence they qualify, repeating them per card would separate a
+          qualification from the only measure it is true of. */}
       <ul className="space-y-3 lg:hidden">
         {data.candidates.map((entry) => (
           <li key={entry.candidate.id} className="rounded-xl border border-border bg-card p-4">
@@ -427,22 +418,6 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
             <div className="mt-3">
               <ProposalCell entry={entry} theme={data.theme} />
             </div>
-            {/* The precision pair drops out entirely when there is no measure. On the table an
-                empty cell sits under a header that explains it; here the term would stand alone
-                facing nothing, which reads as a value we failed to load. */}
-            <dl className="mt-4 space-y-2 border-t border-border pt-3 text-sm">
-              {[
-                { term: COLUMNS[2]!.title, cell: <VoteCell entry={entry} /> },
-                ...(entry.measures.length > 0
-                  ? [{ term: COLUMNS[3]!.title, cell: <PrecisionCell entry={entry} /> }]
-                  : []),
-              ].map(({ term, cell }) => (
-                <div key={term} className="flex flex-wrap items-start justify-between gap-2">
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">{term}</dt>
-                  <dd className="min-w-0 text-right">{cell}</dd>
-                </div>
-              ))}
-            </dl>
           </li>
         ))}
       </ul>
@@ -462,8 +437,8 @@ function FooterCard({
   return (
     <p className="rounded-xl border border-border bg-card px-5 py-3.5 text-sm text-muted-foreground">
       {documented} {documented === 1 ? "candidature porte" : "candidatures portent"} une mesure sur
-      ce sujet, pour {total} au total. Une seule est citée par candidature&nbsp;; les autres se
-      déplient.
+      ce sujet, pour {total} au total. Jusqu&apos;à {QUOTED_MEASURE_LIMIT} mesures sont citées par
+      candidature&nbsp;; au-delà, les suivantes se déplient.
       {withoutMeasure > 0 && (
         <>
           {" "}
@@ -484,11 +459,12 @@ function MethodCard() {
           (VOTE_RELATION_BASIS_LABELS). An earlier version quoted "aucun vote sur cet objet", a
           string that exists nowhere: a reader would have looked for a wording they never meet. */}
       <p className="max-w-3xl text-sm text-muted-foreground">
-        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote. Cette
-        colonne dit donc surtout où nous en sommes&nbsp;: «&nbsp;périmètre non examiné&nbsp;» tant
-        que nous n&apos;avons pas cherché de scrutin proche, «&nbsp;périmètre examiné sans
-        résultat&nbsp;» quand nous avons cherché sans rien trouver. Une position ne s&apos;affiche
-        que pour une candidature qui siégeait au moment où un texte proche a été soumis.
+        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote. La
+        mention portée sous chaque mesure dit donc surtout où nous en sommes&nbsp;: «&nbsp;périmètre
+        non examiné&nbsp;» tant que nous n&apos;avons pas cherché de scrutin proche,
+        «&nbsp;périmètre examiné sans résultat&nbsp;» quand nous avons cherché sans rien trouver.
+        Une position ne s&apos;affiche que pour une candidature qui siégeait au moment où un texte
+        proche a été soumis.
       </p>
       <Link
         href="/methodologie"

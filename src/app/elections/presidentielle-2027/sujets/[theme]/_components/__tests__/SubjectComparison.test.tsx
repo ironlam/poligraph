@@ -270,10 +270,11 @@ describe("SubjectComparison", () => {
 
     expect(container.querySelector('[data-absence-kind="never_sat"]')).toBeNull();
     expect(screen.queryByText(/jamais siégé/i)).not.toBeInTheDocument();
-    expect(
-      container.querySelectorAll('[data-absence-kind="not_applicable"]').length
-    ).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Pas de mesure publiée à rapprocher d'un scrutin/).length).toBe(2);
+    // Ce que la ligne dit à la place, tableau et carte : l'absence porte sur ce sujet, rien d'autre.
+    expect(container.querySelectorAll('[data-absence-kind="no_measure_published"]')).toHaveLength(
+      2
+    );
+    expect(screen.getAllByText(/Aucune mesure publiée sur Logement/).length).toBe(2);
   });
 
   it("ne dit jamais d'une mesure publiée qu'elle n'est pas relue", () => {
@@ -325,6 +326,72 @@ describe("SubjectComparison", () => {
     expect(screen.getByText(/réparties entre 1 candidature/)).toBeInTheDocument();
     // Et sous le nom de celle dont la mesure est retirée, le compte tombe à zéro.
     expect(screen.getAllByText(/aucune mesure sur ce sujet/).length).toBe(2);
+  });
+
+  it("cite jusqu'à trois mesures et ne replie que les suivantes", () => {
+    // La régression que ce test verrouille : une seule mesure était citée, et c'était `measures[0]`
+    // d'un `orderBy: createdAt asc`, donc celle importée en premier. Un artefact de pipeline
+    // présenté comme un choix éditorial.
+    const quatre = [1, 2, 3, 4].map((n) =>
+      subjectMeasure(measure({ id: `m-${n}`, text: `Mesure ${n}.` }), "SEARCH_NOT_DONE")
+    );
+    render(<SubjectComparison data={data({ candidates: [entry("Alix", quatre)] })} />);
+
+    // Trois citées d'emblée, dans les deux rendus.
+    for (const n of [1, 2, 3]) {
+      expect(screen.getAllByText(new RegExp(`Mesure ${n}\\.`))).toHaveLength(2);
+    }
+    // La quatrième est repliée : présente dans le DOM (le `<details>` reste indexable et
+    // opérable au clavier), annoncée pour ce qu'elle est.
+    expect(screen.getAllByText("+ 1 autre mesure sur ce sujet")).toHaveLength(2);
+    expect(screen.getAllByText(/Mesure 4\./)).toHaveLength(2);
+  });
+
+  it("ne replie rien quand la candidature porte trois mesures ou moins", () => {
+    const trois = [1, 2, 3].map((n) =>
+      subjectMeasure(measure({ id: `m-${n}`, text: `Mesure ${n}.` }), "SEARCH_NOT_DONE")
+    );
+    render(<SubjectComparison data={data({ candidates: [entry("Alix", trois)] })} />);
+
+    expect(screen.queryByText(/autre mesure sur ce sujet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/autres mesures sur ce sujet/)).not.toBeInTheDocument();
+  });
+
+  it("qualifie chaque mesure citée, jamais la première pour toutes", () => {
+    // Précision et relation aux votes portent sur UNE mesure. Tant qu'elles vivaient en colonnes
+    // lisant `measures[0]`, citer trois phrases aurait attribué aux deux suivantes la
+    // qualification de la première.
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [
+              subjectMeasure(
+                measure({
+                  id: "m-1",
+                  text: "Construire 200 000 logements.",
+                  precision: "CHIFFREE",
+                }),
+                "SEARCH_NOT_DONE"
+              ),
+              subjectMeasure(
+                measure({ id: "m-2", text: "Encadrer les loyers.", precision: null }),
+                "NO_VOTE_IN_SCOPE"
+              ),
+            ]),
+          ],
+        })}
+      />
+    );
+
+    // Une pastille chiffrée pour la première, une absence qualifiée pour la seconde, pas l'inverse.
+    expect(screen.getAllByText("Chiffrée")).toHaveLength(2);
+    expect(screen.getAllByText("Précision non renseignée")).toHaveLength(2);
+    // Et deux états de vote différents sur la même ligne. Portée sur la ligne du tableau : le
+    // paragraphe de méthode cite les mêmes libellés en bas de page.
+    const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
+    expect(within(ligne).getAllByText(/périmètre non examiné/)).toHaveLength(1);
+    expect(within(ligne).getAllByText(/périmètre examiné sans résultat/)).toHaveLength(1);
   });
 
   it("porte le code couleur de chaque candidature, dans le tableau comme sur les cartes", () => {
