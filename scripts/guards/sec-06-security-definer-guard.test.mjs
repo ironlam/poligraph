@@ -2,101 +2,100 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import { findSecurityDefinerViolations } from "./sec-06-security-definer-guard.mjs";
+import {
+  findRoutinePrivilegeViolations,
+  listApplicationSqlFiles,
+} from "./sec-06-security-definer-guard.mjs";
 
 const migrationPath = path.resolve("prisma/migrations/20990101000000_fixture/migration.sql");
 
-describe("SEC-06 SECURITY DEFINER guard", () => {
-  test("rejects CREATE and ALTER privilege boundaries by default", () => {
+function violationsFor(sql) {
+  return findRoutinePrivilegeViolations([[migrationPath, sql]]);
+}
+
+describe("SEC-06 routine privilege source guard", () => {
+  test("rejects explicit SECURITY DEFINER boundaries, including executable blocks", () => {
     const sql = `
       CREATE FUNCTION public.first_fixture() RETURNS integer
       LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
-      ALTER FUNCTION public.second_fixture(text) SECURITY DEFINER;
+      ALTER PROCEDURE public.second_fixture(text) SECURITY DEFINER;
+      DO $$ BEGIN
+        EXECUTE 'ALTER FUNCTION public.third_fixture() SECURITY DEFINER';
+      END $$;
     `;
 
-    const violations = findSecurityDefinerViolations([[migrationPath, sql]], new Map());
+    assert.equal(violationsFor(sql).filter(({ kind }) => kind === "security-definer").length, 1);
+  });
 
-    assert.deepEqual(
-      violations.map(({ signature }) => signature),
-      ["public.first_fixture()", "public.second_fixture(text)"]
+  test("rejects direct routine EXECUTE and ALL grants to public roles", () => {
+    const forbidden = [
+      "GRANT EXECUTE ON FUNCTION public.fixture() TO PUBLIC;",
+      "GRANT EXECUTE ON FUNCTION public.fixture(text), public.fixture(integer) TO anon;",
+      'GRANT ALL PRIVILEGES ON PROCEDURE public.fixture() TO "authenticated";',
+      "GRANT EXECUTE ON ROUTINE public.fixture() TO service_role, anon;",
+      "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;",
+      "GRANT ALL ON ALL ROUTINES IN SCHEMA public TO PUBLIC;",
+    ];
+
+    for (const sql of forbidden) {
+      assert.ok(
+        violationsFor(sql).some(({ kind }) => kind === "routine-execute-grant"),
+        sql
+      );
+    }
+  });
+
+  test("rejects permissive routine default grants to public roles", () => {
+    const forbidden = [
+      "ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO PUBLIC;",
+      "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT EXECUTE ON ROUTINES TO anon;",
+      "ALTER DEFAULT PRIVILEGES FOR USER postgres GRANT ALL PRIVILEGES ON PROCEDURES TO authenticated;",
+    ];
+
+    for (const sql of forbidden) {
+      assert.ok(
+        violationsFor(sql).some(({ kind }) => kind === "routine-default-grant"),
+        sql
+      );
+    }
+  });
+
+  test("accepts invokers, revokes, non-public grants, and comments", () => {
+    const sql = `
+      -- CREATE FUNCTION public.documented() SECURITY DEFINER;
+      /* GRANT EXECUTE ON FUNCTION public.documented() TO PUBLIC; */
+      CREATE FUNCTION public.safe_fixture() RETURNS integer
+      LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$;
+      REVOKE EXECUTE ON ROUTINE public.safe_fixture() FROM PUBLIC, anon, authenticated;
+      GRANT EXECUTE ON FUNCTION public.safe_fixture() TO sec06_server, service_role;
+      ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+    `;
+
+    assert.deepEqual(violationsFor(sql), []);
+  });
+
+  test("does not claim to parse arbitrarily concatenated dynamic DDL", () => {
+    const sql = `
+      DO $$ BEGIN
+        EXECUTE 'ALTER FUNCTION public.fixture() SECURITY ' || 'DEFINER';
+      END $$;
+    `;
+
+    assert.deepEqual(violationsFor(sql), []);
+  });
+
+  test("covers standard and operational manual SQL migration paths", () => {
+    const relativeFiles = listApplicationSqlFiles().map((file) =>
+      path.relative(process.cwd(), file)
     );
-  });
 
-  test("accepts invokers and ignores comments and function bodies", () => {
-    const sql = `
-      -- SECURITY DEFINER is documentation here.
-      CREATE FUNCTION public.safe_fixture() RETURNS text
-      LANGUAGE sql SECURITY INVOKER AS $$ SELECT 'SECURITY DEFINER' $$;
-      /* ALTER FUNCTION public.safe_fixture() SECURITY DEFINER; */
-    `;
-
-    assert.deepEqual(findSecurityDefinerViolations([[migrationPath, sql]], new Map()), []);
-  });
-
-  test("requires a complete, exact allowlist contract", () => {
-    const sql = `
-      CREATE FUNCTION public.reviewed_fixture() RETURNS integer
-      LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$ SELECT 1 $$;
-    `;
-    const key = "prisma/migrations/20990101000000_fixture/migration.sql::public.reviewed_fixture()";
-    const completeAllowlist = new Map([
-      [
-        key,
-        {
-          owner: "restricted_owner",
-          searchPath: "",
-          justification: "Synthetic guard contract",
-          executeGrantees: [],
-          contractTest: "tests/security/reviewed-fixture-contract.sql",
-        },
-      ],
-    ]);
-
-    assert.deepEqual(findSecurityDefinerViolations([[migrationPath, sql]], completeAllowlist), []);
-
-    const incompleteAllowlist = new Map([[key, { owner: "restricted_owner" }]]);
     assert.ok(
-      findSecurityDefinerViolations([[migrationPath, sql]], incompleteAllowlist).length > 0
+      relativeFiles.includes(
+        "prisma/migrations/20260815170649_sec_06_function_privileges/migration.sql"
+      )
     );
-  });
-
-  test("rejects unsafe search paths and stale allowlist entries", () => {
-    const key = "prisma/migrations/20990101000000_fixture/migration.sql::public.missing_fixture()";
-    const unsafeAllowlist = new Map([
-      [
-        key,
-        {
-          owner: "restricted_owner",
-          searchPath: "public, pg_temp",
-          justification: "Synthetic unsafe contract",
-          executeGrantees: ["authenticated"],
-          contractTest: "tests/security/missing-fixture-contract.sql",
-        },
-      ],
-    ]);
-
-    const unsafeViolations = findSecurityDefinerViolations(
-      [[migrationPath, "SELECT 1;"]],
-      unsafeAllowlist
+    assert.ok(
+      relativeFiles.includes("prisma/migrations/manual/2026-04-08-vote-denorm-trigger.sql")
     );
-    assert.ok(unsafeViolations.some(({ reason }) => reason === "incomplete contract"));
-
-    const staleAllowlist = new Map([
-      [
-        key,
-        {
-          owner: "restricted_owner",
-          searchPath: "",
-          justification: "Synthetic stale contract",
-          executeGrantees: [],
-          contractTest: "tests/security/missing-fixture-contract.sql",
-        },
-      ],
-    ]);
-    const staleViolations = findSecurityDefinerViolations(
-      [[migrationPath, "SELECT 1;"]],
-      staleAllowlist
-    );
-    assert.ok(staleViolations.some(({ reason }) => reason === "stale allowlist entry"));
   });
 });

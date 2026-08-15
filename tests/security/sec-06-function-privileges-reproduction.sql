@@ -14,6 +14,7 @@ CREATE ROLE sec06_owner NOLOGIN;
 CREATE ROLE sec06_hardened_owner NOLOGIN;
 CREATE ROLE sec06_server NOLOGIN;
 CREATE ROLE sec06_platform_owner NOLOGIN;
+CREATE ROLE sec06_alternate_owner NOLOGIN;
 CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;

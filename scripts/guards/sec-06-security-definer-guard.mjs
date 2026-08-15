@@ -3,24 +3,21 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const applicationSqlRoot = path.resolve("prisma/migrations");
+const forbiddenGrantees = new Set(["public", "anon", "authenticated"]);
 
-// Empty by design. A future entry must identify one exact function and record
-// the independently reviewed privilege boundary before the guard can permit it.
-export const securityDefinerAllowlist = new Map();
-
-function listSqlFiles(root) {
+export function listApplicationSqlFiles(root = applicationSqlRoot) {
   const files = [];
 
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     const entryPath = path.join(root, entry.name);
-    if (entry.isDirectory()) files.push(...listSqlFiles(entryPath));
+    if (entry.isDirectory()) files.push(...listApplicationSqlFiles(entryPath));
     else if (entry.isFile() && entry.name.endsWith(".sql")) files.push(entryPath);
   }
 
   return files;
 }
 
-function stripCommentsAndBodies(sql) {
+function stripComments(sql) {
   let result = "";
   let index = 0;
 
@@ -41,37 +38,6 @@ function stripCommentsAndBodies(sql) {
       continue;
     }
 
-    if (sql[index] === "'") {
-      const start = index;
-      index += 1;
-      while (index < sql.length) {
-        if (sql[index] === "'" && sql[index + 1] === "'") {
-          index += 2;
-          continue;
-        }
-        if (sql[index] === "'") {
-          index += 1;
-          break;
-        }
-        index += 1;
-      }
-      result += sql.slice(start, index).replace(/[^\n]/gu, " ");
-      continue;
-    }
-
-    if (sql[index] === "$") {
-      const delimiter = sql.slice(index).match(/^\$[A-Za-z_0-9]*\$/u)?.[0];
-      if (delimiter) {
-        const end = sql.indexOf(delimiter, index + delimiter.length);
-        if (end !== -1) {
-          const bodyEnd = end + delimiter.length;
-          result += sql.slice(index, bodyEnd).replace(/[^\n]/gu, " ");
-          index = bodyEnd;
-          continue;
-        }
-      }
-    }
-
     result += sql[index];
     index += 1;
   }
@@ -79,84 +45,76 @@ function stripCommentsAndBodies(sql) {
   return result;
 }
 
-function normalizeSignature(statement) {
-  const declaration = statement.match(
-    /\b(?:CREATE\s+(?:OR\s+REPLACE\s+)?|ALTER\s+)FUNCTION\s+((?:"[^"]+"|[A-Za-z_][A-Za-z_0-9]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][A-Za-z_0-9]*))?)\s*\(([\s\S]*?)\)/iu
-  );
+function findForbiddenGrantees(clause) {
+  const roles = [];
 
-  if (!declaration) return "<unresolved>";
+  for (const match of clause.matchAll(/"([^"]+)"|([A-Za-z_][A-Za-z_0-9]*)/gu)) {
+    const role = (match[1] ?? match[2]).toLowerCase();
+    if (forbiddenGrantees.has(role)) roles.push(role);
+  }
 
-  const name = declaration[1].replace(/\s+/gu, "");
-  const argumentsList = declaration[2].replace(/\s+/gu, " ").trim();
-  return `${name}(${argumentsList})`;
+  return [...new Set(roles)];
 }
 
-function hasCompleteContract(contract) {
-  if (!contract || typeof contract !== "object") return false;
-  if (typeof contract.owner !== "string" || contract.owner.trim() === "") return false;
-  if (typeof contract.searchPath !== "string") return false;
-  if (/\$user|\bpublic\b|pg_temp/iu.test(contract.searchPath)) return false;
-  if (typeof contract.justification !== "string" || contract.justification.trim() === "") {
-    return false;
+function appendGrantViolations(violations, file, sql, pattern, kind) {
+  for (const match of sql.matchAll(pattern)) {
+    for (const grantee of findForbiddenGrantees(match.groups.grantees)) {
+      violations.push({ file, kind, grantee });
+    }
   }
-  if (!Array.isArray(contract.executeGrantees)) return false;
-  if (typeof contract.contractTest !== "string" || !contract.contractTest.startsWith("tests/")) {
-    return false;
-  }
-  return true;
 }
 
-export function findSecurityDefinerViolations(files, allowlist = securityDefinerAllowlist) {
+export function findRoutinePrivilegeViolations(files) {
   const violations = [];
-  const matchedAllowlistKeys = new Set();
 
-  for (const [file, sql] of files) {
+  for (const [file, source] of files) {
     const relativeFile = path.relative(process.cwd(), file);
-    const statements = stripCommentsAndBodies(sql).split(";");
+    const sql = stripComments(source);
 
-    for (const statement of statements) {
-      if (!/\bSECURITY\s+DEFINER\b/iu.test(statement)) continue;
-
-      const signature = normalizeSignature(statement);
-      const key = `${relativeFile}::${signature}`;
-      const contract = allowlist.get(key);
-
-      if (!hasCompleteContract(contract)) {
-        violations.push({ file: relativeFile, signature, reason: "missing reviewed allowlist" });
-        continue;
-      }
-
-      matchedAllowlistKeys.add(key);
+    if (/\bSECURITY\s+DEFINER\b/iu.test(sql)) {
+      violations.push({
+        file: relativeFile,
+        kind: "security-definer",
+        grantee: null,
+      });
     }
-  }
 
-  for (const [key, contract] of allowlist) {
-    if (!hasCompleteContract(contract)) {
-      violations.push({ file: key, signature: "<allowlist>", reason: "incomplete contract" });
-    } else if (!matchedAllowlistKeys.has(key)) {
-      violations.push({ file: key, signature: "<allowlist>", reason: "stale allowlist entry" });
-    }
+    appendGrantViolations(
+      violations,
+      relativeFile,
+      sql,
+      /\bGRANT\s+(?:EXECUTE|ALL(?:\s+PRIVILEGES)?)\s+ON\s+(?:(?:FUNCTION|PROCEDURE|ROUTINE)\b|ALL\s+(?:FUNCTIONS|PROCEDURES|ROUTINES)\s+IN\s+SCHEMA\b)[\s\S]*?\bTO\s+(?<grantees>[^;]+)/giu,
+      "routine-execute-grant"
+    );
+
+    appendGrantViolations(
+      violations,
+      relativeFile,
+      sql,
+      /\bALTER\s+DEFAULT\s+PRIVILEGES\b[\s\S]*?\bGRANT\s+(?:EXECUTE|ALL(?:\s+PRIVILEGES)?)\s+ON\s+(?:FUNCTIONS|PROCEDURES|ROUTINES)\b[\s\S]*?\bTO\s+(?<grantees>[^;]+)/giu,
+      "routine-default-grant"
+    );
   }
 
   return violations;
 }
 
 function main() {
-  const files = listSqlFiles(applicationSqlRoot).map((file) => [
-    file,
-    fs.readFileSync(file, "utf8"),
-  ]);
-  const violations = findSecurityDefinerViolations(files);
+  const files = listApplicationSqlFiles().map((file) => [file, fs.readFileSync(file, "utf8")]);
+  const violations = findRoutinePrivilegeViolations(files);
 
   if (violations.length > 0) {
-    console.error("SEC-06 forbids unreviewed SECURITY DEFINER application functions.");
+    console.error(
+      "SEC-06 forbids application SECURITY DEFINER routines and public-role EXECUTE grants."
+    );
     for (const violation of violations) {
-      console.error(`- ${violation.file}: ${violation.signature} (${violation.reason})`);
+      const grantee = violation.grantee ? ` to ${violation.grantee}` : "";
+      console.error(`- ${violation.file}: ${violation.kind}${grantee}`);
     }
     process.exit(1);
   }
 
-  console.log("SEC-06 SECURITY DEFINER guard passed");
+  console.log("SEC-06 routine privilege source guard passed");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
