@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ThemeCategory } from "@/generated/prisma";
+import type { ThemeCategory } from "@/generated/prisma";
 
 export const DOCUMENT_TYPES = [
   "CANDIDATE_PROGRAM_2027",
@@ -26,15 +26,23 @@ export const extractionSchema = z.object({
         "GENERAL_INTENT",
         "AMBIGUOUS",
       ]),
-      theme: z.enum(ThemeCategory).nullable(),
+      // Keep the extractor boundary tolerant: an unknown theme must not discard an
+      // otherwise valid segment. It is normalized to null by extractor.ts and reported.
+      theme: z.string().min(1).nullable(),
       confidence: z.number().min(0).max(1),
       rationale: z.string().min(1).max(500),
     })
   ),
 });
 
-export type ExtractedProposal = z.infer<typeof extractionSchema>["proposals"][number] & {
+export type RawExtractedProposal = z.infer<typeof extractionSchema>["proposals"][number];
+
+export type ExtractedProposal = Omit<RawExtractedProposal, "theme"> & {
+  theme: ThemeCategory | null;
   page: number | null;
+  segmentId: string;
+  warnings: string[];
+  normalization: "MODEL" | "SOURCE_FALLBACK" | "NONE";
 };
 
 export type DocumentSegment = {

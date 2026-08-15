@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { normalizeForDeduplication, jaccardSimilarity } from "../deduplication";
-import { normalizedTextAddsInformation } from "../extractor";
+import {
+  normalizedTextAddsInformation,
+  prepareExtractedProposal,
+  sourceTextIsGrounded,
+} from "../extractor";
 import { classifyEdition, isAcceptedProposal } from "../policy";
-import type { ExtractedProposal } from "../types";
+import { extractionSchema, type DocumentSegment, type ExtractedProposal } from "../types";
 
 function proposal(overrides: Partial<ExtractedProposal>): ExtractedProposal {
   return {
@@ -12,10 +16,20 @@ function proposal(overrides: Partial<ExtractedProposal>): ExtractedProposal {
     theme: "ECONOMIE_BUDGET",
     confidence: 0.9,
     page: 2,
+    segmentId: "segment-1",
+    warnings: [],
+    normalization: "MODEL",
     rationale: "Action chiffrée et vérifiable.",
     ...overrides,
   };
 }
+
+const segment: DocumentSegment = {
+  id: "segment-1",
+  heading: "Travail",
+  page: 4,
+  text: "Nous créerons un statut pour les travailleuses et travailleurs essentiels.",
+};
 
 describe("classification éditoriale", () => {
   it("retient une mesure concrète", () => expect(isAcceptedProposal(proposal({}))).toBe(true));
@@ -34,6 +48,70 @@ describe("classification éditoriale", () => {
     expect(normalizedTextAddsInformation("Nous voulons réduire la TVA", "Réduire la TVA")).toBe(
       false
     );
+  });
+});
+
+describe("grounding d'extraction", () => {
+  it("retrouve une citation malgré les variantes typographiques", () => {
+    expect(
+      sourceTextIsGrounded(
+        "Nous défendrons l’État social — sans recul.",
+        "Nous défendrons l'Etat social - sans recul."
+      )
+    ).toBe(true);
+  });
+
+  it("conserve la classification mais retombe sur la citation exacte si la normalisation ajoute des tokens", () => {
+    const result = prepareExtractedProposal(segment, {
+      sourceText: segment.text,
+      normalizedText: "Créer un statut national pour les travailleurs essentiels.",
+      classification: "MEASURE",
+      theme: "SOCIAL_TRAVAIL",
+      confidence: 0.91,
+      rationale: "Engagement explicite.",
+    });
+
+    expect(result.classification).toBe("MEASURE");
+    expect(result.normalizedText).toBe(segment.text);
+    expect(result.normalization).toBe("SOURCE_FALLBACK");
+    expect(result.warnings.join(" ")).toContain("citation exacte");
+    expect(isAcceptedProposal(result)).toBe(true);
+  });
+
+  it("neutralise un thème hors enum sans faire échouer la proposition", () => {
+    const parsed = extractionSchema.parse({
+      proposals: [
+        {
+          sourceText: segment.text,
+          normalizedText: segment.text,
+          classification: "MEASURE",
+          theme: "EMPLOI",
+          confidence: 0.9,
+          rationale: "Engagement explicite.",
+        },
+      ],
+    });
+    const result = prepareExtractedProposal(segment, parsed.proposals[0]);
+
+    expect(result.theme).toBeNull();
+    expect(result.warnings.join(" ")).toContain("Thème hors enum");
+    expect(isAcceptedProposal(result)).toBe(false);
+  });
+
+  it("conserve AMBIGUOUS lorsque la citation n'est pas retrouvable", () => {
+    const result = prepareExtractedProposal(segment, {
+      sourceText: "Nous supprimerons intégralement cette taxe.",
+      normalizedText: "Supprimer cette taxe.",
+      classification: "MEASURE",
+      theme: "ECONOMIE_BUDGET",
+      confidence: 0.95,
+      rationale: "Engagement explicite.",
+    });
+
+    expect(result.classification).toBe("AMBIGUOUS");
+    expect(result.normalizedText).toBeNull();
+    expect(result.normalization).toBe("NONE");
+    expect(isAcceptedProposal(result)).toBe(false);
   });
 });
 

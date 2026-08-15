@@ -10,6 +10,27 @@ import { parseDocument } from "./parser";
 import { classifyEdition, isAcceptedProposal } from "./policy";
 import type { DocumentSegment, ExtractedProposal, ProgramDocumentType } from "./types";
 
+const PRIMARY_SHARE_UNAVAILABLE_REASON =
+  "ProgramEdition ne distingue pas encore explicitement source primaire et source secondaire.";
+
+export type ProgramImportProgressEvent =
+  | {
+      kind: "document";
+      editionId: string;
+      label: string;
+      documentUrl: string;
+      segmentsTotal: number;
+    }
+  | {
+      kind: "extraction";
+      editionId: string;
+      label: string;
+      completed: number;
+      total: number;
+      proposals: number;
+      failed: number;
+    };
+
 export type ProgramImportOptions = {
   apply: boolean;
   candidate?: string;
@@ -18,6 +39,8 @@ export type ProgramImportOptions = {
   limit?: number;
   forceRefetch?: boolean;
   reportDir?: string;
+  segmentConcurrency?: number;
+  onProgress?: (event: ProgramImportProgressEvent) => void;
 };
 
 type CandidateReport = {
@@ -29,9 +52,12 @@ type CandidateReport = {
   draftsExisting: number;
   draftsAdded: number;
   published: number;
-  primaryShare: number;
+  primaryShare: number | null;
+  primaryShareReason: string;
   themes: string[];
   proposals: Array<{
+    editionId: string;
+    documentUrl: string;
     sourceText: string;
     normalizedText: string | null;
     classification: ExtractedProposal["classification"];
@@ -40,6 +66,14 @@ type CandidateReport = {
     page: number | null;
     rationale: string;
     accepted: boolean;
+    warnings: string[];
+    normalization: ExtractedProposal["normalization"];
+    provenance: {
+      ownerType: "PARTY" | "CANDIDACY";
+      ownerId: string | null;
+      documentType: ProgramDocumentType;
+      segmentId: string;
+    };
   }>;
   errors: string[];
   blockers: string[];
@@ -55,6 +89,13 @@ export type ProgramImportReport = {
   generatedAt: string;
   mode: "dry-run" | "apply";
   documents: { known: number; fetched: number; parsed: number; failed: number; scannedPdf: number };
+  extraction: {
+    segmentsTotal: number;
+    segmentsSucceeded: number;
+    segmentsFailed: number;
+    normalizationFallbacks: number;
+    invalidThemes: number;
+  };
   propositions: {
     detected: number;
     measures: number;
@@ -82,6 +123,11 @@ function chunkSegments(segments: DocumentSegment[], maxCharacters = 7_000): Docu
     }
   }
   return chunks;
+}
+
+function normalizeConcurrency(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 3;
+  return Math.min(8, Math.max(1, Math.trunc(value)));
 }
 
 export async function runProgramImport(
@@ -129,6 +175,13 @@ export async function runProgramImport(
     generatedAt: new Date().toISOString(),
     mode: options.apply ? "apply" : "dry-run",
     documents: { known: editions.length, fetched: 0, parsed: 0, failed: 0, scannedPdf: 0 },
+    extraction: {
+      segmentsTotal: 0,
+      segmentsSucceeded: 0,
+      segmentsFailed: 0,
+      normalizationFallbacks: 0,
+      invalidThemes: 0,
+    },
     propositions: {
       detected: 0,
       measures: 0,
@@ -165,7 +218,8 @@ export async function runProgramImport(
           published: candidacy.measures.filter(
             (measure) => measure.publicationStatus === "PUBLISHED"
           ).length,
-          primaryShare: 0,
+          primaryShare: null,
+          primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
           themes: [],
           proposals: [],
           errors: [],
@@ -177,6 +231,7 @@ export async function runProgramImport(
       ];
     })
   );
+  const segmentConcurrency = normalizeConcurrency(options.segmentConcurrency);
 
   for (const edition of editions) {
     const matchedCandidacy = edition.candidacyId
@@ -194,7 +249,8 @@ export async function runProgramImport(
       draftsExisting: 0,
       draftsAdded: 0,
       published: 0,
-      primaryShare: 100,
+      primaryShare: null,
+      primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
       themes: [],
       proposals: [],
       errors: [],
@@ -245,20 +301,99 @@ export async function runProgramImport(
         continue;
       }
 
+      const chunks = chunkSegments(parsed.segments);
+      report.extraction.segmentsTotal += chunks.length;
+      options.onProgress?.({
+        kind: "document",
+        editionId: edition.id,
+        label: edition.label,
+        documentUrl: edition.documentUrl,
+        segmentsTotal: chunks.length,
+      });
+
       const proposals: ExtractedProposal[] = [];
-      for (const segment of chunkSegments(parsed.segments)) {
-        proposals.push(...(await extractSegment(segment)));
+      let segmentFailures = 0;
+      let completedSegments = 0;
+      for (let start = 0; start < chunks.length; start += segmentConcurrency) {
+        const batch = chunks.slice(start, start + segmentConcurrency);
+        const results = await Promise.allSettled(batch.map((segment) => extractSegment(segment)));
+        for (let index = 0; index < results.length; index += 1) {
+          const result = results[index];
+          const segment = batch[index];
+          completedSegments += 1;
+          if (result.status === "fulfilled") {
+            proposals.push(...result.value);
+            report.extraction.segmentsSucceeded += 1;
+          } else {
+            segmentFailures += 1;
+            report.extraction.segmentsFailed += 1;
+            candidate.errors.push(
+              `Échec d'extraction du segment ${segment.id} (page ${segment.page ?? "HTML"}): ${
+                result.reason instanceof Error ? result.reason.message : String(result.reason)
+              }`
+            );
+          }
+        }
+        options.onProgress?.({
+          kind: "extraction",
+          editionId: edition.id,
+          label: edition.label,
+          completed: completedSegments,
+          total: chunks.length,
+          proposals: proposals.length,
+          failed: segmentFailures,
+        });
       }
+
+      if (segmentFailures > 0) {
+        candidate.blockers.push(
+          `Extraction partielle: ${segmentFailures}/${chunks.length} segment(s) en échec.`
+        );
+        if (options.apply) {
+          candidate.blockers.push(
+            "Application bloquée pour cette édition tant que tous les segments ne sont pas extraits avec succès."
+          );
+        }
+      }
+
       candidate.detected += proposals.length;
       report.propositions.detected += proposals.length;
       const exactSeen = new Set<string>();
+      let acceptedInEdition = 0;
       for (const proposal of proposals) {
         if (proposal.classification === "MEASURE") report.propositions.measures += 1;
         else if (proposal.classification === "OBJECTIVE") report.propositions.objectives += 1;
         else if (proposal.classification === "AMBIGUOUS") report.propositions.ambiguous += 1;
         else report.propositions.rejected += 1;
-        candidate.proposals.push({ ...proposal, accepted: isAcceptedProposal(proposal) });
-        if (!isAcceptedProposal(proposal)) continue;
+        report.extraction.normalizationFallbacks += Number(
+          proposal.normalization === "SOURCE_FALLBACK"
+        );
+        report.extraction.invalidThemes += Number(
+          proposal.warnings.some((warning) => warning.startsWith("Thème hors enum"))
+        );
+        const accepted = isAcceptedProposal(proposal);
+        candidate.proposals.push({
+          editionId: edition.id,
+          documentUrl: edition.documentUrl,
+          sourceText: proposal.sourceText,
+          normalizedText: proposal.normalizedText,
+          classification: proposal.classification,
+          theme: proposal.theme,
+          confidence: proposal.confidence,
+          page: proposal.page,
+          rationale: proposal.rationale,
+          accepted,
+          warnings: proposal.warnings,
+          normalization: proposal.normalization,
+          provenance: {
+            ownerType: edition.ownerType,
+            ownerId: edition.candidacyId ?? edition.partyId,
+            documentType,
+            segmentId: proposal.segmentId,
+          },
+        });
+        if (!accepted) continue;
+        acceptedInEdition += 1;
         const text = proposal.normalizedText!;
         const exact = normalizeForDeduplication(text);
         if (exactSeen.has(exact)) {
@@ -290,7 +425,7 @@ export async function runProgramImport(
         }
 
         candidate.themes.push(proposal.theme!);
-        if (options.apply) {
+        if (options.apply && segmentFailures === 0) {
           await createMeasure({
             politicianId: eligible.politicianId,
             electionId: eligible.electionId,
@@ -325,9 +460,11 @@ export async function runProgramImport(
         }
       }
       candidate.status =
-        candidate.draftsAdded > 0 || (!options.apply && candidate.detected > 0)
-          ? "READY_FOR_REVIEW"
-          : "PARTIAL";
+        segmentFailures > 0
+          ? "PARTIAL"
+          : acceptedInEdition > 0
+            ? "READY_FOR_REVIEW"
+            : "PARTIAL";
     } catch (error) {
       report.documents.failed += 1;
       candidate.errors.push(error instanceof Error ? error.message : String(error));
@@ -356,20 +493,25 @@ export function renderMarkdownReport(report: ProgramImportReport): string {
   const rows = report.candidates
     .map(
       (c) =>
-        `| ${c.candidate} | ${c.documentsAnalyzed} | ${c.detected} | ${c.draftsAdded} | ${c.themes.join(", ") || "-"} | ${c.status} |`
+        `| ${c.candidate} | ${c.documentsAnalyzed} | ${c.detected} | ${c.draftsAdded} | ${
+          c.primaryShare === null ? "n/a" : `${c.primaryShare.toFixed(1)} %`
+        } | ${c.themes.join(", ") || "-"} | ${c.status} |`
     )
     .join("\n");
   const proposalDetails = report.candidates
     .filter((candidate) => candidate.proposals.length > 0)
     .map((candidate) => {
       const items = candidate.proposals
-        .map(
-          (proposal) =>
-            `- ${proposal.accepted ? "RETENUE" : "ÉCARTÉE"} [${proposal.classification}, confiance ${proposal.confidence}, page ${proposal.page ?? "HTML"}] ${proposal.normalizedText ?? proposal.sourceText}`
-        )
+        .map((proposal) => {
+          const warnings =
+            proposal.warnings.length > 0
+              ? `\n  - Avertissements: ${proposal.warnings.join(" | ")}`
+              : "";
+          return `- ${proposal.accepted ? "RETENUE" : "ÉCARTÉE"} [${proposal.classification}, confiance ${proposal.confidence}, page ${proposal.page ?? "HTML"}] ${proposal.normalizedText ?? proposal.sourceText}\n  - Édition: ${proposal.editionId}\n  - Document: ${proposal.documentUrl}\n  - Segment: ${proposal.provenance.segmentId}\n  - Normalisation: ${proposal.normalization}${warnings}`;
+        })
         .join("\n");
       return `### ${candidate.candidate}\n\n${items}`;
     })
     .join("\n\n");
-  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs: ${report.documents.failed}\n\n## Extraction\n\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Drafts ajoutés | Thèmes | État |\n|---|---:|---:|---:|---|---|\n${rows}\n\n## Détail des propositions\n\n${proposalDetails || "Aucune proposition extraite."}\n`;
+  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs documentaires: ${report.documents.failed}\n- Part de sources primaires: non calculable avec le schéma ProgramEdition actuel.\n\n## Extraction\n\n- Segments: ${report.extraction.segmentsSucceeded}/${report.extraction.segmentsTotal} réussis\n- Segments en échec: ${report.extraction.segmentsFailed}\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Fallbacks vers citation exacte: ${report.extraction.normalizationFallbacks}\n- Thèmes hors enum neutralisés: ${report.extraction.invalidThemes}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Drafts ajoutés | Sources primaires | Thèmes | État |\n|---|---:|---:|---:|---:|---|---|\n${rows}\n\n_n/a : ${PRIMARY_SHARE_UNAVAILABLE_REASON}_\n\n## Détail des propositions\n\n${proposalDetails || "Aucune proposition extraite."}\n`;
 }

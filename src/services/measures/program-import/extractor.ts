@@ -1,7 +1,13 @@
+import { ThemeCategory, type ThemeCategory as ThemeCategoryValue } from "@/generated/prisma";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
-import { extractionSchema, type DocumentSegment, type ExtractedProposal } from "./types";
+import {
+  extractionSchema,
+  type DocumentSegment,
+  type ExtractedProposal,
+  type RawExtractedProposal,
+} from "./types";
 
-export const EXTRACTOR_VERSION = "mistral-large-latest/presidential-program-import-2";
+export const EXTRACTOR_VERSION = "mistral-large-latest/presidential-program-import-3";
 
 export const EXTRACTION_SYSTEM_PROMPT = `Tu extrais des propositions politiques sans interprétation.
 Ton travail consiste à reconnaître les engagements présents dans le texte, pas à reconstituer le programme que l'auteur aurait pu vouloir écrire.
@@ -14,6 +20,8 @@ Exemples : « rendre du pouvoir d'achat » est GENERAL_INTENT ; « réduire la T
 const OUTPUT_FORMAT = `Réponds uniquement avec un objet JSON de cette forme :
 {"proposals":[{"sourceText":"citation exacte","normalizedText":"formulation fidèle ou null","classification":"MEASURE|OBJECTIVE|VALUE|DIAGNOSIS|GENERAL_INTENT|AMBIGUOUS","theme":"une valeur ThemeCategory ou null","confidence":0.0,"rationale":"raison courte"}]}
 Les seules valeurs de thème sont ECONOMIE_BUDGET, SOCIAL_TRAVAIL, SECURITE_JUSTICE, ENVIRONNEMENT_ENERGIE, SANTE, EDUCATION_CULTURE, INSTITUTIONS, AFFAIRES_ETRANGERES_DEFENSE, NUMERIQUE_TECH, IMMIGRATION, AGRICULTURE_ALIMENTATION, LOGEMENT_URBANISME et TRANSPORTS.`;
+
+const THEME_VALUES = new Set<string>(Object.values(ThemeCategory));
 
 function tokens(text: string): Set<string> {
   return new Set(
@@ -44,9 +52,78 @@ export function sourceTextIsGrounded(documentText: string, sourceText: string): 
   );
 }
 
+/**
+ * Conservative lexical tripwire used only to decide whether the model-authored
+ * normalization may be kept. A positive result no longer discards the proposal:
+ * we fall back to the exact grounded citation instead.
+ */
 export function normalizedTextAddsInformation(source: string, normalized: string): boolean {
   const sourceTokens = tokens(source);
   return [...tokens(normalized)].some((token) => !sourceTokens.has(token));
+}
+
+function normalizeTheme(rawTheme: string | null): {
+  theme: ThemeCategoryValue | null;
+  warning: string | null;
+} {
+  if (rawTheme === null) return { theme: null, warning: null };
+  if (THEME_VALUES.has(rawTheme)) {
+    return { theme: rawTheme as ThemeCategoryValue, warning: null };
+  }
+  return {
+    theme: null,
+    warning: `Thème hors enum retourné par l'extracteur: ${rawTheme}`,
+  };
+}
+
+export function prepareExtractedProposal(
+  segment: DocumentSegment,
+  proposal: RawExtractedProposal
+): ExtractedProposal {
+  const { theme, warning } = normalizeTheme(proposal.theme);
+  const warnings = warning ? [warning] : [];
+
+  if (!sourceTextIsGrounded(segment.text, proposal.sourceText)) {
+    warnings.push("Citation introuvable dans le segment documentaire source.");
+    return {
+      ...proposal,
+      theme,
+      normalizedText: null,
+      classification: "AMBIGUOUS",
+      rationale: "Citation introuvable dans le segment documentaire source.",
+      page: segment.page,
+      segmentId: segment.id,
+      warnings,
+      normalization: "NONE",
+    };
+  }
+
+  if (
+    proposal.normalizedText &&
+    normalizedTextAddsInformation(proposal.sourceText, proposal.normalizedText)
+  ) {
+    warnings.push(
+      "La normalisation proposée ajoutait des tokens absents de la citation; la citation exacte est conservée comme texte du draft."
+    );
+    return {
+      ...proposal,
+      theme,
+      normalizedText: proposal.sourceText,
+      page: segment.page,
+      segmentId: segment.id,
+      warnings,
+      normalization: "SOURCE_FALLBACK",
+    };
+  }
+
+  return {
+    ...proposal,
+    theme,
+    page: segment.page,
+    segmentId: segment.id,
+    warnings,
+    normalization: proposal.normalizedText ? "MODEL" : "NONE",
+  };
 }
 
 function isRateLimitError(error: unknown): boolean {
@@ -87,22 +164,5 @@ export async function extractSegment(segment: DocumentSegment): Promise<Extracte
     }
   );
   const parsed = extractionSchema.parse(parseMistralJSON<unknown>(extractMistralText(response)));
-  return parsed.proposals.map((proposal) => {
-    if (!sourceTextIsGrounded(segment.text, proposal.sourceText)) {
-      return {
-        ...proposal,
-        normalizedText: null,
-        classification: "AMBIGUOUS",
-        rationale: "Citation introuvable dans le segment documentaire source.",
-        page: segment.page,
-      };
-    }
-    if (
-      proposal.normalizedText &&
-      normalizedTextAddsInformation(proposal.sourceText, proposal.normalizedText)
-    ) {
-      return { ...proposal, normalizedText: null, classification: "AMBIGUOUS", page: segment.page };
-    }
-    return { ...proposal, page: segment.page };
-  });
+  return parsed.proposals.map((proposal) => prepareExtractedProposal(segment, proposal));
 }
