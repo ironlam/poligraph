@@ -132,6 +132,18 @@ jobs:
       - name: Verify application database privileges
         run: npm run test:security:least-privilege
 
+  sec-06-function-privilege-contract:
+    name: SEC-06 function privilege contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify application function privileges
+        run: npm run test:security:function-privileges
+
   build:
     name: Build
     runs-on: ubuntu-latest

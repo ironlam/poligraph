@@ -29,6 +29,7 @@
     "test:db:search": "bash scripts/test-db-search.sh",
     "test:security:data-path": "bash scripts/test-sec-02-data-path.sh",
     "test:security:least-privilege": "bash scripts/test-sec-03-least-privilege.sh",
+    "test:security:function-privileges": "bash scripts/test-sec-06-function-privileges-reproduction.sh",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
