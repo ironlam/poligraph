@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { describeError, HTTPError } from "../http-client";
+import { describeError, HTTPClient, HTTPError } from "../http-client";
 
 describe("describeError", () => {
   it("returns the message of a plain error", () => {
