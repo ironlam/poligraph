@@ -74,14 +74,33 @@ describe("SEC-06 routine privilege source guard", () => {
     assert.deepEqual(violationsFor(sql), []);
   });
 
-  test("does not claim to parse arbitrarily concatenated dynamic DDL", () => {
+  test("rejects arbitrarily concatenated dynamic DDL in future migrations", () => {
     const sql = `
       DO $$ BEGIN
         EXECUTE 'ALTER FUNCTION public.fixture() SECURITY ' || 'DEFINER';
       END $$;
     `;
 
-    assert.deepEqual(violationsFor(sql), []);
+    assert.ok(violationsFor(sql).some(({ kind }) => kind === "unbounded-dynamic-sql"));
+    assert.ok(violationsFor(sql).some(({ kind }) => kind === "unbounded-do-block"));
+  });
+
+  test("allows only the bounded dynamic SQL already reviewed in SEC-06", () => {
+    const sql = `
+      DO $sec06$
+      BEGIN
+        EXECUTE format(
+          'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',
+          resolved_signature
+        );
+      END
+      $sec06$;
+    `;
+    const currentMigrationPath = path.resolve(
+      "prisma/migrations/20260815170649_sec_06_function_privileges/migration.sql"
+    );
+
+    assert.deepEqual(findRoutinePrivilegeViolations([[currentMigrationPath, sql]]), []);
   });
 
   test("covers standard and operational manual SQL migration paths", () => {

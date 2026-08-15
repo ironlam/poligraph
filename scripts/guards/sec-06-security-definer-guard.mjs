@@ -4,6 +4,17 @@ import { pathToFileURL } from "node:url";
 
 const applicationSqlRoot = path.resolve("prisma/migrations");
 const forbiddenGrantees = new Set(["public", "anon", "authenticated"]);
+const sec06Migration = "prisma/migrations/20260815170649_sec_06_function_privileges/migration.sql";
+const boundedDynamicSql = new Map([
+  [
+    sec06Migration,
+    /\bEXECUTE\s+format\(\s*'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',\s*resolved_signature\s*\)/iu,
+  ],
+  [
+    "prisma/migrations/manual/enable_rls_all_tables.sql",
+    /\bEXECUTE\s+format\(\s*'ALTER TABLE %s ENABLE ROW LEVEL SECURITY',\s*obj\.object_identity\s*\)/iu,
+  ],
+]);
 
 export function listApplicationSqlFiles(root = applicationSqlRoot) {
   const files = [];
@@ -64,12 +75,41 @@ function appendGrantViolations(violations, file, sql, pattern, kind) {
   }
 }
 
+function findDynamicExecuteOffsets(sql) {
+  const offsets = [];
+
+  for (const match of sql.matchAll(/\bEXECUTE\b/giu)) {
+    const before = sql.slice(Math.max(0, match.index - 24), match.index);
+    const after = sql.slice(match.index + match[0].length, match.index + match[0].length + 24);
+
+    if (/\b(?:GRANT|REVOKE)\s*$/iu.test(before)) continue;
+    if (/^\s+FUNCTION\b/iu.test(after)) continue;
+    offsets.push(match.index);
+  }
+
+  return offsets;
+}
+
 export function findRoutinePrivilegeViolations(files) {
   const violations = [];
 
   for (const [file, source] of files) {
     const relativeFile = path.relative(process.cwd(), file);
     const sql = stripComments(source);
+    const dynamicExecuteOffsets = findDynamicExecuteOffsets(sql);
+    const doBlockCount = [...sql.matchAll(/\bDO\s+\$[A-Za-z_0-9]*\$/giu)].length;
+    const expectedDynamicSql = boundedDynamicSql.get(relativeFile);
+
+    if (
+      dynamicExecuteOffsets.length > 0 &&
+      (!expectedDynamicSql || dynamicExecuteOffsets.length !== 1 || !expectedDynamicSql.test(sql))
+    ) {
+      violations.push({ file: relativeFile, kind: "unbounded-dynamic-sql", grantee: null });
+    }
+
+    if (doBlockCount > 0 && (relativeFile !== sec06Migration || doBlockCount !== 1)) {
+      violations.push({ file: relativeFile, kind: "unbounded-do-block", grantee: null });
+    }
 
     if (/\bSECURITY\s+DEFINER\b/iu.test(sql)) {
       violations.push({
