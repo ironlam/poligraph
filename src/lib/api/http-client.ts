@@ -56,6 +56,58 @@ export class HTTPError extends Error {
   }
 }
 
+/** Guard against a cyclic `cause` chain. */
+const MAX_CAUSE_DEPTH = 5;
+
+function errorLabel(error: Error): string {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? `${error.message} [${code}]` : error.message;
+}
+
+/**
+ * Flatten an error and its `cause` chain into a single readable line.
+ *
+ * Node's fetch reports every connection-level problem as the opaque message
+ * "fetch failed" and hides the real reason (ENOTFOUND, ECONNREFUSED, a TLS
+ * error…) in `cause` — sometimes wrapped one more level in an AggregateError
+ * when several IPs were tried. Logging only `error.message` therefore discards
+ * the one detail needed to triage the failure.
+ *
+ * Example: `fetch failed <- getaddrinfo ENOTFOUND example.fr [ENOTFOUND]`
+ */
+export function describeError(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+    if (current === undefined || current === null || seen.has(current)) break;
+    seen.add(current);
+
+    if (!(current instanceof Error)) {
+      parts.push(String(current));
+      break;
+    }
+
+    parts.push(errorLabel(current));
+
+    // undici groups per-IP connection failures into an AggregateError; the
+    // individual attempts carry the real errno, so surface them.
+    if (current instanceof AggregateError && current.errors?.length) {
+      const inner = current.errors.filter((e): e is Error => e instanceof Error).map(errorLabel);
+      const unique = [...new Set(inner)];
+      if (unique.length > 0) {
+        parts.push(unique.join(", "));
+        break;
+      }
+    }
+
+    current = current.cause;
+  }
+
+  return parts.join(" <- ");
+}
+
 const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
   baseUrl: "",
   timeout: 30000,
@@ -269,7 +321,17 @@ export class HTTPClient {
       }
     }
 
-    throw lastError ?? new Error(`Failed to fetch ${url}`);
+    if (!lastError) {
+      throw new Error(`Failed to fetch ${url}`);
+    }
+
+    // HTTPError already carries a precise status; only opaque network errors
+    // need their `cause` chain unwrapped into the message.
+    if (lastError instanceof HTTPError) {
+      throw lastError;
+    }
+
+    throw new Error(`${describeError(lastError)} (${url})`, { cause: lastError });
   }
 
   /**

@@ -6,7 +6,7 @@
 import { db } from "@/lib/db";
 import mammoth from "mammoth";
 import { ASSEMBLEE_DOCPARL_RATE_LIMIT_MS } from "@/config/rate-limits";
-import { HTTPClient, HTTPError } from "@/lib/api/http-client";
+import { HTTPClient, HTTPError, describeError } from "@/lib/api/http-client";
 
 const DOCPARL_URL_TEMPLATE =
   "https://docparl.assemblee-nationale.fr/base/{id}?format=application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -149,9 +149,7 @@ export async function syncLegislationContent(options?: {
 
       stats.processed++;
     } catch (err) {
-      stats.errors.push(
-        `${dossier.externalId}: ${err instanceof Error ? err.message : String(err)}`
-      );
+      stats.errors.push(`${dossier.externalId}: ${describeError(err)}`);
       stats.processed++;
     }
   }

@@ -2,7 +2,7 @@
  * API module exports
  */
 
-export { HTTPClient, HTTPError, httpClient } from "./http-client";
+export { HTTPClient, HTTPError, httpClient, describeError } from "./http-client";
 export type { HTTPClientOptions, HTTPResponse, RequestOptions } from "./http-client";
 
 export {

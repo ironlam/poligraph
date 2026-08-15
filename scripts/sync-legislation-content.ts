@@ -18,7 +18,7 @@ import { createCLI, type SyncHandler, type SyncResult } from "../src/lib/sync";
 import { db } from "../src/lib/db";
 import mammoth from "mammoth";
 import { ASSEMBLEE_DOCPARL_RATE_LIMIT_MS } from "../src/config/rate-limits";
-import { HTTPClient, HTTPError } from "../src/lib/api/http-client";
+import { HTTPClient, HTTPError, describeError } from "../src/lib/api/http-client";
 
 // Configuration
 const DOCPARL_URL_TEMPLATE =
@@ -258,7 +258,7 @@ Features:
 
         stats.processed++;
       } catch (err) {
-        const msg = `${dossier!.externalId}: ${err instanceof Error ? err.message : String(err)}`;
+        const msg = `${dossier!.externalId}: ${describeError(err)}`;
         errors.push(msg);
         stats.processed++;
       }
