@@ -1,13 +1,13 @@
-CREATE FUNCTION public.sec06_app_adversarial_overload(value text)
+CREATE FUNCTION public.normalize_reference(value text)
 RETURNS text
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT value';
 
-CREATE FUNCTION public.sec06_app_adversarial_overload(value integer)
+CREATE FUNCTION public.normalize_reference(value integer)
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT value';
 
-GRANT EXECUTE ON FUNCTION public.sec06_app_adversarial_overload(integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.normalize_reference(integer) TO authenticated;

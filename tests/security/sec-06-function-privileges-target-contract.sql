@@ -1,19 +1,19 @@
 \set ON_ERROR_STOP on
 
--- Create function, procedure, and aggregate probes after the migration. The
--- catalog contract below covers every pg_proc routine kind in the marked scope.
-CREATE FUNCTION public.sec06_app_future_target_probe()
+-- Create function, procedure, and aggregate probes after the migration. Their
+-- ordinary names are intentionally unrelated to the SEC-06 test harness.
+CREATE FUNCTION public.calculate_fixture_total()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
 
-CREATE PROCEDURE public.sec06_app_future_target_procedure()
+CREATE PROCEDURE public.refresh_fixture_cache()
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
 
-CREATE AGGREGATE public.sec06_app_future_target_sum(integer) (
+CREATE AGGREGATE public.fixture_integer_sum(integer) (
   SFUNC = int4pl,
   STYPE = integer,
   INITCOND = '0'
@@ -21,13 +21,13 @@ CREATE AGGREGATE public.sec06_app_future_target_sum(integer) (
 
 DO $owner_runtime$
 BEGIN
-  IF public.sec06_app_future_target_probe() <> 1 THEN
+  IF public.calculate_fixture_total() <> 1 THEN
     RAISE EXCEPTION 'SEC-06 target owner function execution regression';
   END IF;
 
-  CALL public.sec06_app_future_target_procedure();
+  CALL public.refresh_fixture_cache();
 
-  IF (SELECT public.sec06_app_future_target_sum(value) FROM (VALUES (1), (2)) values(value)) <> 3 THEN
+  IF (SELECT public.fixture_integer_sum(value) FROM (VALUES (1), (2)) values(value)) <> 3 THEN
     RAISE EXCEPTION 'SEC-06 target owner aggregate execution regression';
   END IF;
 END
@@ -89,16 +89,13 @@ BEGIN
     FROM pg_proc routine
     JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
     WHERE namespace.nspname = 'public'
-      AND (
-        routine.proname LIKE 'sec06_app_%'
-        OR routine.oid = ANY (
-          ARRAY[
-            to_regprocedure('public.auto_enable_rls()')::oid,
-            to_regprocedure('public.politician_search_vector_update()')::oid,
-            to_regprocedure('public.search_politicians(text,integer)')::oid,
-            to_regprocedure('public.sync_vote_denorm_from_scrutin()')::oid
-          ]::oid[]
-        )
+      AND routine.prokind IN ('f', 'p', 'a', 'w')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM pg_depend dependency
+        WHERE dependency.classid = 'pg_proc'::regclass
+          AND dependency.objid = routine.oid
+          AND dependency.deptype = 'e'
       )
   LOOP
     IF NOT has_function_privilege('service_role', application_routine.oid, 'EXECUTE') OR
@@ -121,9 +118,9 @@ BEGIN
   END IF;
 
   IF NOT has_function_privilege(
-    'anon', 'public.sec06_platform_managed_function()', 'EXECUTE'
+    'anon', 'sec06_platform.managed_function()', 'EXECUTE'
   ) OR NOT has_function_privilege(
-    'authenticated', 'public.sec06_platform_managed_function()', 'EXECUTE'
+    'authenticated', 'sec06_platform.managed_function()', 'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'SEC-06 target changed the platform negative control';
   END IF;

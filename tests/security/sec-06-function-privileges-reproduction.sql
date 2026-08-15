@@ -19,15 +19,23 @@ CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;
 
-GRANT CREATE ON SCHEMA public TO sec06_owner, sec06_hardened_owner, sec06_platform_owner;
+GRANT CREATE ON SCHEMA public TO sec06_owner, sec06_hardened_owner;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, sec06_server;
 
--- An extension-owned function is a negative control for the application-only
--- inventory. The target contract must ignore extension and platform objects.
+-- Reproduction-only helpers live outside the application schema so the final
+-- public-schema catalog contract does not need a name-based fixture exemption.
+CREATE SCHEMA sec06_harness AUTHORIZATION sec06_owner;
+CREATE SCHEMA sec06_platform AUTHORIZATION sec06_platform_owner;
+GRANT USAGE ON SCHEMA sec06_harness, sec06_platform
+  TO anon, authenticated, service_role, sec06_server;
+
+-- A real extension-owned function in public is the negative control for the
+-- catalog boundary. The separate platform schema is outside the application
+-- schema and does not require a managed-object name allowlist.
 CREATE EXTENSION hstore WITH SCHEMA public;
 
 SET ROLE sec06_platform_owner;
-CREATE FUNCTION public.sec06_platform_managed_function()
+CREATE FUNCTION sec06_platform.managed_function()
 RETURNS integer
 LANGUAGE sql
 SECURITY DEFINER
@@ -36,60 +44,60 @@ RESET ROLE;
 
 SET ROLE sec06_owner;
 
-CREATE TABLE public.sec06_protected_fixture (
+CREATE TABLE sec06_harness.protected_fixture (
   id integer PRIMARY KEY,
   content text NOT NULL
 );
-INSERT INTO public.sec06_protected_fixture (id, content)
+INSERT INTO sec06_harness.protected_fixture (id, content)
 VALUES (1, 'synthetic protected row');
 
 -- PostgreSQL grants PUBLIC EXECUTE when a function is created unless global
 -- default privileges for the creating role override that built-in default.
-CREATE FUNCTION public.sec06_public_only()
+CREATE FUNCTION sec06_harness.public_only()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
 
 -- Direct grant only: PUBLIC is removed, then anon is granted explicitly.
-CREATE FUNCTION public.sec06_explicit_only()
+CREATE FUNCTION sec06_harness.explicit_only()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
-REVOKE EXECUTE ON FUNCTION public.sec06_explicit_only() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.sec06_explicit_only() TO anon;
+REVOKE EXECUTE ON FUNCTION sec06_harness.explicit_only() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION sec06_harness.explicit_only() TO anon;
 
 -- Both origins are present: anon has a direct ACL entry and also inherits the
 -- independent PUBLIC grant that remains on the function.
-CREATE FUNCTION public.sec06_both_origins()
+CREATE FUNCTION sec06_harness.both_origins()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
-GRANT EXECUTE ON FUNCTION public.sec06_both_origins() TO anon;
+GRANT EXECUTE ON FUNCTION sec06_harness.both_origins() TO anon;
 
-CREATE FUNCTION public.sec06_invoker_reads_protected()
+CREATE FUNCTION sec06_harness.invoker_reads_protected()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
-AS 'SELECT count(*)::integer FROM public.sec06_protected_fixture';
+AS 'SELECT count(*)::integer FROM sec06_harness.protected_fixture';
 
 -- This synthetic definer is harmless. It exists only to prove that PUBLIC
 -- EXECUTE crosses a privilege boundary for a definer, unlike the invoker above.
-CREATE FUNCTION public.sec06_definer_reads_protected()
+CREATE FUNCTION sec06_harness.definer_reads_protected()
 RETURNS integer
 LANGUAGE sql
 SECURITY DEFINER
-AS 'SELECT count(*)::integer FROM public.sec06_protected_fixture';
+AS 'SELECT count(*)::integer FROM sec06_harness.protected_fixture';
 
-CREATE TABLE public.sec06_trigger_fixture (
+CREATE TABLE sec06_harness.trigger_fixture (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   content text NOT NULL,
   touched_by_trigger boolean NOT NULL DEFAULT false
 );
 
-CREATE FUNCTION public.sec06_set_trigger_marker()
+CREATE FUNCTION sec06_harness.set_trigger_marker()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -101,20 +109,20 @@ END
 $function$;
 
 CREATE TRIGGER sec06_set_trigger_marker
-BEFORE INSERT ON public.sec06_trigger_fixture
+BEFORE INSERT ON sec06_harness.trigger_fixture
 FOR EACH ROW
-EXECUTE FUNCTION public.sec06_set_trigger_marker();
+EXECUTE FUNCTION sec06_harness.set_trigger_marker();
 
-GRANT INSERT, SELECT ON public.sec06_trigger_fixture TO sec06_server;
-GRANT USAGE, SELECT ON SEQUENCE public.sec06_trigger_fixture_id_seq TO sec06_server;
+GRANT INSERT, SELECT ON sec06_harness.trigger_fixture TO sec06_server;
+GRANT USAGE, SELECT ON SEQUENCE sec06_harness.trigger_fixture_id_seq TO sec06_server;
 
 -- Removing direct-call permission after trigger creation does not disable the
 -- trigger. The server role below has table privileges but no function EXECUTE.
-REVOKE EXECUTE ON FUNCTION public.sec06_set_trigger_marker() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.sec06_set_trigger_marker() FROM anon, authenticated;
+REVOKE EXECUTE ON FUNCTION sec06_harness.set_trigger_marker() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION sec06_harness.set_trigger_marker() FROM anon, authenticated;
 
 -- Baseline future function with PostgreSQL's built-in global PUBLIC default.
-CREATE FUNCTION public.sec06_future_builtin_default()
+CREATE FUNCTION sec06_harness.future_builtin_default()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
@@ -122,20 +130,20 @@ AS 'SELECT 1';
 
 -- This is intentionally ineffective. PostgreSQL 17 per-schema defaults are
 -- additive and cannot remove the built-in global PUBLIC function privilege.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES IN SCHEMA sec06_harness
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
-CREATE FUNCTION public.sec06_future_after_schema_only_revoke()
+CREATE FUNCTION sec06_harness.future_after_schema_only_revoke()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
 AS 'SELECT 1';
 
 -- Representative explicit public-role defaults, separate from PUBLIC itself.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES IN SCHEMA sec06_harness
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
-CREATE FUNCTION public.sec06_future_with_explicit_role_defaults()
+CREATE FUNCTION sec06_harness.future_with_explicit_role_defaults()
 RETURNS integer
 LANGUAGE sql
 SECURITY INVOKER
@@ -233,8 +241,8 @@ DECLARE
   extension_function_count integer;
 BEGIN
   -- Effective privileges inherited through PUBLIC.
-  IF NOT has_function_privilege('anon', 'public.sec06_public_only()', 'EXECUTE') OR
-     NOT has_function_privilege('authenticated', 'public.sec06_public_only()', 'EXECUTE') THEN
+  IF NOT has_function_privilege('anon', 'sec06_harness.public_only()', 'EXECUTE') OR
+     NOT has_function_privilege('authenticated', 'sec06_harness.public_only()', 'EXECUTE') THEN
     RAISE EXCEPTION 'SEC-06 did not reproduce effective PUBLIC EXECUTE';
   END IF;
 
@@ -244,7 +252,7 @@ BEGIN
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     JOIN pg_roles grantee ON grantee.oid = acl.grantee
-    WHERE p.oid = 'public.sec06_public_only()'::regprocedure
+    WHERE p.oid = 'sec06_harness.public_only()'::regprocedure
       AND grantee.rolname IN ('anon', 'authenticated')
       AND acl.privilege_type = 'EXECUTE'
   ) THEN
@@ -257,11 +265,11 @@ BEGIN
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     JOIN pg_roles grantee ON grantee.oid = acl.grantee
-    WHERE p.oid = 'public.sec06_explicit_only()'::regprocedure
+    WHERE p.oid = 'sec06_harness.explicit_only()'::regprocedure
       AND grantee.rolname = 'anon'
       AND acl.privilege_type = 'EXECUTE'
   ) OR has_function_privilege(
-    'authenticated', 'public.sec06_explicit_only()', 'EXECUTE'
+    'authenticated', 'sec06_harness.explicit_only()', 'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'SEC-06 did not distinguish an explicit-only grant';
   END IF;
@@ -271,7 +279,7 @@ BEGIN
     SELECT 1
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-    WHERE p.oid = 'public.sec06_both_origins()'::regprocedure
+    WHERE p.oid = 'sec06_harness.both_origins()'::regprocedure
       AND acl.grantee = 0
       AND acl.privilege_type = 'EXECUTE'
   ) OR NOT EXISTS (
@@ -279,7 +287,7 @@ BEGIN
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     JOIN pg_roles grantee ON grantee.oid = acl.grantee
-    WHERE p.oid = 'public.sec06_both_origins()'::regprocedure
+    WHERE p.oid = 'sec06_harness.both_origins()'::regprocedure
       AND grantee.rolname = 'anon'
       AND acl.privilege_type = 'EXECUTE'
   ) THEN
@@ -288,20 +296,20 @@ BEGIN
 
   -- A schema-local revoke cannot neutralize the global built-in PUBLIC default.
   IF NOT has_function_privilege(
-    'public', 'public.sec06_future_after_schema_only_revoke()', 'EXECUTE'
+    'public', 'sec06_harness.future_after_schema_only_revoke()', 'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'SEC-06 schema-only default-privilege control is not red';
   END IF;
 
   -- Explicit per-schema defaults produce direct grants in addition to PUBLIC.
   IF NOT has_function_privilege(
-    'public', 'public.sec06_future_with_explicit_role_defaults()', 'EXECUTE'
+    'public', 'sec06_harness.future_with_explicit_role_defaults()', 'EXECUTE'
   ) OR NOT EXISTS (
     SELECT 1
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     JOIN pg_roles grantee ON grantee.oid = acl.grantee
-    WHERE p.oid = 'public.sec06_future_with_explicit_role_defaults()'::regprocedure
+    WHERE p.oid = 'sec06_harness.future_with_explicit_role_defaults()'::regprocedure
       AND grantee.rolname IN ('anon', 'authenticated')
       AND acl.privilege_type = 'EXECUTE'
     GROUP BY p.oid
@@ -318,7 +326,7 @@ BEGIN
     CROSS JOIN LATERAL aclexplode(defaults.defaclacl) acl
     JOIN pg_roles grantee ON grantee.oid = acl.grantee
     WHERE creator.rolname = 'sec06_owner'
-      AND namespace.nspname = 'public'
+      AND namespace.nspname = 'sec06_harness'
       AND defaults.defaclobjtype = 'f'
       AND grantee.rolname IN ('anon', 'authenticated')
       AND acl.privilege_type = 'EXECUTE'
@@ -390,18 +398,18 @@ SET ROLE anon;
 DO $invoker$
 BEGIN
   BEGIN
-    PERFORM * FROM public.sec06_protected_fixture;
+    PERFORM * FROM sec06_harness.protected_fixture;
     RAISE EXCEPTION 'SEC-06 direct table access unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
   BEGIN
-    PERFORM public.sec06_invoker_reads_protected();
+    PERFORM sec06_harness.invoker_reads_protected();
     RAISE EXCEPTION 'SEC-06 SECURITY INVOKER bypassed table privileges';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  IF public.sec06_definer_reads_protected() <> 1 THEN
+  IF sec06_harness.definer_reads_protected() <> 1 THEN
     RAISE EXCEPTION 'SEC-06 harmless SECURITY DEFINER control returned an invalid result';
   END IF;
 END
@@ -413,7 +421,7 @@ RESET ROLE;
 DO $trigger_privilege$
 BEGIN
   IF has_function_privilege(
-    'sec06_server', 'public.sec06_set_trigger_marker()', 'EXECUTE'
+    'sec06_server', 'sec06_harness.set_trigger_marker()', 'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'SEC-06 trigger control retained direct EXECUTE';
   END IF;
@@ -425,7 +433,7 @@ DO $trigger_runtime$
 DECLARE
   trigger_marker boolean;
 BEGIN
-  INSERT INTO public.sec06_trigger_fixture (content)
+  INSERT INTO sec06_harness.trigger_fixture (content)
   VALUES ('server trigger path')
   RETURNING touched_by_trigger INTO trigger_marker;
 
@@ -439,7 +447,7 @@ RESET ROLE;
 SET ROLE sec06_owner;
 DO $owner_path$
 BEGIN
-  IF public.sec06_invoker_reads_protected() <> 1 THEN
+  IF sec06_harness.invoker_reads_protected() <> 1 THEN
     RAISE EXCEPTION 'SEC-06 owner path could not execute the invoker function';
   END IF;
 END

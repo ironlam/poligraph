@@ -1,11 +1,13 @@
 \set ON_ERROR_STOP on
 
 -- Authoritative SEC-06 assertion over the final PostgreSQL 17 catalog state.
--- Synthetic application routines use the sec06_app_ prefix. Confirmed historical
--- routines are resolved by exact identity so overloads and absent objects are safe.
+-- Every executable non-extension routine in the application schema is in scope,
+-- regardless of its name, signature, or owner.
 DO $catalog_contract$
 DECLARE
   application_routine_count integer;
+  extension_routine_count integer;
+  extension_overlap_count integer;
   public_execute_count integer;
   anon_direct_count integer;
   authenticated_direct_count integer;
@@ -33,21 +35,41 @@ BEGIN
       WHERE dependency.classid = 'pg_proc'::regclass
         AND dependency.objid = routine.oid
         AND dependency.deptype = 'e'
-    )
-    AND (
-      routine.proname LIKE 'sec06_app_%'
-      OR routine.oid = ANY (
-        ARRAY[
-          to_regprocedure('public.auto_enable_rls()')::oid,
-          to_regprocedure('public.politician_search_vector_update()')::oid,
-          to_regprocedure('public.search_politicians(text,integer)')::oid,
-          to_regprocedure('public.sync_vote_denorm_from_scrutin()')::oid
-        ]::oid[]
-      )
     );
 
   SELECT count(*) INTO application_routine_count
   FROM sec06_application_routines;
+
+  SELECT count(*) INTO extension_routine_count
+  FROM pg_proc routine
+  JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
+  WHERE namespace.nspname = 'public'
+    AND routine.prokind IN ('f', 'p', 'a', 'w')
+    AND EXISTS (
+      SELECT 1
+      FROM pg_depend dependency
+      WHERE dependency.classid = 'pg_proc'::regclass
+        AND dependency.objid = routine.oid
+        AND dependency.deptype = 'e'
+    );
+
+  SELECT count(*) INTO extension_overlap_count
+  FROM sec06_application_routines application_routine
+  WHERE EXISTS (
+    SELECT 1
+    FROM pg_depend dependency
+    WHERE dependency.classid = 'pg_proc'::regclass
+      AND dependency.objid = application_routine.oid
+      AND dependency.deptype = 'e'
+  );
+
+  IF extension_routine_count = 0 OR extension_overlap_count > 0 THEN
+    RAISE EXCEPTION USING MESSAGE = format(
+      'SEC-06 extension boundary invalid: extension_routines=%s application_overlap=%s',
+      extension_routine_count,
+      extension_overlap_count
+    );
+  END IF;
 
   SELECT count(*) INTO public_execute_count
   FROM sec06_application_routines application_routine

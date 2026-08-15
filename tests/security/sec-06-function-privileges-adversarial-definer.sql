@@ -1,7 +1,7 @@
 DO $dynamic_ddl$
 BEGIN
   EXECUTE
-    'CREATE FUNCTION public.sec06_app_adversarial_dynamic_definer() ' ||
+    'CREATE FUNCTION public.build_publication_snapshot() ' ||
     'RETURNS integer LANGUAGE sql SECURITY ' ||
     'DEFINER AS ''SELECT 1''';
 END

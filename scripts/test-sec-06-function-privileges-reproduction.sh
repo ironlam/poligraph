@@ -118,27 +118,48 @@ run_sql sec06_without_history /security/sec-06-function-privileges-no-history.sq
 run_sql sec06_without_history /sec06-migration.sql
 run_sql sec06_without_history /security/sec-06-function-privileges-no-history-contract.sql
 
+create_database sec06_partial_history
+run_sql sec06_partial_history /security/sec-06-function-privileges-no-history.sql
+run_sql sec06_partial_history /security/sec-06-function-privileges-partial-history.sql
+run_sql sec06_partial_history /sec06-migration.sql
+run_sql sec06_partial_history /security/sec-06-function-privileges-no-history-contract.sql
+
+prepare_hardened_database sec06_adversarial_public
+run_sql sec06_adversarial_public \
+  /security/sec-06-function-privileges-adversarial-public.sql
+expect_catalog_failure sec06_adversarial_public "an ordinary-name PUBLIC EXECUTE grant" public
+
 prepare_hardened_database sec06_adversarial_direct
 run_sql sec06_adversarial_direct \
   /security/sec-06-function-privileges-adversarial-direct.sql
-expect_catalog_failure sec06_adversarial_direct "a direct EXECUTE grant" anon_direct
+expect_catalog_failure sec06_adversarial_direct "an ordinary-name anon EXECUTE grant" anon_direct
+
+prepare_hardened_database sec06_adversarial_authenticated
+run_sql sec06_adversarial_authenticated \
+  /security/sec-06-function-privileges-adversarial-authenticated.sql
+expect_catalog_failure sec06_adversarial_authenticated \
+  "an ordinary-name authenticated EXECUTE grant" authenticated_direct
 
 prepare_hardened_database sec06_adversarial_overload
 run_sql sec06_adversarial_overload \
   /security/sec-06-function-privileges-adversarial-overload.sql
-expect_catalog_failure sec06_adversarial_overload "an overloaded routine grant" authenticated_direct
+expect_catalog_failure sec06_adversarial_overload \
+  "an ordinary-name overloaded routine grant" authenticated_direct
 
 prepare_hardened_database sec06_adversarial_owner
 run_sql sec06_adversarial_owner \
   /security/sec-06-function-privileges-adversarial-owner.sql
-expect_catalog_failure sec06_adversarial_owner "an alternate creator default" public
+expect_catalog_failure sec06_adversarial_owner \
+  "an ordinary-name alternate creator default" public
 
 prepare_hardened_database sec06_adversarial_definer
 run_sql sec06_adversarial_definer \
   /security/sec-06-function-privileges-adversarial-definer.sql
-expect_catalog_failure sec06_adversarial_definer "dynamic SECURITY DEFINER DDL" security_definer
+expect_catalog_failure sec06_adversarial_definer \
+  "ordinary-name dynamic SECURITY DEFINER DDL" security_definer
 
 echo "SEC-06 before behavior reproduced"
 echo "SEC-06 target contract passes after remediation with historical routines present"
 echo "SEC-06 target contract passes after remediation with historical routines absent"
+echo "SEC-06 target contract passes after remediation with partial historical routines"
 echo "SEC-06 adversarial catalog regressions detected"
