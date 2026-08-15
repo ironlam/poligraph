@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { describeError, HTTPError } from "../http-client";
 
 describe("describeError", () => {
@@ -85,5 +85,68 @@ describe("describeError", () => {
     expect(describeError(new HTTPError("HTTP 404: Not Found", 404, "https://example.fr"))).toBe(
       "HTTP 404: Not Found"
     );
+  });
+});
+
+describe("HTTPClient error URL redaction", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("removes credentials, query parameters, and fragments from network errors", async () => {
+    const secret = "super-secret-api-key";
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+    const client = new HTTPClient({ retries: 0 });
+
+    const error = await client
+      .get(`https://user:password@example.fr/path?key=${secret}#fragment`)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("network down (https://example.fr/path)");
+    expect((error as Error).message).not.toContain(secret);
+    expect((error as Error).message).not.toContain("password");
+  });
+
+  it("preserves a query-free endpoint in network errors", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+    const client = new HTTPClient({ retries: 0 });
+
+    const error = await client.get("https://example.fr/path").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("network down (https://example.fr/path)");
+  });
+
+  it("does not echo malformed URLs in fallback errors", async () => {
+    const secret = "super-secret-api-key";
+    const client = new HTTPClient();
+
+    const error = await client
+      .get(`not-a-url?key=${secret}`, { retries: -1 })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("Failed to fetch [redacted URL]");
+    expect((error as Error).message).not.toContain(secret);
+  });
+
+  it("redacts the URL used by 429 diagnostics", async () => {
+    const secret = "super-secret-api-key";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 429, statusText: "Too Many Requests" })
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const client = new HTTPClient({ retries: 0 });
+
+    const error = await client
+      .get(`https://example.fr/path?key=${secret}`)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(HTTPError);
+    expect(warn).toHaveBeenCalledWith(
+      "[HTTPClient] 429 Too Many Requests from https://example.fr/path (attempt 1/1)"
+    );
+    expect(warn.mock.calls.flat().join(" ")).not.toContain(secret);
   });
 });

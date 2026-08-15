@@ -64,6 +64,18 @@ function errorLabel(error: Error): string {
   return typeof code === "string" ? `${error.message} [${code}]` : error.message;
 }
 
+function redactUrlForError(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "[redacted URL]";
+    }
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "[redacted URL]";
+  }
+}
+
 /**
  * Flatten an error and its `cause` chain into a single readable line.
  *
@@ -235,6 +247,7 @@ export class HTTPClient {
   ): Promise<HTTPResponse<T>> {
     const maxRetries = options.retries ?? this.options.retries;
     const timeout = options.timeout ?? this.options.timeout;
+    const safeUrl = redactUrlForError(url);
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -269,7 +282,7 @@ export class HTTPClient {
 
           // Log 429 with source name for observability
           if (response.status === 429) {
-            const source = this.options.sourceName || url;
+            const source = this.options.sourceName || safeUrl;
             console.warn(
               `[HTTPClient] 429 Too Many Requests from ${source} (attempt ${attempt + 1}/${maxRetries + 1})`
             );
@@ -322,7 +335,7 @@ export class HTTPClient {
     }
 
     if (!lastError) {
-      throw new Error(`Failed to fetch ${url}`);
+      throw new Error(`Failed to fetch ${safeUrl}`);
     }
 
     // HTTPError already carries a precise status; only opaque network errors
@@ -331,7 +344,7 @@ export class HTTPClient {
       throw lastError;
     }
 
-    throw new Error(`${describeError(lastError)} (${url})`, { cause: lastError });
+    throw new Error(`${describeError(lastError)} (${safeUrl})`, { cause: lastError });
   }
 
   /**
