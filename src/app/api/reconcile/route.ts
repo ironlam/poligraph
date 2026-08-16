@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { safeJsonParse } from "@/lib/api/safe-json";
+import { withPublicRoute } from "@/lib/api/with-public-route";
 import { db } from "@/lib/db";
 import { normalizeText } from "@/lib/name-matching";
-import { withPublicRoute } from "@/lib/api/with-public-route";
 
 const reconciliationQuerySchema = z.object({
   query: z.string().min(1).max(500),
@@ -43,14 +44,12 @@ export const GET = withPublicRoute(async (request) => {
     });
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(queriesParam);
-  } catch {
+  const raw = safeJsonParse(queriesParam);
+  if (!raw.success) {
     return NextResponse.json({ error: "Invalid JSON in queries parameter" }, { status: 400 });
   }
 
-  const parsed = reconciliationQueriesSchema.safeParse(raw);
+  const parsed = reconciliationQueriesSchema.safeParse(raw.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid queries format", issues: parsed.error.issues },
