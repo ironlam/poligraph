@@ -17,13 +17,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify critical guard fixtures
-        run: python3 scripts/ci/__tests__/test_code_quality_guards.py
+        run: python3 -m unittest discover -s scripts/ci/__tests__ -p 'test_*.py' -v
 
       - name: No $executeRawUnsafe without justification
         run: python3 scripts/ci/code_quality_guards.py execute-raw-unsafe
 
       - name: No direct PUBLISHED writes outside an authorized publisher
-        run: python3 scripts/ci/code_quality_guards.py direct-published-writes
+        run: python3 scripts/ci/direct_publication_guard.py
 
       - name: Importers create affairs only through create-draft
         run: python3 scripts/ci/code_quality_guards.py importer-affair-create
