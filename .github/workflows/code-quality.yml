@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify critical guard fixtures
-        run: bash scripts/test-ci-guards.sh
+        run: bash scripts/ci/__tests__/code-quality-guards.test.sh
 
       - name: No $executeRawUnsafe without justification
         run: bash scripts/ci/code-quality-guards.sh execute-raw-unsafe
