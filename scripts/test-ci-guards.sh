@@ -66,6 +66,7 @@ await db.affair.update({
 });
 EOF
 expect_fail 'direct publication write is rejected' direct-published-writes
+rm "$fixture/src/services/publisher.ts"
 cat > "$fixture/src/lib/affairs/publish-guard.ts" <<'EOF'
 await db.affair.update({
   data: {
