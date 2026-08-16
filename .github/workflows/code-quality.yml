@@ -17,32 +17,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify critical guard fixtures
-        run: bash scripts/ci/__tests__/code-quality-guards.test.sh
+        run: python3 scripts/ci/__tests__/test_code_quality_guards.py
 
       - name: No $executeRawUnsafe without justification
-        run: bash scripts/ci/code-quality-guards.sh execute-raw-unsafe
+        run: python3 scripts/ci/code_quality_guards.py execute-raw-unsafe
 
       - name: No direct PUBLISHED writes outside an authorized publisher
-        run: bash scripts/ci/code-quality-guards.sh direct-published-writes
+        run: python3 scripts/ci/code_quality_guards.py direct-published-writes
 
       - name: Importers create affairs only through create-draft
-        run: bash scripts/ci/code-quality-guards.sh importer-affair-create
+        run: python3 scripts/ci/code_quality_guards.py importer-affair-create
 
       - name: Importers never write verifiedAt
-        run: bash scripts/ci/code-quality-guards.sh importer-verified-at
+        run: python3 scripts/ci/code_quality_guards.py importer-verified-at
 
       - name: No press paywall circumvention
-        run: bash scripts/ci/code-quality-guards.sh press-paywall
+        run: python3 scripts/ci/code_quality_guards.py press-paywall
 
-      - name: No dangerouslySetInnerHTML without sanitization
-        run: bash scripts/ci/code-quality-guards.sh dangerous-html
+      - name: No dangerouslySetInnerHTML outside canonical safe JSON-LD
+        run: python3 scripts/ci/code_quality_guards.py dangerous-html
 
-      - name: No JSON.parse of user input without try-catch
-        run: bash scripts/ci/code-quality-guards.sh json-parse
+      - name: Public API JSON parsing uses safeJsonParse
+        run: python3 scripts/ci/code_quality_guards.py json-parse
 
       - name: No findMany without where clause (full table scan)
         run: |
-          # Flag findMany() with no where/take/select within 10 lines (unfiltered full table scan)
+          # Performance heuristic, not a CI-01 critical security/editorial guard.
           VIOLATIONS=$(grep -rn '\.findMany(' src/lib/data/ src/lib/feature-flags.ts --include='*.ts' \
             | while IFS= read -r line; do
                 FILE=$(echo "$line" | cut -d: -f1)
@@ -60,11 +60,7 @@ jobs:
 
       - name: Commons thumbnail URLs built only via lib/photos/commons
         run: |
-          # upload.wikimedia.org only serves the widths listed on
-          # https://www.mediawiki.org/wiki/Common_thumbnail_sizes ; any other
-          # width returns HTTP 400. Building these URLs by hand silently broke
-          # 549 portraits once already, so the MD5-shard construction lives in
-          # src/lib/photos/commons.ts and nowhere else.
+          # Availability/correctness guard, not a CI-01 security/editorial boundary.
           VIOLATIONS=$(grep -rn 'wikipedia/commons/thumb' src/ scripts/ --include='*.ts' --include='*.tsx' \
             | grep -v 'src/lib/photos/commons.ts' \
             | grep -v '__tests__' | grep -v '\.test\.' || true)
@@ -75,7 +71,7 @@ jobs:
           fi
 
       - name: No secrets in NEXT_PUBLIC_ vars
-        run: bash scripts/ci/code-quality-guards.sh next-public-secrets
+        run: python3 scripts/ci/code_quality_guards.py next-public-secrets
 
   react-patterns:
     name: React Patterns
@@ -124,7 +120,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Admin routes use withAdminAuth
-        run: bash scripts/ci/code-quality-guards.sh admin-auth
+        run: python3 scripts/ci/code_quality_guards.py admin-auth
 
       - name: No unjustified any without eslint-disable
         run: |
@@ -137,10 +133,8 @@ jobs:
                 FILE=$(echo "$line" | cut -d: -f1)
                 LINENUM=$(echo "$line" | cut -d: -f2)
                 PREV=$((LINENUM - 1))
-                # Check if the any is in code (not in a comment on that line)
                 CODE=$(echo "$line" | cut -d: -f3-)
                 if echo "$CODE" | grep -qE ':\s*any\b|as\s+any\b'; then
-                  # Verify it's not just "any" in a comment part of the line
                   CODE_BEFORE_COMMENT=$(echo "$CODE" | sed 's|//.*||')
                   if echo "$CODE_BEFORE_COMMENT" | grep -qE ':\s*any\b|as\s+any\b'; then
                     if ! sed -n "${PREV}p" "$FILE" | grep -q 'eslint-disable'; then
@@ -155,9 +149,12 @@ jobs:
             exit 1
           fi
 
-      - name: Factcheck queries use FACTCHECK_ALLOWED_SOURCES
+      - name: "Advisory: factcheck queries may need FACTCHECK_ALLOWED_SOURCES"
         run: |
-          # Check that factcheck findMany queries include the source filter
+          # Non-blocking heuristic only. It is deliberately excluded from the
+          # CI-01 critical-guard set because it does not enforce a boundary: the
+          # actual public fact-check source filter is versioned in data-access
+          # code and covered by application tests. This step remains a review hint.
           VIOLATIONS=$(grep -rn 'factCheck\.findMany\|factCheck\.count' src/ --include='*.ts' --include='*.tsx' \
             | grep -v 'FACTCHECK_ALLOWED_SOURCES\|generated/\|admin/\|sync/' || true)
           if [ -n "$VIOLATIONS" ]; then
