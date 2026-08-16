@@ -57,8 +57,9 @@ def tokenize_ts(source: str) -> list[Token]:
 
     Comments and literal-only template content never become code tokens. Template
     interpolations are scanned as code so executable expressions cannot hide in
-    `${...}`. This is intentionally a lexer, not a TypeScript parser: guards only
-    use token sequences and exact path contracts below.
+    `${...}`. Regex literals are consumed as literals so quotes or backticks in a
+    regex cannot corrupt the scanner. This is intentionally a lexer, not a full
+    TypeScript parser: guards only use token sequences and exact path contracts.
     """
 
     tokens: list[Token] = []
@@ -113,6 +114,57 @@ def tokenize_ts(source: str) -> list[Token]:
                 token, i = _parse_quoted(source, i, ch)
                 tokens.append(token)
                 continue
+            if ch == "/":
+                previous = tokens[-1].value if tokens else None
+                regex_context = previous is None or previous in {
+                    "(",
+                    "[",
+                    "{",
+                    "=",
+                    ":",
+                    ",",
+                    ";",
+                    "!",
+                    "?",
+                    "return",
+                    "case",
+                    "throw",
+                    "else",
+                    "=>",
+                }
+                if regex_context:
+                    start = i
+                    i += 1
+                    in_class = False
+                    escaped = False
+                    pattern: list[str] = []
+                    while i < n:
+                        current = source[i]
+                        if escaped:
+                            pattern.append(current)
+                            escaped = False
+                            i += 1
+                            continue
+                        if current == "\\":
+                            pattern.append(current)
+                            escaped = True
+                            i += 1
+                            continue
+                        if current == "[":
+                            in_class = True
+                        elif current == "]":
+                            in_class = False
+                        elif current == "/" and not in_class:
+                            i += 1
+                            while i < n and source[i].isalpha():
+                                i += 1
+                            tokens.append(Token("regex", "".join(pattern), start))
+                            break
+                        pattern.append(current)
+                        i += 1
+                    else:
+                        raise ScanError("unterminated regular expression literal")
+                    continue
             if ch == "`":
                 i = scan_template(i)
                 continue
