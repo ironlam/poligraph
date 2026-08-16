@@ -16,134 +16,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify critical guard fixtures
+        run: bash scripts/test-ci-guards.sh
+
       - name: No $executeRawUnsafe without justification
-        run: |
-          # Find $executeRawUnsafe calls that don't have an eslint-disable or Safe: comment on the preceding line
-          VIOLATIONS=$(grep -rn '\$executeRawUnsafe' src/ --include='*.ts' --include='*.tsx' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Found \$executeRawUnsafe usage. Use \$executeRaw with Prisma.sql template literals instead."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh execute-raw-unsafe
 
       - name: No direct PUBLISHED writes outside an authorized publisher
-        run: |
-          # RGPD art. 10 : la publication d'une affaire passe exclusivement par
-          # src/lib/affairs/publish-guard.ts. Ce step détecte les écritures
-          # directes : un littéral `publicationStatus: "PUBLISHED"` dont le
-          # contexte amont (12 lignes) contient `data:` plus près que `where:`.
-          # scripts/ est couvert au même titre que src/.
-          #
-          # La détection est lexicale, donc aveugle au modèle : `PublicationStatus`
-          # est un enum partagé, et ce step attrape aussi la publication d'une
-          # mesure. La liste ci-dessous nomme donc UN fichier autorisé par modèle,
-          # jamais un répertoire : tout autre fichier qui publierait une mesure
-          # reste détecté, ce qui est bien l'invariant voulu.
-          FOUND=0
-          for f in $(grep -rl 'publicationStatus: "PUBLISHED"' src/ scripts/ --include='*.ts' --include='*.tsx' \
-            | grep -v 'src/lib/affairs/publish-guard.ts' \
-            | grep -v 'src/lib/measures/transitions.ts' \
-            | grep -v '__tests__' | grep -v '\.test\.'); do
-            while IFS=: read -r linenum rest; do
-              START=$((linenum > 12 ? linenum - 12 : 1))
-              CONTEXT=$(sed -n "${START},${linenum}p" "$f")
-              DATA_LINE=$(echo "$CONTEXT" | grep -n 'data:' | tail -1 | cut -d: -f1 || true)
-              WHERE_LINE=$(echo "$CONTEXT" | grep -n 'where\|Where' | tail -1 | cut -d: -f1 || true)
-              if [ -n "$DATA_LINE" ] && { [ -z "$WHERE_LINE" ] || [ "$DATA_LINE" -gt "$WHERE_LINE" ]; }; then
-                echo "::error file=$f,line=$linenum::Écriture directe de publicationStatus PUBLISHED hors publish-guard"
-                FOUND=1
-              fi
-            done < <(grep -n 'publicationStatus: "PUBLISHED"' "$f")
-          done
-          exit $FOUND
+        run: bash scripts/ci/code-quality-guards.sh direct-published-writes
 
       - name: Importers create affairs only through create-draft
-        run: |
-          # Le step précédent ne couvre qu'un littéral ; celui-ci pose
-          # l'invariant structurel, qui tient quelle que soit l'expression
-          # employée : un importeur (scripts/ ou src/services/sync/) ne
-          # construit pas une affaire lui-même, il passe par
-          # createDraftAffairFromDiscovery, qui force DRAFT.
-          # seed-fixtures est exclu : fixtures de dev, protégé par
-          # SEED_BLOCKED_HOSTS, et il ne touche pas publicationStatus.
-          VIOLATIONS=$(grep -rn '\(db\|tx\)\.affair\.create' scripts/ src/services/sync/ --include='*.ts' \
-            | grep -v '__tests__' | grep -v '\.test\.' \
-            | grep -v 'scripts/seed-fixtures.ts' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Un importeur crée une affaire directement. Utilisez createDraftAffairFromDiscovery (src/services/affairs/create-draft.ts)."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh importer-affair-create
 
       - name: Importers never write verifiedAt
-        run: |
-          # `verifiedAt` atteste d'une validation humaine : seul publish-guard
-          # l'écrit, et toujours avec `verifiedBy`, atomiquement. Un des deux
-          # champs sans l'autre ne veut rien dire.
-          # On ne cible que l'affectation d'une date : `verifiedAt: true`
-          # (select) et `verifiedAt: { not: null }` (where) restent permis.
-          VIOLATIONS=$(grep -rn 'verifiedAt:.*new Date(' scripts/ src/services/sync/ --include='*.ts' \
-            | grep -v '__tests__' | grep -v '\.test\.' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Un importeur écrit verifiedAt. La validation humaine passe exclusivement par assertPublishable()."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh importer-verified-at
 
       - name: No press paywall circumvention
-        run: |
-          # L'ingestion presse se fait en accès anonyme, sur les sources en
-          # accès libre. Aucun identifiant ni endpoint d'authentification
-          # éditeur ne doit apparaître dans le code.
-          # Les tests sont exclus : ils vérifient justement l'absence de ces
-          # motifs, et les citer est leur seule façon de le faire.
-          VIOLATIONS=$(grep -rniE 'MEDIAPART_(EMAIL|PASSWORD)|login_check' src/ scripts/ --include='*.ts' --include='*.tsx' \
-            | grep -v '__tests__' | grep -v '\.test\.' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Référence à une authentification éditeur dans le code d'ingestion."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
-          # Le robot s'identifie. La forme attendue nomme le projet et donne
-          # une URL de contact :
-          # "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)".
-          UA=$(grep -rn 'Mozilla/5.0' src/ scripts/ --include='*.ts' --include='*.tsx' \
-            | grep -v '__tests__' | grep -v '\.test\.' \
-            | grep -v 'Poligraph' || true)
-          if [ -n "$UA" ]; then
-            echo "::error::User-Agent n'identifiant pas Poligraph. Le robot doit s'identifier avec une URL de contact."
-            echo "$UA"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh press-paywall
 
       - name: No dangerouslySetInnerHTML without sanitization
-        run: |
-          if grep -q 'dangerouslySetInnerHTML' src/components/ui/markdown.tsx; then
-            echo "::error::MarkdownText must render untrusted content structurally."
-            exit 1
-          fi
-          VIOLATIONS=$(grep -rn 'dangerouslySetInnerHTML' src/ --include='*.tsx' | grep -v 'DOMPurify\|sanitize\|JSON.stringify\|JsonLd' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Found dangerouslySetInnerHTML without sanitization."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh dangerous-html
 
       - name: No JSON.parse of user input without try-catch
-        run: |
-          # Flag JSON.parse(searchParams/param/body) in public API routes without try-catch
-          # Excludes: admin routes (behind withAdminAuth), JSON.parse(JSON.stringify(...)) (deep clone)
-          FOUND=0
-          for f in $(grep -rl 'JSON\.parse' src/app/api/ --include='*.ts' | grep -v '/admin/'); do
-            grep -n 'JSON\.parse' "$f" | grep -v 'JSON\.stringify' | while IFS=: read -r linenum rest; do
-              START=$((linenum > 5 ? linenum - 5 : 1))
-              CONTEXT=$(sed -n "${START},${linenum}p" "$f")
-              echo "$CONTEXT" | grep -q 'try' && continue
-              echo "::error file=$f,line=$linenum::JSON.parse of user input without try-catch"
-              FOUND=1
-            done
-          done
-          exit $FOUND
+        run: bash scripts/ci/code-quality-guards.sh json-parse
 
       - name: No findMany without where clause (full table scan)
         run: |
@@ -180,13 +75,7 @@ jobs:
           fi
 
       - name: No secrets in NEXT_PUBLIC_ vars
-        run: |
-          VIOLATIONS=$(grep -rn 'NEXT_PUBLIC_.*SECRET\|NEXT_PUBLIC_.*TOKEN\|NEXT_PUBLIC_.*PASSWORD\|NEXT_PUBLIC_.*API_KEY' src/ .env.example --include='*.ts' --include='*.tsx' --include='*.env*' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Potential secret exposed in NEXT_PUBLIC_ variable."
-            echo "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh next-public-secrets
 
   react-patterns:
     name: React Patterns
@@ -235,19 +124,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Admin routes use withAdminAuth
-        run: |
-          # Check all admin route files (except auth endpoint) export using withAdminAuth
-          VIOLATIONS=""
-          for f in $(find src/app/api/admin -name 'route.ts' | grep -v '/auth/'); do
-            if ! grep -q 'withAdminAuth' "$f"; then
-              VIOLATIONS="$VIOLATIONS\n$f: missing withAdminAuth wrapper"
-            fi
-          done
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Admin routes must use withAdminAuth() wrapper."
-            echo -e "$VIOLATIONS"
-            exit 1
-          fi
+        run: bash scripts/ci/code-quality-guards.sh admin-auth
 
       - name: No unjustified any without eslint-disable
         run: |
