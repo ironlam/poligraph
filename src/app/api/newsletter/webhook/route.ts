@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { safeJsonParse } from "@/lib/api/safe-json";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { db } from "@/lib/db";
 import { verifyMailjetBasicAuth } from "@/lib/newsletter/webhook-auth";
@@ -24,14 +25,12 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
   }
 
   const rawBody = await request.text();
-
-  let events: MailjetEvent[];
-  try {
-    const parsed = JSON.parse(rawBody);
-    events = Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
+  const parsed = safeJsonParse<MailjetEvent | MailjetEvent[]>(rawBody);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const events = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
 
   for (const event of events) {
     if (typeof event.email !== "string") continue;
