@@ -60,8 +60,17 @@ export const GET = withPublicRoute(async (request) => {
 });
 
 export const POST = withPublicRoute(async (request) => {
-  const body = await request.json();
-  const input = body.queries ?? body;
+  const bodyText = await request.text();
+  const raw = safeJsonParse(bodyText);
+  if (!raw.success) {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const body = raw.data;
+  const input =
+    typeof body === "object" && body !== null && !Array.isArray(body) && "queries" in body
+      ? (body as Record<string, unknown>).queries
+      : body;
 
   const parsed = reconciliationQueriesSchema.safeParse(input);
   if (!parsed.success) {

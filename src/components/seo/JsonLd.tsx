@@ -3,10 +3,9 @@
  * @see https://schema.org
  */
 
-/** Safely serialize JSON-LD — escapes </script> to prevent injection */
-function safeJsonLd(data: object): string {
-  return JSON.stringify(data).replace(/<\/script/gi, "<\\/script");
-}
+/** Safely serialize JSON-LD, escaping </script> to prevent injection. */
+const safeJsonLd = (data: object): string =>
+  JSON.stringify(data).replace(/<\/script/gi, "<\\/script");
 
 interface PersonJsonLdProps {
   name: string;

@@ -39,8 +39,9 @@
  *   broad directory allowlist. If an importer imports such a module, it enters the graph.
  *
  * HTTP identity
- * - Guarantee: direct fetch calls with an explicit User-Agent identify Poligraph. HTTPClient header
- *   override resistance is a runtime contract in `http-client.test.ts`.
+ * - Guarantee: statically explicit User-Agent values on direct fetch calls identify Poligraph,
+ *   including bounded object, Headers, mutation, and Request forms. HTTPClient header override
+ *   resistance is a runtime contract in `http-client.test.ts`.
  * - Canonical syntax: HTTPClient, or an explicit Poligraph User-Agent on direct fetch.
  * - Forbidden: explicit non-Poligraph User-Agent and publisher login credentials/endpoints.
  * - Limit: business and audit fields named userAgent are not outbound headers.
@@ -55,8 +56,9 @@
  *
  * JSON-LD and fail-closed scanning
  * - Guarantee: dangerouslySetInnerHTML exists only in the canonical JSON-LD component and calls its
- *   single unshadowed serializer, whose runtime output neutralizes every case variant of </script>.
- *   Missing roots, unreadable entries, symlinks, read failures, and TypeScript parse errors throw.
+ *   single top-level const serializer, which cannot be shadowed or reassigned and whose runtime
+ *   output neutralizes every case variant of </script>. Missing roots, unreadable entries, symlinks,
+ *   read failures, and TypeScript parse errors throw.
  * - Canonical syntax: a direct `safeJsonLd(data)` sink in the canonical component.
  * - Forbidden: other sinks, serializer shadowing, missing/wrong replacement, and filesystem ambiguity.
  * - Limit: safe aliases are intentionally rejected to keep the sink contract direct and inspectable.
@@ -513,7 +515,7 @@ function refersToNativeJson(
 ): boolean {
   const current = unwrap(expression);
   if (ts.isIdentifier(current)) {
-    const symbol = model.checker.getSymbolAtLocation(current);
+    const symbol = bindingIdentifierSymbol(current, model);
     if (current.text === "JSON" && symbolFromDefaultLibrary(symbol)) return true;
     if (symbol && seen.has(symbol)) return false;
     const initializer = identifierInitializer(current, model);
@@ -1343,6 +1345,147 @@ function identifiesPoligraph(value: string | null): boolean {
   return typeof value === "string" && value.toLowerCase().includes("poligraph");
 }
 
+interface HeaderUserAgent {
+  node: ts.Node;
+  value: string | null;
+}
+
+function objectMemberExpression(
+  object: ts.ObjectLiteralExpression,
+  wanted: string,
+  model: ProjectModel
+): ts.Expression | null | undefined {
+  let result: ts.Expression | null | undefined;
+  for (const property of object.properties) {
+    if (ts.isPropertyAssignment(property) && propertyName(property.name, model) === wanted) {
+      result = property.initializer;
+    } else if (ts.isShorthandPropertyAssignment(property) && property.name.text === wanted) {
+      result = property.name;
+    } else if (ts.isSpreadAssignment(property)) {
+      const nested = objectLiteral(property.expression, model);
+      if (!nested) return null;
+      const nestedValue = objectMemberExpression(nested, wanted, model);
+      if (nestedValue !== undefined) result = nestedValue;
+    }
+  }
+  return result;
+}
+
+function resolveHeadersInit(
+  expression: ts.Expression,
+  model: ProjectModel,
+  sourceUnit: SourceUnit,
+  before: number,
+  seen = new Set<ts.Symbol>()
+): HeaderUserAgent[] {
+  const current = unwrap(expression);
+  if (ts.isIdentifier(current)) {
+    const symbol = bindingIdentifierSymbol(current, model);
+    if (symbol && seen.has(symbol)) return [];
+    const nextSeen = new Set(seen);
+    if (symbol) nextSeen.add(symbol);
+    const initializer = identifierInitializer(current, model);
+    const findings = initializer
+      ? resolveHeadersInit(initializer, model, sourceUnit, before, nextSeen)
+      : [];
+    if (!symbol) return findings;
+    walk(sourceUnit.sourceFile, (node) => {
+      if (!ts.isCallExpression(node) || node.getStart() >= before) return;
+      const method = memberName(node.expression, model);
+      const base = memberBase(node.expression);
+      const target = base ? unwrap(base) : null;
+      if (
+        !["set", "append"].includes(method ?? "") ||
+        !target ||
+        !ts.isIdentifier(target) ||
+        bindingIdentifierSymbol(target, model) !== symbol
+      ) {
+        return;
+      }
+      const name = node.arguments[0] ? staticString(node.arguments[0], model) : null;
+      if (name?.toLowerCase() !== "user-agent") return;
+      findings.push({
+        node,
+        value: node.arguments[1] ? staticString(node.arguments[1], model) : null,
+      });
+    });
+    return findings;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    const findings: HeaderUserAgent[] = [];
+    for (const property of current.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      if (propertyName(property.name, model)?.toLowerCase() !== "user-agent") continue;
+      findings.push({ node: property, value: staticString(property.initializer, model) });
+    }
+    return findings;
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    const findings: HeaderUserAgent[] = [];
+    for (const element of current.elements) {
+      const tuple = unwrap(element);
+      if (!ts.isArrayLiteralExpression(tuple)) continue;
+      const name = tuple.elements[0] ? staticString(tuple.elements[0], model) : null;
+      if (name?.toLowerCase() !== "user-agent") continue;
+      findings.push({
+        node: tuple,
+        value: tuple.elements[1] ? staticString(tuple.elements[1], model) : null,
+      });
+    }
+    return findings;
+  }
+  if (
+    ts.isNewExpression(current) &&
+    ts.isIdentifier(unwrap(current.expression)) &&
+    (unwrap(current.expression) as ts.Identifier).text === "Headers"
+  ) {
+    return current.arguments?.[0]
+      ? resolveHeadersInit(current.arguments[0], model, sourceUnit, before, new Set(seen))
+      : [];
+  }
+  return [];
+}
+
+function resolveRequestInit(
+  expression: ts.Expression,
+  model: ProjectModel,
+  sourceUnit: SourceUnit,
+  before: number
+): HeaderUserAgent[] {
+  const options = objectLiteral(expression, model);
+  if (!options) return [];
+  const headers = objectMemberExpression(options, "headers", model);
+  return headers ? resolveHeadersInit(headers, model, sourceUnit, before) : [];
+}
+
+function resolveRequestExpression(
+  expression: ts.Expression,
+  model: ProjectModel,
+  sourceUnit: SourceUnit,
+  before: number,
+  seen = new Set<ts.Symbol>()
+): HeaderUserAgent[] {
+  const current = unwrap(expression);
+  if (ts.isIdentifier(current)) {
+    const symbol = model.checker.getSymbolAtLocation(current);
+    if (symbol && seen.has(symbol)) return [];
+    const initializer = identifierInitializer(current, model);
+    if (!initializer) return [];
+    const nextSeen = new Set(seen);
+    if (symbol) nextSeen.add(symbol);
+    return resolveRequestExpression(initializer, model, sourceUnit, before, nextSeen);
+  }
+  if (
+    ts.isNewExpression(current) &&
+    ts.isIdentifier(unwrap(current.expression)) &&
+    (unwrap(current.expression) as ts.Identifier).text === "Request" &&
+    current.arguments?.[1]
+  ) {
+    return resolveRequestInit(current.arguments[1], model, sourceUnit, before);
+  }
+  return [];
+}
+
 function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
   const violations: Violation[] = [];
   walk(sourceUnit.sourceFile, (node) => {
@@ -1355,30 +1498,73 @@ function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Vi
     if (
       !ts.isCallExpression(node) ||
       !ts.isIdentifier(unwrap(node.expression)) ||
-      (unwrap(node.expression) as ts.Identifier).text !== "fetch" ||
-      !node.arguments[1]
+      (unwrap(node.expression) as ts.Identifier).text !== "fetch"
     ) {
       return;
     }
-    const options = objectLiteral(node.arguments[1], model);
-    if (!options) return;
-    const headersExpression = objectProperty(options, "headers", model);
-    if (!headersExpression) return;
-    const headers = objectLiteral(headersExpression, model);
-    if (!headers) return;
-    for (const property of headers.properties) {
-      if (!ts.isPropertyAssignment(property)) continue;
-      const name = propertyName(property.name, model);
-      if (name?.toLowerCase() !== "user-agent") continue;
-      const value = staticString(property.initializer, model);
-      if (!identifiesPoligraph(value)) {
-        violations.push(
-          problem(sourceUnit, node, "direct fetch User-Agent must identify Poligraph")
-        );
-      }
+    const findings = node.arguments[0]
+      ? resolveRequestExpression(node.arguments[0], model, sourceUnit, node.getStart())
+      : [];
+    if (node.arguments[1]) {
+      findings.push(...resolveRequestInit(node.arguments[1], model, sourceUnit, node.getStart()));
+    }
+    if (findings.some((finding) => !identifiesPoligraph(finding.value))) {
+      violations.push(problem(sourceUnit, node, "direct fetch User-Agent must identify Poligraph"));
     }
   });
   return violations;
+}
+
+function refersToGlobalThis(
+  expression: ts.Expression,
+  model: ProjectModel,
+  seen = new Set<ts.Symbol>()
+): boolean {
+  const current = unwrap(expression);
+  if (!ts.isIdentifier(current)) return false;
+  const symbol = model.checker.getSymbolAtLocation(current);
+  if (
+    current.text === "globalThis" &&
+    (!symbol || symbolFromDefaultLibrary(symbol) || symbol.getDeclarations()?.length === 0)
+  ) {
+    return true;
+  }
+  if (symbol && seen.has(symbol)) return false;
+  const initializer = identifierInitializer(current, model);
+  if (!initializer) return false;
+  const nextSeen = new Set(seen);
+  if (symbol) nextSeen.add(symbol);
+  return refersToGlobalThis(initializer, model, nextSeen);
+}
+
+function refersToNodeProcess(
+  expression: ts.Expression,
+  model: ProjectModel,
+  seen = new Set<ts.Symbol>()
+): boolean {
+  const current = unwrap(expression);
+  if (ts.isIdentifier(current)) {
+    const symbol = model.checker.getSymbolAtLocation(current);
+    if (
+      current.text === "process" &&
+      (!symbol ||
+        symbol.getDeclarations()?.length === 0 ||
+        symbol
+          .getDeclarations()
+          ?.every((declaration) => declaration.getSourceFile().isDeclarationFile))
+    ) {
+      return true;
+    }
+    if (symbol && seen.has(symbol)) return false;
+    const initializer = identifierInitializer(current, model);
+    if (!initializer) return false;
+    const nextSeen = new Set(seen);
+    if (symbol) nextSeen.add(symbol);
+    return refersToNodeProcess(initializer, model, nextSeen);
+  }
+  const name = memberName(current, model);
+  const base = memberBase(current);
+  return name === "process" && !!base && refersToGlobalThis(base, model);
 }
 
 function processEnvExpression(expression: ts.Expression, model: ProjectModel): boolean {
@@ -1386,8 +1572,7 @@ function processEnvExpression(expression: ts.Expression, model: ProjectModel): b
   return (
     memberName(current, model) === "env" &&
     !!memberBase(current) &&
-    ts.isIdentifier(unwrap(memberBase(current)!)) &&
-    (unwrap(memberBase(current)!) as ts.Identifier).text === "process"
+    refersToNodeProcess(memberBase(current)!, model)
   );
 }
 
@@ -1462,28 +1647,107 @@ function jsxAttributeName(attribute: ts.JsxAttribute): string {
   return attribute.name.getText();
 }
 
+function bindingIdentifierSymbol(
+  identifier: ts.Identifier,
+  model: ProjectModel
+): ts.Symbol | undefined {
+  return ts.isShorthandPropertyAssignment(identifier.parent)
+    ? model.checker.getShorthandAssignmentValueSymbol(identifier.parent)
+    : model.checker.getSymbolAtLocation(identifier);
+}
+
+function assignmentTargetsSymbol(
+  expression: ts.Expression,
+  symbol: ts.Symbol,
+  model: ProjectModel
+): boolean {
+  const target = unwrap(expression);
+  if (ts.isIdentifier(target)) return bindingIdentifierSymbol(target, model) === symbol;
+  if (ts.isObjectLiteralExpression(target)) {
+    return target.properties.some((property) => {
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return bindingIdentifierSymbol(property.name, model) === symbol;
+      }
+      if (ts.isPropertyAssignment(property)) {
+        return assignmentTargetsSymbol(property.initializer, symbol, model);
+      }
+      return ts.isSpreadAssignment(property)
+        ? assignmentTargetsSymbol(property.expression, symbol, model)
+        : false;
+    });
+  }
+  if (ts.isArrayLiteralExpression(target)) {
+    return target.elements.some(
+      (element) => ts.isExpression(element) && assignmentTargetsSymbol(element, symbol, model)
+    );
+  }
+  return false;
+}
+
 function validateJsonLd(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
-  const functions: ts.FunctionDeclaration[] = [];
-  const shadows: ts.Node[] = [];
+  const bindings: ts.Node[] = [];
+  const topLevel: ts.VariableDeclaration[] = [];
+  for (const statement of sourceUnit.sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === "safeJsonLd") {
+        topLevel.push(declaration);
+      }
+    }
+  }
   walk(sourceUnit.sourceFile, (node) => {
-    if (ts.isFunctionDeclaration(node) && node.name?.text === "safeJsonLd") functions.push(node);
     if (
-      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
+      (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) &&
       ts.isIdentifier(node.name) &&
       node.name.text === "safeJsonLd"
     ) {
-      shadows.push(node);
+      bindings.push(node);
     }
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "safeJsonLd") bindings.push(node);
   });
-  if (functions.length !== 1 || shadows.length > 0) {
+  if (bindings.length !== 1) {
     return [
       { file: sourceUnit.file, line: 1, message: "safeJsonLd must be unique and unshadowed" },
     ];
   }
-  const helper = functions[0]!;
-  if (!helper.body) return [problem(sourceUnit, helper, "safeJsonLd body missing")];
+  if (topLevel.length !== 1) {
+    return [
+      {
+        file: sourceUnit.file,
+        line: 1,
+        message: "safeJsonLd must be one top-level const function",
+      },
+    ];
+  }
+  const helper = topLevel[0]!;
+  const declarationList = helper.parent;
+  const initializer = helper.initializer ? unwrap(helper.initializer) : null;
+  if (
+    !ts.isVariableDeclarationList(declarationList) ||
+    !(declarationList.flags & ts.NodeFlags.Const) ||
+    !initializer ||
+    (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer))
+  ) {
+    return [problem(sourceUnit, helper, "safeJsonLd must be one top-level const function")];
+  }
+  const helperSymbol = model.checker.getSymbolAtLocation(helper.name);
+  if (!helperSymbol) {
+    return [problem(sourceUnit, helper, "safeJsonLd canonical symbol is missing")];
+  }
+  const violations: Violation[] = [];
+  walk(sourceUnit.sourceFile, (node) => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      assignmentTargetsSymbol(node.left, helperSymbol, model)
+    ) {
+      violations.push(problem(sourceUnit, node, "safeJsonLd must not be reassigned"));
+    }
+  });
+  const statement = declarationList.parent;
   const javascript = ts.transpileModule(
-    `${helper.getText(sourceUnit.sourceFile)}\n(globalThis as any).__safe = safeJsonLd;`,
+    `${statement.getText(sourceUnit.sourceFile)}\n(globalThis as any).__safe = safeJsonLd;`,
     {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
     }
@@ -1493,7 +1757,6 @@ function validateJsonLd(model: ProjectModel, sourceUnit: SourceUnit): Violation[
   const serialized = sandbox.__safe?.({
     value: "</script><script>x</script></SCRIPT></ScRiPt>",
   });
-  const violations: Violation[] = [];
   if (!serialized || serialized.toLowerCase().includes("</script")) {
     violations.push(
       problem(sourceUnit, helper, "safeJsonLd does not neutralize every script closing tag")
@@ -1511,7 +1774,11 @@ function validateJsonLd(model: ProjectModel, sourceUnit: SourceUnit): Violation[
     const html = object ? objectProperty(object, "__html", model) : undefined;
     const value = html ? resolveExpression(html, model) : null;
     const callee = value && ts.isCallExpression(value) ? unwrap(value.expression) : null;
-    if (!callee || !ts.isIdentifier(callee) || callee.text !== "safeJsonLd") {
+    if (
+      !callee ||
+      !ts.isIdentifier(callee) ||
+      bindingIdentifierSymbol(callee, model) !== helperSymbol
+    ) {
       violations.push(problem(sourceUnit, node, "JSON-LD sink must directly call safeJsonLd"));
     }
   });
@@ -1913,18 +2180,33 @@ describe("CI-01 outbound identity contract", () => {
     return analyzeNetworkIdentity(model, unit(model, "src/demo.ts"));
   }
 
-  it("rejects an explicit unidentified fetch User-Agent", () => {
-    expect(messages(analyze('fetch(url,{headers:{"User-Agent":"Mozilla/5.0"}})'))).toContain(
-      "direct fetch User-Agent must identify Poligraph"
-    );
-    expect(messages(analyze('fetch(url,{headers:{"user-agent":"curl/8"}})'))).toContain(
-      "direct fetch User-Agent must identify Poligraph"
-    );
+  it.each([
+    'const headers={"User-Agent":"Mozilla/5.0"}; fetch(url,{headers})',
+    'fetch(url,{headers:new Headers({"User-Agent":"Mozilla/5.0"})})',
+    'fetch(url,{headers:new Headers([["user-agent","Mozilla/5.0"]])})',
+    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
+    'const headers=new Headers(); headers.append("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
+    'fetch(new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}))',
+    'const request=new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}); fetch(request)',
+    'fetch(url,{headers:{"user-agent":"curl/8"}})',
+    'const agent="Mozilla/"+"5.0"; fetch(url,{headers:{"User-Agent":agent}})',
+  ])("rejects an explicit unidentified fetch User-Agent: %s", (source) => {
+    expect(messages(analyze(source))).toContain("direct fetch User-Agent must identify Poligraph");
   });
 
-  it("accepts Poligraph fetch identity and ignores audit userAgent fields", () => {
-    expect(analyze('fetch(url,{headers:{"User-Agent":"Poligraph/1.0"}})')).toEqual([]);
-    expect(analyze('const audit={userAgent:"Mozilla/5.0"}')).toEqual([]);
+  it.each([
+    'const headers={"User-Agent":"Poligraph/1.0"}; fetch(url,{headers})',
+    'fetch(url,{headers:new Headers({"User-Agent":"Poligraph/1.0"})})',
+    'fetch(url,{headers:new Headers([["user-agent","Poligraph/1.0"]])})',
+    'const headers=new Headers(); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
+    'const headers=new Headers(); headers.append("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
+    'fetch(new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}))',
+    'const request=new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}); fetch(request)',
+    'fetch(url,{headers:{Accept:"application/json"}})',
+    'const audit={userAgent:"Mozilla/5.0"}',
+    "httpClient.get(url)",
+  ])("accepts identified or unrelated outbound forms: %s", (source) => {
+    expect(analyze(source)).toEqual([]);
   });
 });
 
@@ -1935,21 +2217,36 @@ describe("CI-01 NEXT_PUBLIC secret contract", () => {
   }
 
   it.each([
-    "const {NEXT_PUBLIC_PRIVATE_KEY}=process.env",
-    "const env=process.env; const {NEXT_PUBLIC_TOKEN}=env",
-    'const env=process.env; env["NEXT_PUBLIC_"+"PRIVATE_KEY"]',
-    'const prefix="NEXT_PUBLIC_"; const suffix="PRIVATE_KEY"; process.env[prefix+suffix]',
-    'const key=`NEXT_PUBLIC_${"PRIVATE_KEY"}`; process.env[key]',
-  ])("rejects statically determined secret-like key: %s", (source) => {
-    expect(messages(analyze(source))).toContain("secret-like public env");
+    ["const {NEXT_PUBLIC_PRIVATE_KEY}=process.env", "NEXT_PUBLIC_PRIVATE_KEY"],
+    ["const env=process.env; const {NEXT_PUBLIC_TOKEN}=env", "NEXT_PUBLIC_TOKEN"],
+    ['const env=process.env; env["NEXT_PUBLIC_"+"PRIVATE_KEY"]', "NEXT_PUBLIC_PRIVATE_KEY"],
+    [
+      'const prefix="NEXT_PUBLIC_"; const suffix="PRIVATE_KEY"; process.env[prefix+suffix]',
+      "NEXT_PUBLIC_PRIVATE_KEY",
+    ],
+    ['const key=`NEXT_PUBLIC_${"PRIVATE_KEY"}`; process.env[key]', "NEXT_PUBLIC_PRIVATE_KEY"],
+    [
+      "const processAlias=process; const env=processAlias.env; env.NEXT_PUBLIC_PRIVATE_KEY",
+      "NEXT_PUBLIC_PRIVATE_KEY",
+    ],
+    ["const env=globalThis.process.env; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
+    ['const env=globalThis["process"].env; env.NEXT_PUBLIC_TOKEN', "NEXT_PUBLIC_TOKEN"],
+    [
+      "const p1=process; const p2=p1; const env=p2.env; const {NEXT_PUBLIC_PASSWORD}=env",
+      "NEXT_PUBLIC_PASSWORD",
+    ],
+  ])("rejects statically determined secret-like key: %s", (source, expectedName) => {
+    expect(messages(analyze(source))).toContain(`secret-like public env ${expectedName}`);
   });
 
-  it("ignores comments, safe public names, and runtime-unknown keys", () => {
-    expect(
-      analyze(
-        '// process.env.NEXT_PUBLIC_PRIVATE_KEY\nconst safe=process.env.NEXT_PUBLIC_SITE_URL; process.env["NEXT_PUBLIC_"+runtime]'
-      )
-    ).toEqual([]);
+  it.each([
+    "const safe=process.env.NEXT_PUBLIC_SITE_URL",
+    "function demo(process:{env:Record<string,string>}){return process.env.NEXT_PUBLIC_PRIVATE_KEY}",
+    'const local={env:{NEXT_PUBLIC_TOKEN:"value"}}; local.env.NEXT_PUBLIC_TOKEN',
+    'process.env["NEXT_PUBLIC_"+runtime]',
+    "// process.env.NEXT_PUBLIC_PRIVATE_KEY\nconst safe=process.env.NEXT_PUBLIC_SITE_URL",
+  ])("accepts non-sensitive, shadowed, local, or runtime-unknown form: %s", (source) => {
+    expect(analyze(source)).toEqual([]);
   });
 
   it("covers .env.example without treating comments as keys", () => {
@@ -1964,8 +2261,9 @@ describe("CI-01 NEXT_PUBLIC secret contract", () => {
 });
 
 describe("CI-01 JSON-LD contract", () => {
-  const safe =
-    'function safeJsonLd(data:object){return JSON.stringify(data).replace(/<\\/script/gi,"<\\\\/script")}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}';
+  const helper =
+    'const safeJsonLd=(data:object):string=>JSON.stringify(data).replace(/<\\/script/gi,"<\\\\/script");';
+  const safe = `${helper} export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}`;
 
   it("accepts the direct canonical serializer and multiple mixed-case payloads", () => {
     expect(jsonLdFixture(safe)).toEqual([]);
@@ -1975,27 +2273,57 @@ describe("CI-01 JSON-LD contract", () => {
     expect(
       messages(
         jsonLdFixture(
-          "function safeJsonLd(data:object){return JSON.stringify(data)}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}"
+          "const safeJsonLd=(data:object):string=>JSON.stringify(data); export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}"
         )
       )
     ).toContain("does not neutralize every script closing tag");
     expect(
       messages(
         jsonLdFixture(
-          'function safeJsonLd(data:object){return JSON.stringify(data).replace("</script>","<\\/script>")}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}'
+          'const safeJsonLd=(data:object):string=>JSON.stringify(data).replace("</script>","<\\/script>"); export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}'
         )
       )
     ).toContain("does not neutralize every script closing tag");
   });
 
-  it("rejects helper shadowing, unrelated sinks, and sinks outside the canonical component", () => {
+  it.each([
+    `${safe}\nsafeJsonLd=other`,
+    `${safe}\n(safeJsonLd as any)=other`,
+    `${safe}\nsafeJsonLd ||= other`,
+    `${safe}\nsafeJsonLd ??= other`,
+    `${safe}\n({safeJsonLd}=object)`,
+  ])("rejects later writes to the canonical symbol: %s", (source) => {
+    expect(messages(jsonLdFixture(source))).toContain("safeJsonLd must not be reassigned");
+  });
+
+  it("requires one top-level const function and rejects shadowing", () => {
+    expect(
+      messages(
+        jsonLdFixture(
+          'function safeJsonLd(data:object){return JSON.stringify(data).replace(/<\\/script/gi,"<\\\\/script")}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:safeJsonLd({x:1})}}/>}'
+        )
+      )
+    ).toContain("safeJsonLd must be one top-level const function");
     expect(
       messages(jsonLdFixture(`${safe}\nconst safeJsonLd=(value:object)=>JSON.stringify(value)`))
     ).toContain("safeJsonLd must be unique and unshadowed");
     expect(
+      messages(jsonLdFixture(`${safe}\nfunction other(safeJsonLd:unknown){return safeJsonLd}`))
+    ).toContain("safeJsonLd must be unique and unshadowed");
+  });
+
+  it("rejects unrelated sinks and sinks outside the canonical component", () => {
+    expect(
       messages(
         jsonLdFixture(
-          'function safeJsonLd(data:object){return JSON.stringify(data).replace(/<\\/script/gi,"<\\\\/script")}; function other(data:object){return JSON.stringify(data)}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:other({x:1})}}/>}'
+          `${helper} function other(data:object){return JSON.stringify(data)}; export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:other({x:1})}}/>}`
+        )
+      )
+    ).toContain("JSON-LD sink must directly call safeJsonLd");
+    expect(
+      messages(
+        jsonLdFixture(
+          `${helper} export function JsonLd(){return <script dangerouslySetInnerHTML={{__html:JSON.stringify({x:1})}}/>}`
         )
       )
     ).toContain("JSON-LD sink must directly call safeJsonLd");
