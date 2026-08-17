@@ -127,11 +127,28 @@ export function discoverPublicEntrypoints(root = process.cwd()): string[] {
 function localImports(path: string, source: string): string[] {
   return sourceFile(path, source).statements.flatMap((statement) => {
     if (ts.isImportDeclaration(statement)) {
-      if (statement.importClause?.isTypeOnly) return [];
+      const clause = statement.importClause;
+      if (clause?.isTypeOnly) return [];
+      if (
+        clause &&
+        !clause.name &&
+        clause.namedBindings &&
+        ts.isNamedImports(clause.namedBindings) &&
+        clause.namedBindings.elements.every((specifier) => specifier.isTypeOnly)
+      ) {
+        return [];
+      }
       return ts.isStringLiteral(statement.moduleSpecifier) ? [statement.moduleSpecifier.text] : [];
     }
     if (ts.isExportDeclaration(statement)) {
       if (statement.isTypeOnly || !statement.moduleSpecifier) return [];
+      if (
+        statement.exportClause &&
+        ts.isNamedExports(statement.exportClause) &&
+        statement.exportClause.elements.every((specifier) => specifier.isTypeOnly)
+      ) {
+        return [];
+      }
       return ts.isStringLiteral(statement.moduleSpecifier) ? [statement.moduleSpecifier.text] : [];
     }
     return [];

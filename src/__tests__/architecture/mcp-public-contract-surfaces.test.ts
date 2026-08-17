@@ -268,11 +268,13 @@ const REVIEWED_SURFACES: ReviewedSurfaceInventory = {
 };
 
 /*
- * Deliberate limits: this is a local static import graph, not TypeScript type or call-graph
- * analysis. It follows relative and @/ imports, ignores type-only/external/generated imports,
- * and conservatively treats every runtime local import as reachable from its entrypoint. Database
- * aliases propagate only through direct identifier declarations or assignments. Literal element
- * keys are supported, while computed dynamic model keys and general data-flow analysis are not.
+ * Deliberate limits: this guard inventories sensitive public surfaces and checks a small set of
+ * targeted structural invariants. It is a local static import graph, not a semantic proof of every
+ * nested Prisma relation. It follows relative and @/ imports, ignores type-only, external and
+ * generated imports, and conservatively treats every runtime local import as reachable from its
+ * entrypoint. Database aliases propagate only through direct identifier declarations or
+ * assignments. Literal element keys are supported, while computed dynamic model keys and general
+ * data-flow analysis are not.
  */
 
 describe("MCP-01 public contract surfaces", () => {
@@ -729,6 +731,79 @@ describe("MCP-01 public surface graph mutation fixtures", () => {
     });
 
     expect([...analysis.domains]).toEqual([]);
+  });
+
+  it("does not traverse a local module imported exclusively through inline type specifiers", () => {
+    const entrypoint = "src/app/api/fixture/route.ts";
+    const analysis = fixtureAnalysis(entrypoint, {
+      [entrypoint]: `
+        import { type SensitiveResult, type SensitiveOptions } from "@/lib/sensitive-types";
+        export async function GET(): Promise<SensitiveResult | SensitiveOptions | null> {
+          return null;
+        }
+      `,
+      "src/lib/sensitive-types.ts": `
+        import { db } from "@/lib/db";
+        export type SensitiveResult = Awaited<ReturnType<typeof db.party.findMany>>;
+        export type SensitiveOptions = Parameters<typeof db.affair.findMany>[0];
+      `,
+    });
+
+    expect([...analysis.domains]).toEqual([]);
+    expect(analysis.sources.has("src/lib/sensitive-types.ts")).toBe(false);
+  });
+
+  it("still traverses a mixed runtime and type import", () => {
+    const entrypoint = "src/app/api/fixture/route.ts";
+    const analysis = fixtureAnalysis(entrypoint, {
+      [entrypoint]: `
+        import { loadParties, type SensitiveResult } from "@/lib/sensitive-loader";
+        export async function GET(): Promise<SensitiveResult> { return loadParties(); }
+      `,
+      "src/lib/sensitive-loader.ts": `
+        import { db } from "@/lib/db";
+        export type SensitiveResult = Awaited<ReturnType<typeof loadParties>>;
+        export function loadParties() { return db.party.findMany({}); }
+      `,
+    });
+
+    expect([...analysis.domains]).toEqual(["Party"]);
+    expect(analysis.sources.has("src/lib/sensitive-loader.ts")).toBe(true);
+  });
+
+  it("does not traverse exclusively typed local re-exports", () => {
+    const entrypoint = "src/app/api/fixture/route.ts";
+    const analysis = fixtureAnalysis(entrypoint, {
+      [entrypoint]: `
+        export type { SensitiveResult } from "@/lib/sensitive-types";
+        export { type SensitiveOptions } from "@/lib/sensitive-types";
+      `,
+      "src/lib/sensitive-types.ts": `
+        import { db } from "@/lib/db";
+        export type SensitiveResult = Awaited<ReturnType<typeof db.party.findMany>>;
+        export type SensitiveOptions = Parameters<typeof db.factCheck.findMany>[0];
+      `,
+    });
+
+    expect([...analysis.domains]).toEqual([]);
+    expect(analysis.sources.has("src/lib/sensitive-types.ts")).toBe(false);
+  });
+
+  it("still traverses a mixed runtime and type re-export", () => {
+    const entrypoint = "src/app/api/fixture/route.ts";
+    const analysis = fixtureAnalysis(entrypoint, {
+      [entrypoint]: `
+        export { loadAffairs, type SensitiveResult } from "@/lib/sensitive-loader";
+      `,
+      "src/lib/sensitive-loader.ts": `
+        import { db } from "@/lib/db";
+        export type SensitiveResult = Awaited<ReturnType<typeof loadAffairs>>;
+        export function loadAffairs() { return db.affair.findMany({}); }
+      `,
+    });
+
+    expect([...analysis.domains]).toEqual(["Affair"]);
+    expect(analysis.sources.has("src/lib/sensitive-loader.ts")).toBe(true);
   });
 
   it("detects a namespace import of the db module", () => {
