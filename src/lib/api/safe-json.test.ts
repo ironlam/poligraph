@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeJsonParse } from "./safe-json";
+import { safeJsonParse, safeJsonParseOrThrow } from "./safe-json";
 
 describe("safeJsonParse", () => {
   it("returns parsed data for valid JSON", () => {
@@ -11,5 +11,10 @@ describe("safeJsonParse", () => {
 
   it("returns a failure result for invalid JSON", () => {
     expect(safeJsonParse("{")).toEqual({ success: false });
+  });
+
+  it("supports internal callers that intentionally preserve a throwing contract", () => {
+    expect(safeJsonParseOrThrow<{ ok: boolean }>('{"ok":true}')).toEqual({ ok: true });
+    expect(() => safeJsonParseOrThrow("{")).toThrow(SyntaxError);
   });
 });

@@ -1,5 +1,6 @@
 import { PolicyTitleOutputSchema } from "./output-schema";
 import { parseMistralJSON } from "@/lib/api/mistral";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import type { PolicyTitleOutput } from "./types";
 
 export type ParseResult =
@@ -11,7 +12,7 @@ function extractFirstJsonObject(raw: string): unknown | null {
   const end = raw.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
   try {
-    return JSON.parse(raw.slice(start, end + 1));
+    return safeJsonParseOrThrow(raw.slice(start, end + 1));
   } catch {
     return null;
   }
@@ -20,7 +21,7 @@ function extractFirstJsonObject(raw: string): unknown | null {
 export function parsePolicyTitleOutput(raw: string): ParseResult {
   // 1. strict
   try {
-    const direct = JSON.parse(raw);
+    const direct = safeJsonParseOrThrow(raw);
     const v = PolicyTitleOutputSchema.safeParse(direct);
     if (v.success) return { ok: true, data: v.data as PolicyTitleOutput };
   } catch {

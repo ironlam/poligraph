@@ -33,6 +33,7 @@ import {
   assessProcedureEvidence,
 } from "@/lib/affair-matching";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 // ============================================
 // TYPES
@@ -718,7 +719,7 @@ async function rejectLowConfidenceAffair(
       articleId,
       politicianId,
       politicianName: detected.politicianName,
-      detectedAffair: JSON.parse(JSON.stringify(detected)),
+      detectedAffair: safeJsonParseOrThrow(JSON.stringify(detected)),
       confidenceScore: detected.confidenceScore,
     },
   });
@@ -744,7 +745,9 @@ async function rejectWeakAttribution(
       articleId,
       politicianId,
       politicianName: detected.politicianName,
-      detectedAffair: JSON.parse(JSON.stringify({ ...detected, attributionVerdict: verdict })),
+      detectedAffair: safeJsonParseOrThrow(
+        JSON.stringify({ ...detected, attributionVerdict: verdict })
+      ),
       confidenceScore: detected.confidenceScore,
     },
   });

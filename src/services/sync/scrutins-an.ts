@@ -18,6 +18,7 @@ import * as path from "path";
 import * as https from "https";
 import { createWriteStream, mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
 import { extractZip } from "@/lib/parsing/unzip";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -320,7 +321,7 @@ export async function syncScrutinsAN(
       try {
         const filePath = path.join(jsonDir, file!);
         const content = readFileSync(filePath, "utf-8");
-        const data: ANScrutin = JSON.parse(content);
+        const data = safeJsonParseOrThrow<ANScrutin>(content);
         const s = data.scrutin;
 
         // Filter by today's date if --today flag is set

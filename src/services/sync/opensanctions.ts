@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { resolveBatch } from "@/lib/identity";
 import type { ResolveInput } from "@/lib/identity";
 import { createOpenSanctionsClient } from "@/lib/api/opensanctions";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 // --- FtM types ---
 
@@ -126,7 +127,7 @@ async function parseNdjsonFile(
     totalLines++;
 
     try {
-      const entity = JSON.parse(line) as FtmEntity;
+      const entity = safeJsonParseOrThrow<FtmEntity>(line);
       if (entity.schema !== "Person" || !entity.properties.country?.includes("fr")) {
         continue;
       }

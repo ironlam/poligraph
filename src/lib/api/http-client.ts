@@ -134,6 +134,28 @@ const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
 };
 
 /**
+ * Merge caller-controlled headers without allowing them to replace the crawler identity.
+ * Headers normalizes names case-insensitively, so every User-Agent spelling is removed before
+ * the canonical value is set.
+ */
+function mergeRequestHeaders(
+  canonicalUserAgent: string,
+  ...sources: Array<HeadersInit | undefined>
+): Headers {
+  const headers = new Headers();
+
+  for (const source of sources) {
+    if (!source) continue;
+    new Headers(source).forEach((value, name) => {
+      if (name.toLowerCase() !== "user-agent") headers.set(name, value);
+    });
+  }
+
+  headers.set("User-Agent", canonicalUserAgent);
+  return headers;
+}
+
+/**
  * Sleep for a specified duration
  */
 function sleep(ms: number): Promise<void> {
@@ -260,12 +282,12 @@ export class HTTPClient {
         const response = await fetch(url, {
           ...init,
           signal: controller.signal,
-          headers: {
-            "User-Agent": this.options.userAgent,
-            ...this.options.headers,
-            ...init.headers,
-            ...options.headers,
-          },
+          headers: mergeRequestHeaders(
+            this.options.userAgent,
+            this.options.headers,
+            init.headers,
+            options.headers
+          ),
         });
 
         clearTimeout(timeoutId);

@@ -150,3 +150,94 @@ describe("HTTPClient error URL redaction", () => {
     expect(warn.mock.calls.flat().join(" ")).not.toContain(secret);
   });
 });
+
+describe("HTTPClient crawler identity", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mockSuccessfulFetch() {
+    return vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+  }
+
+  function requestHeaders(fetchMock: ReturnType<typeof mockSuccessfulFetch>): Headers {
+    const init = fetchMock.mock.calls[0]?.[1];
+    return new Headers(init?.headers);
+  }
+
+  it("identifies default requests as Poligraph", async () => {
+    const fetchMock = mockSuccessfulFetch();
+
+    await new HTTPClient({ retries: 0 }).get("https://example.fr/data");
+
+    expect(requestHeaders(fetchMock).get("user-agent")).toContain("Poligraph");
+  });
+
+  it("does not let client option headers replace the canonical User-Agent", async () => {
+    const fetchMock = mockSuccessfulFetch();
+
+    await new HTTPClient({
+      retries: 0,
+      headers: { "User-Agent": "Mozilla/5.0", "X-Base": "base" },
+    }).get("https://example.fr/data");
+
+    const headers = requestHeaders(fetchMock);
+    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("x-base")).toBe("base");
+  });
+
+  it("does not let request option headers replace the canonical User-Agent", async () => {
+    const fetchMock = mockSuccessfulFetch();
+
+    await new HTTPClient({ retries: 0 }).get("https://example.fr/data", {
+      headers: { "User-Agent": "curl/8", "X-Request": "request" },
+    });
+
+    const headers = requestHeaders(fetchMock);
+    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("x-request")).toBe("request");
+  });
+
+  it("does not let internal init headers replace the canonical User-Agent", async () => {
+    const fetchMock = mockSuccessfulFetch();
+    const client = new HTTPClient({ retries: 0 });
+    const fetchWithRetry = client as unknown as {
+      fetchWithRetry<T>(
+        url: string,
+        init: RequestInit,
+        options: Record<string, never>
+      ): Promise<{ data: T }>;
+    };
+
+    await fetchWithRetry.fetchWithRetry(
+      "https://example.fr/data",
+      {
+        method: "GET",
+        headers: { "User-Agent": "bot", "X-Init": "init" },
+      },
+      {}
+    );
+
+    const headers = requestHeaders(fetchMock);
+    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("x-init")).toBe("init");
+  });
+
+  it("normalizes User-Agent casing while merging unrelated headers", async () => {
+    const fetchMock = mockSuccessfulFetch();
+
+    await new HTTPClient({
+      retries: 0,
+      headers: { "user-agent": "lowercase bypass", Accept: "application/json" },
+    }).get("https://example.fr/data", {
+      headers: { "UsEr-AgEnT": "mixed-case bypass", "X-Trace": "trace" },
+    });
+
+    const headers = requestHeaders(fetchMock);
+    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("accept")).toBe("application/json");
+    expect(headers.get("x-trace")).toBe("trace");
+  });
+});

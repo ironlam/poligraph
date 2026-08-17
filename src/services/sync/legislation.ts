@@ -12,6 +12,7 @@ import * as path from "path";
 import { mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
 import { extractZip } from "@/lib/parsing/unzip";
 import { downloadFileWithRetry } from "@/lib/download-file";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 const DEFAULT_LEGISLATURE = 17;
 const TEMP_DIR = "/tmp/dossiers-legislatifs-an";
@@ -337,7 +338,7 @@ export async function syncLegislation(options?: {
           continue;
         }
 
-        const data: ANDossier = JSON.parse(content);
+        const data = safeJsonParseOrThrow<ANDossier>(content);
         const dp = data.dossierParlementaire;
 
         const type = dp["@xsi:type"] ?? ""; // malformed dossiers lack @xsi:type → skip cleanly, don't crash

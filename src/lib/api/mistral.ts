@@ -1,3 +1,5 @@
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+
 const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
 
 function getApiKey(): string {
@@ -89,5 +91,5 @@ export function parseMistralJSON<T = unknown>(text: string): T {
   let cleaned = text.trim();
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) cleaned = fenceMatch[1]!.trim();
-  return JSON.parse(cleaned) as T;
+  return safeJsonParseOrThrow<T>(cleaned);
 }

@@ -3,6 +3,7 @@ import { canonicalJson, hashSourceContent } from "@/lib/hash/canonical";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import type { ProposalRisk, SourceType } from "@/generated/prisma";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import {
   affairPatchSchema,
   PROPOSABLE_FIELDS,
@@ -497,5 +498,5 @@ function clampConfidence(value: number): number {
 }
 
 function toJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  return safeJsonParseOrThrow<Prisma.InputJsonValue>(JSON.stringify(value));
 }

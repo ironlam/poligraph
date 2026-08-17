@@ -7,6 +7,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 const CHECKPOINT_DIR = "/tmp/poligraph-checkpoints";
 
@@ -127,7 +128,7 @@ export class CheckpointManager {
       if (!fs.existsSync(filePath)) return null;
 
       const content = fs.readFileSync(filePath, "utf-8");
-      const checkpoint = JSON.parse(content) as Checkpoint;
+      const checkpoint = safeJsonParseOrThrow<Checkpoint>(content);
 
       // Convert date strings to Date objects
       checkpoint.startedAt = new Date(checkpoint.startedAt);
@@ -225,7 +226,7 @@ export class CheckpointManager {
       const filePath = path.join(CHECKPOINT_DIR, file);
       try {
         const content = fs.readFileSync(filePath, "utf-8");
-        const checkpoint = JSON.parse(content) as Checkpoint;
+        const checkpoint = safeJsonParseOrThrow<Checkpoint>(content);
         const lastProcessed = new Date(checkpoint.lastProcessedAt).getTime();
 
         if (now - lastProcessed > maxAgeMs) {

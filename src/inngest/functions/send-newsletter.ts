@@ -1,6 +1,9 @@
+import type { Jsonify } from "inngest/types";
 import { inngest } from "../client";
 import { computeWeeklyConcordance } from "@/lib/newsletter/concordance";
 import type { PersonalDeputyContext } from "@/lib/email/render-recap";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import type { WeeklyRecapData } from "@/lib/data/recap";
 
 const BATCH_SIZE = 50;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://poligraph.fr";
@@ -35,6 +38,35 @@ interface DeputyVoteRow {
   scrutin: { id: string; slug: string | null; title: string; votingDate: string | Date };
 }
 
+function rehydrateWeeklyRecap(recap: Jsonify<WeeklyRecapData>): WeeklyRecapData {
+  return {
+    ...recap,
+    weekStart: new Date(recap.weekStart),
+    weekEnd: new Date(recap.weekEnd),
+    votes: {
+      ...recap.votes,
+      scrutins: recap.votes.scrutins.map((scrutin) => ({
+        ...scrutin,
+        votingDate: new Date(scrutin.votingDate),
+      })),
+    },
+    press: {
+      ...recap.press,
+      storiesOfTheWeek: recap.press.storiesOfTheWeek.map((story) => ({
+        ...story,
+        publishedAt: new Date(story.publishedAt),
+      })),
+    },
+    platformUpdates: {
+      ...recap.platformUpdates,
+      updates: recap.platformUpdates.updates.map((update) => ({
+        ...update,
+        date: new Date(update.date),
+      })),
+    },
+  };
+}
+
 export const sendNewsletter = inngest.createFunction(
   {
     id: "newsletter/weekly-send",
@@ -61,7 +93,7 @@ export const sendNewsletter = inngest.createFunction(
       const now = new Date();
       const lastMonday = getWeekStart(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
       const data = await getWeeklyRecap(lastMonday);
-      return JSON.parse(JSON.stringify(data));
+      return safeJsonParseOrThrow<WeeklyRecapData>(JSON.stringify(data));
     });
 
     // Skip empty week
@@ -123,20 +155,7 @@ export const sendNewsletter = inngest.createFunction(
       const weekStart = getWeekStart(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
       const weekNum = getISOWeekNumber(weekStart);
 
-      const rehydrated = {
-        ...recap,
-        weekStart: new Date(recap.weekStart),
-        weekEnd: new Date(recap.weekEnd),
-        votes: {
-          ...recap.votes,
-          scrutins: recap.votes.scrutins.map(
-            (s: { votingDate: string; [key: string]: unknown }) => ({
-              ...s,
-              votingDate: new Date(s.votingDate),
-            })
-          ),
-        },
-      };
+      const rehydrated = rehydrateWeeklyRecap(recap);
 
       const editorialIntro = buildStaticEditorial(rehydrated, weekNum);
       const politicianBio = politicianData
@@ -253,29 +272,7 @@ export const sendNewsletter = inngest.createFunction(
     }
 
     // Helper to rehydrate dates from JSON-serialized recap (Inngest step storage strips Date objects)
-    const rehydratedRecap = {
-      ...recap,
-      weekStart: new Date(recap.weekStart),
-      weekEnd: new Date(recap.weekEnd),
-      votes: {
-        ...recap.votes,
-        scrutins: recap.votes.scrutins.map((s: { votingDate: string; [key: string]: unknown }) => ({
-          ...s,
-          votingDate: new Date(s.votingDate),
-        })),
-      },
-      press: recap.press
-        ? {
-            ...recap.press,
-            storiesOfTheWeek: (recap.press.storiesOfTheWeek ?? []).map(
-              (story: { publishedAt: string; [key: string]: unknown }) => ({
-                ...story,
-                publishedAt: new Date(story.publishedAt),
-              })
-            ),
-          }
-        : recap.press,
-    };
+    const rehydratedRecap = rehydrateWeeklyRecap(recap);
 
     // Step 6: Sample test to admin first (safety net)
     const testEmail = process.env.NEWSLETTER_TEST_EMAIL;

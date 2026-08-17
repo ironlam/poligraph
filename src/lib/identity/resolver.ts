@@ -27,6 +27,7 @@ import type {
   SignalCandidateRecord,
   SignalScoringContext,
 } from "./signals/types";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 // Signal instances (stateless, reusable)
 const birthdateSignal = new BirthdateSignal();
@@ -344,7 +345,7 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
       judgement,
       confidence: bestMatch.score,
       method: bestMatch.method,
-      evidence: JSON.parse(
+      evidence: safeJsonParseOrThrow(
         JSON.stringify({
           version: 3,
           mode: bestMatch.fellegiSunter ? "fellegi-sunter" : "legacy",
@@ -618,7 +619,7 @@ async function logDecision(input: ResolveInput, result: ResolveResult): Promise<
           gender: input.gender ?? null,
           candidateCount: result.candidates.length,
           context: input.context
-            ? (JSON.parse(JSON.stringify(input.context)) as Prisma.InputJsonValue)
+            ? safeJsonParseOrThrow<Prisma.InputJsonValue>(JSON.stringify(input.context))
             : null,
           fellegiSunter:
             result.candidates.find((c) => c.politicianId === politicianId)?.fellegiSunter ?? null,

@@ -1,3 +1,5 @@
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
 function getApiKey(): string {
@@ -73,5 +75,5 @@ export function parseAnthropicJSON<T = unknown>(text: string): T {
   let cleaned = text.trim();
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) cleaned = fenceMatch[1]!.trim();
-  return JSON.parse(cleaned) as T;
+  return safeJsonParseOrThrow<T>(cleaned);
 }

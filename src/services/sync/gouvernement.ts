@@ -11,6 +11,7 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
 import { sanitizeGovernmentTitle } from "./government-title";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 
@@ -375,7 +376,7 @@ async function applyLocalCorrections(): Promise<{ applied: number; errors: strin
 
   try {
     const correctionsData = fs.readFileSync(CORRECTIONS_FILE, "utf-8");
-    const corrections: GovernmentCorrections = JSON.parse(correctionsData);
+    const corrections = safeJsonParseOrThrow<GovernmentCorrections>(correctionsData);
 
     // 1. End mandates
     for (const endMandate of corrections.endMandates || []) {

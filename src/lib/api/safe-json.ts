@@ -14,3 +14,13 @@ export function safeJsonParse<T = unknown>(raw: string): SafeJsonParseResult<T> 
     return { success: false };
   }
 }
+
+/**
+ * Parse internal JSON through the same canonical boundary while preserving the throwing contract
+ * expected by import files, checkpoints, and AI response parsers.
+ */
+export function safeJsonParseOrThrow<T = unknown>(raw: string): T {
+  const result = safeJsonParse<T>(raw);
+  if (!result.success) throw new SyntaxError("Invalid JSON");
+  return result.data;
+}

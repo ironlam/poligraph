@@ -21,6 +21,7 @@ import { createWriteStream, mkdirSync, rmSync, readdirSync, readFileSync } from 
 import { extractZip } from "@/lib/parsing/unzip";
 import { parseDossierJson, buildDossierMaps, type ParsedDossier, type ResolverMaps } from "./maps";
 import { resolveScrutinDossier } from "./resolve";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import type {
   ReconcileOptions,
   ReconciliationResult,
@@ -180,7 +181,7 @@ export async function reconcileScrutinDossier(
     const parsedDossiers: ParsedDossier[] = [];
     for (const file of dossierFiles) {
       try {
-        const raw = JSON.parse(readFileSync(`${dossierDir}/${file}`, "utf-8"));
+        const raw = safeJsonParseOrThrow(readFileSync(`${dossierDir}/${file}`, "utf-8"));
         const parsed = parseDossierJson(raw);
         if (parsed) parsedDossiers.push(parsed);
       } catch {
@@ -204,7 +205,7 @@ export async function reconcileScrutinDossier(
     for (const file of scrutinFiles) {
       try {
         const raw = readFileSync(`${scrutinDir}/${file}`, "utf-8");
-        const data = JSON.parse(raw) as ANScrutinMinimal;
+        const data = safeJsonParseOrThrow<ANScrutinMinimal>(raw);
         const uid = data.scrutin?.uid;
         if (!uid) continue;
         seanceRefByExtId.set(uid, data.scrutin?.seanceRef ?? null);

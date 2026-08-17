@@ -1,4 +1,5 @@
 import yauzl from "yauzl";
+import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 export interface ZipJsonEntry {
   entryPath: string;
@@ -89,7 +90,7 @@ export async function* iterateZipJsonEntries(
 
       let json: unknown;
       try {
-        json = JSON.parse(buf.toString("utf8"));
+        json = safeJsonParseOrThrow(buf.toString("utf8"));
       } catch (e) {
         const msg = (e as Error).message ?? String(e);
         if (opts.onWarning) {
