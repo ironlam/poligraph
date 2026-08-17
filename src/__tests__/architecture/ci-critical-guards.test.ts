@@ -40,8 +40,9 @@
  *
  * HTTP identity
  * - Guarantee: statically explicit User-Agent values on direct fetch calls identify Poligraph,
- *   including bounded object, Headers, mutation, and Request forms. HTTPClient header override
- *   resistance is a runtime contract in `http-client.test.ts`.
+ *   including ordered static spreads and the effective pre-fetch state of bounded object, Headers,
+ *   mutation, and Request forms. HTTPClient header override resistance is a runtime contract in
+ *   `http-client.test.ts`.
  * - Canonical syntax: HTTPClient, or an explicit Poligraph User-Agent on direct fetch.
  * - Forbidden: explicit non-Poligraph User-Agent and publisher login credentials/endpoints.
  * - Limit: business and audit fields named userAgent are not outbound headers.
@@ -50,7 +51,8 @@
  * - Guarantee: statically determined process.env names and `.env.example` keys are rejected when a
  *   NEXT_PUBLIC name contains a sensitive marker.
  * - Canonical syntax: non-sensitive public configuration names only.
- * - Forbidden: direct, destructured, aliased, concatenated, and template-composed sensitive names.
+ * - Forbidden: direct, object/array-destructured, aliased, concatenated, and template-composed
+ *   sensitive names.
  * - Limit: names depending on unknown runtime data are not guessed. All static components are folded,
  *   so ordinary renaming or concatenation is not a trivial bypass.
  *
@@ -300,9 +302,41 @@ function unwrap(expression: ts.Expression): ts.Expression {
   return current;
 }
 
+function bindingElementInitializer(
+  element: ts.BindingElement,
+  model: ProjectModel,
+  seen: Set<ts.Symbol>
+): ts.Expression | undefined {
+  const variable = element.parent.parent;
+  if (!ts.isVariableDeclaration(variable) || !variable.initializer) return undefined;
+
+  const source = resolveExpression(variable.initializer, model, new Set(seen));
+  if (ts.isArrayBindingPattern(element.parent)) {
+    if (!ts.isArrayLiteralExpression(source) || element.dotDotDotToken) return undefined;
+    const index = element.parent.elements.indexOf(element);
+    const value = source.elements[index];
+    if (!value || ts.isOmittedExpression(value) || ts.isSpreadElement(value)) {
+      return element.initializer;
+    }
+    return value;
+  }
+
+  const name = element.propertyName
+    ? propertyName(element.propertyName, model)
+    : ts.isIdentifier(element.name)
+      ? element.name.text
+      : null;
+  if (!name) return undefined;
+  if (ts.isObjectLiteralExpression(source)) {
+    return objectProperty(source, name, model) ?? element.initializer;
+  }
+  return ts.factory.createElementAccessExpression(source, ts.factory.createStringLiteral(name));
+}
+
 function identifierInitializer(
   identifier: ts.Identifier,
-  model: ProjectModel
+  model: ProjectModel,
+  seen = new Set<ts.Symbol>()
 ): ts.Expression | undefined {
   const symbol = ts.isShorthandPropertyAssignment(identifier.parent)
     ? model.checker.getShorthandAssignmentValueSymbol(identifier.parent)
@@ -312,8 +346,7 @@ function identifierInitializer(
       return declaration.initializer;
     }
     if (ts.isBindingElement(declaration)) {
-      const variable = declaration.parent.parent;
-      if (ts.isVariableDeclaration(variable) && variable.initializer) return variable.initializer;
+      return bindingElementInitializer(declaration, model, seen);
     }
   }
   const sourceFile = identifier.getSourceFile();
@@ -341,7 +374,7 @@ function resolveExpression(
   if (!ts.isIdentifier(current)) return current;
   const symbol = model.checker.getSymbolAtLocation(current);
   if (symbol && seen.has(symbol)) return current;
-  const initializer = identifierInitializer(current, model);
+  const initializer = identifierInitializer(current, model, seen);
   if (!initializer) return current;
   if (symbol) seen.add(symbol);
   return resolveExpression(initializer, model, seen);
@@ -357,7 +390,7 @@ function staticString(
   if (ts.isIdentifier(current)) {
     const symbol = model.checker.getSymbolAtLocation(current);
     if (symbol && seen.has(symbol)) return null;
-    const initializer = identifierInitializer(current, model);
+    const initializer = identifierInitializer(current, model, seen);
     if (!initializer) return null;
     if (symbol) seen.add(symbol);
     return staticString(initializer, model, seen);
@@ -1345,9 +1378,34 @@ function identifiesPoligraph(value: string | null): boolean {
   return typeof value === "string" && value.toLowerCase().includes("poligraph");
 }
 
-interface HeaderUserAgent {
-  node: ts.Node;
-  value: string | null;
+type UserAgentState =
+  | { kind: "absent" }
+  | { kind: "known"; node: ts.Node; value: string }
+  | { kind: "unknown"; node: ts.Node };
+
+interface ResolvedRequestInit {
+  explicitHeaders: boolean;
+  userAgent: UserAgentState;
+}
+
+function userAgentValue(node: ts.Node, expression: ts.Expression | undefined, model: ProjectModel) {
+  if (!expression) return { kind: "unknown", node } as const;
+  const value = staticString(expression, model);
+  return value === null
+    ? ({ kind: "unknown", node } as const)
+    : ({ kind: "known", node, value } as const);
+}
+
+function appendUserAgent(
+  state: UserAgentState,
+  node: ts.Node,
+  expression: ts.Expression | undefined,
+  model: ProjectModel
+): UserAgentState {
+  const appended = userAgentValue(node, expression, model);
+  if (appended.kind === "unknown" || state.kind === "unknown") return { kind: "unknown", node };
+  if (state.kind === "absent") return appended;
+  return { kind: "known", node, value: `${state.value}, ${appended.value}` };
 }
 
 function objectMemberExpression(
@@ -1377,25 +1435,25 @@ function resolveHeadersInit(
   sourceUnit: SourceUnit,
   before: number,
   seen = new Set<ts.Symbol>()
-): HeaderUserAgent[] {
+): UserAgentState {
   const current = unwrap(expression);
   if (ts.isIdentifier(current)) {
     const symbol = bindingIdentifierSymbol(current, model);
-    if (symbol && seen.has(symbol)) return [];
+    if (symbol && seen.has(symbol)) return { kind: "absent" };
     const nextSeen = new Set(seen);
     if (symbol) nextSeen.add(symbol);
-    const initializer = identifierInitializer(current, model);
-    const findings = initializer
+    const initializer = identifierInitializer(current, model, seen);
+    let state: UserAgentState = initializer
       ? resolveHeadersInit(initializer, model, sourceUnit, before, nextSeen)
-      : [];
-    if (!symbol) return findings;
+      : { kind: "absent" };
+    if (!symbol) return state;
     walk(sourceUnit.sourceFile, (node) => {
       if (!ts.isCallExpression(node) || node.getStart() >= before) return;
       const method = memberName(node.expression, model);
       const base = memberBase(node.expression);
       const target = base ? unwrap(base) : null;
       if (
-        !["set", "append"].includes(method ?? "") ||
+        !["set", "append", "delete"].includes(method ?? "") ||
         !target ||
         !ts.isIdentifier(target) ||
         bindingIdentifierSymbol(target, model) !== symbol
@@ -1404,35 +1462,46 @@ function resolveHeadersInit(
       }
       const name = node.arguments[0] ? staticString(node.arguments[0], model) : null;
       if (name?.toLowerCase() !== "user-agent") return;
-      findings.push({
-        node,
-        value: node.arguments[1] ? staticString(node.arguments[1], model) : null,
-      });
+      if (method === "delete") {
+        state = { kind: "absent" };
+      } else if (method === "set") {
+        state = userAgentValue(node, node.arguments[1], model);
+      } else {
+        state = appendUserAgent(state, node, node.arguments[1], model);
+      }
     });
-    return findings;
+    return state;
   }
   if (ts.isObjectLiteralExpression(current)) {
-    const findings: HeaderUserAgent[] = [];
+    let state: UserAgentState = { kind: "absent" };
     for (const property of current.properties) {
-      if (!ts.isPropertyAssignment(property)) continue;
-      if (propertyName(property.name, model)?.toLowerCase() !== "user-agent") continue;
-      findings.push({ node: property, value: staticString(property.initializer, model) });
+      if (ts.isPropertyAssignment(property)) {
+        if (propertyName(property.name, model)?.toLowerCase() !== "user-agent") continue;
+        state = userAgentValue(property, property.initializer, model);
+      } else if (ts.isSpreadAssignment(property)) {
+        const spread = resolveHeadersInit(property.expression, model, sourceUnit, before, seen);
+        if (spread.kind !== "absent") state = spread;
+      }
     }
-    return findings;
+    return state;
   }
   if (ts.isArrayLiteralExpression(current)) {
-    const findings: HeaderUserAgent[] = [];
+    let state: UserAgentState = { kind: "absent" };
     for (const element of current.elements) {
       const tuple = unwrap(element);
       if (!ts.isArrayLiteralExpression(tuple)) continue;
       const name = tuple.elements[0] ? staticString(tuple.elements[0], model) : null;
       if (name?.toLowerCase() !== "user-agent") continue;
-      findings.push({
-        node: tuple,
-        value: tuple.elements[1] ? staticString(tuple.elements[1], model) : null,
-      });
+      state = appendUserAgent(
+        state,
+        tuple,
+        tuple.elements[1] && !ts.isOmittedExpression(tuple.elements[1])
+          ? tuple.elements[1]
+          : undefined,
+        model
+      );
     }
-    return findings;
+    return state;
   }
   if (
     ts.isNewExpression(current) &&
@@ -1441,9 +1510,9 @@ function resolveHeadersInit(
   ) {
     return current.arguments?.[0]
       ? resolveHeadersInit(current.arguments[0], model, sourceUnit, before, new Set(seen))
-      : [];
+      : { kind: "absent" };
   }
-  return [];
+  return { kind: "absent" };
 }
 
 function resolveRequestInit(
@@ -1451,11 +1520,16 @@ function resolveRequestInit(
   model: ProjectModel,
   sourceUnit: SourceUnit,
   before: number
-): HeaderUserAgent[] {
+): ResolvedRequestInit {
   const options = objectLiteral(expression, model);
-  if (!options) return [];
+  if (!options) return { explicitHeaders: false, userAgent: { kind: "absent" } };
   const headers = objectMemberExpression(options, "headers", model);
-  return headers ? resolveHeadersInit(headers, model, sourceUnit, before) : [];
+  return headers
+    ? {
+        explicitHeaders: true,
+        userAgent: resolveHeadersInit(headers, model, sourceUnit, before),
+      }
+    : { explicitHeaders: false, userAgent: { kind: "absent" } };
 }
 
 function resolveRequestExpression(
@@ -1464,13 +1538,13 @@ function resolveRequestExpression(
   sourceUnit: SourceUnit,
   before: number,
   seen = new Set<ts.Symbol>()
-): HeaderUserAgent[] {
+): UserAgentState {
   const current = unwrap(expression);
   if (ts.isIdentifier(current)) {
     const symbol = model.checker.getSymbolAtLocation(current);
-    if (symbol && seen.has(symbol)) return [];
-    const initializer = identifierInitializer(current, model);
-    if (!initializer) return [];
+    if (symbol && seen.has(symbol)) return { kind: "absent" };
+    const initializer = identifierInitializer(current, model, seen);
+    if (!initializer) return { kind: "absent" };
     const nextSeen = new Set(seen);
     if (symbol) nextSeen.add(symbol);
     return resolveRequestExpression(initializer, model, sourceUnit, before, nextSeen);
@@ -1481,9 +1555,9 @@ function resolveRequestExpression(
     (unwrap(current.expression) as ts.Identifier).text === "Request" &&
     current.arguments?.[1]
   ) {
-    return resolveRequestInit(current.arguments[1], model, sourceUnit, before);
+    return resolveRequestInit(current.arguments[1], model, sourceUnit, before).userAgent;
   }
-  return [];
+  return { kind: "absent" };
 }
 
 function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
@@ -1502,13 +1576,17 @@ function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Vi
     ) {
       return;
     }
-    const findings = node.arguments[0]
+    let userAgent = node.arguments[0]
       ? resolveRequestExpression(node.arguments[0], model, sourceUnit, node.getStart())
-      : [];
+      : { kind: "absent" as const };
     if (node.arguments[1]) {
-      findings.push(...resolveRequestInit(node.arguments[1], model, sourceUnit, node.getStart()));
+      const init = resolveRequestInit(node.arguments[1], model, sourceUnit, node.getStart());
+      if (init.explicitHeaders) userAgent = init.userAgent;
     }
-    if (findings.some((finding) => !identifiesPoligraph(finding.value))) {
+    if (
+      userAgent.kind === "unknown" ||
+      (userAgent.kind === "known" && !identifiesPoligraph(userAgent.value))
+    ) {
       violations.push(problem(sourceUnit, node, "direct fetch User-Agent must identify Poligraph"));
     }
   });
@@ -2208,6 +2286,51 @@ describe("CI-01 outbound identity contract", () => {
   ])("accepts identified or unrelated outbound forms: %s", (source) => {
     expect(analyze(source)).toEqual([]);
   });
+
+  it.each([
+    'const base={"User-Agent":"Mozilla/5.0"}; const headers={...base}; fetch(url,{headers})',
+    'const base={"User-Agent":"Mozilla/5.0"}; fetch(url,{headers:new Headers({...base})})',
+    'const safe={"User-Agent":"Poligraph/1.0"}; const unsafe={"User-Agent":"Mozilla/5.0"}; const headers={...safe,...unsafe}; fetch(url,{headers})',
+    'const base={"User-Agent":"Mozilla/5.0"}; const headers={"User-Agent":"Poligraph/1.0",...base}; fetch(url,{headers})',
+    'const first={"User-Agent":"Mozilla/5.0"}; const second={...first}; const third={...second}; fetch(url,{headers:third})',
+    'const headers=new Headers(); headers.set("User-Agent","Poligraph/1.0"); headers.set("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
+    'const request=new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}); fetch(request,{headers:{"User-Agent":"Mozilla/5.0"}})',
+  ])("rejects the effective unidentified fetch User-Agent: %s", (source) => {
+    expect(messages(analyze(source))).toContain("direct fetch User-Agent must identify Poligraph");
+  });
+
+  it.each([
+    'const unsafe={"User-Agent":"Mozilla/5.0"}; const headers={...unsafe,"User-Agent":"Poligraph/1.0"}; fetch(url,{headers})',
+    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
+    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); headers.delete("User-Agent"); fetch(url,{headers})',
+    'const headers=new Headers({"User-Agent":"Mozilla/5.0"}); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
+    'const headers=new Headers(); headers.append("User-Agent","Mozilla/5.0"); headers.append("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
+    'const request=new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}); fetch(request,{headers:{"User-Agent":"Poligraph/1.0"}})',
+  ])("accepts the effective Poligraph or absent fetch User-Agent: %s", (source) => {
+    expect(analyze(source)).toEqual([]);
+  });
+
+  it("computes the Headers state separately before each fetch", () => {
+    const violations = analyze(`const headers=new Headers();
+headers.set("User-Agent","Mozilla/5.0");
+fetch(firstUrl,{headers});
+headers.set("User-Agent","Poligraph/1.0");
+fetch(secondUrl,{headers});`);
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({
+      line: 3,
+      message: "direct fetch User-Agent must identify Poligraph",
+    });
+  });
+
+  it("ignores unrelated header-like values that never reach fetch", () => {
+    expect(
+      analyze(
+        'const business={"User-Agent":"Mozilla/5.0"}; const headers=new Headers({"User-Agent":"Mozilla/5.0"})'
+      )
+    ).toEqual([]);
+  });
 });
 
 describe("CI-01 NEXT_PUBLIC secret contract", () => {
@@ -2235,6 +2358,21 @@ describe("CI-01 NEXT_PUBLIC secret contract", () => {
       "const p1=process; const p2=p1; const env=p2.env; const {NEXT_PUBLIC_PASSWORD}=env",
       "NEXT_PUBLIC_PASSWORD",
     ],
+    ["const [env]=[process.env]; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
+    [
+      "const tuple=[process.env] as const; const [env]=tuple; env.NEXT_PUBLIC_TOKEN",
+      "NEXT_PUBLIC_TOKEN",
+    ],
+    [
+      "const [,env]=[undefined,globalThis.process.env]; env.NEXT_PUBLIC_PASSWORD",
+      "NEXT_PUBLIC_PASSWORD",
+    ],
+    [
+      "const first=process.env; const tuple=[first] as const; const [env]=tuple; const {NEXT_PUBLIC_PRIVATE_KEY}=env",
+      "NEXT_PUBLIC_PRIVATE_KEY",
+    ],
+    ["const {env}=process; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
+    ["const {env:publicEnv}=process; publicEnv.NEXT_PUBLIC_TOKEN", "NEXT_PUBLIC_TOKEN"],
   ])("rejects statically determined secret-like key: %s", (source, expectedName) => {
     expect(messages(analyze(source))).toContain(`secret-like public env ${expectedName}`);
   });
@@ -2243,6 +2381,9 @@ describe("CI-01 NEXT_PUBLIC secret contract", () => {
     "const safe=process.env.NEXT_PUBLIC_SITE_URL",
     "function demo(process:{env:Record<string,string>}){return process.env.NEXT_PUBLIC_PRIVATE_KEY}",
     'const local={env:{NEXT_PUBLIC_TOKEN:"value"}}; local.env.NEXT_PUBLIC_TOKEN',
+    'const local=[{NEXT_PUBLIC_PRIVATE_KEY:"ordinary-field"}]; const [env]=local; env.NEXT_PUBLIC_PRIVATE_KEY',
+    "function example(tuple:Array<Record<string,string>>){const [env]=tuple; return env?.NEXT_PUBLIC_PRIVATE_KEY}",
+    "const [env]=[process.env]; env.NEXT_PUBLIC_PUBLIC_API_URL",
     'process.env["NEXT_PUBLIC_"+runtime]',
     "// process.env.NEXT_PUBLIC_PRIVATE_KEY\nconst safe=process.env.NEXT_PUBLIC_SITE_URL",
   ])("accepts non-sensitive, shadowed, local, or runtime-unknown form: %s", (source) => {
