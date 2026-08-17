@@ -10,35 +10,23 @@ jobs:
   security:
     name: Security
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify critical guard fixtures
-        run: python3 -m unittest discover -s scripts/ci/__tests__ -p 'test_*.py' -v
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
 
-      - name: No $executeRawUnsafe without justification
-        run: python3 scripts/ci/code_quality_guards.py execute-raw-unsafe
+      - name: Install dependencies for AST guards
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
-      - name: No direct PUBLISHED writes outside an authorized publisher
-        run: python3 scripts/ci/direct_publication_guard.py
-
-      - name: Importers create affairs only through create-draft
-        run: python3 scripts/ci/code_quality_guards.py importer-affair-create
-
-      - name: Importers never write verifiedAt
-        run: python3 scripts/ci/code_quality_guards.py importer-verified-at
-
-      - name: No press paywall circumvention
-        run: python3 scripts/ci/code_quality_guards.py press-paywall
-
-      - name: No dangerouslySetInnerHTML outside canonical safe JSON-LD
-        run: python3 scripts/ci/code_quality_guards.py dangerous-html
-
-      - name: Public API JSON parsing uses safeJsonParse
-        run: python3 scripts/ci/code_quality_guards.py json-parse
+      - name: Verify CI-01 critical guard contracts
+        run: npx vitest run src/__tests__/architecture/ci-critical-guards.test.ts src/lib/api/safe-json.test.ts
 
       - name: No findMany without where clause (full table scan)
         run: |
@@ -69,9 +57,6 @@ jobs:
             echo "$VIOLATIONS"
             exit 1
           fi
-
-      - name: No secrets in NEXT_PUBLIC_ vars
-        run: python3 scripts/ci/code_quality_guards.py next-public-secrets
 
   react-patterns:
     name: React Patterns
@@ -118,9 +103,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Admin routes use withAdminAuth
-        run: python3 scripts/ci/code_quality_guards.py admin-auth
 
       - name: No unjustified any without eslint-disable
         run: |
