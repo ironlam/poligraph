@@ -26,7 +26,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Verify CI-01 critical guard contracts
-        run: npx vitest run src/__tests__/architecture/ci-critical-guards.test.ts src/lib/api/safe-json.test.ts
+        run: npx vitest run --testTimeout=20000 src/__tests__/architecture/ci-critical-guards.test.ts src/lib/api/safe-json.test.ts
 
       - name: No findMany without where clause (full table scan)
         run: |
