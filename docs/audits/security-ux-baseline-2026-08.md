@@ -49,7 +49,7 @@ change marks it `Closed`. Accepted risks retain their rationale and next review 
 | `SEC-04`   | P1                 | Authentication        | Closed         | @ironlam   | Private Security Advisory                                                   | [#715](https://github.com/ironlam/poligraph/pull/715) | 2026-08-13   |
 | `SEC-06`   | P2                 | Database security     | Closed         | @ironlam   | Private Security Advisory                                                   | [#728](https://github.com/ironlam/poligraph/pull/728) | 2026-08-16   |
 | `SEC-07`   | P2                 | Application security  | To investigate | Unassigned | [Context](#sec-07-csp-hardening-without-sacrificing-rendering-architecture) | None                                                  | 2026-08-08   |
-| `CI-01`    | P1                 | CI                    | In remediation | @ironlam   | [Context](#ci-01-make-security-guards-trustworthy)                          | [#733](https://github.com/ironlam/poligraph/pull/733) | 2026-08-16   |
+| `CI-01`    | P1                 | CI                    | In remediation | @ironlam   | [Context](#ci-01-make-security-guards-trustworthy)                          | [#733](https://github.com/ironlam/poligraph/pull/733) | 2026-08-17   |
 | `CI-02`    | P1                 | Quality               | To investigate | Unassigned | [Context](#ci-02-bring-scripts-under-static-analysis)                       | None                                                  | 2026-08-08   |
 | `SEC-05`   | P1                 | Software supply chain | To investigate | Unassigned | [Context](#sec-05-software-supply-chain-baseline)                           | None                                                  | 2026-08-08   |
 | `DB-01`    | Measurement-driven | Database performance  | To investigate | Unassigned | [Context](#db-01-incremental-group-position-computation)                    | None                                                  | 2026-08-08   |
@@ -220,8 +220,8 @@ measured query behavior rather than advisor output alone.
 **Required investigation.** For every candidate, evaluate cardinality, real joins, delete and update
 patterns, frequency, write cost, and whether an existing index already covers the need.
 
-**Closure criteria.** Every adopted index has before and after measurements. Every rejected index
-has a documented rationale.
+**Closure criteria.** Every adopted index has before and after measurements. Every rejected index has
+a documented rationale.
 
 ## UX and quality
 
