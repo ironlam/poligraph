@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { Prisma, MandateType } from "@/generated/prisma";
 import { findDepartmentCode } from "@/config/departments";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 // FTS result type from raw query
 interface FTSResult {
@@ -40,6 +41,7 @@ export interface SearchResult {
     type: MandateType;
     constituency: string | null;
   } | null;
+  /** Legacy compatibility total: published affairs across every involvement role. */
   affairsCount: number;
   relevance?: number;
 }
@@ -53,8 +55,8 @@ export interface SearchResponse {
 }
 
 /**
- * Search using PostgreSQL Full-Text Search
- * Uses the search_politicians function created in the FTS migration
+ * Search using PostgreSQL Full-Text Search.
+ * The public search boundary is enforced in SQL before any IDs leave this query.
  */
 async function searchWithFTS(
   filters: SearchFilters,
@@ -64,8 +66,6 @@ async function searchWithFTS(
   const { query, partyId, mandateType, department, hasAffairs, isActive } = filters;
   const skip = (page - 1) * limit;
 
-  // Use raw SQL with FTS for text search
-  // The search_politicians function handles accent-insensitive matching
   const ftsResults = await db.$queryRaw<FTSResult[]>`
     SELECT
       p.id,
@@ -77,15 +77,17 @@ async function searchWithFTS(
       p."currentPartyId",
       ts_rank(p."searchVector", plainto_tsquery('french', unaccent(${query}))) as relevance
     FROM "Politician" p
-    WHERE p."searchVector" @@ plainto_tsquery('french', unaccent(${query}))
-       OR p."fullName" ILIKE ${`%${query}%`}
-       OR p."lastName" ILIKE ${`%${query}%`}
+    WHERE p."publicationStatus" = 'PUBLISHED'
+      AND (
+        p."searchVector" @@ plainto_tsquery('french', unaccent(${query}))
+        OR p."fullName" ILIKE ${`%${query}%`}
+        OR p."lastName" ILIKE ${`%${query}%`}
+      )
     ORDER BY relevance DESC, p."lastName" ASC
     LIMIT 500
   `;
 
   if (ftsResults.length === 0) {
-    // No FTS results, generate suggestions
     const suggestions = await generateSuggestions(query);
     return {
       results: [],
@@ -96,12 +98,12 @@ async function searchWithFTS(
     };
   }
 
-  // Get all matching IDs
   let matchingIds = ftsResults.map((r) => r.id);
 
-  // Apply additional filters using Prisma on the ID set
   if (partyId || mandateType || department || hasAffairs !== undefined || isActive !== undefined) {
-    const additionalFilters: Prisma.PoliticianWhereInput[] = [{ id: { in: matchingIds } }];
+    const additionalFilters: Prisma.PoliticianWhereInput[] = [
+      { id: { in: matchingIds }, publicationStatus: "PUBLISHED" },
+    ];
 
     if (partyId) {
       additionalFilters.push({ currentPartyId: partyId });
@@ -123,9 +125,13 @@ async function searchWithFTS(
     }
 
     if (hasAffairs === true) {
-      additionalFilters.push({ affairs: { some: { publicationStatus: "PUBLISHED" } } });
+      additionalFilters.push({
+        affairs: { some: getPublishedAffairWhere() },
+      });
     } else if (hasAffairs === false) {
-      additionalFilters.push({ affairs: { none: { publicationStatus: "PUBLISHED" } } });
+      additionalFilters.push({
+        affairs: { none: getPublishedAffairWhere() },
+      });
     }
 
     if (isActive === true) {
@@ -144,15 +150,13 @@ async function searchWithFTS(
 
   const total = matchingIds.length;
 
-  // Get paginated results preserving FTS order
   const orderedIds = ftsResults
     .filter((r) => matchingIds.includes(r.id))
     .slice(skip, skip + limit)
     .map((r) => r.id);
 
-  // Fetch full data for the page
   const politicians = await db.politician.findMany({
-    where: { id: { in: orderedIds } },
+    where: { id: { in: orderedIds }, publicationStatus: "PUBLISHED" },
     select: {
       id: true,
       slug: true,
@@ -168,11 +172,12 @@ async function searchWithFTS(
         select: { type: true, constituency: true },
         take: 1,
       },
-      _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" } } } },
+      _count: {
+        select: { affairs: { where: getPublishedAffairWhere() } },
+      },
     },
   });
 
-  // Reorder to match FTS relevance order
   const politicianMap = new Map(politicians.map((p) => [p.id, p]));
   const orderedPoliticians = orderedIds
     .map((id) => politicianMap.get(id))
@@ -199,8 +204,8 @@ async function searchWithFTS(
 }
 
 /**
- * Advanced search using PostgreSQL full-text search for text queries,
- * combined with Prisma for other filters
+ * Advanced public search using PostgreSQL full-text search for text queries,
+ * combined with Prisma for other filters.
  */
 export async function searchPoliticians(
   filters: SearchFilters,
@@ -210,20 +215,16 @@ export async function searchPoliticians(
   const { query, partyId, mandateType, department, hasAffairs, isActive } = filters;
   const skip = (page - 1) * limit;
 
-  // If we have a text query, use PostgreSQL FTS via raw query
   if (query && query.length >= 2) {
     return searchWithFTS(filters, page, limit);
   }
 
-  // Build where clause for filters (no text search)
-  const whereConditions: Prisma.PoliticianWhereInput[] = [];
+  const whereConditions: Prisma.PoliticianWhereInput[] = [{ publicationStatus: "PUBLISHED" }];
 
-  // Party filter
   if (partyId) {
     whereConditions.push({ currentPartyId: partyId });
   }
 
-  // Mandate type filter
   if (mandateType) {
     whereConditions.push({
       mandates: {
@@ -235,7 +236,6 @@ export async function searchPoliticians(
     });
   }
 
-  // Department filter
   if (department) {
     const deptCode = findDepartmentCode(department);
     if (deptCode) {
@@ -245,18 +245,16 @@ export async function searchPoliticians(
     }
   }
 
-  // Affairs filter — only count PUBLISHED affairs
   if (hasAffairs === true) {
     whereConditions.push({
-      affairs: { some: { publicationStatus: "PUBLISHED" } },
+      affairs: { some: getPublishedAffairWhere() },
     });
   } else if (hasAffairs === false) {
     whereConditions.push({
-      affairs: { none: { publicationStatus: "PUBLISHED" } },
+      affairs: { none: getPublishedAffairWhere() },
     });
   }
 
-  // Active status filter
   if (isActive === true) {
     whereConditions.push({
       mandates: { some: { isCurrent: true } },
@@ -267,10 +265,8 @@ export async function searchPoliticians(
     });
   }
 
-  const where: Prisma.PoliticianWhereInput =
-    whereConditions.length > 0 ? { AND: whereConditions } : {};
+  const where: Prisma.PoliticianWhereInput = { AND: whereConditions };
 
-  // Execute query
   const [politicians, total] = await Promise.all([
     db.politician.findMany({
       where,
@@ -298,21 +294,16 @@ export async function searchPoliticians(
           take: 1,
         },
         _count: {
-          select: { affairs: true },
+          select: { affairs: { where: getPublishedAffairWhere() } },
         },
       },
-      orderBy: [
-        // Sort by last name for consistency
-        { lastName: "asc" },
-        { firstName: "asc" },
-      ],
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       skip,
       take: limit,
     }),
     db.politician.count({ where }),
   ]);
 
-  // Transform results
   const results: SearchResult[] = politicians.map((p) => ({
     id: p.id,
     slug: p.slug,
@@ -325,7 +316,6 @@ export async function searchPoliticians(
     affairsCount: p._count.affairs,
   }));
 
-  // Generate suggestions if no results
   let suggestions: string[] | undefined;
   if (results.length === 0 && query && query.length >= 2) {
     suggestions = await generateSuggestions(query);
@@ -340,14 +330,10 @@ export async function searchPoliticians(
   };
 }
 
-/**
- * Generate search suggestions when no results found
- */
 async function generateSuggestions(query: string): Promise<string[]> {
-  // Find similar names using trigram similarity
-  // For now, just return some common patterns
   const partialMatches = await db.politician.findMany({
     where: {
+      publicationStatus: "PUBLISHED",
       OR: [
         { lastName: { startsWith: query.slice(0, 3), mode: "insensitive" } },
         { firstName: { startsWith: query.slice(0, 3), mode: "insensitive" } },
@@ -361,9 +347,6 @@ async function generateSuggestions(query: string): Promise<string[]> {
   return partialMatches.map((p) => p.fullName);
 }
 
-/**
- * Get autocomplete suggestions using FTS for better performance
- */
 export async function getAutocompleteSuggestions(
   query: string,
   limit: number = 8
@@ -372,7 +355,6 @@ export async function getAutocompleteSuggestions(
     return [];
   }
 
-  // Use FTS for fast autocomplete
   const ftsResults = await db.$queryRaw<FTSResult[]>`
     SELECT
       p.id,
@@ -384,9 +366,12 @@ export async function getAutocompleteSuggestions(
       p."currentPartyId",
       ts_rank(p."searchVector", plainto_tsquery('french', unaccent(${query}))) as relevance
     FROM "Politician" p
-    WHERE p."searchVector" @@ plainto_tsquery('french', unaccent(${query}))
-       OR p."fullName" ILIKE ${`%${query}%`}
-       OR p."lastName" ILIKE ${`%${query}%`}
+    WHERE p."publicationStatus" = 'PUBLISHED'
+      AND (
+        p."searchVector" @@ plainto_tsquery('french', unaccent(${query}))
+        OR p."fullName" ILIKE ${`%${query}%`}
+        OR p."lastName" ILIKE ${`%${query}%`}
+      )
     ORDER BY relevance DESC, p."lastName" ASC
     LIMIT ${limit}
   `;
@@ -395,10 +380,9 @@ export async function getAutocompleteSuggestions(
     return [];
   }
 
-  // Get full data with party info
   const ids = ftsResults.map((r) => r.id);
   const politicians = await db.politician.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, publicationStatus: "PUBLISHED" },
     select: {
       id: true,
       slug: true,
@@ -414,11 +398,12 @@ export async function getAutocompleteSuggestions(
         select: { type: true, constituency: true },
         take: 1,
       },
-      _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" } } } },
+      _count: {
+        select: { affairs: { where: getPublishedAffairWhere() } },
+      },
     },
   });
 
-  // Preserve FTS order
   const politicianMap = new Map(politicians.map((p) => [p.id, p]));
   return ids
     .map((id) => politicianMap.get(id))
@@ -437,54 +422,64 @@ export async function getAutocompleteSuggestions(
 }
 
 /**
- * Get search filter options (for dropdowns)
+ * Get public search filter options (for dropdowns).
  */
 export async function getSearchFilterOptions() {
   const [parties, departments, mandateTypes] = await Promise.all([
-    // Get parties with active members
-    db.party.findMany({
-      where: {
-        politicians: {
-          some: {
-            mandates: { some: { isCurrent: true } },
-          },
-        },
-      },
-      select: {
-        id: true,
-        shortName: true,
-        name: true,
-        color: true,
-        _count: {
-          select: { politicians: true },
-        },
-      },
-      orderBy: { politicians: { _count: "desc" } },
-      take: 50,
-    }),
+    db.$queryRaw<
+      Array<{
+        id: string;
+        shortName: string;
+        name: string;
+        color: string | null;
+        count: bigint;
+      }>
+    >`
+      SELECT party.id,
+             party."shortName",
+             party.name,
+             party.color,
+             COUNT(member.id) AS count
+      FROM "Party" party
+      JOIN "Politician" member
+        ON member."currentPartyId" = party.id
+       AND member."publicationStatus" = 'PUBLISHED'
+      WHERE EXISTS (
+        SELECT 1
+        FROM "Politician" active_member
+        JOIN "Mandate" mandate
+          ON mandate."politicianId" = active_member.id
+        WHERE active_member."currentPartyId" = party.id
+          AND active_member."publicationStatus" = 'PUBLISHED'
+          AND mandate."isCurrent" = true
+      )
+      GROUP BY party.id, party."shortName", party.name, party.color
+      ORDER BY COUNT(member.id) DESC, party.name ASC
+      LIMIT 50
+    `,
 
-    // Get unique departments
     db.mandate.findMany({
       where: {
         isCurrent: true,
         constituency: { not: null },
         type: "DEPUTE",
+        politician: { publicationStatus: "PUBLISHED" },
       },
       select: { constituency: true },
       distinct: ["constituency"],
     }),
 
-    // Get mandate type counts (counting distinct politicians, not mandates)
     db.$queryRaw<Array<{ type: MandateType; count: bigint }>>`
       SELECT m.type, COUNT(DISTINCT m."politicianId") as count
       FROM "Mandate" m
+      JOIN "Politician" p ON p.id = m."politicianId"
       WHERE m."isCurrent" = true
+        AND p."publicationStatus" = 'PUBLISHED'
       GROUP BY m.type
       ORDER BY count DESC
     `,
   ]);
 
-  // Extract unique department names
   const uniqueDepartments = [
     ...new Set(departments.map((d) => d.constituency?.split("(")[0]!.trim()).filter(Boolean)),
   ].sort();
@@ -495,7 +490,7 @@ export async function getSearchFilterOptions() {
       shortName: p.shortName,
       name: p.name,
       color: p.color,
-      count: p._count.politicians,
+      count: Number(p.count),
     })),
     departments: uniqueDepartments,
     mandateTypes: mandateTypes.map((m) => ({

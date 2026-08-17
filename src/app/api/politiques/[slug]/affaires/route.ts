@@ -3,13 +3,15 @@ import { db } from "@/lib/db";
 import { Involvement } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { getPublicAffairSemantics } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 /**
  * @openapi
  * /api/politiques/{slug}/affaires:
  *   get:
- *     summary: Affaires d'un représentant
- *     description: Retourne toutes les affaires judiciaires d'un représentant politique
+ *     summary: Affaires d'un représentant publié
+ *     description: Retourne les affaires judiciaires publiées d'un représentant publié avec son rôle, les sources et la sémantique éditoriale canonique
  *     tags: [Affaires]
  *     parameters:
  *       - in: path
@@ -17,11 +19,16 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         required: true
  *         schema:
  *           type: string
- *         description: Slug du représentant (ex. jean-dupont)
- *         example: nicolas-sarkozy
+ *         description: Slug du représentant (ex. nicolas-sarkozy)
+ *       - in: query
+ *         name: involvement
+ *         schema:
+ *           type: string
+ *           default: DIRECT
+ *         description: Filtrer par niveau d'implication (valeurs séparées par virgule). Défaut DIRECT. Une liste vide ou composée uniquement de séparateurs est invalide.
  *     responses:
  *       200:
- *         description: Affaires du représentant
+ *         description: Affaires du représentant. Chaque item contient involvement et semantics afin de distinguer mise en cause, mention, victime et plaignant.
  *         content:
  *           application/json:
  *             schema:
@@ -35,8 +42,10 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                     $ref: '#/components/schemas/Affair'
  *                 total:
  *                   type: integer
+ *       400:
+ *         description: Filtre invalide, notamment liste vide ou composée uniquement de séparateurs
  *       404:
- *         description: Représentant non trouvé
+ *         description: Représentant non trouvé ou non publié
  *         content:
  *           application/json:
  *             schema:
@@ -49,21 +58,15 @@ export const GET = withPublicRoute(async (request, context) => {
   const { searchParams } = new URL(request.url);
   const involvement = searchParams.get("involvement");
 
-  const VALID_INVOLVEMENTS: Involvement[] = [
-    "DIRECT",
-    "INDIRECT",
-    "MENTIONED_ONLY",
-    "VICTIM",
-    "PLAINTIFF",
-  ];
-  const requestedInvolvements: Involvement[] = involvement
-    ? (involvement
-        .split(",")
-        .filter((v) => VALID_INVOLVEMENTS.includes(v as Involvement)) as Involvement[])
-    : ["DIRECT"];
+  const validInvolvements = Object.values(Involvement) as string[];
+  const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];
+  if (involvementValues.some((value) => !validInvolvements.includes(value))) {
+    return NextResponse.json({ error: "Niveau d'implication invalide" }, { status: 400 });
+  }
+  const requestedInvolvements = involvementValues as Involvement[];
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     select: {
       id: true,
       slug: true,
@@ -75,7 +78,10 @@ export const GET = withPublicRoute(async (request, context) => {
         select: { shortName: true, name: true, color: true },
       },
       affairs: {
-        where: { publicationStatus: "PUBLISHED", involvement: { in: requestedInvolvements } },
+        where: {
+          ...getPublishedAffairWhere(),
+          involvement: { in: requestedInvolvements },
+        },
         select: {
           id: true,
           slug: true,
@@ -83,6 +89,7 @@ export const GET = withPublicRoute(async (request, context) => {
           description: true,
           status: true,
           category: true,
+          involvement: true,
           factsDate: true,
           startDate: true,
           verdictDate: true,
@@ -108,7 +115,7 @@ export const GET = withPublicRoute(async (request, context) => {
   });
 
   if (!politician) {
-    return NextResponse.json({ error: "Politique non trouvé" }, { status: 404 });
+    return NextResponse.json({ error: "Représentant non trouvé ou non publié" }, { status: 404 });
   }
 
   return withCache(
@@ -122,7 +129,10 @@ export const GET = withPublicRoute(async (request, context) => {
         photoUrl: politician.photoUrl,
         party: politician.currentParty,
       },
-      affairs: politician.affairs,
+      affairs: politician.affairs.map((affair) => ({
+        ...affair,
+        semantics: getPublicAffairSemantics(affair),
+      })),
       total: politician.affairs.length,
     }),
     "daily"

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getPublishedAffairWhere,
+  getPublishedAffairSqlWhere,
   getAdverseAffairWhere,
   getConvictionOnlyWhere,
   getMisEnCauseWhere,
@@ -39,6 +40,19 @@ describe("public-filters — contrat des agrégats (RGPD art. 10)", () => {
     ]) {
       expect(where.publicationStatus).toBe("PUBLISHED");
     }
+  });
+
+  it("garde le filtre SQL brut cohérent avec le builder Prisma", () => {
+    const sql = getPublishedAffairSqlWhere();
+
+    expect(sql.sql).toContain('a."publicationStatus" =');
+    expect(sql.values).toEqual([getPublishedAffairWhere().publicationStatus]);
+  });
+
+  it("rejette tout alias SQL judiciaire non inventorié", () => {
+    expect(() => getPublishedAffairSqlWhere("unsafe" as "a")).toThrow(
+      "Unsupported public affair SQL alias: unsafe"
+    );
   });
 
   it("l'agrégat à charge exclut chaque statut non validé ou favorable", () => {

@@ -34,7 +34,7 @@ const CERTAINTY_STATUSES: Record<CertaintyLevel, string[]> = {
     "Renvoi devant le tribunal",
     "Procès en cours",
   ],
-  CLOS_SANS_CHARGE: ["Instruction close, sans mise en examen"],
+  CLOS_SANS_CHARGE: ["Instruction clôturée, sans mise en examen"],
   CLOS_FAVORABLE: [
     "Relaxe",
     "Acquittement",

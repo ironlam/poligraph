@@ -9,8 +9,8 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  * @openapi
  * /api/politiques/{slug}/votes:
  *   get:
- *     summary: Votes d'un représentant
- *     description: Retourne l'historique des votes parlementaires d'un représentant avec statistiques
+ *     summary: Votes d'un représentant publié
+ *     description: Retourne l'historique des votes parlementaires d'un représentant publié avec statistiques. Un taux de participation nullable doit être interprété avec participationStatus.
  *     tags: [Votes]
  *     parameters:
  *       - in: path
@@ -54,7 +54,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                 pagination:
  *                   $ref: '#/components/schemas/Pagination'
  *       404:
- *         description: Représentant non trouvé
+ *         description: Représentant non trouvé ou non publié
  *       500:
  *         description: Erreur serveur
  */
@@ -64,8 +64,8 @@ export const GET = withPublicRoute(async (request, context) => {
 
   const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     select: {
       id: true,
       slug: true,
@@ -80,10 +80,9 @@ export const GET = withPublicRoute(async (request, context) => {
   });
 
   if (!politician) {
-    return NextResponse.json({ error: "Politique non trouvé" }, { status: 404 });
+    return NextResponse.json({ error: "Représentant non trouvé ou non publié" }, { status: 404 });
   }
 
-  // Get votes with scrutin info
   const [votes, total, votingStats] = await Promise.all([
     db.vote.findMany({
       where: { politicianId: politician.id },

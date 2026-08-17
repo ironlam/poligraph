@@ -117,7 +117,7 @@ const NOTICES: Record<AffairNoticeVariant, { title: string; body: string; classN
       "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300",
   },
   instruction_close: {
-    title: "Instruction close, sans mise en examen",
+    title: "Instruction clôturée, sans mise en examen",
     body: "l'instruction est terminée sans qu'aucune mise en examen ait été prononcée. Le parquet doit encore rendre ses réquisitions. Aucune condamnation n'a été prononcée.",
     className:
       "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200",

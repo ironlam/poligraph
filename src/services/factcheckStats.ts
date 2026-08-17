@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
-import { Prisma } from "@/generated/prisma";
-import { FACTCHECK_ALLOWED_SOURCES, VERDICT_GROUPS } from "@/config/labels";
+import { VERDICT_GROUPS } from "@/config/labels";
 import { bayesianScore } from "@/lib/bayesianScore";
+import { getPublicFactCheckSqlWhere, getPublicFactCheckWhere } from "@/lib/api/public-contract";
 
 // ============================================
 // Types
@@ -90,7 +90,7 @@ export interface FactCheckStatisticsData {
 // Service
 // ============================================
 
-/** Full stats used by the public API (/api/factchecks/stats) */
+/** Full stats used by the public API (/api/factchecks/stats). */
 async function getFactCheckStats(options?: { limit?: number }): Promise<FactCheckStatsResult> {
   const limit = options?.limit ?? 15;
 
@@ -101,7 +101,6 @@ async function getFactCheckStats(options?: { limit?: number }): Promise<FactChec
     getBySource(),
   ]);
 
-  // Aggregate global
   let totalFactChecks = 0;
   const globalByVerdict: Record<string, number> = {};
   for (const row of globalRows) {
@@ -112,13 +111,8 @@ async function getFactCheckStats(options?: { limit?: number }): Promise<FactChec
     }
   }
 
-  // Aggregate by party
   const byParty = aggregateByParty(partyRows, limit);
-
-  // Aggregate by politician
   const byPolitician = aggregateByPolitician(politicianRows);
-
-  // Aggregate by source
   const bySource = aggregateBySource(sourceRows);
 
   return {
@@ -131,23 +125,22 @@ async function getFactCheckStats(options?: { limit?: number }): Promise<FactChec
 
 /**
  * Lightweight stats for factchecks/page.tsx listing page.
- * Returns total count, per-rating counts, per-source counts, and top 10 politicians.
- * Applies FACTCHECK_ALLOWED_SOURCES filter.
+ * Every query uses exactly the public fact-check and public-politician boundary.
  */
 async function getPageStats(): Promise<FactCheckPageStats> {
+  const publicWhere = getPublicFactCheckWhere();
+
   const [totalFactChecks, byRatingRaw, bySourceRaw, topPoliticians] = await Promise.all([
-    db.factCheck.count({
-      where: { publicationStatus: "PUBLISHED", source: { in: FACTCHECK_ALLOWED_SOURCES } },
-    }),
+    db.factCheck.count({ where: publicWhere }),
     db.factCheck.groupBy({
       by: ["verdictRating"],
-      where: { publicationStatus: "PUBLISHED", source: { in: FACTCHECK_ALLOWED_SOURCES } },
+      where: publicWhere,
       _count: true,
       orderBy: { _count: { verdictRating: "desc" } },
     }),
     db.factCheck.groupBy({
       by: ["source"],
-      where: { publicationStatus: "PUBLISHED", source: { in: FACTCHECK_ALLOWED_SOURCES } },
+      where: publicWhere,
       _count: true,
       orderBy: { _count: { source: "desc" } },
     }),
@@ -156,8 +149,8 @@ async function getPageStats(): Promise<FactCheckPageStats> {
       FROM "FactCheckMention" m
       JOIN "FactCheck" fc ON m."factCheckId" = fc.id
       JOIN "Politician" p ON m."politicianId" = p.id
-      WHERE fc.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
-        AND fc."publicationStatus" = 'PUBLISHED'
+      WHERE ${getPublicFactCheckSqlWhere()}
+        AND p."publicationStatus" = 'PUBLISHED'
       GROUP BY p.id, p."fullName", p.slug
       ORDER BY count DESC
       LIMIT 10
@@ -192,25 +185,26 @@ function classifyRating(rating: string): keyof VerdictBreakdown {
 
 /**
  * Rich statistics for statistiques/page.tsx.
- * Returns global verdict groups, per-source counts, and Bayesian-ranked politicians and parties.
- * Applies FACTCHECK_ALLOWED_SOURCES filter and only counts isClaimant=true mentions.
+ * Only published fact-checks from allowed sources and published politicians may
+ * contribute to public rankings.
  */
 async function getStatisticsData(): Promise<FactCheckStatisticsData> {
+  const publicWhere = getPublicFactCheckWhere();
+
   const [total, byRatingRaw, bySourceRaw, allMentions] = await Promise.all([
-    db.factCheck.count({ where: { source: { in: FACTCHECK_ALLOWED_SOURCES } } }),
+    db.factCheck.count({ where: publicWhere }),
     db.factCheck.groupBy({
       by: ["verdictRating"],
-      where: { source: { in: FACTCHECK_ALLOWED_SOURCES } },
+      where: publicWhere,
       _count: true,
       orderBy: { _count: { verdictRating: "desc" } },
     }),
     db.factCheck.groupBy({
       by: ["source"],
-      where: { source: { in: FACTCHECK_ALLOWED_SOURCES } },
+      where: publicWhere,
       _count: true,
       orderBy: { _count: { source: "desc" } },
     }),
-    // Fetch claimant mentions aggregated by politician + verdict (raw SQL for performance)
     db.$queryRaw<
       Array<{
         politicianId: string;
@@ -241,14 +235,14 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
       JOIN "Politician" p ON fcm."politicianId" = p.id
       LEFT JOIN "Party" party ON p."currentPartyId" = party.id
       WHERE fcm."isClaimant" = true
-        AND fc.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
+        AND ${getPublicFactCheckSqlWhere()}
+        AND p."publicationStatus" = 'PUBLISHED'
       GROUP BY p.id, p."fullName", p.slug, p."photoUrl",
                party.name, party."shortName", party.color, party.slug,
                fc."verdictRating"
     `,
   ]);
 
-  // Global verdict groups
   const ratingMap: Record<string, number> = {};
   byRatingRaw.forEach((r) => {
     ratingMap[r.verdictRating] = r._count;
@@ -261,7 +255,6 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     inverifiable: ratingMap["UNVERIFIABLE"] || 0,
   };
 
-  // Aggregate pre-grouped mention rows by politician and party
   const politicianMap = new Map<
     string,
     {
@@ -292,7 +285,6 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     const partyKey = row.partySlug;
     const partyDisplayName = row.partyName || row.partyShortName;
 
-    // By politician
     if (!politicianMap.has(row.politicianId)) {
       politicianMap.set(row.politicianId, {
         fullName: row.fullName,
@@ -308,7 +300,6 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     polEntry.breakdown[verdict] += count;
     polEntry.total += count;
 
-    // By party
     if (partyKey) {
       if (!partyMap.has(partyKey)) {
         partyMap.set(partyKey, {
@@ -326,7 +317,6 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     }
   }
 
-  // Compute global means for Bayesian scoring (excluding inverifiable)
   const allPols = [...politicianMap.values()].filter((p) => p.total >= MIN_MENTIONS);
   const totalScorable = allPols.reduce((sum, p) => sum + p.total - p.breakdown.inverifiable, 0);
   const totalVrai = allPols.reduce((sum, p) => sum + p.breakdown.vrai, 0);
@@ -334,7 +324,6 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
   const globalMeanVrai = totalScorable > 0 ? totalVrai / totalScorable : 0;
   const globalMeanFaux = totalScorable > 0 ? totalFaux / totalScorable : 0;
 
-  // Score and rank politicians
   const scorePolitician = (p: (typeof allPols)[number]): RankedPolitician => {
     const scorable = p.total - p.breakdown.inverifiable;
     const pVrai = scorable > 0 ? p.breakdown.vrai / scorable : 0;
@@ -362,10 +351,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     .sort((a, b) => b.scoreFaux - a.scoreFaux)
     .slice(0, 5);
 
-  // Score and rank parties
   const allParties = [...partyMap.values()].filter((p) => p.total >= MIN_MENTIONS);
-
-  // Compute party-level global means
   const partyTotalScorable = allParties.reduce(
     (sum, p) => sum + p.total - p.breakdown.inverifiable,
     0
@@ -423,10 +409,10 @@ interface GlobalVerdictRow {
 
 async function getGlobalByVerdict(): Promise<GlobalVerdictRow[]> {
   return db.$queryRaw<GlobalVerdictRow[]>`
-    SELECT "verdictRating", COUNT(*) as count
-    FROM "FactCheck"
-    WHERE source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
-    GROUP BY "verdictRating"
+    SELECT fc."verdictRating", COUNT(*) as count
+    FROM "FactCheck" fc
+    WHERE ${getPublicFactCheckSqlWhere()}
+    GROUP BY fc."verdictRating"
   `;
 }
 
@@ -454,7 +440,8 @@ async function getByParty(): Promise<PartyVerdictRow[]> {
     JOIN "FactCheck" fc ON fcm."factCheckId" = fc.id
     JOIN "Politician" pol ON fcm."politicianId" = pol.id
     JOIN "Party" p ON pol."currentPartyId" = p.id
-    WHERE fc.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
+    WHERE ${getPublicFactCheckSqlWhere()}
+      AND pol."publicationStatus" = 'PUBLISHED'
     GROUP BY p.id, p.name, p."shortName", p.color, p.slug, fc."verdictRating"
     ORDER BY COUNT(*) DESC
   `;
@@ -484,14 +471,17 @@ async function getByPolitician(limit: number): Promise<PoliticianVerdictRow[]> {
       FROM "FactCheckMention" fcm
       JOIN "Politician" pol ON fcm."politicianId" = pol.id
       LEFT JOIN "Party" p ON pol."currentPartyId" = p.id
+      WHERE pol."publicationStatus" = 'PUBLISHED'
     ) sub
     JOIN "FactCheck" fc ON sub."factCheckId" = fc.id
-    WHERE fc.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
+    WHERE ${getPublicFactCheckSqlWhere()}
       AND sub."politicianId" IN (
         SELECT fcm2."politicianId"
         FROM "FactCheckMention" fcm2
         JOIN "FactCheck" fc2 ON fcm2."factCheckId" = fc2.id
-        WHERE fc2.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
+        JOIN "Politician" pol2 ON fcm2."politicianId" = pol2.id
+        WHERE ${getPublicFactCheckSqlWhere("fc2")}
+          AND pol2."publicationStatus" = 'PUBLISHED'
         GROUP BY fcm2."politicianId"
         ORDER BY COUNT(*) DESC
         LIMIT ${limit}
@@ -508,10 +498,10 @@ interface SourceVerdictRow {
 
 async function getBySource(): Promise<SourceVerdictRow[]> {
   return db.$queryRaw<SourceVerdictRow[]>`
-    SELECT source, "verdictRating", COUNT(*) as count
-    FROM "FactCheck"
-    WHERE source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
-    GROUP BY source, "verdictRating"
+    SELECT fc.source, fc."verdictRating", COUNT(*) as count
+    FROM "FactCheck" fc
+    WHERE ${getPublicFactCheckSqlWhere()}
+    GROUP BY fc.source, fc."verdictRating"
     ORDER BY COUNT(*) DESC
   `;
 }

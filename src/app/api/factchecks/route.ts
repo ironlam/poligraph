@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { FactCheckRating } from "@/generated/prisma";
+import { FactCheckRating, Prisma } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { getPublicFactCheckWhere, isAllowedFactCheckSource } from "@/lib/api/public-contract";
 
 /**
  * @openapi
  * /api/factchecks:
  *   get:
  *     summary: Liste des fact-checks
- *     description: Retourne la liste paginée des fact-checks avec filtres
+ *     description: Retourne la liste paginée des fact-checks publiés issus des sources autorisées
  *     tags: [Fact-checks]
  *     parameters:
  *       - in: query
@@ -23,12 +23,12 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         name: politician
  *         schema:
  *           type: string
- *         description: Filtrer par slug du politicien
+ *         description: Filtrer par slug d'un politicien publié
  *       - in: query
  *         name: source
  *         schema:
  *           type: string
- *         description: "Filtrer par source (ex: AFP Factuel, Les Décodeurs)"
+ *         description: Filtrer par une source publique autorisée
  *       - in: query
  *         name: verdict
  *         schema:
@@ -41,7 +41,6 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *           type: integer
  *           default: 1
  *           minimum: 1
- *         description: Numéro de page
  *       - in: query
  *         name: limit
  *         schema:
@@ -49,10 +48,22 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *           default: 20
  *           minimum: 1
  *           maximum: 100
- *         description: Nombre d'éléments par page
  *     responses:
  *       200:
  *         description: Liste des fact-checks avec pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FactCheck'
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         description: Filtre invalide
  *       500:
  *         description: Erreur serveur
  */
@@ -63,10 +74,23 @@ export const GET = withPublicRoute(async (request) => {
   const politician = searchParams.get("politician");
   const source = searchParams.get("source");
   const verdict = searchParams.get("verdict");
-  const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
+  const { page, limit, skip } = parsePagination(searchParams, {
+    defaultLimit: 20,
+  });
 
-  const where: Record<string, unknown> = {
-    source: source || { in: FACTCHECK_ALLOWED_SOURCES },
+  if (politician !== null && politician.length === 0) {
+    return NextResponse.json({ error: "Politicien invalide" }, { status: 400 });
+  }
+  if (source !== null && !isAllowedFactCheckSource(source)) {
+    return NextResponse.json({ error: "Source de fact-check non autorisée" }, { status: 400 });
+  }
+
+  if (verdict !== null && !Object.values(FactCheckRating).includes(verdict as FactCheckRating)) {
+    return NextResponse.json({ error: "Verdict invalide" }, { status: 400 });
+  }
+
+  const where: Prisma.FactCheckWhereInput = {
+    ...getPublicFactCheckWhere(source ?? undefined),
   };
 
   if (search) {
@@ -79,12 +103,12 @@ export const GET = withPublicRoute(async (request) => {
   if (politician) {
     where.mentions = {
       some: {
-        politician: { slug: politician },
+        politician: { slug: politician, publicationStatus: "PUBLISHED" },
       },
     };
   }
 
-  if (verdict && Object.values(FactCheckRating).includes(verdict as FactCheckRating)) {
+  if (verdict !== null) {
     where.verdictRating = verdict as FactCheckRating;
   }
 
@@ -104,6 +128,7 @@ export const GET = withPublicRoute(async (request) => {
         publishedAt: true,
         claimDate: true,
         mentions: {
+          where: { politician: { publicationStatus: "PUBLISHED" } },
           select: {
             politician: {
               select: {

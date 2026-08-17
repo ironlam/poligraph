@@ -1,9 +1,15 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import { Prisma } from "@/generated/prisma";
 import type { PlatformUpdateType } from "@/generated/prisma";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
 import { getCertaintyLevel } from "@/config/certainty";
+import {
+  getPublicFactCheckSqlWhere,
+  getPublicFactCheckWhere,
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -223,7 +229,7 @@ export async function selectPressStories(
       mentions: {
         // Only surface mentions of PUBLISHED politicians. DRAFT, ARCHIVED,
         // EXCLUDED or REJECTED profiles must never leak via press grids.
-        where: { politician: { publicationStatus: "PUBLISHED" } },
+        where: { politician: PUBLIC_POLITICIAN_WHERE },
         include: {
           politician: {
             select: {
@@ -236,13 +242,19 @@ export async function selectPressStories(
         },
       },
       partyMentions: {
+        where: { party: PUBLIC_PARTY_WHERE },
         include: { party: { select: { slug: true, shortName: true } } },
       },
       affairLinks: {
         // Only surface PUBLISHED affairs to the public Recap grid. Drafts ("À
         // vérifier") and rejected affairs must never leak via press story
         // mentions, even when an article correctly references them.
-        where: { affair: { publicationStatus: "PUBLISHED" } },
+        where: {
+          affair: {
+            ...getPublishedAffairWhere(),
+            politician: PUBLIC_POLITICIAN_WHERE,
+          },
+        },
         include: { affair: { select: { slug: true, title: true, status: true } } },
       },
     },
@@ -368,6 +380,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
       JOIN "Scrutin" s ON v."scrutinId" = s.id
       WHERE s."votingDate" >= ${weekStart}
         AND s."votingDate" < ${weekEnd}
+        AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         AND v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
       GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
       ORDER BY count DESC
@@ -404,7 +417,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         p.slug as "politicianSlug"
       FROM "Affair" a
       JOIN "Politician" p ON a."politicianId" = p.id
-      WHERE a."publicationStatus" = 'PUBLISHED'
+      WHERE ${getPublishedAffairSqlWhere()}
+        AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')
         AND COALESCE(a."startDate", a."factsDate", a."createdAt") >= ${weekStart}
         AND COALESCE(a."startDate", a."factsDate", a."createdAt") < ${weekEnd}
@@ -429,8 +443,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         db.factCheck.groupBy({
           by: ["verdictRating"],
           where: {
+            ...getPublicFactCheckWhere(),
             createdAt: { gte: weekStart, lt: weekEnd },
-            source: { in: FACTCHECK_ALLOWED_SOURCES },
           },
           _count: true,
         }),
@@ -457,7 +471,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         LEFT JOIN "Party" par ON p."currentPartyId" = par.id
         WHERE fc."createdAt" >= ${weekStart}
           AND fc."createdAt" < ${weekEnd}
-          AND fc.source IN (${Prisma.join(FACTCHECK_ALLOWED_SOURCES)})
+          AND ${getPublicFactCheckSqlWhere()}
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
           AND m."isClaimant" = true
         GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
         ORDER BY count DESC
@@ -470,7 +485,10 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         db.pressArticle.count({
           where: {
             publishedAt: { gte: weekStart, lt: weekEnd },
-            OR: [{ mentions: { some: {} } }, { partyMentions: { some: {} } }],
+            OR: [
+              { mentions: { some: { politician: PUBLIC_POLITICIAN_WHERE } } },
+              { partyMentions: { some: { party: PUBLIC_PARTY_WHERE } } },
+            ],
           },
         }),
         db.$queryRaw<
@@ -496,6 +514,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         LEFT JOIN "Party" par ON p."currentPartyId" = par.id
         WHERE a."publishedAt" >= ${weekStart}
           AND a."publishedAt" < ${weekEnd}
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
         ORDER BY count DESC
         LIMIT 5
@@ -582,7 +601,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
   const photoMap = new Map<string, string | null>();
   if (politicianSlugs.length > 0) {
     const politicians = await db.politician.findMany({
-      where: { slug: { in: politicianSlugs } },
+      where: { slug: { in: politicianSlugs }, ...PUBLIC_POLITICIAN_WHERE },
       select: { slug: true, photoUrl: true },
     });
     for (const p of politicians) photoMap.set(p.slug, p.photoUrl);
@@ -638,7 +657,11 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
   );
   if (affairsMissingPolitician.length > 0) {
     const affairData = await db.affair.findMany({
-      where: { slug: { in: affairsMissingPolitician.map((a) => a.slug) } },
+      where: {
+        slug: { in: affairsMissingPolitician.map((a) => a.slug) },
+        ...getPublishedAffairWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
+      },
       select: {
         slug: true,
         politician: { select: { slug: true, fullName: true } },

@@ -1,15 +1,41 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  queryRaw: vi.fn(),
+  scrutinFindMany: vi.fn(),
+  factCheckGroupBy: vi.fn(),
+  pressArticleFindMany: vi.fn(),
+  pressArticleCount: vi.fn(),
+  politicianFindMany: vi.fn(),
+  affairFindMany: vi.fn(),
+  platformUpdateFindMany: vi.fn(),
+}));
 
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/db", () => ({
   db: {
-    pressArticle: { findMany: vi.fn(), count: vi.fn() },
-    politician: { findMany: vi.fn() },
-    affair: { findMany: vi.fn() },
+    $queryRaw: mocks.queryRaw,
+    scrutin: { findMany: mocks.scrutinFindMany },
+    factCheck: { groupBy: mocks.factCheckGroupBy },
+    pressArticle: { findMany: mocks.pressArticleFindMany, count: mocks.pressArticleCount },
+    politician: { findMany: mocks.politicianFindMany },
+    affair: { findMany: mocks.affairFindMany },
+    platformUpdate: { findMany: mocks.platformUpdateFindMany },
   },
 }));
 
-import { getISOWeekString, parseISOWeekString } from "../recap";
+import { getISOWeekString, getWeeklyRecap, parseISOWeekString } from "../recap";
+
+function rawSqlText(call: unknown[]): string {
+  const strings = call[0] as readonly string[];
+  const values = call.slice(1);
+  return strings
+    .map((part, index) => {
+      const value = values[index] as { sql?: string } | undefined;
+      return `${part}${value?.sql ?? "?"}`;
+    })
+    .join("");
+}
 
 describe("getISOWeekString", () => {
   it("formats 2026-W18 for the Monday of ISO week 18", () => {
@@ -52,5 +78,52 @@ describe("parseISOWeekString", () => {
     const iso = getISOWeekString(monday);
     const parsed = parseISOWeekString(iso);
     expect(parsed!.toISOString()).toBe(monday.toISOString());
+  });
+});
+
+describe("frontières publiques du récapitulatif", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.queryRaw.mockResolvedValue([]);
+    mocks.scrutinFindMany.mockResolvedValue([]);
+    mocks.factCheckGroupBy.mockResolvedValue([]);
+    mocks.pressArticleFindMany.mockResolvedValue([]);
+    mocks.pressArticleCount.mockResolvedValue(0);
+    mocks.politicianFindMany.mockResolvedValue([]);
+    mocks.affairFindMany.mockResolvedValue([]);
+    mocks.platformUpdateFindMany.mockResolvedValue([]);
+  });
+
+  it("ignore les affaires et fact-checks non publics ainsi que leurs personnalités DRAFT", async () => {
+    const recap = await getWeeklyRecap(new Date("2026-08-10T00:00:00.000Z"));
+
+    expect(recap.affairs).toEqual({ newAffairs: [], total: 0 });
+    expect(recap.factChecks).toEqual({
+      total: 0,
+      trueCount: 0,
+      falseCount: 0,
+      mixedCount: 0,
+      topPoliticians: [],
+    });
+
+    expect(mocks.factCheckGroupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          publicationStatus: "PUBLISHED",
+          source: expect.objectContaining({ in: expect.any(Array) }),
+        }),
+      })
+    );
+
+    const sql = mocks.queryRaw.mock.calls.map(rawSqlText);
+    const affairQuery = sql.find((query) => query.includes('FROM "Affair" a'));
+    const factCheckQuery = sql.find((query) => query.includes('JOIN "FactCheck" fc'));
+
+    expect(affairQuery).toContain('a."publicationStatus" =');
+    expect(affairQuery).toContain('p."publicationStatus" =');
+    expect(affairQuery).toContain("a.involvement NOT IN");
+    expect(factCheckQuery).toContain('fc."publicationStatus" =');
+    expect(factCheckQuery).toContain("fc.source IN");
+    expect(factCheckQuery).toContain('p."publicationStatus" =');
   });
 });

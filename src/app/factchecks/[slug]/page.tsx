@@ -11,12 +11,13 @@ import { ClaimReviewJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
+import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
 export async function generateStaticParams() {
   const factChecks = await db.factCheck.findMany({
-    where: { slug: { not: null } },
+    where: { ...getPublicFactCheckWhere(), slug: { not: null } },
     select: { slug: true },
     take: 100,
     orderBy: { publishedAt: "desc" },
@@ -33,10 +34,11 @@ async function getFactCheck(slug: string) {
   cacheTag(`factcheck:${slug}`, "factchecks");
   cacheLife("synced");
 
-  return db.factCheck.findUnique({
-    where: { slug },
+  return db.factCheck.findFirst({
+    where: { ...getPublicFactCheckWhere(), slug },
     include: {
       mentions: {
+        where: { politician: PUBLIC_POLITICIAN_WHERE },
         include: {
           politician: {
             select: {

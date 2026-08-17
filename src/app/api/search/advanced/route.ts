@@ -4,13 +4,14 @@ import { MandateType } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { parsePagination } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { findDepartmentCode } from "@/config/departments";
 
 /**
  * @openapi
  * /api/search/advanced:
  *   get:
- *     summary: Recherche avancée de représentants
- *     description: Recherche avec filtres multiples (parti, mandat, département, affaires)
+ *     summary: Recherche avancée de représentants publiés
+ *     description: Recherche avec filtres multiples (parti, mandat, département, affaires publiées) sur le corpus public
  *     tags: [Recherche]
  *     parameters:
  *       - in: query
@@ -29,7 +30,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         name: mandate
  *         schema:
  *           type: string
- *           enum: [DEPUTE, SENATEUR, MINISTRE, PREMIER_MINISTRE, MINISTRE_DELEGUE, SECRETAIRE_ETAT, DEPUTE_EUROPEEN]
+ *           enum: [DEPUTE, SENATEUR, DEPUTE_EUROPEEN, PRESIDENT_REPUBLIQUE, PREMIER_MINISTRE, MINISTRE, MINISTRE_DELEGUE, SECRETAIRE_ETAT, PRESIDENT_REGION, VICE_PRESIDENT_REGION, PRESIDENT_DEPARTEMENT, VICE_PRESIDENT_DEPARTEMENT, MAIRE, ADJOINT_MAIRE, CONSEILLER_REGIONAL, CONSEILLER_DEPARTEMENTAL, CONSEILLER_MUNICIPAL, PRESIDENT_PARTI, OTHER]
  *         description: Type de mandat actuel
  *       - in: query
  *         name: department
@@ -41,7 +42,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         name: hasAffairs
  *         schema:
  *           type: boolean
- *         description: Filtrer par présence d'affaires judiciaires
+ *         description: Filtrer par présence d'affaires judiciaires publiées
  *       - in: query
  *         name: isActive
  *         schema:
@@ -102,6 +103,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                             type: string
  *                       affairsCount:
  *                         type: integer
+ *                         description: Nombre d'affaires publiées, tous rôles confondus (compatibilité legacy)
  *                 total:
  *                   type: integer
  *                 page:
@@ -113,6 +115,8 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                   items:
  *                     type: string
  *                   description: Suggestions si aucun résultat
+ *       400:
+ *         description: Filtre invalide
  *       500:
  *         description: Erreur serveur
  */
@@ -120,21 +124,42 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
 
   const query = searchParams.get("q") || "";
-  const partyId = searchParams.get("party") || undefined;
-  const mandateType = searchParams.get("mandate") as MandateType | undefined;
-  const department = searchParams.get("department") || undefined;
+  const partyParam = searchParams.get("party");
+  const mandateParam = searchParams.get("mandate");
+  const departmentParam = searchParams.get("department");
   const hasAffairsParam = searchParams.get("hasAffairs");
   const isActiveParam = searchParams.get("isActive");
   const { page, limit } = parsePagination(searchParams, { defaultLimit: 20 });
 
+  if (partyParam !== null && partyParam.length === 0) {
+    return NextResponse.json({ error: "Parti invalide" }, { status: 400 });
+  }
+  if (mandateParam !== null && !Object.values(MandateType).includes(mandateParam as MandateType)) {
+    return NextResponse.json({ error: "Type de mandat invalide" }, { status: 400 });
+  }
+  if (
+    departmentParam !== null &&
+    (departmentParam.length === 0 || !findDepartmentCode(departmentParam))
+  ) {
+    return NextResponse.json({ error: "Département invalide" }, { status: 400 });
+  }
+  if (hasAffairsParam !== null && hasAffairsParam !== "true" && hasAffairsParam !== "false") {
+    return NextResponse.json({ error: "Filtre hasAffairs invalide" }, { status: 400 });
+  }
+  if (isActiveParam !== null && isActiveParam !== "true" && isActiveParam !== "false") {
+    return NextResponse.json({ error: "Filtre isActive invalide" }, { status: 400 });
+  }
+
   const hasAffairs =
     hasAffairsParam === "true" ? true : hasAffairsParam === "false" ? false : undefined;
   const isActive = isActiveParam === "true" ? true : isActiveParam === "false" ? false : undefined;
+  const partyId = partyParam ?? undefined;
+  const department = departmentParam ?? undefined;
 
   const filters: SearchFilters = {
     query,
     partyId,
-    mandateType,
+    mandateType: (mandateParam as MandateType | null) ?? undefined,
     department,
     hasAffairs,
     isActive,
@@ -149,7 +174,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
  * /api/search/advanced/filters:
  *   get:
  *     summary: Options de filtres de recherche
- *     description: Retourne les options disponibles pour les filtres (partis, départements, types de mandat)
+ *     description: Retourne les options disponibles pour les filtres (partis, départements, types de mandat) sur le corpus public
  *     tags: [Recherche]
  *     responses:
  *       200:

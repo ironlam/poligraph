@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   toCSV,
@@ -13,11 +14,12 @@ import {
   INVOLVEMENT_LABELS,
   POLITICAL_POSITION_LABELS,
 } from "@/config/labels";
+import { AffairStatus, AffairCategory, Prisma } from "@/generated/prisma";
 import { parsePagination } from "@/lib/api/pagination";
-import type { AffairStatus, AffairCategory } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { resolveDecisionField } from "@/lib/affairs/decision-fields";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { AFFAIR_EXPORT_COLUMNS } from "./columns";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +30,7 @@ export const dynamic = "force-dynamic";
  *   get:
  *     summary: Export CSV des affaires judiciaires
  *     description: >
- *       Retourne toutes les affaires judiciaires publiées au format CSV,
+ *       Retourne les affaires judiciaires publiées de personnalités publiées au format CSV,
  *       prêtes à l'emploi pour l'analyse statistique (R, Python, Excel).
  *       Chaque ligne inclut le poligraphId (identifiant stable pour citation),
  *       les métadonnées du politique et du parti (actuel + au moment des
@@ -50,7 +52,7 @@ export const dynamic = "force-dynamic";
  *         name: politicianId
  *         schema:
  *           type: string
- *         description: Filtrer par ID interne du politique
+ *         description: Filtrer par ID interne d'un politique publié
  *       - in: query
  *         name: limit
  *         schema:
@@ -65,24 +67,37 @@ export const dynamic = "force-dynamic";
  *           text/csv:
  *             schema:
  *               type: string
+ *       400:
+ *         description: Filtre structuré vide ou invalide
  */
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
-  const status = searchParams.get("status") as AffairStatus | null;
-  const category = searchParams.get("category") as AffairCategory | null;
+  const status = searchParams.get("status");
+  const category = searchParams.get("category");
   const politicianId = searchParams.get("politicianId");
   const { limit } = parsePagination(searchParams, {
     defaultLimit: 10000,
     maxLimit: 50000,
   });
 
-  const where: Record<string, unknown> = {
-    publicationStatus: "PUBLISHED",
+  if (status !== null && !Object.values(AffairStatus).includes(status as AffairStatus)) {
+    return NextResponse.json({ error: "Statut judiciaire invalide" }, { status: 400 });
+  }
+  if (category !== null && !Object.values(AffairCategory).includes(category as AffairCategory)) {
+    return NextResponse.json({ error: "Catégorie d'affaire invalide" }, { status: 400 });
+  }
+  if (politicianId !== null && politicianId.length === 0) {
+    return NextResponse.json({ error: "Politicien invalide" }, { status: 400 });
+  }
+
+  const where: Prisma.AffairWhereInput = {
+    ...getPublishedAffairWhere(),
+    politician: { publicationStatus: "PUBLISHED" },
+    ...(status !== null && { status: status as AffairStatus }),
+    ...(category !== null && { category: category as AffairCategory }),
+    ...(politicianId !== null && { politicianId }),
   };
-  if (status) where.status = status;
-  if (category) where.category = category;
-  if (politicianId) where.politicianId = politicianId;
 
   const affairs = await db.affair.findMany({
     where,

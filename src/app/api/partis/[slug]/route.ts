@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 /**
  * @openapi
  * /api/partis/{slug}:
  *   get:
  *     summary: Détail d'un parti politique
- *     description: Retourne les informations détaillées d'un parti avec ses membres actuels, identifiants externes et filiation
+ *     description: Retourne les informations détaillées d'un parti avec ses membres publiés, identifiants externes et filiation
  *     tags: [Partis]
  *     parameters:
  *       - in: path
@@ -19,7 +21,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         description: Slug du parti (ex. "les-republicains")
  *     responses:
  *       200:
- *         description: Détail du parti avec membres et historique de direction
+ *         description: Détail du parti avec membres publiés et historique de direction public
  *         content:
  *           application/json:
  *             schema:
@@ -29,7 +31,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                   properties:
  *                     leadership:
  *                       type: array
- *                       description: Historique des dirigeants du parti (actuel et passés)
+ *                       description: Historique des dirigeants publiés du parti (actuel et passés)
  *                       items:
  *                         type: object
  *                         properties:
@@ -69,10 +71,11 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 export const GET = withPublicRoute(async (_request, context) => {
   const { slug } = await context.params;
 
-  const party = await db.party.findUnique({
-    where: { slug },
+  const party = await db.party.findFirst({
+    where: { slug, ...PUBLIC_PARTY_WHERE },
     include: {
       politicians: {
+        where: PUBLIC_POLITICIAN_WHERE,
         select: {
           id: true,
           slug: true,
@@ -83,16 +86,25 @@ export const GET = withPublicRoute(async (_request, context) => {
             select: { type: true, title: true },
             take: 1,
           },
-          _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" } } } },
+          _count: { select: { affairs: { where: getPublishedAffairWhere() } } },
         },
       },
       externalIds: {
         select: { source: true, externalId: true, url: true },
       },
       predecessor: {
-        select: { id: true, slug: true, name: true, shortName: true },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          shortName: true,
+          _count: {
+            select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } },
+          },
+        },
       },
       successors: {
+        where: PUBLIC_PARTY_WHERE,
         select: { id: true, slug: true, name: true, shortName: true },
       },
     },
@@ -102,9 +114,14 @@ export const GET = withPublicRoute(async (_request, context) => {
     return NextResponse.json({ error: "Parti non trouvé" }, { status: 404 });
   }
 
-  // Fetch leadership history
+  // Fetch leadership history, but never expose an unpublished politician through
+  // an otherwise public party endpoint.
   const leadership = await db.mandate.findMany({
-    where: { type: "PRESIDENT_PARTI", partyId: party.id },
+    where: {
+      type: "PRESIDENT_PARTI",
+      partyId: party.id,
+      politician: { publicationStatus: "PUBLISHED" },
+    },
     select: {
       id: true,
       title: true,
@@ -118,7 +135,7 @@ export const GET = withPublicRoute(async (_request, context) => {
     orderBy: { startDate: "desc" },
   });
 
-  const { politicians, ...rest } = party;
+  const { politicians, predecessor, ...rest } = party;
 
   const members = politicians.map(({ mandates, _count, ...p }) => ({
     ...p,
@@ -129,6 +146,15 @@ export const GET = withPublicRoute(async (_request, context) => {
   return withCache(
     NextResponse.json({
       ...rest,
+      predecessor:
+        predecessor && predecessor._count.politicians > 0
+          ? {
+              id: predecessor.id,
+              slug: predecessor.slug,
+              name: predecessor.name,
+              shortName: predecessor.shortName,
+            }
+          : null,
       memberCount: members.length,
       members,
       leadership: leadership.map((m) => ({

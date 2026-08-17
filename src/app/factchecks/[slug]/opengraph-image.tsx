@@ -1,7 +1,9 @@
 import { ImageResponse } from "next/og";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OgBadge, OG_SIZE, truncateOg } from "@/lib/og-utils";
 import type { FactCheckRating } from "@/generated/prisma";
+import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
 
 export const alt = "Fact-check sur Poligraph";
 export const size = OG_SIZE;
@@ -31,8 +33,8 @@ const RATING_COLORS: Partial<Record<FactCheckRating, string>> = {
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const factCheck = await db.factCheck.findUnique({
-    where: { slug },
+  const factCheck = await db.factCheck.findFirst({
+    where: { slug, ...getPublicFactCheckWhere() },
     select: {
       title: true,
       claimText: true,
@@ -42,23 +44,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   });
 
   if (!factCheck) {
-    return new ImageResponse(
-      <OgLayout>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 32,
-          }}
-        >
-          Fact-check non trouvé
-        </div>
-      </OgLayout>,
-      { ...OG_SIZE }
-    );
+    notFound();
   }
 
   const ratingLabel = RATING_LABELS[factCheck.verdictRating] || factCheck.verdictRating;

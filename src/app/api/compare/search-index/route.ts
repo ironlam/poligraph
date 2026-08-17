@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 /**
  * Lightweight search index for client-side autocomplete in the compare page.
@@ -15,9 +16,7 @@ async function getSearchIndex() {
 
   const [politicians, parties, groups] = await Promise.all([
     db.politician.findMany({
-      where: {
-        publicationStatus: "PUBLISHED",
-      },
+      where: PUBLIC_POLITICIAN_WHERE,
       select: {
         slug: true,
         fullName: true,
@@ -44,10 +43,8 @@ async function getSearchIndex() {
     }),
     db.party.findMany({
       where: {
+        ...PUBLIC_PARTY_WHERE,
         dissolvedDate: null,
-        politicians: {
-          some: {},
-        },
       },
       select: {
         slug: true,
@@ -56,7 +53,7 @@ async function getSearchIndex() {
         color: true,
         logoUrl: true,
         _count: {
-          select: { politicians: true },
+          select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } },
         },
       },
       orderBy: [{ name: "asc" }],

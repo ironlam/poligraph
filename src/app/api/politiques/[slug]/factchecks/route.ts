@@ -3,13 +3,14 @@ import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
 
 /**
  * @openapi
  * /api/politiques/{slug}/factchecks:
  *   get:
  *     summary: Fact-checks mentionnant un politicien
- *     description: Retourne la liste paginée des fact-checks mentionnant ce politicien
+ *     description: Retourne les fact-checks publiés et autorisés mentionnant un politicien publié
  *     tags: [Politiques]
  *     parameters:
  *       - in: path
@@ -17,7 +18,6 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         required: true
  *         schema:
  *           type: string
- *         description: Identifiant unique du représentant (ex. marine-le-pen)
  *       - in: query
  *         name: page
  *         schema:
@@ -34,8 +34,23 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *     responses:
  *       200:
  *         description: Fact-checks du politicien avec pagination
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 politician:
+ *                   $ref: '#/components/schemas/PoliticianSummary'
+ *                 factchecks:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/FactCheck'
+ *                 total:
+ *                   type: integer
+ *                 pagination:
+ *                   $ref: '#/components/schemas/Pagination'
  *       404:
- *         description: Politicien non trouvé
+ *         description: Politicien non trouvé ou non publié
  *       500:
  *         description: Erreur serveur
  */
@@ -45,8 +60,8 @@ export const GET = withPublicRoute(async (request, context) => {
 
   const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     select: {
       id: true,
       slug: true,
@@ -61,10 +76,13 @@ export const GET = withPublicRoute(async (request, context) => {
   });
 
   if (!politician) {
-    return NextResponse.json({ error: "Politicien non trouvé" }, { status: 404 });
+    return NextResponse.json({ error: "Politicien non trouvé ou non publié" }, { status: 404 });
   }
 
-  const mentionWhere = { politicianId: politician.id };
+  const mentionWhere = {
+    politicianId: politician.id,
+    factCheck: getPublicFactCheckWhere(),
+  };
 
   const [mentions, total] = await Promise.all([
     db.factCheckMention.findMany({

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  findUnique: vi.fn(),
+  findFirst: vi.fn(),
   findMany: vi.fn(),
   count: vi.fn(),
   getVotingStats: vi.fn(),
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({
   db: {
-    politician: { findUnique: mocks.findUnique },
+    politician: { findFirst: mocks.findFirst },
     vote: { findMany: mocks.findMany, count: mocks.count },
   },
 }));
@@ -24,7 +24,7 @@ describe("GET /api/politiques/[slug]/votes", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("sérialise l'indisponibilité Sénat sans taux numérique", async () => {
-    mocks.findUnique.mockResolvedValue({
+    mocks.findFirst.mockResolvedValue({
       id: "senateur-1",
       slug: "nathalie-delattre",
       fullName: "Nathalie Delattre",
@@ -53,13 +53,18 @@ describe("GET /api/politiques/[slug]/votes", () => {
     );
     const payload = await response.json();
 
+    expect(mocks.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { slug: "nathalie-delattre", publicationStatus: "PUBLISHED" },
+      })
+    );
     expect(payload.stats.participationRate).toBeNull();
     expect(payload.stats.participationStatus).toBe("SOURCE_INSUFFICIENT");
     expect(typeof payload.stats.participationRate).not.toBe("number");
   });
 
   it("ne publie aucun taux quand les mandats parlementaires courants sont ambigus", async () => {
-    mocks.findUnique.mockResolvedValue({
+    mocks.findFirst.mockResolvedValue({
       id: "mandats-ambigus",
       slug: "mandats-ambigus",
       fullName: "Mandats ambigus",

@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
-import { MandateType, PublicationStatus } from "@/generated/prisma";
+import { MandateType } from "@/generated/prisma";
 import { getPoliticians } from "@/services/politicians";
 import { withCache } from "@/lib/cache";
 import { parsePagination } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 
 const VALID_MANDATE_TYPES = Object.values(MandateType) as string[];
-const VALID_STATUSES = Object.values(PublicationStatus) as string[];
 
 /**
  * @openapi
  * /api/politiques:
  *   get:
  *     summary: Liste des représentants politiques
- *     description: Retourne la liste paginée des représentants politiques français
+ *     description: Retourne la liste paginée des représentants politiques publiés
  *     tags: [Politiques]
  *     parameters:
  *       - in: query
@@ -30,20 +29,19 @@ const VALID_STATUSES = Object.values(PublicationStatus) as string[];
  *         name: mandateType
  *         schema:
  *           type: string
- *           enum: [DEPUTE, SENATEUR, DEPUTE_EUROPEEN, PRESIDENT, PREMIER_MINISTRE, MINISTRE, SECRETAIRE_ETAT, MAIRE, PRESIDENT_REGION, PRESIDENT_DEPARTEMENT, CONSEILLER_REGIONAL, CONSEILLER_DEPARTEMENTAL, CONSEILLER_MUNICIPAL]
+ *           enum: [DEPUTE, SENATEUR, DEPUTE_EUROPEEN, PRESIDENT_REPUBLIQUE, PREMIER_MINISTRE, MINISTRE, MINISTRE_DELEGUE, SECRETAIRE_ETAT, MAIRE, ADJOINT_MAIRE, PRESIDENT_REGION, VICE_PRESIDENT_REGION, PRESIDENT_DEPARTEMENT, VICE_PRESIDENT_DEPARTEMENT, CONSEILLER_REGIONAL, CONSEILLER_DEPARTEMENTAL, CONSEILLER_MUNICIPAL, PRESIDENT_PARTI, OTHER]
  *         description: Filtrer par type de mandat actuel
  *       - in: query
  *         name: hasAffairs
  *         schema:
  *           type: boolean
- *         description: Filtrer les politiques avec/sans affaires judiciaires
+ *         description: Filtrer les politiques avec/sans affaires judiciaires publiées
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           enum: ["PUBLISHED", "DRAFT", "ARCHIVED", "all"]
- *           default: "PUBLISHED"
- *         description: Statut de publication (défaut PUBLISHED)
+ *           enum: ["PUBLISHED"]
+ *         description: Paramètre conservé pour compatibilité ; seule la valeur PUBLISHED est publique
  *       - in: query
  *         name: sort
  *         schema:
@@ -80,6 +78,8 @@ const VALID_STATUSES = Object.values(PublicationStatus) as string[];
  *                     $ref: '#/components/schemas/Politician'
  *                 pagination:
  *                   $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         description: Filtre invalide ou tentative d'accès à un statut non public
  *       500:
  *         description: Erreur serveur
  *         content:
@@ -91,29 +91,44 @@ export const GET = withPublicRoute(async (request) => {
   const { searchParams } = new URL(request.url);
 
   const search = searchParams.get("search") || undefined;
-  const partyId = searchParams.get("partyId") || undefined;
-  const mandateTypeParam = searchParams.get("mandateType") || undefined;
-  const validMandateType =
-    mandateTypeParam && VALID_MANDATE_TYPES.includes(mandateTypeParam)
-      ? (mandateTypeParam as MandateType)
-      : undefined;
+  const partyIdParam = searchParams.get("partyId");
+  const mandateTypeParam = searchParams.get("mandateType");
+  if (partyIdParam !== null && partyIdParam.length === 0) {
+    return NextResponse.json({ error: "Parti invalide" }, { status: 400 });
+  }
+  if (mandateTypeParam !== null && !VALID_MANDATE_TYPES.includes(mandateTypeParam)) {
+    return NextResponse.json({ error: "Type de mandat invalide" }, { status: 400 });
+  }
+  const partyId = partyIdParam ?? undefined;
+  const validMandateType = mandateTypeParam as MandateType | null;
+
   const hasAffairsParam = searchParams.get("hasAffairs");
+  if (hasAffairsParam !== null && hasAffairsParam !== "true" && hasAffairsParam !== "false") {
+    return NextResponse.json({ error: "Filtre hasAffairs invalide" }, { status: 400 });
+  }
   const hasAffairs =
     hasAffairsParam === "true" ? true : hasAffairsParam === "false" ? false : undefined;
-  const statusParam = searchParams.get("status") || "PUBLISHED";
-  const validStatus =
-    statusParam !== "all" && VALID_STATUSES.includes(statusParam)
-      ? (statusParam as PublicationStatus)
-      : undefined;
+
+  const statusParam = searchParams.get("status");
+  if (statusParam !== null && statusParam !== "PUBLISHED") {
+    return NextResponse.json(
+      { error: "Seuls les représentants publiés sont accessibles" },
+      { status: 400 }
+    );
+  }
+
   const sort = searchParams.get("sort");
+  if (sort !== null && sort !== "name" && sort !== "prominence") {
+    return NextResponse.json({ error: "Tri invalide" }, { status: 400 });
+  }
   const { page, limit } = parsePagination(searchParams, { defaultLimit: 20 });
 
   const result = await getPoliticians({
     search,
     partyId,
-    mandateType: validMandateType,
+    mandateType: validMandateType ?? undefined,
     hasAffairs,
-    ...(statusParam !== "all" && validStatus && { publicationStatus: validStatus }),
+    publicationStatus: "PUBLISHED",
     ...(sort === "prominence" && { sortBy: "prominence" as const }),
     page,
     limit,

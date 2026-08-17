@@ -47,8 +47,8 @@ jobs:
             while IFS=: read -r linenum rest; do
               START=$((linenum > 12 ? linenum - 12 : 1))
               CONTEXT=$(sed -n "${START},${linenum}p" "$f")
-              DATA_LINE=$(echo "$CONTEXT" | grep -n 'data:' | tail -1 | cut -d: -f1)
-              WHERE_LINE=$(echo "$CONTEXT" | grep -n 'where\|Where' | tail -1 | cut -d: -f1)
+              DATA_LINE=$(echo "$CONTEXT" | grep -n 'data:' | tail -1 | cut -d: -f1 || true)
+              WHERE_LINE=$(echo "$CONTEXT" | grep -n 'where\|Where' | tail -1 | cut -d: -f1 || true)
               if [ -n "$DATA_LINE" ] && { [ -z "$WHERE_LINE" ] || [ "$DATA_LINE" -gt "$WHERE_LINE" ]; }; then
                 echo "::error file=$f,line=$linenum::Écriture directe de publicationStatus PUBLISHED hors publish-guard"
                 FOUND=1

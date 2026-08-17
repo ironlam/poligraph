@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
+import {
+  getPublicFactCheckWhere,
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 /**
  * @openapi
@@ -38,11 +43,16 @@ import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
  */
 export const GET = withPublicRoute(async () => {
   const [politicians, parties, affairs, scrutins, factchecks] = await Promise.all([
-    db.politician.count({ where: { publicationStatus: "PUBLISHED" } }),
-    db.party.count(),
-    db.affair.count({ where: { publicationStatus: "PUBLISHED" } }),
+    db.politician.count({ where: PUBLIC_POLITICIAN_WHERE }),
+    db.party.count({ where: PUBLIC_PARTY_WHERE }),
+    db.affair.count({
+      where: {
+        ...getPublishedAffairWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
+      },
+    }),
     db.scrutin.count(),
-    db.factCheck.count({ where: { source: { in: FACTCHECK_ALLOWED_SOURCES } } }),
+    db.factCheck.count({ where: getPublicFactCheckWhere() }),
   ]);
 
   return withCache(

@@ -4,33 +4,35 @@ import { AffairStatus, AffairCategory, Involvement } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { getPublicAffairSemantics } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 /**
  * @openapi
  * /api/affaires:
  *   get:
  *     summary: Liste des affaires judiciaires
- *     description: Retourne la liste paginée des affaires judiciaires documentées avec leurs sources
+ *     description: Retourne la liste paginée des affaires publiées de personnalités publiées, avec leurs sources, leur rôle et la sémantique éditoriale canonique
  *     tags: [Affaires]
  *     parameters:
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *           enum: [ENQUETE_PRELIMINAIRE, MISE_EN_EXAMEN, PROCES_EN_COURS, CONDAMNATION_PREMIERE_INSTANCE, APPEL_EN_COURS, POURVOI_EN_CASSATION, CONDAMNATION_DEFINITIVE, RELAXE, NON_LIEU, PRESCRIPTION]
+ *           enum: [ENQUETE_PRELIMINAIRE, INSTRUCTION, INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN, MISE_EN_EXAMEN, RENVOI_TRIBUNAL, PROCES_EN_COURS, CONDAMNATION_PREMIERE_INSTANCE, APPEL_EN_COURS, POURVOI_EN_CASSATION, CONDAMNATION_DEFINITIVE, RELAXE, ACQUITTEMENT, NON_LIEU, PRESCRIPTION, CLASSEMENT_SANS_SUITE]
  *         description: Filtrer par statut judiciaire
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
- *           enum: [CORRUPTION, FRAUDE_FISCALE, BLANCHIMENT, TRAFIC_INFLUENCE, PRISE_ILLEGALE_INTERET, VIOLENCE, HARCELEMENT_SEXUEL, DIFFAMATION]
+ *           enum: [CORRUPTION, CORRUPTION_PASSIVE, TRAFIC_INFLUENCE, PRISE_ILLEGALE_INTERETS, FAVORITISME, DETOURNEMENT_FONDS_PUBLICS, FRAUDE_FISCALE, BLANCHIMENT, ABUS_BIENS_SOCIAUX, ABUS_CONFIANCE, EMPLOI_FICTIF, FINANCEMENT_ILLEGAL_CAMPAGNE, FINANCEMENT_ILLEGAL_PARTI, HARCELEMENT_MORAL, HARCELEMENT_SEXUEL, AGRESSION_SEXUELLE, VIOLENCE, MENACE, DIFFAMATION, INJURE, INCITATION_HAINE, FAUX_ET_USAGE_FAUX, RECEL, CONFLIT_INTERETS, AUTRE]
  *         description: Filtrer par catégorie d'infraction
  *       - in: query
  *         name: involvement
  *         schema:
  *           type: string
  *           default: DIRECT
- *         description: Filtrer par niveau d'implication (valeurs séparées par virgule). Défaut DIRECT.
+ *         description: Filtrer par niveau d'implication (valeurs séparées par virgule). Défaut DIRECT. Les segments vides, séparateurs doublés ou finaux sont invalides.
  *       - in: query
  *         name: page
  *         schema:
@@ -48,7 +50,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         description: Nombre d'éléments par page
  *     responses:
  *       200:
- *         description: Liste des affaires avec pagination
+ *         description: Liste des affaires avec pagination. Chaque item contient involvement et semantics (libellés, prudence, certitude et maturité judiciaire).
  *         content:
  *           application/json:
  *             schema:
@@ -60,6 +62,8 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                     $ref: '#/components/schemas/Affair'
  *                 pagination:
  *                   $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         description: Filtre invalide
  *       500:
  *         description: Erreur serveur
  *         content:
@@ -75,30 +79,26 @@ export const GET = withPublicRoute(async (request) => {
   const involvement = searchParams.get("involvement");
   const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
-  const VALID_INVOLVEMENTS: Involvement[] = [
-    "DIRECT",
-    "INDIRECT",
-    "MENTIONED_ONLY",
-    "VICTIM",
-    "PLAINTIFF",
-  ];
-  const requestedInvolvements: Involvement[] = involvement
-    ? (involvement
-        .split(",")
-        .filter((v) => VALID_INVOLVEMENTS.includes(v as Involvement)) as Involvement[])
-    : ["DIRECT"];
+  const validInvolvements = Object.values(Involvement) as string[];
+  const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];
+  if (involvementValues.some((value) => !validInvolvements.includes(value))) {
+    return NextResponse.json({ error: "Niveau d'implication invalide" }, { status: 400 });
+  }
+  const requestedInvolvements = involvementValues as Involvement[];
 
-  const validStatus =
-    status && Object.values(AffairStatus).includes(status as AffairStatus)
-      ? (status as AffairStatus)
-      : undefined;
-  const validCategory =
-    category && Object.values(AffairCategory).includes(category as AffairCategory)
-      ? (category as AffairCategory)
-      : undefined;
+  if (status !== null && !Object.values(AffairStatus).includes(status as AffairStatus)) {
+    return NextResponse.json({ error: "Statut judiciaire invalide" }, { status: 400 });
+  }
+  if (category !== null && !Object.values(AffairCategory).includes(category as AffairCategory)) {
+    return NextResponse.json({ error: "Catégorie d'affaire invalide" }, { status: 400 });
+  }
+
+  const validStatus = status as AffairStatus | null;
+  const validCategory = category as AffairCategory | null;
 
   const where = {
-    publicationStatus: "PUBLISHED" as const,
+    ...getPublishedAffairWhere(),
+    politician: { publicationStatus: "PUBLISHED" as const },
     involvement: { in: requestedInvolvements },
     ...(validStatus && { status: validStatus }),
     ...(validCategory && { category: validCategory }),
@@ -114,6 +114,7 @@ export const GET = withPublicRoute(async (request) => {
         description: true,
         status: true,
         category: true,
+        involvement: true,
         factsDate: true,
         startDate: true,
         verdictDate: true,
@@ -154,7 +155,10 @@ export const GET = withPublicRoute(async (request) => {
 
   return withCache(
     NextResponse.json({
-      data: affairs,
+      data: affairs.map((affair) => ({
+        ...affair,
+        semantics: getPublicAffairSemantics(affair),
+      })),
       pagination: buildPaginationMeta(page, limit, total),
     }),
     "daily"

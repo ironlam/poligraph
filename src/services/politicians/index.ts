@@ -1,4 +1,6 @@
 import { db } from "@/lib/db";
+import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import type {
   PoliticianFilters,
   PaginatedResponse,
@@ -22,6 +24,11 @@ export async function getPoliticians(
     sortBy = "name",
   } = filters;
 
+  // Public politician collections must never infer the existence of a non-public
+  // affair. Admin callers using another politician publication status keep the
+  // previous all-affairs semantics for their private workflow.
+  const affairRelationWhere = publicationStatus === "PUBLISHED" ? getPublishedAffairWhere() : {};
+
   const where = {
     publicationStatus,
     ...(search && {
@@ -40,7 +47,7 @@ export async function getPoliticians(
       },
     }),
     ...(hasAffairs !== undefined && {
-      affairs: hasAffairs ? { some: {} } : { none: {} },
+      affairs: hasAffairs ? { some: affairRelationWhere } : { none: affairRelationWhere },
     }),
   };
 
@@ -72,8 +79,8 @@ export async function getPoliticians(
 }
 
 export async function getPoliticianBySlug(slug: string): Promise<PoliticianFull | null> {
-  return db.politician.findUnique({
-    where: { slug },
+  return db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     include: {
       currentParty: true,
       mandates: {
@@ -89,7 +96,7 @@ export async function getPoliticianBySlug(slug: string): Promise<PoliticianFull 
         },
       },
       affairs: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: getPublishedAffairWhere(),
         include: {
           sources: true,
         },
@@ -99,7 +106,13 @@ export async function getPoliticianBySlug(slug: string): Promise<PoliticianFull 
         orderBy: { year: "desc" },
       },
       _count: {
-        select: { factCheckMentions: true },
+        select: {
+          factCheckMentions: {
+            where: {
+              factCheck: getPublicFactCheckWhere(),
+            },
+          },
+        },
       },
     },
   });
@@ -114,7 +127,7 @@ export async function getPoliticianById(id: string): Promise<PoliticianFull | nu
         orderBy: { startDate: "desc" },
       },
       affairs: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: getPublishedAffairWhere(),
         include: {
           sources: true,
         },

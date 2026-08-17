@@ -1,5 +1,6 @@
 import type { PressStory, WeeklyRecapData } from "@/lib/data/recap";
 import { getISOWeekNumber } from "@/lib/data/recap";
+import { CERTAINTY_LABELS } from "@/config/certainty";
 import { WEEKLY_RECAP_HTML } from "./templates/weekly-recap-compiled";
 
 // ---------------------------------------------------------------------------
@@ -48,13 +49,7 @@ const CERTAINTY_EMAIL_COLORS: Record<string, string> = {
   CLOS_FAVORABLE: "#6b7280",
 };
 
-const CERTAINTY_EMAIL_LABELS: Record<string, string> = {
-  ETABLI: "Condamnation definitive",
-  PRONONCE: "Condamnation non definitive",
-  EN_COURS: "Procedure en cours",
-  CLOS_SANS_CHARGE: "Instruction close, sans mise en examen",
-  CLOS_FAVORABLE: "Procedure close",
-};
+const CERTAINTY_EMAIL_LABELS: Record<string, string> = CERTAINTY_LABELS;
 
 // ---------------------------------------------------------------------------
 // HTML escaping

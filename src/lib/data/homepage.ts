@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { cacheTag, cacheLife } from "next/cache";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
+import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
   getConvictionOnlyWhere,
   getMisEnCauseWhere,
@@ -30,17 +30,18 @@ export async function getHomepageKPIs(): Promise<HomepageKPIs> {
     votesCount,
     factchecksCount,
   ] = await Promise.all([
-    db.politician.count({ where: { publicationStatus: "PUBLISHED" } }),
-    db.affair.count({ where: getConvictionOnlyWhere() }),
-    db.affair.count({ where: getMisEnCauseWhere() }),
-    db.affair.count({ where: getFavorableOutcomeWhere() }),
-    db.scrutin.count(),
-    db.factCheck.count({
-      where: {
-        publicationStatus: "PUBLISHED",
-        source: { in: FACTCHECK_ALLOWED_SOURCES },
-      },
+    db.politician.count({ where: PUBLIC_POLITICIAN_WHERE }),
+    db.affair.count({
+      where: { ...getConvictionOnlyWhere(), politician: PUBLIC_POLITICIAN_WHERE },
     }),
+    db.affair.count({
+      where: { ...getMisEnCauseWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+    }),
+    db.affair.count({
+      where: { ...getFavorableOutcomeWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+    }),
+    db.scrutin.count(),
+    db.factCheck.count({ where: getPublicFactCheckWhere() }),
   ]);
 
   return {

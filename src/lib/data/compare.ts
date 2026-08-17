@@ -6,6 +6,13 @@ import { participationStatusFor } from "@/lib/votes/participation-publication";
 import { CATEGORY_MANDATE_TYPES } from "@/types/compare";
 import type { CompareCategory } from "@/types/compare";
 import type { MandateType, Involvement } from "@/types";
+import {
+  getPublicFactCheckWhere,
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -124,8 +131,8 @@ async function getPoliticianPreview(
   cacheTag(`politician:${slug}`);
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     select: {
       slug: true,
       fullName: true,
@@ -167,14 +174,14 @@ async function getPartyPreview(slugOrId: string): Promise<ComparePreview | null>
   cacheLife("synced");
 
   const party = await db.party.findFirst({
-    where: { OR: [{ slug: slugOrId }, { id: slugOrId }] },
+    where: { ...PUBLIC_PARTY_WHERE, OR: [{ slug: slugOrId }, { id: slugOrId }] },
     select: {
       slug: true,
       name: true,
       shortName: true,
       color: true,
       logoUrl: true,
-      _count: { select: { politicians: true } },
+      _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
     },
   });
 
@@ -257,7 +264,11 @@ const POLITICIAN_COMPARISON_SELECT = {
       slug: true,
     },
   },
-  _count: { select: { factCheckMentions: { where: { isClaimant: true } } } },
+  _count: {
+    select: {
+      factCheckMentions: { where: { isClaimant: true, factCheck: getPublicFactCheckWhere() } },
+    },
+  },
   mandates: {
     orderBy: { startDate: "desc" as const },
     select: {
@@ -284,7 +295,7 @@ const POLITICIAN_COMPARISON_SELECT = {
     // Only affairs where the politician is the accused feed the comparison
     // counts; victim/plaintiff/mentioned affairs are not their condamnations (#383).
     where: {
-      publicationStatus: "PUBLISHED" as const,
+      ...getPublishedAffairWhere(),
       involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
     },
     select: { id: true, status: true, severity: true },
@@ -310,7 +321,7 @@ const POLITICIAN_COMPARISON_SELECT = {
     },
   },
   factCheckMentions: {
-    where: { isClaimant: true },
+    where: { isClaimant: true, factCheck: getPublicFactCheckWhere() },
     take: 20,
     orderBy: { factCheck: { publishedAt: "desc" as const } },
     include: {
@@ -328,8 +339,8 @@ async function getPoliticianForComparison(slug: string, mandateType: string) {
   cacheTag(`politician:${slug}`, "votes");
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     select: POLITICIAN_COMPARISON_SELECT,
   });
 
@@ -384,8 +395,8 @@ async function getMinistreForComparison(slug: string) {
   cacheTag(`politician:${slug}`);
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     select: {
       id: true,
       slug: true,
@@ -400,7 +411,13 @@ async function getMinistreForComparison(slug: string) {
           slug: true,
         },
       },
-      _count: { select: { factCheckMentions: { where: { isClaimant: true } } } },
+      _count: {
+        select: {
+          factCheckMentions: {
+            where: { isClaimant: true, factCheck: getPublicFactCheckWhere() },
+          },
+        },
+      },
       mandates: {
         orderBy: { startDate: "desc" },
         select: {
@@ -425,7 +442,7 @@ async function getMinistreForComparison(slug: string) {
       },
       affairs: {
         where: {
-          publicationStatus: "PUBLISHED",
+          ...getPublishedAffairWhere(),
           involvement: { in: ["DIRECT", "INDIRECT"] },
         },
         select: { id: true, status: true, severity: true },
@@ -435,7 +452,7 @@ async function getMinistreForComparison(slug: string) {
         select: { year: true, type: true, details: true },
       },
       factCheckMentions: {
-        where: { isClaimant: true },
+        where: { isClaimant: true, factCheck: getPublicFactCheckWhere() },
         take: 20,
         orderBy: { factCheck: { publishedAt: "desc" } },
         include: {
@@ -480,7 +497,7 @@ async function getPartyForComparison(slugOrId: string) {
   cacheLife("synced");
 
   const party = await db.party.findFirst({
-    where: { OR: [{ slug: slugOrId }, { id: slugOrId }] },
+    where: { ...PUBLIC_PARTY_WHERE, OR: [{ slug: slugOrId }, { id: slugOrId }] },
     select: {
       id: true,
       slug: true,
@@ -491,7 +508,7 @@ async function getPartyForComparison(slugOrId: string) {
       foundedDate: true,
       politicalPosition: true,
       ideology: true,
-      _count: { select: { politicians: true } },
+      _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
     },
   });
 
@@ -502,7 +519,7 @@ async function getPartyForComparison(slugOrId: string) {
     by: ["type"],
     where: {
       isCurrent: true,
-      politician: { currentPartyId: party.id },
+      politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
     },
     _count: true,
   });
@@ -510,9 +527,9 @@ async function getPartyForComparison(slugOrId: string) {
   // Published affairs of members (bounded)
   const affairs = await db.affair.findMany({
     where: {
-      publicationStatus: "PUBLISHED",
+      ...getPublishedAffairWhere(),
       involvement: { in: ["DIRECT", "INDIRECT"] },
-      politician: { currentPartyId: party.id },
+      politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
     },
     select: { id: true, status: true, severity: true },
     orderBy: { updatedAt: "desc" },
@@ -521,7 +538,11 @@ async function getPartyForComparison(slugOrId: string) {
 
   // Fact-check citations (isClaimant) of party members (bounded)
   const factCheckMentions = await db.factCheckMention.findMany({
-    where: { isClaimant: true, politician: { currentPartyId: party.id } },
+    where: {
+      isClaimant: true,
+      factCheck: getPublicFactCheckWhere(),
+      politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
+    },
     include: {
       factCheck: { select: { verdictRating: true } },
     },
@@ -582,6 +603,7 @@ export async function getPartyVoteComparison(leftPartyId: string, rightPartyId: 
       JOIN "Politician" pol ON v."politicianId" = pol.id
       JOIN "Scrutin" s ON v."scrutinId" = s.id
       WHERE pol."currentPartyId" = ${leftPartyId}
+        AND pol."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         AND v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
       GROUP BY v."scrutinId", s.title, s.slug, s."votingDate"
     `,
@@ -606,6 +628,7 @@ export async function getPartyVoteComparison(leftPartyId: string, rightPartyId: 
       JOIN "Politician" pol ON v."politicianId" = pol.id
       JOIN "Scrutin" s ON v."scrutinId" = s.id
       WHERE pol."currentPartyId" = ${rightPartyId}
+        AND pol."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         AND v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
       GROUP BY v."scrutinId", s.title, s.slug, s."votingDate"
     `,
@@ -663,10 +686,20 @@ async function getGroupForComparison(idOrCode: string) {
     where: { OR: [{ id: idOrCode }, { code: idOrCode }] },
     include: {
       defaultParty: {
-        select: { name: true, shortName: true, color: true, slug: true },
+        select: {
+          name: true,
+          shortName: true,
+          color: true,
+          slug: true,
+          _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+        },
       },
       _count: {
-        select: { mandates: { where: { mandate: { isCurrent: true } } } },
+        select: {
+          mandates: {
+            where: { mandate: { isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE } },
+          },
+        },
       },
     },
   });
@@ -675,7 +708,11 @@ async function getGroupForComparison(idOrCode: string) {
 
   // Get member votes through current mandates
   const memberMandates = await db.mandate.findMany({
-    where: { parliamentaryData: { parliamentaryGroupId: group.id }, isCurrent: true },
+    where: {
+      parliamentaryData: { parliamentaryGroupId: group.id },
+      isCurrent: true,
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
     select: {
       politician: {
         select: {
@@ -733,9 +770,10 @@ async function getGroupForComparison(idOrCode: string) {
   // Get published affairs of group members
   const affairs = await db.affair.findMany({
     where: {
-      publicationStatus: "PUBLISHED",
+      ...getPublishedAffairWhere(),
       involvement: { in: ["DIRECT", "INDIRECT"] },
       politician: {
+        ...PUBLIC_POLITICIAN_WHERE,
         mandates: {
           some: {
             parliamentaryData: { parliamentaryGroupId: group.id },
@@ -752,7 +790,9 @@ async function getGroupForComparison(idOrCode: string) {
   const factCheckMentions = await db.factCheckMention.findMany({
     where: {
       isClaimant: true,
+      factCheck: getPublicFactCheckWhere(),
       politician: {
+        ...PUBLIC_POLITICIAN_WHERE,
         mandates: {
           some: {
             parliamentaryData: { parliamentaryGroupId: group.id },
@@ -770,6 +810,15 @@ async function getGroupForComparison(idOrCode: string) {
   return {
     group: {
       ...group,
+      defaultParty:
+        group.defaultParty && group.defaultParty._count.politicians > 0
+          ? {
+              name: group.defaultParty.name,
+              shortName: group.defaultParty.shortName,
+              color: group.defaultParty.color,
+              slug: group.defaultParty.slug,
+            }
+          : null,
       memberCount: group._count.mandates,
     },
     stats: {

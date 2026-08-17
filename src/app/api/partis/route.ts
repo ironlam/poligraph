@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { PoliticalPosition } from "@/generated/prisma";
+import { PoliticalPosition, Prisma } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 /**
  * @openapi
  * /api/partis:
  *   get:
  *     summary: Liste des partis politiques
- *     description: Retourne la liste paginée des partis politiques avec filtres optionnels
+ *     description: Retourne la liste paginée des partis politiques avec filtres optionnels et compte uniquement les membres publiés
  *     tags: [Partis]
  *     parameters:
  *       - in: query
@@ -29,7 +30,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *         schema:
  *           type: string
  *           enum: ["true", "false"]
- *         description: "true = non dissous avec des membres, false = dissous"
+ *         description: "true = non dissous avec au moins un membre publié, false = dissous"
  *       - in: query
  *         name: page
  *         schema:
@@ -59,6 +60,8 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
  *                     $ref: '#/components/schemas/Party'
  *                 pagination:
  *                   $ref: '#/components/schemas/Pagination'
+ *       400:
+ *         description: Filtre invalide
  *       500:
  *         description: Erreur serveur
  *         content:
@@ -74,18 +77,26 @@ export const GET = withPublicRoute(async (request) => {
   const active = searchParams.get("active");
   const { page, limit, skip } = parsePagination(searchParams, { defaultLimit: 20 });
 
-  const where = {
+  if (
+    position !== null &&
+    !Object.values(PoliticalPosition).includes(position as PoliticalPosition)
+  ) {
+    return NextResponse.json({ error: "Position politique invalide" }, { status: 400 });
+  }
+  if (active !== null && active !== "true" && active !== "false") {
+    return NextResponse.json({ error: "Filtre active invalide" }, { status: 400 });
+  }
+
+  const where: Prisma.PartyWhereInput = {
+    ...PUBLIC_PARTY_WHERE,
     ...(search && {
       OR: [
         { name: { contains: search, mode: "insensitive" as const } },
         { shortName: { contains: search, mode: "insensitive" as const } },
       ],
     }),
-    ...(position && { politicalPosition: position as PoliticalPosition }),
-    ...(active === "true" && {
-      dissolvedDate: null,
-      politicians: { some: {} },
-    }),
+    ...(position !== null && { politicalPosition: position as PoliticalPosition }),
+    ...(active === "true" && { dissolvedDate: null }),
     ...(active === "false" && { dissolvedDate: { not: null } }),
   };
 
@@ -105,7 +116,11 @@ export const GET = withPublicRoute(async (request) => {
         foundedDate: true,
         dissolvedDate: true,
         website: true,
-        _count: { select: { politicians: true } },
+        _count: {
+          select: {
+            politicians: { where: PUBLIC_POLITICIAN_WHERE },
+          },
+        },
       },
       orderBy: { name: "asc" },
       skip,

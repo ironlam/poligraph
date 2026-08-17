@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import type {
   WatchlistPolitician,
   WatchlistParty,
@@ -31,7 +33,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
 
   // Resolve slugs to politicians
   const politicians = await db.politician.findMany({
-    where: { slug: { in: slugs }, publicationStatus: "PUBLISHED" },
+    where: { slug: { in: slugs }, ...PUBLIC_POLITICIAN_WHERE },
     select: {
       id: true,
       slug: true,
@@ -89,7 +91,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
           db.affair.findMany({
             where: {
               politicianId: { in: politicianIds },
-              publicationStatus: "PUBLISHED",
+              ...getPublishedAffairWhere(),
               createdAt: { gte: since },
             },
             select: {
@@ -110,14 +112,20 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
   const partyPromise =
     partySlugs.length > 0
       ? db.party.findMany({
-          where: { slug: { in: partySlugs } },
+          where: { slug: { in: partySlugs }, ...PUBLIC_PARTY_WHERE },
           select: {
             id: true,
             slug: true,
             name: true,
             shortName: true,
             color: true,
-            _count: { select: { partyMemberships: { where: { endDate: null } } } },
+            _count: {
+              select: {
+                partyMemberships: {
+                  where: { endDate: null, politician: PUBLIC_POLITICIAN_WHERE },
+                },
+              },
+            },
           },
         })
       : Promise.resolve([]);
@@ -150,7 +158,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
 
     const recentVoteCount = await db.vote.count({
       where: {
-        politician: { currentPartyId: party.id },
+        politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
         votingDate: { gte: since },
       },
     });

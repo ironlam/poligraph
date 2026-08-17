@@ -4,6 +4,11 @@ import { MANDATE_TYPE_LABELS, POLITICAL_POSITION_LABELS } from "@/config/labels"
 import type { MandateType } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import {
+  getMandateStartDatePublicationStatus,
+  getPublicFactCheckWhere,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +79,7 @@ export const GET = withPublicRoute(async (request) => {
   }
 
   if (hasAffairs) {
-    where.affairs = { some: { publicationStatus: "PUBLISHED" } };
+    where.affairs = { some: getPublishedAffairWhere() };
   }
 
   const politicians = await db.politician.findMany({
@@ -109,8 +114,8 @@ export const GET = withPublicRoute(async (request) => {
       },
       _count: {
         select: {
-          affairs: { where: { publicationStatus: "PUBLISHED" } },
-          factCheckMentions: true,
+          affairs: { where: getPublishedAffairWhere() },
+          factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
         },
       },
     },
@@ -140,6 +145,9 @@ export const GET = withPublicRoute(async (request) => {
       currentMandateType: mandate ? MANDATE_TYPE_LABELS[mandate.type] : "",
       currentMandateTitle: mandate?.title ?? "",
       currentMandateStart: formatDateForCSV(mandate?.startDate),
+      currentMandateStartPublicationStatus: mandate
+        ? getMandateStartDatePublicationStatus(mandate.type)
+        : "",
       currentMandateEnd: formatDateForCSV(mandate?.endDate),
       constituency: mandate?.constituency ?? "",
       departmentCode: mandate?.departmentCode ?? "",
@@ -172,6 +180,10 @@ export const GET = withPublicRoute(async (request) => {
     { key: "currentMandateType" as const, header: "Mandat actuel" },
     { key: "currentMandateTitle" as const, header: "Titre du mandat" },
     { key: "currentMandateStart" as const, header: "Début du mandat" },
+    {
+      key: "currentMandateStartPublicationStatus" as const,
+      header: "Statut de publication du début de mandat",
+    },
     { key: "currentMandateEnd" as const, header: "Fin du mandat" },
     { key: "constituency" as const, header: "Circonscription" },
     { key: "departmentCode" as const, header: "Code département" },

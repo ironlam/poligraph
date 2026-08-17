@@ -1,10 +1,12 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { toCSV, formatDateForCSV, formatDateTimeForCSV, createCSVResponse } from "@/lib/csv";
 import { FACTCHECK_RATING_LABELS, POLITICAL_POSITION_LABELS } from "@/config/labels";
+import { FactCheckRating, Prisma } from "@/generated/prisma";
 import { parsePagination } from "@/lib/api/pagination";
-import type { FactCheckRating } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { getPublicFactCheckWhere, isAllowedFactCheckSource } from "@/lib/api/public-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +16,10 @@ export const dynamic = "force-dynamic";
  *   get:
  *     summary: Export CSV des fact-checks
  *     description: >
- *       Retourne les fact-checks publiés au format CSV, dénormalisés par
- *       politique mentionné (une ligne par paire factcheck + politique).
- *       Un fact-check sans mention apparaît sur une seule ligne avec les
- *       colonnes politique vides. Cette structure permet l'agrégation par
- *       parti politique sans join côté client.
+ *       Retourne les fact-checks publiés issus des sources autorisées au format CSV,
+ *       dénormalisés par politique publié mentionné (une ligne par paire
+ *       factcheck + politique). Un fact-check sans mention publique apparaît sur
+ *       une seule ligne avec les colonnes politique vides.
  *     tags: [Exports]
  *     parameters:
  *       - in: query
@@ -30,11 +31,12 @@ export const dynamic = "force-dynamic";
  *         name: source
  *         schema:
  *           type: string
- *         description: Nom du fact-checker (AFP Factuel, Les Décodeurs, etc.)
+ *         description: Source publique autorisée
  *       - in: query
  *         name: politicianSlug
  *         schema:
  *           type: string
+ *         description: Slug d'un politique publié
  *       - in: query
  *         name: limit
  *         schema:
@@ -49,11 +51,13 @@ export const dynamic = "force-dynamic";
  *           text/csv:
  *             schema:
  *               type: string
+ *       400:
+ *         description: Filtre structuré vide, invalide ou non autorisé
  */
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
-  const verdict = searchParams.get("verdict") as FactCheckRating | null;
+  const verdict = searchParams.get("verdict");
   const source = searchParams.get("source");
   const politicianSlug = searchParams.get("politicianSlug");
   const { limit } = parsePagination(searchParams, {
@@ -61,21 +65,33 @@ export const GET = withPublicRoute(async (request) => {
     maxLimit: 50000,
   });
 
-  const where: Record<string, unknown> = {
-    publicationStatus: "PUBLISHED",
-  };
-  if (verdict) where.verdictRating = verdict;
-  if (source) where.source = source;
-  if (politicianSlug) {
-    where.mentions = {
-      some: { politician: { slug: politicianSlug } },
-    };
+  if (source !== null && !isAllowedFactCheckSource(source)) {
+    return NextResponse.json({ error: "Source de fact-check non autorisée" }, { status: 400 });
   }
+  if (verdict !== null && !Object.values(FactCheckRating).includes(verdict as FactCheckRating)) {
+    return NextResponse.json({ error: "Verdict invalide" }, { status: 400 });
+  }
+  if (politicianSlug !== null && politicianSlug.length === 0) {
+    return NextResponse.json({ error: "Politicien invalide" }, { status: 400 });
+  }
+
+  const where: Prisma.FactCheckWhereInput = {
+    ...getPublicFactCheckWhere(source ?? undefined),
+    ...(verdict !== null && { verdictRating: verdict as FactCheckRating }),
+    ...(politicianSlug !== null && {
+      mentions: {
+        some: {
+          politician: { slug: politicianSlug, publicationStatus: "PUBLISHED" },
+        },
+      },
+    }),
+  };
 
   const factchecks = await db.factCheck.findMany({
     where,
     include: {
       mentions: {
+        where: { politician: { publicationStatus: "PUBLISHED" } },
         include: {
           politician: {
             select: {
@@ -99,9 +115,8 @@ export const GET = withPublicRoute(async (request) => {
     take: limit,
   });
 
-  // Denormalise: one row per (factcheck, mention) pair. Factchecks with no
-  // mentioned politicians still emit one row with empty politician columns
-  // so the output is never silently filtered.
+  // Denormalise: one row per (factcheck, public mention) pair. Factchecks with
+  // no public politician mention still emit one row with empty politician columns.
   const data = factchecks.flatMap((fc) => {
     const base = {
       poligraphId: fc.publicId ?? "",

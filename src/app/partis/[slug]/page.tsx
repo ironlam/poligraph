@@ -35,9 +35,12 @@ import { ensureContrast } from "@/lib/contrast";
 import { SITE_URL } from "@/config/site";
 import { db } from "@/lib/db";
 import { FollowButton } from "@/components/politicians/FollowButton";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 
 export async function generateStaticParams() {
   const parties = await db.party.findMany({
+    where: PUBLIC_PARTY_WHERE,
     select: { slug: true },
     orderBy: { name: "asc" },
     take: 50,
@@ -115,9 +118,9 @@ export default async function PartyPage({ params }: PageProps) {
     getPartyPlatform(slug),
     db.affair.count({
       where: {
-        publicationStatus: "PUBLISHED",
-        involvement: { in: ["DIRECT", "INDIRECT"] },
+        ...getConvictionOnlyWhere(),
         status: "CONDAMNATION_DEFINITIVE",
+        politician: PUBLIC_POLITICIAN_WHERE,
         OR: [
           { partyAtTime: { slug: party.slug } },
           { politician: { currentParty: { slug: party.slug } } },

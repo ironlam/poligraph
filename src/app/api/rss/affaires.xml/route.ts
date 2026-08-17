@@ -4,12 +4,17 @@ import { AFFAIR_CATEGORY_LABELS } from "@/config/labels";
 import type { AffairCategory } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const revalidate = 300;
 
 export const GET = withPublicRoute(async () => {
   const affairs = await db.affair.findMany({
-    where: { publicationStatus: "PUBLISHED" },
+    where: {
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
     orderBy: { createdAt: "desc" },
     take: 50,
     select: {

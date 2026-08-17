@@ -3,13 +3,14 @@ import { getPoliticianBySlug } from "@/services/politicians";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { computeAffairCounts } from "@/lib/affairs/affair-counts";
+import { getMandateStartDatePublicationStatus } from "@/lib/api/public-contract";
 
 /**
  * @openapi
  * /api/politiques/{slug}:
  *   get:
- *     summary: Détails d'un représentant politique
- *     description: Retourne les informations détaillées d'un représentant politique, incluant ses mandats et déclarations
+ *     summary: Détails d'un représentant politique publié
+ *     description: Retourne les informations détaillées d'un représentant politique publié, incluant ses mandats, déclarations et compteurs éditoriaux role-aware
  *     tags: [Politiques]
  *     parameters:
  *       - in: path
@@ -20,13 +21,13 @@ import { computeAffairCounts } from "@/lib/affairs/affair-counts";
  *         description: Identifiant unique du représentant (ex. emmanuel-macron)
  *     responses:
  *       200:
- *         description: Détails du représentant politique
+ *         description: Détails du représentant politique. Les mandats contiennent startDatePublicationStatus ; affairsCount est conservé pour compatibilité et les compteurs par rôle font foi éditorialement.
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/PoliticianDetails'
  *       404:
- *         description: Représentant non trouvé
+ *         description: Représentant non trouvé ou non publié
  *         content:
  *           application/json:
  *             schema:
@@ -38,14 +39,16 @@ import { computeAffairCounts } from "@/lib/affairs/affair-counts";
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-export const GET = withPublicRoute(async (request, context) => {
+export const GET = withPublicRoute(async (_request, context) => {
   const params = await context.params;
   const slug = params["slug"]!;
 
   const politician = await getPoliticianBySlug(slug);
 
+  // Public callers must not be able to distinguish an absent record from a
+  // record that exists but is outside the PUBLISHED corpus.
   if (!politician) {
-    return NextResponse.json({ error: "Représentant non trouvé" }, { status: 404 });
+    return NextResponse.json({ error: "Représentant non trouvé ou non publié" }, { status: 404 });
   }
 
   return withCache(
@@ -81,6 +84,7 @@ export const GET = withPublicRoute(async (request, context) => {
           institution: mandate.institution,
           constituency: mandate.constituency,
           startDate: mandate.startDate,
+          startDatePublicationStatus: getMandateStartDatePublicationStatus(mandate.type),
           endDate: mandate.endDate,
           isCurrent: mandate.isCurrent,
           parliamentaryGroup: mandate.parliamentaryData?.parliamentaryGroup
@@ -100,6 +104,8 @@ export const GET = withPublicRoute(async (request, context) => {
         hatvpUrl: d.hatvpUrl,
         details: d.details,
       })),
+      // Legacy compatibility total: all published affairs across roles. Consumers
+      // must use the role-aware counters below for editorial presentation.
       affairsCount: politician.affairs.length,
       ...computeAffairCounts(politician.affairs),
       factchecksCount:

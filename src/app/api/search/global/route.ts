@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { parsePagination } from "@/lib/api/pagination";
+import { getPublicFactCheckSqlWhere, getPublicPartySqlWhere } from "@/lib/api/public-contract";
 
 const MAX_LIMIT = 8;
 
@@ -44,10 +44,10 @@ interface RawScrutin {
 }
 
 interface RawFactCheck {
-  slug: string;
+  slug: string | null;
   title: string;
   source: string;
-  verdictRating: string | null;
+  verdictRating: string;
   publishedAt: Date;
   politicianName: string | null;
 }
@@ -109,19 +109,21 @@ export const GET = withPublicRoute(async (request) => {
         LIMIT ${limit}
       `,
 
-      // Parties: accent-insensitive on name/shortName
+      // Parties: accent-insensitive on name/shortName; public member count only.
       db.$queryRaw<RawParty[]>`
         SELECT p."slug", p."name", p."shortName", p."color",
                (SELECT COUNT(*) FROM "Politician" pol
-                WHERE pol."currentPartyId" = p."id")::bigint AS "memberCount"
+                WHERE pol."currentPartyId" = p."id"
+                  AND pol."publicationStatus" = 'PUBLISHED')::bigint AS "memberCount"
         FROM "Party" p
-        WHERE unaccent(p."name") ILIKE unaccent(${pattern})
-           OR unaccent(p."shortName") ILIKE unaccent(${Prisma.sql`${query}`})
+        WHERE ${getPublicPartySqlWhere()}
+          AND (unaccent(p."name") ILIKE unaccent(${pattern})
+            OR unaccent(p."shortName") ILIKE unaccent(${Prisma.sql`${query}`}))
         ORDER BY p."name" ASC
         LIMIT ${limit}
       `,
 
-      // Affairs: accent-insensitive on title
+      // Affairs: public affairs tied to public politicians only.
       db.$queryRaw<RawAffair[]>`
         SELECT a."slug", a."title", a."status",
                pol."fullName" AS "politicianName",
@@ -129,6 +131,7 @@ export const GET = withPublicRoute(async (request) => {
         FROM "Affair" a
         JOIN "Politician" pol ON pol."id" = a."politicianId"
         WHERE a."publicationStatus" = 'PUBLISHED'
+          AND pol."publicationStatus" = 'PUBLISHED'
           AND unaccent(a."title") ILIKE unaccent(${pattern})
         ORDER BY a."createdAt" DESC
         LIMIT ${limit}
@@ -143,17 +146,20 @@ export const GET = withPublicRoute(async (request) => {
         LIMIT ${limit}
       `,
 
-      // Fact-checks: accent-insensitive on title, filtered by allowed sources
+      // Fact-checks: preserve accent-insensitive search while composing the
+      // canonical public publication + allow-list predicate.
       db.$queryRaw<RawFactCheck[]>`
-        SELECT DISTINCT ON (fc."id")
-               fc."slug", fc."title", fc."source", fc."verdictRating", fc."publishedAt",
-               pol."fullName" AS "politicianName"
+        SELECT fc."slug", fc."title", fc."source", fc."verdictRating", fc."publishedAt",
+               (SELECT p."fullName"
+                FROM "FactCheckMention" m
+                JOIN "Politician" p ON p."id" = m."politicianId"
+                WHERE m."factCheckId" = fc."id"
+                  AND p."publicationStatus" = 'PUBLISHED'
+                LIMIT 1) AS "politicianName"
         FROM "FactCheck" fc
-        LEFT JOIN "FactCheckMention" fcm ON fcm."factCheckId" = fc."id"
-        LEFT JOIN "Politician" pol ON pol."id" = fcm."politicianId"
-        WHERE fc."source" = ANY(${FACTCHECK_ALLOWED_SOURCES})
+        WHERE ${getPublicFactCheckSqlWhere()}
           AND unaccent(fc."title") ILIKE unaccent(${pattern})
-        ORDER BY fc."id", fc."publishedAt" DESC
+        ORDER BY fc."publishedAt" DESC
         LIMIT ${limit}
       `,
 

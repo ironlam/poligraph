@@ -1,6 +1,8 @@
 import { ImageResponse } from "next/og";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 export const alt = "Parti politique sur Poligraph";
 export const size = OG_SIZE;
@@ -8,36 +10,20 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const party = await db.party.findUnique({
-    where: { slug },
+  const party = await db.party.findFirst({
+    where: { slug, ...PUBLIC_PARTY_WHERE },
     select: {
       name: true,
       shortName: true,
       color: true,
       logoUrl: true,
       politicalPosition: true,
-      _count: { select: { politicians: true } },
+      _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
     },
   });
 
   if (!party) {
-    return new ImageResponse(
-      <OgLayout>
-        <div
-          style={{
-            display: "flex",
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontSize: 32,
-          }}
-        >
-          Parti non trouvé
-        </div>
-      </OgLayout>,
-      { ...OG_SIZE }
-    );
+    notFound();
   }
 
   const color = party.color || "#6366f1";

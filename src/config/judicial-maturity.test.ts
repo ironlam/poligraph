@@ -134,6 +134,6 @@ describe("palier INSTRUCTION_CLOSE", () => {
   });
 
   it("a un libellé", () => {
-    expect(MATURITY_LABELS.INSTRUCTION_CLOSE).toBe("Instruction close sans mise en examen");
+    expect(MATURITY_LABELS.INSTRUCTION_CLOSE).toBe("Instruction clôturée sans mise en examen");
   });
 });

@@ -9,7 +9,7 @@ interface SlappStatsChartProps {
 const STATUS_LABELS: Record<string, string> = {
   ENQUETE_PRELIMINAIRE: "Enquête préliminaire",
   INSTRUCTION: "Instruction",
-  INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "Instruction close, sans mise en examen",
+  INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "Instruction clôturée, sans mise en examen",
   MISE_EN_EXAMEN: "Mise en examen",
   RENVOI_TRIBUNAL: "Renvoi au tribunal",
   PROCES_EN_COURS: "Procès en cours",

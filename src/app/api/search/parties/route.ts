@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 /**
  * @openapi
@@ -45,11 +46,8 @@ export const GET = withPublicRoute(async (request) => {
 
   const parties = await db.party.findMany({
     where: {
-      AND: [
-        { OR: nameConditions },
-        { politicians: { some: {} } },
-        ...(activeOnly ? [{ dissolvedDate: null }] : []),
-      ],
+      ...PUBLIC_PARTY_WHERE,
+      AND: [{ OR: nameConditions }, ...(activeOnly ? [{ dissolvedDate: null }] : [])],
     },
     select: {
       id: true,
@@ -60,7 +58,7 @@ export const GET = withPublicRoute(async (request) => {
       logoUrl: true,
       _count: {
         select: {
-          politicians: true,
+          politicians: { where: PUBLIC_POLITICIAN_WHERE },
         },
       },
     },

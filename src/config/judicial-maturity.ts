@@ -52,7 +52,7 @@ export const MATURITY_LABELS: Record<JudicialMaturity, string> = {
   CONDAMNATION: "Condamnation",
   PROCEDURE_VALIDEE: "Procédure validée par un juge",
   ENQUETE: "Enquête préliminaire",
-  INSTRUCTION_CLOSE: "Instruction close sans mise en examen",
+  INSTRUCTION_CLOSE: "Instruction clôturée sans mise en examen",
   CLOSE_SANS_CONDAMNATION: "Procédure close sans condamnation",
 };
 

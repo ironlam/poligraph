@@ -32,12 +32,13 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
   const searchParams = request.nextUrl.searchParams;
   const VALID_FILTERS = new Set(["all", "deputes", "senateurs"]);
   const filterParam = searchParams.get("filter");
-  const filter =
-    filterParam && VALID_FILTERS.has(filterParam)
-      ? (filterParam as "all" | "deputes" | "senateurs")
-      : null;
 
-  // Build type filter
+  if (filterParam !== null && !VALID_FILTERS.has(filterParam)) {
+    return NextResponse.json({ error: "Filtre invalide" }, { status: 400 });
+  }
+
+  const filter = (filterParam || "all") as "all" | "deputes" | "senateurs";
+
   const mandateTypes =
     filter === "deputes"
       ? [MandateType.DEPUTE]
@@ -45,7 +46,6 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
         ? [MandateType.SENATEUR]
         : [MandateType.DEPUTE, MandateType.SENATEUR];
 
-  // Get all current mandates with department codes, grouped by department and party
   const mandatesByDept = await db.$queryRaw<
     {
       departmentCode: string;
@@ -69,13 +69,13 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     JOIN "Politician" pol ON m."politicianId" = pol.id
     LEFT JOIN "Party" p ON pol."currentPartyId" = p.id
     WHERE m."isCurrent" = true
+      AND pol."publicationStatus" = 'PUBLISHED'
       AND m."departmentCode" IS NOT NULL
       AND m.type = ANY(${mandateTypes}::"MandateType"[])
     GROUP BY m."departmentCode", m.type, p.id, p.name, p."shortName", p.color
     ORDER BY m."departmentCode", count DESC
   `;
 
-  // Aggregate stats by department
   const deptMap = new Map<string, DepartmentStats>();
 
   for (const row of mandatesByDept) {
@@ -106,7 +106,6 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
       dept.senateurs += count;
     }
 
-    // Track party stats
     if (row.partyId) {
       const existingParty = dept.parties.find((p) => p.id === row.partyId);
       if (existingParty) {
@@ -123,12 +122,9 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     }
   }
 
-  // Calculate dominant party for each department
   for (const dept of deptMap.values()) {
-    // Sort parties by count (descending)
     dept.parties.sort((a, b) => b.count - a.count);
 
-    // Set dominant party only if the top party has strictly more representatives than the second
     if (
       dept.parties.length === 1 ||
       (dept.parties.length > 1 && dept.parties[0]!.count > dept.parties[1]!.count)
@@ -137,12 +133,10 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     }
   }
 
-  // Convert to array and sort by department code
   const departments = Array.from(deptMap.values()).sort((a, b) =>
     a.code.localeCompare(b.code, "fr", { numeric: true })
   );
 
-  // Calculate global stats
   const totalStats = {
     totalDepartments: departments.length,
     totalElus: departments.reduce((sum, d) => sum + d.totalElus, 0),
@@ -154,7 +148,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     NextResponse.json({
       departments,
       stats: totalStats,
-      filter: filter || "all",
+      filter,
     }),
     "stats"
   );

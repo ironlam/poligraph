@@ -1,8 +1,8 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import { FACTCHECK_ALLOWED_SOURCES } from "@/config/labels";
 import { factcheckStatsService } from "@/services/factcheckStats";
 import { decodeHtmlEntities } from "@/lib/parsing/html-utils";
+import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
 import type { FactCheckRating } from "@/types";
 
 /** Generic claimant patterns — must match GENERIC_CLAIMANT_PATTERNS in labels.ts */
@@ -113,13 +113,12 @@ async function queryFactchecks(params: {
   const skip = (page - 1) * limit;
 
   const where = {
-    publicationStatus: "PUBLISHED" as const,
-    source: source || { in: FACTCHECK_ALLOWED_SOURCES },
+    ...getPublicFactCheckWhere(source),
     ...(verdict && buildVerdictFilter(verdict)),
     ...(politicianSlug && {
       mentions: {
         some: {
-          politician: { slug: politicianSlug },
+          politician: { slug: politicianSlug, publicationStatus: "PUBLISHED" as const },
           ...(directOnly && { isClaimant: true }),
         },
       },
@@ -144,6 +143,7 @@ async function queryFactchecks(params: {
       take: limit,
       include: {
         mentions: {
+          where: { politician: { publicationStatus: "PUBLISHED" } },
           select: {
             isClaimant: true,
             politician: {
@@ -189,10 +189,7 @@ export async function getFactcheckSources() {
 
   const sources = await db.factCheck.groupBy({
     by: ["source"],
-    where: {
-      publicationStatus: "PUBLISHED",
-      source: { in: FACTCHECK_ALLOWED_SOURCES },
-    },
+    where: getPublicFactCheckWhere(),
     _count: true,
     orderBy: { _count: { source: "desc" } },
   });
@@ -207,8 +204,8 @@ export async function getPoliticianNameBySlug(slug: string): Promise<string | nu
   cacheTag(`politician:${slug}`, "politicians");
   cacheLife("synced");
 
-  const p = await db.politician.findUnique({
-    where: { slug },
+  const p = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     select: { fullName: true },
   });
   return p?.fullName || null;
@@ -222,8 +219,8 @@ export async function getPoliticianFactcheckContext(slug: string) {
   cacheTag("factchecks", "politicians");
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     select: {
       fullName: true,
       slug: true,
@@ -235,10 +232,7 @@ export async function getPoliticianFactcheckContext(slug: string) {
         select: {
           factCheckMentions: {
             where: {
-              factCheck: {
-                publicationStatus: "PUBLISHED",
-                source: { in: FACTCHECK_ALLOWED_SOURCES },
-              },
+              factCheck: getPublicFactCheckWhere(),
             },
           },
         },

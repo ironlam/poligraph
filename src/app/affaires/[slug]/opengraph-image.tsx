@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OgBadge, OG_SIZE, truncateOg } from "@/lib/og-utils";
 import { isAccusedInvolvement } from "@/config/certainty";
 import type { AffairStatus } from "@/generated/prisma";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const alt = "Affaire judiciaire sur Poligraph";
 export const size = OG_SIZE;
@@ -23,7 +25,7 @@ const STATUS_LABELS: Partial<Record<AffairStatus, string>> = {
   NON_LIEU: "Non-lieu",
   PRESCRIPTION: "Action publique éteinte par prescription",
   CLASSEMENT_SANS_SUITE: "Classement sans suite",
-  INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "Instruction close, sans mise en examen",
+  INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "Instruction clôturée, sans mise en examen",
 };
 
 const STATUS_COLORS: Partial<Record<AffairStatus, string>> = {
@@ -40,7 +42,11 @@ const STATUS_COLORS: Partial<Record<AffairStatus, string>> = {
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const affair = await db.affair.findFirst({
-    where: { slug, publicationStatus: "PUBLISHED" },
+    where: {
+      slug,
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
     select: {
       title: true,
       status: true,

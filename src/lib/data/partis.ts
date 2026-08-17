@@ -1,20 +1,29 @@
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
+import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { CONVICTION_BADGE_WHERE } from "@/config/labels";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import type { PoliticalPosition } from "@/types";
+import {
+  getPublicPartySqlWhere,
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const getParty = cache(async function getParty(slug: string) {
   "use cache";
   cacheTag(`party:${slug}`, "parties");
   cacheLife("synced");
 
-  const party = await db.party.findUnique({
-    where: { slug },
+  const party = await db.party.findFirst({
+    where: { slug, ...PUBLIC_PARTY_WHERE },
     include: {
       // Current members
       politicians: {
+        where: PUBLIC_POLITICIAN_WHERE,
         orderBy: { fullName: "asc" },
         include: {
           mandates: {
@@ -30,6 +39,7 @@ export const getParty = cache(async function getParty(slug: string) {
       },
       // Membership history (for people who were members but aren't currently)
       partyMemberships: {
+        where: { politician: PUBLIC_POLITICIAN_WHERE },
         include: {
           politician: true,
         },
@@ -37,15 +47,22 @@ export const getParty = cache(async function getParty(slug: string) {
       },
       // Affairs that happened when politician was in this party
       affairsAtTime: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: {
+          ...getPublishedAffairWhere(),
+          politician: PUBLIC_POLITICIAN_WHERE,
+        },
         include: {
           politician: true,
         },
         orderBy: { verdictDate: "desc" },
       },
       // Party evolution
-      predecessor: true,
-      successors: true,
+      predecessor: {
+        include: {
+          _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+        },
+      },
+      successors: { where: PUBLIC_PARTY_WHERE },
       // External IDs
       externalIds: true,
       // Press mentions
@@ -70,6 +87,10 @@ export const getParty = cache(async function getParty(slug: string) {
   // Convert Decimal fields for RSC boundary
   return {
     ...party,
+    predecessor:
+      party.predecessor && party.predecessor._count.politicians > 0
+        ? { ...party.predecessor, _count: undefined }
+        : null,
     affairsAtTime: party.affairsAtTime.map((a) => ({
       ...a,
       fineAmount: a.fineAmount != null ? Number(a.fineAmount) : null,
@@ -89,6 +110,7 @@ export async function getPartyLeadership(partyId: string, partyName: string) {
         { partyId },
         { institution: partyName, partyId: null }, // Fallback for non-migrated data
       ],
+      politician: PUBLIC_POLITICIAN_WHERE,
     },
     include: {
       politician: true,
@@ -106,6 +128,7 @@ export async function getPartyRoles(partyId: string) {
     where: {
       partyId,
       role: { not: "MEMBRE" },
+      politician: PUBLIC_POLITICIAN_WHERE,
     },
     include: {
       politician: true,
@@ -128,8 +151,7 @@ async function queryParties(
   status?: StatusFilter,
   sort: SortOption = "members"
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [];
+  const conditions: Prisma.PartyWhereInput[] = [];
 
   if (search) {
     conditions.push({
@@ -145,12 +167,15 @@ async function queryParties(
   }
 
   if (status === "actifs") {
-    conditions.push({ dissolvedDate: null, politicians: { some: {} } });
+    conditions.push({ dissolvedDate: null });
   } else if (status === "historiques") {
     conditions.push({ dissolvedDate: { not: null } });
   }
 
-  const where = conditions.length > 0 ? { AND: conditions } : {};
+  const where = {
+    ...PUBLIC_PARTY_WHERE,
+    ...(conditions.length > 0 && { AND: conditions }),
+  };
 
   const orderBy =
     sort === "alpha"
@@ -164,19 +189,24 @@ async function queryParties(
     include: {
       _count: {
         select: {
-          politicians: true,
-          partyMemberships: true,
+          politicians: { where: PUBLIC_POLITICIAN_WHERE },
+          partyMemberships: { where: { politician: PUBLIC_POLITICIAN_WHERE } },
         },
       },
       affairsAtTime: {
         where: {
-          publicationStatus: "PUBLISHED",
+          ...getPublishedAffairWhere(),
+          politician: PUBLIC_POLITICIAN_WHERE,
           involvement: { notIn: ["VICTIM", "PLAINTIFF"] },
         },
         select: { id: true, status: true, involvement: true },
       },
       predecessor: {
-        select: { shortName: true, slug: true },
+        select: {
+          shortName: true,
+          slug: true,
+          _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+        },
       },
     },
     orderBy,
@@ -203,6 +233,10 @@ async function queryParties(
 
       return {
         ...party,
+        predecessor:
+          party.predecessor && party.predecessor._count.politicians > 0
+            ? { shortName: party.predecessor.shortName, slug: party.predecessor.slug }
+            : null,
         affairCounts: { condamnations, enCours, closesSansCondamnation, total },
         affairsAtTime: undefined,
       };
@@ -255,30 +289,39 @@ export async function getPartiesStats() {
     SELECT
       COUNT(*) FILTER (
         WHERE p."dissolvedDate" IS NULL
-          AND EXISTS (SELECT 1 FROM "Politician" pol WHERE pol."currentPartyId" = p.id)
+          AND ${getPublicPartySqlWhere()}
       ) AS actifs,
       COUNT(*) FILTER (
         WHERE p."politicalPosition" IN ('FAR_LEFT', 'LEFT', 'CENTER_LEFT')
           AND p."dissolvedDate" IS NULL
+          AND ${getPublicPartySqlWhere()}
       ) AS gauche,
       COUNT(*) FILTER (
         WHERE p."politicalPosition" IN ('CENTER')
           AND p."dissolvedDate" IS NULL
+          AND ${getPublicPartySqlWhere()}
       ) AS centre,
       COUNT(*) FILTER (
         WHERE p."politicalPosition" IN ('CENTER_RIGHT', 'RIGHT', 'FAR_RIGHT')
           AND p."dissolvedDate" IS NULL
+          AND ${getPublicPartySqlWhere()}
       ) AS droite,
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
           SELECT 1 FROM "Affair" a
           WHERE a."partyAtTimeId" = p.id
-            AND a."publicationStatus" = 'PUBLISHED'
+            AND ${getPublishedAffairSqlWhere()}
+            AND EXISTS (
+              SELECT 1 FROM "Politician" public_affair_politician
+              WHERE public_affair_politician.id = a."politicianId"
+                AND public_affair_politician."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+            )
             AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF')
         )
       ) AS affaires
     FROM "Party" p
     WHERE p.slug IS NOT NULL
+      AND ${getPublicPartySqlWhere()}
   `;
 
   return {

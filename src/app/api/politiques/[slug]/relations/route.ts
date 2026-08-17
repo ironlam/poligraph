@@ -51,8 +51,8 @@ const POLITICIAN_SELECT = {
  * @openapi
  * /api/politiques/{slug}/relations:
  *   get:
- *     summary: Relations d'un représentant
- *     description: Retourne les clusters de relations d'un représentant (gouvernement, entreprises, département, parcours partisan)
+ *     summary: Relations d'un représentant publié
+ *     description: Retourne les clusters de relations entre représentants publiés (gouvernement, entreprises, département, parcours partisan)
  *     tags: [Relations]
  *     parameters:
  *       - in: path
@@ -60,7 +60,7 @@ const POLITICIAN_SELECT = {
  *         required: true
  *         schema:
  *           type: string
- *         description: Slug du représentant
+ *         description: Slug du représentant publié
  *         example: emmanuel-macron
  *       - in: query
  *         name: types
@@ -77,9 +77,11 @@ const POLITICIAN_SELECT = {
  *         description: Nombre max de connexions par type
  *     responses:
  *       200:
- *         description: Clusters de relations
+ *         description: Clusters de relations entre représentants publiés
+ *       400:
+ *         description: Filtre de relation invalide
  *       404:
- *         description: Représentant non trouvé
+ *         description: Représentant non trouvé ou non publié
  *       500:
  *         description: Erreur serveur
  */
@@ -90,14 +92,15 @@ export const GET = withPublicRoute(async (request, context) => {
   const typesParam = searchParams.get("types");
   const { limit } = parsePagination(searchParams, { defaultLimit: 10, maxLimit: 50 });
 
-  const requestedTypes: RelationType[] = typesParam
-    ? (typesParam
-        .split(",")
-        .filter((t) => ALL_RELATION_TYPES.includes(t as RelationType)) as RelationType[])
-    : ALL_RELATION_TYPES;
+  const requestedTypeValues = typesParam !== null ? typesParam.split(",") : [];
+  if (requestedTypeValues.some((type) => !ALL_RELATION_TYPES.includes(type as RelationType))) {
+    return NextResponse.json({ error: "Type de relation invalide" }, { status: 400 });
+  }
+  const requestedTypes: RelationType[] =
+    typesParam !== null ? (requestedTypeValues as RelationType[]) : ALL_RELATION_TYPES;
 
-  const politician = await db.politician.findUnique({
-    where: { slug },
+  const politician = await db.politician.findFirst({
+    where: { slug, publicationStatus: "PUBLISHED" },
     include: {
       currentParty: { select: { id: true, shortName: true, color: true } },
       mandates: {
@@ -125,7 +128,7 @@ export const GET = withPublicRoute(async (request, context) => {
   });
 
   if (!politician) {
-    return NextResponse.json({ error: "Politique non trouvé" }, { status: 404 });
+    return NextResponse.json({ error: "Représentant non trouvé ou non publié" }, { status: 404 });
   }
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
@@ -146,7 +149,6 @@ export const GET = withPublicRoute(async (request, context) => {
       (m) => GOVERNMENT_TYPES.includes(m.type) && m.governmentData?.governmentName
     );
 
-    // Group by government name for distinct clusters
     const govGroups = new Map<string, (typeof politician.mandates)[number][]>();
     for (const m of govMandates) {
       const name = m.governmentData!.governmentName;
@@ -158,6 +160,7 @@ export const GET = withPublicRoute(async (request, context) => {
       const mandate = mandates[0];
       const colleagues = await db.politician.findMany({
         where: {
+          publicationStatus: "PUBLISHED",
           id: { not: politician.id },
           mandates: {
             some: {
@@ -214,10 +217,10 @@ export const GET = withPublicRoute(async (request, context) => {
       if (companies.size > 0) {
         const companyArray = Array.from(companies);
 
-        // Fetch declarations with details, filter in JS for company matches
         const matchingDeclarations = await db.declaration.findMany({
           where: {
             politicianId: { not: politician.id },
+            politician: { publicationStatus: "PUBLISHED" },
             details: { not: Prisma.DbNull },
           },
           select: {
@@ -284,6 +287,7 @@ export const GET = withPublicRoute(async (request, context) => {
     if (deptMandate?.departmentCode) {
       const sameDept = await db.politician.findMany({
         where: {
+          publicationStatus: "PUBLISHED",
           id: { not: politician.id },
           mandates: {
             some: {
@@ -325,6 +329,7 @@ export const GET = withPublicRoute(async (request, context) => {
     if (partyIds.length > 0) {
       const formerColleagues = await db.politician.findMany({
         where: {
+          publicationStatus: "PUBLISHED",
           id: { not: politician.id },
           ...(politician.currentParty
             ? { NOT: { currentPartyId: politician.currentParty.id } }

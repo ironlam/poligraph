@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 export const GET = withPublicRoute(async (request: NextRequest) => {
   const q = request.nextUrl.searchParams.get("q")?.trim();
@@ -13,7 +14,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
   const [politicians, parties] = await Promise.all([
     db.politician.findMany({
       where: {
-        publicationStatus: "PUBLISHED",
+        ...PUBLIC_POLITICIAN_WHERE,
         OR: [
           { fullName: { contains: q, mode: "insensitive" } },
           { lastName: { contains: q, mode: "insensitive" } },
@@ -36,6 +37,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     }),
     db.party.findMany({
       where: {
+        ...PUBLIC_PARTY_WHERE,
         OR: [
           { name: { contains: q, mode: "insensitive" } },
           { shortName: { contains: q, mode: "insensitive" } },
@@ -47,7 +49,11 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
         shortName: true,
         color: true,
         _count: {
-          select: { partyMemberships: { where: { endDate: null } } },
+          select: {
+            partyMemberships: {
+              where: { endDate: null, politician: PUBLIC_POLITICIAN_WHERE },
+            },
+          },
         },
       },
       orderBy: { name: "asc" },

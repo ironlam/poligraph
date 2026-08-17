@@ -8,6 +8,11 @@ import { db } from "@/lib/db";
 import { getSystemPrompt } from "@/services/chat/systemPrompt";
 import { matchPattern } from "@/services/chat/patterns";
 import { searchDatabaseByKeywords } from "@/services/chat/keywords";
+import {
+  getPublicFactCheckSqlWhere,
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairSqlWhere } from "@/lib/affairs/public-filters";
 
 // Runtime configuration for streaming
 export const maxDuration = 30;
@@ -88,16 +93,40 @@ async function getGlobalStats(): Promise<{
     ]
   >`
     SELECT
-      (SELECT COUNT(*) FROM "Affair" WHERE "publicationStatus" = 'PUBLISHED') AS total_affairs,
-      (SELECT COUNT(*) FROM "Politician") AS total_politicians,
+      (SELECT COUNT(*) FROM "Affair" a
+        WHERE ${getPublishedAffairSqlWhere()}
+          AND EXISTS (
+            SELECT 1 FROM "Politician" public_affair_politician
+            WHERE public_affair_politician.id = a."politicianId"
+              AND public_affair_politician."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
+          )) AS total_affairs,
+      (SELECT COUNT(*) FROM "Politician" p
+        WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_politicians,
       (SELECT COUNT(*) FROM "LegislativeDossier") AS total_dossiers,
       (SELECT COUNT(*) FROM "Scrutin") AS total_votes,
-      (SELECT COUNT(*) FROM "FactCheck") AS total_factchecks,
+      (SELECT COUNT(*) FROM "FactCheck" fc
+        WHERE ${getPublicFactCheckSqlWhere()}) AS total_factchecks,
       (SELECT COUNT(*) FROM "PressArticle") AS total_press_articles,
-      (SELECT COUNT(*) FROM "Mandate" WHERE "isCurrent" = true AND "type" = 'DEPUTE') AS total_deputies,
-      (SELECT COUNT(*) FROM "Mandate" WHERE "isCurrent" = true AND "type" = 'SENATEUR') AS total_senators,
-      (SELECT COUNT(*) FROM "Mandate" WHERE "isCurrent" = true AND "type" = 'DEPUTE_EUROPEEN') AS total_meps,
-      (SELECT COUNT(*) FROM "Mandate" WHERE "isCurrent" = true AND "type" IN ('MINISTRE', 'MINISTRE_DELEGUE', 'SECRETAIRE_ETAT', 'PREMIER_MINISTRE')) AS total_ministers
+      (SELECT COUNT(*) FROM "Mandate" m
+        JOIN "Politician" p ON m."politicianId" = p.id
+        WHERE m."isCurrent" = true
+          AND m."type" = 'DEPUTE'
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_deputies,
+      (SELECT COUNT(*) FROM "Mandate" m
+        JOIN "Politician" p ON m."politicianId" = p.id
+        WHERE m."isCurrent" = true
+          AND m."type" = 'SENATEUR'
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_senators,
+      (SELECT COUNT(*) FROM "Mandate" m
+        JOIN "Politician" p ON m."politicianId" = p.id
+        WHERE m."isCurrent" = true
+          AND m."type" = 'DEPUTE_EUROPEEN'
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_meps,
+      (SELECT COUNT(*) FROM "Mandate" m
+        JOIN "Politician" p ON m."politicianId" = p.id
+        WHERE m."isCurrent" = true
+          AND m."type" IN ('MINISTRE', 'MINISTRE_DELEGUE', 'SECRETAIRE_ETAT', 'PREMIER_MINISTRE')
+          AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_ministers
   `;
 
   const r = rows[0];

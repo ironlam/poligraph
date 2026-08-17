@@ -5,6 +5,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { CATEGORY_MANDATE_TYPES } from "@/types/compare";
 import type { CompareCategory } from "@/types/compare";
 import type { PoliticalPosition } from "@/types";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 const POSITION_ORDER: PoliticalPosition[] = [
   "FAR_LEFT",
@@ -42,33 +43,6 @@ const POLITICIAN_FALLBACKS = [
     leftName: "Emmanuel Macron",
     rightSlug: "jean-luc-melenchon",
     rightName: "Jean-Luc Mélenchon",
-  },
-];
-
-const PARTY_FALLBACKS = [
-  {
-    leftSlug: "la-france-insoumise",
-    leftName: "La France Insoumise",
-    rightSlug: "rassemblement-national",
-    rightName: "Rassemblement National",
-  },
-  {
-    leftSlug: "renaissance",
-    leftName: "Renaissance",
-    rightSlug: "rassemblement-national",
-    rightName: "Rassemblement National",
-  },
-  {
-    leftSlug: "socialistes-et-apparentes",
-    leftName: "Parti Socialiste",
-    rightSlug: "les-republicains",
-    rightName: "Les Républicains",
-  },
-  {
-    leftSlug: "ecologiste-et-social",
-    leftName: "Écologistes",
-    rightSlug: "rassemblement-national",
-    rightName: "Rassemblement National",
   },
 ];
 
@@ -194,16 +168,19 @@ async function getPartySuggestions() {
   try {
     const parties = await db.party.findMany({
       where: {
+        ...PUBLIC_PARTY_WHERE,
         slug: { not: null },
         dissolvedDate: null,
-        politicians: { some: { mandates: { some: { isCurrent: true } } } },
+        politicians: {
+          some: { ...PUBLIC_POLITICIAN_WHERE, mandates: { some: { isCurrent: true } } },
+        },
       },
       select: {
         slug: true,
         name: true,
         shortName: true,
         politicalPosition: true,
-        _count: { select: { politicians: true } },
+        _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
       },
       orderBy: { politicians: { _count: "desc" } },
       take: 15,
@@ -249,7 +226,7 @@ async function getPartySuggestions() {
       used.add(c.rightSlug);
     }
 
-    if (pairs.length === 0) return withCache(NextResponse.json(PARTY_FALLBACKS), "static");
+    if (pairs.length === 0) return withCache(NextResponse.json([]), "static");
 
     return withCache(
       NextResponse.json(
@@ -263,7 +240,7 @@ async function getPartySuggestions() {
       "static"
     );
   } catch {
-    return withCache(NextResponse.json(PARTY_FALLBACKS), "static");
+    return withCache(NextResponse.json([]), "static");
   }
 }
 
@@ -323,7 +300,7 @@ async function getGroupSuggestions() {
       used.add(c.rightSlug);
     }
 
-    if (pairs.length === 0) return withCache(NextResponse.json(PARTY_FALLBACKS), "static");
+    if (pairs.length === 0) return withCache(NextResponse.json([]), "static");
 
     return withCache(
       NextResponse.json(
@@ -337,6 +314,6 @@ async function getGroupSuggestions() {
       "static"
     );
   } catch {
-    return withCache(NextResponse.json(PARTY_FALLBACKS), "static");
+    return withCache(NextResponse.json([]), "static");
   }
 }
