@@ -20,6 +20,7 @@ import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { resolveDecisionField } from "@/lib/affairs/decision-fields";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { AFFAIR_EXPORT_COLUMNS } from "./columns";
 
 export const dynamic = "force-dynamic";
@@ -93,10 +94,10 @@ export const GET = withPublicRoute(async (request) => {
 
   const where: Prisma.AffairWhereInput = {
     ...getPublishedAffairWhere(),
-    politician: { publicationStatus: "PUBLISHED" },
     ...(status !== null && { status: status as AffairStatus }),
     ...(category !== null && { category: category as AffairCategory }),
     ...(politicianId !== null && { politicianId }),
+    politician: PUBLIC_POLITICIAN_WHERE,
   };
 
   const affairs = await db.affair.findMany({
@@ -120,6 +121,7 @@ export const GET = withPublicRoute(async (request) => {
         select: {
           shortName: true,
           name: true,
+          _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
         },
       },
       sources: {
@@ -151,8 +153,8 @@ export const GET = withPublicRoute(async (request) => {
     partyCurrentPosition: a.politician.currentParty?.politicalPosition
       ? POLITICAL_POSITION_LABELS[a.politician.currentParty.politicalPosition]
       : "",
-    partyAtTimeShort: a.partyAtTime?.shortName ?? "",
-    partyAtTimeLong: a.partyAtTime?.name ?? "",
+    partyAtTimeShort: a.partyAtTime?._count.politicians ? (a.partyAtTime.shortName ?? "") : "",
+    partyAtTimeLong: a.partyAtTime?._count.politicians ? (a.partyAtTime.name ?? "") : "",
     status: AFFAIR_STATUS_LABELS[a.status],
     statusCode: a.status,
     category: AFFAIR_CATEGORY_LABELS[a.category],

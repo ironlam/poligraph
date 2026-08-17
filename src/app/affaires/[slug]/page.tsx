@@ -46,6 +46,8 @@ import type { Prisma } from "@/generated/prisma";
 import { SITE_URL } from "@/config/site";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
 import { buildPublicAffairLookupWheres, pickPublicLinkedAffair } from "@/lib/affairs/affair-lookup";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { resolveDecisionFields } from "@/lib/affairs/decision-fields";
 import {
   buildCourtDecisionDisplay,
@@ -59,7 +61,10 @@ export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on
 
 export async function generateStaticParams() {
   const affairs = await db.affair.findMany({
-    where: { publicationStatus: "PUBLISHED" },
+    where: {
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
     select: { slug: true },
     orderBy: { updatedAt: "desc" },
     take: 50,
@@ -94,7 +99,7 @@ const affairInclude = {
         select: { type: true, constituency: true, startDate: true },
         orderBy: { startDate: "asc" as const },
       },
-      _count: { select: { affairs: { where: { publicationStatus: "PUBLISHED" as const } } } },
+      _count: { select: { affairs: { where: getPublishedAffairWhere() } } },
     },
   },
   partyAtTime: {
@@ -106,7 +111,15 @@ const affairInclude = {
       color: true,
       foundedDate: true,
       _count: {
-        select: { affairsAtTime: { where: { publicationStatus: "PUBLISHED" as const } } },
+        select: {
+          politicians: { where: PUBLIC_POLITICIAN_WHERE },
+          affairsAtTime: {
+            where: {
+              ...getPublishedAffairWhere(),
+              politician: PUBLIC_POLITICIAN_WHERE,
+            },
+          },
+        },
       },
     },
   },
@@ -160,9 +173,28 @@ const affairInclude = {
 };
 
 async function findAffair(where: Prisma.AffairWhereInput) {
-  const affair = await db.affair.findFirst({ where, include: affairInclude });
+  const affair = await db.affair.findFirst({
+    where: {
+      ...where,
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
+    include: affairInclude,
+  });
   if (!affair) return null;
-  return { ...affair, fineAmount: affair.fineAmount ? Number(affair.fineAmount) : null };
+  const partyAtTime = affair.partyAtTime;
+  const publicPartyAtTime =
+    partyAtTime && partyAtTime._count.politicians > 0
+      ? {
+          ...partyAtTime,
+          _count: { affairsAtTime: partyAtTime._count.affairsAtTime },
+        }
+      : null;
+  return {
+    ...affair,
+    partyAtTime: publicPartyAtTime,
+    fineAmount: affair.fineAmount ? Number(affair.fineAmount) : null,
+  };
 }
 
 type AffairResult = NonNullable<Awaited<ReturnType<typeof findAffair>>>;

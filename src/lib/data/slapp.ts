@@ -1,5 +1,7 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import type { AffairStatus } from "@/types";
 
 export type SlappAffairFilters = {
@@ -7,17 +9,22 @@ export type SlappAffairFilters = {
   limit?: number;
 };
 
+function getPublicSlappWhere(status?: AffairStatus) {
+  return {
+    ...getPublishedAffairWhere(),
+    isSlapp: true,
+    ...(status ? { status } : {}),
+    politician: PUBLIC_POLITICIAN_WHERE,
+  };
+}
+
 export async function getSlappAffairs(filters: SlappAffairFilters) {
   "use cache";
   cacheTag("affairs", "slapp");
   cacheLife("synced");
 
   return db.affair.findMany({
-    where: {
-      isSlapp: true,
-      publicationStatus: "PUBLISHED",
-      ...(filters.status ? { status: filters.status } : {}),
-    },
+    where: getPublicSlappWhere(filters.status),
     take: filters.limit,
     orderBy: { slappQualifiedAt: "desc" },
     include: {
@@ -42,11 +49,11 @@ export async function getSlappStats() {
 
   const [total, byStatusRaw] = await Promise.all([
     db.affair.count({
-      where: { isSlapp: true, publicationStatus: "PUBLISHED" },
+      where: getPublicSlappWhere(),
     }),
     db.affair.groupBy({
       by: ["status"],
-      where: { isSlapp: true, publicationStatus: "PUBLISHED" },
+      where: getPublicSlappWhere(),
       _count: { _all: true },
     }),
   ]);

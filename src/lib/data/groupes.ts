@@ -1,5 +1,6 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import type { GroupPosition, Chamber } from "@/generated/prisma";
 
 export interface ScrutinGroupPositionData {
@@ -235,7 +236,7 @@ export async function getGroupeDetail(slug: string) {
     include: {
       stats: { take: 1, orderBy: { computedAt: "desc" } },
       mandates: {
-        where: { mandate: { isCurrent: true } },
+        where: { mandate: { isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE } },
         include: {
           mandate: {
             include: {

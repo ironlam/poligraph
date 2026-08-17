@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { findDepartmentCode } from "@/config/departments";
 import { DEPARTMENTS } from "@/config/departments";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { extractTemporalModifiers, DOSSIER_STATUS_LABELS, formatCurrency } from "./helpers";
 
 /**
@@ -135,6 +137,7 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
   if (words.length > 0) {
     const politicians = await db.politician.findMany({
       where: {
+        ...PUBLIC_POLITICIAN_WHERE,
         OR: words.map((word) => ({
           OR: [
             { fullName: { contains: word, mode: "insensitive" as const } },
@@ -168,6 +171,7 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
   ) {
     const parties = await db.party.findMany({
       where: {
+        ...PUBLIC_PARTY_WHERE,
         OR: words.map((word) => ({
           OR: [
             { name: { contains: word, mode: "insensitive" as const } },
@@ -176,7 +180,7 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
         })),
       },
       include: {
-        _count: { select: { politicians: true } },
+        _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
       },
       take: 3,
     });
@@ -281,7 +285,10 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
     lowerQuery.includes("hatvp")
   ) {
     const declarations = await db.declaration.findMany({
-      where: { totalNet: { not: null } },
+      where: {
+        totalNet: { not: null },
+        politician: PUBLIC_POLITICIAN_WHERE,
+      },
       orderBy: { totalNet: "desc" },
       include: {
         politician: { select: { fullName: true, slug: true } },
@@ -347,6 +354,7 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
             departmentCode: code,
             isCurrent: true,
             type: { in: ["DEPUTE", "SENATEUR"] },
+            politician: PUBLIC_POLITICIAN_WHERE,
           },
         });
         results.push(
@@ -376,20 +384,36 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
       voteCount,
       declCount,
     ] = await Promise.all([
-      db.mandate.count({ where: { type: "DEPUTE", isCurrent: true } }),
-      db.mandate.count({ where: { type: "SENATEUR", isCurrent: true } }),
-      db.mandate.count({ where: { type: "DEPUTE_EUROPEEN", isCurrent: true } }),
+      db.mandate.count({
+        where: { type: "DEPUTE", isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE },
+      }),
+      db.mandate.count({
+        where: { type: "SENATEUR", isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE },
+      }),
+      db.mandate.count({
+        where: {
+          type: "DEPUTE_EUROPEEN",
+          isCurrent: true,
+          politician: PUBLIC_POLITICIAN_WHERE,
+        },
+      }),
       db.mandate.count({
         where: {
           type: { in: ["MINISTRE", "MINISTRE_DELEGUE", "SECRETAIRE_ETAT", "PREMIER_MINISTRE"] },
           isCurrent: true,
+          politician: PUBLIC_POLITICIAN_WHERE,
         },
       }),
-      db.party.count(),
-      db.affair.count({ where: { publicationStatus: "PUBLISHED" } }),
+      db.party.count({ where: PUBLIC_PARTY_WHERE }),
+      db.affair.count({
+        where: {
+          ...getPublishedAffairWhere(),
+          politician: PUBLIC_POLITICIAN_WHERE,
+        },
+      }),
       db.legislativeDossier.count(),
       db.scrutin.count(),
-      db.declaration.count(),
+      db.declaration.count({ where: { politician: PUBLIC_POLITICIAN_WHERE } }),
     ]);
 
     results.push(

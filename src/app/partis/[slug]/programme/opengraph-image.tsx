@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 
 export const alt = "Programme du parti sur Poligraph";
 export const size = OG_SIZE;
@@ -10,7 +11,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const { slug } = await params;
   const platform = await db.platform.findFirst({
     where: {
-      party: { slug },
+      party: { slug, ...PUBLIC_PARTY_WHERE },
       publicationStatus: "PUBLISHED",
     },
     include: {

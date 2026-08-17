@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const getPolitician = cache(async function getPolitician(slug: string) {
   "use cache";
@@ -8,7 +10,7 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
   cacheLife("synced");
 
   const politician = await db.politician.findUnique({
-    where: { slug },
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     include: {
       currentParty: true,
       mandates: {
@@ -17,7 +19,10 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
           // Who the person sat with, shown on the career timeline: the party
           // for a party leadership, the group for a parliamentary mandate.
           party: {
-            select: { name: true },
+            select: {
+              name: true,
+              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+            },
           },
           parliamentaryData: {
             select: {
@@ -40,10 +45,14 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
         },
       },
       affairs: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE },
         include: {
           sources: true,
-          partyAtTime: true,
+          partyAtTime: {
+            include: {
+              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+            },
+          },
           events: {
             orderBy: { date: "asc" },
           },
@@ -75,6 +84,7 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
         orderBy: { year: "desc" },
       },
       factCheckMentions: {
+        where: { factCheck: getPublicFactCheckWhere() },
         include: {
           factCheck: {
             select: {
@@ -96,7 +106,13 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
       partyHistory: {
         include: {
           party: {
-            select: { name: true, shortName: true, slug: true, color: true },
+            select: {
+              name: true,
+              shortName: true,
+              slug: true,
+              color: true,
+              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+            },
           },
         },
         orderBy: { startDate: "desc" },
@@ -125,10 +141,38 @@ export const getPolitician = cache(async function getPolitician(slug: string) {
   if (!politician) return null;
 
   // Serialize Decimal fields to numbers for client components
+  const mandates = politician.mandates.map((mandate) => ({
+    ...mandate,
+    party:
+      mandate.party && mandate.party._count.politicians > 0 ? { name: mandate.party.name } : null,
+  }));
+  const partyHistory = politician.partyHistory.flatMap((membership) => {
+    if (!membership.party || membership.party._count.politicians === 0) return [];
+    return [
+      {
+        ...membership,
+        party: {
+          name: membership.party.name,
+          shortName: membership.party.shortName,
+          slug: membership.party.slug,
+          color: membership.party.color,
+        },
+      },
+    ];
+  });
   return {
     ...politician,
+    mandates,
+    partyHistory,
     affairs: politician.affairs.map((affair) => ({
       ...affair,
+      partyAtTime:
+        affair.partyAtTime && affair.partyAtTime._count.politicians > 0
+          ? (() => {
+              const { _count: _publicMembers, ...partyAtTime } = affair.partyAtTime;
+              return partyAtTime;
+            })()
+          : null,
       fineAmount: affair.fineAmount ? Number(affair.fineAmount) : null,
     })),
   };
@@ -140,7 +184,7 @@ export async function getPoliticianForComparison(slug: string) {
   cacheLife("synced");
 
   const politician = await db.politician.findUnique({
-    where: { slug },
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     include: {
       currentParty: true,
       _count: {
@@ -150,7 +194,7 @@ export async function getPoliticianForComparison(slug: string) {
         orderBy: { startDate: "desc" },
       },
       affairs: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE },
         orderBy: { createdAt: "desc" },
       },
       declarations: {
@@ -164,6 +208,7 @@ export async function getPoliticianForComparison(slug: string) {
         take: 500,
       },
       factCheckMentions: {
+        where: { factCheck: getPublicFactCheckWhere() },
         include: {
           factCheck: {
             select: {

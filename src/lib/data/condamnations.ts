@@ -2,6 +2,11 @@ import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import type { MandateType, AffairStatus, Involvement } from "@/generated/prisma";
+import {
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export const MANDAT_BUCKETS: Record<string, MandateType[]> = {
   depute: ["DEPUTE", "DEPUTE_EUROPEEN"],
@@ -58,20 +63,19 @@ export async function getCondamnations(filters: CondamnationsFilters) {
   const statuses = CERTAINTY_STATUS[certainty];
 
   const where: Prisma.AffairWhereInput = {
-    publicationStatus: "PUBLISHED",
+    ...getPublishedAffairWhere(),
     involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
     ...(statuses !== "all" && { status: { in: statuses } }),
-    ...(mandateTypes && {
-      politician: {
-        mandates: { some: { type: { in: mandateTypes } } },
-      },
-    }),
     ...(partiSlug && {
       OR: [
         { partyAtTime: { slug: partiSlug } },
         { politician: { currentParty: { slug: partiSlug } } },
       ],
     }),
+    politician: {
+      ...(mandateTypes && { mandates: { some: { type: { in: mandateTypes } } } }),
+      ...PUBLIC_POLITICIAN_WHERE,
+    },
   };
 
   const orderBy = orderByForSort(sort);
@@ -102,6 +106,7 @@ export async function getCondamnations(filters: CondamnationsFilters) {
             name: true,
             publicId: true,
             foundedDate: true,
+            _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
           },
         },
         sources: { select: { id: true } },
@@ -114,10 +119,24 @@ export async function getCondamnations(filters: CondamnationsFilters) {
   ]);
 
   return {
-    affairs: affairs.map((a) => ({
-      ...a,
-      fineAmount: a.fineAmount !== null ? Number(a.fineAmount) : null,
-    })),
+    affairs: affairs.map((a) => {
+      const partyAtTime =
+        a.partyAtTime && a.partyAtTime._count.politicians > 0
+          ? {
+              id: a.partyAtTime.id,
+              slug: a.partyAtTime.slug,
+              shortName: a.partyAtTime.shortName,
+              name: a.partyAtTime.name,
+              publicId: a.partyAtTime.publicId,
+              foundedDate: a.partyAtTime.foundedDate,
+            }
+          : null;
+      return {
+        ...a,
+        partyAtTime,
+        fineAmount: a.fineAmount !== null ? Number(a.fineAmount) : null,
+      };
+    }),
     total,
     totalPages: Math.ceil(total / PAGE_SIZE) || 1,
     page,
@@ -179,11 +198,12 @@ export async function getCondamnationsStatsByParty(
     FROM "Politician" p
     JOIN "Party" pt ON pt.id = p."currentPartyId"
     LEFT JOIN "Affair" a ON a."politicianId" = p.id
-      AND a."publicationStatus" = 'PUBLISHED'
+      AND ${getPublishedAffairSqlWhere()}
       AND a.involvement IN ('DIRECT','INDIRECT')
+    WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     ${
       mandateTypes
-        ? Prisma.sql`WHERE EXISTS (SELECT 1 FROM "Mandate" m WHERE m."politicianId" = p.id AND m.type = ANY(${mandateTypes}::"MandateType"[]))`
+        ? Prisma.sql`AND EXISTS (SELECT 1 FROM "Mandate" m WHERE m."politicianId" = p.id AND m.type = ANY(${mandateTypes}::"MandateType"[]))`
         : Prisma.empty
     }
     GROUP BY pt.id, pt.slug, pt."shortName", pt.name

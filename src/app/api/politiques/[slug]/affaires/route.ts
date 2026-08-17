@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { Involvement } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
-import { getPublicAffairSemantics } from "@/lib/api/public-contract";
+import { getPublicAffairSemantics, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 /**
@@ -66,7 +66,7 @@ export const GET = withPublicRoute(async (request, context) => {
   const requestedInvolvements = involvementValues as Involvement[];
 
   const politician = await db.politician.findFirst({
-    where: { slug, publicationStatus: "PUBLISHED" },
+    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
     select: {
       id: true,
       slug: true,
@@ -81,6 +81,7 @@ export const GET = withPublicRoute(async (request, context) => {
         where: {
           ...getPublishedAffairWhere(),
           involvement: { in: requestedInvolvements },
+          politician: PUBLIC_POLITICIAN_WHERE,
         },
         select: {
           id: true,
@@ -97,7 +98,11 @@ export const GET = withPublicRoute(async (request, context) => {
           appeal: true,
           createdAt: true,
           partyAtTime: {
-            select: { shortName: true, name: true },
+            select: {
+              shortName: true,
+              name: true,
+              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+            },
           },
           sources: {
             select: {
@@ -131,6 +136,12 @@ export const GET = withPublicRoute(async (request, context) => {
       },
       affairs: politician.affairs.map((affair) => ({
         ...affair,
+        partyAtTime: affair.partyAtTime?._count.politicians
+          ? {
+              shortName: affair.partyAtTime.shortName,
+              name: affair.partyAtTime.name,
+            }
+          : null,
         semantics: getPublicAffairSemantics(affair),
       })),
       total: politician.affairs.length,

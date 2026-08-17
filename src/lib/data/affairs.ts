@@ -11,16 +11,23 @@ import {
   type CertaintyLevel,
 } from "@/config/certainty";
 import type { AffairStatus, AffairCategory, AffairSeverity, Involvement } from "@/types";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 export async function getPartiesWithAffairs() {
   "use cache";
   cacheTag("affairs", "parties");
   cacheLife("synced");
 
+  const publicAffairWhere = {
+    ...getPublishedAffairWhere(),
+    politician: PUBLIC_POLITICIAN_WHERE,
+  };
   const parties = await db.party.findMany({
     where: {
+      ...PUBLIC_PARTY_WHERE,
       affairsAtTime: {
-        some: { publicationStatus: "PUBLISHED" },
+        some: publicAffairWhere,
       },
       slug: { not: null },
     },
@@ -30,7 +37,7 @@ export async function getPartiesWithAffairs() {
       name: true,
       color: true,
       _count: {
-        select: { affairsAtTime: { where: { publicationStatus: "PUBLISHED" } } },
+        select: { affairsAtTime: { where: publicAffairWhere } },
       },
     },
     orderBy: { shortName: "asc" },
@@ -81,7 +88,7 @@ function buildAffairWhere(opts: AffairFilterOpts) {
   }
 
   return {
-    publicationStatus: "PUBLISHED" as const,
+    ...getPublishedAffairWhere(),
     involvement: { in: involvements },
     ...statusFilter,
     ...(categoryFilter && { category: { in: categoryFilter } }),
@@ -93,6 +100,7 @@ function buildAffairWhere(opts: AffairFilterOpts) {
         { description: { contains: search, mode: "insensitive" as const } },
       ],
     }),
+    politician: PUBLIC_POLITICIAN_WHERE,
   };
 }
 
@@ -133,7 +141,14 @@ async function queryAffairs(
           select: { id: true, fullName: true, slug: true, currentParty: true },
         },
         partyAtTime: {
-          select: { id: true, slug: true, shortName: true, name: true, color: true },
+          select: {
+            id: true,
+            slug: true,
+            shortName: true,
+            name: true,
+            color: true,
+            _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+          },
         },
         sources: { select: { id: true }, take: 1 },
         _count: { select: { sources: true } },
@@ -146,10 +161,23 @@ async function queryAffairs(
   ]);
 
   return {
-    affairs: affairs.map((a) => ({
-      ...a,
-      fineAmount: a.fineAmount ? Number(a.fineAmount) : null,
-    })),
+    affairs: affairs.map((a) => {
+      const partyAtTime =
+        a.partyAtTime && a.partyAtTime._count.politicians > 0
+          ? {
+              id: a.partyAtTime.id,
+              slug: a.partyAtTime.slug,
+              shortName: a.partyAtTime.shortName,
+              name: a.partyAtTime.name,
+              color: a.partyAtTime.color,
+            }
+          : null;
+      return {
+        ...a,
+        partyAtTime,
+        fineAmount: a.fineAmount ? Number(a.fineAmount) : null,
+      };
+    }),
     total,
     page,
     totalPages: Math.ceil(total / limit),
@@ -311,7 +339,11 @@ export async function getSuperCategoryCounts() {
 
   const categoryCounts = await db.affair.groupBy({
     by: ["category"],
-    where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+    where: {
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+      involvement: "DIRECT",
+    },
     _count: { category: true },
   });
 
@@ -341,7 +373,11 @@ export async function getStatusCounts() {
 
   const statusCounts = await db.affair.groupBy({
     by: ["status"],
-    where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+    where: {
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+      involvement: "DIRECT",
+    },
     _count: { status: true },
   });
 
@@ -355,7 +391,11 @@ export async function getSeverityCounts() {
 
   const severityCounts = await db.affair.groupBy({
     by: ["severity"],
-    where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
+    where: {
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
+      involvement: "DIRECT",
+    },
     _count: { severity: true },
   });
 
@@ -374,7 +414,8 @@ export async function getCertaintyCounts() {
     by: ["status"],
     _count: true,
     where: {
-      publicationStatus: "PUBLISHED",
+      ...getPublishedAffairWhere(),
+      politician: PUBLIC_POLITICIAN_WHERE,
       involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] },
     },
   });
@@ -420,7 +461,8 @@ export async function getVictimStats() {
   cacheLife("synced");
 
   const victimWhere = {
-    publicationStatus: "PUBLISHED" as const,
+    ...getPublishedAffairWhere(),
+    politician: PUBLIC_POLITICIAN_WHERE,
     involvement: { in: VICTIM_INVOLVEMENTS },
     category: { in: VIOLENCE_CATEGORIES },
   };

@@ -12,6 +12,11 @@ import {
   parseSnapshot,
 } from "@/types/stats-snapshots";
 import { computeDepartmentPartyDataLive } from "@/services/sync/compute-municipales-snapshots";
+import {
+  PUBLIC_POLITICIAN_PUBLICATION_STATUS,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
 // ============================================
 // Incumbent maire helper
@@ -24,6 +29,7 @@ async function getIncumbentMaire(communeId: string, electionId: string) {
       type: "MAIRE",
       isCurrent: true,
       localData: { communeId },
+      politician: PUBLIC_POLITICIAN_WHERE,
     },
     include: {
       politician: {
@@ -270,7 +276,11 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
 
   // Get all candidacies for this commune in this election, with candidate + politician data
   const candidacies = await db.candidacy.findMany({
-    where: { electionId: election.id, communeId: inseeCode },
+    where: {
+      electionId: election.id,
+      communeId: inseeCode,
+      OR: [{ politicianId: null }, { politician: PUBLIC_POLITICIAN_WHERE }],
+    },
     include: {
       candidate: true,
       politician: {
@@ -301,7 +311,11 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
     // Count affairs per politician
     const affairsCounts = await db.affair.groupBy({
       by: ["politicianId"],
-      where: { politicianId: { in: politicianIds } },
+      where: {
+        ...getPublishedAffairWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
+        politicianId: { in: politicianIds },
+      },
       _count: true,
     });
     for (const a of affairsCounts) {
@@ -475,6 +489,7 @@ export const getCumulCandidates = cache(async function getCumulCandidates() {
       electionId: election.id,
       politicianId: { not: null },
       politician: {
+        ...PUBLIC_POLITICIAN_WHERE,
         mandates: {
           some: {
             isCurrent: true,
@@ -562,6 +577,7 @@ export const getMissingMaires = cache(async function getMissingMaires() {
     WHERE NOT EXISTS (
       SELECT 1 FROM "Candidacy" c WHERE c."politicianId" = p.id AND c."electionId" = ${election.id}
     )
+      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     ORDER BY p."fullName" ASC
   `);
 
@@ -781,7 +797,10 @@ export async function getMaireStats(): Promise<MaireStats> {
     JOIN "MandateLocal" ml ON ml."mandateId" = m.id
     JOIN "Politician" p ON p.id = m."politicianId"
     JOIN "Party" pa ON pa.id = p."currentPartyId"
-    WHERE m.type = 'MAIRE' AND m."isCurrent" = true AND p."currentPartyId" IS NOT NULL
+    WHERE m.type = 'MAIRE'
+      AND m."isCurrent" = true
+      AND p."currentPartyId" IS NOT NULL
+      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     GROUP BY pa."shortName", pa.color
     ORDER BY count DESC
     LIMIT 15
@@ -832,6 +851,7 @@ async function queryMaires(
     isCurrent: true,
     ...(departmentCode ? { departmentCode } : {}),
     politician: {
+      ...PUBLIC_POLITICIAN_WHERE,
       ...(search
         ? {
             OR: [
@@ -950,6 +970,7 @@ export async function getMaireParties() {
       JOIN "Politician" p ON p."currentPartyId" = pa.id
       JOIN "Mandate" m ON m."politicianId" = p.id AND m.type = 'MAIRE' AND m."isCurrent" = true
       JOIN "MandateLocal" ml ON ml."mandateId" = m.id
+      WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
       ORDER BY pa."shortName" ASC
     `
   );

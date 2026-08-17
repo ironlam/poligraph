@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 import type { ThematicAxis, PublicationStatus } from "@/generated/prisma";
 
 // --- Single platform by party slug + election ---
@@ -14,7 +15,7 @@ export const getPartyPlatform = cache(async function getPartyPlatform(
   cacheLife("synced");
 
   const where: Record<string, unknown> = {
-    party: { slug: partySlug },
+    party: { slug: partySlug, ...PUBLIC_PARTY_WHERE },
     publicationStatus: "PUBLISHED",
   };
   if (electionId) where.electionId = electionId;
@@ -56,6 +57,7 @@ export async function getPlatformsByElection(electionId: string) {
     where: {
       electionId,
       publicationStatus: "PUBLISHED",
+      party: PUBLIC_PARTY_WHERE,
     },
     include: {
       proposals: true,
@@ -80,6 +82,7 @@ async function queryPlatforms(status?: PublicationStatus) {
   return db.platform.findMany({
     where: {
       publicationStatus: status || "PUBLISHED",
+      party: PUBLIC_PARTY_WHERE,
     },
     include: {
       party: {
@@ -115,6 +118,7 @@ export async function getLatestPlatformsPerParty() {
     where: {
       publicationStatus: "PUBLISHED",
       partyId: { not: null },
+      party: PUBLIC_PARTY_WHERE,
     },
     include: {
       party: {
@@ -160,6 +164,7 @@ export async function getPartyPositionsForMatching(electionId: string) {
     where: {
       electionId,
       publicationStatus: "PUBLISHED",
+      party: PUBLIC_PARTY_WHERE,
     },
     include: {
       proposals: {

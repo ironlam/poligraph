@@ -6,6 +6,7 @@ import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { getPublicAffairSemantics } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 /**
  * @openapi
@@ -98,10 +99,10 @@ export const GET = withPublicRoute(async (request) => {
 
   const where = {
     ...getPublishedAffairWhere(),
-    politician: { publicationStatus: "PUBLISHED" as const },
     involvement: { in: requestedInvolvements },
     ...(validStatus && { status: validStatus }),
     ...(validCategory && { category: validCategory }),
+    politician: PUBLIC_POLITICIAN_WHERE,
   };
 
   const [affairs, total] = await Promise.all([
@@ -133,7 +134,11 @@ export const GET = withPublicRoute(async (request) => {
           },
         },
         partyAtTime: {
-          select: { shortName: true, name: true },
+          select: {
+            shortName: true,
+            name: true,
+            _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
+          },
         },
         sources: {
           select: {
@@ -155,10 +160,17 @@ export const GET = withPublicRoute(async (request) => {
 
   return withCache(
     NextResponse.json({
-      data: affairs.map((affair) => ({
-        ...affair,
-        semantics: getPublicAffairSemantics(affair),
-      })),
+      data: affairs.map((affair) => {
+        const partyAtTime =
+          affair.partyAtTime && affair.partyAtTime._count.politicians > 0
+            ? { shortName: affair.partyAtTime.shortName, name: affair.partyAtTime.name }
+            : null;
+        return {
+          ...affair,
+          partyAtTime,
+          semantics: getPublicAffairSemantics(affair),
+        };
+      }),
       pagination: buildPaginationMeta(page, limit, total),
     }),
     "daily"

@@ -38,6 +38,61 @@ describe("getCondamnations", () => {
     expect(result.page).toBe(1);
   });
 
+  it("conserve la condamnation mais masque intégralement son parti historique non public", async () => {
+    mockFindMany.mockResolvedValue([
+      {
+        id: "affair-public",
+        title: "Condamnation publique",
+        fineAmount: null,
+        partyAtTime: {
+          id: "party-draft",
+          publicId: "PT000999",
+          slug: "parti-draft",
+          shortName: "PD",
+          name: "Parti DRAFT",
+          logoUrl: "https://example.test/draft.svg",
+          color: "#123456",
+          _count: { politicians: 0 },
+        },
+      },
+      {
+        id: "affair-public-party",
+        title: "Condamnation avec parti public",
+        fineAmount: null,
+        partyAtTime: {
+          id: "party-public",
+          publicId: "PT000001",
+          slug: "parti-public",
+          shortName: "PP",
+          name: "Parti public",
+          logoUrl: null,
+          color: "#654321",
+          _count: { politicians: 1 },
+        },
+      },
+    ]);
+    mockCount.mockResolvedValue(2);
+
+    const result = await getCondamnations({});
+
+    expect(result.affairs).toHaveLength(2);
+    expect(result.affairs[0]).toMatchObject({ id: "affair-public", partyAtTime: null });
+    expect(result.affairs[1]).toMatchObject({
+      id: "affair-public-party",
+      partyAtTime: {
+        id: "party-public",
+        publicId: "PT000001",
+        slug: "parti-public",
+        name: "Parti public",
+      },
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("party-draft");
+    expect(serialized).not.toContain("PT000999");
+    expect(serialized).not.toContain("draft.svg");
+    expect(serialized).not.toContain("#123456");
+  });
+
   it("passes mandat=depute as mandates.some.type filter", async () => {
     await getCondamnations({ mandat: "depute" });
     expect(mockFindMany).toHaveBeenCalledOnce();

@@ -64,6 +64,59 @@ describe("frontières publiques des groupes parlementaires", () => {
     expect(group?.stats[0]?.cohesionPct).toBe(88);
   });
 
+  it("ne retourne que les membres publiés avec leur parti courant lié", async () => {
+    dbMock.parliamentaryGroup.findUnique.mockImplementation(async (args) => {
+      const publicOnly = JSON.stringify(args).includes(
+        '"politician":{"publicationStatus":"PUBLISHED"}'
+      );
+      const publicMember = {
+        mandate: {
+          politician: {
+            id: "public-member",
+            slug: "alice-publique",
+            firstName: "Alice",
+            lastName: "Publique",
+            fullName: "Alice Publique",
+            photoUrl: null,
+            currentParty: { shortName: "PP" },
+          },
+        },
+      };
+      const draftMember = {
+        mandate: {
+          politician: {
+            id: "draft-member",
+            slug: "bastien-brouillon",
+            firstName: "Bastien",
+            lastName: "Brouillon",
+            fullName: "Bastien Brouillon",
+            photoUrl: null,
+            currentParty: { shortName: "PI" },
+          },
+        },
+      };
+      return {
+        id: "group-1",
+        slug: "groupe-public",
+        stats: [],
+        mandates: publicOnly ? [publicMember] : [publicMember, draftMember],
+      } as never;
+    });
+
+    const group = await getGroupeDetail("groupe-public");
+
+    expect(group?.members).toEqual([
+      expect.objectContaining({
+        id: "public-member",
+        fullName: "Alice Publique",
+        currentParty: { shortName: "PP" },
+      }),
+    ]);
+    expect(group?.seatCount).toBe(1);
+    expect(JSON.stringify(group)).not.toContain("Bastien Brouillon");
+    expect(JSON.stringify(group)).not.toContain('"shortName":"PI"');
+  });
+
   it("sélectionne les attributs réels nécessaires aux cartes de scrutins", async () => {
     dbMock.scrutinGroupPosition.findMany.mockResolvedValue([]);
 

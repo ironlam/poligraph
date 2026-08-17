@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { findDepartmentCode } from "@/config/departments";
 import { DEPARTMENTS } from "@/config/departments";
+import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { extractPersonName, AFFAIR_STATUS_LABELS, formatCurrency } from "./helpers";
 
 /**
@@ -228,6 +230,7 @@ const PATTERNS: QueryPattern[] = [
       const [p1, p2] = await Promise.all([
         db.politician.findFirst({
           where: {
+            ...PUBLIC_POLITICIAN_WHERE,
             OR: [
               { fullName: { contains: name1, mode: "insensitive" } },
               { lastName: { contains: name1, mode: "insensitive" } },
@@ -237,6 +240,7 @@ const PATTERNS: QueryPattern[] = [
         }),
         db.politician.findFirst({
           where: {
+            ...PUBLIC_POLITICIAN_WHERE,
             OR: [
               { fullName: { contains: name2, mode: "insensitive" } },
               { lastName: { contains: name2, mode: "insensitive" } },
@@ -287,6 +291,7 @@ const PATTERNS: QueryPattern[] = [
           type: {
             in: ["PREMIER_MINISTRE", "MINISTRE", "MINISTRE_DELEGUE", "SECRETAIRE_ETAT"],
           },
+          politician: PUBLIC_POLITICIAN_WHERE,
         },
         include: {
           politician: {
@@ -458,6 +463,7 @@ async function fetchElusByDepartment(code: string, name: string): Promise<string
       departmentCode: code,
       isCurrent: true,
       type: { in: ["DEPUTE", "SENATEUR"] },
+      politician: PUBLIC_POLITICIAN_WHERE,
     },
     include: {
       politician: {
@@ -507,6 +513,7 @@ async function fetchElusByDepartment(code: string, name: string): Promise<string
 async function fetchPoliticianProfile(searchName: string): Promise<string | null> {
   const politician = await db.politician.findFirst({
     where: {
+      ...PUBLIC_POLITICIAN_WHERE,
       OR: [
         { fullName: { contains: searchName, mode: "insensitive" } },
         { lastName: { contains: searchName, mode: "insensitive" } },
@@ -515,7 +522,11 @@ async function fetchPoliticianProfile(searchName: string): Promise<string | null
     include: {
       currentParty: true,
       mandates: { where: { isCurrent: true }, take: 5 },
-      affairs: { take: 5, include: { sources: { take: 1 } } },
+      affairs: {
+        where: getPublishedAffairWhere(),
+        take: 5,
+        include: { sources: { take: 1 } },
+      },
       declarations: { orderBy: { year: "desc" }, take: 1 },
     },
   });
@@ -580,6 +591,7 @@ async function fetchPoliticianProfile(searchName: string): Promise<string | null
 async function fetchPoliticianAffairs(searchName: string): Promise<string | null> {
   const politician = await db.politician.findFirst({
     where: {
+      ...PUBLIC_POLITICIAN_WHERE,
       OR: [
         { fullName: { contains: searchName, mode: "insensitive" } },
         { lastName: { contains: searchName, mode: "insensitive" } },
@@ -587,9 +599,9 @@ async function fetchPoliticianAffairs(searchName: string): Promise<string | null
     },
     include: {
       affairs: {
+        where: getPublishedAffairWhere(),
         include: {
           sources: { take: 2 },
-          partyAtTime: { select: { shortName: true } },
         },
       },
     },
@@ -639,6 +651,7 @@ async function fetchPoliticianAffairs(searchName: string): Promise<string | null
 async function fetchPoliticianHATVP(searchName: string): Promise<string | null> {
   const politician = await db.politician.findFirst({
     where: {
+      ...PUBLIC_POLITICIAN_WHERE,
       OR: [
         { fullName: { contains: searchName, mode: "insensitive" } },
         { lastName: { contains: searchName, mode: "insensitive" } },
@@ -681,6 +694,7 @@ async function fetchPoliticianVotes(
 ): Promise<string | null> {
   const politician = await db.politician.findFirst({
     where: {
+      ...PUBLIC_POLITICIAN_WHERE,
       OR: [
         { fullName: { contains: searchName, mode: "insensitive" } },
         { lastName: { contains: searchName, mode: "insensitive" } },
@@ -743,13 +757,14 @@ async function fetchPoliticianVotes(
 async function fetchPartyMembers(partySearch: string): Promise<string | null> {
   const party = await db.party.findFirst({
     where: {
+      ...PUBLIC_PARTY_WHERE,
       OR: [
         { name: { contains: partySearch, mode: "insensitive" } },
         { shortName: { contains: partySearch, mode: "insensitive" } },
       ],
     },
     include: {
-      _count: { select: { politicians: true } },
+      _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
     },
   });
 
@@ -760,7 +775,10 @@ async function fetchPartyMembers(partySearch: string): Promise<string | null> {
     by: ["type"],
     where: {
       isCurrent: true,
-      politician: { currentPartyId: party.id },
+      politician: {
+        ...PUBLIC_POLITICIAN_WHERE,
+        currentPartyId: party.id,
+      },
     },
     _count: true,
   });
