@@ -220,8 +220,8 @@ measured query behavior rather than advisor output alone.
 **Required investigation.** For every candidate, evaluate cardinality, real joins, delete and update
 patterns, frequency, write cost, and whether an existing index already covers the need.
 
-**Closure criteria.** Every adopted index has before and after measurements. Every rejected index has
-a documented rationale.
+**Closure criteria.** Every adopted index has before and after measurements. Every rejected index
+has a documented rationale.
 
 ## UX and quality
 
