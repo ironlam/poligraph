@@ -22,6 +22,7 @@ import { invalidateEntity } from "@/lib/cache";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import { removeSidebarElements } from "@/lib/parsing/html-utils";
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
+import { USER_AGENT } from "@/config/site";
 
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 2000;
@@ -568,7 +569,7 @@ async function scrapeTopArticles(results: BraveSearchResult[]): Promise<ScrapedA
     try {
       const response = await fetch(result.url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)",
+          "User-Agent": USER_AGENT,
           Accept: "text/html",
         },
         signal: AbortSignal.timeout(15_000),

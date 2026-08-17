@@ -300,23 +300,8 @@ export class RSSClient {
   async fetchFeed(config: RSSFeedConfig): Promise<RSSFeed> {
     try {
       // Fetch raw XML
-      const response = await fetch(config.url, {
-        headers: {
-          Accept: "application/rss+xml, application/xml, text/xml, */*",
-          "User-Agent": "Poligraph/1.0 (https://poligraph.fr)",
-        },
-        signal: AbortSignal.timeout(this.options.timeout),
-      });
-
-      if (!response.ok) {
-        throw new HTTPError(
-          `HTTP ${response.status}: ${response.statusText}`,
-          response.status,
-          config.url
-        );
-      }
-
-      const xml = await response.text();
+      const response = await this.http.getText(config.url, { timeout: this.options.timeout });
+      const xml = response.data;
       const parsed = this.parser.parse(xml);
 
       // Handle RSS 2.0 format

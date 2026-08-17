@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { USER_AGENT } from "@/config/site";
 
 /**
  * @openapi
@@ -78,7 +79,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
 
     const geoUrl = `https://geo.api.gouv.fr/communes?lat=${latNum}&lon=${lonNum}&fields=code,nom&limit=1`;
     const geoResp = await fetch(geoUrl, {
-      headers: { "User-Agent": "PoliGraph/1.0" },
+      headers: { "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(5000),
     });
 

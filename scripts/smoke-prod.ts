@@ -8,7 +8,7 @@
  * Usage: npx dotenv -e .env -- npx tsx scripts/smoke-prod.ts [--base https://...]
  */
 import { db } from "@/lib/db";
-import { SITE_URL } from "@/config/site";
+import { SITE_URL, USER_AGENT } from "@/config/site";
 
 const argBase = (() => {
   const i = process.argv.indexOf("--base");
@@ -93,7 +93,7 @@ async function probe(
     const res = await fetch(`${BASE}${p.path}`, {
       redirect: "follow",
       signal: ctrl.signal,
-      headers: { "user-agent": "poligraph-smoke" },
+      headers: { "User-Agent": USER_AGENT },
     });
     return { p, status: res.status, ms: Date.now() - t0 };
   } catch (e) {

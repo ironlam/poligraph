@@ -13,7 +13,6 @@ const client = new HTTPClient({ rateLimitMs: FACTCHECK_RATE_LIMIT_MS });
 const scraperClient = new HTTPClient({
   rateLimitMs: 1000,
   timeout: 10_000,
-  userAgent: "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)",
 });
 
 const API_BASE = "https://factchecktools.googleapis.com/v1alpha1/claims:search";

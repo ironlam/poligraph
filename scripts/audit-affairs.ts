@@ -21,6 +21,7 @@ import "dotenv/config";
 import { AffairCategory, AffairStatus } from "../src/generated/prisma";
 import { db } from "../src/lib/db.js";
 import * as fs from "fs";
+import { HTTPClient, HTTPError } from "@/lib/api/http-client";
 
 // Sensitive categories that require manual verification
 const SENSITIVE_CATEGORIES: AffairCategory[] = ["AGRESSION_SEXUELLE", "HARCELEMENT_SEXUEL"];
@@ -36,6 +37,8 @@ const ACTIVE_STATUSES: AffairStatus[] = [
   "RENVOI_TRIBUNAL",
   "PROCES_EN_COURS",
 ];
+
+const auditHttp = new HTTPClient({ timeout: 10_000, retries: 0 });
 
 // Patterns that contradict a CONDAMNATION status in descriptions
 // Keep patterns tight to avoid cross-sentence false positives
@@ -102,29 +105,11 @@ interface BrokenUrl {
  */
 async function checkUrl(url: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(url, {
-      method: "HEAD",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Poligraph/1.0; +https://poligraph.fr)",
-      },
-    });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return { ok: false, error: `HTTP ${response.status}` };
-    }
-
+    await auditHttp.head(url);
     return { ok: true };
   } catch (error) {
+    if (error instanceof HTTPError) return { ok: false, error: `HTTP ${error.status}` };
     if (error instanceof Error) {
-      if (error.name === "AbortError") {
-        return { ok: false, error: "Timeout (10s)" };
-      }
       return { ok: false, error: error.message };
     }
     return { ok: false, error: "Unknown error" };

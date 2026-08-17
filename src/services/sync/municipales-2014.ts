@@ -14,6 +14,7 @@ import { Prisma } from "@/generated/prisma";
 import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
 import { parseWideResultRow2014 } from "./parse-wide-results-2014";
 import { type ListResult, type CommuneResult } from "./parse-wide-results";
+import { USER_AGENT } from "@/config/site";
 
 const URLS = {
   t1: "https://www.data.gouv.fr/api/1/datasets/r/936f6d38-5969-46e5-8b9d-c7646d6390ec",
@@ -50,7 +51,7 @@ function decodeAndSplit(buf: Buffer, delimiter: string): string[][] {
 
 async function downloadBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url, {
-    headers: { "User-Agent": "Poligraph/1.0 (sync)" },
+    headers: { "User-Agent": USER_AGENT },
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url}`);

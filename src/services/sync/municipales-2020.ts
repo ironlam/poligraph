@@ -21,6 +21,7 @@ import {
   type ListResult,
   type CommuneResult,
 } from "./parse-wide-results";
+import { USER_AGENT } from "@/config/site";
 
 // ── Data source URLs ────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ function decodeAndSplit(buf: Buffer, delimiter: string): string[][] {
 /** Download a URL and return the body as a Buffer. */
 async function downloadBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url, {
-    headers: { "User-Agent": "Poligraph/1.0 (sync)" },
+    headers: { "User-Agent": USER_AGENT },
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url}`);

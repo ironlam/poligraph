@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { USER_AGENT } from "@/config/site";
 
-const USER_AGENT = "PoligraphProgramImporter/1.0 (+https://poligraph.fr)";
 const DEFAULT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 type CacheMetadata = {
@@ -25,6 +25,45 @@ function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function fetchDocument(
+  url: string,
+  timeoutMs: number,
+  conditionalHeaders: Record<string, string>
+): Promise<Response> {
+  const etag = conditionalHeaders["If-None-Match"];
+  const lastModified = conditionalHeaders["If-Modified-Since"];
+  if (etag && lastModified) {
+    return fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        "If-None-Match": etag,
+        "If-Modified-Since": lastModified,
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
+  if (etag) {
+    return fetch(url, {
+      headers: { "User-Agent": USER_AGENT, "If-None-Match": etag },
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
+  if (lastModified) {
+    return fetch(url, {
+      headers: { "User-Agent": USER_AGENT, "If-Modified-Since": lastModified },
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
+  return fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    redirect: "follow",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
 async function fetchWithRetry(
   url: string,
   timeoutMs: number,
@@ -33,11 +72,7 @@ async function fetchWithRetry(
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await fetch(url, {
-        headers: { "User-Agent": USER_AGENT, ...conditionalHeaders },
-        redirect: "follow",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      const response = await fetchDocument(url, timeoutMs, conditionalHeaders);
       if (!response.ok && response.status !== 304) throw new Error(`HTTP ${response.status}`);
       return response;
     } catch (error) {

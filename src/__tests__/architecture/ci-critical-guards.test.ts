@@ -39,22 +39,23 @@
  *   broad directory allowlist. If an importer imports such a module, it enters the graph.
  *
  * HTTP identity
- * - Guarantee: statically explicit User-Agent values on direct fetch calls identify Poligraph,
- *   including ordered static spreads and the effective pre-fetch state of bounded object, Headers,
- *   mutation, and Request forms. HTTPClient header override resistance is a runtime contract in
- *   `http-client.test.ts`.
- * - Canonical syntax: HTTPClient, or an explicit Poligraph User-Agent on direct fetch.
- * - Forbidden: explicit non-Poligraph User-Agent and publisher login credentials/endpoints.
- * - Limit: business and audit fields named userAgent are not outbound headers.
+ * - Guarantee: an explicit User-Agent outside HTTPClient appears only as a direct property in the
+ *   inline headers object of a direct fetch and uses USER_AGENT imported from `@/config/site`.
+ *   HTTPClient header override resistance remains a runtime contract in `http-client.test.ts`.
+ * - Canonical syntax: HTTPClient, or `fetch(url, { headers: { "User-Agent": USER_AGENT } })`.
+ * - Forbidden: hardcoded/computed values, header aliases, spreads, Headers mutations or
+ *   constructors, and Request objects that carry User-Agent.
+ * - Limit: fetch calls without an explicit User-Agent and incoming/audit fields named userAgent are
+ *   outside this contract. HTTPClient internals are the only exact implementation exemption.
  *
  * NEXT_PUBLIC secrets
- * - Guarantee: statically determined process.env names and `.env.example` keys are rejected when a
- *   NEXT_PUBLIC name contains a sensitive marker.
+ * - Guarantee: every statically determined name in non-test source and `.env.example` is rejected
+ *   when a NEXT_PUBLIC name contains a sensitive marker, independently of value provenance.
  * - Canonical syntax: non-sensitive public configuration names only.
- * - Forbidden: direct, object/array-destructured, aliased, concatenated, and template-composed
- *   sensitive names.
- * - Limit: names depending on unknown runtime data are not guessed. All static components are folded,
- *   so ordinary renaming or concatenation is not a trivial bypass.
+ * - Forbidden: sensitive identifiers, properties, object/binding keys, and statically composed
+ *   element-access keys.
+ * - Limit: names depending on unknown runtime data are not guessed. Tests and comments are excluded;
+ *   all production syntax nodes and static key components are scanned without provenance analysis.
  *
  * JSON-LD and fail-closed scanning
  * - Guarantee: dangerouslySetInnerHTML exists only in the canonical JSON-LD component and calls its
@@ -86,6 +87,8 @@ const PROPOSAL_MODULE = "src/services/affairs/proposals.ts";
 const PROPOSAL_SCHEMA = "src/lib/security/schemas/affair-proposal.ts";
 const CREATE_DRAFT_SERVICE = "src/services/affairs/create-draft.ts";
 const JSON_LD_MODULE = "src/components/seo/JsonLd.tsx";
+const SITE_CONFIG_MODULE = "@/config/site";
+const HTTP_CLIENT_MODULE = "src/lib/api/http-client.ts";
 const LOCAL_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 interface Violation {
@@ -302,41 +305,9 @@ function unwrap(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function bindingElementInitializer(
-  element: ts.BindingElement,
-  model: ProjectModel,
-  seen: Set<ts.Symbol>
-): ts.Expression | undefined {
-  const variable = element.parent.parent;
-  if (!ts.isVariableDeclaration(variable) || !variable.initializer) return undefined;
-
-  const source = resolveExpression(variable.initializer, model, new Set(seen));
-  if (ts.isArrayBindingPattern(element.parent)) {
-    if (!ts.isArrayLiteralExpression(source) || element.dotDotDotToken) return undefined;
-    const index = element.parent.elements.indexOf(element);
-    const value = source.elements[index];
-    if (!value || ts.isOmittedExpression(value) || ts.isSpreadElement(value)) {
-      return element.initializer;
-    }
-    return value;
-  }
-
-  const name = element.propertyName
-    ? propertyName(element.propertyName, model)
-    : ts.isIdentifier(element.name)
-      ? element.name.text
-      : null;
-  if (!name) return undefined;
-  if (ts.isObjectLiteralExpression(source)) {
-    return objectProperty(source, name, model) ?? element.initializer;
-  }
-  return ts.factory.createElementAccessExpression(source, ts.factory.createStringLiteral(name));
-}
-
 function identifierInitializer(
   identifier: ts.Identifier,
-  model: ProjectModel,
-  seen = new Set<ts.Symbol>()
+  model: ProjectModel
 ): ts.Expression | undefined {
   const symbol = ts.isShorthandPropertyAssignment(identifier.parent)
     ? model.checker.getShorthandAssignmentValueSymbol(identifier.parent)
@@ -346,7 +317,8 @@ function identifierInitializer(
       return declaration.initializer;
     }
     if (ts.isBindingElement(declaration)) {
-      return bindingElementInitializer(declaration, model, seen);
+      const variable = declaration.parent.parent;
+      if (ts.isVariableDeclaration(variable) && variable.initializer) return variable.initializer;
     }
   }
   const sourceFile = identifier.getSourceFile();
@@ -374,7 +346,7 @@ function resolveExpression(
   if (!ts.isIdentifier(current)) return current;
   const symbol = model.checker.getSymbolAtLocation(current);
   if (symbol && seen.has(symbol)) return current;
-  const initializer = identifierInitializer(current, model, seen);
+  const initializer = identifierInitializer(current, model);
   if (!initializer) return current;
   if (symbol) seen.add(symbol);
   return resolveExpression(initializer, model, seen);
@@ -390,7 +362,7 @@ function staticString(
   if (ts.isIdentifier(current)) {
     const symbol = model.checker.getSymbolAtLocation(current);
     if (symbol && seen.has(symbol)) return null;
-    const initializer = identifierInitializer(current, model, seen);
+    const initializer = identifierInitializer(current, model);
     if (!initializer) return null;
     if (symbol) seen.add(symbol);
     return staticString(initializer, model, seen);
@@ -1374,194 +1346,71 @@ function analyzeImporterGraph(model: ProjectModel, entries: Iterable<string>): V
   return violations;
 }
 
-function identifiesPoligraph(value: string | null): boolean {
-  return typeof value === "string" && value.toLowerCase().includes("poligraph");
-}
-
-type UserAgentState =
-  | { kind: "absent" }
-  | { kind: "known"; node: ts.Node; value: string }
-  | { kind: "unknown"; node: ts.Node };
-
-interface ResolvedRequestInit {
-  explicitHeaders: boolean;
-  userAgent: UserAgentState;
-}
-
-function userAgentValue(node: ts.Node, expression: ts.Expression | undefined, model: ProjectModel) {
-  if (!expression) return { kind: "unknown", node } as const;
-  const value = staticString(expression, model);
-  return value === null
-    ? ({ kind: "unknown", node } as const)
-    : ({ kind: "known", node, value } as const);
-}
-
-function appendUserAgent(
-  state: UserAgentState,
-  node: ts.Node,
-  expression: ts.Expression | undefined,
-  model: ProjectModel
-): UserAgentState {
-  const appended = userAgentValue(node, expression, model);
-  if (appended.kind === "unknown" || state.kind === "unknown") return { kind: "unknown", node };
-  if (state.kind === "absent") return appended;
-  return { kind: "known", node, value: `${state.value}, ${appended.value}` };
-}
-
-function objectMemberExpression(
-  object: ts.ObjectLiteralExpression,
-  wanted: string,
-  model: ProjectModel
-): ts.Expression | null | undefined {
-  let result: ts.Expression | null | undefined;
-  for (const property of object.properties) {
-    if (ts.isPropertyAssignment(property) && propertyName(property.name, model) === wanted) {
-      result = property.initializer;
-    } else if (ts.isShorthandPropertyAssignment(property) && property.name.text === wanted) {
-      result = property.name;
-    } else if (ts.isSpreadAssignment(property)) {
-      const nested = objectLiteral(property.expression, model);
-      if (!nested) return null;
-      const nestedValue = objectMemberExpression(nested, wanted, model);
-      if (nestedValue !== undefined) result = nestedValue;
+function canonicalUserAgentSymbols(model: ProjectModel, sourceFile: ts.SourceFile): Set<ts.Symbol> {
+  const symbols = new Set<ts.Symbol>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== SITE_CONFIG_MODULE ||
+      !statement.importClause?.namedBindings ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+    for (const element of statement.importClause.namedBindings.elements) {
+      if ((element.propertyName?.text ?? element.name.text) !== "USER_AGENT") continue;
+      const symbol = model.checker.getSymbolAtLocation(element.name);
+      if (symbol) symbols.add(symbol);
     }
   }
-  return result;
+  return symbols;
 }
 
-function resolveHeadersInit(
-  expression: ts.Expression,
+function isCanonicalFetchUserAgent(
+  property: ts.PropertyAssignment,
   model: ProjectModel,
-  sourceUnit: SourceUnit,
-  before: number,
-  seen = new Set<ts.Symbol>()
-): UserAgentState {
-  const current = unwrap(expression);
-  if (ts.isIdentifier(current)) {
-    const symbol = bindingIdentifierSymbol(current, model);
-    if (symbol && seen.has(symbol)) return { kind: "absent" };
-    const nextSeen = new Set(seen);
-    if (symbol) nextSeen.add(symbol);
-    const initializer = identifierInitializer(current, model, seen);
-    let state: UserAgentState = initializer
-      ? resolveHeadersInit(initializer, model, sourceUnit, before, nextSeen)
-      : { kind: "absent" };
-    if (!symbol) return state;
-    walk(sourceUnit.sourceFile, (node) => {
-      if (!ts.isCallExpression(node) || node.getStart() >= before) return;
-      const method = memberName(node.expression, model);
-      const base = memberBase(node.expression);
-      const target = base ? unwrap(base) : null;
-      if (
-        !["set", "append", "delete"].includes(method ?? "") ||
-        !target ||
-        !ts.isIdentifier(target) ||
-        bindingIdentifierSymbol(target, model) !== symbol
-      ) {
-        return;
-      }
-      const name = node.arguments[0] ? staticString(node.arguments[0], model) : null;
-      if (name?.toLowerCase() !== "user-agent") return;
-      if (method === "delete") {
-        state = { kind: "absent" };
-      } else if (method === "set") {
-        state = userAgentValue(node, node.arguments[1], model);
-      } else {
-        state = appendUserAgent(state, node, node.arguments[1], model);
-      }
-    });
-    return state;
+  symbols: Set<ts.Symbol>
+): boolean {
+  if (propertyName(property.name, model) !== "User-Agent") return false;
+  const value = unwrap(property.initializer);
+  if (!ts.isIdentifier(value)) return false;
+  const valueSymbol = model.checker.getSymbolAtLocation(value);
+  if (!valueSymbol || !symbols.has(valueSymbol)) return false;
+
+  const headers = property.parent;
+  if (!ts.isObjectLiteralExpression(headers) || headers.properties.some(ts.isSpreadAssignment)) {
+    return false;
   }
-  if (ts.isObjectLiteralExpression(current)) {
-    let state: UserAgentState = { kind: "absent" };
-    for (const property of current.properties) {
-      if (ts.isPropertyAssignment(property)) {
-        if (propertyName(property.name, model)?.toLowerCase() !== "user-agent") continue;
-        state = userAgentValue(property, property.initializer, model);
-      } else if (ts.isSpreadAssignment(property)) {
-        const spread = resolveHeadersInit(property.expression, model, sourceUnit, before, seen);
-        if (spread.kind !== "absent") state = spread;
-      }
-    }
-    return state;
-  }
-  if (ts.isArrayLiteralExpression(current)) {
-    let state: UserAgentState = { kind: "absent" };
-    for (const element of current.elements) {
-      const tuple = unwrap(element);
-      if (!ts.isArrayLiteralExpression(tuple)) continue;
-      const name = tuple.elements[0] ? staticString(tuple.elements[0], model) : null;
-      if (name?.toLowerCase() !== "user-agent") continue;
-      state = appendUserAgent(
-        state,
-        tuple,
-        tuple.elements[1] && !ts.isOmittedExpression(tuple.elements[1])
-          ? tuple.elements[1]
-          : undefined,
-        model
-      );
-    }
-    return state;
-  }
+  const headersProperty = headers.parent;
   if (
-    ts.isNewExpression(current) &&
-    ts.isIdentifier(unwrap(current.expression)) &&
-    (unwrap(current.expression) as ts.Identifier).text === "Headers"
+    !ts.isPropertyAssignment(headersProperty) ||
+    propertyName(headersProperty.name, model) !== "headers" ||
+    unwrap(headersProperty.initializer) !== headers
   ) {
-    return current.arguments?.[0]
-      ? resolveHeadersInit(current.arguments[0], model, sourceUnit, before, new Set(seen))
-      : { kind: "absent" };
+    return false;
   }
-  return { kind: "absent" };
+  const options = headersProperty.parent;
+  if (!ts.isObjectLiteralExpression(options)) return false;
+  const call = options.parent;
+  return (
+    ts.isCallExpression(call) &&
+    call.arguments[1] === options &&
+    ts.isIdentifier(unwrap(call.expression)) &&
+    (unwrap(call.expression) as ts.Identifier).text === "fetch"
+  );
 }
 
-function resolveRequestInit(
-  expression: ts.Expression,
-  model: ProjectModel,
-  sourceUnit: SourceUnit,
-  before: number
-): ResolvedRequestInit {
-  const options = objectLiteral(expression, model);
-  if (!options) return { explicitHeaders: false, userAgent: { kind: "absent" } };
-  const headers = objectMemberExpression(options, "headers", model);
-  return headers
-    ? {
-        explicitHeaders: true,
-        userAgent: resolveHeadersInit(headers, model, sourceUnit, before),
-      }
-    : { explicitHeaders: false, userAgent: { kind: "absent" } };
-}
-
-function resolveRequestExpression(
-  expression: ts.Expression,
-  model: ProjectModel,
-  sourceUnit: SourceUnit,
-  before: number,
-  seen = new Set<ts.Symbol>()
-): UserAgentState {
-  const current = unwrap(expression);
-  if (ts.isIdentifier(current)) {
-    const symbol = model.checker.getSymbolAtLocation(current);
-    if (symbol && seen.has(symbol)) return { kind: "absent" };
-    const initializer = identifierInitializer(current, model, seen);
-    if (!initializer) return { kind: "absent" };
-    const nextSeen = new Set(seen);
-    if (symbol) nextSeen.add(symbol);
-    return resolveRequestExpression(initializer, model, sourceUnit, before, nextSeen);
-  }
-  if (
-    ts.isNewExpression(current) &&
-    ts.isIdentifier(unwrap(current.expression)) &&
-    (unwrap(current.expression) as ts.Identifier).text === "Request" &&
-    current.arguments?.[1]
-  ) {
-    return resolveRequestInit(current.arguments[1], model, sourceUnit, before).userAgent;
-  }
-  return { kind: "absent" };
+function isUserAgentTuple(node: ts.ArrayLiteralExpression, model: ProjectModel): boolean {
+  return (
+    !!node.elements[0] && staticString(node.elements[0], model)?.toLowerCase() === "user-agent"
+  );
 }
 
 function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
   const violations: Violation[] = [];
+  const canonicalSymbols = canonicalUserAgentSymbols(model, sourceUnit.sourceFile);
+  const userAgentMessage = "direct fetch User-Agent must use inline USER_AGENT from @/config/site";
   walk(sourceUnit.sourceFile, (node) => {
     if (ts.isIdentifier(node) && ["MEDIAPART_EMAIL", "MEDIAPART_PASSWORD"].includes(node.text)) {
       violations.push(problem(sourceUnit, node, "publisher credential reference"));
@@ -1569,89 +1418,28 @@ function analyzeNetworkIdentity(model: ProjectModel, sourceUnit: SourceUnit): Vi
     if (ts.isStringLiteralLike(node) && node.text.includes("login_check")) {
       violations.push(problem(sourceUnit, node, "publisher login endpoint"));
     }
+    if (sourceUnit.file === HTTP_CLIENT_MODULE) return;
     if (
-      !ts.isCallExpression(node) ||
-      !ts.isIdentifier(unwrap(node.expression)) ||
-      (unwrap(node.expression) as ts.Identifier).text !== "fetch"
+      ts.isPropertyAssignment(node) &&
+      propertyName(node.name, model)?.toLowerCase() === "user-agent" &&
+      !isCanonicalFetchUserAgent(node, model, canonicalSymbols)
     ) {
-      return;
-    }
-    let userAgent = node.arguments[0]
-      ? resolveRequestExpression(node.arguments[0], model, sourceUnit, node.getStart())
-      : { kind: "absent" as const };
-    if (node.arguments[1]) {
-      const init = resolveRequestInit(node.arguments[1], model, sourceUnit, node.getStart());
-      if (init.explicitHeaders) userAgent = init.userAgent;
+      violations.push(problem(sourceUnit, node, userAgentMessage));
     }
     if (
-      userAgent.kind === "unknown" ||
-      (userAgent.kind === "known" && !identifiesPoligraph(userAgent.value))
+      ts.isCallExpression(node) &&
+      ["set", "append"].includes(memberName(node.expression, model) ?? "")
     ) {
-      violations.push(problem(sourceUnit, node, "direct fetch User-Agent must identify Poligraph"));
+      const name = node.arguments[0] ? staticString(node.arguments[0], model) : null;
+      if (name?.toLowerCase() === "user-agent") {
+        violations.push(problem(sourceUnit, node, userAgentMessage));
+      }
+    }
+    if (ts.isArrayLiteralExpression(node) && isUserAgentTuple(node, model)) {
+      violations.push(problem(sourceUnit, node, userAgentMessage));
     }
   });
   return violations;
-}
-
-function refersToGlobalThis(
-  expression: ts.Expression,
-  model: ProjectModel,
-  seen = new Set<ts.Symbol>()
-): boolean {
-  const current = unwrap(expression);
-  if (!ts.isIdentifier(current)) return false;
-  const symbol = model.checker.getSymbolAtLocation(current);
-  if (
-    current.text === "globalThis" &&
-    (!symbol || symbolFromDefaultLibrary(symbol) || symbol.getDeclarations()?.length === 0)
-  ) {
-    return true;
-  }
-  if (symbol && seen.has(symbol)) return false;
-  const initializer = identifierInitializer(current, model);
-  if (!initializer) return false;
-  const nextSeen = new Set(seen);
-  if (symbol) nextSeen.add(symbol);
-  return refersToGlobalThis(initializer, model, nextSeen);
-}
-
-function refersToNodeProcess(
-  expression: ts.Expression,
-  model: ProjectModel,
-  seen = new Set<ts.Symbol>()
-): boolean {
-  const current = unwrap(expression);
-  if (ts.isIdentifier(current)) {
-    const symbol = model.checker.getSymbolAtLocation(current);
-    if (
-      current.text === "process" &&
-      (!symbol ||
-        symbol.getDeclarations()?.length === 0 ||
-        symbol
-          .getDeclarations()
-          ?.every((declaration) => declaration.getSourceFile().isDeclarationFile))
-    ) {
-      return true;
-    }
-    if (symbol && seen.has(symbol)) return false;
-    const initializer = identifierInitializer(current, model);
-    if (!initializer) return false;
-    const nextSeen = new Set(seen);
-    if (symbol) nextSeen.add(symbol);
-    return refersToNodeProcess(initializer, model, nextSeen);
-  }
-  const name = memberName(current, model);
-  const base = memberBase(current);
-  return name === "process" && !!base && refersToGlobalThis(base, model);
-}
-
-function processEnvExpression(expression: ts.Expression, model: ProjectModel): boolean {
-  const current = resolveExpression(expression, model);
-  return (
-    memberName(current, model) === "env" &&
-    !!memberBase(current) &&
-    refersToNodeProcess(memberBase(current)!, model)
-  );
 }
 
 function sensitivePublicName(name: string | null): boolean {
@@ -1664,37 +1452,31 @@ function sensitivePublicName(name: string | null): boolean {
 
 function analyzePublicEnv(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
   const violations: Violation[] = [];
+  const reported = new Set<string>();
   const check = (name: string | null, node: ts.Node): void => {
-    if (sensitivePublicName(name)) {
-      violations.push(problem(sourceUnit, node, `secret-like public env ${name}`));
-    }
+    if (!sensitivePublicName(name)) return;
+    const key = `${node.getStart(sourceUnit.sourceFile)}:${name}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    violations.push(problem(sourceUnit, node, `secret-like public env ${name}`));
   };
   walk(sourceUnit.sourceFile, (node) => {
-    if (
-      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
-      processEnvExpression(node.expression, model)
-    ) {
-      const name = ts.isPropertyAccessExpression(node)
-        ? node.name.text
-        : node.argumentExpression
-          ? staticString(node.argumentExpression, model)
-          : null;
-      check(name, node);
+    if (ts.isIdentifier(node)) check(node.text, node);
+    if (ts.isPropertyAccessExpression(node)) check(node.name.text, node.name);
+    if (ts.isElementAccessExpression(node) && node.argumentExpression) {
+      check(staticString(node.argumentExpression, model), node.argumentExpression);
     }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
-      node.initializer &&
-      processEnvExpression(node.initializer, model)
-    ) {
-      for (const element of node.name.elements) {
-        const name = element.propertyName
-          ? propertyName(element.propertyName, model)
-          : ts.isIdentifier(element.name)
-            ? element.name.text
-            : null;
-        check(name, element);
-      }
+    if (ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node)) {
+      check(propertyName(node.name, model), node.name);
+    }
+    if (ts.isBindingElement(node)) {
+      const nameNode = node.propertyName ?? node.name;
+      const name = node.propertyName
+        ? propertyName(node.propertyName, model)
+        : ts.isIdentifier(node.name)
+          ? node.name.text
+          : null;
+      check(name, nameNode);
     }
   });
   return violations;
@@ -2258,78 +2040,33 @@ describe("CI-01 outbound identity contract", () => {
     return analyzeNetworkIdentity(model, unit(model, "src/demo.ts"));
   }
 
+  const diagnostic = "direct fetch User-Agent must use inline USER_AGENT from @/config/site";
+
   it.each([
-    'const headers={"User-Agent":"Mozilla/5.0"}; fetch(url,{headers})',
-    'fetch(url,{headers:new Headers({"User-Agent":"Mozilla/5.0"})})',
-    'fetch(url,{headers:new Headers([["user-agent","Mozilla/5.0"]])})',
-    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
-    'const headers=new Headers(); headers.append("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
-    'fetch(new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}))',
-    'const request=new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}); fetch(request)',
-    'fetch(url,{headers:{"user-agent":"curl/8"}})',
-    'const agent="Mozilla/"+"5.0"; fetch(url,{headers:{"User-Agent":agent}})',
-  ])("rejects an explicit unidentified fetch User-Agent: %s", (source) => {
-    expect(messages(analyze(source))).toContain("direct fetch User-Agent must identify Poligraph");
+    'fetch(url,{headers:{"User-Agent":"Poligraph/1.0"}})',
+    'import {USER_AGENT} from "@/other"; fetch(url,{headers:{"User-Agent":USER_AGENT}})',
+    'import {USER_AGENT} from "@/config/site"; const headers={"User-Agent":USER_AGENT}; fetch(url,{headers})',
+    'import {USER_AGENT} from "@/config/site"; fetch(url,{headers:{...otherHeaders,"User-Agent":USER_AGENT}})',
+    'import {USER_AGENT} from "@/config/site"; new Headers({"User-Agent":USER_AGENT})',
+    'import {USER_AGENT} from "@/config/site"; const headers=new Headers(); headers.set("User-Agent",USER_AGENT)',
+    'import {USER_AGENT} from "@/config/site"; const headers=new Headers(); headers.append("User-Agent",USER_AGENT)',
+    'import {USER_AGENT} from "@/config/site"; new Request(url,{headers:{"User-Agent":USER_AGENT}})',
+    'import {USER_AGENT} from "@/config/site"; new Headers([["user-agent",USER_AGENT]])',
+    'import {USER_AGENT} from "@/config/site"; const values=[["user-agent",USER_AGENT]]; new Headers(values)',
+    'const computedValue="Poligraph/1.0"; fetch(url,{headers:{"User-Agent":computedValue}})',
+  ])("rejects non-canonical explicit User-Agent syntax: %s", (source) => {
+    expect(messages(analyze(source))).toContain(diagnostic);
   });
 
   it.each([
-    'const headers={"User-Agent":"Poligraph/1.0"}; fetch(url,{headers})',
-    'fetch(url,{headers:new Headers({"User-Agent":"Poligraph/1.0"})})',
-    'fetch(url,{headers:new Headers([["user-agent","Poligraph/1.0"]])})',
-    'const headers=new Headers(); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
-    'const headers=new Headers(); headers.append("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
-    'fetch(new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}))',
-    'const request=new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}); fetch(request)',
+    'import {USER_AGENT} from "@/config/site"; fetch(url,{signal,headers:{Accept:"text/csv","User-Agent":USER_AGENT}})',
+    'import {USER_AGENT as agent} from "@/config/site"; fetch(url,{headers:{"User-Agent":agent}})',
     'fetch(url,{headers:{Accept:"application/json"}})',
+    'const value=request.headers.get("user-agent")',
     'const audit={userAgent:"Mozilla/5.0"}',
     "httpClient.get(url)",
-  ])("accepts identified or unrelated outbound forms: %s", (source) => {
+  ])("accepts canonical or unrelated forms: %s", (source) => {
     expect(analyze(source)).toEqual([]);
-  });
-
-  it.each([
-    'const base={"User-Agent":"Mozilla/5.0"}; const headers={...base}; fetch(url,{headers})',
-    'const base={"User-Agent":"Mozilla/5.0"}; fetch(url,{headers:new Headers({...base})})',
-    'const safe={"User-Agent":"Poligraph/1.0"}; const unsafe={"User-Agent":"Mozilla/5.0"}; const headers={...safe,...unsafe}; fetch(url,{headers})',
-    'const base={"User-Agent":"Mozilla/5.0"}; const headers={"User-Agent":"Poligraph/1.0",...base}; fetch(url,{headers})',
-    'const first={"User-Agent":"Mozilla/5.0"}; const second={...first}; const third={...second}; fetch(url,{headers:third})',
-    'const headers=new Headers(); headers.set("User-Agent","Poligraph/1.0"); headers.set("User-Agent","Mozilla/5.0"); fetch(url,{headers})',
-    'const request=new Request(url,{headers:{"User-Agent":"Poligraph/1.0"}}); fetch(request,{headers:{"User-Agent":"Mozilla/5.0"}})',
-  ])("rejects the effective unidentified fetch User-Agent: %s", (source) => {
-    expect(messages(analyze(source))).toContain("direct fetch User-Agent must identify Poligraph");
-  });
-
-  it.each([
-    'const unsafe={"User-Agent":"Mozilla/5.0"}; const headers={...unsafe,"User-Agent":"Poligraph/1.0"}; fetch(url,{headers})',
-    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
-    'const headers=new Headers(); headers.set("User-Agent","Mozilla/5.0"); headers.delete("User-Agent"); fetch(url,{headers})',
-    'const headers=new Headers({"User-Agent":"Mozilla/5.0"}); headers.set("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
-    'const headers=new Headers(); headers.append("User-Agent","Mozilla/5.0"); headers.append("User-Agent","Poligraph/1.0"); fetch(url,{headers})',
-    'const request=new Request(url,{headers:{"User-Agent":"Mozilla/5.0"}}); fetch(request,{headers:{"User-Agent":"Poligraph/1.0"}})',
-  ])("accepts the effective Poligraph or absent fetch User-Agent: %s", (source) => {
-    expect(analyze(source)).toEqual([]);
-  });
-
-  it("computes the Headers state separately before each fetch", () => {
-    const violations = analyze(`const headers=new Headers();
-headers.set("User-Agent","Mozilla/5.0");
-fetch(firstUrl,{headers});
-headers.set("User-Agent","Poligraph/1.0");
-fetch(secondUrl,{headers});`);
-
-    expect(violations).toHaveLength(1);
-    expect(violations[0]).toMatchObject({
-      line: 3,
-      message: "direct fetch User-Agent must identify Poligraph",
-    });
-  });
-
-  it("ignores unrelated header-like values that never reach fetch", () => {
-    expect(
-      analyze(
-        'const business={"User-Agent":"Mozilla/5.0"}; const headers=new Headers({"User-Agent":"Mozilla/5.0"})'
-      )
-    ).toEqual([]);
   });
 });
 
@@ -2340,53 +2077,24 @@ describe("CI-01 NEXT_PUBLIC secret contract", () => {
   }
 
   it.each([
-    ["const {NEXT_PUBLIC_PRIVATE_KEY}=process.env", "NEXT_PUBLIC_PRIVATE_KEY"],
-    ["const env=process.env; const {NEXT_PUBLIC_TOKEN}=env", "NEXT_PUBLIC_TOKEN"],
-    ['const env=process.env; env["NEXT_PUBLIC_"+"PRIVATE_KEY"]', "NEXT_PUBLIC_PRIVATE_KEY"],
-    [
-      'const prefix="NEXT_PUBLIC_"; const suffix="PRIVATE_KEY"; process.env[prefix+suffix]',
-      "NEXT_PUBLIC_PRIVATE_KEY",
-    ],
-    ['const key=`NEXT_PUBLIC_${"PRIVATE_KEY"}`; process.env[key]', "NEXT_PUBLIC_PRIVATE_KEY"],
-    [
-      "const processAlias=process; const env=processAlias.env; env.NEXT_PUBLIC_PRIVATE_KEY",
-      "NEXT_PUBLIC_PRIVATE_KEY",
-    ],
-    ["const env=globalThis.process.env; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
-    ['const env=globalThis["process"].env; env.NEXT_PUBLIC_TOKEN', "NEXT_PUBLIC_TOKEN"],
-    [
-      "const p1=process; const p2=p1; const env=p2.env; const {NEXT_PUBLIC_PASSWORD}=env",
-      "NEXT_PUBLIC_PASSWORD",
-    ],
-    ["const [env]=[process.env]; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
-    [
-      "const tuple=[process.env] as const; const [env]=tuple; env.NEXT_PUBLIC_TOKEN",
-      "NEXT_PUBLIC_TOKEN",
-    ],
-    [
-      "const [,env]=[undefined,globalThis.process.env]; env.NEXT_PUBLIC_PASSWORD",
-      "NEXT_PUBLIC_PASSWORD",
-    ],
-    [
-      "const first=process.env; const tuple=[first] as const; const [env]=tuple; const {NEXT_PUBLIC_PRIVATE_KEY}=env",
-      "NEXT_PUBLIC_PRIVATE_KEY",
-    ],
-    ["const {env}=process; env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
-    ["const {env:publicEnv}=process; publicEnv.NEXT_PUBLIC_TOKEN", "NEXT_PUBLIC_TOKEN"],
+    ["env.NEXT_PUBLIC_PRIVATE_KEY", "NEXT_PUBLIC_PRIVATE_KEY"],
+    ["const {NEXT_PUBLIC_TOKEN}=anything", "NEXT_PUBLIC_TOKEN"],
+    ["const [NEXT_PUBLIC_PASSWORD]=values", "NEXT_PUBLIC_PASSWORD"],
+    ["const NEXT_PUBLIC_SECRET=value", "NEXT_PUBLIC_SECRET"],
+    ["const object={NEXT_PUBLIC_CREDENTIAL:value}", "NEXT_PUBLIC_CREDENTIAL"],
+    ['const key="NEXT_PUBLIC_"+"API_KEY"; object[key]', "NEXT_PUBLIC_API_KEY"],
+    ['object[`NEXT_PUBLIC_${"PRIVATE_KEY"}`]', "NEXT_PUBLIC_PRIVATE_KEY"],
   ])("rejects statically determined secret-like key: %s", (source, expectedName) => {
     expect(messages(analyze(source))).toContain(`secret-like public env ${expectedName}`);
   });
 
   it.each([
-    "const safe=process.env.NEXT_PUBLIC_SITE_URL",
-    "function demo(process:{env:Record<string,string>}){return process.env.NEXT_PUBLIC_PRIVATE_KEY}",
-    'const local={env:{NEXT_PUBLIC_TOKEN:"value"}}; local.env.NEXT_PUBLIC_TOKEN',
-    'const local=[{NEXT_PUBLIC_PRIVATE_KEY:"ordinary-field"}]; const [env]=local; env.NEXT_PUBLIC_PRIVATE_KEY',
-    "function example(tuple:Array<Record<string,string>>){const [env]=tuple; return env?.NEXT_PUBLIC_PRIVATE_KEY}",
-    "const [env]=[process.env]; env.NEXT_PUBLIC_PUBLIC_API_URL",
+    "process.env.NEXT_PUBLIC_SITE_URL",
+    "object.NEXT_PUBLIC_PUBLIC_API_URL",
     'process.env["NEXT_PUBLIC_"+runtime]',
+    "const key=`NEXT_PUBLIC_${runtime}`; object[key]",
     "// process.env.NEXT_PUBLIC_PRIVATE_KEY\nconst safe=process.env.NEXT_PUBLIC_SITE_URL",
-  ])("accepts non-sensitive, shadowed, local, or runtime-unknown form: %s", (source) => {
+  ])("accepts non-sensitive, commented, or runtime-unknown names: %s", (source) => {
     expect(analyze(source)).toEqual([]);
   });
 

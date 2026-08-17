@@ -22,6 +22,7 @@ import {
   type CommuneResult2026,
   type ListResult2026,
 } from "./parse-wide-results-2026";
+import { USER_AGENT } from "@/config/site";
 
 // --- Data source URLs ---
 
@@ -55,7 +56,7 @@ interface SyncStats {
 async function downloadCsv(url: string): Promise<string> {
   console.log(`Downloading CSV from ${url}...`);
   const response = await fetch(url, {
-    headers: { "User-Agent": "Poligraph/1.0 (sync)" },
+    headers: { "User-Agent": USER_AGENT },
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url}`);

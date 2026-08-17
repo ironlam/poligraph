@@ -40,6 +40,13 @@ import { fetchP18Filenames, filenameFromThumbnailUrl } from "../src/lib/photos/w
 import { uploadCroppedPortrait, deleteCroppedPortrait } from "../src/lib/photos/blob";
 
 const client = new HTTPClient({ rateLimitMs: 150 });
+const imageClient = new HTTPClient({
+  timeout: 20_000,
+  retries: 2,
+  retryDelay: 2_000,
+  rateLimitMs: 700,
+  sourceName: "Wikimedia images",
+});
 
 /** Default cap for the crop phase, which downloads and uploads per row. */
 const DEFAULT_CROP_LIMIT = 300;
@@ -106,39 +113,8 @@ interface CropEntry {
  * throttled response is indistinguishable from a missing file unless you slow
  * down and retry — which once made a perfectly good batch look half-broken.
  */
-const IMAGE_FETCH_INTERVAL_MS = 700;
-
-/** Attempts per image, to ride out a 429 rather than record a false failure. */
-const IMAGE_FETCH_ATTEMPTS = 3;
-
-let lastImageFetchAt = 0;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function fetchImage(url: string): Promise<Buffer> {
-  let lastError = "";
-
-  for (let attempt = 1; attempt <= IMAGE_FETCH_ATTEMPTS; attempt++) {
-    const waitFor = lastImageFetchAt + IMAGE_FETCH_INTERVAL_MS - Date.now();
-    if (waitFor > 0) await sleep(waitFor);
-    lastImageFetchAt = Date.now();
-
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Poligraph/1.0 (https://poligraph.fr)" },
-      signal: AbortSignal.timeout(20000),
-    });
-
-    if (res.ok) return Buffer.from(await res.arrayBuffer());
-
-    lastError = `HTTP ${res.status}`;
-    // Only throttling is worth retrying; a 404 will not become a 200.
-    if (res.status !== 429) break;
-    await sleep(2000 * attempt);
-  }
-
-  throw new Error(lastError);
+  return (await imageClient.getBuffer(url)).data;
 }
 
 async function urlIsServed(url: string): Promise<boolean> {

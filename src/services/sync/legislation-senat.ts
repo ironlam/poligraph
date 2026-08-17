@@ -14,6 +14,7 @@ import { resolveBatch } from "@/lib/identity";
 import { IDENTITY_THRESHOLDS } from "@/lib/identity";
 import type { ResolveInput } from "@/lib/identity";
 import { normalizeText } from "@/lib/name-matching";
+import { USER_AGENT } from "@/config/site";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -188,7 +189,7 @@ function normalizeTitle(title: string): string {
  */
 async function downloadCsvBuffer(url: string): Promise<Buffer> {
   const response = await fetch(url, {
-    headers: { "User-Agent": "Poligraph/1.0 (sync)" },
+    headers: { "User-Agent": USER_AGENT },
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url}`);

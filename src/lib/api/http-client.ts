@@ -8,6 +8,8 @@
  * - Batch requests with concurrency control
  */
 
+import { USER_AGENT } from "@/config/site";
+
 export interface HTTPClientOptions {
   baseUrl?: string;
   timeout?: number;
@@ -126,7 +128,7 @@ const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
   retries: 3,
   retryDelay: 1000,
   rateLimitMs: 0,
-  userAgent: "Poligraph/1.0 (https://poligraph.fr)",
+  userAgent: USER_AGENT,
   headers: {},
   enableCache: false,
   cacheTtlMs: 5 * 60 * 1000, // 5 minutes
