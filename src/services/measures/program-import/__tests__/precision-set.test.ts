@@ -58,7 +58,29 @@ describe("precision set François Ruffin", () => {
 
   it("mesure séparément precision, confusion et faux négatifs", () => {
     const metrics = evaluatePrecisionSet(RUFFIN_PRECISION_SET);
-    expect(metrics).toMatchSnapshot();
+    expect(metrics).toMatchObject({
+      sampleSize: 120,
+      accepted: 95,
+      truePositives: 68,
+      falsePositives: 27,
+      precision: 68 / 95,
+      byClassification: {
+        MEASURE: { accepted: 77, falsePositives: 25, precision: 52 / 77 },
+        OBJECTIVE: { accepted: 18, falsePositives: 2, precision: 16 / 18 },
+      },
+      falsePositivesByCause: {
+        EXISTING_POLICY_DESCRIPTION: 2,
+        GENERAL_INTENT: 4,
+        HISTORICAL_ACTION: 1,
+        INSUFFICIENT_ATTRIBUTION: 2,
+        RHETORICAL_FORMULATION: 3,
+        SLOGAN: 8,
+        THIRD_PARTY_PROPOSAL: 1,
+        TITLE_ONLY: 6,
+      },
+    });
+    expect(metrics.falseNegatives.ACCEPT_MEASURE).toHaveLength(11);
+    expect(metrics.falseNegatives.ACCEPT_OBJECTIVE).toHaveLength(2);
   });
 
   it("mesure la frontière d'acceptation recalibrée sans modifier les annotations", () => {
@@ -83,6 +105,29 @@ describe("precision set François Ruffin", () => {
     expect(metrics.precision).toBeGreaterThanOrEqual(0.95);
     expect(survivingHistorical).toEqual([]);
     expect(survivingThirdParty).toEqual([]);
-    expect({ metrics, acceptanceGuards }).toMatchSnapshot();
+    expect(metrics).toMatchObject({
+      sampleSize: 120,
+      accepted: 69,
+      truePositives: 69,
+      falsePositives: 0,
+      precision: 1,
+      byClassification: {
+        MEASURE: { accepted: 51, falsePositives: 0, precision: 1 },
+        OBJECTIVE: { accepted: 18, falsePositives: 0, precision: 1 },
+      },
+      falsePositiveIds: [],
+    });
+    expect(metrics.falseNegatives.ACCEPT_MEASURE).toHaveLength(11);
+    expect(metrics.falseNegatives.ACCEPT_OBJECTIVE).toEqual(["calibrated-accepted-46"]);
+    expect(acceptanceGuards).toEqual({
+      DEPENDENT_FRAGMENT: 4,
+      DESCRIPTIVE_EXISTING_POLICY: 2,
+      GENERAL_INTENT_FORMULATION: 1,
+      HISTORICAL_REFERENCE: 1,
+      INSUFFICIENT_ATTRIBUTION: 1,
+      RHETORICAL_FORMULATION: 6,
+      SLOGAN_OR_PRINCIPLE: 8,
+      TITLE_OR_NOMINAL_LABEL: 5,
+    });
   });
 });

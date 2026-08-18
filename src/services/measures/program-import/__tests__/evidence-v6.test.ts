@@ -21,8 +21,6 @@ import {
 } from "../evidence-v6";
 import type { DiscourseAnnotation } from "../discourse";
 import type { DocumentUnit, SegmentProvenance } from "../types";
-import { RUFFIN_BLIND_HOLDOUT_V2 } from "./fixtures/ruffin-blind-holdout-v2";
-import { RUFFIN_BLIND_HOLDOUT_V3 } from "./fixtures/ruffin-blind-holdout-v3";
 
 const TRUSTED: SegmentProvenance = {
   status: "TEXT_LAYER_TRUSTED",
@@ -131,8 +129,63 @@ function extraction(
   return value;
 }
 
-function v3(id: string) {
-  return RUFFIN_BLIND_HOLDOUT_V3.find((entry) => entry.id === id)!;
+const REGRESSION_EVIDENCE: Record<string, { page: number; sourceText: string }> = {
+  "blind-v2-12": {
+    page: 11,
+    sourceText:
+      "On n’est pas des bêtes. On n’est pas des boniches. On veut juste être reconnues pour ce qu’on fait.",
+  },
+  "blind-v3-1": {
+    page: 21,
+    sourceText:
+      "nous voulons contrôler et menacer de pénalités les entreprises (surtout dans l’industrie) qui renouvellent incessamment les contrats d’intérim de 3x6 mois",
+  },
+  "blind-v3-12": {
+    page: 18,
+    sourceText:
+      "nous voulons limiter les possibilités de dérogations conventionnelles à la durée minimale du travail",
+  },
+  "blind-v3-13": {
+    page: 21,
+    sourceText:
+      "créer une obligation légale de faveur, visant à appliquer le régime le plus favorable entre le régime de l’entreprise sous-traitante ou le régime de l’entreprise donneuse d’ordre",
+  },
+  "blind-v3-20": {
+    page: 12,
+    sourceText:
+      "Elisabeth Borne avait commandé, dès 2020, un rapport visant à reconnaître les travailleurs essentiels, et les conclusions sur les conditions de travail de ces salariés sont limpides. Mais qu’a-t-elle fait de ce rapport ? Renvoyer tout à la négociation et s’en laver les mains !",
+  },
+  "blind-v3-22": {
+    page: 27,
+    sourceText:
+      "Nous créerons des équipements polyvalents dans les zones qui en sont aujourd’hui dépourvues, en priorisant les territoires sans aucun lieu de réunion culturel, associatif ou festif.",
+  },
+  "blind-v3-27": {
+    page: 38,
+    sourceText:
+      "Nous voulons que cet espace public réponde à ce besoin, en réunissant en un seul lieu : des contenus d’auto-formation gratuits, un annuaire des associations et écoles d’enseignement artistique à proximité, les lieux disponibles pour pratiquer en autonomie, et des ressources pour se produire ou exposer son travail.",
+  },
+  "blind-v3-40": {
+    page: 13,
+    sourceText:
+      "L’une des conditions impératives de ce projet est de protéger le temps libéré des travailleuses et des travailleurs",
+  },
+  "blind-v3-50": {
+    page: 42,
+    sourceText:
+      "Nous lui donnerons un pouvoir d’enquête renforcé sur les activités réellement réalisées par les anciens ministres et élus, qu’ils créent leur propre cabinet ou qu’ils soient recrutés au sein d’entreprises.",
+  },
+  "blind-v3-56": {
+    page: 48,
+    sourceText:
+      "Nous étendrons le champ des responsables publics concernés au Président de la République, aux membres du Conseil constitutionnel, du Conseil d’État et de la Cour de cassation, aujourd’hui hors du dispositif",
+  },
+};
+
+function regressionEvidence(id: string) {
+  const fixture = REGRESSION_EVIDENCE[id];
+  if (!fixture) throw new Error(`Cas de régression inconnu : ${id}`);
+  return fixture;
 }
 
 function prepare(units: DocumentUnit[], proposal: EvidenceExtraction) {
@@ -238,7 +291,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   beforeEach(() => vi.mocked(callMistral).mockReset());
 
   it("1. accepte une mesure autonome et ne laisse pas le modèle fournir sourceText", async () => {
-    const fixture = v3("blind-v3-22");
+    const fixture = regressionEvidence("blind-v3-22");
     const blocks = [unit("p27-b01", 0, fixture.sourceText, { page: fixture.page })];
     vi.mocked(callMistral).mockResolvedValue(
       response({
@@ -272,7 +325,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   });
 
   it("2. résout un référent grâce au bloc précédent inclus", () => {
-    const dependent = v3("blind-v3-50");
+    const dependent = regressionEvidence("blind-v3-50");
     const blocks = [
       unit(
         "p41-b03",
@@ -296,7 +349,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   });
 
   it("3. accepte un objectif établi par plusieurs blocs", () => {
-    const objective = v3("blind-v3-40");
+    const objective = regressionEvidence("blind-v3-40");
     const blocks = [
       unit("p12-b01", 0, "NOTRE PROJET : UNE VIE LARGE, HORS DU RÈGNE DE LA MARCHANDISE.", {
         page: 12,
@@ -324,7 +377,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   });
 
   it("4. conserve une mesure voisine d’un diagnostic sans transformer le diagnostic", () => {
-    const measure = v3("blind-v3-1");
+    const measure = regressionEvidence("blind-v3-1");
     const blocks = [
       unit(
         "p21-b01",
@@ -349,7 +402,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   });
 
   it("5. rejette toujours le témoignage d’un tiers", () => {
-    const thirdParty = RUFFIN_BLIND_HOLDOUT_V2.find((entry) => entry.id === "blind-v2-12")!;
+    const thirdParty = regressionEvidence("blind-v2-12");
     const blocks = [
       unit(
         "p11-b01",
@@ -374,7 +427,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
   });
 
   it("6. rejette toujours une référence historique", () => {
-    const historical = v3("blind-v3-20");
+    const historical = regressionEvidence("blind-v3-20");
     const blocks = [unit("p12-b01", 0, historical.sourceText, { page: historical.page })];
     const result = evaluate(
       blocks,
@@ -810,7 +863,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
     expect(cases).toHaveLength(7);
 
     for (const item of cases) {
-      const fixture = v3(item.id);
+      const fixture = regressionEvidence(item.id);
       const blocks = item.context
         ? [unit("p1-b01", 0, item.context), unit("p1-b02", 1, fixture.sourceText)]
         : [unit("p1-b01", 0, fixture.sourceText)];
