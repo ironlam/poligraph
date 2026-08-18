@@ -20,14 +20,15 @@ let reviewMeasureRevision: typeof import("../transitions").reviewMeasureRevision
 // constraint is on what the caller can pass, not on what the body does.
 //
 // Erased at runtime: it is `npx tsc --noEmit` that fails on a violation.
-// `expectedUpdatedAt` was added in lot 2 for optimistic concurrency. It is NOT a review
-// field: it carries the version of the row the caller last saw, so a stale form cannot
-// republish content another reviewer just took down. The exact shape is kept rather than
-// loosened, so that any future field has to be added here deliberately.
+// `expectedUpdatedAt` was added in lot 2 for optimistic concurrency. `publishedBy` carries
+// the authenticated actor to the audit log. Neither declares a review: the transition still
+// reads reviewedAt from the stored revision. The exact shape is kept rather than loosened,
+// so that any future field has to be added here deliberately.
 it("keeps the publication input free of any review field", () => {
   expectTypeOf<Parameters<typeof PublishFn>[0]>().toEqualTypeOf<{
     measureId: string;
     revisionId: string;
+    publishedBy?: string;
     expectedUpdatedAt?: Date;
   }>();
 });
@@ -173,6 +174,23 @@ describeIfDisposableDb("publishMeasureRevision guards", () => {
     // path ever moved it: every measure would have stayed invisible forever.
     expect(measure.publicationStatus).toBe("PUBLISHED");
     expect(measure.publishedRevisionId).toBe(revisionId);
+  });
+
+  it("audits an authenticated editorial publication", async () => {
+    const { measureId, revisionId } = await seedMeasureWithDraft();
+    await reviewMeasureRevision({ measureId, revisionId, reviewedBy: "relecteur" });
+
+    await publishMeasureRevision({ measureId, revisionId, publishedBy: "admin" });
+
+    await expect(
+      db.auditLog.findFirstOrThrow({
+        where: {
+          action: "PUBLISH_MEASURE_REVISION",
+          entityType: "MeasureRevision",
+          entityId: revisionId,
+        },
+      })
+    ).resolves.toMatchObject({ userId: "admin", changes: { measureId } });
   });
 
   it("supersedes the previous published revision and leaves exactly one current", async () => {

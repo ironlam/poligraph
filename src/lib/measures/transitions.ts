@@ -2,12 +2,16 @@ import type {
   MeasureAttribution,
   MeasureExtractionMethod,
   MeasurePrecision,
+  MeasureRejectionReason,
+  MeasureReviewReadiness,
+  MeasureReviewWarning,
   MeasureSourceKind,
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { invalidateMeasureTags } from "./cache";
+import { validateRevisionEvidence, type MeasureImportEngine } from "./evidence-snapshot";
 import { MeasureConcurrencyError, MeasureValidationError } from "./errors";
 import { lockMeasure } from "./lock";
 import { syncSearchDocument } from "./search-sync";
@@ -27,6 +31,11 @@ export type MeasureRevisionInput = {
   extractionMethod: MeasureExtractionMethod;
   extractionConfidence: number | null;
   extractorVersion: string | null;
+  importEngine?: MeasureImportEngine;
+  evidenceSnapshot?: unknown | null;
+  importFingerprint?: string | null;
+  reviewReadiness?: MeasureReviewReadiness | null;
+  reviewWarnings?: MeasureReviewWarning[];
 };
 
 export type CreateMeasureInput = {
@@ -106,7 +115,7 @@ function assertVersionMatches(measureId: string, expected: Date | undefined, act
 function assertRevisionIsUsable(
   revision: MeasureRevisionInput,
   sources: MeasureSourceInput[]
-): void {
+): ReturnType<typeof validateRevisionEvidence> & { ok: true } {
   if (revision.text.trim() === "") {
     throw new MeasureValidationError("Le texte de la révision est vide");
   }
@@ -115,6 +124,26 @@ function assertRevisionIsUsable(
   if (sources.length === 0) {
     throw new MeasureValidationError("Une révision exige au moins une source");
   }
+  const evidence = validateRevisionEvidence(revision);
+  if (!evidence.ok) {
+    throw new MeasureValidationError(evidence.reason);
+  }
+  if (revision.importEngine === "V6" && revision.extractionMethod === "AI_ASSISTED") {
+    if (!revision.importFingerprint || !/^[a-f0-9]{64}$/.test(revision.importFingerprint)) {
+      throw new MeasureValidationError("Un import V6 exige une clé d'idempotence valide");
+    }
+    if (!revision.reviewReadiness) {
+      throw new MeasureValidationError("Un import V6 exige un état de préparation à la revue");
+    }
+    const warningCount = revision.reviewWarnings?.length ?? 0;
+    if (
+      (revision.reviewReadiness === "READY_FOR_REVIEW" && warningCount > 0) ||
+      (revision.reviewReadiness === "REVIEW_WITH_WARNING" && warningCount === 0)
+    ) {
+      throw new MeasureValidationError("L'état de revue V6 contredit ses warnings");
+    }
+  }
+  return evidence;
 }
 
 /**
@@ -128,7 +157,7 @@ function assertRevisionIsUsable(
 export async function createMeasure(
   input: CreateMeasureInput
 ): Promise<{ measureId: string; revisionId: string }> {
-  assertRevisionIsUsable(input.revision, input.sources);
+  const evidence = assertRevisionIsUsable(input.revision, input.sources);
 
   return db.$transaction(async (tx) => {
     await assertContextIsCoherent(tx, input);
@@ -154,6 +183,10 @@ export async function createMeasure(
         extractionMethod: input.revision.extractionMethod,
         extractionConfidence: input.revision.extractionConfidence,
         extractorVersion: input.revision.extractorVersion,
+        evidenceSnapshot: evidence.evidenceSnapshot,
+        importFingerprint: input.revision.importFingerprint,
+        reviewReadiness: input.revision.reviewReadiness,
+        reviewWarnings: input.revision.reviewWarnings,
         sources: { create: input.sources },
       },
     });
@@ -183,6 +216,9 @@ export type DraftMeasureRevisionInput = {
    * in progress without anyone seeing it.
    */
   expectedUpdatedAt?: Date;
+  /** Preserves immutable V6 proof when a human corrects the active imported formulation. */
+  preserveEvidenceFromRevisionId?: string;
+  correctedBy?: string;
 };
 
 // No `discardedBy` and no `supersedesDraftBy`. A first version of this plan took a
@@ -201,8 +237,6 @@ export type DraftMeasureRevisionInput = {
 export async function draftMeasureRevision(
   input: DraftMeasureRevisionInput
 ): Promise<{ revisionId: string }> {
-  assertRevisionIsUsable(input.revision, input.sources);
-
   return db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
 
@@ -212,6 +246,47 @@ export async function draftMeasureRevision(
     });
 
     assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
+
+    let revisionInput = input.revision;
+    let revisionSources = input.sources;
+    if (input.preserveEvidenceFromRevisionId) {
+      if (measure.latestRevisionId !== input.preserveEvidenceFromRevisionId) {
+        throw new MeasureValidationError(
+          "La preuve à conserver n'appartient plus au brouillon actif"
+        );
+      }
+      const previous = await tx.measureRevision.findUnique({
+        where: { id: input.preserveEvidenceFromRevisionId },
+        select: {
+          measureId: true,
+          evidenceSnapshot: true,
+          reviewReadiness: true,
+          reviewWarnings: true,
+          sources: {
+            select: {
+              sourceKind: true,
+              tier: true,
+              url: true,
+              page: true,
+              publishedAt: true,
+            },
+          },
+        },
+      });
+      if (!previous || previous.measureId !== input.measureId) {
+        throw new MeasureValidationError("La révision source de la preuve est introuvable");
+      }
+      revisionInput = {
+        ...input.revision,
+        importEngine: previous.evidenceSnapshot === null ? input.revision.importEngine : "V6",
+        evidenceSnapshot: previous.evidenceSnapshot,
+        reviewReadiness: previous.reviewReadiness,
+        reviewWarnings: previous.reviewWarnings,
+        importFingerprint: null,
+      };
+      revisionSources = previous.sources;
+    }
+    const evidence = assertRevisionIsUsable(revisionInput, revisionSources);
 
     // The previous latest revision is an active draft only if it is not the published
     // one: a published revision is superseded at publication time, never discarded.
@@ -225,15 +300,34 @@ export async function draftMeasureRevision(
     const revision = await tx.measureRevision.create({
       data: {
         measureId: input.measureId,
-        text: input.revision.text,
-        precision: input.revision.precision,
-        validFrom: input.revision.validFrom,
-        extractionMethod: input.revision.extractionMethod,
-        extractionConfidence: input.revision.extractionConfidence,
-        extractorVersion: input.revision.extractorVersion,
-        sources: { create: input.sources },
+        text: revisionInput.text,
+        precision: revisionInput.precision,
+        validFrom: revisionInput.validFrom,
+        extractionMethod: revisionInput.extractionMethod,
+        extractionConfidence: revisionInput.extractionConfidence,
+        extractorVersion: revisionInput.extractorVersion,
+        evidenceSnapshot: evidence.evidenceSnapshot,
+        importFingerprint: revisionInput.importFingerprint,
+        reviewReadiness: revisionInput.reviewReadiness,
+        reviewWarnings: revisionInput.reviewWarnings,
+        sources: { create: revisionSources },
       },
     });
+
+    if (input.preserveEvidenceFromRevisionId) {
+      await tx.auditLog.create({
+        data: {
+          action: "CORRECT_DRAFT",
+          entityType: "MeasureRevision",
+          entityId: revision.id,
+          changes: {
+            previousRevisionId: input.preserveEvidenceFromRevisionId,
+            evidenceSnapshotPreserved: true,
+          },
+          userId: input.correctedBy,
+        },
+      });
+    }
 
     await tx.measure.update({
       where: { id: input.measureId },
@@ -347,6 +441,71 @@ export async function discardMeasureRevision(input: {
   });
 }
 
+/** Records a structured human rejection of an unpublished proposal. */
+export async function rejectMeasureRevision(input: {
+  measureId: string;
+  revisionId: string;
+  reason: MeasureRejectionReason;
+  detail: string | null;
+  rejectedBy: string;
+}): Promise<void> {
+  if (input.rejectedBy.trim() === "") {
+    throw new MeasureValidationError("Le relecteur doit être identifié");
+  }
+  if (input.reason === "OTHER" && (input.detail === null || input.detail.trim() === "")) {
+    throw new MeasureValidationError("Le motif Autre exige une précision");
+  }
+
+  await db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+    const measure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { latestRevisionId: true, publishedRevisionId: true },
+    });
+    if (input.revisionId === measure.publishedRevisionId) {
+      throw new MeasureValidationError("Une révision publiée ne peut pas être rejetée");
+    }
+    const revision = await tx.measureRevision.findUnique({
+      where: { id: input.revisionId },
+      select: { measureId: true, discardedAt: true, rejectedAt: true },
+    });
+    if (!revision || revision.measureId !== input.measureId) {
+      throw new MeasureValidationError("La révision à rejeter est introuvable sur cette mesure");
+    }
+    if (revision.discardedAt || revision.rejectedAt) {
+      throw new MeasureValidationError("Cette révision a déjà été abandonnée ou rejetée");
+    }
+
+    const now = new Date();
+    await tx.measureRevision.update({
+      where: { id: input.revisionId },
+      data: {
+        discardedAt: now,
+        rejectedAt: now,
+        rejectedBy: input.rejectedBy,
+        rejectionReason: input.reason,
+        rejectionDetail: input.detail?.trim() || null,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        action: "REJECT_DRAFT",
+        entityType: "MeasureRevision",
+        entityId: input.revisionId,
+        changes: { reason: input.reason, detail: input.detail?.trim() || null },
+        userId: input.rejectedBy,
+      },
+    });
+    if (measure.latestRevisionId === input.revisionId) {
+      await tx.measure.update({
+        where: { id: input.measureId },
+        data: { latestRevisionId: measure.publishedRevisionId },
+      });
+    }
+    await syncSearchDocument(tx, input.measureId);
+  });
+}
+
 /**
  * Publishes a reviewed revision. Five writes in one PostgreSQL transaction, then the cache
  * invalidation outside it.
@@ -358,6 +517,8 @@ export async function discardMeasureRevision(input: {
 export async function publishMeasureRevision(input: {
   measureId: string;
   revisionId: string;
+  /** Set by authenticated editorial entrypoints so publication itself is auditable. */
+  publishedBy?: string;
   /**
    * The `Measure.updatedAt` the caller last saw. When given, publication is refused if the row
    * has moved since, with MeasureConcurrencyError.
@@ -398,6 +559,8 @@ export async function publishMeasureRevision(input: {
         reviewedAt: true,
         discardedAt: true,
         supersededAt: true,
+        evidenceSnapshot: true,
+        reviewReadiness: true,
         _count: { select: { sources: true } },
       },
     });
@@ -417,6 +580,17 @@ export async function publishMeasureRevision(input: {
     }
     if (revision._count.sources === 0) {
       throw new MeasureValidationError("Une révision publiée doit porter au moins une source");
+    }
+    if (revision.reviewReadiness !== null) {
+      const evidence = validateRevisionEvidence({
+        importEngine: "V6",
+        evidenceSnapshot: revision.evidenceSnapshot,
+      });
+      if (!evidence.ok) {
+        throw new MeasureValidationError(
+          "Une révision V6 sans preuve valide ne peut pas être publiée"
+        );
+      }
     }
 
     const now = new Date();
@@ -454,6 +628,18 @@ export async function publishMeasureRevision(input: {
         ...(hasNewerDraft ? {} : { latestRevisionId: input.revisionId }),
       },
     });
+
+    if (input.publishedBy) {
+      await tx.auditLog.create({
+        data: {
+          action: "PUBLISH_MEASURE_REVISION",
+          entityType: "MeasureRevision",
+          entityId: input.revisionId,
+          changes: { measureId: input.measureId },
+          userId: input.publishedBy,
+        },
+      });
+    }
 
     // In the same transaction: the database must never expose a new revision while the
     // index still holds the previous text. Called last, so it reads the pointers this

@@ -2786,6 +2786,36 @@ enum MeasureExtractionMethod {
   IMPORTED
 }
 
+// Technical state of an imported revision before any editorial decision. A READY revision is
+// ready to be read, not validated or publishable. TECHNICALLY_BLOCKED never reaches persistence.
+enum MeasureReviewReadiness {
+  READY_FOR_REVIEW
+  REVIEW_WITH_WARNING
+}
+
+enum MeasureReviewWarning {
+  POSSIBLE_DIAGNOSIS_AS_ACTION
+  POSSIBLE_EXISTING_POLICY
+  ATTRIBUTION_UNCERTAIN
+  POSSIBLE_DUPLICATE
+  OBJECTIVE_VS_MEASURE_UNCERTAIN
+  WORDING_NEEDS_REVIEW
+  EVIDENCE_SCOPE_WEAK
+  MODEL_LOW_CONFIDENCE
+}
+
+enum MeasureRejectionReason {
+  NOT_A_PROPOSAL
+  DIAGNOSIS_ONLY
+  THIRD_PARTY
+  EXISTING_POLICY
+  HISTORICAL
+  DUPLICATE
+  INSUFFICIENT_EVIDENCE
+  BAD_WORDING
+  OTHER
+}
+
 // Eight values and not six. A campaign rally, a televised debate and a written
 // declaration are the most common primary sources of a presidential measure, and
 // revision 3 of the spec could express none of them: a non-parliamentary candidate
@@ -2912,6 +2942,15 @@ model MeasureRevision {
   extractionMethod     MeasureExtractionMethod
   extractionConfidence Float?
   extractorVersion     String?
+  evidenceSnapshot     Json?
+  importFingerprint    String?                 @unique
+  reviewReadiness      MeasureReviewReadiness?
+  reviewWarnings       MeasureReviewWarning[]  @default([])
+
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason MeasureRejectionReason?
+  rejectionDetail String?                 @db.Text
 
   sources             MeasureSource[]
   qualifications      MeasureQualification[]
