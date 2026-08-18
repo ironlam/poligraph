@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "program-import-v6-cross-candidate-pre-reveal/v1",
+  "candidateSlug": "marine-le-pen",
+  "candidateName": "Marine Le Pen",
+  "programEditionId": "cmsjfx2ki000au5v5nh62tkoy",
+  "chronology": [
+    {
+      "event": "SCOPE_SELECTED",
+      "recordedAt": "2026-08-17T23:19:14+02:00",
+      "pipelineOutputsVisible": false
+    },
+    {
+      "event": "SOURCE_PARSED",
+      "recordedAt": "2026-08-17T23:19:14+02:00",
+      "pipelineOutputsVisible": false
+    },
+    {
+      "event": "SOURCE_ONLY_GOLD_ANNOTATED",
+      "recordedAt": "2026-08-17T23:24:54+02:00",
+      "pipelineOutputsVisible": false
+    },
+    {
+      "event": "GOLD_HASH_FROZEN",
+      "recordedAt": "2026-08-17T23:25:00+02:00",
+      "pipelineOutputsVisible": false
+    }
+  ],
+  "documents": [
+    {
+      "url": "https://rassemblementnational.fr/documents/WEB-GRN-LIVRET-ENTREPRISE.pdf",
+      "documentHash": "84fcdf9546e870b286a36a0103fc8e90d5870eac1fa5b2f31cc8123ae2f3becd",
+      "documentType": "CANDIDATE_PROPOSALS_2027",
+      "publishedAt": "2024-09-06T00:00:00.000Z"
+    }
+  ],
+  "scope": {
+    "selectionMethod": "FULL_PROGRAMMATIC_SECTIONS",
+    "pageRange": {
+      "start": 5,
+      "end": 29
+    },
+    "excludedBlockedPages": [16, 21],
+    "reliablePagesWithUnits": 22,
+    "blocks": 221,
+    "units": 377,
+    "canonicalScopeHash": "19e656e6fed09a9d80703c9114f4e66d3bc410b6f1e86ed856d3e87e1ce042af",
+    "scopeFileSha256": "4042f6ada34e38be632ef86e6877d11434c502594e5aa6d68f9bf01da6af93e2",
+    "parsedSourceFileSha256": "8ff19e5ea1a5332d3e0971e958cad819de128c3e67ed48cf69ab07a45700e7cb"
+  },
+  "gold": {
+    "annotatorType": "CODEX_SOURCE_ONLY_EDITORIAL_ANNOTATION",
+    "pipelineOutputsVisible": false,
+    "measures": 70,
+    "objectives": 11,
+    "total": 81,
+    "goldFileSha256": "669e4889a3fc27b86965383c7f124a4ac5e336bd3d8929f3a4887ac9aa8bbaf2"
+  },
+  "semanticFreeze": {
+    "manifestSha256": "0bed0c2412192830b8167efae4a9f6e07baa64875f0896ecca8eb4837e1983ff",
+    "parserVersion": "program-document-parser/7-units-v1",
+    "discourseExtractorVersion": "mistral-large-latest/presidential-program-discourse-1-units-v2",
+    "measureExtractorVersion": "mistral-large-latest/presidential-program-import-7-discourse-grounded-v1",
+    "evidenceSchemaVersion": "evidence-snapshot/v3",
+    "discoursePromptSha256": "89a2ecdcee6b4a822f6a50553faa22c2b7e48f1cfe9409e4576954db0685fe8e",
+    "measureExtractorPromptSha256": "3900b57fe3a3eeaf7c797cca895157cced01c05802d18e6a1a746d50acbf778e"
+  },
+  "scoringScopeRule": {
+    "includedOutput": "ELIGIBLE_FOR_HUMAN_REVIEW avec toutes les evidenceUnitIds dans le scope gelé",
+    "excludedOutput": "Sortie rejetée par la policy gelée ou preuve partiellement ou totalement hors scope",
+    "classificationCompatibilityRequired": true
+  },
+  "matchingRule": {
+    "substance": "Même engagement politique substantiel, sans contradiction de portée",
+    "evidence": "Unités identiques ou recouvrement fort comprenant au moins une unité qui porte l'engagement; un voisinage contigu ne suffit que si le texte démontre la même action",
+    "formulation": "L'identité textuelle n'est pas requise",
+    "oneToOne": "Une sortie compatible retrouve un gold et compte pour un TP sortie et un gold retrouvé",
+    "oneToMany": "Plusieurs sorties peuvent retrouver un gold seulement si chacune exprime une composante substantielle distincte; chaque sortie valide compte TP, le gold compte une seule fois au rappel",
+    "manyToOne": "Une sortie peut retrouver plusieurs gold seulement si elle exprime intégralement chacun; la sortie compte une fois en précision et chaque gold intégralement couvert compte au rappel",
+    "redundantOutput": "Une sortie redondante sans portée distincte compte FP",
+    "ambiguous": "Un appariement non résolu compte FP pour la sortie et FN pour le gold, sans bénéfice du doute"
+  },
+  "metricsRule": {
+    "precision": "TP outputs / (TP outputs + FP outputs)",
+    "recall": "gold retrouvés / total gold",
+    "classMismatch": "Une sortie MEASURE face à un gold OBJECTIVE, ou l'inverse, compte FP et laisse le gold FN",
+    "global": "Calculé sur toutes les sorties et tous les gold du scope",
+    "measure": "Calculé sur sorties MEASURE et gold ACCEPT_MEASURE",
+    "objective": "Calculé sur sorties OBJECTIVE et gold ACCEPT_OBJECTIVE"
+  },
+  "safetyCategories": [
+    "TESTIMONY_AS_CANDIDATE",
+    "DIAGNOSIS_AS_ACTION",
+    "LEGAL_REFERENCE_AS_COMMITMENT",
+    "EXISTING_POLICY_AS_PROPOSAL",
+    "HISTORICAL_AS_CURRENT",
+    "THIRD_PARTY_AS_CANDIDATE",
+    "UNSUPPORTED_SUBSTANTIVE_CONTENT",
+    "QUANTITATIVE_INVENTION",
+    "PROVENANCE_FAILURE",
+    "INSUFFICIENT_COMMITMENT",
+    "OTHER"
+  ],
+  "reveal": {
+    "status": "NOT_STARTED",
+    "fullV6RunsAllowed": 1
+  },
+  "productionSafety": {
+    "apply": false,
+    "databaseWrites": false,
+    "migrationDeploy": false,
+    "draftsCreated": 0,
+    "publication": false,
+    "cutover": false,
+    "productionModified": false
+  }
+}
