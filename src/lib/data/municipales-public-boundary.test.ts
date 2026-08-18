@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   electionFindUnique: vi.fn(),
   candidacyFindMany: vi.fn(),
+  mandateFindMany: vi.fn(),
+  mandateCount: vi.fn(),
+  queryRaw: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -15,10 +18,16 @@ vi.mock("@/lib/db", () => ({
   db: {
     election: { findUnique: mocks.electionFindUnique },
     candidacy: { findMany: mocks.candidacyFindMany },
+    mandate: { findMany: mocks.mandateFindMany, count: mocks.mandateCount },
+    $queryRaw: mocks.queryRaw,
   },
 }));
 
-import { getCumulCandidates } from "./municipales";
+import { getCumulCandidates, getMaires, getMaireStats } from "./municipales";
+
+function rawSqlText(query: unknown): string {
+  return (query as { sql: string }).sql;
+}
 
 describe("getCumulCandidates, frontière publique", () => {
   beforeEach(() => {
@@ -82,5 +91,118 @@ describe("getCumulCandidates, frontière publique", () => {
     ]);
     expect(JSON.stringify(candidates)).not.toContain("Bastien Brouillon");
     expect(JSON.stringify(candidates)).not.toContain("politician-draft");
+  });
+});
+
+describe("maires, population publique des listes et agrégats", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("exclut le maire DRAFT de la liste et de chaque statistique", async () => {
+    const mairePublic = {
+      id: "mandate-public",
+      departmentCode: "75",
+      startDate: new Date("2020-05-18T00:00:00.000Z"),
+      politician: {
+        slug: "alice-publique",
+        fullName: "Alice Publique",
+        firstName: "Alice",
+        lastName: "Publique",
+        civility: "Mme",
+        photoUrl: null,
+        blobPhotoUrl: null,
+        birthDate: null,
+        currentParty: { shortName: "PP", color: "#123456", slug: "parti-public" },
+      },
+      localData: {
+        functionStart: new Date("2020-05-18T00:00:00.000Z"),
+        commune: { name: "Paris", departmentCode: "75", population: 2_000_000 },
+      },
+    };
+    const maireDraft = {
+      ...mairePublic,
+      id: "mandate-draft",
+      politician: {
+        ...mairePublic.politician,
+        slug: "bastien-brouillon",
+        fullName: "Bastien Brouillon",
+        firstName: "Bastien",
+        lastName: "Brouillon",
+        civility: "M.",
+        currentParty: { shortName: "PD", color: "#654321", slug: "parti-draft" },
+      },
+      localData: {
+        ...mairePublic.localData,
+        functionStart: new Date("2010-01-01T00:00:00.000Z"),
+      },
+    };
+
+    mocks.mandateFindMany.mockImplementation(async (args: { where?: unknown }) => {
+      const publicOnly = JSON.stringify(args.where).includes(
+        '"politician":{"publicationStatus":"PUBLISHED"}'
+      );
+      return (publicOnly ? [mairePublic] : [mairePublic, maireDraft]) as never;
+    });
+    mocks.mandateCount.mockImplementation(async (args: { where?: unknown }) =>
+      JSON.stringify(args.where).includes('"politician":{"publicationStatus":"PUBLISHED"}') ? 1 : 2
+    );
+    mocks.queryRaw.mockImplementation(async (query: unknown) => {
+      const sql = rawSqlText(query);
+      const values = (query as { values: unknown[] }).values;
+      const publicOnly =
+        sql.includes('JOIN "Politician" p ON p.id = m."politicianId"') &&
+        sql.includes('p."publicationStatus" = ?') &&
+        values.includes("PUBLISHED");
+
+      if (sql.includes("COUNT(*) FILTER")) {
+        return publicOnly
+          ? [{ total: 1, female: 1, with_party: 1, with_national_mandate: 0 }]
+          : [{ total: 2, female: 1, with_party: 2, with_national_mandate: 1 }];
+      }
+      if (sql.includes('JOIN "Party" pa')) {
+        return publicOnly
+          ? [{ shortName: "PP", color: "#123456", count: 1 }]
+          : [
+              { shortName: "PP", color: "#123456", count: 1 },
+              { shortName: "PD", color: "#654321", count: 1 },
+            ];
+      }
+      return publicOnly
+        ? [{ bracket: "Depuis 2020", count: 1 }]
+        : [
+            { bracket: "Depuis 2020", count: 1 },
+            { bracket: "Avant 2014", count: 1 },
+          ];
+    });
+
+    const [listing, stats] = await Promise.all([getMaires(), getMaireStats()]);
+
+    expect(listing).toMatchObject({
+      total: 1,
+      maires: [expect.objectContaining({ slug: "alice-publique" })],
+    });
+    expect(JSON.stringify(listing)).not.toContain("Bastien Brouillon");
+    expect(stats).toEqual({
+      total: 1,
+      femaleRate: 1,
+      withParty: 1,
+      withNationalMandate: 0,
+      partyDistribution: [{ shortName: "PP", color: "#123456", count: 1 }],
+      mandateDistribution: [{ bracket: "Depuis 2020", count: 1 }],
+    });
+
+    const countQuery = mocks.queryRaw.mock.calls.find(([query]) =>
+      rawSqlText(query).includes("COUNT(*) FILTER")
+    )?.[0] as { sql: string; values: unknown[] };
+    const mandateDistributionQuery = mocks.queryRaw.mock.calls.find(([query]) =>
+      rawSqlText(query).includes('WHEN ml."functionStart"')
+    )?.[0] as { sql: string; values: unknown[] };
+
+    for (const query of [countQuery, mandateDistributionQuery]) {
+      expect(query.sql).toContain('JOIN "Politician" p ON p.id = m."politicianId"');
+      expect(query.sql).toContain('p."publicationStatus" = ?');
+      expect(query.values).toEqual(["PUBLISHED"]);
+    }
   });
 });

@@ -16,7 +16,7 @@ interface PressQueryParams {
 // ── Core query (free-text capable, never cached directly) ───
 
 async function queryPress(params: PressQueryParams) {
-  const { page, limit, source, partyId, search, sort } = params;
+  const { page, limit, source, partyId, search } = params;
   const skip = (page - 1) * limit;
 
   const where = {
@@ -34,7 +34,7 @@ async function queryPress(params: PressQueryParams) {
   const [articles, total] = await Promise.all([
     db.pressArticle.findMany({
       where,
-      orderBy: sort === "relevance" ? { mentions: { _count: "desc" } } : { publishedAt: "desc" },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
       skip,
       take: limit,
       include: {

@@ -786,7 +786,9 @@ export async function getMaireStats(): Promise<MaireStats> {
     FROM "Mandate" m
     JOIN "MandateLocal" ml ON ml."mandateId" = m.id
     JOIN "Politician" p ON p.id = m."politicianId"
-    WHERE m.type = 'MAIRE' AND m."isCurrent" = true
+    WHERE m.type = 'MAIRE'
+      AND m."isCurrent" = true
+      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
   `);
 
   const partyDistribution = await db.$queryRaw<
@@ -820,7 +822,10 @@ export async function getMaireStats(): Promise<MaireStats> {
       COUNT(*)::int as count
     FROM "Mandate" m
     JOIN "MandateLocal" ml ON ml."mandateId" = m.id
-    WHERE m.type = 'MAIRE' AND m."isCurrent" = true
+    JOIN "Politician" p ON p.id = m."politicianId"
+    WHERE m.type = 'MAIRE'
+      AND m."isCurrent" = true
+      AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     GROUP BY bracket
     ORDER BY MIN(COALESCE(ml."functionStart", '1900-01-01'))
   `);

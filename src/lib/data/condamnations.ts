@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import type { MandateType, AffairStatus, Involvement } from "@/generated/prisma";
 import {
+  PUBLIC_PARTY_WHERE,
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
@@ -68,8 +69,8 @@ export async function getCondamnations(filters: CondamnationsFilters) {
     ...(statuses !== "all" && { status: { in: statuses } }),
     ...(partiSlug && {
       OR: [
-        { partyAtTime: { slug: partiSlug } },
-        { politician: { currentParty: { slug: partiSlug } } },
+        { partyAtTime: { slug: partiSlug, ...PUBLIC_PARTY_WHERE } },
+        { politician: { currentParty: { slug: partiSlug, ...PUBLIC_PARTY_WHERE } } },
       ],
     }),
     politician: {

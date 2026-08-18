@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { SimplePagination } from "@/components/ui/SimplePagination";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -13,6 +12,7 @@ import {
   getSuperCategoryCounts,
   getCertaintyCounts,
   getPartiesWithAffairs,
+  getPublicPartyMetadataBySlug,
 } from "@/lib/data/affairs";
 import {
   AFFAIR_STATUS_LABELS,
@@ -55,16 +55,11 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
   let title = AFFAIRES_DEFAULT_TITLE;
   let description = AFFAIRES_DEFAULT_DESCRIPTION;
+  const party = partiSlug ? await getPublicPartyMetadataBySlug(partiSlug) : null;
 
-  if (partiSlug) {
-    const party = await db.party.findUnique({
-      where: { slug: partiSlug },
-      select: { name: true, shortName: true },
-    });
-    if (party) {
-      title = `Affaires judiciaires — ${party.name} (${party.shortName})`;
-      description = `Affaires judiciaires impliquant des élus ${party.name}. Filtrez par statut et catégorie. Sources vérifiées.`;
-    }
+  if (party) {
+    title = `Affaires judiciaires — ${party.name} (${party.shortName})`;
+    description = `Affaires judiciaires impliquant des élus ${party.name}. Filtrez par statut et catégorie. Sources vérifiées.`;
   } else if (certaintyKey && CERTAINTY_LABELS[certaintyKey]) {
     title = `Affaires judiciaires : ${CERTAINTY_LABELS[certaintyKey]}`;
     description = `Responsables politiques français avec une affaire au niveau "${CERTAINTY_LABELS[certaintyKey]}".`;
@@ -94,7 +89,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     alternates: {
       canonical: (() => {
         const cp = new URLSearchParams();
-        if (partiSlug) cp.set("parti", partiSlug);
+        if (party) cp.set("parti", partiSlug);
         if (certaintyKey) cp.set("certainty", certaintyKey);
         if (statusKey) cp.set("status", statusKey);
         if (superCatKey) cp.set("supercat", superCatKey);

@@ -7,7 +7,9 @@ import { CondamnationsFilters } from "@/components/affairs/CondamnationsFilters"
 import { CondamnationsStatsTable } from "@/components/affairs/CondamnationsStatsTable";
 import { CondamnationsPresumptionBanner } from "@/components/affairs/CondamnationsPresumptionBanner";
 import { getCondamnations, getCondamnationsStatsByParty } from "@/lib/data/condamnations";
-import { getPartiesWithAffairs } from "@/lib/data/affairs";
+import { getPartiesWithAffairs, getPublicPartyMetadataBySlug } from "@/lib/data/affairs";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { buildListTitle, buildDescription, buildCanonical } from "@/lib/seo/condamnations-metadata";
 import { CollectionPageJsonLd, AffairItemListJsonLd, DatasetJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
@@ -32,10 +34,7 @@ interface PageProps {
 
 async function getPartyNameFromSlug(slug?: string): Promise<string | null> {
   if (!slug) return null;
-  const p = await db.party.findUnique({
-    where: { slug },
-    select: { shortName: true, name: true },
-  });
+  const p = await getPublicPartyMetadataBySlug(slug);
   return p ? `${p.name} (${p.shortName})` : null;
 }
 
@@ -49,14 +48,16 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const [totalDef, totalPro] = await Promise.all([
     db.affair.count({
       where: {
-        publicationStatus: "PUBLISHED",
+        ...getPublishedAffairWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
         involvement: { in: ["DIRECT", "INDIRECT"] },
         status: "CONDAMNATION_DEFINITIVE",
       },
     }),
     db.affair.count({
       where: {
-        publicationStatus: "PUBLISHED",
+        ...getPublishedAffairWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
         involvement: { in: ["DIRECT", "INDIRECT"] },
         status: { in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"] },
       },
@@ -84,7 +85,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const canonical = buildCanonical({
     mandat: params.mandat,
     certainty: params.certainty,
-    partiSlug: params.parti,
+    partiSlug: partyName ? params.parti : undefined,
     view: params.view,
   });
 

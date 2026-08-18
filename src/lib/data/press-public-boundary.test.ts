@@ -159,4 +159,62 @@ describe("presse, frontières publiques", () => {
     ]);
     expect(JSON.stringify(parties)).not.toContain("party-draft");
   });
+
+  it("normalise relevance vers l'ordre récent sans dépendre d'un _count non filtré", async () => {
+    const articleRecent = {
+      id: "article-a",
+      title: "Article A récent",
+      publishedAt: new Date("2026-08-18T10:00:00.000Z"),
+      mentions: [],
+      partyMentions: [],
+      _count: { mentions: 0 },
+    };
+    const articleWithDraftMentions = {
+      id: "article-b",
+      title: "Article B avec cinq mentions DRAFT",
+      publishedAt: new Date("2026-08-17T10:00:00.000Z"),
+      mentions: [],
+      partyMentions: [],
+      _count: { mentions: 0 },
+    };
+
+    mocks.articleFindMany.mockImplementation(async (args: { orderBy?: unknown }) => {
+      const usesUnfilteredCount = JSON.stringify(args.orderBy).includes("_count");
+      return (
+        usesUnfilteredCount
+          ? [articleWithDraftMentions, articleRecent]
+          : [articleRecent, articleWithDraftMentions]
+      ) as never;
+    });
+    mocks.articleCount.mockResolvedValue(2);
+
+    const result = await searchPress({
+      page: 1,
+      limit: 20,
+      sort: "relevance",
+    });
+
+    expect(result.articles.map((article) => article.id)).toEqual(["article-a", "article-b"]);
+    expect(mocks.articleFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      })
+    );
+    expect(JSON.stringify(mocks.articleFindMany.mock.calls[0]?.[0]?.orderBy)).not.toContain(
+      "_count"
+    );
+  });
+
+  it("conserve l'ordre récent public et son départage déterministe", async () => {
+    mocks.articleFindMany.mockResolvedValue([]);
+    mocks.articleCount.mockResolvedValue(0);
+
+    await searchPress({ page: 1, limit: 20, sort: "recent" });
+
+    expect(mocks.articleFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
+      })
+    );
+  });
 });

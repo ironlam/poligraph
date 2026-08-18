@@ -50,7 +50,7 @@ export default async function PressePage({ searchParams }: PageProps) {
   const source = params.source;
   const partyId = params.party;
   const search = params.search;
-  const sort = params.sort === "relevance" ? "relevance" : "recent";
+  const sort = "recent";
 
   const [{ articles, total, totalPages }, stats, partiesWithMentions] = await Promise.all([
     getPress({ page, limit, source, partyId, search, sort }),
@@ -67,7 +67,7 @@ export default async function PressePage({ searchParams }: PageProps) {
     if (params.search) current.set("search", params.search);
     if (params.source) current.set("source", params.source);
     if (params.party) current.set("party", params.party);
-    if (params.sort) current.set("sort", params.sort);
+    if (params.sort && params.sort !== "relevance") current.set("sort", params.sort);
 
     for (const [key, value] of Object.entries(newParams)) {
       if (value) {
@@ -151,7 +151,7 @@ export default async function PressePage({ searchParams }: PageProps) {
             ))}
           </div>
 
-          {/* Sort toggle */}
+          {/* The relevance sort stays disabled until its score can use public mentions only. */}
           <div className="flex gap-2">
             <Link
               href={buildUrl({ sort: undefined })}
@@ -162,16 +162,6 @@ export default async function PressePage({ searchParams }: PageProps) {
               }`}
             >
               Récents
-            </Link>
-            <Link
-              href={buildUrl({ sort: "relevance" })}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                sort === "relevance"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
-            >
-              Pertinence
             </Link>
           </div>
 

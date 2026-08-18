@@ -46,6 +46,13 @@ export async function getPartiesWithAffairs() {
   return parties;
 }
 
+export async function getPublicPartyMetadataBySlug(slug: string) {
+  return db.party.findFirst({
+    where: { slug, ...PUBLIC_PARTY_WHERE },
+    select: { name: true, shortName: true },
+  });
+}
+
 interface AffairFilterOpts {
   search?: string;
   status?: string;
@@ -93,7 +100,7 @@ function buildAffairWhere(opts: AffairFilterOpts) {
     ...statusFilter,
     ...(categoryFilter && { category: { in: categoryFilter } }),
     ...(severity && { severity }),
-    ...(partySlug && { partyAtTime: { slug: partySlug } }),
+    ...(partySlug && { partyAtTime: { slug: partySlug, ...PUBLIC_PARTY_WHERE } }),
     ...(search && {
       OR: [
         { title: { contains: search, mode: "insensitive" as const } },
