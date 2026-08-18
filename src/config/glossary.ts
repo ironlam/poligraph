@@ -10,8 +10,10 @@
 export const LEGAL_TERMS = {
   sursis:
     "Peine prononcée mais non exécutée, sauf en cas de nouvelle infraction dans un délai fixé par le tribunal.",
+  // Source: code pénal, art. 132-25. An aménagement is mandatory below six months
+  // and available up to one year, so "ferme" does not imply incarceration.
   ferme:
-    "Peine de prison effectivement exécutée (le condamné est incarcéré), par opposition au sursis.",
+    "Part de la peine qui doit être exécutée, par opposition au sursis. Elle n'implique pas nécessairement l'incarcération : une peine courte peut être aménagée en détention à domicile sous surveillance électronique, en semi-liberté ou en placement extérieur.",
   repartitionNonEtablie:
     "La durée totale de la peine est attestée, mais aucune source ne dit quelle part est ferme et quelle part est assortie du sursis.",
   ineligibilite:
@@ -36,8 +38,11 @@ export const PARLIAMENTARY_TERMS = {
     "Code de vote indiquant que le parlementaire ne prend pas part au scrutin. Ce code ne suffit pas à établir sa présence physique.",
   absent:
     "Code fourni par une source pour un scrutin donné. Il n'est jamais déduit de la seule absence d'une ligne de vote.",
+  // Source: règlement du Sénat, art. 52 — "conformément au droit commun en matière
+  // électorale, les abstentions n'entrent pas en compte dans le dénombrement des
+  // suffrages exprimés".
   abstention:
-    "Vote exprimé mais ni pour ni contre. L'abstention est comptabilisée dans les suffrages exprimés.",
+    "Position de vote distincte du pour et du contre. Les abstentions n'entrent pas dans le décompte des suffrages exprimés, qui ne retient que les voix pour et les voix contre.",
   scrutin: "Vote formel des parlementaires sur un texte de loi, un amendement ou une motion.",
   dossierLegislatif:
     "Ensemble des textes et débats liés à un projet ou une proposition de loi, de son dépôt à son adoption.",
@@ -70,23 +75,13 @@ export const INSTITUTION_TERMS = {
 } as const;
 
 // ============================================
-// HATVP — Déclarations de patrimoine & intérêts
-// ============================================
-
-export const HATVP_TERMS = {
-  portefeuilleTotal:
-    "Valeur totale estimée des participations financières déclarées (actions, obligations, assurance-vie…).",
-  participationsHatvp:
-    "Nombre d'entreprises ou organismes dans lesquels le déclarant détient des parts ou actions.",
-  revenusAnnuels:
-    "Montant brut des revenus perçus sur la dernière année déclarée (traitements, honoraires, dividendes…).",
-  mandatsDirections:
-    "Nombre de fonctions de direction ou mandats exercés dans des entreprises, associations ou organismes publics.",
-} as const;
-
-// ============================================
 // MÉTRIQUES & DONNÉES
 // ============================================
+// The four HATVP keys below used to be declared twice, in a separate HATVP_TERMS
+// block spread before this one. Every duplicate was therefore unreachable through
+// GLOSSARY, and the two `revenusAnnuels` texts disagreed ("brut" against "net avant
+// impôt"). The dead block is gone; the wording kept here is the one visitors were
+// already being served.
 
 export const METRIC_TERMS = {
   prominence:
@@ -108,7 +103,6 @@ export const GLOSSARY = {
   ...LEGAL_TERMS,
   ...PARLIAMENTARY_TERMS,
   ...INSTITUTION_TERMS,
-  ...HATVP_TERMS,
   ...METRIC_TERMS,
 } as const;
 
