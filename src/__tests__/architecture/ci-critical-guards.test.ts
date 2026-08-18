@@ -2068,6 +2068,53 @@ describe("CI-01 outbound identity contract", () => {
   ])("accepts canonical or unrelated forms: %s", (source) => {
     expect(analyze(source)).toEqual([]);
   });
+
+  it.each(["MEDIAPART_EMAIL", "MEDIAPART_PASSWORD"])(
+    "rejects publisher credential reference %s",
+    (credential) => {
+      const violations = analyze(
+        `declare const ${credential}: string; const value = ${credential};`
+      );
+
+      expect(messages(violations)).toContain("publisher credential reference");
+    }
+  );
+
+  it("rejects publisher login endpoints", () => {
+    const violations = analyze('const endpoint = "https://example.test/login_check";');
+
+    expect(messages(violations)).toContain("publisher login endpoint");
+  });
+
+  it("accepts neighboring publisher names and ordinary login endpoints", () => {
+    expect(
+      analyze(`
+        const MEDIAPART_FEED_URL = "https://example.test/feed";
+        const endpoint = "https://example.test/login";
+      `)
+    ).toEqual([]);
+  });
+});
+
+describe("CI-01 unsafe raw contract", () => {
+  it("rejects $executeRawUnsafe", () => {
+    const model = fixtureModel({
+      "src/demo.ts": "declare const db:any; db.$executeRawUnsafe('DELETE FROM demo')",
+    });
+    const sourceUnit = unit(model, "src/demo.ts");
+    const violations = analyzeUnsafeRaw(sourceUnit);
+
+    expect(messages(violations)).toContain("$executeRawUnsafe forbidden");
+  });
+
+  it("accepts parameterized $executeRaw", () => {
+    const model = fixtureModel({
+      "src/demo.ts": "declare const db:any; declare const query:unknown; db.$executeRaw(query)",
+    });
+    const sourceUnit = unit(model, "src/demo.ts");
+
+    expect(analyzeUnsafeRaw(sourceUnit)).toEqual([]);
+  });
 });
 
 describe("CI-01 NEXT_PUBLIC secret contract", () => {
