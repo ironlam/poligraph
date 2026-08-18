@@ -4,8 +4,10 @@ import { PUBLICATION_STATE_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels
 import type { ThemeCategory } from "@/generated/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import type { PublicationState } from "@/lib/measures/moderation-state";
+import { BatchPublishPanel } from "./_components/BatchPublishPanel";
 import { QueueFilters, type QueueFilterState } from "./_components/QueueFilters";
 import { QueueTable } from "./_components/QueueTable";
+import { queryBatchPublishGroups } from "./_data/batch-publish-query";
 import { queryMeasureQueue } from "./_data/queue-query";
 
 export const metadata = {
@@ -55,15 +57,18 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
   const pageParam = Number(asString(params.page) ?? "1");
   const page = Number.isFinite(pageParam) ? Math.max(1, Math.trunc(pageParam)) : 1;
 
-  const result = await queryMeasureQueue({
-    publication,
-    theme,
-    withdrawn,
-    anomaliesOnly,
-    q,
-    take: PAGE_SIZE,
-    skip: (page - 1) * PAGE_SIZE,
-  });
+  const [result, batchPublishGroups] = await Promise.all([
+    queryMeasureQueue({
+      publication,
+      theme,
+      withdrawn,
+      anomaliesOnly,
+      q,
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+    }),
+    queryBatchPublishGroups(),
+  ]);
 
   const current: QueueFilterState = { publication, theme, anomaliesOnly, withdrawn, q };
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
@@ -101,6 +106,8 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
       )}
 
       <QueueFilters current={current} result={result} />
+
+      <BatchPublishPanel groups={batchPublishGroups} />
 
       <QueueTable rows={result.rows} />
 

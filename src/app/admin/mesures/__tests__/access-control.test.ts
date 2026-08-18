@@ -27,6 +27,7 @@ const EMPTY_RESULT: MeasureQueueResult = {
 };
 
 const queryMeasureQueueMock = vi.fn(async () => EMPTY_RESULT);
+const queryBatchPublishGroupsMock = vi.fn(async () => []);
 
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => redirectMock(path),
@@ -43,6 +44,10 @@ vi.mock("@/lib/auth", () => ({
 // the session would be visible in the call order.
 vi.mock("../_data/queue-query", () => ({
   queryMeasureQueue: () => queryMeasureQueueMock(),
+}));
+
+vi.mock("../_data/batch-publish-query", () => ({
+  queryBatchPublishGroups: () => queryBatchPublishGroupsMock(),
 }));
 
 vi.mock("../_data/detail-query", () => ({
@@ -66,6 +71,7 @@ vi.mock("../actions", () => ({
   reviewRevisionAction: vi.fn(async () => ({ ok: true })),
   discardRevisionAction: vi.fn(async () => ({ ok: true })),
   publishRevisionAction: vi.fn(async () => ({ ok: true })),
+  publishReviewedBatchAction: vi.fn(async () => ({ ok: true, publishedCount: 0 })),
   depublishMeasureAction: vi.fn(async () => ({ ok: true })),
   withdrawMeasureAction: vi.fn(async () => ({ ok: true })),
 }));
@@ -89,6 +95,7 @@ describe("accès aux écrans de modération des mesures", () => {
     );
     expect(redirectMock).toHaveBeenCalledWith("/admin/login");
     expect(queryMeasureQueueMock).not.toHaveBeenCalled();
+    expect(queryBatchPublishGroupsMock).not.toHaveBeenCalled();
   });
 
   it("redirige le détail vers la connexion en l'absence de session", async () => {
@@ -118,6 +125,7 @@ describe("accès aux écrans de modération des mesures", () => {
 
     expect(redirectMock).not.toHaveBeenCalled();
     expect(queryMeasureQueueMock).toHaveBeenCalledTimes(1);
+    expect(queryBatchPublishGroupsMock).toHaveBeenCalledTimes(1);
   });
 
   it("garde les trois écrans hors des index", async () => {

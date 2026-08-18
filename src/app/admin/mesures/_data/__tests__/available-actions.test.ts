@@ -29,7 +29,7 @@ function kinds(input: Parameters<typeof availableActions>[0]): string[] {
 }
 
 describe("availableActions : une ligne par état", () => {
-  it("brouillon actif non relu : relire, abandonner", () => {
+  it("brouillon actif non relu : relire, corriger ou rejeter", () => {
     const actions = availableActions({
       state: state({ activeDraft: { id: "rev-1", reviewed: false } }),
       publishedRevisionId: null,
@@ -37,11 +37,12 @@ describe("availableActions : une ligne par état", () => {
 
     expect(actions).toEqual([
       { kind: "review", revisionId: "rev-1" },
-      { kind: "discard", revisionId: "rev-1" },
+      { kind: "reject", revisionId: "rev-1" },
+      { kind: "draft", preservesEvidenceFromRevisionId: "rev-1" },
     ]);
   });
 
-  it("brouillon relu : publier, abandonner", () => {
+  it("brouillon relu : publier, corriger ou rejeter", () => {
     const actions = availableActions({
       state: state({ publication: "REVIEWED", activeDraft: { id: "rev-1", reviewed: true } }),
       publishedRevisionId: null,
@@ -49,7 +50,8 @@ describe("availableActions : une ligne par état", () => {
 
     expect(actions).toEqual([
       { kind: "publish", revisionId: "rev-1", isFirstPublication: true },
-      { kind: "discard", revisionId: "rev-1" },
+      { kind: "reject", revisionId: "rev-1" },
+      { kind: "draft", preservesEvidenceFromRevisionId: "rev-1" },
     ]);
   });
 
@@ -72,19 +74,12 @@ describe("availableActions : une ligne par état", () => {
     });
 
     expect(actions).toContainEqual({ kind: "review", revisionId: "rev-2" });
-    expect(actions).toContainEqual({ kind: "discard", revisionId: "rev-2" });
+    expect(actions).toContainEqual({ kind: "reject", revisionId: "rev-2" });
     expect(actions).toContainEqual({ kind: "depublish" });
-    // Pas de « nouvelle révision » : elle abandonnerait la correction en cours en silence.
-    expect(
-      kinds({
-        state: state({
-          ...PUBLISHED,
-          activeDraft: { id: "rev-2", reviewed: false },
-          draftIsCorrection: true,
-        }),
-        publishedRevisionId: "rev-pub",
-      })
-    ).not.toContain("draft");
+    expect(actions).toContainEqual({
+      kind: "draft",
+      preservesEvidenceFromRevisionId: "rev-2",
+    });
   });
 
   it("mesure publiée avec correction relue : publier ou abandonner la correction, dépublier", () => {
@@ -103,7 +98,7 @@ describe("availableActions : une ligne par état", () => {
       // Publier une correction n'est pas une première publication, et l'interface doit le dire.
       isFirstPublication: false,
     });
-    expect(actions).toContainEqual({ kind: "discard", revisionId: "rev-2" });
+    expect(actions).toContainEqual({ kind: "reject", revisionId: "rev-2" });
     expect(actions).toContainEqual({ kind: "depublish" });
   });
 

@@ -33,6 +33,9 @@ import type {
   MeasureAttribution,
   MeasureExtractionMethod,
   MeasurePrecision,
+  MeasureRejectionReason,
+  MeasureReviewReadiness,
+  MeasureReviewWarning,
   MeasureSourceKind,
   MeasureVoteLinkKind,
   MeasureVoteRelation,
@@ -1542,6 +1545,34 @@ export const MEASURE_EXTRACTION_METHOD_LABELS: Record<MeasureExtractionMethod, s
   MANUAL: "Saisie manuelle",
   AI_ASSISTED: "Assistée par IA",
   IMPORTED: "Importée",
+};
+
+export const MEASURE_REVIEW_READINESS_LABELS: Record<MeasureReviewReadiness, string> = {
+  READY_FOR_REVIEW: "Prête pour revue technique",
+  REVIEW_WITH_WARNING: "Revue avec attention requise",
+};
+
+export const MEASURE_REVIEW_WARNING_LABELS: Record<MeasureReviewWarning, string> = {
+  POSSIBLE_DIAGNOSIS_AS_ACTION: "Possible diagnostic transformé en action",
+  POSSIBLE_EXISTING_POLICY: "Possible politique existante",
+  ATTRIBUTION_UNCERTAIN: "Attribution discursive incertaine",
+  POSSIBLE_DUPLICATE: "Doublon possible",
+  OBJECTIVE_VS_MEASURE_UNCERTAIN: "Classification mesure ou objectif incertaine",
+  WORDING_NEEDS_REVIEW: "Formulation à revoir",
+  EVIDENCE_SCOPE_WEAK: "Périmètre de preuve à examiner",
+  MODEL_LOW_CONFIDENCE: "Confiance du modèle moyenne ou faible",
+};
+
+export const MEASURE_REJECTION_REASON_LABELS: Record<MeasureRejectionReason, string> = {
+  NOT_A_PROPOSAL: "Pas une proposition",
+  DIAGNOSIS_ONLY: "Diagnostic seul",
+  THIRD_PARTY: "Proposition d'un tiers",
+  EXISTING_POLICY: "Politique existante",
+  HISTORICAL: "Élément historique",
+  DUPLICATE: "Doublon",
+  INSUFFICIENT_EVIDENCE: "Preuve insuffisante",
+  BAD_WORDING: "Formulation inadéquate",
+  OTHER: "Autre",
 };
 
 export const MEASURE_SOURCE_KIND_LABELS: Record<MeasureSourceKind, string> = {

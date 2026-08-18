@@ -1,11 +1,14 @@
 import {
   MEASURE_EXTRACTION_METHOD_LABELS,
   MEASURE_PRECISION_LABELS,
+  MEASURE_REJECTION_REASON_LABELS,
   MEASURE_SOURCE_KIND_LABELS,
   QUALIFICATION_KIND_LABELS,
   SOURCE_TIER_LABELS,
 } from "@/config/labels";
 import type { getMeasureForModeration } from "@/lib/data/measures";
+import { EvidenceSnapshotPanel } from "./EvidenceSnapshotPanel";
+import { ReviewReadinessPanel } from "./ReviewReadinessPanel";
 
 type ModerationMeasure = NonNullable<Awaited<ReturnType<typeof getMeasureForModeration>>>;
 type ModerationRevision = ModerationMeasure["revisions"][number];
@@ -29,21 +32,25 @@ function RevisionCard({
   isPublished,
   isLatest,
   formatter,
+  documentLabel,
 }: {
   revision: ModerationRevision;
   isPublished: boolean;
   isLatest: boolean;
   formatter: Intl.DateTimeFormat;
+  documentLabel: string | null;
 }) {
-  const state = revision.discardedAt
-    ? "Abandonnée"
-    : revision.supersededAt
-      ? "Remplacée"
-      : revision.publishedAt
-        ? "Publiée"
-        : revision.reviewedAt
-          ? "Relue, non publiée"
-          : "Brouillon";
+  const state = revision.rejectedAt
+    ? "Rejetée"
+    : revision.discardedAt
+      ? "Abandonnée"
+      : revision.supersededAt
+        ? "Remplacée"
+        : revision.publishedAt
+          ? "Publiée"
+          : revision.reviewedAt
+            ? "Relue, non publiée"
+            : "Brouillon";
 
   return (
     <li className="rounded-lg border border-border p-4">
@@ -65,7 +72,34 @@ function RevisionCard({
         )}
       </div>
 
-      <p className="mt-3 text-sm">{revision.text}</p>
+      {revision.reviewReadiness !== null && (
+        <div className="mt-3">
+          <ReviewReadinessPanel
+            readiness={revision.reviewReadiness}
+            warnings={revision.reviewWarnings}
+          />
+        </div>
+      )}
+
+      {revision.rejectedAt !== null && revision.rejectionReason !== null && (
+        <div className="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+          <p className="font-medium">
+            Rejet humain : {MEASURE_REJECTION_REASON_LABELS[revision.rejectionReason]}
+          </p>
+          <p className="mt-1 text-xs">
+            {formatter.format(revision.rejectedAt)}
+            {revision.rejectedBy !== null && ` · ${revision.rejectedBy}`}
+          </p>
+          {revision.rejectionDetail !== null && <p className="mt-2">{revision.rejectionDetail}</p>}
+        </div>
+      )}
+
+      <EvidenceSnapshotPanel
+        formulation={revision.text}
+        classification={revision.precision === "OBJECTIF_SANS_CHIFFRE" ? "OBJECTIVE" : "MEASURE"}
+        snapshotValue={revision.evidenceSnapshot}
+        documentLabel={documentLabel}
+      />
 
       <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
         <div className="flex gap-1">
@@ -182,10 +216,12 @@ export function RevisionTimeline({
   revisions,
   publishedRevisionId,
   latestRevisionId,
+  documentLabel,
 }: {
   revisions: ModerationRevision[];
   publishedRevisionId: string | null;
   latestRevisionId: string | null;
+  documentLabel: string | null;
 }) {
   const formatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" });
 
@@ -206,6 +242,7 @@ export function RevisionTimeline({
           isPublished={revision.id === publishedRevisionId}
           isLatest={revision.id === latestRevisionId}
           formatter={formatter}
+          documentLabel={documentLabel}
         />
       ))}
     </ol>

@@ -224,6 +224,7 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
             revisions={measure.revisions}
             publishedRevisionId={measure.publishedRevisionId}
             latestRevisionId={measure.latestRevisionId}
+            documentLabel={context.programEdition?.label ?? null}
           />
         </div>
       </section>

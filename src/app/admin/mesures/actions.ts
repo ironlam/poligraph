@@ -7,6 +7,7 @@ import type {
   MeasureAttribution,
   MeasureExtractionMethod,
   MeasurePrecision,
+  MeasureRejectionReason,
   MeasureSourceKind,
   MeasureVoteRelation,
   QualificationKind,
@@ -14,8 +15,14 @@ import type {
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
+import { z } from "zod";
 import { isAuthenticated } from "@/lib/auth";
 import { createQualification, createSimilarityAssessment } from "@/lib/measures/assessments";
+import {
+  MAX_MEASURE_PUBLICATION_BATCH_SIZE,
+  publishMeasureRevisionBatch,
+  type MeasurePublicationBatchFailure,
+} from "@/lib/measures/batch-publication";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 import { createMeasureVoteLink } from "@/lib/measures/vote-links";
 import {
@@ -25,6 +32,7 @@ import {
   draftMeasureRevision,
   publishMeasureRevision,
   reviewMeasureRevision,
+  rejectMeasureRevision,
   withdrawMeasure,
 } from "@/lib/measures/transitions";
 import { assertHubMeasureCandidacy } from "./_data/candidacy-eligibility";
@@ -50,6 +58,14 @@ export type ActionResult =
   | { ok: true; measureId?: string }
   | { ok: false; message: string; stale?: boolean };
 
+export type BatchActionResult =
+  | { ok: true; publishedCount: number }
+  | {
+      ok: false;
+      publishedCount: number;
+      failures: MeasurePublicationBatchFailure[];
+    };
+
 /**
  * The admin auth of this project is a single signed cookie with no per-user identity (see
  * `src/lib/auth.ts`), so every action attributes its review to a constant actor. Same convention as
@@ -57,6 +73,23 @@ export type ActionResult =
  * unverifiable attribution, which is worse than no attribution.
  */
 const ACTOR = "admin";
+
+const batchPublicationInputSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            measureId: z.string().min(1),
+            revisionId: z.string().min(1),
+            expectedUpdatedAt: z.string().min(1),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(MAX_MEASURE_PUBLICATION_BATCH_SIZE),
+  })
+  .strict();
 
 async function assertAuthenticated(): Promise<void> {
   if (!(await isAuthenticated())) throw new Error("Non autorisé");
@@ -178,6 +211,7 @@ export async function draftRevisionAction(input: {
   sources: SourceInput[];
   /** The `Measure.updatedAt` the page carried, in ISO form. */
   expectedUpdatedAt: string;
+  preserveEvidenceFromRevisionId?: string;
 }): Promise<ActionResult> {
   await assertAuthenticated();
 
@@ -187,7 +221,26 @@ export async function draftRevisionAction(input: {
       revision: toRevision(input.revision),
       sources: toSources(input.sources),
       expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
+      preserveEvidenceFromRevisionId: input.preserveEvidenceFromRevisionId,
+      correctedBy: input.preserveEvidenceFromRevisionId ? ACTOR : undefined,
     });
+    revalidate(input.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function rejectRevisionAction(input: {
+  measureId: string;
+  revisionId: string;
+  reason: MeasureRejectionReason;
+  detail: string | null;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    await rejectMeasureRevision({ ...input, rejectedBy: ACTOR });
     revalidate(input.measureId);
     return { ok: true };
   } catch (error) {
@@ -238,11 +291,55 @@ export async function publishRevisionAction(input: {
       measureId: input.measureId,
       revisionId: input.revisionId,
       expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
+      publishedBy: ACTOR,
     });
     revalidate(input.measureId);
     return { ok: true };
   } catch (error) {
     return toFailure(error);
+  }
+}
+
+export async function publishReviewedBatchAction(input: unknown): Promise<BatchActionResult> {
+  await assertAuthenticated();
+
+  try {
+    // Parse the complete request before the first write, so malformed trailing input cannot leave
+    // a valid prefix published and then fail validation halfway through the lot.
+    const parsed = batchPublicationInputSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new MeasureValidationError(
+        `Le lot doit contenir entre 1 et ${MAX_MEASURE_PUBLICATION_BATCH_SIZE} éléments valides`
+      );
+    }
+    const items = parsed.data.items.map((item) => ({
+      measureId: item.measureId,
+      revisionId: item.revisionId,
+      expectedUpdatedAt: parseDate(item.expectedUpdatedAt, "La version attendue"),
+    }));
+    const result = await publishMeasureRevisionBatch(items, ACTOR);
+
+    revalidatePath("/admin/mesures");
+    for (const item of items) revalidatePath(`/admin/mesures/${item.measureId}`);
+
+    return result.failures.length === 0
+      ? { ok: true, publishedCount: result.publishedCount }
+      : { ok: false, publishedCount: result.publishedCount, failures: result.failures };
+  } catch (error) {
+    const failure = toFailure(error);
+    if (failure.ok) throw new Error("Résultat d'échec incohérent");
+    return {
+      ok: false,
+      publishedCount: 0,
+      failures: [
+        {
+          measureId: "batch",
+          revisionId: "batch",
+          message: failure.message,
+          stale: failure.stale ?? false,
+        },
+      ],
+    };
   }
 }
 

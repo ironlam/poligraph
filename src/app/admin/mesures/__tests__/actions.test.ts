@@ -20,6 +20,7 @@ const transitionsMock = {
   draftMeasureRevision: vi.fn(async () => ({ revisionId: "rev-2" })),
   reviewMeasureRevision: vi.fn(async () => undefined),
   discardMeasureRevision: vi.fn(async () => undefined),
+  rejectMeasureRevision: vi.fn(async () => undefined),
   publishMeasureRevision: vi.fn(async () => undefined),
   depublishMeasure: vi.fn(async () => undefined),
   withdrawMeasure: vi.fn(async () => undefined),
@@ -105,6 +106,16 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
       call: () => a.discardRevisionAction({ measureId: "m-1", revisionId: "rev-1" }),
     },
     {
+      name: "rejectRevisionAction",
+      call: () =>
+        a.rejectRevisionAction({
+          measureId: "m-1",
+          revisionId: "rev-1",
+          reason: "DIAGNOSIS_ONLY",
+          detail: null,
+        }),
+    },
+    {
       name: "publishRevisionAction",
       call: () =>
         a.publishRevisionAction({
@@ -141,7 +152,7 @@ describe("actions éditoriales : la session", () => {
     vi.clearAllMocks();
   });
 
-  it("refuse les sept actions sans session, sans rien écrire", async () => {
+  it("refuse toutes les actions sans session, sans rien écrire", async () => {
     isAuthenticatedMock.mockResolvedValue(false);
 
     for (const { name, call } of await everyAction()) {
@@ -154,7 +165,7 @@ describe("actions éditoriales : la session", () => {
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
-  it("laisse passer les sept actions avec une session valide", async () => {
+  it("laisse passer toutes les actions avec une session valide", async () => {
     // Without this case, a guard that refused unconditionally would pass the test above while
     // making the admin unusable.
     isAuthenticatedMock.mockResolvedValue(true);
@@ -218,6 +229,46 @@ describe("createMeasureAction : garde de candidature du hub (#660)", () => {
 
     expect(result.ok).toBe(false);
     expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
+  });
+});
+
+describe("actions de revue des imports V6", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  it("demande à la transition de conserver la preuve lors d'une correction", async () => {
+    const a = await actions();
+    await a.draftRevisionAction({
+      measureId: "m-1",
+      revision: { ...REVISION, text: "Encadrer les loyers." },
+      sources: [],
+      expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+      preserveEvidenceFromRevisionId: "rev-1",
+    });
+
+    expect(transitionsMock.draftMeasureRevision).toHaveBeenCalledWith(
+      expect.objectContaining({ preserveEvidenceFromRevisionId: "rev-1", sources: [] })
+    );
+  });
+
+  it("enregistre un rejet humain structuré", async () => {
+    const a = await actions();
+    await a.rejectRevisionAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      reason: "DIAGNOSIS_ONLY",
+      detail: "Le passage décrit uniquement la situation actuelle.",
+    });
+
+    expect(transitionsMock.rejectMeasureRevision).toHaveBeenCalledWith({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      reason: "DIAGNOSIS_ONLY",
+      detail: "Le passage décrit uniquement la situation actuelle.",
+      rejectedBy: "admin",
+    });
   });
 });
 
@@ -293,6 +344,66 @@ describe("actions éditoriales : la traduction des erreurs", () => {
   });
 });
 
+describe("publication par lot", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const input = {
+    items: [
+      {
+        measureId: "m-1",
+        revisionId: "rev-1",
+        expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+      },
+      {
+        measureId: "m-2",
+        revisionId: "rev-2",
+        expectedUpdatedAt: "2027-01-17T10:00:00.000Z",
+      },
+    ],
+  };
+
+  it("refuse le lot sans session avant toute publication", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { publishReviewedBatchAction } = await actions();
+
+    await expect(publishReviewedBatchAction(input)).rejects.toThrow("Non autorisé");
+    expect(transitionsMock.publishMeasureRevision).not.toHaveBeenCalled();
+  });
+
+  it("publie toutes les révisions du lot via la transition et trace l'acteur", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { publishReviewedBatchAction } = await actions();
+
+    const result = await publishReviewedBatchAction(input);
+
+    expect(result).toEqual({ ok: true, publishedCount: 2 });
+    expect(transitionsMock.publishMeasureRevision).toHaveBeenNthCalledWith(1, {
+      measureId: "m-1",
+      revisionId: "rev-1",
+      expectedUpdatedAt: new Date("2027-01-16T10:00:00.000Z"),
+      publishedBy: "admin",
+    });
+    expect(transitionsMock.publishMeasureRevision).toHaveBeenNthCalledWith(2, {
+      measureId: "m-2",
+      revisionId: "rev-2",
+      expectedUpdatedAt: new Date("2027-01-17T10:00:00.000Z"),
+      publishedBy: "admin",
+    });
+  });
+
+  it("refuse une charge mal formée avant toute publication", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { publishReviewedBatchAction } = await actions();
+
+    const result = await publishReviewedBatchAction({ items: [] });
+
+    expect(result).toMatchObject({ ok: false, publishedCount: 0 });
+    expect(transitionsMock.publishMeasureRevision).not.toHaveBeenCalled();
+  });
+});
+
 describe("actions éditoriales : ce qu'elles transmettent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -326,6 +437,7 @@ describe("actions éditoriales : ce qu'elles transmettent", () => {
       measureId: "m-1",
       revisionId: "rev-1",
       expectedUpdatedAt: new Date("2027-01-16T10:00:00.000Z"),
+      publishedBy: "admin",
     });
   });
 

@@ -6,7 +6,7 @@ import { MeasureActionPanel } from "../MeasureActionPanel";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../../actions", () => ({
   reviewRevisionAction: vi.fn(async () => ({ ok: true })),
-  discardRevisionAction: vi.fn(async () => ({ ok: true })),
+  rejectRevisionAction: vi.fn(async () => ({ ok: true })),
   publishRevisionAction: vi.fn(async () => ({ ok: true })),
   draftRevisionAction: vi.fn(async () => ({ ok: true })),
   depublishMeasureAction: vi.fn(async () => ({ ok: true })),
@@ -55,14 +55,15 @@ describe("MeasureActionPanel", () => {
     expect(reason).toBeRequired();
   });
 
-  it("nomme la révision avant de confirmer un abandon", () => {
+  it("nomme la révision et exige un motif structuré avant un rejet", () => {
     // Une action dangereuse doit dire sur quel texte elle agit.
-    panel([{ kind: "discard", revisionId: "rev-1" }]);
+    panel([{ kind: "reject", revisionId: "rev-1" }]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Abandonner le brouillon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rejeter la proposition" }));
 
     expect(screen.getByText(/Encadrer les loyers dans les zones tendues/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Confirmer l'abandon/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("Motif")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Confirmer le rejet/ })).toBeInTheDocument();
   });
 
   it("ne présente pas un retrait comme une dépublication", () => {
@@ -93,6 +94,17 @@ describe("MeasureActionPanel", () => {
     expect(form).not.toBeNull();
     expect(within(form as HTMLElement).getByLabelText("URL")).toBeRequired();
     expect(within(form as HTMLElement).getByLabelText("Date de la source")).toBeRequired();
+  });
+
+  it("préremplit une correction et conserve sa preuve sans redemander la source", () => {
+    panel([{ kind: "draft", preservesEvidenceFromRevisionId: "rev-1" }]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Corriger la proposition" }));
+
+    expect(screen.getByLabelText("Texte de la nouvelle révision")).toHaveValue(
+      BASE.revisionTexts["rev-1"]
+    );
+    expect(screen.queryByLabelText("URL")).not.toBeInTheDocument();
   });
 
   it("refuse toute action quand les pointeurs sont ambigus, et dit pourquoi", () => {

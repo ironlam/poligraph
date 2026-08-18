@@ -2,15 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { MEASURE_SOURCE_KIND_LABELS, SOURCE_TIER_LABELS } from "@/config/labels";
-import type { MeasureSourceKind, SourceTier } from "@/generated/prisma";
+import {
+  MEASURE_REJECTION_REASON_LABELS,
+  MEASURE_SOURCE_KIND_LABELS,
+  SOURCE_TIER_LABELS,
+} from "@/config/labels";
+import type { MeasureRejectionReason, MeasureSourceKind, SourceTier } from "@/generated/prisma";
 import type { AvailableAction } from "../_data/available-actions";
 import {
   depublishMeasureAction,
-  discardRevisionAction,
   draftRevisionAction,
   publishRevisionAction,
   reviewRevisionAction,
+  rejectRevisionAction,
   withdrawMeasureAction,
   type ActionResult,
 } from "../actions";
@@ -41,6 +45,7 @@ const LABEL = "text-xs font-semibold uppercase tracking-wide text-muted-foregrou
 
 const SOURCE_KINDS = Object.keys(MEASURE_SOURCE_KIND_LABELS) as MeasureSourceKind[];
 const TIERS = Object.keys(SOURCE_TIER_LABELS) as SourceTier[];
+const REJECTION_REASONS = Object.keys(MEASURE_REJECTION_REASON_LABELS) as MeasureRejectionReason[];
 
 function excerpt(text: string | undefined): string {
   if (text === undefined) return "révision inconnue";
@@ -170,12 +175,14 @@ export function MeasureActionPanel({
               </button>
             );
           }
-          const key = action.kind === "discard" ? `discard-${action.revisionId}` : action.kind;
+          const key = action.kind === "reject" ? `reject-${action.revisionId}` : action.kind;
           const label =
-            action.kind === "discard"
-              ? "Abandonner le brouillon"
+            action.kind === "reject"
+              ? "Rejeter la proposition"
               : action.kind === "draft"
-                ? "Saisir une nouvelle révision"
+                ? action.preservesEvidenceFromRevisionId
+                  ? "Corriger la proposition"
+                  : "Saisir une nouvelle révision"
                 : action.kind === "depublish"
                   ? "Dépublier"
                   : "Enregistrer un retrait du candidat";
@@ -195,24 +202,57 @@ export function MeasureActionPanel({
       </div>
 
       {actions.map((action) => {
-        if (action.kind === "discard" && open === `discard-${action.revisionId}`) {
+        if (action.kind === "reject" && open === `reject-${action.revisionId}`) {
           return (
-            <div key="discard-form" className="rounded border border-border p-3 text-sm">
+            <form
+              key="reject-form"
+              className="rounded border border-border p-3 text-sm"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                run(() =>
+                  rejectRevisionAction({
+                    measureId,
+                    revisionId: action.revisionId,
+                    reason: String(data.get("reason")) as MeasureRejectionReason,
+                    detail: String(data.get("detail") ?? "").trim() || null,
+                  })
+                );
+              }}
+            >
               <p>
-                Abandonner définitivement ce brouillon :{" "}
+                Rejeter définitivement cette proposition :{" "}
                 <em>{excerpt(revisionTexts[action.revisionId])}</em>
               </p>
-              <button
-                type="button"
-                className={`${DANGER} mt-2`}
-                disabled={pending}
-                onClick={() =>
-                  run(() => discardRevisionAction({ measureId, revisionId: action.revisionId }))
-                }
+              <label
+                htmlFor={`reject-reason-${action.revisionId}`}
+                className={`${LABEL} mt-3 block`}
               >
-                Confirmer l&apos;abandon
+                Motif
+              </label>
+              <select id={`reject-reason-${action.revisionId}`} name="reason" className={FIELD}>
+                {REJECTION_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {MEASURE_REJECTION_REASON_LABELS[reason]}
+                  </option>
+                ))}
+              </select>
+              <label
+                htmlFor={`reject-detail-${action.revisionId}`}
+                className={`${LABEL} mt-3 block`}
+              >
+                Précision facultative
+              </label>
+              <textarea
+                id={`reject-detail-${action.revisionId}`}
+                name="detail"
+                rows={2}
+                className={FIELD}
+              />
+              <button type="submit" className={`${DANGER} mt-2`} disabled={pending}>
+                Confirmer le rejet
               </button>
-            </div>
+            </form>
           );
         }
 
@@ -329,6 +369,7 @@ export function MeasureActionPanel({
                   draftRevisionAction({
                     measureId,
                     expectedUpdatedAt,
+                    preserveEvidenceFromRevisionId: action.preservesEvidenceFromRevisionId,
                     revision: {
                       text: String(data.get("text") ?? ""),
                       precision:
@@ -338,15 +379,17 @@ export function MeasureActionPanel({
                       validFrom: String(data.get("validFrom") ?? ""),
                       extractionMethod: "MANUAL",
                     },
-                    sources: [
-                      {
-                        sourceKind: String(data.get("sourceKind")) as MeasureSourceKind,
-                        tier: String(data.get("tier")) as SourceTier,
-                        url: String(data.get("sourceUrl") ?? ""),
-                        page: String(data.get("page") ?? "") || null,
-                        publishedAt: String(data.get("sourcePublishedAt") ?? ""),
-                      },
-                    ],
+                    sources: action.preservesEvidenceFromRevisionId
+                      ? []
+                      : [
+                          {
+                            sourceKind: String(data.get("sourceKind")) as MeasureSourceKind,
+                            tier: String(data.get("tier")) as SourceTier,
+                            url: String(data.get("sourceUrl") ?? ""),
+                            page: String(data.get("page") ?? "") || null,
+                            publishedAt: String(data.get("sourcePublishedAt") ?? ""),
+                          },
+                        ],
                   })
                 );
               }}
@@ -354,7 +397,18 @@ export function MeasureActionPanel({
               <label htmlFor="draft-text" className={LABEL}>
                 Texte de la nouvelle révision
               </label>
-              <textarea id="draft-text" name="text" required rows={3} className={FIELD} />
+              <textarea
+                id="draft-text"
+                name="text"
+                required
+                rows={3}
+                className={FIELD}
+                defaultValue={
+                  action.preservesEvidenceFromRevisionId
+                    ? revisionTexts[action.preservesEvidenceFromRevisionId]
+                    : undefined
+                }
+              />
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
@@ -381,68 +435,70 @@ export function MeasureActionPanel({
                 </div>
               </div>
 
-              <fieldset className="mt-3">
-                <legend className={LABEL}>Source de cette formulation</legend>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Une révision sans source ne peut pas être publiée, donc elle est exigée ici.
-                </p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="draft-sourcekind" className={LABEL}>
-                      Nature
-                    </label>
-                    <select id="draft-sourcekind" name="sourceKind" className={FIELD}>
-                      {SOURCE_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {MEASURE_SOURCE_KIND_LABELS[kind]}
-                        </option>
-                      ))}
-                    </select>
+              {!action.preservesEvidenceFromRevisionId && (
+                <fieldset className="mt-3">
+                  <legend className={LABEL}>Source de cette formulation</legend>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Une révision sans source ne peut pas être publiée, donc elle est exigée ici.
+                  </p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="draft-sourcekind" className={LABEL}>
+                        Nature
+                      </label>
+                      <select id="draft-sourcekind" name="sourceKind" className={FIELD}>
+                        {SOURCE_KINDS.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {MEASURE_SOURCE_KIND_LABELS[kind]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="draft-tier" className={LABEL}>
+                        Rang
+                      </label>
+                      <select id="draft-tier" name="tier" className={FIELD}>
+                        {TIERS.map((tier) => (
+                          <option key={tier} value={tier}>
+                            {SOURCE_TIER_LABELS[tier]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="draft-sourceurl" className={LABEL}>
+                        URL
+                      </label>
+                      <input
+                        id="draft-sourceurl"
+                        name="sourceUrl"
+                        type="url"
+                        required
+                        className={FIELD}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="draft-sourcedate" className={LABEL}>
+                        Date de la source
+                      </label>
+                      <input
+                        id="draft-sourcedate"
+                        name="sourcePublishedAt"
+                        type="date"
+                        required
+                        className={FIELD}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="draft-page" className={LABEL}>
+                        Page (facultatif)
+                      </label>
+                      <input id="draft-page" name="page" type="text" className={FIELD} />
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="draft-tier" className={LABEL}>
-                      Rang
-                    </label>
-                    <select id="draft-tier" name="tier" className={FIELD}>
-                      {TIERS.map((tier) => (
-                        <option key={tier} value={tier}>
-                          {SOURCE_TIER_LABELS[tier]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="draft-sourceurl" className={LABEL}>
-                      URL
-                    </label>
-                    <input
-                      id="draft-sourceurl"
-                      name="sourceUrl"
-                      type="url"
-                      required
-                      className={FIELD}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="draft-sourcedate" className={LABEL}>
-                      Date de la source
-                    </label>
-                    <input
-                      id="draft-sourcedate"
-                      name="sourcePublishedAt"
-                      type="date"
-                      required
-                      className={FIELD}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="draft-page" className={LABEL}>
-                      Page (facultatif)
-                    </label>
-                    <input id="draft-page" name="page" type="text" className={FIELD} />
-                  </div>
-                </div>
-              </fieldset>
+                </fieldset>
+              )}
 
               <button type="submit" className={`${BUTTON} mt-3`} disabled={pending}>
                 Enregistrer le brouillon

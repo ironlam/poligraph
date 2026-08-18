@@ -11,9 +11,9 @@ import type { ModerationAnomalyCode, ModerationState } from "@/lib/measures/mode
 
 export type AvailableAction =
   | { kind: "review"; revisionId: string }
-  | { kind: "discard"; revisionId: string }
+  | { kind: "reject"; revisionId: string }
   | { kind: "publish"; revisionId: string; isFirstPublication: boolean }
-  | { kind: "draft" }
+  | { kind: "draft"; preservesEvidenceFromRevisionId?: string }
   | { kind: "depublish" }
   | { kind: "withdraw" };
 
@@ -58,7 +58,8 @@ export function availableActions(input: {
     } else {
       actions.push({ kind: "review", revisionId: state.activeDraft.id });
     }
-    actions.push({ kind: "discard", revisionId: state.activeDraft.id });
+    actions.push({ kind: "reject", revisionId: state.activeDraft.id });
+    actions.push({ kind: "draft", preservesEvidenceFromRevisionId: state.activeDraft.id });
   }
 
   // A depublished measure can go back online on the revision it had, which is a different act from
