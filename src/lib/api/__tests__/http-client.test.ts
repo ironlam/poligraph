@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { USER_AGENT } from "@/config/site";
 import { describeError, HTTPClient, HTTPError } from "../http-client";
 
 describe("describeError", () => {
@@ -172,7 +173,19 @@ describe("HTTPClient crawler identity", () => {
 
     await new HTTPClient({ retries: 0 }).get("https://example.fr/data");
 
-    expect(requestHeaders(fetchMock).get("user-agent")).toContain("Poligraph");
+    expect(requestHeaders(fetchMock).get("user-agent")).toBe(USER_AGENT);
+  });
+
+  it("does not expose or honor a configurable userAgent option", async () => {
+    const fetchMock = mockSuccessfulFetch();
+
+    await new HTTPClient({
+      retries: 0,
+      // @ts-expect-error HTTPClient identity is intentionally not configurable
+      userAgent: "Mozilla/5.0",
+    }).get("https://example.fr/data");
+
+    expect(requestHeaders(fetchMock).get("user-agent")).toBe(USER_AGENT);
   });
 
   it("does not let client option headers replace the canonical User-Agent", async () => {
@@ -184,7 +197,7 @@ describe("HTTPClient crawler identity", () => {
     }).get("https://example.fr/data");
 
     const headers = requestHeaders(fetchMock);
-    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("user-agent")).toBe(USER_AGENT);
     expect(headers.get("x-base")).toBe("base");
   });
 
@@ -196,7 +209,7 @@ describe("HTTPClient crawler identity", () => {
     });
 
     const headers = requestHeaders(fetchMock);
-    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("user-agent")).toBe(USER_AGENT);
     expect(headers.get("x-request")).toBe("request");
   });
 
@@ -221,7 +234,7 @@ describe("HTTPClient crawler identity", () => {
     );
 
     const headers = requestHeaders(fetchMock);
-    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("user-agent")).toBe(USER_AGENT);
     expect(headers.get("x-init")).toBe("init");
   });
 
@@ -236,7 +249,7 @@ describe("HTTPClient crawler identity", () => {
     });
 
     const headers = requestHeaders(fetchMock);
-    expect(headers.get("user-agent")).toBe("Poligraph/1.0 (https://poligraph.fr)");
+    expect(headers.get("user-agent")).toBe(USER_AGENT);
     expect(headers.get("accept")).toBe("application/json");
     expect(headers.get("x-trace")).toBe("trace");
   });

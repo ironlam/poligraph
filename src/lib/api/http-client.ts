@@ -16,7 +16,6 @@ export interface HTTPClientOptions {
   retries?: number;
   retryDelay?: number;
   rateLimitMs?: number;
-  userAgent?: string;
   headers?: Record<string, string>;
   /** Enable response caching (default: false) */
   enableCache?: boolean;
@@ -128,7 +127,6 @@ const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
   retries: 3,
   retryDelay: 1000,
   rateLimitMs: 0,
-  userAgent: USER_AGENT,
   headers: {},
   enableCache: false,
   cacheTtlMs: 5 * 60 * 1000, // 5 minutes
@@ -140,10 +138,7 @@ const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
  * Headers normalizes names case-insensitively, so every User-Agent spelling is removed before
  * the canonical value is set.
  */
-function mergeRequestHeaders(
-  canonicalUserAgent: string,
-  ...sources: Array<HeadersInit | undefined>
-): Headers {
+function mergeRequestHeaders(...sources: Array<HeadersInit | undefined>): Headers {
   const headers = new Headers();
 
   for (const source of sources) {
@@ -153,7 +148,7 @@ function mergeRequestHeaders(
     });
   }
 
-  headers.set("User-Agent", canonicalUserAgent);
+  headers.set("User-Agent", USER_AGENT);
   return headers;
 }
 
@@ -284,12 +279,7 @@ export class HTTPClient {
         const response = await fetch(url, {
           ...init,
           signal: controller.signal,
-          headers: mergeRequestHeaders(
-            this.options.userAgent,
-            this.options.headers,
-            init.headers,
-            options.headers
-          ),
+          headers: mergeRequestHeaders(this.options.headers, init.headers, options.headers),
         });
 
         clearTimeout(timeoutId);

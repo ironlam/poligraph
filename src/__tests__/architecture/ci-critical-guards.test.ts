@@ -41,7 +41,8 @@
  * HTTP identity
  * - Guarantee: an explicit User-Agent outside HTTPClient appears only as a direct property in the
  *   inline headers object of a direct fetch and uses USER_AGENT imported from `@/config/site`.
- *   HTTPClient header override resistance remains a runtime contract in `http-client.test.ts`.
+ *   HTTPClient identity is immutable and enforced by USER_AGENT; constructor options and caller
+ *   headers cannot replace it. This remains a runtime contract in `http-client.test.ts`.
  * - Canonical syntax: HTTPClient, or `fetch(url, { headers: { "User-Agent": USER_AGENT } })`.
  * - Forbidden: hardcoded/computed values, header aliases, spreads, Headers mutations or
  *   constructors, and Request objects that carry User-Agent.
@@ -1658,10 +1659,13 @@ function analyzeHtml(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
   return violations;
 }
 
-function analyzeUnsafeRaw(sourceUnit: SourceUnit): Violation[] {
+function analyzeUnsafeRaw(model: ProjectModel, sourceUnit: SourceUnit): Violation[] {
   const violations: Violation[] = [];
   walk(sourceUnit.sourceFile, (node) => {
-    if (ts.isIdentifier(node) && node.text === "$executeRawUnsafe") {
+    if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      memberName(node, model) === "$executeRawUnsafe"
+    ) {
       violations.push(problem(sourceUnit, node, "$executeRawUnsafe forbidden"));
     }
   });
@@ -1675,7 +1679,7 @@ function repositoryViolations(model: ProjectModel): Violation[] {
     violations.push(...analyzePublicationUnit(model, sourceUnit));
     violations.push(...analyzeNetworkIdentity(model, sourceUnit));
     violations.push(...analyzePublicEnv(model, sourceUnit));
-    violations.push(...analyzeUnsafeRaw(sourceUnit));
+    violations.push(...analyzeUnsafeRaw(model, sourceUnit));
     if (sourceUnit.file.endsWith(".tsx")) violations.push(...analyzeHtml(model, sourceUnit));
   }
   violations.push(...validateProposalBuilder(model));
@@ -2097,23 +2101,26 @@ describe("CI-01 outbound identity contract", () => {
 });
 
 describe("CI-01 unsafe raw contract", () => {
-  it("rejects $executeRawUnsafe", () => {
-    const model = fixtureModel({
-      "src/demo.ts": "declare const db:any; db.$executeRawUnsafe('DELETE FROM demo')",
-    });
-    const sourceUnit = unit(model, "src/demo.ts");
-    const violations = analyzeUnsafeRaw(sourceUnit);
+  function analyze(source: string): Violation[] {
+    const model = fixtureModel({ "src/demo.ts": source });
+    return analyzeUnsafeRaw(model, unit(model, "src/demo.ts"));
+  }
 
+  it.each([
+    "declare const db:any; db.$executeRawUnsafe('DELETE FROM demo')",
+    "declare const db:any; db['$executeRawUnsafe']('DELETE FROM demo')",
+    "declare const db:any; const method='$executeRawUnsafe'; db[method]('DELETE FROM demo')",
+  ])("rejects unsafe raw member access: %s", (source) => {
+    const violations = analyze(source);
     expect(messages(violations)).toContain("$executeRawUnsafe forbidden");
   });
 
-  it("accepts parameterized $executeRaw", () => {
-    const model = fixtureModel({
-      "src/demo.ts": "declare const db:any; declare const query:unknown; db.$executeRaw(query)",
-    });
-    const sourceUnit = unit(model, "src/demo.ts");
-
-    expect(analyzeUnsafeRaw(sourceUnit)).toEqual([]);
+  it.each([
+    "declare const db:any; declare const query:unknown; db.$executeRaw(query)",
+    "declare const db:any; declare const query:unknown; db['$executeRaw'](query)",
+    "const text='$executeRawUnsafe'",
+  ])("accepts safe raw and isolated string forms: %s", (source) => {
+    expect(analyze(source)).toEqual([]);
   });
 });
 
