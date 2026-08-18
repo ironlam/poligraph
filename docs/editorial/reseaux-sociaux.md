@@ -94,3 +94,25 @@ vivant.
 Cela pèse sur la formulation. Un chiffre susceptible d'être révisé se présente par ce qui le
 produit plutôt que par sa valeur seule, et une règle se formule par le texte qui la fixe plutôt que
 par son résultat du jour.
+
+## 10. À qui nous écrivons
+
+Nos publications s'adressent à des citoyens de tous âges, adolescents et adultes, qui ont besoin de
+vulgarisation politique et civique. Ce lecteur n'a pas lu le texte dont nous parlons, ne connaît pas
+le vocabulaire de l'institution qui le produit, et n'a aucune raison de fournir un effort pour nous.
+
+Quatre conséquences, toutes vérifiables sur une publication finie.
+
+**Le vocabulaire de l'institution se traduit.** Les catégories de travail d'une administration ou
+d'une commission sont ses outils de classement, pas des explications. Un terme technique que rien ne
+remplace se définit sur place, en clair, dans la phrase où il apparaît.
+
+**La phrase complète précède la mise en forme.** Si l'information ne tient pas dans une phrase qui
+dit tout, le sujet n'est pas compris. Cette phrase ouvre la publication et le reste la détaille. Une
+publication qui ménage son effet fait de la narration, pas de la pédagogie.
+
+**Le titre s'écrit en dernier.** Rédigé avant le corps, il sort abstrait, faute d'être écrit par
+quelqu'un qui sait déjà ce qu'il a à dire. Il nomme l'objet dont il est question, jamais la
+catégorie à laquelle cet objet appartient.
+
+**Aucune métaphore en titre.** Imager, c'est renoncer à nommer.
