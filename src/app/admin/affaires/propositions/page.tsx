@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
 import type { OfficialDecisionVerificationStatus } from "@/lib/affairs/official-decision-verification";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 // Affaires v2, lot 1: review queue for importer-proposed affair changes.
 // Every automated write to an existing affair lands here first.
@@ -182,7 +184,11 @@ function formatValue(value: unknown): string {
 }
 
 export default function PropositionsPage() {
-  const [tab, setTab] = useState<ProposalStatus>("PENDING");
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get("status");
+  const [tab, setTab] = useState<ProposalStatus>(
+    initialStatus === "CONFLICT" ? "CONFLICT" : "PENDING"
+  );
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -255,14 +261,10 @@ export default function PropositionsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Propositions de modification</h1>
-        <p className="text-muted-foreground max-w-3xl text-sm">
-          Les synchroniseurs ne modifient plus directement une affaire existante. Chaque changement
-          arrive ici avec sa source, son extrait justificatif et la valeur actuelle, pour être
-          accepté ou rejeté explicitement.
-        </p>
-      </header>
+      <AdminPageHeader
+        title="Propositions de modification"
+        description="Chaque changement arrive avec sa source, son extrait justificatif et la valeur actuelle, pour être accepté ou rejeté explicitement."
+      />
 
       <nav aria-label="Filtrer par état" className="flex flex-wrap gap-2">
         {TABS.map((t) => {

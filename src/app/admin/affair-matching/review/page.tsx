@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, LinkIcon, Loader2, Search } from "lucide-react";
 import { BlockedAffairs } from "@/components/admin/BlockedAffairs";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -195,17 +196,11 @@ export default function AffairMatchingReviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight">
-          Révision des décisions de liaison
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Les onglets listent l{"'"}ensemble du registre, qui compte plusieurs milliers de lignes.
-          La plupart ne retiennent rien : seules celles reprises ci-dessous empêchent une
-          publication.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Révision des décisions de liaison"
+        description="Confirmer ou rejeter les rapprochements qui empêchent une publication."
+        help="La file En attente correspond aux décisions UNDECIDED non révisées."
+      />
 
       {/* What actually has to be settled, before the full registry. */}
       <BlockedAffairs />

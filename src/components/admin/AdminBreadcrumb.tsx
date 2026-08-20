@@ -3,21 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Home } from "lucide-react";
-
-const SEGMENT_LABELS: Record<string, string> = {
-  admin: "Dashboard",
-  affaires: "Affaires",
-  politiques: "Politiques",
-  partis: "Partis",
-  dossiers: "Dossiers",
-  elections: "Élections",
-  syncs: "Syncs",
-  "feature-toggles": "Feature Toggles",
-  audit: "Audit Log",
-  parametres: "Paramètres",
-  edit: "Modifier",
-  nouveau: "Nouveau",
-};
+import { findAdminNavigationEntry } from "@/config/admin-navigation";
 
 interface Crumb {
   label: string;
@@ -25,28 +11,23 @@ interface Crumb {
 }
 
 function buildCrumbs(pathname: string): Crumb[] {
+  const entry = findAdminNavigationEntry(pathname);
   const segments = pathname.split("/").filter(Boolean);
-  const crumbs: Crumb[] = [];
+  const crumbs: Crumb[] = [{ label: "À traiter", href: "/admin" }];
 
-  for (let i = 0; i < segments.length; i++) {
+  if (entry && entry.href !== "/admin") {
+    crumbs.push({
+      label: entry.breadcrumb ?? entry.label,
+      href: entry.href.split("?")[0] ?? "/admin",
+    });
+  }
+
+  const base = entry?.href.split("?")[0] ?? "/admin";
+  const baseSegments = base.split("/").filter(Boolean).length;
+  for (let i = baseSegments; i < segments.length; i++) {
     const segment = segments[i]!;
     const href = "/" + segments.slice(0, i + 1).join("/");
-
-    // Skip "admin" as first segment — it becomes "Dashboard"
-    if (i === 0 && segment === "admin") {
-      crumbs.push({ label: "Dashboard", href: "/admin" });
-      continue;
-    }
-
-    // Known labels
-    const knownLabel = SEGMENT_LABELS[segment];
-    if (knownLabel) {
-      crumbs.push({ label: knownLabel, href });
-      continue;
-    }
-
-    // Dynamic segments (IDs, slugs) — show as-is, truncated
-    const label = segment.length > 20 ? segment.slice(0, 17) + "..." : segment;
+    const label = segment.length > 20 ? `${segment.slice(0, 17)}...` : segment;
     crumbs.push({ label, href });
   }
 
@@ -54,26 +35,22 @@ function buildCrumbs(pathname: string): Crumb[] {
 }
 
 export function AdminBreadcrumb() {
-  const pathname = usePathname();
-  const crumbs = buildCrumbs(pathname);
-
+  const crumbs = buildCrumbs(usePathname());
   if (crumbs.length <= 1) return null;
 
   return (
-    <nav aria-label="Fil d'Ariane" className="flex items-center gap-1 text-sm">
+    <nav aria-label="Fil d’Ariane" className="flex items-center gap-1 text-sm">
       <Link
         href="/admin"
-        className="text-muted-foreground hover:text-foreground transition-colors p-1 -ml-1 rounded"
-        aria-label="Dashboard"
+        className="text-muted-foreground hover:text-foreground transition-colors min-h-11 min-w-11 inline-flex items-center justify-center rounded"
+        aria-label="À traiter"
       >
         <Home className="w-3.5 h-3.5" aria-hidden="true" />
       </Link>
-
       {crumbs.slice(1).map((crumb, i) => {
         const isLast = i === crumbs.length - 2;
-
         return (
-          <span key={crumb.href} className="flex items-center gap-1">
+          <span key={`${crumb.href}-${crumb.label}`} className="flex items-center gap-1">
             <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50" aria-hidden="true" />
             {isLast ? (
               <span className="font-medium text-foreground" aria-current="page">

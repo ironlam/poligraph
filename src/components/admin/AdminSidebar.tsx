@@ -1,79 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronsLeft, ChevronsRight, ExternalLink, Menu, X } from "lucide-react";
 import {
-  LayoutDashboard,
-  Scale,
-  Users,
-  Building2,
-  FileText,
-  RefreshCw,
-  ToggleLeft,
-  History,
-  HeartPulse,
-  Settings,
-  ChevronsLeft,
-  ChevronsRight,
-  Menu,
-  X,
-  ExternalLink,
-  ShieldX,
-  Newspaper,
-  ShieldCheck,
-  Crown,
-  Share2,
-  Fingerprint,
-  BarChart3,
-  Vote,
-  CopyCheck,
-  GitPullRequestArrow,
-  ListChecks,
-} from "lucide-react";
+  ADMIN_NAVIGATION_GROUPS,
+  getCounterValue,
+  isAdminNavigationActive,
+  type AdminCounterKey,
+} from "@/config/admin-navigation";
 
 const STORAGE_KEY = "admin-sidebar-collapsed";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badge?: number;
-}
+type BadgeResponse = {
+  drafts: { affairs: number; politicians: number };
+  moderation: { proposalsPending: number; proposalsConflict: number; reviewsPending: number };
+  matching: { decisionsPending: number; duplicatesPending: number };
+  press: { rejectionsPending: number };
+  operations: { failedPipelines: number; failedSyncs: number };
+};
 
-const contentItems: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/affaires", label: "Affaires", icon: Scale },
-  { href: "/admin/affaires/propositions", label: "Propositions", icon: GitPullRequestArrow },
-  { href: "/admin/affaires/doublons", label: "Doublons", icon: CopyCheck },
-  { href: "/admin/politiques", label: "Politiques", icon: Users },
-  { href: "/admin/partis", label: "Partis", icon: Building2 },
-  { href: "/admin/maires", label: "Maires", icon: Crown },
-  { href: "/admin/dossiers", label: "Dossiers", icon: FileText },
-  { href: "/admin/policy-titles", label: "Titres de scrutins", icon: Vote },
-  { href: "/admin/mesures", label: "Mesures", icon: ListChecks },
-  { href: "/admin/affair-matching/review", label: "Liaison affaires", icon: Fingerprint },
-  { href: "/admin/affair-matching/dashboard", label: "Liaison — activité", icon: BarChart3 },
-];
+const EMPTY_BADGES: BadgeResponse = {
+  drafts: { affairs: 0, politicians: 0 },
+  moderation: { proposalsPending: 0, proposalsConflict: 0, reviewsPending: 0 },
+  matching: { decisionsPending: 0, duplicatesPending: 0 },
+  press: { rejectionsPending: 0 },
+  operations: { failedPipelines: 0, failedSyncs: 0 },
+};
 
-const mediaItems: NavItem[] = [
-  { href: "/admin/presse", label: "Presse", icon: Newspaper },
-  { href: "/admin/press/rejections", label: "Rejets presse", icon: ShieldX },
-  { href: "/admin/factchecks", label: "Fact-checks", icon: ShieldCheck },
-  { href: "/admin/social", label: "Social", icon: Share2 },
-];
-
-const systemItems: NavItem[] = [
-  { href: "/admin/pipelines", label: "Pipelines", icon: HeartPulse },
-  { href: "/admin/syncs", label: "Syncs", icon: RefreshCw },
-  { href: "/admin/feature-toggles", label: "Feature Toggles", icon: ToggleLeft },
-  { href: "/admin/audit", label: "Audit Log", icon: History },
-  { href: "/admin/parametres", label: "Paramètres", icon: Settings },
-];
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/admin") return pathname === "/admin";
-  return pathname.startsWith(href);
+function flattenBadges(badges: BadgeResponse): Record<string, number> {
+  return {
+    "drafts.affairs": badges.drafts.affairs,
+    "drafts.politicians": badges.drafts.politicians,
+    "moderation.proposalsPending": badges.moderation.proposalsPending,
+    "moderation.proposalsConflict": badges.moderation.proposalsConflict,
+    "moderation.reviewsPending": badges.moderation.reviewsPending,
+    "matching.decisionsPending": badges.matching.decisionsPending,
+    "matching.duplicatesPending": badges.matching.duplicatesPending,
+    "press.rejectionsPending": badges.press.rejectionsPending,
+    "operations.failedPipelines": badges.operations.failedPipelines,
+    "operations.failedSyncs": badges.operations.failedSyncs,
+  };
 }
 
 export function AdminSidebar() {
@@ -83,49 +51,64 @@ export function AdminSidebar() {
     return localStorage.getItem(STORAGE_KEY) === "true";
   });
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [badges, setBadges] = useState<{ affairsDraft: number }>({ affairsDraft: 0 });
+  const [badges, setBadges] = useState<BadgeResponse>(EMPTY_BADGES);
 
-  // Fetch badge counts
   useEffect(() => {
-    fetch("/api/admin/badges")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) setBadges(data);
-      })
-      .catch(() => {});
-
-    const interval = setInterval(() => {
+    const refresh = () => {
       fetch("/api/admin/badges")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data) setBadges(data);
-        })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: BadgeResponse | null) => data && setBadges(data))
         .catch(() => {});
-    }, 60_000);
+    };
+    refresh();
+    const interval = setInterval(refresh, 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  // Close mobile sidebar on route change
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- sync with navigation
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- close the mobile drawer after navigation
   useEffect(() => setMobileOpen(false), [pathname]);
 
-  function toggleCollapse() {
+  const toggleCollapse = () => {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem(STORAGE_KEY, String(next));
-  }
+  };
 
-  // Inject badge into Affaires item
-  const itemsWithBadges = contentItems.map((item) => {
-    if (item.href === "/admin/affaires" && badges.affairsDraft > 0) {
-      return { ...item, badge: badges.affairsDraft };
-    }
-    return item;
-  });
+  const counters = flattenBadges(badges);
+  const navigation = (
+    <nav role="navigation" aria-label="Administration" className="flex-1 overflow-y-auto py-3 px-2">
+      {ADMIN_NAVIGATION_GROUPS.map((group) => (
+        <section
+          key={group.id}
+          aria-labelledby={`admin-group-${group.id}`}
+          className="mb-4 last:mb-0"
+        >
+          {!collapsed && (
+            <h2
+              id={`admin-group-${group.id}`}
+              className="px-3 mb-1 text-[10px] uppercase tracking-wider text-white/45"
+            >
+              {group.label}
+            </h2>
+          )}
+          <ul className="space-y-0.5">
+            {group.items.map((item) => (
+              <NavLink
+                key={item.id}
+                item={item}
+                active={isAdminNavigationActive(pathname, item)}
+                collapsed={collapsed}
+                badge={getCounterValue(counters, item.counterKey)}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </nav>
+  );
 
   const sidebarContent = (
     <>
-      {/* Logo / Brand */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-white/10 shrink-0">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
@@ -139,80 +122,32 @@ export function AdminSidebar() {
           </span>
         )}
       </div>
-
-      {/* Navigation */}
-      <nav
-        role="navigation"
-        aria-label="Administration"
-        className="flex-1 overflow-y-auto py-3 px-2"
-      >
-        <ul className="space-y-0.5">
-          {itemsWithBadges.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              collapsed={collapsed}
-            />
-          ))}
-        </ul>
-
-        {/* Separator */}
-        <div className="my-3 mx-2 border-t border-white/10" role="separator" />
-
-        <ul className="space-y-0.5">
-          {mediaItems.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              collapsed={collapsed}
-            />
-          ))}
-        </ul>
-
-        {/* Separator */}
-        <div className="my-3 mx-2 border-t border-white/10" role="separator" />
-
-        <ul className="space-y-0.5">
-          {systemItems.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isActive(pathname, item.href)}
-              collapsed={collapsed}
-            />
-          ))}
-        </ul>
-      </nav>
-
-      {/* Footer */}
+      {navigation}
       <div className="border-t border-white/10 p-2 shrink-0 space-y-1">
         <Link
           href="/"
           target="_blank"
-          className="flex items-center gap-2 px-3 py-2 text-xs text-white/50 hover:text-white/80 rounded-md hover:bg-white/5 transition-colors"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 min-h-11 px-3 py-2 text-xs text-white/60 hover:text-white/90 rounded-md hover:bg-white/5"
+          title={collapsed ? "Voir le site" : undefined}
         >
           <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           {!collapsed && <span>Voir le site</span>}
         </Link>
-
         <form action="/api/admin/logout" method="POST">
           <button
             type="submit"
-            className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-white/50 hover:text-white/80 rounded-md hover:bg-white/5 transition-colors ${collapsed ? "justify-center" : ""}`}
+            className={`w-full min-h-11 flex items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white/90 rounded-md hover:bg-white/5 ${collapsed ? "justify-center" : ""}`}
           >
             {!collapsed && <span>Déconnexion</span>}
+            {collapsed && <span className="sr-only">Déconnexion</span>}
           </button>
         </form>
-
-        {/* Collapse toggle — desktop only */}
         <button
           onClick={toggleCollapse}
-          // text-white/60 et pas /40 : sur le fond oklch(0.18 0.015 250), 40 % de blanc donne 4,06:1,
-          // sous le seuil AA de 4,5:1 pour du texte de 12 px. 60 % donne environ 7,9:1.
-          className="hidden lg:flex w-full items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white/90 rounded-md hover:bg-white/5 transition-colors"
+          className="hidden lg:flex w-full min-h-11 items-center gap-2 px-3 py-2 text-xs text-white/60 hover:text-white/90 rounded-md hover:bg-white/5"
           aria-label={collapsed ? "Développer la sidebar" : "Réduire la sidebar"}
+          title={collapsed ? "Développer la sidebar" : "Réduire la sidebar"}
         >
           {collapsed ? (
             <ChevronsRight className="w-4 h-4 mx-auto" aria-hidden="true" />
@@ -229,16 +164,14 @@ export function AdminSidebar() {
 
   return (
     <>
-      {/* Mobile trigger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-background border border-border shadow-md"
+        className="lg:hidden fixed top-2 left-2 z-50 h-11 w-11 inline-flex items-center justify-center rounded-lg bg-background border border-border shadow-md"
         aria-label="Ouvrir le menu"
+        title="Ouvrir le menu"
       >
         <Menu className="w-5 h-5" aria-hidden="true" />
       </button>
-
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="lg:hidden fixed inset-0 z-50 bg-black/60"
@@ -246,29 +179,22 @@ export function AdminSidebar() {
           aria-hidden="true"
         />
       )}
-
-      {/* Mobile sidebar */}
       <aside
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-200 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
         style={{ backgroundColor: "oklch(0.18 0.015 250)" }}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-3 right-3 p-1 text-white/50 hover:text-white"
+          className="absolute top-2 right-2 h-11 w-11 inline-flex items-center justify-center text-white/60 hover:text-white"
           aria-label="Fermer le menu"
+          title="Fermer le menu"
         >
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
         {sidebarContent}
       </aside>
-
-      {/* Desktop sidebar */}
       <aside
-        className={`hidden lg:flex flex-col shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${
-          collapsed ? "w-16" : "w-56"
-        }`}
+        className={`hidden lg:flex flex-col shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${collapsed ? "w-16" : "w-56"}`}
         style={{ backgroundColor: "oklch(0.18 0.015 250)" }}
       >
         {sidebarContent}
@@ -281,46 +207,47 @@ function NavLink({
   item,
   active,
   collapsed,
+  badge,
 }: {
-  item: NavItem;
+  item: {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    counterKey?: AdminCounterKey;
+  };
   active: boolean;
   collapsed: boolean;
+  badge?: number;
 }) {
   const Icon = item.icon;
-
   return (
     <li>
       <Link
         href={item.href}
         aria-current={active ? "page" : undefined}
-        className={`group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-          active
-            ? "bg-white/12 text-white font-medium"
-            : "text-white/60 hover:text-white hover:bg-white/6"
-        } ${collapsed ? "justify-center" : ""}`}
+        aria-label={collapsed ? item.label : undefined}
         title={collapsed ? item.label : undefined}
+        className={`relative min-h-11 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${active ? "bg-white/12 text-white font-medium" : "text-white/60 hover:text-white hover:bg-white/6"} ${collapsed ? "justify-center" : ""}`}
       >
         <Icon className="w-4.5 h-4.5 shrink-0" aria-hidden="true" />
         {!collapsed && (
           <>
             <span className="truncate">{item.label}</span>
-            {item.badge !== undefined && item.badge > 0 && (
+            {badge !== undefined && badge > 0 && (
               <span
                 className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{
-                  backgroundColor: "oklch(0.52 0.2 25)",
-                  color: "white",
-                }}
+                style={{ backgroundColor: "oklch(0.52 0.2 25)", color: "white" }}
               >
-                {item.badge}
+                {badge}
               </span>
             )}
           </>
         )}
-        {collapsed && item.badge !== undefined && item.badge > 0 && (
+        {collapsed && badge !== undefined && badge > 0 && (
           <span
-            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+            className="absolute top-2 right-2 w-2 h-2 rounded-full"
             style={{ backgroundColor: "oklch(0.52 0.2 25)" }}
+            aria-label={`${badge} élément${badge > 1 ? "s" : ""} en attente`}
           />
         )}
       </Link>

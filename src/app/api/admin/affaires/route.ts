@@ -25,6 +25,7 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   const status = validateEnum(searchParams.get("status"), VALID_AFFAIR_STATUSES);
   const search = searchParams.get("search");
   const hasEcli = searchParams.get("hasEcli");
+  const moderation = searchParams.get("moderation");
   const { page, limit, skip } = parsePagination(searchParams);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +42,9 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   }
   if (hasEcli === "false") {
     where.courtDecisions = { none: { courtDecision: { ecli: { not: null } } } };
+  }
+  if (moderation === "pending") {
+    where.moderationReviews = { some: { appliedAt: null } };
   }
   if (search) {
     where.OR = [

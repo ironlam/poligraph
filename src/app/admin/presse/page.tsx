@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateShort } from "@/lib/utils";
 import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 import { PressPurgeButton } from "@/components/admin/PressPurgeButton";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import type { Prisma } from "@/generated/prisma";
 
 interface PageProps {
@@ -112,14 +113,13 @@ export default async function AdminPressePage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight">Presse</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {stats.total} articles — {stats.totalMentions} mentions
-        </p>
-        {stats.purgeableCount > 0 && <PressPurgeButton count={stats.purgeableCount} />}
-      </div>
+      <AdminPageHeader
+        title="Presse et articles"
+        description={`${stats.total} articles, ${stats.totalMentions} mentions`}
+        action={
+          stats.purgeableCount > 0 ? <PressPurgeButton count={stats.purgeableCount} /> : undefined
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

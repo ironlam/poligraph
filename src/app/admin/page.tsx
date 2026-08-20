@@ -2,31 +2,33 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
+import { getPipelineHealthAll } from "@/lib/data/pipelines";
 import {
-  ImageOff,
-  FileWarning,
-  Scale,
-  FileQuestion,
-  EyeOff,
-  Plus,
-  Clock,
-  AlertCircle,
   CheckCircle2,
+  CopyCheck,
+  FileCheck2,
+  FileText,
+  Fingerprint,
+  GitPullRequestArrow,
+  HeartPulse,
+  Newspaper,
+  Plus,
   RefreshCw,
-  XCircle,
+  Scale,
+  ShieldAlert,
 } from "lucide-react";
 
-interface DataHealthItem {
+type QueueCard = {
   label: string;
   count: number;
-  total?: number;
-  icon: React.ComponentType<{ className?: string }>;
+  description: string;
   href: string;
-  color: string;
-}
+  icon: typeof Scale;
+};
 
 async function getDashboardData() {
-  // Single SQL for all counts — prevents pool starvation (8 parallel counts → 1 query)
   const counts = await db.$queryRaw<
     [
       {
@@ -42,365 +44,318 @@ async function getDashboardData() {
     ]
   >`
     SELECT
-      COUNT(*)                                                                           AS total_politicians,
-      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED')                          AS published_politicians,
-      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED' AND "photoUrl" IS NULL)   AS without_photo,
-      COUNT(*) FILTER (WHERE "publicationStatus" = 'DRAFT')                              AS draft_politicians,
-      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED' AND "biography" IS NULL)  AS without_bio,
-      (SELECT COUNT(*) FROM "Affair")                                                    AS total_affairs,
-      (SELECT COUNT(*) FROM "Affair" WHERE "publicationStatus" = 'DRAFT')                AS draft_affairs,
-      -- « Sans référence judiciaire » se mesure sur les décisions rattachées : la
-      -- colonne ecli a été retirée d'Affair (#545).
-      (SELECT COUNT(*) FROM "Affair" a
-        WHERE a."publicationStatus" = 'PUBLISHED'
-          AND NOT EXISTS (SELECT 1 FROM "AffairCourtDecision" acd WHERE acd."affairId" = a.id)
-      ) AS without_ecli
+      COUNT(*) AS total_politicians,
+      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED') AS published_politicians,
+      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED' AND "photoUrl" IS NULL) AS without_photo,
+      COUNT(*) FILTER (WHERE "publicationStatus" = 'DRAFT') AS draft_politicians,
+      COUNT(*) FILTER (WHERE "publicationStatus" = 'PUBLISHED' AND "biography" IS NULL) AS without_bio,
+      (SELECT COUNT(*) FROM "Affair") AS total_affairs,
+      (SELECT COUNT(*) FROM "Affair" WHERE "publicationStatus" = 'DRAFT') AS draft_affairs,
+      (SELECT COUNT(*) FROM "Affair" a WHERE a."publicationStatus" = 'PUBLISHED' AND NOT EXISTS (SELECT 1 FROM "AffairCourtDecision" acd WHERE acd."affairId" = a.id)) AS without_ecli
     FROM "Politician"
   `;
-
-  const c = counts[0];
+  const c = counts[0]!;
+  const [
+    proposalsPending,
+    proposalsConflict,
+    reviewsPending,
+    decisionsPending,
+    duplicates,
+    rejectionsPending,
+    failedSyncs,
+    pipelines,
+    recentActivity,
+    syncHistory,
+  ] = await Promise.all([
+    db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
+    db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
+    db.moderationReview.count({ where: { appliedAt: null } }),
+    db.affairPoliticianDecision.count({ where: { judgment: "UNDECIDED", reviewedAt: null } }),
+    findPotentialDuplicates(),
+    db.pressAnalysisRejection.count(),
+    db.syncJob.count({ where: { status: "FAILED" } }),
+    getPipelineHealthAll(),
+    db.auditLog.findMany({ take: 10, orderBy: { createdAt: "desc" } }),
+    db.syncJob.findMany({ take: 10, orderBy: { createdAt: "desc" } }),
+  ]);
   const totalPoliticians = Number(c.total_politicians);
   const publishedPoliticians = Number(c.published_politicians);
-  const politiciansWithoutPhoto = Number(c.without_photo);
-  const politiciansDraft = Number(c.draft_politicians);
-  const biographiesMissing = Number(c.without_bio);
-  const totalAffairs = Number(c.total_affairs);
-  const affairsDraft = Number(c.draft_affairs);
-  const affairsWithoutEcli = Number(c.without_ecli);
-
-  // These 2 queries need actual rows, not counts — run in parallel (2 = fine with max:2 pool)
-  const [recentActivity, syncHistory] = await Promise.all([
-    db.auditLog.findMany({
-      take: 20,
-      orderBy: { createdAt: "desc" },
-    }),
-    db.syncJob.findMany({
-      take: 10,
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  const withPhoto = publishedPoliticians - politiciansWithoutPhoto;
-  const withBio = publishedPoliticians - biographiesMissing;
-  const completeness =
-    publishedPoliticians > 0
-      ? Math.round(((withPhoto + withBio) / (publishedPoliticians * 2)) * 100)
-      : 0;
-
+  const withoutPhoto = Number(c.without_photo);
+  const withoutBio = Number(c.without_bio);
+  const withPhoto = publishedPoliticians - withoutPhoto;
+  const withBio = publishedPoliticians - withoutBio;
   return {
     totalPoliticians,
     publishedPoliticians,
-    politiciansWithoutPhoto,
-    politiciansDraft,
-    biographiesMissing,
-    totalAffairs,
-    affairsDraft,
-    affairsWithoutEcli,
-    completeness,
+    politiciansDraft: Number(c.draft_politicians),
+    totalAffairs: Number(c.total_affairs),
+    affairsDraft: Number(c.draft_affairs),
+    affairsWithoutEcli: Number(c.without_ecli),
+    politiciansWithoutPhoto: withoutPhoto,
+    biographiesMissing: withoutBio,
+    completeness: publishedPoliticians
+      ? Math.round(((withPhoto + withBio) / (publishedPoliticians * 2)) * 100)
+      : 0,
+    queues: {
+      proposalsPending,
+      proposalsConflict,
+      reviewsPending,
+      decisionsPending,
+      duplicates: duplicates.length,
+      rejectionsPending,
+      failedPipelines: pipelines.filter((p) => p.status === "critical").length,
+      failedSyncs,
+    },
     recentActivity,
     syncHistory,
   };
 }
 
-function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - new Date(date).getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffH = Math.floor(diffMin / 60);
-  const diffD = Math.floor(diffH / 24);
-
-  if (diffMin < 1) return "à l'instant";
-  if (diffMin < 60) return `il y a ${diffMin}min`;
-  if (diffH < 24) return `il y a ${diffH}h`;
-  if (diffD < 7) return `il y a ${diffD}j`;
-  return new Date(date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+function relativeTime(value: Date): string {
+  const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60000);
+  if (minutes < 1) return "à l’instant";
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  return new Date(value).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
-
-function formatDuration(start: Date | null, end: Date | null): string {
-  if (!start || !end) return "-";
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  return `${Math.floor(sec / 60)}min ${sec % 60}s`;
-}
-
-const ACTION_ICONS: Record<string, { icon: typeof Plus; className: string }> = {
-  CREATE: { icon: Plus, className: "text-emerald-600 bg-emerald-50" },
-  UPDATE: { icon: RefreshCw, className: "text-primary bg-primary/10" },
-  DELETE: { icon: XCircle, className: "text-red-600 bg-red-50" },
-};
-
-const SYNC_STATUS_STYLES: Record<string, string> = {
-  COMPLETED: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  RUNNING: "bg-blue-50 text-blue-700 border-blue-200",
-  FAILED: "bg-red-50 text-red-700 border-red-200",
-  PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-};
 
 export default async function AdminDashboard() {
   const data = await getDashboardData();
-
-  const healthItems: DataHealthItem[] = [
+  const queueCards: QueueCard[] = [
     {
-      label: "Affaires à modérer",
+      label: "Affaires DRAFT",
       count: data.affairsDraft,
-      icon: Scale,
+      description: "Vérifier les sources et décider de la publication.",
       href: "/admin/affaires?status=DRAFT",
-      color: "oklch(0.52 0.2 25)",
+      icon: Scale,
     },
     {
-      label: "Politiciens sans photo",
-      count: data.politiciansWithoutPhoto,
-      total: data.publishedPoliticians,
-      icon: ImageOff,
-      href: "/admin/politiques?filter=no-photo",
-      color: "oklch(0.55 0.15 250)",
+      label: "Propositions en attente",
+      count: data.queues.proposalsPending,
+      description: "Examiner les modifications proposées.",
+      href: "/admin/affaires/propositions?status=PENDING",
+      icon: GitPullRequestArrow,
     },
     {
-      label: "Biographies manquantes",
-      count: data.biographiesMissing,
-      total: data.publishedPoliticians,
-      icon: FileQuestion,
-      href: "/admin/politiques?filter=no-bio",
-      color: "oklch(0.55 0.15 310)",
+      label: "Propositions en conflit",
+      count: data.queues.proposalsConflict,
+      description: "Résoudre les écarts avec la donnée actuelle.",
+      href: "/admin/affaires/propositions?status=CONFLICT",
+      icon: ShieldAlert,
     },
     {
-      label: "Affaires sans ECLI",
-      count: data.affairsWithoutEcli,
-      icon: FileWarning,
-      href: "/admin/affaires?filter=no-ecli",
-      color: "oklch(0.55 0.18 65)",
+      label: "Revues de modération",
+      count: data.queues.reviewsPending,
+      description: "Appliquer ou écarter la recommandation, avec preuve.",
+      href: "/admin/affaires?filter=moderation-pending",
+      icon: FileCheck2,
     },
     {
-      label: "Politiciens DRAFT",
-      count: data.politiciansDraft,
-      icon: EyeOff,
-      href: "/admin/politiques?status=DRAFT",
-      color: "oklch(0.5 0.12 200)",
+      label: "Liaisons à confirmer",
+      count: data.queues.decisionsPending,
+      description: "Confirmer ou rejeter les rapprochements.",
+      href: "/admin/affair-matching/review?tab=UNDECIDED",
+      icon: Fingerprint,
+    },
+    {
+      label: "Doublons à trancher",
+      count: data.queues.duplicates,
+      description: "Comparer les paires proposées.",
+      href: "/admin/affaires/doublons",
+      icon: CopyCheck,
+    },
+    {
+      label: "Rejets presse",
+      count: data.queues.rejectionsPending,
+      description: "Prendre une décision éditoriale sur les rejets.",
+      href: "/admin/press/rejections",
+      icon: Newspaper,
+    },
+    {
+      label: "Pipelines en échec",
+      count: data.queues.failedPipelines,
+      description: "Diagnostiquer les pipelines critiques.",
+      href: "/admin/pipelines?status=critical",
+      icon: HeartPulse,
+    },
+    {
+      label: "Synchronisations en échec",
+      count: data.queues.failedSyncs,
+      description: "Inspecter les exécutions interrompues.",
+      href: "/admin/syncs?status=FAILED",
+      icon: RefreshCw,
     },
   ];
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <AdminPageHeader
+        title="À traiter maintenant"
+        description={`${data.totalPoliticians} personnalités politiques, ${data.totalAffairs} affaires`}
+        action={
+          <Link
+            href="/admin/affaires/nouveau"
+            className="min-h-11 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg"
+            style={{ backgroundColor: "oklch(0.52 0.2 25)" }}
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Nouvelle affaire
+          </Link>
+        }
+      />
+
+      <section aria-labelledby="todo-title" className="space-y-4">
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {data.totalPoliticians} politiciens &middot; {data.totalAffairs} affaires
+          <h2 id="todo-title" className="text-lg font-display font-semibold">
+            À traiter maintenant
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Chaque compteur correspond à une file distincte et ouvre son filtre de travail.
           </p>
         </div>
-        <Link
-          href="/admin/affaires/nouveau"
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
-          style={{ backgroundColor: "oklch(0.52 0.2 25)" }}
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          Nouvelle affaire
-        </Link>
-      </div>
-
-      {/* Data Health + Activity Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Data Health — 2 cols */}
-        <div className="xl:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-display font-semibold">Santé des données</h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${data.completeness}%`,
-                    backgroundColor:
-                      data.completeness > 80
-                        ? "oklch(0.6 0.18 145)"
-                        : data.completeness > 50
-                          ? "oklch(0.6 0.15 80)"
-                          : "oklch(0.6 0.18 25)",
-                  }}
-                />
-              </div>
-              <span>{data.completeness}% complet</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {healthItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.label} href={item.href}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer group">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div
-                          className="p-2 rounded-lg"
-                          style={{
-                            backgroundColor: `color-mix(in oklch, ${item.color} 12%, transparent)`,
-                          }}
-                        >
-                          <span style={{ color: item.color }}>
-                            <Icon className="w-4 h-4" aria-hidden="true" />
-                          </span>
-                        </div>
-                        <span
-                          className="text-2xl font-bold font-display"
-                          style={{ color: item.count > 0 ? item.color : undefined }}
-                        >
-                          {item.count}
-                        </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {queueCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <Link key={card.label} href={card.href}>
+                <Card className="h-full hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Icon className="w-4 h-4 text-primary" aria-hidden="true" />
                       </div>
-                      <p className="text-sm text-muted-foreground mt-2 group-hover:text-foreground transition-colors">
-                        {item.label}
-                      </p>
-                      {item.total && (
-                        <div className="mt-2 w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${Math.max(2, ((item.total - item.count) / item.total) * 100)}%`,
-                              backgroundColor: item.color,
-                            }}
-                          />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
+                      <span
+                        className={`text-2xl font-bold font-display ${card.count ? "text-primary" : "text-muted-foreground"}`}
+                      >
+                        {card.count}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium mt-3">{card.label}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {card.count ? card.description : "File vide, aucune action en attente."}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
+      </section>
 
-        {/* Activity Timeline — 1 col */}
+      <section aria-labelledby="health-title" className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 id="health-title" className="text-lg font-display font-semibold">
+            Santé des données
+          </h2>
+          <span className="text-sm text-muted-foreground">{data.completeness}% complet</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            [
+              "Personnalités sans photo",
+              data.politiciansWithoutPhoto,
+              "/admin/politiques?filter=no-photo",
+              FileText,
+            ],
+            [
+              "Biographies manquantes",
+              data.biographiesMissing,
+              "/admin/politiques?filter=no-bio",
+              FileText,
+            ],
+            [
+              "Affaires sans décision",
+              data.affairsWithoutEcli,
+              "/admin/affaires?filter=no-ecli",
+              Scale,
+            ],
+            [
+              "Personnalités DRAFT",
+              data.politiciansDraft,
+              "/admin/politiques?status=DRAFT",
+              FileText,
+            ],
+          ].map(([label, count, href]) => (
+            <Link key={String(label)} href={String(href)}>
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="text-2xl font-bold">{String(count)}</div>
+                  <p className="text-sm text-muted-foreground mt-1">{String(label)}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="activity-title" className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <h2 className="text-lg font-display font-semibold">Activité récente</h2>
+          <h2 id="activity-title" className="text-lg font-display font-semibold">
+            Activité récente
+          </h2>
           <Card>
             <CardContent className="p-0">
-              {data.recentActivity.length > 0 ? (
+              {data.recentActivity.length ? (
                 <ul className="divide-y divide-border">
-                  {data.recentActivity.slice(0, 10).map((entry) => {
-                    const actionMeta = ACTION_ICONS[entry.action] || ACTION_ICONS.UPDATE;
-                    const ActionIcon = actionMeta!.icon;
-                    return (
-                      <li key={entry.id} className="px-4 py-3 flex items-start gap-3">
-                        <div
-                          className={`p-1.5 rounded-md shrink-0 mt-0.5 ${actionMeta!.className}`}
-                        >
-                          <ActionIcon className="w-3 h-3" aria-hidden="true" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm truncate">
-                            <span className="font-medium">{entry.action}</span>{" "}
-                            <span className="text-muted-foreground">{entry.entityType}</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {formatRelativeTime(entry.createdAt)}
-                          </p>
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {data.recentActivity.map((entry) => (
+                    <li key={entry.id} className="px-4 py-3 flex items-center gap-3">
+                      <CheckCircle2
+                        className="w-4 h-4 text-emerald-600 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="text-sm flex-1 truncate">
+                        {entry.action}{" "}
+                        <span className="text-muted-foreground">{entry.entityType}</span>
+                      </span>
+                      <time
+                        className="text-xs text-muted-foreground"
+                        dateTime={entry.createdAt.toISOString()}
+                      >
+                        {relativeTime(entry.createdAt)}
+                      </time>
+                    </li>
+                  ))}
                 </ul>
               ) : (
-                <div className="p-6 text-center text-sm text-muted-foreground">
+                <p className="p-6 text-sm text-muted-foreground text-center">
                   Aucune activité récente
-                </div>
+                </p>
               )}
             </CardContent>
           </Card>
-
-          {data.recentActivity.length > 10 && (
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-display font-semibold">Activité et opérations</h2>
             <Link
-              href="/admin/audit"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              href="/admin/syncs"
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
-              Voir tout l&apos;historique &rarr;
+              Voir les synchronisations
             </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Sync History */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-display font-semibold">Dernières synchronisations</h2>
-          <Link
-            href="/admin/syncs"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Gérer les syncs &rarr;
-          </Link>
-        </div>
-
-        {data.syncHistory.length > 0 ? (
+          </div>
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <th className="px-4 py-3 font-medium text-muted-foreground">Script</th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground">Statut</th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">
-                        Durée
-                      </th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">
-                        Stats
-                      </th>
-                      <th className="px-4 py-3 font-medium text-muted-foreground">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {data.syncHistory.map((job) => (
-                      <tr key={job.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs">{job.script}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className={SYNC_STATUS_STYLES[job.status] || ""}>
-                            {job.status === "COMPLETED" && (
-                              <CheckCircle2 className="w-3 h-3 mr-1" aria-hidden="true" />
-                            )}
-                            {job.status === "FAILED" && (
-                              <AlertCircle className="w-3 h-3 mr-1" aria-hidden="true" />
-                            )}
-                            {job.status === "RUNNING" && (
-                              <RefreshCw className="w-3 h-3 mr-1 animate-spin" aria-hidden="true" />
-                            )}
-                            {job.status === "PENDING" && (
-                              <Clock className="w-3 h-3 mr-1" aria-hidden="true" />
-                            )}
-                            {job.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                          {formatDuration(job.startedAt, job.completedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                          {job.processed != null && job.total != null
-                            ? `${job.processed}/${job.total}`
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {formatRelativeTime(job.createdAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {data.syncHistory.length ? (
+                <ul className="divide-y divide-border">
+                  {data.syncHistory.map((job) => (
+                    <li key={job.id} className="px-4 py-3 flex items-center gap-3">
+                      <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />
+                      <span className="font-mono text-xs flex-1 truncate">{job.script}</span>
+                      <Badge variant="outline">{job.status}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-6 text-sm text-muted-foreground text-center">
+                  Aucune synchronisation enregistrée
+                </p>
+              )}
             </CardContent>
           </Card>
-        ) : (
-          <Card>
-            <CardContent className="p-6 text-center text-sm text-muted-foreground">
-              Aucune synchronisation enregistrée.{" "}
-              <Link href="/admin/syncs" className="text-foreground hover:underline">
-                Lancer une sync
-              </Link>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,12 +1,58 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
+import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
+import { getPipelineHealthAll } from "@/lib/data/pipelines";
+
+export interface AdminBadgeContract {
+  drafts: { affairs: number; politicians: number };
+  moderation: {
+    proposalsPending: number;
+    proposalsConflict: number;
+    reviewsPending: number;
+  };
+  matching: { decisionsPending: number; duplicatesPending: number };
+  press: { rejectionsPending: number };
+  operations: { failedPipelines: number; failedSyncs: number };
+}
 
 export const GET = withAdminAuth(async () => {
-  const [affairsDraft, politiciansDraft] = await Promise.all([
+  const [
+    affairs,
+    politicians,
+    proposalsPending,
+    proposalsConflict,
+    reviewsPending,
+    decisionsPending,
+    duplicates,
+    rejectionsPending,
+    failedSyncs,
+    pipelineHealth,
+  ] = await Promise.all([
     db.affair.count({ where: { publicationStatus: "DRAFT" } }),
     db.politician.count({ where: { publicationStatus: "DRAFT" } }),
+    db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
+    db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
+    db.moderationReview.count({ where: { appliedAt: null } }),
+    db.affairPoliticianDecision.count({
+      where: { judgment: "UNDECIDED", reviewedAt: null },
+    }),
+    findPotentialDuplicates(),
+    db.pressAnalysisRejection.count(),
+    db.syncJob.count({ where: { status: "FAILED" } }),
+    getPipelineHealthAll(),
   ]);
 
-  return NextResponse.json({ affairsDraft, politiciansDraft });
+  const response: AdminBadgeContract = {
+    drafts: { affairs, politicians },
+    moderation: { proposalsPending, proposalsConflict, reviewsPending },
+    matching: { decisionsPending, duplicatesPending: duplicates.length },
+    press: { rejectionsPending },
+    operations: {
+      failedPipelines: pipelineHealth.filter((pipeline) => pipeline.status === "critical").length,
+      failedSyncs,
+    },
+  };
+
+  return NextResponse.json(response);
 });

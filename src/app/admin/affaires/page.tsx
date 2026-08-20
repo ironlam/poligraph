@@ -25,6 +25,7 @@ import {
   Scale,
 } from "lucide-react";
 import { AffairesPageSkeleton } from "./_components/AffairesPageSkeleton";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   buildApplyAiPayload,
   buildBulkPayload,
@@ -129,6 +130,7 @@ export default function AdminAffairsPage() {
     if (searchQuery) params.set("search", searchQuery);
     if (categoryFilter) params.set("category", categoryFilter);
     if (filterParam === "no-ecli") params.set("hasEcli", "false");
+    if (filterParam === "moderation-pending") params.set("moderation", "pending");
     params.set("page", String(currentPage));
     params.set("limit", "50");
 
@@ -236,16 +238,18 @@ export default function AdminAffairsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-display font-bold tracking-tight">Affaires judiciaires</h1>
-        <Button asChild>
-          <Link href="/admin/affaires/nouveau">
-            <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
-            Nouvelle affaire
-          </Link>
-        </Button>
-      </div>
+      <AdminPageHeader
+        title="Affaires judiciaires"
+        description="Affaires à vérifier, documenter et publier."
+        action={
+          <Button asChild>
+            <Link href="/admin/affaires/nouveau">
+              <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+              Nouvelle affaire
+            </Link>
+          </Button>
+        }
+      />
 
       {/* Moderation feedback (surfaces publish-guard failures, #364) */}
       {feedback && (
