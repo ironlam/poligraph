@@ -25,7 +25,7 @@ export function HubEntryCards() {
                 Partir d&apos;un sujet
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Le logement, la santé, l&apos;environnement et les mesures documentées par thème.
+                Logement, santé, environnement : les mesures publiées, sujet par sujet.
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -39,7 +39,7 @@ export function HubEntryCards() {
                 Partir d&apos;une candidature
               </p>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Les candidatures sourcées, avec leur statut et leur origine.
+                Le statut de chaque candidature et les mesures disponibles sur Poligraph.
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -64,7 +64,7 @@ export function HubEntryCards() {
                 Partir d&apos;un sujet
               </h3>
               <p className="flex-1 text-sm text-muted-foreground">
-                Le logement, la santé, l&apos;environnement et les mesures documentées par thème.
+                Logement, santé, environnement : les mesures publiées, sujet par sujet.
               </p>
               <span className="text-sm font-semibold text-primary group-hover:underline">
                 Voir les sujets →
@@ -80,10 +80,10 @@ export function HubEntryCards() {
                 Partir d&apos;une candidature
               </h3>
               <p className="flex-1 text-sm text-muted-foreground">
-                Les candidatures sourcées, avec leur statut et leur origine.
+                Le statut de chaque candidature et les mesures disponibles sur Poligraph.
               </p>
               <span className="text-sm font-semibold text-primary group-hover:underline">
-                Voir les fiches →
+                Voir les candidatures →
               </span>
             </CardContent>
           </Card>

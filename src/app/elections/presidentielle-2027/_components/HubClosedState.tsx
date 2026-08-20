@@ -31,10 +31,10 @@ export function HubClosedState({
       </h2>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
         {verifiedMeasureCount === 0
-          ? "Aucune mesure vérifiée n'est encore publiée."
-          : `${verifiedMeasureCount} ${verifiedMeasureCount === 1 ? "mesure vérifiée" : "mesures vérifiées"} à ce jour.`}{" "}
-        Un sujet s&apos;ouvre à la comparaison quand {required} candidatures y portent une mesure
-        vérifiée, et aucun des {themeCount} sujets n&apos;atteint ce seuil.{" "}
+          ? "Aucune mesure n'est encore publiée."
+          : `${verifiedMeasureCount} ${verifiedMeasureCount === 1 ? "mesure publiée" : "mesures publiées"} à ce jour.`}{" "}
+        Un sujet s&apos;ouvre à la comparaison quand au moins {required} candidatures y portent une
+        mesure sourcée et relue, et aucun des {themeCount} sujets n&apos;atteint ce seuil.{" "}
         <Link
           href="/elections/presidentielle-2027/sujets"
           className="underline underline-offset-2 hover:text-foreground"

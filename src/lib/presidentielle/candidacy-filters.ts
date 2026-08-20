@@ -21,15 +21,11 @@ export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   toutes: "Toutes",
   declarees: "Déclarées",
   pressenties: "Pressenties",
-  // "Mesures documentées" and not "Programme documenté", because the predicate below is
-  // `measureCount > 0` and a measure does not imply a programme: `Measure.programEditionId`
-  // is nullable precisely so a proposal made in a speech, an interview or an article can be
-  // recorded. Labelling that as a documented programme would promise a published document
-  // this filter never checks.
-  //
-  // The key stays `depouillees`: it travels in shared URLs. Only the label changes, and
-  // "dépouillé" had to go anyway — on an elections page that word means counting ballots.
-  depouillees: "Mesures documentées",
+  // The public wording describes what the reader can open, not our internal moderation state.
+  // A measure can come from a programme, a speech or an interview, so the filter must not promise
+  // that a complete programme exists. The historical URL key stays `depouillees` so shared links
+  // do not break.
+  depouillees: "Avec des mesures",
 };
 
 /** The fields a filter reads, so a caller can pass its own row type unchanged. */
@@ -60,8 +56,7 @@ export function matchesCandidacyFilter(
     // not a different thing: a reader filtering on "pressenties" wants everyone not yet declared.
     case "pressenties":
       return candidacy.status === "PRESSENTI" || candidacy.status === "ENVISAGE";
-    // Our own extraction, not a claim about the candidacy. A row with no measure can still have
-    // published a programme.
+    // Our published extraction, not a claim about the existence or completeness of a programme.
     case "depouillees":
       return candidacy.measureCount > 0;
     default: {

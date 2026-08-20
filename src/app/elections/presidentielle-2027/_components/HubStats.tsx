@@ -1,7 +1,7 @@
 import { formatDate } from "@/lib/utils";
 
 /**
- * Launch-honest reporting (spec §4.3): a count of verified measures and the date they were last
+ * Launch-honest reporting (spec §4.3): a count of published measures and the date they were last
  * reviewed, never a percentage. There is no denominator that would make a "100 %" true at launch,
  * so the component never computes one. At zero, it says so plainly instead of hiding the section.
  *
@@ -19,19 +19,24 @@ interface HubStatsProps {
 export function HubStats({ verifiedMeasureCount, lastReviewedAt }: HubStatsProps) {
   if (verifiedMeasureCount === 0 && lastReviewedAt === null) {
     return (
-      <section aria-label="Mesures vérifiées" className="text-sm text-muted-foreground">
-        Aucune mesure vérifiée pour l&apos;instant.
+      <section
+        aria-label="Mesures publiées sur Poligraph"
+        className="text-sm text-muted-foreground"
+      >
+        Aucune mesure publiée pour l&apos;instant.
       </section>
     );
   }
 
-  const countLabel = `${verifiedMeasureCount} mesure${verifiedMeasureCount === 1 ? "" : "s"} vérifiée${verifiedMeasureCount === 1 ? "" : "s"}`;
+  const countLabel = `${verifiedMeasureCount} mesure${verifiedMeasureCount === 1 ? "" : "s"} publiée${verifiedMeasureCount === 1 ? "" : "s"}`;
 
   return (
-    <section aria-label="Mesures vérifiées" className="text-sm">
+    <section aria-label="Mesures publiées sur Poligraph" className="text-sm">
       <p className="font-medium">{countLabel}</p>
       {lastReviewedAt !== null && (
-        <p className="mt-1 text-muted-foreground">Dernière revue le {formatDate(lastReviewedAt)}</p>
+        <p className="mt-1 text-muted-foreground">
+          Dernière revue éditoriale le {formatDate(lastReviewedAt)}
+        </p>
       )}
     </section>
   );

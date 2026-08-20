@@ -16,21 +16,23 @@ describe("HubClosedState", () => {
     );
   });
 
-  it("dit l'absence de mesure au lieu d'annoncer « 0 mesures vérifiées »", () => {
+  it("dit l'absence de mesure au lieu d'afficher un compteur nul", () => {
     render(<HubClosedState verifiedMeasureCount={0} themeCount={13} />);
-    expect(screen.getByText(/Aucune mesure vérifiée n'est encore publiée/)).toBeInTheDocument();
+    expect(screen.getByText(/Aucune mesure n'est encore publiée/)).toBeInTheDocument();
   });
 
   it("accorde le singulier sur une seule mesure", () => {
     render(<HubClosedState verifiedMeasureCount={1} themeCount={13} />);
-    expect(screen.getByText(/1 mesure vérifiée à ce jour/)).toBeInTheDocument();
+    expect(screen.getByText(/1 mesure publiée à ce jour/)).toBeInTheDocument();
   });
 
   it("lit le seuil dans PUBLICATION_GATES plutôt que de le coder en dur", () => {
     render(<HubClosedState verifiedMeasureCount={4} themeCount={13} />);
     const attendu = PUBLICATION_GATES.pageSujet.minCandidaciesWithVerifiedMeasure;
     expect(
-      screen.getByText(new RegExp(`quand ${attendu} candidatures y portent une mesure vérifiée`))
+      screen.getByText(
+        new RegExp(`quand au moins ${attendu} candidatures y portent une mesure sourcée et relue`)
+      )
     ).toBeInTheDocument();
     expect(screen.getByText(/aucun des 13 sujets n'atteint ce seuil/)).toBeInTheDocument();
   });

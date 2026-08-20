@@ -27,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Présidentielle 2027 : programmes, votes, bilans | Poligraph",
     description:
-      "Les candidatures à la présidentielle 2027, leurs mesures documentées par sujet et les votes qui les éclairent.",
+      "Les candidatures à la présidentielle 2027, leurs mesures sourcées et relues par sujet et les votes qui les éclairent.",
     robots: publishable ? undefined : { index: false, follow: true },
     alternates: { canonical: "/elections/presidentielle-2027" },
   };

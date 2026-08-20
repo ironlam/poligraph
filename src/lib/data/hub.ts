@@ -37,6 +37,9 @@ export type HubCandidacy = {
   id: string;
   candidateName: string;
   politicianSlug: string | null;
+  /** Original portrait URL and our cached/cropped copy, when the candidacy is linked to a profile. */
+  photoUrl: string | null;
+  blobPhotoUrl: string | null;
   status: CandidacyStatus | null;
   sourceUrl: string | null;
   sourceLabel: string | null;
@@ -122,6 +125,8 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
           select: {
             slug: true,
             lastName: true,
+            photoUrl: true,
+            blobPhotoUrl: true,
             currentParty: { select: { color: true, name: true, shortName: true } },
           },
         },
@@ -170,6 +175,8 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
       id: c.id,
       candidateName: c.candidateName,
       politicianSlug: c.politician?.slug ?? null,
+      photoUrl: c.politician?.photoUrl ?? null,
+      blobPhotoUrl: c.politician?.blobPhotoUrl ?? null,
       status: c.status,
       sourceUrl: c.sourceUrl,
       sourceLabel: c.sourceLabel,
