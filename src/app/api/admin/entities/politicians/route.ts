@@ -62,7 +62,7 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   if (!q || q.length < 2) return NextResponse.json({ results: [], page, limit, hasMore: false });
 
   const offset = (page - 1) * limit;
-  const search = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const search = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
   const rows = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT p.id
     FROM "Politician" p
