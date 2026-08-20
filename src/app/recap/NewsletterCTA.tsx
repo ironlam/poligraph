@@ -93,7 +93,7 @@ export function NewsletterCTA() {
           <span>
             J&apos;accepte de recevoir la newsletter Poligraph par email. Je peux me désinscrire à
             tout moment.{" "}
-            <a href="/mentions-legales#newsletter" className="underline">
+            <a href="/confidentialite#newsletter" className="underline">
               Comment mes données sont traitées
             </a>
             .

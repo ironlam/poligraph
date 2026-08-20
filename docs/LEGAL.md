@@ -1,6 +1,6 @@
 # Considérations juridiques
 
-> **Dernière mise à jour** : 2026-03-08
+> **Dernière mise à jour** : 2026-08-20
 
 Ce document détaille le cadre juridique applicable au projet Poligraph et les mesures prises pour assurer sa conformité.
 
@@ -122,9 +122,19 @@ Toute personne nommée ou désignée dans un service de communication au public 
 
 ### 6.2 Données des visiteurs
 
-- **Collecte** : Aucune donnée personnelle collectée
-- **Cookies** : Session uniquement, pas de tracking
-- **Analytics** : Aucun (ou solution respectueuse si ajoutée)
+Les traitements liés aux visiteurs et utilisateurs sont détaillés dans la page
+publique [/confidentialite](/confidentialite). Ils varient selon le service :
+
+- **Site principal** : mesure d'audience avec Umami, sans cookie.
+- **Newsletter** : inscription fondée sur le consentement et traitée avec
+  Mailjet.
+- **Serveur MCP** : logs techniques limités aux métadonnées opérationnelles.
+  Les arguments des tools ne sont pas copiés dans les logs applicatifs.
+- **Support** : traitement des informations transmises volontairement pour
+  répondre à la demande.
+
+Cette description ne préjuge pas des données techniques que les hébergeurs
+peuvent traiter pour acheminer et sécuriser les requêtes.
 
 ### 6.3 Droits des personnes
 
