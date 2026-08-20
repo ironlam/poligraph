@@ -16,16 +16,11 @@ import {
   PUBLICATION_STATUS_OPTIONS,
 } from "@/config/labels";
 import { LinkedAffairSelect } from "@/components/admin/LinkedAffairSelect";
+import { PoliticianPicker } from "@/components/admin/PoliticianPicker";
 import { involvementRequiresNote } from "@/lib/affairs/involvement-note";
 import { formatAffairFormError } from "@/lib/admin/moderation-payload";
 import type { AffairStatus, AffairCategory, Involvement, SourceType } from "@/types";
 import type { PublicationStatus } from "@/generated/prisma";
-
-interface Politician {
-  id: string;
-  fullName: string;
-  slug: string;
-}
 
 interface Source {
   id?: string;
@@ -73,8 +68,8 @@ interface AffairFormData {
 }
 
 interface AffairFormProps {
-  politicians: Politician[];
   initialData?: AffairFormData;
+  initialPoliticianId?: string;
 }
 
 const emptySource: Source = {
@@ -86,13 +81,14 @@ const emptySource: Source = {
   sourceType: "MANUAL" as SourceType,
 };
 
-export function AffairForm({ politicians, initialData }: AffairFormProps) {
+export function AffairForm({ initialData, initialPoliticianId }: AffairFormProps) {
   const router = useRouter();
   const isEditing = !!initialData?.id;
+  const isPublished = initialData?.publicationStatus === "PUBLISHED";
 
   const [formData, setFormData] = useState<AffairFormData>(
     initialData || {
-      politicianId: "",
+      politicianId: initialPoliticianId ?? "",
       title: "",
       description: "",
       status: "ENQUETE_PRELIMINAIRE" as AffairStatus,
@@ -138,7 +134,7 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
 
     // Validation
     if (!formData.politicianId) {
-      setError("Veuillez sélectionner un politique");
+      setError("Veuillez sélectionner une personnalité politique");
       return;
     }
     if (!formData.title.trim()) {
@@ -203,20 +199,17 @@ export function AffairForm({ politicians, initialData }: AffairFormProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="politicianId">Politique concerné *</Label>
-            <Select
-              id="politicianId"
-              value={formData.politicianId}
-              onChange={(e) => updateField("politicianId", e.target.value)}
-              required
-            >
-              <option value="">Sélectionner un politique</option>
-              {politicians.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.fullName}
-                </option>
-              ))}
-            </Select>
+            <PoliticianPicker
+              value={formData.politicianId || null}
+              onChange={(value) => updateField("politicianId", value ?? "")}
+              readOnly={isPublished}
+              label="Personnalité politique concernée *"
+              description={
+                isPublished
+                  ? "La réattribution d’une affaire publiée est une opération éditoriale dédiée."
+                  : undefined
+              }
+            />
           </div>
 
           <div>

@@ -52,18 +52,35 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
     return NextResponse.json({ error: "Affaire non trouvée" }, { status: 404 });
   }
 
+  if (existing.publicationStatus === "PUBLISHED" && data.politicianId !== existing.politicianId) {
+    return NextResponse.json(
+      {
+        error: "Réattribution interdite depuis le formulaire générique",
+        code: "PUBLISHED_AFFAIR_POLITICIAN_CHANGE_REQUIRES_DEDICATED_WORKFLOW",
+        message: "La réattribution d’une affaire publiée est une opération éditoriale dédiée.",
+      },
+      { status: 409 }
+    );
+  }
+
+  const selectedPolitician = await db.politician.findUnique({
+    where: { id: data.politicianId },
+    select: { slug: true },
+  });
+  if (!selectedPolitician) {
+    return NextResponse.json(
+      { error: "Personnalité politique introuvable", code: "POLITICIAN_NOT_FOUND" },
+      { status: 404 }
+    );
+  }
+
   // Regenerate slug if title or politician changed
   let newSlug: string | undefined;
   let oldSlugToSave: string | undefined;
   if (existing.title !== data.title || existing.politicianId !== data.politicianId) {
     const politicianSlug =
       existing.politicianId !== data.politicianId
-        ? ((
-            await db.politician.findUnique({
-              where: { id: data.politicianId },
-              select: { slug: true },
-            })
-          )?.slug ?? existing.politician.slug)
+        ? selectedPolitician.slug
         : existing.politician.slug;
 
     const baseSlug = generateAffairSlug(politicianSlug, data.title);

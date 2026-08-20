@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
@@ -7,7 +7,24 @@ vi.mock("next/navigation", () => ({
 
 import { AffairForm } from "@/components/admin/AffairForm";
 
-const POLITICIANS = [{ id: "pol_1", fullName: "Jean Testeur", slug: "jean-testeur" }];
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        result: {
+          id: "pol_1",
+          fullName: "Politicien de test",
+          slug: "politicien-de-test",
+          publicationStatus: "PUBLISHED",
+          party: { shortName: "TEST", name: "Parti de test" },
+          mandate: { type: "DEPUTE", title: "Député", institution: "Assemblée nationale" },
+        },
+      }),
+    })
+  );
+});
 
 // `initialData` bypasses the component's own defaults, so the shape has to be complete.
 const BASE = {
@@ -44,7 +61,7 @@ describe("AffairForm — part ferme (#576)", () => {
   it("affiche 0 au lieu d'un champ vide", () => {
     render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, prisonMonths: 48, prisonFirmMonths: 0 } as never}
       />
     );
@@ -55,7 +72,7 @@ describe("AffairForm — part ferme (#576)", () => {
   it("laisse le champ vide quand la répartition n'est pas établie", () => {
     render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, prisonMonths: 48, prisonFirmMonths: null } as never}
       />
     );
@@ -66,7 +83,7 @@ describe("AffairForm — part ferme (#576)", () => {
   it("distingue les deux états sur l'inéligibilité aussi", () => {
     const { unmount } = render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, ineligibilityMonths: 45, ineligibilityFirmMonths: 0 } as never}
       />
     );
@@ -77,7 +94,7 @@ describe("AffairForm — part ferme (#576)", () => {
 
     render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, ineligibilityMonths: 45, ineligibilityFirmMonths: null } as never}
       />
     );
@@ -96,7 +113,7 @@ describe("AffairForm — note d'implication selon l'implication", () => {
   it("marque la note obligatoire pour une simple mention", () => {
     render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, involvement: "MENTIONED_ONLY" } as never}
       />
     );
@@ -106,10 +123,31 @@ describe("AffairForm — note d'implication selon l'implication", () => {
   it("n'impose pas la note pour une victime", () => {
     render(
       <AffairForm
-        politicians={POLITICIANS}
+        initialPoliticianId="pol_1"
         initialData={{ ...BASE, involvement: "VICTIM" } as never}
       />
     );
     expect(screen.queryByText(/obligatoire à la publication/)).not.toBeInTheDocument();
+  });
+});
+
+describe("AffairForm — réattribution éditoriale", () => {
+  it("keeps a published affair politician in read-only mode", () => {
+    render(<AffairForm initialData={{ ...BASE, publicationStatus: "PUBLISHED" } as never} />);
+    expect(
+      screen.getByText(
+        "La réattribution d’une affaire publiée est une opération éditoriale dédiée."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: /personnalité politique concernée/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the politician picker editable for a draft", () => {
+    render(<AffairForm initialData={{ ...BASE, publicationStatus: "DRAFT" } as never} />);
+    expect(
+      screen.getByRole("combobox", { name: /personnalité politique concernée/i })
+    ).toBeInTheDocument();
   });
 });

@@ -20,16 +20,9 @@ async function getAffair(id: string) {
   });
 }
 
-async function getPoliticians() {
-  return db.politician.findMany({
-    select: { id: true, fullName: true, slug: true },
-    orderBy: { lastName: "asc" },
-  });
-}
-
 export default async function EditAffairPage({ params }: PageProps) {
   const { id } = await params;
-  const [affair, politicians] = await Promise.all([getAffair(id), getPoliticians()]);
+  const affair = await getAffair(id);
 
   if (!affair) {
     notFound();
@@ -104,7 +97,7 @@ export default async function EditAffairPage({ params }: PageProps) {
           />
         </div>
       )}
-      <AffairForm politicians={politicians} initialData={initialData} />
+      <AffairForm initialData={initialData} />
     </div>
   );
 }
