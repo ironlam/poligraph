@@ -16,7 +16,7 @@ const STORAGE_KEY = "admin-sidebar-collapsed";
 type BadgeResponse = {
   drafts: { affairs: number; politicians: number };
   moderation: { proposalsPending: number; proposalsConflict: number; reviewsPending: number };
-  matching: { decisionsPending: number; duplicatesPending: number };
+  matching: { decisionsPending: number; articlesPending: number; duplicatesPending: number };
   press: { rejectionsPending: number };
   operations: { failedPipelines: number; failedSyncs: number };
 };
@@ -24,7 +24,7 @@ type BadgeResponse = {
 const EMPTY_BADGES: BadgeResponse = {
   drafts: { affairs: 0, politicians: 0 },
   moderation: { proposalsPending: 0, proposalsConflict: 0, reviewsPending: 0 },
-  matching: { decisionsPending: 0, duplicatesPending: 0 },
+  matching: { decisionsPending: 0, articlesPending: 0, duplicatesPending: 0 },
   press: { rejectionsPending: 0 },
   operations: { failedPipelines: 0, failedSyncs: 0 },
 };
@@ -37,6 +37,7 @@ function flattenBadges(badges: BadgeResponse): Record<string, number> {
     "moderation.proposalsConflict": badges.moderation.proposalsConflict,
     "moderation.reviewsPending": badges.moderation.reviewsPending,
     "matching.decisionsPending": badges.matching.decisionsPending,
+    "matching.articlesPending": badges.matching.articlesPending,
     "matching.duplicatesPending": badges.matching.duplicatesPending,
     "press.rejectionsPending": badges.press.rejectionsPending,
     "operations.failedPipelines": badges.operations.failedPipelines,

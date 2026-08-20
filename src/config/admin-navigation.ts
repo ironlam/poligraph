@@ -34,6 +34,7 @@ export type AdminCounterKey =
   | "moderation.proposalsConflict"
   | "moderation.reviewsPending"
   | "matching.decisionsPending"
+  | "matching.articlesPending"
   | "matching.duplicatesPending"
   | "press.rejectionsPending"
   | "operations.failedPipelines"
@@ -170,22 +171,22 @@ const entries: readonly AdminNavigationEntry[] = [
   },
   {
     id: "articles-affairs",
-    href: "/admin/presse?mention=none",
+    href: "/admin/liaisons/articles-affaires",
     label: "Articles ↔ affaires",
     description: "Articles analysés sans liaison détectée.",
     group: "quality",
     icon: FileCheck2,
-    counterKey: "matching.decisionsPending",
-    query: { mention: "none" },
+    counterKey: "matching.articlesPending",
   },
   {
     id: "affairs-politicians",
-    href: "/admin/affair-matching/review",
+    href: "/admin/liaisons/affaires-personnalites",
     label: "Affaires ↔ personnalités",
     description: "Décisions de liaison à confirmer.",
     group: "quality",
     icon: Fingerprint,
     counterKey: "matching.decisionsPending",
+    aliases: ["/admin/affair-matching/review"],
   },
   {
     id: "affairs-decisions",

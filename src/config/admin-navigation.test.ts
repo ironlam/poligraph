@@ -34,4 +34,14 @@ describe("admin navigation registry", () => {
     const audit = ADMIN_NAVIGATION.find((entry) => entry.id === "audit")!;
     expect(isAdminNavigationActive("/admin/audit/bio-quality", audit)).toBe(true);
   });
+
+  it("points both relationship entries to explicit workbenches with distinct counters", () => {
+    const articles = ADMIN_NAVIGATION.find((entry) => entry.id === "articles-affairs")!;
+    const politicians = ADMIN_NAVIGATION.find((entry) => entry.id === "affairs-politicians")!;
+    expect(articles.href).toBe("/admin/liaisons/articles-affaires");
+    expect(politicians.href).toBe("/admin/liaisons/affaires-personnalites");
+    expect(articles.counterKey).toBe("matching.articlesPending");
+    expect(politicians.counterKey).toBe("matching.decisionsPending");
+    expect(isAdminNavigationActive("/admin/affair-matching/review", politicians)).toBe(true);
+  });
 });

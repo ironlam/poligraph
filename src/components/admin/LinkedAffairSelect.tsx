@@ -1,19 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import { AdminEntityPicker } from "@/components/admin/AdminEntityPicker";
+import { AffairPicker, type AffairPickerResult } from "@/components/admin/AffairPicker";
 import { INVOLVEMENT_LABELS } from "@/config/labels";
 import type { Involvement } from "@/generated/prisma";
-
-interface LinkedAffair {
-  id: string;
-  title: string;
-  slug: string;
-  involvement: Involvement;
-  linkedAffairId: string | null;
-  politician: { id: string; fullName: string; slug: string };
-}
 
 interface Props {
   value: string | null;
@@ -23,26 +14,7 @@ interface Props {
 }
 
 export function LinkedAffairSelect({ value, onChange, excludeId, currentInvolvement }: Props) {
-  const [selected, setSelected] = useState<LinkedAffair | null>(null);
-  const search = useCallback(
-    async (query: string, signal: AbortSignal) => {
-      const params = new URLSearchParams({ q: query });
-      if (excludeId) params.set("excludeId", excludeId);
-      const response = await fetch(`/api/admin/affaires/search?${params.toString()}`, { signal });
-      if (!response.ok) throw new Error("Recherche d’affaire indisponible");
-      const data = (await response.json()) as { results: LinkedAffair[] };
-      return data.results;
-    },
-    [excludeId]
-  );
-  const resolve = useCallback(async (id: string, signal: AbortSignal) => {
-    const response = await fetch(`/api/admin/affaires/search?id=${encodeURIComponent(id)}`, {
-      signal,
-    });
-    if (!response.ok) throw new Error("Impossible de charger l’affaire sélectionnée");
-    const data = (await response.json()) as { results: LinkedAffair[] };
-    return data.results[0] ?? null;
-  }, []);
+  const [selected, setSelected] = useState<AffairPickerResult | null>(null);
 
   const showSameInvolvementWarning = Boolean(
     selected && currentInvolvement && selected.involvement === currentInvolvement
@@ -51,26 +23,15 @@ export function LinkedAffairSelect({ value, onChange, excludeId, currentInvolvem
 
   return (
     <div className="space-y-2">
-      <AdminEntityPicker<LinkedAffair>
+      <AffairPicker
         value={value}
         onChange={(id, result) => {
           setSelected(result);
           onChange(id);
         }}
         onResolved={setSelected}
-        search={search}
-        resolve={resolve}
-        renderResult={(affair) => (
-          <div className="pr-5">
-            <p className="font-medium">{affair.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {affair.politician.fullName} · {INVOLVEMENT_LABELS[affair.involvement]}
-            </p>
-            <p className="text-xs text-muted-foreground">{affair.slug}</p>
-          </div>
-        )}
+        excludeId={excludeId}
         label="Affaire liée (optionnel)"
-        placeholder="Rechercher une affaire par titre..."
         description="La liaison conserve son sens actuel et exclut l’affaire en cours."
       />
       {showSameInvolvementWarning && (

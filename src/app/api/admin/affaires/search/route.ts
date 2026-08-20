@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod/v4";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { db } from "@/lib/db";
 
 export const GET = withAdminAuth(async (request: NextRequest) => {
-  const url = new URL(request.url);
-  const q = (url.searchParams.get("q") || "").slice(0, 100);
-  const excludeId = url.searchParams.get("excludeId") || undefined;
-  const id = url.searchParams.get("id") || undefined;
+  const parsed = z
+    .object({
+      q: z.string().trim().max(100).optional(),
+      excludeId: z.string().trim().max(100).optional(),
+      id: z.string().trim().max(100).optional(),
+    })
+    .safeParse(Object.fromEntries(new URL(request.url).searchParams));
+  if (!parsed.success) return NextResponse.json({ error: "Paramètres invalides" }, { status: 400 });
+  const q = parsed.data.q ?? "";
+  const { excludeId, id } = parsed.data;
 
   if (id) {
     const affair = await db.affair.findUnique({
@@ -16,6 +23,8 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
         title: true,
         slug: true,
         involvement: true,
+        publicationStatus: true,
+        status: true,
         linkedAffairId: true,
         politician: { select: { id: true, fullName: true, slug: true } },
       },
@@ -37,10 +46,12 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
       title: true,
       slug: true,
       involvement: true,
+      publicationStatus: true,
+      status: true,
       linkedAffairId: true,
       politician: { select: { id: true, fullName: true, slug: true } },
     },
-    take: 10,
+    take: 20,
     orderBy: { title: "asc" },
   });
 

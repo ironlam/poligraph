@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
     affairUpdateProposal: { count: vi.fn() },
     moderationReview: { count: vi.fn() },
     affairPoliticianDecision: { count: vi.fn() },
+    pressArticle: { count: vi.fn() },
     pressAnalysisRejection: { count: vi.fn() },
     syncJob: { count: vi.fn() },
   },
@@ -33,6 +34,7 @@ beforeEach(() => {
   );
   h.db.moderationReview.count.mockResolvedValue(7);
   h.db.affairPoliticianDecision.count.mockResolvedValue(8);
+  h.db.pressArticle.count.mockResolvedValue(11);
   h.db.pressAnalysisRejection.count.mockResolvedValue(9);
   h.db.syncJob.count.mockResolvedValue(10);
   h.duplicates.mockResolvedValue([{ id: "duplicate-1" }, { id: "duplicate-2" }]);
@@ -51,9 +53,12 @@ describe("GET /api/admin/badges", () => {
     expect(await response.json()).toEqual({
       drafts: { affairs: 3, politicians: 4 },
       moderation: { proposalsPending: 5, proposalsConflict: 2, reviewsPending: 7 },
-      matching: { decisionsPending: 8, duplicatesPending: 2 },
+      matching: { decisionsPending: 8, articlesPending: 11, duplicatesPending: 2 },
       press: { rejectionsPending: 9 },
       operations: { failedPipelines: 2, failedSyncs: 10 },
+    });
+    expect(h.db.pressArticle.count).toHaveBeenCalledWith({
+      where: { aiAnalyzedAt: { not: null }, isAffairRelated: true, affairLinks: { none: {} } },
     });
   });
 });

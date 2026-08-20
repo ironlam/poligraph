@@ -11,7 +11,7 @@ export interface AdminBadgeContract {
     proposalsConflict: number;
     reviewsPending: number;
   };
-  matching: { decisionsPending: number; duplicatesPending: number };
+  matching: { decisionsPending: number; articlesPending: number; duplicatesPending: number };
   press: { rejectionsPending: number };
   operations: { failedPipelines: number; failedSyncs: number };
 }
@@ -24,6 +24,7 @@ export const GET = withAdminAuth(async () => {
     proposalsConflict,
     reviewsPending,
     decisionsPending,
+    articlesPending,
     duplicates,
     rejectionsPending,
     failedSyncs,
@@ -37,6 +38,9 @@ export const GET = withAdminAuth(async () => {
     db.affairPoliticianDecision.count({
       where: { judgment: "UNDECIDED", reviewedAt: null },
     }),
+    db.pressArticle.count({
+      where: { aiAnalyzedAt: { not: null }, isAffairRelated: true, affairLinks: { none: {} } },
+    }),
     findPotentialDuplicates(),
     db.pressAnalysisRejection.count(),
     db.syncJob.count({ where: { status: "FAILED" } }),
@@ -46,7 +50,7 @@ export const GET = withAdminAuth(async () => {
   const response: AdminBadgeContract = {
     drafts: { affairs, politicians },
     moderation: { proposalsPending, proposalsConflict, reviewsPending },
-    matching: { decisionsPending, duplicatesPending: duplicates.length },
+    matching: { decisionsPending, articlesPending, duplicatesPending: duplicates.length },
     press: { rejectionsPending },
     operations: {
       failedPipelines: pipelineHealth.filter((pipeline) => pipeline.status === "critical").length,
