@@ -158,6 +158,26 @@ quelques candidates déclarées, une poignée de mesures chacune sur un ou deux 
 C'est ce qui valide la tranche verticale du lot 3 avant de multiplier les sujets. Un compteur public de
 couverture, adossé à cette réalité, vaut mieux qu'une façade de complétude.
 
+### Publier les mesures ne suffit pas : le dernier maillon
+
+Une mesure relue, publiée et sourcée reste **invisible** tant que deux interrupteurs distincts n'ont pas
+été basculés, et la file de modération des mesures ne les mentionne pas :
+
+1. `CandidacyPresidential.publicationStatus`. Toutes les surfaces présidentielles filtrent dessus (hub,
+   pages sujet, index des thèmes, priorités, fiche candidat, encart de la fiche politique). Tant qu'il
+   vaut `DRAFT`, les compteurs de mesures de la candidature valent zéro, la fiche candidat reste sous son
+   seuil de publication et passe en `noindex`. C'est ce qui a rendu invisibles les 26 mesures de Jérôme
+   Guedj, et 139 mesures au total sur six candidatures, alors que rien ne manquait côté mesures.
+2. `ProgramEdition.publicationStatus`. Il ne conditionne aucune mesure, mais il décide de la phrase
+   affichée sous le seuil : « programme identifié » plutôt que « aucun programme publié à ce jour ». Les
+   éditions créées par l'import naissent en `DRAFT`.
+
+Les deux se basculent depuis **`/admin/candidats`**, colonnes « Fiche publique » et « Programme », qui
+affichent aussi le nombre de mesures publiables retenues. Le badge de l'entrée « Candidatures » compte les
+candidatures dans cet état. Publier la fiche exige une candidature **sourcée** (statut, `sourceUrl`,
+`sourceLabel`) : sans eux la fiche publique redirige vers le profil, et publier l'extension ouvrirait le
+hub sur un candidat dont la fiche n'existe pas.
+
 ---
 
 ## Décisions arbitrées le 2026-08-06

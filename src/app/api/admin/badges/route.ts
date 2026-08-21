@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
 import { getPipelineHealthAll } from "@/lib/data/pipelines";
+import { countCandidaciesHoldingBackMeasures } from "@/lib/data/measures";
 
 export interface AdminBadgeContract {
   drafts: { affairs: number; politicians: number };
@@ -12,6 +13,8 @@ export interface AdminBadgeContract {
     reviewsPending: number;
   };
   matching: { decisionsPending: number; articlesPending: number; duplicatesPending: number };
+  /** Candidatures dont les mesures publiables restent derrière une extension non publiée. */
+  candidacies: { publicationPending: number };
   press: { rejectionsPending: number };
   operations: { failedPipelines: number; failedSyncs: number };
 }
@@ -29,6 +32,7 @@ export const GET = withAdminAuth(async () => {
     rejectionsPending,
     failedSyncs,
     pipelineHealth,
+    candidaciesPublicationPending,
   ] = await Promise.all([
     db.affair.count({ where: { publicationStatus: "DRAFT" } }),
     db.politician.count({ where: { publicationStatus: "DRAFT" } }),
@@ -45,12 +49,14 @@ export const GET = withAdminAuth(async () => {
     db.pressAnalysisRejection.count(),
     db.syncJob.count({ where: { status: "FAILED" } }),
     getPipelineHealthAll(),
+    countCandidaciesHoldingBackMeasures(),
   ]);
 
   const response: AdminBadgeContract = {
     drafts: { affairs, politicians },
     moderation: { proposalsPending, proposalsConflict, reviewsPending },
     matching: { decisionsPending, articlesPending, duplicatesPending: duplicates.length },
+    candidacies: { publicationPending: candidaciesPublicationPending },
     press: { rejectionsPending },
     operations: {
       failedPipelines: pipelineHealth.filter((pipeline) => pipeline.status === "critical").length,

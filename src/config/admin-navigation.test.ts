@@ -35,6 +35,13 @@ describe("admin navigation registry", () => {
     expect(isAdminNavigationActive("/admin/audit/bio-quality", audit)).toBe(true);
   });
 
+  it("badges the candidacies entry with its pending publications", () => {
+    // Une candidature qui retient des mesures publiables demande une décision humaine, et rien
+    // dans l'admin ne le disait : la file des mesures se vide quand elles sont toutes publiées.
+    const candidates = ADMIN_NAVIGATION.find((entry) => entry.id === "candidates")!;
+    expect(candidates.counterKey).toBe("candidacies.publicationPending");
+  });
+
   it("points both relationship entries to explicit workbenches with distinct counters", () => {
     const articles = ADMIN_NAVIGATION.find((entry) => entry.id === "articles-affairs")!;
     const politicians = ADMIN_NAVIGATION.find((entry) => entry.id === "affairs-politicians")!;

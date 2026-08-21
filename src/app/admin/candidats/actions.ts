@@ -1,0 +1,175 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import type { PublicationStatus } from "@/generated/prisma";
+import { isAuthenticated } from "@/lib/auth";
+import { invalidateEntity } from "@/lib/cache";
+import { db } from "@/lib/db";
+import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
+
+/**
+ * The publication switches of a presidential candidacy.
+ *
+ * Two rows decide what the public sees of a candidate, and until now neither had a control in the
+ * admin. `CandidacyPresidential.publicationStatus` was reachable only by hand-crafting a PATCH on
+ * `/api/admin/candidats/[id]`, and `ProgramEdition.publicationStatus` had no writer at all in the
+ * application: the import pipeline creates editions at their `DRAFT` default and nothing ever
+ * flipped them. The result was measures fully reviewed, published, primary-sourced, and invisible,
+ * with the candidate fiche stating that no programme had been identified.
+ *
+ * A server action is a network endpoint, not a form detail: the page guard does not protect it, so
+ * each action re-checks the session as its first statement, and validates its own input.
+ */
+
+/** Business errors are returned so the moderator reads the reason on screen; auth failures throw. */
+export type CandidacyActionResult = { ok: true } | { ok: false; message: string };
+
+const publicationStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "EXCLUDED", "REJECTED"]);
+
+const candidacyPublicationSchema = z
+  .object({ candidacyId: z.string().min(1), status: publicationStatusSchema })
+  .strict();
+
+const programEditionPublicationSchema = z
+  .object({ programEditionId: z.string().min(1), status: publicationStatusSchema })
+  .strict();
+
+async function assertAuthenticated(): Promise<void> {
+  if (!(await isAuthenticated())) throw new Error("Non autorisé");
+}
+
+function revalidate(): void {
+  revalidatePath("/admin/candidats");
+}
+
+/**
+ * Publishes, or withdraws, the editorial extension that gates every public presidential surface.
+ *
+ * The extension is UPSERTED and not updated: twelve candidacies carry no `CandidacyPresidential`
+ * row at all, and without a create path a moderator facing "métadonnées absentes" has nowhere to
+ * go. Creating it here writes nothing else than the status, so the row stays what it is, an
+ * editorial extension, and the candidacy keeps its own columns.
+ *
+ * Publishing requires the candidacy to be sourced. That is not a duplicate of the fiche's own
+ * check: `loadPoliticianPresidentialCandidacy` drops a candidacy whose status, source URL or source
+ * label is null, so publishing an unsourced one would open the hub surfaces on a candidate whose
+ * fiche redirects away. The state would be inconsistent rather than merely incomplete.
+ */
+export async function setCandidacyPublicationAction(input: {
+  candidacyId: string;
+  status: PublicationStatus;
+}): Promise<CandidacyActionResult> {
+  await assertAuthenticated();
+
+  const parsed = candidacyPublicationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Requête invalide." };
+  }
+  const { candidacyId, status } = parsed.data;
+
+  const candidacy = await db.candidacy.findUnique({
+    where: { id: candidacyId },
+    select: {
+      id: true,
+      electionId: true,
+      status: true,
+      sourceUrl: true,
+      sourceLabel: true,
+      presidentialData: { select: { id: true, publicationStatus: true } },
+    },
+  });
+  if (!candidacy) {
+    return { ok: false, message: "Candidature introuvable." };
+  }
+  if (
+    status === "PUBLISHED" &&
+    (!candidacy.status || !candidacy.sourceUrl || !candidacy.sourceLabel)
+  ) {
+    return {
+      ok: false,
+      message:
+        "La candidature doit porter un statut et une source (URL et libellé) avant publication. " +
+        "Sans eux, la fiche publique renvoie vers le profil et les mesures restent invisibles.",
+    };
+  }
+
+  const extension = await db.candidacyPresidential.upsert({
+    where: { candidacyId },
+    create: { candidacyId, publicationStatus: status },
+    update: { publicationStatus: status },
+    select: { id: true },
+  });
+
+  await db.auditLog.create({
+    data: {
+      action: candidacy.presidentialData ? "UPDATE" : "CREATE",
+      entityType: "CandidacyPresidential",
+      entityId: extension.id,
+      changes: {
+        candidacyId,
+        publicationStatus: status,
+        previousPublicationStatus: candidacy.presidentialData?.publicationStatus ?? null,
+      },
+    },
+  });
+
+  invalidateEntity("election");
+  // The four hub reads, the candidate fiche and the politician notice all gate on this status and
+  // carry this tag alone. `invalidateEntity("election")` purges `elections`, which none of them use.
+  invalidatePresidentialCandidacyTags(candidacy.electionId);
+  revalidate();
+
+  return { ok: true };
+}
+
+/**
+ * Publishes, or withdraws, a programme edition.
+ *
+ * The edition's status does not gate a measure: a measure carries its own. What it drives is the
+ * sentence the candidate fiche shows below its gate, "programme identifié" against "aucun programme
+ * publié à ce jour", and the corpus nature the priorities page reads. Leaving every edition at its
+ * `DRAFT` default made the fiche deny a document we had already extracted 26 measures from.
+ */
+export async function setProgramEditionPublicationAction(input: {
+  programEditionId: string;
+  status: PublicationStatus;
+}): Promise<CandidacyActionResult> {
+  await assertAuthenticated();
+
+  const parsed = programEditionPublicationSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Requête invalide." };
+  }
+  const { programEditionId, status } = parsed.data;
+
+  const edition = await db.programEdition.findUnique({
+    where: { id: programEditionId },
+    select: { id: true, electionId: true, publicationStatus: true },
+  });
+  if (!edition) {
+    return { ok: false, message: "Édition de programme introuvable." };
+  }
+
+  await db.programEdition.update({
+    where: { id: programEditionId },
+    data: { publicationStatus: status },
+  });
+
+  await db.auditLog.create({
+    data: {
+      action: "UPDATE",
+      entityType: "ProgramEdition",
+      entityId: programEditionId,
+      changes: {
+        publicationStatus: status,
+        previousPublicationStatus: edition.publicationStatus,
+      },
+    },
+  });
+
+  invalidatePresidentialCandidacyTags(edition.electionId);
+  revalidate();
+
+  return { ok: true };
+}

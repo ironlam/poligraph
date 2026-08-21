@@ -33,6 +33,7 @@ export type AdminCounterKey =
   | "moderation.proposalsPending"
   | "moderation.proposalsConflict"
   | "moderation.reviewsPending"
+  | "candidacies.publicationPending"
   | "matching.decisionsPending"
   | "matching.articlesPending"
   | "matching.duplicatesPending"
@@ -128,6 +129,7 @@ const entries: readonly AdminNavigationEntry[] = [
     description: "Candidatures et comparaisons.",
     group: "content",
     icon: CheckSquare,
+    counterKey: "candidacies.publicationPending",
   },
   {
     id: "mayors",

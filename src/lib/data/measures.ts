@@ -313,6 +313,97 @@ export async function getPublicMeasureStatsByCandidacy(
 }
 
 /**
+ * The same measure population as the public reads, for a set of candidacies, WITHOUT the
+ * `PUBLIC_CANDIDACY_WHERE` gate.
+ *
+ * It answers the one question the public reads cannot: how many measures WOULD become visible if
+ * the candidacy's editorial extension were published. `getPublicMeasureStatsByCandidacy` returns
+ * zero on a DRAFT extension, which is correct for a page and useless for the moderator deciding
+ * whether to publish it: the whole point of the admin screen is to see the measures the gate is
+ * currently holding back.
+ *
+ * The measure-level conditions are NOT rewritten here, they are `PUBLIC_MEASURE_WHERE` plus the
+ * withdrawal filter. A hand-rolled copy is how the hub's count and its review date drifted apart
+ * (see `getLatestPresidentialReviewDate`), and here it would announce a number the fiche does not
+ * honour once published.
+ *
+ * One grouped query for the whole page rather than one read per row: the candidates screen lists
+ * every candidacy of the election, and a per-row read turns it into thirty round trips.
+ */
+export type CandidacyMeasureReadiness = {
+  measureCount: number;
+  themesCoveredCount: number;
+  primarySourceMeasureCount: number;
+};
+
+export const EMPTY_MEASURE_READINESS: CandidacyMeasureReadiness = {
+  measureCount: 0,
+  themesCoveredCount: 0,
+  primarySourceMeasureCount: 0,
+};
+
+/**
+ * How many candidacies hold publishable measures behind a closed extension.
+ *
+ * The badge of the candidates screen, and the reason this file owns the count: the predicate is
+ * the negation of `PUBLIC_CANDIDACY_WHERE` applied to the population `PUBLIC_MEASURE_WHERE`
+ * describes, and neither belongs on a route handler. `NOT` on the public gate also catches a
+ * candidacy with no extension row at all, which is the state twelve of them are in.
+ */
+export async function countCandidaciesHoldingBackMeasures(): Promise<number> {
+  return db.candidacy.count({
+    where: {
+      NOT: PUBLIC_CANDIDACY_WHERE,
+      measures: { some: { withdrawnAt: null, ...PUBLIC_MEASURE_WHERE } },
+    },
+  });
+}
+
+export async function getMeasureReadinessByCandidacies(
+  candidacyIds: string[]
+): Promise<Map<string, CandidacyMeasureReadiness>> {
+  const readiness = new Map<string, CandidacyMeasureReadiness>();
+  if (candidacyIds.length === 0) return readiness;
+
+  const scope: Prisma.MeasureWhereInput = {
+    candidacyId: { in: candidacyIds },
+    withdrawnAt: null,
+    ...PUBLIC_MEASURE_WHERE,
+  };
+
+  const [byTheme, byPrimarySource] = await Promise.all([
+    db.measure.groupBy({ by: ["candidacyId", "theme"], where: scope, _count: { _all: true } }),
+    db.measure.groupBy({
+      by: ["candidacyId"],
+      where: {
+        ...scope,
+        publishedRevision: {
+          ...PUBLIC_MEASURE_WHERE.publishedRevision,
+          sources: { some: { tier: "PRIMARY" } },
+        },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  for (const row of byTheme) {
+    if (row.candidacyId === null) continue;
+    const current = readiness.get(row.candidacyId) ?? { ...EMPTY_MEASURE_READINESS };
+    current.measureCount += row._count._all;
+    current.themesCoveredCount += 1;
+    readiness.set(row.candidacyId, current);
+  }
+  for (const row of byPrimarySource) {
+    if (row.candidacyId === null) continue;
+    const current = readiness.get(row.candidacyId) ?? { ...EMPTY_MEASURE_READINESS };
+    current.primarySourceMeasureCount = row._count._all;
+    readiness.set(row.candidacyId, current);
+  }
+
+  return readiness;
+}
+
+/**
  * The revision publicly in force on a given day. The condition on publishedAt is not
  * optional: without it the query can select a draft that was never published, and make the
  * site report a text it never displayed.

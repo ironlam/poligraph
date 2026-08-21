@@ -3,6 +3,7 @@ import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard"
 
 let db: typeof import("@/lib/db").db;
 let getPublicMeasureStatsByCandidacy: typeof import("../measures").getPublicMeasureStatsByCandidacy;
+let getMeasureReadinessByCandidacies: typeof import("../measures").getMeasureReadinessByCandidacies;
 
 const SLUG = "stats-by-candidacy";
 
@@ -23,7 +24,8 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
   beforeAll(async () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
-    ({ getPublicMeasureStatsByCandidacy } = await import("../measures"));
+    ({ getPublicMeasureStatsByCandidacy, getMeasureReadinessByCandidacies } =
+      await import("../measures"));
     const { createMeasure, reviewMeasureRevision, publishMeasureRevision, draftMeasureRevision } =
       await import("@/lib/measures/transitions");
 
@@ -176,5 +178,43 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     const stats = await getPublicMeasureStatsByCandidacy(secondarySourceCandidacyId);
     expect(stats.measureCount).toBe(1);
     expect(stats.primarySourceMeasureCount).toBe(0);
+  });
+
+  // La lecture d'administration répond à l'autre question : ce que la publication de l'extension
+  // rendrait visible. C'est le cas Guedj, 26 mesures relues, publiées et sourcées, comptées zéro
+  // par les surfaces publiques parce que l'extension est restée en brouillon.
+  it("compte pour l'admin les mesures qu'une extension DRAFT retient", async () => {
+    const readiness = await getMeasureReadinessByCandidacies([draftExtensionCandidacyId]);
+
+    expect(readiness.get(draftExtensionCandidacyId)).toEqual({
+      measureCount: 1,
+      themesCoveredCount: 1,
+      primarySourceMeasureCount: 1,
+    });
+  });
+
+  it("agrège plusieurs candidatures en une lecture", async () => {
+    const readiness = await getMeasureReadinessByCandidacies([
+      publishedCandidacyId,
+      draftExtensionCandidacyId,
+      secondarySourceCandidacyId,
+    ]);
+
+    expect(readiness.get(publishedCandidacyId)).toEqual({
+      measureCount: 2,
+      themesCoveredCount: 2,
+      primarySourceMeasureCount: 1,
+    });
+    // Même piège de révision que la lecture publique : la source primaire du brouillon ne compte pas.
+    expect(readiness.get(secondarySourceCandidacyId)).toEqual({
+      measureCount: 1,
+      themesCoveredCount: 1,
+      primarySourceMeasureCount: 0,
+    });
+  });
+
+  it("ne lance aucune requête sans candidature", async () => {
+    const readiness = await getMeasureReadinessByCandidacies([]);
+    expect(readiness.size).toBe(0);
   });
 });
