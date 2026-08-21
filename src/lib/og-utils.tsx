@@ -144,3 +144,50 @@ export function OgBadge({ label, color }: { label: string; color: string }) {
 export function truncateOg(text: string, max: number): string {
   return text.length > max ? text.slice(0, max - 3) + "..." : text;
 }
+
+/**
+ * Content types a portrait may have to be embedded in an OG image.
+ *
+ * `next/og` rasterises through Satori + resvg, which decode PNG, JPEG and GIF and
+ * nothing else. A WebP or an AVIF does not degrade, it throws while the image is
+ * being generated, and the route then returns a 500 to a social crawler that will
+ * cache the failure. Unknown types are therefore dropped before rendering, and the
+ * caller falls back to initials.
+ */
+const OG_PORTRAIT_TYPES = new Set(["image/jpeg", "image/png", "image/gif"]);
+
+/** A portrait is a few dozen kilobytes. Anything past this is not one. */
+const OG_PORTRAIT_MAX_BYTES = 5_000_000;
+
+/**
+ * Download a portrait and return it as a data URI, or null when anything is off.
+ *
+ * Satori can fetch a remote `src` itself, but a slow or dead upstream host then
+ * takes the whole image route down with it — the portraits we hold point at
+ * external sources as often as at our own Blob CDN. Fetching here bounds the wait,
+ * checks what came back, and turns every failure into "no photo" rather than into
+ * a broken preview card.
+ */
+export async function loadOgPortrait(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  const httpsUrl = url.startsWith("http://") ? `https://${url.slice("http://".length)}` : url;
+  if (!httpsUrl.startsWith("https://")) return null;
+
+  try {
+    const response = await fetch(httpsUrl, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return null;
+
+    const contentType = (response.headers.get("content-type") ?? "")
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase();
+    if (!contentType || !OG_PORTRAIT_TYPES.has(contentType)) return null;
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > OG_PORTRAIT_MAX_BYTES) return null;
+
+    return `data:${contentType};base64,${bytes.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}

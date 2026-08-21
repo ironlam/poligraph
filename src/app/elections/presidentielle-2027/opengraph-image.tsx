@@ -5,11 +5,16 @@ import { OgLayout, OG_SIZE } from "@/lib/og-utils";
  * Shared preview card for the whole presidential hub.
  *
  * Next inherits a route's `opengraph-image` down every descendant segment that does
- * not define its own, so this one file covers the hub, the 13 subject pages, the 25
- * candidate pages and /priorites. That inheritance is the point rather than a side
- * effect: one image URL for the section instead of forty. Search Console attributed
- * the large majority of the site's "crawled, currently not indexed" bucket to
- * `opengraph-image` routes, so every one we do not create is crawl budget we keep.
+ * not define its own, so this one file covers the hub, the 13 subject pages and
+ * /priorites. That inheritance is the point rather than a side effect: one image URL
+ * for the section instead of forty. Search Console attributed the large majority of
+ * the site's "crawled, currently not indexed" bucket to `opengraph-image` routes, so
+ * every one we do not create is crawl budget we keep.
+ *
+ * The candidate fiches are the one segment that defines its own, because a fiche is
+ * about a person and its shared card has to carry that person's face; see the comment
+ * in candidats/[slug]/opengraph-image.tsx.
+ *
  * The route is covered without further work by OG_IMAGE_ROBOTS_SOURCE (X-Robots-Tag)
  * and OG_IMAGE_DISALLOW_PATHS (robots.txt), both matching any path ending in
  * `/opengraph-image`.
