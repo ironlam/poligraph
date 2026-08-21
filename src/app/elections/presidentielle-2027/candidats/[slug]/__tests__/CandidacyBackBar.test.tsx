@@ -6,8 +6,10 @@ describe("CandidacyBackBar", () => {
   it("offre une sortie nommée vers le champ, collée sous l'en-tête du site", () => {
     const { container } = render(<CandidacyBackBar electionSlug="presidentielle-2027" />);
 
+    // La liste des candidatures, pas le hub : la barre s'appelle « Toutes les candidatures »,
+    // et depuis que le champ a quitté la page d'accueil du hub, une seule page porte ce nom.
     const lien = screen.getByRole("link", { name: "Toutes les candidatures" });
-    expect(lien).toHaveAttribute("href", "/elections/presidentielle-2027");
+    expect(lien).toHaveAttribute("href", "/elections/presidentielle-2027/candidats");
 
     // `top-16`, la hauteur exacte du `<header>` global : sans cet offset la barre se glisse
     // sous l'en-tête au défilement au lieu de se poser dessous.
