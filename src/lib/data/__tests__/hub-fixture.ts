@@ -11,11 +11,14 @@ import { assertDisposableTestDb } from "@/test/disposable-db";
  *   editorial accent used to verify that the hub and subject pages share the same colour priority.
  * - Charlie is ENVISAGE, has a complete source (`sourceUrl` + `sourceLabel`), and a DRAFT
  *   `CandidacyPresidential` extension carrying a published LOGEMENT_URBANISME measure. The hub
- *   field shows the whole race, not just published fiches, so Charlie must still surface from
- *   `getHubCandidacyField`, but the DRAFT extension means the measure is unreachable from any
- *   subject page, so `verifiedMeasureCount` must not count it either (I7).
+ *   field shows sourced candidacies attached to public politicians, not just published fiches, so
+ *   Charlie must still surface from `getHubCandidacyField`. The DRAFT extension means the measure
+ *   is unreachable from any subject page, so `verifiedMeasureCount` must not count it either (I7).
+ *   A party-only program edition verifies that no program is attributed to Charlie without an
+ *   explicit candidacy relation.
  * - Delta has a source URL but no `sourceLabel`: an incomplete source, which must stay absent
  *   from the field.
+ * - Echo has a complete candidacy source but a DRAFT Politician: the public field must exclude it.
  *
  * Statuses are assigned so that alphabetical order (by `candidateName`) and status order (by
  * `status`, alphabetically DECLARE < ENVISAGE < PRESSENTI < RETIRE) disagree: Alpha is
@@ -53,6 +56,7 @@ export async function seedHubFixture(
         firstName: name,
         lastName: "Fixture",
         fullName: `${name} Fixture`,
+        publicationStatus: "PUBLISHED",
       },
     });
   }
@@ -161,6 +165,35 @@ export async function seedHubFixture(
     "Mesure logement rattachée à une candidature non publiée."
   );
 
+  const party = await db.party.create({
+    data: {
+      slug: `${options.electionSlug}-parti-fixture`,
+      name: `Parti fixture ${options.electionSlug}`,
+      shortName: `PF-${options.electionSlug}`,
+      logoUrl: "https://example.org/logo-parti-fixture.svg",
+    },
+  });
+  await db.politician.update({
+    where: { id: charlie.id },
+    data: { currentPartyId: party.id },
+  });
+  await db.candidacy.update({
+    where: { id: charlieCandidacy.id },
+    data: { partyId: party.id, partyLabel: null },
+  });
+  await db.programEdition.create({
+    data: {
+      electionId: election.id,
+      ownerType: "PARTY",
+      partyId: party.id,
+      label: "Projet du parti fixture",
+      version: 1,
+      publishedAt: new Date("2027-01-01T00:00:00Z"),
+      documentUrl: "https://example.org/projet-parti-fixture",
+      publicationStatus: "PUBLISHED",
+    },
+  });
+
   // Delta: incomplete source (no sourceLabel). Must stay absent from the field.
   const delta = await politician("Delta");
   await db.candidacy.create({
@@ -171,6 +204,26 @@ export async function seedHubFixture(
       status: "ENVISAGE",
       sourceUrl: "https://example.org/rumeur-delta",
       sourceLabel: null,
+    },
+  });
+
+  const echo = await db.politician.create({
+    data: {
+      slug: `${options.electionSlug}-echo-draft`,
+      firstName: "Echo",
+      lastName: "Fixture",
+      fullName: "Echo Fixture",
+      publicationStatus: "DRAFT",
+    },
+  });
+  await db.candidacy.create({
+    data: {
+      electionId: election.id,
+      politicianId: echo.id,
+      candidateName: "Echo Fixture",
+      status: "DECLARE",
+      sourceUrl: "https://example.org/declaration-echo",
+      sourceLabel: "Déclaration",
     },
   });
 

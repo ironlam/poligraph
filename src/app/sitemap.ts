@@ -437,6 +437,18 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       priority: 0.7,
     }));
 
+  const presidentialDirectoryPages: MetadataRoute.Sitemap =
+    presidentielleHubPublishable && presidentielle2027 !== undefined
+      ? [
+          {
+            url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/candidats`,
+            lastModified: presidentielle2027.updatedAt,
+            changeFrequency: "weekly" as const,
+            priority: 0.6,
+          },
+        ]
+      : [];
+
   // Candidate fiches, only above their own publication gate (spec §4.1, indexation §4.2). The route
   // redirects to /politiques/[slug] below the gate, so announcing an unpublishable slug would spend
   // crawl budget on a redirect.
@@ -495,6 +507,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...partyPages,
     ...partyAffairPages,
     ...electionPages,
+    ...presidentialDirectoryPages,
     ...candidateFichePages,
     ...departmentPages,
     ...themePages,

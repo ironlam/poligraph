@@ -78,7 +78,6 @@ export async function loadPoliticianPresidentialCandidacy(
       status: true,
       sourceUrl: true,
       sourceLabel: true,
-      partyId: true,
       partyLabel: true,
       party: { select: { name: true, shortName: true, logoUrl: true } },
       round1Pct: true,
@@ -110,7 +109,7 @@ export async function loadPoliticianPresidentialCandidacy(
       where: {
         election: { slug: PRESIDENTIELLE_2027_SLUG },
         publicationStatus: "PUBLISHED",
-        OR: [{ candidacyId: row.id }, ...(row.partyId === null ? [] : [{ partyId: row.partyId }])],
+        candidacyId: row.id,
       },
       select: { id: true },
     }),

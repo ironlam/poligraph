@@ -24,6 +24,11 @@ const WIDTHS = [375, 768, 1440];
 
 const PAGES = [
   { name: "hub", path: "/elections/presidentielle-2027" },
+  {
+    name: "annuaire des candidatures",
+    path: "/elections/presidentielle-2027/candidats",
+    expectedHeading: "Candidatures et personnalités suivies",
+  },
   { name: "index des sujets", path: "/elections/presidentielle-2027/sujets" },
   {
     name: "page sujet sous seuil (numérique & tech)",
@@ -35,10 +40,11 @@ const PAGES = [
   {
     name: "fiche candidature publiée",
     path: "/elections/presidentielle-2027/candidats/presidentielle-hub-demo-c",
+    expectedHeading: "Candidat·e C",
   },
 ];
 
-for (const { name, path } of PAGES) {
+for (const { name, path, expectedHeading } of PAGES) {
   test.describe(`${name} (présidentielle 2027)`, () => {
     for (const width of WIDTHS) {
       test(`répond 200, sans violation WCAG AA ni débordement horizontal à ${width}px`, async ({
@@ -47,7 +53,12 @@ for (const { name, path } of PAGES) {
         await page.setViewportSize({ width, height: 900 });
         const response = await page.goto(path);
         expect(response?.status()).toBe(200);
-        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        const heading = page.getByRole("heading", { level: 1 });
+        await expect(heading).toBeVisible();
+        if (expectedHeading !== undefined) {
+          await expect(heading).toHaveText(expectedHeading);
+          await expect(page.getByText("Page introuvable", { exact: true })).toHaveCount(0);
+        }
 
         expect(await horizontalScroll(page)).toBe(0);
 

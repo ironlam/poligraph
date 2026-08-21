@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus } from "@/generated/prisma";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
 import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
@@ -17,11 +18,11 @@ import { getLatestPresidentialReviewDate, getPublicMeasuresByElection } from "./
  * The two read authorities for the presidential hub page.
  *
  * The candidacy field and the published fiches are two different populations, and this file
- * exists to keep them that way. `getHubCandidacyField` shows the whole race — every sourced
- * candidacy (status + `sourceUrl` + `sourceLabel` non-null), pressenti/envisagé included,
- * extension NOT required — because the hub has to show the field before anyone has a published
- * fiche. Routing it through `getPublicPresidentialCandidates` (the PUBLISHED-extension
- * population used by the subject pages) would empty the hub at launch.
+ * exists to keep them that way. `getHubCandidacyField` shows every sourced candidacy attached to
+ * a public politician (status + `sourceUrl` + `sourceLabel` non-null), pressenti/envisagé included,
+ * extension NOT required, because the hub has to show the field before anyone has a published
+ * presidential extension. Routing it through `getPublicPresidentialCandidates` (the
+ * PUBLISHED-extension population used by the subject pages) would empty the hub at launch.
  *
  * `getHubMeasureContext`, by contrast, summarizes the same subject pages the themes index
  * gates: it is cached under the same `election-measures:${electionId}` tag as the measure
@@ -102,6 +103,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
         sourceUrl: { not: null },
         sourceLabel: { not: null },
         politicianId: { not: null },
+        politician: PUBLIC_POLITICIAN_WHERE,
       },
       select: {
         id: true,
@@ -110,7 +112,6 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
         sourceUrl: true,
         sourceLabel: true,
         partyLabel: true,
-        partyId: true,
         presidentialData: { select: { accentColor: true, publicationStatus: true } },
         politician: {
           select: {
@@ -121,7 +122,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
             currentParty: { select: { color: true, name: true, shortName: true } },
           },
         },
-        party: { select: { color: true, shortName: true, logoUrl: true } },
+        party: { select: { color: true, name: true, shortName: true, logoUrl: true } },
       },
     }),
     // Defended measures only: `getPublicMeasuresByElection` drops withdrawals unless asked, and a
@@ -131,12 +132,15 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
     // `loadThemesIndex`: a measure on a DRAFT-extension candidacy is rendered nowhere, so counting
     // it on this row would advertise work the reader cannot reach (invariant I7).
     getPublicPresidentialCandidates(electionSlug),
-    // A programme edition owned by the candidacy OR by its party. The party case is not a
-    // convenience: three socialist candidacies point at one Projet socialiste, and reading only
-    // `candidacyId` would report all three as having published nothing.
+    // A party platform is not a candidate programme without an explicit editorial attribution.
+    // Only editions directly owned by the candidacy can qualify this candidate-level state.
     db.programEdition.findMany({
-      where: { electionId: election.id, publicationStatus: "PUBLISHED" },
-      select: { candidacyId: true, partyId: true },
+      where: {
+        electionId: election.id,
+        publicationStatus: "PUBLISHED",
+        candidacyId: { not: null },
+      },
+      select: { candidacyId: true },
     }),
   ]);
 
@@ -152,16 +156,11 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
   const editionCandidacyIds = new Set(
     editions.map((e) => e.candidacyId).filter((id): id is string => id !== null)
   );
-  const editionPartyIds = new Set(
-    editions.map((e) => e.partyId).filter((id): id is string => id !== null)
-  );
-
   return sortPresidentialCandidatesBySurname(rows).flatMap((c) => {
     if (c.politician === null) return [];
     const rollup = byCandidacy.get(c.id);
     const measureCount = rollup?.measureCount ?? 0;
-    const hasProgramme =
-      editionCandidacyIds.has(c.id) || (c.partyId !== null && editionPartyIds.has(c.partyId));
+    const hasProgramme = editionCandidacyIds.has(c.id);
 
     return [
       {
@@ -173,7 +172,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
         status: c.status,
         sourceUrl: c.sourceUrl,
         sourceLabel: c.sourceLabel,
-        partyLabel: c.partyLabel,
+        partyLabel: c.partyLabel ?? c.party?.shortName ?? c.party?.name ?? null,
         partyColor: resolveCandidateAccentColor({
           // The hub includes candidacies without a published presidential extension. Use an editorial
           // accent only after that extension clears its publication gate, otherwise fall back to the
