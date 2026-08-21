@@ -24,6 +24,7 @@ function context(over: Partial<HubMeasureContext> = {}): HubMeasureContext {
     hubPublishable: false,
     verifiedMeasureCount: 0,
     lastReviewedAt: null,
+    themes: [],
     ...over,
   };
 }

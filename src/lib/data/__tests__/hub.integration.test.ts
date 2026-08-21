@@ -164,6 +164,21 @@ describeIfDisposableDb("hub", () => {
       expect(context.verifiedMeasureCount).toBe(2);
     });
 
+    it("porte les treize sujets, sans compteur de mesures et avec leur état d'ouverture", async () => {
+      const { THEMES_IN_ORDER } = await import("@/lib/presidentielle/themes");
+      const context = await loadHubMeasureContext(electionId, SLUG);
+
+      expect(context.themes.map((t) => t.theme)).toEqual(THEMES_IN_ORDER);
+      // Aucun compteur ici : l'index des sujets compte les mesures « documentées » (retraits
+      // compris) et l'en-tête du hub les mesures défendues. Deux nombres pour un même sujet.
+      const premier = context.themes[0];
+      expect(premier).toBeDefined();
+      expect(Object.keys(premier ?? {})).toEqual(["theme", "label", "slug", "publishable"]);
+      expect(context.themes.filter((t) => t.publishable).length).toBe(
+        context.publishableSubjectPageCount
+      );
+    });
+
     it("rend null pour une élection inconnue (getHubMeasureContext, avant la frontière cache)", async () => {
       const context = await getHubMeasureContext("inconnue");
       expect(context).toBeNull();

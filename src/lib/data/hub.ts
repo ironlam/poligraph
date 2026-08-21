@@ -1,6 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { CandidacyStatus } from "@/generated/prisma";
+import type { CandidacyStatus, ThemeCategory } from "@/generated/prisma";
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { db } from "@/lib/db";
 import { isHubPublishable } from "@/config/publication-gates";
@@ -68,6 +68,22 @@ export type HubCandidacy = {
   programmeAbsence: "aucun_programme" | "non_depouille" | null;
 };
 
+/**
+ * One subject, as the hub home names it: enough to link to its page and to say whether it is open
+ * to comparison, and nothing else.
+ *
+ * Deliberately NOT the full `ThemeIndexEntry`. The index page speaks in "mesures documentées"
+ * (withdrawals included) while the hub header counts currently defended ones, so shipping the
+ * index's counters here would put two different numbers for the same subject on two pages, with
+ * nothing on screen explaining the gap. The hub links to the index for the detail instead.
+ */
+export type HubTheme = {
+  theme: ThemeCategory;
+  label: string;
+  slug: string;
+  publishable: boolean;
+};
+
 export type HubMeasureContext = {
   electionTitle: string;
   round1Date: Date | null;
@@ -78,6 +94,8 @@ export type HubMeasureContext = {
   hubPublishable: boolean;
   verifiedMeasureCount: number;
   lastReviewedAt: Date | null;
+  /** The thirteen subjects in reading order, so the hub can name them without a second read. */
+  themes: HubTheme[];
 };
 
 /**
@@ -240,6 +258,12 @@ export async function loadHubMeasureContext(
     hubPublishable: isHubPublishable(themesIndex.publishableSubjectPageCount),
     verifiedMeasureCount,
     lastReviewedAt,
+    themes: themesIndex.themes.map(({ theme, label, slug, publishable }) => ({
+      theme,
+      label,
+      slug,
+      publishable,
+    })),
   };
 }
 

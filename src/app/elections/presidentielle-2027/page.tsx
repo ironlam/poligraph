@@ -9,11 +9,11 @@ import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
-import { formatCandidacyFieldSummary } from "@/lib/presidentielle/candidacy-filters";
 import { DataProvenance } from "./_components/DataProvenance";
+import { HubCandidacyOverview } from "./_components/HubCandidacyOverview";
 import { HubClosedState } from "./_components/HubClosedState";
-import { HubEntryCards } from "./_components/HubEntryCards";
 import { HubStats } from "./_components/HubStats";
+import { HubSubjects } from "./_components/HubSubjects";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
@@ -174,7 +174,12 @@ export default async function PresidentialHubPage() {
           />
         )}
 
-        <HubEntryCards summary={formatCandidacyFieldSummary(field)} />
+        {/* The two entry points of the hub, each carrying its own content rather than a button:
+            the subjects it follows, and the state of the field. Since the candidacy list moved to
+            `/candidats`, a home made of two cards named its two routes and said nothing else. */}
+        <HubSubjects themes={context.themes} />
+
+        <HubCandidacyOverview candidacies={field} />
 
         <DataProvenance />
       </div>
