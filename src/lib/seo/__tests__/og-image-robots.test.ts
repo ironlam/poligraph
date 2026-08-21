@@ -34,6 +34,9 @@ describe("opengraph-image noindex header", () => {
     "/partis/renaissance/programme/opengraph-image",
     "/politiques/jean-dupont/opengraph-image",
     "/elections/presidentielle-2027/opengraph-image",
+    // Four segments deep, the deepest OG route on the site: the `:path*` prefix has to
+    // stay unbounded, or every candidacy card would be crawled and indexed as an image.
+    "/elections/presidentielle-2027/candidats/marine-tondelier/opengraph-image",
   ])("noindexes OG image path %s", (path) => {
     expect(source.test(path)).toBe(true);
   });
@@ -44,6 +47,7 @@ describe("opengraph-image noindex header", () => {
     "/parlement/dossiers/reforme-des-retraites",
     "/parlement",
     "/politiques/jean-dupont",
+    "/elections/presidentielle-2027/candidats/marine-tondelier",
     "/opengraph-image-gallery",
   ])("leaves real page %s indexable", (path) => {
     expect(source.test(path)).toBe(false);
