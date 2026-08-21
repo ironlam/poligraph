@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Search } from "lucide-react";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
@@ -129,7 +130,10 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
   const router = useRouter();
   const searchParams = useSearchParams();
   const status = parseCandidacyFilter(searchParams.get("statut"));
-  const query = searchParams.get("q") ?? "";
+  const urlQuery = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(urlQuery);
+  const submittedQuery = useRef<string | null>(null);
+  const previousUrlQuery = useRef(urlQuery);
   const publishedOnly = searchParams.get("propositions") === "publiees";
   const counts = Object.fromEntries(
     CANDIDACY_FILTERS.map((key) => [
@@ -144,23 +148,45 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       matchesCandidacyQuery(c, query)
   );
 
-  function update(next: { statut?: CandidacyFilter; q?: string; publishedOnly?: boolean }) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next.statut !== undefined) {
-      if (next.statut === "toutes") params.delete("statut");
-      else params.set("statut", next.statut);
+  const update = useCallback(
+    function update(next: { statut?: CandidacyFilter; q?: string; publishedOnly?: boolean }) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next.statut !== undefined) {
+        if (next.statut === "toutes") params.delete("statut");
+        else params.set("statut", next.statut);
+      }
+      if (next.q !== undefined) {
+        submittedQuery.current = next.q;
+        if (next.q === "") params.delete("q");
+        else params.set("q", next.q);
+      }
+      if (next.publishedOnly !== undefined) {
+        if (next.publishedOnly) params.set("propositions", "publiees");
+        else params.delete("propositions");
+      }
+      const value = params.toString();
+      router.replace(value === "" ? "?" : `?${value}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
+
+  useEffect(() => {
+    if (previousUrlQuery.current === urlQuery) return;
+    previousUrlQuery.current = urlQuery;
+
+    if (submittedQuery.current === urlQuery) {
+      submittedQuery.current = null;
+      return;
     }
-    if (next.q !== undefined) {
-      if (next.q === "") params.delete("q");
-      else params.set("q", next.q);
-    }
-    if (next.publishedOnly !== undefined) {
-      if (next.publishedOnly) params.set("propositions", "publiees");
-      else params.delete("propositions");
-    }
-    const value = params.toString();
-    router.replace(value === "" ? "?" : `?${value}`, { scroll: false });
-  }
+    const frame = window.requestAnimationFrame(() => setQuery(urlQuery));
+    return () => window.cancelAnimationFrame(frame);
+  }, [urlQuery]);
+
+  useEffect(() => {
+    if (query === urlQuery) return;
+    const timeout = window.setTimeout(() => update({ q: query }), 250);
+    return () => window.clearTimeout(timeout);
+  }, [query, update, urlQuery]);
 
   return (
     <div className="space-y-6">
@@ -172,7 +198,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
             <input
               type="search"
               value={query}
-              onChange={(event) => update({ q: event.target.value })}
+              onChange={(event) => setQuery(event.target.value)}
               className="min-w-0 flex-1 bg-transparent outline-none"
             />
           </span>
@@ -185,7 +211,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
                 key={key}
                 type="button"
                 aria-pressed={key === status}
-                onClick={() => update({ statut: key })}
+                onClick={() => update({ statut: key, q: query })}
                 className={`min-h-11 rounded-full border px-4 text-sm ${
                   key === status
                     ? "border-primary bg-primary text-primary-foreground"
@@ -201,7 +227,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
           <input
             type="checkbox"
             checked={publishedOnly}
-            onChange={(event) => update({ publishedOnly: event.target.checked })}
+            onChange={(event) => update({ q: query, publishedOnly: event.target.checked })}
             className="h-5 w-5 rounded border-border accent-primary"
           />
           Afficher uniquement les personnes avec des propositions publiées
@@ -213,7 +239,10 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
           Aucune personne ne correspond à ces critères.
           <button
             type="button"
-            onClick={() => update({ statut: "toutes", q: "", publishedOnly: false })}
+            onClick={() => {
+              setQuery("");
+              update({ statut: "toutes", q: "", publishedOnly: false });
+            }}
             className="ml-2 min-h-11 font-semibold text-primary underline"
           >
             Réinitialiser

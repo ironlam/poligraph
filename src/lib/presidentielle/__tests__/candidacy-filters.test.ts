@@ -54,6 +54,12 @@ describe("filtres de candidatures", () => {
     expect(matchesCandidacyQuery(row, "ouvriere")).toBe(true);
     expect(matchesCandidacyQuery(row, "absent")).toBe(false);
   });
+
+  it("cherche un nom sans imposer la ponctuation inclusive", () => {
+    expect(matchesCandidacyQuery(candidacy({ candidateName: "Candidat·e C" }), "Candidat C")).toBe(
+      true
+    );
+  });
 });
 
 describe("compteurs dynamiques", () => {

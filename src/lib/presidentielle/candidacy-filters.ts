@@ -98,12 +98,21 @@ function fold(value: string): string {
     .trim();
 }
 
+function matchesFoldedValue(value: string, needle: string): boolean {
+  const haystack = fold(value);
+  if (haystack.includes(needle)) return true;
+
+  const haystackWords = haystack.split(/[^\p{Letter}\p{Number}]+/u).filter(Boolean);
+  const needleWords = needle.split(/[^\p{Letter}\p{Number}]+/u).filter(Boolean);
+  return needleWords.every((word) => haystackWords.some((candidate) => candidate.startsWith(word)));
+}
+
 export function matchesCandidacyQuery(candidacy: FilterableCandidacy, query: string): boolean {
   const needle = fold(query);
   if (needle === "") return true;
   return (
-    fold(candidacy.candidateName).includes(needle) ||
-    fold(candidacy.partyLabel ?? "").includes(needle) ||
-    fold(candidacy.partyShortName ?? "").includes(needle)
+    matchesFoldedValue(candidacy.candidateName, needle) ||
+    matchesFoldedValue(candidacy.partyLabel ?? "", needle) ||
+    matchesFoldedValue(candidacy.partyShortName ?? "", needle)
   );
 }
