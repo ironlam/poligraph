@@ -1,7 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HubCandidacy } from "@/lib/data/hub";
 import { CandidacyCard, CandidacyFieldBrowser } from "../CandidacyFieldBrowser";
+
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: navigation.replace,
+    prefetch: vi.fn(),
+    back: vi.fn(),
+  }),
+  useSearchParams: () => navigation.searchParams,
+  usePathname: () => "/elections/presidentielle-2027",
+}));
 
 function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
   return {
@@ -25,6 +41,15 @@ function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
 }
 
 describe("annuaire présidentiel", () => {
+  beforeEach(() => {
+    navigation.replace.mockReset();
+    navigation.searchParams = new URLSearchParams();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("donne à chaque carte une destination interne unique et aucune action externe", () => {
     render(<CandidacyCard candidacy={candidacy()} />);
     const links = screen.getAllByRole("link");
@@ -140,5 +165,65 @@ describe("annuaire présidentiel", () => {
     const heading = screen.getByRole("heading");
     expect(heading.className).toContain("break-words");
     expect(container).toHaveTextContent("Rassemblement démocratique écologique et social");
+  });
+
+  it("annule la synchronisation différée quand un statut est sélectionné", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    fireEvent.click(screen.getByRole("button", { name: "Personnalités pressenties (1)" }));
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?statut=pressenties&q=Alix", {
+      scroll: false,
+    });
+  });
+
+  it("synchronise la dernière saisie après le délai", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    const searchbox = screen.getByRole("searchbox");
+    fireEvent.change(searchbox, { target: { value: "Ali" } });
+    fireEvent.change(searchbox, { target: { value: "Alix" } });
+    act(() => vi.advanceTimersByTime(249));
+    expect(navigation.replace).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?q=Alix", { scroll: false });
+  });
+
+  it("annule la synchronisation différée quand le filtre de propositions change", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Afficher uniquement les personnes avec des propositions publiées",
+      })
+    );
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?q=Alix&propositions=publiees", {
+      scroll: false,
+    });
+  });
+
+  it("annule la synchronisation différée avant d'ouvrir une fiche candidate", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    const link = screen.getByRole("link", { name: /Voir le suivi 2027/ });
+    link.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(link);
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

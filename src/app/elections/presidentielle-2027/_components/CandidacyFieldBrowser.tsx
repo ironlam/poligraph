@@ -87,7 +87,13 @@ function PublishedContent({ candidacy }: { candidacy: HubCandidacy }) {
   );
 }
 
-export function CandidacyCard({ candidacy }: { candidacy: HubCandidacy }) {
+export function CandidacyCard({
+  candidacy,
+  onNavigate,
+}: {
+  candidacy: HubCandidacy;
+  onNavigate?: () => void;
+}) {
   return (
     <li className="flex min-w-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start gap-4">
@@ -115,6 +121,7 @@ export function CandidacyCard({ candidacy }: { candidacy: HubCandidacy }) {
         <Link
           href={`/elections/presidentielle-2027/candidats/${candidacy.politicianSlug}`}
           prefetch={false}
+          onClick={onNavigate}
           className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           Voir le suivi 2027
@@ -134,6 +141,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
   const [query, setQuery] = useState(urlQuery);
   const submittedQuery = useRef<string | null>(null);
   const previousUrlQuery = useRef(urlQuery);
+  const pendingQuerySync = useRef<number | null>(null);
   const publishedOnly = searchParams.get("propositions") === "publiees";
   const counts = Object.fromEntries(
     CANDIDACY_FILTERS.map((key) => [
@@ -148,8 +156,15 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       matchesCandidacyQuery(c, query)
   );
 
+  const cancelPendingQuerySync = useCallback(() => {
+    if (pendingQuerySync.current === null) return;
+    window.clearTimeout(pendingQuerySync.current);
+    pendingQuerySync.current = null;
+  }, []);
+
   const update = useCallback(
     function update(next: { statut?: CandidacyFilter; q?: string; publishedOnly?: boolean }) {
+      cancelPendingQuerySync();
       const params = new URLSearchParams(searchParams.toString());
       if (next.statut !== undefined) {
         if (next.statut === "toutes") params.delete("statut");
@@ -167,7 +182,7 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       const value = params.toString();
       router.replace(value === "" ? "?" : `?${value}`, { scroll: false });
     },
-    [router, searchParams]
+    [cancelPendingQuerySync, router, searchParams]
   );
 
   useEffect(() => {
@@ -183,9 +198,16 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
   }, [urlQuery]);
 
   useEffect(() => {
-    if (query === urlQuery) return;
-    const timeout = window.setTimeout(() => update({ q: query }), 250);
-    return () => window.clearTimeout(timeout);
+    if (query === urlQuery || submittedQuery.current === query) return;
+    const timeout = window.setTimeout(() => {
+      pendingQuerySync.current = null;
+      update({ q: query });
+    }, 250);
+    pendingQuerySync.current = timeout;
+    return () => {
+      window.clearTimeout(timeout);
+      if (pendingQuerySync.current === timeout) pendingQuerySync.current = null;
+    };
   }, [query, update, urlQuery]);
 
   return (
@@ -251,7 +273,11 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
       ) : (
         <ul className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((candidacy) => (
-            <CandidacyCard key={candidacy.id} candidacy={candidacy} />
+            <CandidacyCard
+              key={candidacy.id}
+              candidacy={candidacy}
+              onNavigate={cancelPendingQuerySync}
+            />
           ))}
         </ul>
       )}
