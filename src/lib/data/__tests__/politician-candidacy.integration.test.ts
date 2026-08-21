@@ -60,7 +60,7 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
         },
       });
       ids[name] = pol.id;
-      await db.candidacy.create({
+      const candidacy = await db.candidacy.create({
         data: {
           electionId: election.id,
           politicianId: pol.id,
@@ -68,6 +68,7 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
           ...data,
         },
       });
+      ids[`${name}Candidacy`] = candidacy.id;
     }
 
     await seed("declared", {
@@ -85,6 +86,36 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
       sourceUrl: "https://example.org/withdrawn",
       sourceLabel: "Communiqué",
     });
+    await seed("partyonly", {
+      status: "DECLARE",
+      sourceUrl: "https://example.org/partyonly",
+      sourceLabel: "Déclaration",
+    });
+
+    const party = await db.party.create({
+      data: {
+        slug: `${SLUG}-party`,
+        name: "Parti de la fixture candidature",
+        shortName: "PFC",
+        logoUrl: "https://example.org/logo-pfc.svg",
+      },
+    });
+    await db.candidacy.update({
+      where: { id: ids.partyonlyCandidacy! },
+      data: { partyId: party.id, partyLabel: null },
+    });
+    await db.programEdition.create({
+      data: {
+        electionId: election.id,
+        ownerType: "PARTY",
+        partyId: party.id,
+        label: "Plateforme du parti de la fixture",
+        version: 1,
+        publishedAt: new Date("2027-01-01T00:00:00Z"),
+        documentUrl: "https://example.org/plateforme-pfc",
+        publicationStatus: "PUBLISHED",
+      },
+    });
 
     const orphan = await db.politician.create({
       data: {
@@ -101,6 +132,7 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
     await db.candidacy.deleteMany({ where: { electionId } });
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { id: electionId } });
+    await db.party.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.$disconnect();
   });
 
@@ -133,5 +165,13 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
     const found = await loadPoliticianPresidentialCandidacy(ids.declared!);
     expect(found?.publishedMeasureCount).toBe(0);
     expect(found?.primarySourceMeasureCount).toBe(0);
+  });
+
+  it("n'attribue pas à la personne une édition appartenant seulement à son parti", async () => {
+    const found = await loadPoliticianPresidentialCandidacy(ids.partyonly!);
+
+    expect(found?.partyLabel).toBe("PFC");
+    expect(found?.partyLogoUrl).toBe("https://example.org/logo-pfc.svg");
+    expect(found?.programmeIdentified).toBe(false);
   });
 });

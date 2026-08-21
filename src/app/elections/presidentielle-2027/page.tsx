@@ -9,8 +9,8 @@ import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
+import { formatCandidacyFieldSummary } from "@/lib/presidentielle/candidacy-filters";
 import { DataProvenance } from "./_components/DataProvenance";
-import { HubCandidacyField } from "./_components/HubCandidacyField";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubEntryCards } from "./_components/HubEntryCards";
 import { HubStats } from "./_components/HubStats";
@@ -174,12 +174,7 @@ export default async function PresidentialHubPage() {
           />
         )}
 
-        <HubEntryCards />
-
-        <section id="candidatures" className="space-y-3">
-          <h2 className="text-xl font-display font-bold tracking-tight">Les candidatures</h2>
-          <HubCandidacyField candidacies={field} />
-        </section>
+        <HubEntryCards summary={formatCandidacyFieldSummary(field)} />
 
         <DataProvenance />
       </div>

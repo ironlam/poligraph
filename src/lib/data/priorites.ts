@@ -148,7 +148,7 @@ export async function loadPrioritesData(
     ])
   );
   for (const c of publicCandidates) {
-    if (identities.has(c.id)) continue;
+    if (identities.has(c.id) || c.politicianSlug === null) continue;
     identities.set(c.id, {
       id: c.id,
       candidateName: c.candidateName,

@@ -68,7 +68,7 @@ export function CandidateStats({
   const stats = [
     {
       value: measureCount,
-      label: measureCount === 1 ? "mesure documentée" : "mesures documentées",
+      label: measureCount === 1 ? "proposition publiée" : "propositions publiées",
     },
     { value: themesCoveredCount, label: "sujets couverts sur 13" },
     { value: mandateCount, label: mandateCount === 1 ? "mandat exercé" : "mandats exercés" },
@@ -180,7 +180,7 @@ export function CandidateThemes({
           prefetch={false}
           className="font-bold text-primary hover:underline"
         >
-          Explorer les mesures par sujet
+          Explorer les propositions par thème
         </Link>
         {lastReviewedAt !== null && (
           <span className="text-muted-foreground">

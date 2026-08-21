@@ -1,13 +1,29 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HubCandidacy } from "@/lib/data/hub";
-import { HubCandidacyField } from "../HubCandidacyField";
+import { CandidacyCard, CandidacyFieldBrowser } from "../CandidacyFieldBrowser";
+
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: navigation.replace,
+    prefetch: vi.fn(),
+    back: vi.fn(),
+  }),
+  useSearchParams: () => navigation.searchParams,
+  usePathname: () => "/elections/presidentielle-2027",
+}));
 
 function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
   return {
     id: "c1",
     candidateName: "Alix Dupont",
-    politicianSlug: null,
+    politicianSlug: "alix-dupont",
     photoUrl: null,
     blobPhotoUrl: null,
     status: "PRESSENTI",
@@ -20,199 +36,194 @@ function candidacy(over: Partial<HubCandidacy> = {}): HubCandidacy {
     measureCount: 0,
     themesCoveredCount: 0,
     programmeAbsence: "aucun_programme",
-    ficheAvailable: false,
     ...over,
   };
 }
 
-function cardFor(name: string): HTMLElement {
-  const card = screen.getByText(name).closest("li");
-  if (!(card instanceof HTMLElement)) throw new Error(`Carte introuvable pour ${name}`);
-  return card;
-}
-
-describe("HubCandidacyField", () => {
-  it("sépare le statut de candidature de ce que Poligraph publie", () => {
-    render(<HubCandidacyField candidacies={[candidacy()]} />);
-
-    expect(screen.getByText("Candidature pressentie")).toBeInTheDocument();
-    expect(screen.getByText("Aucune mesure publiée sur Poligraph")).toBeInTheDocument();
-    expect(screen.queryByText("Pressentie · aucun programme")).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/Une mesure publiée sur Poligraph est une proposition sourcée/)
-    ).toBeInTheDocument();
+describe("annuaire présidentiel", () => {
+  beforeEach(() => {
+    navigation.replace.mockReset();
+    navigation.searchParams = new URLSearchParams();
   });
 
-  it("affiche la photo du candidat et le logo du parti quand ils existent", () => {
-    const { container } = render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({
-            photoUrl: "https://example.org/alix.jpg",
-            partyLogoUrl: "https://example.org/parti.svg",
-          }),
-        ]}
-      />
-    );
-
-    expect(screen.getByAltText("Alix Dupont")).toBeInTheDocument();
-    expect(container.querySelector('[data-party-logo="true"]')).not.toBeNull();
-    expect(screen.getByText("Parti Test")).toBeInTheDocument();
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it("donne la priorité visuelle à la fiche interne, jamais à la source externe", () => {
-    render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({
-            politicianSlug: "alix-dupont",
-            status: "DECLARE",
-            measureCount: 4,
-            themesCoveredCount: 2,
-            programmeAbsence: null,
-            ficheAvailable: true,
-          }),
-        ]}
-      />
-    );
-
-    const candidature = screen.getByRole("link", { name: /Voir les mesures/ });
-    expect(candidature).toHaveAttribute(
+  it("donne à chaque carte une destination interne unique et aucune action externe", () => {
+    render(<CandidacyCard candidacy={candidacy()} />);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats/alix-dupont"
     );
-    expect(candidature).toHaveAttribute("data-variant", "default");
-
-    const source = screen.getByRole("link", { name: /Source du statut de Alix Dupont/ });
-    expect(source).toHaveTextContent("Source du statut");
-    expect(source).not.toHaveAttribute("data-variant");
-    expect(source).toHaveAttribute("target", "_blank");
+    expect(links[0]).toHaveTextContent("Voir le suivi 2027");
   });
 
-  it("renvoie vers le profil général quand la page de candidature n'est pas publiable", () => {
+  it("rend portrait et logo quand ils existent", () => {
     render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({ politicianSlug: "alix-dupont", status: "DECLARE", ficheAvailable: false }),
-        ]}
+      <CandidacyCard
+        candidacy={candidacy({
+          photoUrl: "https://upload.wikimedia.org/photo.jpg",
+          partyLogoUrl: "https://upload.wikimedia.org/logo.svg",
+        })}
       />
     );
-
-    expect(screen.queryByRole("link", { name: /Voir les mesures/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Voir le profil politique/ })).toHaveAttribute(
-      "href",
-      "/politiques/alix-dupont"
-    );
+    expect(screen.getByRole("img", { hidden: true, name: "Alix Dupont" })).toBeInTheDocument();
     expect(
-      screen.getByText("La page de candidature n'est pas encore publiée sur Poligraph.")
-    ).toBeInTheDocument();
+      document.querySelector('img[src="https://upload.wikimedia.org/logo.svg"]')
+    ).not.toBeNull();
+    expect(screen.getByText("Parti Test")).toBeInTheDocument();
   });
 
-  it("distingue l'absence de programme de notre travail d'intégration", () => {
+  it("rend les fallbacks portrait et logo", () => {
+    const { container } = render(<CandidacyCard candidacy={candidacy()} />);
+    expect(container).toHaveTextContent("AD");
+    expect(container).toHaveTextContent("PT");
+    expect(screen.getByText("Parti Test")).toBeInTheDocument();
+  });
+
+  it("distingue zéro proposition, programme identifié et propositions publiées", () => {
     render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({ id: "c1", candidateName: "Sans programme" }),
-          candidacy({
-            id: "c2",
-            candidateName: "Programme en cours",
+      <ul>
+        <CandidacyCard candidacy={candidacy({ id: "a", candidateName: "Sans programme" })} />
+        <CandidacyCard
+          candidacy={candidacy({
+            id: "b",
+            candidateName: "Programme identifié",
             programmeAbsence: "non_depouille",
-          }),
-        ]}
-      />
-    );
-
-    expect(
-      within(cardFor("Sans programme")).getByText("Aucun programme de campagne publié à ce jour.")
-    ).toBeInTheDocument();
-    expect(
-      within(cardFor("Programme en cours")).getByText(
-        "Un programme a été repéré ; ses mesures sont en cours de traitement par Poligraph."
-      )
-    ).toBeInTheDocument();
-  });
-
-  it("ne suppose jamais qu'aucun programme n'existe quand notre état est inconnu", () => {
-    render(<HubCandidacyField candidacies={[candidacy({ programmeAbsence: null })]} />);
-
-    expect(
-      screen.getByText("Cette candidature n’a pas encore été traitée par Poligraph.")
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Aucun programme de campagne/i)).not.toBeInTheDocument();
-  });
-
-  it("présente les mesures comme des contenus publiés et précise leur répartition", () => {
-    render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({
-            status: "DECLARE",
-            measureCount: 12,
-            themesCoveredCount: 8,
-            programmeAbsence: null,
-          }),
-        ]}
-      />
-    );
-
-    expect(screen.getByText("12 mesures publiées sur Poligraph")).toBeInTheDocument();
-    expect(screen.getByText("Disponibles dans 8 des 13 sujets suivis")).toBeInTheDocument();
-    expect(screen.queryByText(/documenté/i)).not.toBeInTheDocument();
-  });
-
-  it("compte seulement les candidatures réellement sans programme publié", () => {
-    render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({ id: "c1", programmeAbsence: "aucun_programme" }),
-          candidacy({ id: "c2", programmeAbsence: "non_depouille" }),
-          candidacy({ id: "c3", measureCount: 4, themesCoveredCount: 2, programmeAbsence: null }),
-        ]}
-      />
-    );
-
-    expect(
-      screen.getByText("1 candidature n’a publié aucun programme à ce jour.")
-    ).toBeInTheDocument();
-  });
-
-  it("réduit une candidature retirée à son état et ne présente plus ses mesures comme défendues", () => {
-    render(
-      <HubCandidacyField
-        candidacies={[
-          candidacy({
-            status: "RETIRE",
-            measureCount: 7,
+          })}
+        />
+        <CandidacyCard
+          candidacy={candidacy({
+            id: "c",
+            candidateName: "Propositions publiées",
+            measureCount: 8,
             themesCoveredCount: 3,
             programmeAbsence: null,
+          })}
+        />
+      </ul>
+    );
+    expect(
+      screen.getByText("Poligraph n'a identifié aucun programme publié à ce jour")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Programme identifié, aucune proposition encore publiée sur Poligraph")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Des propositions sont disponibles sur 3 thèmes")).toBeInTheDocument();
+  });
+
+  it("sépare visuellement statut public et contenu disponible", () => {
+    render(
+      <CandidacyFieldBrowser
+        candidacies={[
+          candidacy({ id: "a", status: "DECLARE", measureCount: 0 }),
+          candidacy({ id: "b", status: "RETIRE", measureCount: 2 }),
+        ]}
+      />
+    );
+    expect(screen.getByRole("group", { name: "Statut public" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Afficher uniquement les personnes avec des propositions publiées",
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Candidatures annoncées (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Candidatures retirées (1)" })).toBeInTheDocument();
+  });
+
+  it("filtre le contenu sans changer le sens des compteurs de statut", () => {
+    render(
+      <CandidacyFieldBrowser
+        candidacies={[
+          candidacy({ id: "a", candidateName: "Sans proposition", status: "DECLARE" }),
+          candidacy({
+            id: "b",
+            candidateName: "Avec proposition",
+            status: "RETIRE",
+            measureCount: 2,
           }),
         ]}
       />
     );
-
-    expect(screen.getAllByText("Candidature retirée")[0]?.className).toContain("font-semibold");
-    expect(screen.queryByText(/7 mesures/)).not.toBeInTheDocument();
-    expect(screen.getByText("Alix Dupont").className).toContain("line-through");
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.click(checkbox);
+    expect(screen.getByRole("button", { name: "Candidatures annoncées (1)" })).toBeInTheDocument();
   });
 
-  it("garde la source vérifiable mais secondaire et sécurise le lien externe", () => {
-    const sourceLabel =
-      "Lutte ouvrière : conférence de presse annonçant la candidature le 8 décembre 2025";
-    render(<HubCandidacyField candidacies={[candidacy({ sourceLabel })]} />);
-
-    const source = screen.getByRole("link", { name: new RegExp(sourceLabel.slice(0, 25)) });
-    expect(source).toHaveAttribute("title", sourceLabel);
-    expect(source).toHaveAttribute("href", "https://example.org/source");
-    expect(source).toHaveAttribute("rel", expect.stringContaining("nofollow"));
-    expect(source).toHaveAttribute("rel", expect.stringContaining("noopener"));
-    expect(source).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
-    expect(source).toHaveAttribute("target", "_blank");
+  it("préserve les noms et partis longs sans tronquer le texte", () => {
+    const { container } = render(
+      <CandidacyCard
+        candidacy={candidacy({
+          candidateName: "Anne-Charlotte de la Très Longue Circonscription",
+          partyLabel: "Rassemblement démocratique écologique et social pour les territoires",
+        })}
+      />
+    );
+    const heading = screen.getByRole("heading");
+    expect(heading.className).toContain("break-words");
+    expect(container).toHaveTextContent("Rassemblement démocratique écologique et social");
   });
 
-  it("annonce le tri réellement appliqué et le filtre compréhensible", () => {
-    render(<HubCandidacyField candidacies={[candidacy()]} />);
+  it("annule la synchronisation différée quand un statut est sélectionné", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
 
-    expect(screen.getByText("Classement alphabétique par nom de famille.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Avec des mesures · 0" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    fireEvent.click(screen.getByRole("button", { name: "Personnalités pressenties (1)" }));
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?statut=pressenties&q=Alix", {
+      scroll: false,
+    });
+  });
+
+  it("synchronise la dernière saisie après le délai", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    const searchbox = screen.getByRole("searchbox");
+    fireEvent.change(searchbox, { target: { value: "Ali" } });
+    fireEvent.change(searchbox, { target: { value: "Alix" } });
+    act(() => vi.advanceTimersByTime(249));
+    expect(navigation.replace).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?q=Alix", { scroll: false });
+  });
+
+  it("annule la synchronisation différée quand le filtre de propositions change", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "Afficher uniquement les personnes avec des propositions publiées",
+      })
+    );
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith("?q=Alix&propositions=publiees", {
+      scroll: false,
+    });
+  });
+
+  it("annule la synchronisation différée avant d'ouvrir une fiche candidate", () => {
+    vi.useFakeTimers();
+    render(<CandidacyFieldBrowser candidacies={[candidacy()]} />);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Alix" } });
+    const link = screen.getByRole("link", { name: /Voir le suivi 2027/ });
+    link.addEventListener("click", (event) => event.preventDefault());
+    fireEvent.click(link);
+    act(() => vi.advanceTimersByTime(250));
+
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

@@ -51,7 +51,13 @@ export async function seedPresidentielleHubDemo(
   async function politician(name: string) {
     const slug = `presidentielle-hub-demo-${name.toLowerCase()}`;
     return db.politician.create({
-      data: { slug, firstName: "Candidat·e", lastName: name, fullName: `Candidat·e ${name}` },
+      data: {
+        slug,
+        firstName: "Candidat·e",
+        lastName: name,
+        fullName: `Candidat·e ${name}`,
+        publicationStatus: "PUBLISHED",
+      },
     });
   }
 

@@ -1,5 +1,4 @@
-import { ExternalLink } from "lucide-react";
-import { CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
+import { CANDIDACY_STATUS_LABELS } from "@/config/labels";
 import type { CandidacyStatus } from "@/generated/prisma";
 
 /**
@@ -19,26 +18,22 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * candidacy is a fact about a schedule, not about a person's record.
  */
 
-type ProgrammeAbsence = "aucun_programme" | "non_depouille" | null;
-
-type BadgeVariant = "documented" | "declared" | "pending" | "withdrawn";
+type BadgeVariant = "announced" | "expected" | "withdrawn";
 
 /**
  * `border` on every variant, transparent where the mockup has none: without it the four states
  * would not share a box height, and the pastilles of two consecutive rows would sit 2px apart.
  */
 const VARIANT_CLASS: Record<BadgeVariant, string> = {
-  documented: "border-primary bg-primary text-primary-foreground",
-  declared: "border-primary bg-card text-primary",
-  pending: "border-transparent bg-muted text-foreground",
+  announced: "border-primary bg-primary/8 text-primary",
+  expected: "border-border bg-muted text-foreground",
   withdrawn: "border-dashed border-border bg-transparent text-muted-foreground-strong",
 };
 
-function badgeVariant(status: CandidacyStatus | null, measureCount: number): BadgeVariant {
+function badgeVariant(status: CandidacyStatus | null): BadgeVariant {
   if (status === "RETIRE") return "withdrawn";
-  if (measureCount > 0) return "documented";
-  if (status === "DECLARE") return "declared";
-  return "pending";
+  if (status === "DECLARE") return "announced";
+  return "expected";
 }
 
 /**
@@ -48,25 +43,8 @@ function badgeVariant(status: CandidacyStatus | null, measureCount: number): Bad
  * They are not interchangeable, and the fallback is the one about us: asserting a candidate has
  * published nothing, because our own field is null, would be a false claim about a real person.
  */
-function programmePart(measureCount: number, programmeAbsence: ProgrammeAbsence): string {
-  if (measureCount > 0) {
-    return `${measureCount} ${measureCount === 1 ? "mesure" : "mesures"}`;
-  }
-  return programmeAbsence === "aucun_programme" ? "aucun programme" : "non documenté";
-}
-
-export function candidacyBadgeLabel(params: {
-  status: CandidacyStatus | null;
-  measureCount: number;
-  programmeAbsence: ProgrammeAbsence;
-}): string {
-  // A withdrawal ends the candidacy: what we did or did not document of its programme is no
-  // longer the reader's question, so the badge says the one thing that still holds.
-  if (params.status === "RETIRE") return CANDIDACY_STATUS_SHORT_LABELS.RETIRE;
-
-  const programme = programmePart(params.measureCount, params.programmeAbsence);
-  if (params.status === null) return programme;
-  return `${CANDIDACY_STATUS_SHORT_LABELS[params.status]} · ${programme}`;
+export function candidacyBadgeLabel(status: CandidacyStatus | null): string {
+  return status === null ? "Statut non renseigné" : CANDIDACY_STATUS_LABELS[status];
 }
 
 /**
@@ -79,63 +57,10 @@ export function candidacyBadgeLabel(params: {
 const PILL =
   "inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border px-2.5 py-[3px] font-display text-xs font-bold leading-[1.35]";
 
-export function CandidacyStatusBadge({
-  status,
-  measureCount,
-  programmeAbsence,
-  sourceUrl,
-  sourceLabel,
-}: {
-  status: CandidacyStatus | null;
-  measureCount: number;
-  programmeAbsence: ProgrammeAbsence;
-  sourceUrl?: string | null;
-  sourceLabel?: string | null;
-}) {
-  const label = candidacyBadgeLabel({ status, measureCount, programmeAbsence });
-  const pill = `${PILL} ${VARIANT_CLASS[badgeVariant(status, measureCount)]}`;
-
-  if (sourceUrl == null || sourceLabel == null) {
-    return (
-      <span className={`${pill} self-start`}>
-        <span className="min-w-0">{label}</span>
-      </span>
-    );
-  }
-
-  /**
-   * The touch target grows, the pastille does not.
-   *
-   * Merging the status and the source made this pastille the row's external link, so it falls
-   * under the 44px rule; the source link it replaced already carried `min-h-11`, and losing that
-   * while merging two elements would be a tactile regression dressed up as a visual
-   * simplification. Painting the pastille itself 44px tall would instead break the geometry the
-   * handoff specifies (min-height, padding 3px 10px), and put a slab of navy back on every row,
-   * which is the one thing this pass exists to remove. So the anchor is a transparent 44px band
-   * and the coloured pastille sits centred inside it, back to 26px above lg where a pointer needs
-   * no such margin.
-   */
+export function CandidacyStatusBadge({ status }: { status: CandidacyStatus | null }) {
   return (
-    <a
-      href={sourceUrl}
-      // AGENTS.md: every external link carries `noopener noreferrer`. `nofollow` on top of it
-      // because the destination is an unvetted source, not a page we vouch for.
-      rel="nofollow noopener noreferrer"
-      target="_blank"
-      // `title` for the pointer, `aria-label` for everyone else: a title attribute is not reliably
-      // announced, and a link named "Déclarée · 19 mesures" that opens an external site without
-      // saying which one is exactly the surprise the row exists to remove. `aria-label` rather
-      // than an `sr-only` sibling because the accessibility tree joins sibling nodes with a space,
-      // announcing "19 mesures , source". The visible label stays a prefix of it, so the spoken
-      // name still starts with what a speech-input user sees (WCAG 2.5.3).
-      title={sourceLabel}
-      aria-label={`${label}, source de la candidature : ${sourceLabel}`}
-      className="inline-flex min-h-11 max-w-full items-center self-start hover:brightness-95 lg:min-h-[26px]"
-    >
-      <span className={pill}>
-        <span className="min-w-0">{label}</span>
-        <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0 opacity-70" />
-      </span>
-    </a>
+    <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]} self-start`}>
+      {candidacyBadgeLabel(status)}
+    </span>
   );
 }

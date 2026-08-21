@@ -10,7 +10,8 @@ let loadHubMeasureContext: typeof import("../hub").loadHubMeasureContext;
 const SLUG = "hub-test";
 
 /**
- * The hub field is the whole race (every sourced candidacy, pressenti/envisagé included),
+ * The hub field is the public race (every sourced candidacy attached to a PUBLISHED politician,
+ * pressenti/envisagé included),
  * never routed through `getPublicPresidentialCandidates` — that population is the published
  * fiches, and it would empty the hub at launch. The measure context, by contrast, mirrors the
  * subject-page gate exactly, because it summarizes the same subject pages: Charlie's
@@ -33,6 +34,7 @@ describeIfDisposableDb("hub", () => {
     await db.candidacy.deleteMany({ where: { electionId } });
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { slug: SLUG } });
+    await db.party.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.$disconnect();
   });
 
@@ -46,11 +48,30 @@ describeIfDisposableDb("hub", () => {
         "Charlie Fixture",
       ]);
       expect(field.some((c) => c.candidateName === "Delta Fixture")).toBe(false);
+      expect(field.some((c) => c.candidateName === "Echo Fixture")).toBe(false);
 
       const charlie = field.find((c) => c.candidateName === "Charlie Fixture");
       expect(charlie?.status).toBe("ENVISAGE");
       expect(charlie?.sourceUrl).toBe("https://example.org/rumeur");
       expect(charlie?.sourceLabel).toBe("Presse");
+    });
+
+    it("associe le logo au nom réel du parti quand partyLabel est absent", async () => {
+      const charlie = (await getHubCandidacyField(SLUG)).find(
+        (c) => c.candidateName === "Charlie Fixture"
+      );
+
+      expect(charlie?.partyLabel).toBe(`PF-${SLUG}`);
+      expect(charlie?.partyLogoUrl).toBe("https://example.org/logo-parti-fixture.svg");
+    });
+
+    it("n'attribue pas à une candidature une édition appartenant seulement à son parti", async () => {
+      const charlie = (await getHubCandidacyField(SLUG)).find(
+        (c) => c.candidateName === "Charlie Fixture"
+      );
+
+      expect(charlie?.measureCount).toBe(0);
+      expect(charlie?.programmeAbsence).toBe("aucun_programme");
     });
 
     it("trie sur le NOM DE FAMILLE, pas sur le prénom", async () => {
@@ -64,6 +85,7 @@ describeIfDisposableDb("hub", () => {
           lastName: "Abbat",
           fullName: "Zoé Abbat",
           source: "MANUAL",
+          publicationStatus: "PUBLISHED",
         },
         select: { id: true },
       });
@@ -74,6 +96,7 @@ describeIfDisposableDb("hub", () => {
           lastName: "Zurbain",
           fullName: "Aaron Zurbain",
           source: "MANUAL",
+          publicationStatus: "PUBLISHED",
         },
         select: { id: true },
       });

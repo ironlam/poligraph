@@ -312,6 +312,17 @@ describe("doctrine — presidentielle-2027 hub stays out of the sitemap while un
     expect(filterAt).toBeGreaterThan(electionPagesAt);
     expect(mapAt).toBeGreaterThan(filterAt);
   });
+
+  it("ajoute l'annuaire présidentiel au même seuil que le hub", () => {
+    expect(electionShard).toContain("const presidentialDirectoryPages");
+    expect(electionShard).toContain(
+      "`${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/candidats`"
+    );
+    expect(electionShard).toMatch(
+      /const presidentialDirectoryPages:[\s\S]*=\s*presidentielleHubPublishable[\s\S]*\?/
+    );
+    expect(electionShard).toContain("...presidentialDirectoryPages");
+  });
 });
 
 describe("doctrine — opengraph-image assets stay noindexed", () => {
