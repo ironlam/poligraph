@@ -13,23 +13,15 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * quality and is exactly the ranking this site does not publish.
  */
 
-export const CANDIDACY_FILTERS = ["toutes", "declarees", "pressenties", "depouillees"] as const;
+export const CANDIDACY_FILTERS = ["toutes", "annoncees", "pressenties", "retirees"] as const;
 
 export type CandidacyFilter = (typeof CANDIDACY_FILTERS)[number];
 
 export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   toutes: "Toutes",
-  declarees: "Déclarées",
-  pressenties: "Pressenties",
-  // "Mesures documentées" and not "Programme documenté", because the predicate below is
-  // `measureCount > 0` and a measure does not imply a programme: `Measure.programEditionId`
-  // is nullable precisely so a proposal made in a speech, an interview or an article can be
-  // recorded. Labelling that as a documented programme would promise a published document
-  // this filter never checks.
-  //
-  // The key stays `depouillees`: it travels in shared URLs. Only the label changes, and
-  // "dépouillé" had to go anyway — on an elections page that word means counting ballots.
-  depouillees: "Mesures documentées",
+  annoncees: "Candidatures annoncées",
+  pressenties: "Personnalités pressenties",
+  retirees: "Candidatures retirées",
 };
 
 /** The fields a filter reads, so a caller can pass its own row type unchanged. */
@@ -54,21 +46,47 @@ export function matchesCandidacyFilter(
   switch (filter) {
     case "toutes":
       return true;
-    case "declarees":
+    case "annoncees":
       return candidacy.status === "DECLARE";
     // Both, because the difference between "pressentie" and "évoquée" is a degree of sourcing and
     // not a different thing: a reader filtering on "pressenties" wants everyone not yet declared.
     case "pressenties":
       return candidacy.status === "PRESSENTI" || candidacy.status === "ENVISAGE";
-    // Our own extraction, not a claim about the candidacy. A row with no measure can still have
-    // published a programme.
-    case "depouillees":
-      return candidacy.measureCount > 0;
+    case "retirees":
+      return candidacy.status === "RETIRE";
     default: {
       const exhaustive: never = filter;
       return exhaustive;
     }
   }
+}
+
+export function matchesPublishedProposals(
+  candidacy: FilterableCandidacy,
+  publishedOnly: boolean
+): boolean {
+  return !publishedOnly || candidacy.measureCount > 0;
+}
+
+export type CandidacyFieldCounts = {
+  total: number;
+  announced: number;
+  expected: number;
+  withdrawn: number;
+};
+
+export function countCandidacyField(candidacies: FilterableCandidacy[]): CandidacyFieldCounts {
+  return {
+    total: candidacies.length,
+    announced: candidacies.filter((c) => c.status === "DECLARE").length,
+    expected: candidacies.filter((c) => c.status === "PRESSENTI" || c.status === "ENVISAGE").length,
+    withdrawn: candidacies.filter((c) => c.status === "RETIRE").length,
+  };
+}
+
+export function formatCandidacyFieldSummary(candidacies: FilterableCandidacy[]): string {
+  const counts = countCandidacyField(candidacies);
+  return `${counts.total} ${counts.total === 1 ? "personne suivie" : "personnes suivies"} pour 2027 : ${counts.announced} ${counts.announced === 1 ? "candidature annoncée" : "candidatures annoncées"}, ${counts.expected} ${counts.expected === 1 ? "personnalité pressentie" : "personnalités pressenties"} et ${counts.withdrawn} ${counts.withdrawn === 1 ? "candidature retirée" : "candidatures retirées"}.`;
 }
 
 /** Accent and case insensitive, so "melenchon" finds "Mélenchon" and "lo" finds "Lutte ouvrière". */

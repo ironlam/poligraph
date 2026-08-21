@@ -2,7 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
+import { isHubPublishable } from "@/config/publication-gates";
 import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import {
@@ -36,7 +36,9 @@ import { getLatestPresidentialReviewDate, getPublicMeasuresByElection } from "./
 export type HubCandidacy = {
   id: string;
   candidateName: string;
-  politicianSlug: string | null;
+  politicianSlug: string;
+  photoUrl: string | null;
+  blobPhotoUrl: string | null;
   status: CandidacyStatus | null;
   sourceUrl: string | null;
   sourceLabel: string | null;
@@ -63,15 +65,6 @@ export type HubCandidacy = {
    * Null when `measureCount > 0`, since there is then no absence to qualify.
    */
   programmeAbsence: "aucun_programme" | "non_depouille" | null;
-  /**
-   * Whether `/candidats/[slug]` will actually render a fiche for this candidacy.
-   *
-   * The row needs this because that page redirects to `/politiques/[slug]` when the gate
-   * is not cleared. A single link therefore led to two different destinations depending
-   * on a rule no reader can see, which is the one thing a link must never do. With this,
-   * the row offers the destination it can name.
-   */
-  ficheAvailable: boolean;
 };
 
 export type HubMeasureContext = {
@@ -108,6 +101,7 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
         status: { not: null },
         sourceUrl: { not: null },
         sourceLabel: { not: null },
+        politicianId: { not: null },
       },
       select: {
         id: true,
@@ -122,6 +116,8 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
           select: {
             slug: true,
             lastName: true,
+            photoUrl: true,
+            blobPhotoUrl: true,
             currentParty: { select: { color: true, name: true, shortName: true } },
           },
         },
@@ -160,47 +156,46 @@ export async function getHubCandidacyField(electionSlug: string): Promise<HubCan
     editions.map((e) => e.partyId).filter((id): id is string => id !== null)
   );
 
-  return sortPresidentialCandidatesBySurname(rows).map((c) => {
+  return sortPresidentialCandidatesBySurname(rows).flatMap((c) => {
+    if (c.politician === null) return [];
     const rollup = byCandidacy.get(c.id);
     const measureCount = rollup?.measureCount ?? 0;
     const hasProgramme =
       editionCandidacyIds.has(c.id) || (c.partyId !== null && editionPartyIds.has(c.partyId));
 
-    return {
-      id: c.id,
-      candidateName: c.candidateName,
-      politicianSlug: c.politician?.slug ?? null,
-      status: c.status,
-      sourceUrl: c.sourceUrl,
-      sourceLabel: c.sourceLabel,
-      partyLabel: c.partyLabel,
-      partyColor: resolveCandidateAccentColor({
-        // The hub includes candidacies without a published presidential extension. Use an editorial
-        // accent only after that extension clears its publication gate, otherwise fall back to the
-        // candidacy's public party data.
-        accentColor:
-          c.presidentialData?.publicationStatus === "PUBLISHED"
-            ? c.presidentialData.accentColor
-            : null,
-        candidacyParty: c.party,
+    return [
+      {
+        id: c.id,
+        candidateName: c.candidateName,
+        politicianSlug: c.politician.slug,
+        photoUrl: c.politician.photoUrl,
+        blobPhotoUrl: c.politician.blobPhotoUrl,
+        status: c.status,
+        sourceUrl: c.sourceUrl,
+        sourceLabel: c.sourceLabel,
         partyLabel: c.partyLabel,
-        currentParty: c.politician?.currentParty ?? null,
-      }),
-      partyShortName: c.party?.shortName ?? null,
-      partyLogoUrl: c.party?.logoUrl ?? null,
-      measureCount,
-      themesCoveredCount: rollup?.themesCoveredCount ?? 0,
-      programmeAbsence: resolveProgrammeAbsence(measureCount, hasProgramme),
-      // Evaluated with the gate the fiche itself uses, not re-derived from `measureCount`.
-      // The row is what decides which link to offer, so a disagreement between the two
-      // would send the reader to a page that redirects them somewhere else without a word.
-      ficheAvailable:
-        c.politician?.slug != null &&
-        isFicheCandidatPublishable({
-          statusSourced: true,
-          verifiedMeasuresWithPrimarySource: rollup?.primarySourceMeasureCount ?? 0,
+        partyColor: resolveCandidateAccentColor({
+          // The hub includes candidacies without a published presidential extension. Use an editorial
+          // accent only after that extension clears its publication gate, otherwise fall back to the
+          // candidacy's public party data.
+          accentColor:
+            c.presidentialData?.publicationStatus === "PUBLISHED"
+              ? c.presidentialData.accentColor
+              : null,
+          candidacyParty: c.party,
+          partyLabel: c.partyLabel,
+          currentParty: c.politician?.currentParty ?? null,
         }),
-    };
+        partyShortName: c.party?.shortName ?? null,
+        partyLogoUrl: c.party?.logoUrl ?? null,
+        measureCount,
+        themesCoveredCount: rollup?.themesCoveredCount ?? 0,
+        programmeAbsence: resolveProgrammeAbsence(measureCount, hasProgramme),
+        // Evaluated with the gate the fiche itself uses, not re-derived from `measureCount`.
+        // The row is what decides which link to offer, so a disagreement between the two
+        // would send the reader to a page that redirects them somewhere else without a word.
+      },
+    ];
   });
 }
 

@@ -38,6 +38,9 @@ export type PoliticianCandidacy = {
   status: CandidacyStatus;
   sourceUrl: string;
   sourceLabel: string;
+  partyLabel: string | null;
+  partyLogoUrl: string | null;
+  programmeIdentified: boolean;
   declaredAt: Date | null;
   withdrewAt: Date | null;
   /** Generated summary of this candidacy, null until a generation pass has produced one. */
@@ -75,6 +78,9 @@ export async function loadPoliticianPresidentialCandidacy(
       status: true,
       sourceUrl: true,
       sourceLabel: true,
+      partyId: true,
+      partyLabel: true,
+      party: { select: { name: true, shortName: true, logoUrl: true } },
       round1Pct: true,
       round2Pct: true,
       isElected: true,
@@ -98,7 +104,17 @@ export async function loadPoliticianPresidentialCandidacy(
     return null;
   }
 
-  const stats = await getPublicMeasureStatsByCandidacy(row.id);
+  const [stats, programme] = await Promise.all([
+    getPublicMeasureStatsByCandidacy(row.id),
+    db.programEdition.findFirst({
+      where: {
+        election: { slug: PRESIDENTIELLE_2027_SLUG },
+        publicationStatus: "PUBLISHED",
+        OR: [{ candidacyId: row.id }, ...(row.partyId === null ? [] : [{ partyId: row.partyId }])],
+      },
+      select: { id: true },
+    }),
+  ]);
 
   return {
     candidacyId: row.id,
@@ -109,6 +125,9 @@ export async function loadPoliticianPresidentialCandidacy(
     status: row.status,
     sourceUrl: row.sourceUrl,
     sourceLabel: row.sourceLabel,
+    partyLabel: row.partyLabel ?? row.party?.shortName ?? row.party?.name ?? null,
+    partyLogoUrl: row.party?.logoUrl ?? null,
+    programmeIdentified: programme !== null,
     declaredAt: row.presidentialData?.declaredAt ?? null,
     withdrewAt: row.presidentialData?.withdrewAt ?? null,
     synthesis: row.presidentialData?.synthesis ?? null,

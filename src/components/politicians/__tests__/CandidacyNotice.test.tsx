@@ -15,6 +15,9 @@ const base: PoliticianCandidacy = {
   status: "DECLARE",
   sourceUrl: "https://example.org/source",
   sourceLabel: "Le Monde, 14 janvier 2026",
+  partyLabel: null,
+  partyLogoUrl: null,
+  programmeIdentified: false,
   declaredAt: new Date("2026-01-14T00:00:00.000Z"),
   withdrewAt: null,
   synthesis: null,
@@ -59,7 +62,7 @@ describe("CandidacyNotice", () => {
 
   it("affiche le statut avec le libellé du dépôt", () => {
     renderNotice();
-    expect(screen.getByText("Candidature déclarée")).toBeInTheDocument();
+    expect(screen.getByText("Candidature annoncée")).toBeInTheDocument();
   });
 
   it("ouvre la source dans un nouvel onglet, sans fuite de référent", () => {

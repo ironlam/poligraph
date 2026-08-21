@@ -28,13 +28,13 @@ describe("CandidacyCard", () => {
   it("affiche le statut quand la candidature n'est que pressentie", () => {
     render(<CandidacyCard candidacy={{ ...baseCandidacy, status: "PRESSENTI" }} />);
 
-    expect(screen.getByText("Candidature pressentie")).toBeInTheDocument();
+    expect(screen.getByText("Personnalité pressentie")).toBeInTheDocument();
   });
 
-  it("affiche le statut quand la candidature est déclarée", () => {
+  it("affiche le statut quand la candidature est annoncée", () => {
     render(<CandidacyCard candidacy={{ ...baseCandidacy, status: "DECLARE" }} />);
 
-    expect(screen.getByText("Candidature déclarée")).toBeInTheDocument();
+    expect(screen.getByText("Candidature annoncée")).toBeInTheDocument();
   });
 
   it("n'affiche aucun statut quand la candidature n'en porte pas", () => {

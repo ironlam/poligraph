@@ -1465,9 +1465,9 @@ export const PROMISE_EXTRACTION_STATUS_LABELS: Record<PromiseExtractionStatus, s
 // Pre-campaign candidacy status. Before official filing, no one is formally a candidate:
 // the four levels must stay distinguishable so a rumour is never rendered as an announcement.
 export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
-  DECLARE: "Candidature déclarée",
-  PRESSENTI: "Candidature pressentie",
-  ENVISAGE: "Candidature évoquée",
+  DECLARE: "Candidature annoncée",
+  PRESSENTI: "Personnalité pressentie",
+  ENVISAGE: "Personnalité évoquée",
   RETIRE: "Candidature retirée",
 };
 

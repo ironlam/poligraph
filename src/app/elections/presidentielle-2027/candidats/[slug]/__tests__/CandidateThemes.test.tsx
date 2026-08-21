@@ -107,7 +107,7 @@ describe("CandidateThemes", () => {
       />
     );
 
-    const lien = screen.getByRole("link", { name: /Explorer les mesures par sujet/ });
+    const lien = screen.getByRole("link", { name: /Explorer les propositions par thème/ });
     expect(lien).toHaveAttribute("href", "/elections/presidentielle-2027/sujets");
     expect(screen.queryByText(/Comparer ces mesures/)).not.toBeInTheDocument();
   });

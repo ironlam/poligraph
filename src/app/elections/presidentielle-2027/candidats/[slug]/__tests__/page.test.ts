@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockRedirect = vi.fn((href: string) => {
   throw new Error(`REDIRECT:${href}`);
@@ -6,7 +7,6 @@ const mockRedirect = vi.fn((href: string) => {
 const mockNotFound = vi.fn(() => {
   throw new Error("NOT_FOUND");
 });
-
 vi.mock("next/navigation", () => ({
   redirect: (href: string) => mockRedirect(href),
   notFound: () => mockNotFound(),
@@ -19,7 +19,6 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
   getCandidateFicheDetail: (candidacyId: string, politicianId: string) =>
     mockGetDetail(candidacyId, politicianId),
 }));
-
 const mockGetPolitician = vi.fn();
 vi.mock("@/lib/data/politicians", () => ({
   getPolitician: (slug: string) => mockGetPolitician(slug),
@@ -29,13 +28,16 @@ const candidacy = (overrides: Record<string, unknown> = {}) => ({
   candidacyId: "cand-1",
   electionSlug: "presidentielle-2027",
   electionShortTitle: "Présidentielle 2027",
-  round1Date: new Date("2027-04-11T00:00:00.000Z"),
-  round2Date: new Date("2027-04-25T00:00:00.000Z"),
   status: "DECLARE",
   sourceUrl: "https://example.org/source",
   sourceLabel: "Le Monde, 14 janvier 2026",
+  partyLabel: "Parti Test",
+  partyLogoUrl: null,
+  programmeIdentified: false,
   declaredAt: null,
   withdrewAt: null,
+  synthesis: null,
+  synthesisGeneratedAt: null,
   publishedMeasureCount: 0,
   themesCoveredCount: 0,
   primarySourceMeasureCount: 0,
@@ -46,7 +48,7 @@ const candidacy = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe("page fiche candidat", () => {
+describe("page présidentielle d'une personne", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetPolitician.mockResolvedValue({
@@ -54,74 +56,80 @@ describe("page fiche candidat", () => {
       slug: "camille-riviere",
       fullName: "Camille Rivière",
       civility: "Mme",
+      photoUrl: null,
+      blobPhotoUrl: null,
       declarations: [],
       affairs: [],
     });
     mockGetDetail.mockResolvedValue({ themes: [], recentVotes: [], mandateCount: 0 });
   });
 
-  it("renvoie vers la fiche du politique quand la candidature est sous le seuil", async () => {
+  it("rend en 200 une page minimale avec zéro proposition publiée", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
     const { default: Page } = await import("../page");
-
-    await expect(Page({ params: Promise.resolve({ slug: "camille-riviere" }) })).rejects.toThrow(
-      "REDIRECT:/politiques/camille-riviere"
-    );
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Camille Rivière");
+    expect(
+      screen.getByText("Poligraph n’a identifié aucun programme publié à ce jour.")
+    ).toBeInTheDocument();
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockGetDetail).not.toHaveBeenCalled();
   });
 
-  it("renvoie vers la fiche du politique quand il n'y a aucune candidature", async () => {
-    mockGetCandidacy.mockResolvedValue(null);
+  it("rend l'état programme identifié sans publier de proposition", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ programmeIdentified: true }));
     const { default: Page } = await import("../page");
-
-    await expect(Page({ params: Promise.resolve({ slug: "camille-riviere" }) })).rejects.toThrow(
-      "REDIRECT:/politiques/camille-riviere"
-    );
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(
+      screen.getByText("Programme identifié, aucune proposition encore publiée sur Poligraph.")
+    ).toBeInTheDocument();
   });
 
-  it("rend 404 quand le politique n'existe pas", async () => {
-    mockGetPolitician.mockResolvedValue(null);
-    const { default: Page } = await import("../page");
-
-    await expect(Page({ params: Promise.resolve({ slug: "inconnu" }) })).rejects.toThrow(
-      "NOT_FOUND"
-    );
-  });
-
-  it("rend la fiche quand le seuil est franchi", async () => {
+  it("garde les blocs enrichis derrière la porte de publication", async () => {
     mockGetCandidacy.mockResolvedValue(
       candidacy({ publishedMeasureCount: 27, themesCoveredCount: 9, primarySourceMeasureCount: 20 })
     );
     const { default: Page } = await import("../page");
-
-    const result = await Page({ params: Promise.resolve({ slug: "camille-riviere" }) });
-    expect(result).toBeDefined();
-    expect(mockRedirect).not.toHaveBeenCalled();
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(mockGetDetail).toHaveBeenCalledWith("cand-1", "p1");
+    expect(screen.queryByText(/aucun programme publié/i)).not.toBeInTheDocument();
   });
 
-  it("reste hors des moteurs tant que la fiche n'est pas publiable", async () => {
+  it("présente la source comme lien externe secondaire", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy());
+    const { default: Page } = await import("../page");
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(
+      screen.getByRole("heading", { name: "Source du statut de candidature" })
+    ).toBeInTheDocument();
+    const source = screen.getByRole("link", { name: /source originale, lien externe/ });
+    expect(source).toHaveAttribute("href", "https://example.org/source");
+    expect(source).toHaveAttribute("rel", "nofollow noopener noreferrer");
+  });
+
+  it("redirige seulement quand aucune candidature publique n'existe", async () => {
+    mockGetCandidacy.mockResolvedValue(null);
+    const { default: Page } = await import("../page");
+    await expect(Page({ params: Promise.resolve({ slug: "camille-riviere" }) })).rejects.toThrow(
+      "REDIRECT:/politiques/camille-riviere"
+    );
+  });
+
+  it("reste noindex tant que la porte éditoriale n'est pas franchie", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
     const { generateMetadata } = await import("../page");
-
     const metadata = await generateMetadata({
       params: Promise.resolve({ slug: "camille-riviere" }),
     });
     expect(metadata.robots).toEqual({ index: false, follow: true });
   });
 
-  it("laisse la fiche publiable entrer dans les moteurs", async () => {
-    mockGetCandidacy.mockResolvedValue(
-      candidacy({ publishedMeasureCount: 27, themesCoveredCount: 9, primarySourceMeasureCount: 20 })
-    );
+  it("devient indexable uniquement après franchissement de la porte", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
     const { generateMetadata } = await import("../page");
-
     const metadata = await generateMetadata({
       params: Promise.resolve({ slug: "camille-riviere" }),
     });
     expect(metadata.robots).toBeUndefined();
-  });
-
-  it("génère zéro paramètre statique : les fiches sortent à l'écriture éditoriale", async () => {
-    const { generateStaticParams } = await import("../page");
-    expect(await generateStaticParams()).toEqual([]);
   });
 });

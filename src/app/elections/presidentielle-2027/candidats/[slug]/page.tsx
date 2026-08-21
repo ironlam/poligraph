@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { candidacyRoleLabel } from "@/config/labels";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 // Reuses the established politician authority rather than adding a second, lighter read for three
@@ -88,15 +89,13 @@ export default async function CandidateFichePage({ params }: PageProps) {
       verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
     });
 
-  // A safety net now, not a routing rule. The field used to link every row here and let this
-  // redirect sort them out, so one link had two destinations and named neither; the row now
-  // reads the same gate and offers the destination it can name. What is left is the hand-typed
-  // URL and the stale bookmark, for which landing on the politician's fiche beats a 404.
-  if (!candidacy || !publishable) {
+  if (!candidacy) {
     redirect(`/politiques/${slug}`);
   }
 
-  const detail = await getCandidateFicheDetail(candidacy.candidacyId, politician.id);
+  const detail = publishable
+    ? await getCandidateFicheDetail(candidacy.candidacyId, politician.id)
+    : null;
 
   return (
     <>
@@ -110,68 +109,98 @@ export default async function CandidateFichePage({ params }: PageProps) {
           ]}
         />
 
-        <header className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-brand">
-            {candidacy.electionShortTitle}
-          </p>
-          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-            {politician.fullName}
-          </h1>
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold">{candidacyRoleLabel(politician.civility)}</span>
-            {/* The same badge language as the field, so a reader arriving from the list sees the
+        <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          <div aria-hidden="true">
+            <PoliticianAvatar
+              photoUrl={politician.photoUrl ?? null}
+              blobPhotoUrl={politician.blobPhotoUrl ?? null}
+              fullName={politician.fullName}
+              size="lg"
+            />
+          </div>
+          <div className="min-w-0 flex-1 space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-brand">
+              {candidacy.electionShortTitle}
+            </p>
+            <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+              {politician.fullName}
+            </h1>
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-semibold">{candidacyRoleLabel(politician.civility)}</span>
+              {/* The same badge language as the field, so a reader arriving from the list sees the
                 pastille they clicked, unchanged. Not a link here: the source is a full line just
                 below, and two controls to the same URL name one destination twice. */}
-            <CandidacyStatusBadge
-              status={candidacy.status}
-              measureCount={candidacy.publishedMeasureCount}
-              programmeAbsence={null}
-            />
-            <a
-              href={candidacy.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs underline hover:no-underline"
-            >
-              {candidacy.sourceLabel}
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>
-          </p>
+              <CandidacyStatusBadge status={candidacy.status} />
+            </p>
+            {candidacy.partyLabel && (
+              <p className="text-sm text-muted-foreground-strong">{candidacy.partyLabel}</p>
+            )}
+          </div>
         </header>
 
-        <CandidateSynthesis
-          synthesis={candidacy.synthesis}
-          generatedAt={candidacy.synthesisGeneratedAt}
-          measureCount={candidacy.publishedMeasureCount}
-        />
+        <section className="space-y-2 rounded-xl border bg-card p-4 md:p-6">
+          <h2 className="font-display text-base font-bold">Source du statut de candidature</h2>
+          <p className="text-sm text-muted-foreground">{candidacy.sourceLabel}</p>
+          <a
+            href={candidacy.sourceUrl}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            aria-label="Consulter l’annonce ou la source originale, lien externe"
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary underline hover:no-underline"
+          >
+            Consulter l&apos;annonce ou la source originale
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </section>
 
-        {/* Measures before the counters, everywhere and not only on mobile.
+        {!publishable && (
+          <section className="rounded-xl border border-dashed bg-muted/30 p-5 md:p-7">
+            <h2 className="font-display text-xl font-bold">Contenu disponible sur Poligraph</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground-strong">
+              {candidacy.programmeIdentified
+                ? "Programme identifié, aucune proposition encore publiée sur Poligraph."
+                : "Poligraph n’a identifié aucun programme publié à ce jour."}
+            </p>
+          </section>
+        )}
+
+        {publishable && detail && (
+          <>
+            <CandidateSynthesis
+              synthesis={candidacy.synthesis}
+              generatedAt={candidacy.synthesisGeneratedAt}
+              measureCount={candidacy.publishedMeasureCount}
+            />
+
+            {/* Measures before the counters, everywhere and not only on mobile.
             The three counters describe the COVERAGE of our own work; they are a caption on the
             measures, not an introduction to them. Reading them first meant scrolling past a
             description of the content to reach the content, which on a phone is the whole first
             screen. One order for every width rather than two: a block that belongs after on a
             phone does not belong before on a desktop, it was simply less costly there. */}
-        <CandidateThemes
-          themes={detail.themes}
-          electionSlug={candidacy.electionSlug}
-          lastReviewedAt={candidacy.lastReviewedAt}
-        />
+            <CandidateThemes
+              themes={detail.themes}
+              electionSlug={candidacy.electionSlug}
+              lastReviewedAt={candidacy.lastReviewedAt}
+            />
 
-        <CandidateStats
-          measureCount={candidacy.publishedMeasureCount}
-          themesCoveredCount={candidacy.themesCoveredCount}
-          mandateCount={detail.mandateCount}
-        />
+            <CandidateStats
+              measureCount={candidacy.publishedMeasureCount}
+              themesCoveredCount={candidacy.themesCoveredCount}
+              mandateCount={detail.mandateCount}
+            />
 
-        <CandidateThemeSpread themes={detail.themes} />
+            <CandidateThemeSpread themes={detail.themes} />
 
-        <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
+            <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
 
-        <CandidateIntegrity
-          declarationCount={politician.declarations.length}
-          affairCount={politician.affairs.length}
-          politicianSlug={slug}
-        />
+            <CandidateIntegrity
+              declarationCount={politician.declarations.length}
+              affairCount={politician.affairs.length}
+              politicianSlug={slug}
+            />
+          </>
+        )}
 
         <section className="space-y-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground md:p-6">
           <h2 className="font-display text-base font-bold tracking-tight text-foreground">
@@ -210,7 +239,7 @@ export default async function CandidateFichePage({ params }: PageProps) {
             className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-[10px] border border-border px-4 font-display text-sm font-bold text-primary hover:border-primary hover:bg-muted md:min-h-[40px]"
           >
             <UserRound aria-hidden="true" className="h-4 w-4 shrink-0" />
-            Sa fiche Poligraph
+            Mandats, votes et parcours politique
           </Link>
         </section>
       </div>
