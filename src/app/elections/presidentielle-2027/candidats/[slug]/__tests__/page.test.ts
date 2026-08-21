@@ -95,6 +95,36 @@ describe("page présidentielle d'une personne", () => {
     expect(screen.queryByText(/aucun programme publié/i)).not.toBeInTheDocument();
   });
 
+  it("propose le partage de la fiche une fois la porte franchie", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+    const { default: Page } = await import("../page");
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    // Deux barres, la verticale du desktop et celle du bas sur mobile, comme sur les autres fiches.
+    expect(screen.getAllByRole("group", { name: "Partager cette page" })).toHaveLength(2);
+    const shareLink = screen.getAllByRole("link", { name: "Partager sur X" })[0]!;
+    expect(shareLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        encodeURIComponent(
+          "https://poligraph.fr/elections/presidentielle-2027/candidats/camille-riviere"
+        )
+      )
+    );
+    // Ni le statut de candidature ni le nombre de mesures : un post daté leur survit.
+    expect(shareLink.getAttribute("href")).toContain(
+      encodeURIComponent(
+        "Camille Rivière, Présidentielle 2027 (Parti Test) : ses mesures et leurs sources sur Poligraph"
+      )
+    );
+  });
+
+  it("ne propose pas le partage sous la porte de publication", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy());
+    const { default: Page } = await import("../page");
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(screen.queryByRole("group", { name: "Partager cette page" })).not.toBeInTheDocument();
+  });
+
   it("présente la source comme lien externe secondaire", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
     const { default: Page } = await import("../page");
@@ -131,5 +161,21 @@ describe("page présidentielle d'une personne", () => {
       params: Promise.resolve({ slug: "camille-riviere" }),
     });
     expect(metadata.robots).toBeUndefined();
+  });
+
+  it("décrit la fiche pour les aperçus de partage", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.openGraph?.title).toContain("Camille Rivière");
+    expect(metadata.openGraph?.url).toBe(
+      "/elections/presidentielle-2027/candidats/camille-riviere"
+    );
+    expect(metadata.twitter).toMatchObject({ card: "summary_large_image" });
+    // La carte vient de la route opengraph-image voisine, jamais d'une seconde image nommée ici.
+    expect(metadata.openGraph?.images).toBeUndefined();
+    expect(metadata.twitter?.images).toBeUndefined();
   });
 });

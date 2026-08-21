@@ -3,9 +3,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ShareBar } from "@/components/ui/ShareBar";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { candidacyRoleLabel } from "@/config/labels";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
+import { SITE_URL } from "@/config/site";
+import { cn } from "@/lib/utils";
 // Reuses the established politician authority rather than adding a second, lighter read for three
 // fields. It loads more than this page needs, but it is already cached under `politician:<slug>`.
 import { getPolitician } from "@/lib/data/politicians";
@@ -40,6 +43,14 @@ import {
 export const revalidate = 86400;
 
 /**
+ * One place for the fiche path. The canonical, the share link and the link the OG card is attached
+ * to are the same URL, and a reader who copies the address bar must land on what they shared.
+ */
+function fichePath(slug: string): string {
+  return `/elections/presidentielle-2027/candidats/${slug}`;
+}
+
+/**
  * No pre-generation. The publishable population changes with EDITORIAL WRITES, not with deployments:
  * pre-generating at build time would freeze a list that a publication invalidates hours later, and
  * would make a fiche's going live depend on a redeploy. Fiches are therefore generated on demand
@@ -66,13 +77,27 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
     });
 
+  const title = `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`;
+  const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par sujet, avec leurs sources.`;
+
   return {
-    title: `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`,
-    description: `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par sujet, avec leurs sources.`,
+    title,
+    description,
     // A surface below its gate stays out of search results (spec §4.2). `follow: true` so the links
     // out of the page keep their value.
     robots: publishable ? undefined : { index: false, follow: true },
-    alternates: { canonical: `/elections/presidentielle-2027/candidats/${slug}` },
+    alternates: { canonical: fichePath(slug) },
+    // A pasted link must show the fiche, not the tab title a platform guesses from the document.
+    // No `images` here: the `opengraph-image` route beside this file already provides the card, and
+    // naming a second image would let the two drift. `summary_large_image` is what that 1200x630
+    // card is drawn for, and X falls back to `og:image` since we ship no `twitter-image` route.
+    openGraph: {
+      title,
+      description,
+      type: "profile",
+      url: fichePath(slug),
+    },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
@@ -99,8 +124,34 @@ export default async function CandidateFichePage({ params }: PageProps) {
 
   return (
     <>
+      {/* Sharing a fiche is the same gesture as sharing any other Poligraph page, so it is the same
+          bar, with the same platforms and the same copy control. It only appears above the
+          publication gate: below it the page carries a sourced status and nothing else, stays
+          `noindex` by policy, and handing readers buttons to spread a page we keep out of search
+          would contradict that policy rather than serve them. */}
+      {publishable && (
+        <ShareBar
+          data={{
+            title: politician.fullName,
+            // Name, election, party: the three facts that stay true. Deliberately no candidacy
+            // status and no measure count, for the reason the OG card states at length. A post
+            // outlives the day it was written, and a withdrawn candidacy shared as "annoncée"
+            // cannot be corrected once it is out.
+            text: `${politician.fullName}, ${candidacy.electionShortTitle}${candidacy.partyLabel ? ` (${candidacy.partyLabel})` : ""} : ses mesures et leurs sources sur Poligraph`,
+            url: `${SITE_URL}${fichePath(slug)}`,
+          }}
+        />
+      )}
       <CandidacyBackBar electionSlug={candidacy.electionSlug} />
-      <div className="container mx-auto space-y-8 px-4 pb-8 pt-4">
+      {/* The mobile share bar is fixed to the bottom of the viewport, so the last control of the
+          page needs room to clear it. The extra padding goes away at `2xl`, where that bar becomes
+          the vertical one on the left. */}
+      <div
+        className={cn(
+          "container mx-auto space-y-8 px-4 pt-4",
+          publishable ? "pb-24 2xl:pb-8" : "pb-8"
+        )}
+      >
         <Breadcrumb
           items={[
             { label: "Élections", href: "/elections" },
