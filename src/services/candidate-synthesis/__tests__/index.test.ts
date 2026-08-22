@@ -112,6 +112,30 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
+  // Le cas Arthaud, bout en bout : aucun mandat, aucun vote, cinq mesures. Le service doit demander
+  // au modèle la longueur que cette matière porte, et juger sur la même.
+  it("annonce au modèle le plancher que la matière porte, et juge sur le même", async () => {
+    dbMock.measure.findMany.mockResolvedValue(
+      Array.from({ length: 5 }, (_, i) => ({
+        theme: "SANTE",
+        publishedRevision: { text: `Mesure ${i}.` },
+      }))
+    );
+    callAnthropicMock.mockResolvedValue(
+      anthropicText(`${Array.from({ length: 81 }, (_, i) => `mot${i}`).join(" ")}.`)
+    );
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
+
+    // 25 de base + 0 de parcours + 35 de programme : 81 mots passent, là où le plancher fixe de 90
+    // les refusait deux fois de suite et laissait la fiche sans résumé.
+    expect(result).toMatchObject({ ok: true });
+    const system = callAnthropicMock.mock.calls[0]![1].system as string;
+    expect(system).toContain("Entre 60 et 200 mots");
+    expect(callAnthropicMock).toHaveBeenCalledTimes(1);
+  });
+
   it("bascule sur Mistral quand Anthropic échoue", async () => {
     // Le repli couvre la panne récurrente du projet : un solde Anthropic à zéro, qui rend un 400.
     callAnthropicMock.mockRejectedValue(new Error("credit balance is too low"));

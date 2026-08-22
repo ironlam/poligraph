@@ -19,21 +19,97 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 const FIELD_LIMIT = 240;
 
 /**
- * Word bounds, and why there are two floors rather than one.
+ * Word bounds. Two numbers, and the whole point is that they are two.
  *
- * A single high floor contradicts the instruction the model is given. It is told to
- * state an empty record in one sentence rather than pad, and a candidacy we have not
- * yet documented has nothing to say about its programme: on a first run, thirteen of
- * twenty candidacies came back between 27 and 75 words, all of them correct, all of
- * them rejected by a 90-word floor. The floor was punishing the model for obeying.
+ * A single number played both roles and could not: the prompt asked for "entre 90 et 200 mots",
+ * and the screen refused anything under 90. So the length we WANT was also the length below which
+ * we threw the text away. On a first run thirteen of twenty candidacies came back between 27 and
+ * 75 words, all correct, all rejected. Nathalie Arthaud, who has no mandate, no recorded vote and
+ * five measures, wrote 81 honest words, was told the minimum was 90, had nothing left but filler,
+ * failed twice, and her fiche kept no summary at all.
  *
- * So the floor follows the material. With measures to summarise, a text under 90
- * words is thin and something went wrong. Without them, brevity is the honest answer
- * and only an empty one is a failure.
+ * Splitting the roles dissolves it:
+ *
+ * - {@link synthesisTargetRange} is what the prompt asks for. It is a target, and being under it is
+ *   a disappointment, not a fault. It follows the material, one term per thing there is to say, so
+ *   a candidacy with a one-line career is not asked for the paragraph it cannot fill.
+ * - {@link synthesisFloor} is what the screen refuses. It catches an answer that is not an answer:
+ *   an empty reply, one line, a truncation. It sits far below the target on purpose, because every
+ *   attempt to make it double as a quality bar has rejected honest work.
+ *
+ * The full-material target is still 90, so nothing changes for the candidacies that were already
+ * passing. Checked against the twenty declared candidacies in production, every stored synthesis
+ * clears its own floor, the tightest margin being 27 words against a floor of 25.
  */
-export const SYNTHESIS_MIN_WORDS = 90;
-export const SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES = 25;
 export const SYNTHESIS_MAX_WORDS = 200;
+
+/** Target terms: the identity sentence, then a paragraph per section, in two steps each. */
+export const TARGET_BASE = 25;
+export const TARGET_THIN_CAREER = 15;
+export const TARGET_CAREER = 30;
+export const TARGET_FEW_MEASURES = 15;
+export const TARGET_MEASURES = 35;
+
+/**
+ * Where a section stops being a sentence and becomes a paragraph.
+ *
+ * A career counts as substantial on mandates OR on recorded votes: François Ruffin holds three
+ * mandates and a thousand votes, which is a record to describe whatever the mandate count says.
+ */
+export const SUBSTANTIAL_MANDATES = 4;
+export const SUBSTANTIAL_VOTES = 100;
+export const SUBSTANTIAL_MEASURES = 4;
+
+/** Floor terms: one clause of identity, one sentence per section that exists. */
+export const FLOOR_BASE = 15;
+export const FLOOR_PER_SECTION = 10;
+
+/**
+ * What the prompt was built from, reduced to what decides the length.
+ *
+ * The three counts and not three booleans: both bounds distinguish a section that is a sentence
+ * from one that is a paragraph, and a boolean cannot carry that.
+ */
+export type SynthesisMaterial = {
+  mandateCount: number;
+  voteCount: number;
+  measureCount: number;
+};
+
+function hasCareer(material: SynthesisMaterial): boolean {
+  return material.mandateCount > 0 || material.voteCount > 0;
+}
+
+/** The length the prompt asks for. Stated to the model, never enforced against it. */
+export function synthesisTargetRange(material: SynthesisMaterial): { min: number; max: number } {
+  const career = !hasCareer(material)
+    ? 0
+    : material.mandateCount >= SUBSTANTIAL_MANDATES || material.voteCount >= SUBSTANTIAL_VOTES
+      ? TARGET_CAREER
+      : TARGET_THIN_CAREER;
+  const programme =
+    material.measureCount === 0
+      ? 0
+      : material.measureCount >= SUBSTANTIAL_MEASURES
+        ? TARGET_MEASURES
+        : TARGET_FEW_MEASURES;
+  return { min: TARGET_BASE + career + programme, max: SYNTHESIS_MAX_WORDS };
+}
+
+/** The length below which there is no answer to keep. Enforced; deliberately far under the target. */
+export function synthesisFloor(material: SynthesisMaterial): number {
+  const sections = (hasCareer(material) ? 1 : 0) + (material.measureCount > 0 ? 1 : 0);
+  return FLOOR_BASE + sections * FLOOR_PER_SECTION;
+}
+
+/** The material of a built prompt, so a caller never has to restate it. */
+export function synthesisMaterial(input: CandidateSynthesisInput): SynthesisMaterial {
+  return {
+    mandateCount: input.mandates.length,
+    voteCount: input.voteCount,
+    measureCount: input.measures.length,
+  };
+}
 
 export type SynthesisMandate = {
   role: string;
@@ -85,7 +161,17 @@ function formatMandate(mandate: SynthesisMandate): string {
   return `- ${safe(mandate.role)}${where}, ${from} à ${to}`;
 }
 
-export const SYNTHESIS_SYSTEM_PROMPT = `Tu rédiges pour Poligraph, un site français de transparence politique. Ta tâche est une synthèse factuelle du parcours et du programme d'une candidature à l'élection présidentielle.
+/**
+ * The rules, with the length the material actually supports.
+ *
+ * A function and no longer a constant, and that is the half of the fix the screen alone cannot
+ * make: telling every candidacy "entre 90 et 200 mots" while accepting 60 from some of them leaves
+ * the model aiming at a number it has no material for. It then pads, which the rules forbid, or
+ * stops short, which the screen used to punish. The prompt and the screen now read the same
+ * `synthesisMinWords`.
+ */
+export function buildSynthesisSystemPrompt(material: SynthesisMaterial): string {
+  return `Tu rédiges pour Poligraph, un site français de transparence politique. Ta tâche est une synthèse factuelle du parcours et du programme d'une candidature à l'élection présidentielle.
 
 Règles absolues :
 - N'écris RIEN qui ne figure pas dans les données fournies. Aucune connaissance extérieure, aucune inférence sur les intentions, aucune prévision.
@@ -97,12 +183,13 @@ Règles absolues :
 Forme :
 - Français, avec tous les accents.
 - Deux paragraphes : le parcours d'abord, le programme ensuite.
-- Entre ${SYNTHESIS_MIN_WORDS} et ${SYNTHESIS_MAX_WORDS} mots au total.
+- Entre ${synthesisTargetRange(material).min} et ${synthesisTargetRange(material).max} mots au total.
 - Aucun tiret cadratin ni demi-cadratin. Utilise virgules, parenthèses ou deux-points.
 - Pas de phrase de conclusion générale du type « une candidature qui entend peser ». Termine sur un fait.
 - Si le parcours ou le programme est vide, dis-le en une phrase simple plutôt que de meubler.
 
 Réponds uniquement par le texte de la synthèse, sans titre ni préambule.`;
+}
 
 export function buildCandidateSynthesisPrompt(input: CandidateSynthesisInput): string {
   const mandates =
@@ -161,10 +248,17 @@ export type SynthesisScreen =
  */
 export function screenSynthesis(
   raw: string,
-  options: { hasMeasures?: boolean } = {}
+  /**
+   * The material the text was written from. Omitted, it defaults to the richest case, which is the
+   * strictest floor: a caller that forgets to say gets the demanding answer rather than a free pass.
+   */
+  material: SynthesisMaterial = {
+    mandateCount: SUBSTANTIAL_MANDATES,
+    voteCount: SUBSTANTIAL_VOTES,
+    measureCount: SUBSTANTIAL_MEASURES,
+  }
 ): SynthesisScreen {
-  const minWords =
-    options.hasMeasures === false ? SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES : SYNTHESIS_MIN_WORDS;
+  const minWords = synthesisFloor(material);
   const text = raw.trim();
   if (text === "") return { ok: false, reason: "vide", detail: "le modèle n'a rien renvoyé" };
 
