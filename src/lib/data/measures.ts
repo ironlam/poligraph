@@ -272,6 +272,15 @@ export type PublicMeasureStats = {
   themesCoveredCount: number;
   primarySourceMeasureCount: number;
   lastReviewedAt: Date | null;
+  /**
+   * When the OLDEST measure the candidacy currently shows was published. Null when it shows none.
+   *
+   * The one date that answers "did this candidacy have a programme on day X", which is what
+   * `isSynthesisContradictedByMeasures` needs and what `lastReviewedAt` cannot say: a candidacy
+   * documented for months and reviewed again yesterday has the same `lastReviewedAt` as one whose
+   * whole programme landed yesterday.
+   */
+  firstPublishedAt: Date | null;
 };
 
 export async function getPublicMeasureStatsByCandidacy(
@@ -286,7 +295,7 @@ export async function getPublicMeasureStatsByCandidacy(
     ...PUBLIC_MEASURE_WHERE,
   };
 
-  const [byTheme, primarySourceMeasureCount, lastReviewed] = await Promise.all([
+  const [byTheme, primarySourceMeasureCount, lastReviewed, firstPublished] = await Promise.all([
     db.measure.groupBy({ by: ["theme"], where: scope, _count: { _all: true } }),
     db.measure.count({
       where: {
@@ -302,6 +311,14 @@ export async function getPublicMeasureStatsByCandidacy(
       orderBy: { publishedRevision: { reviewedAt: "desc" } },
       select: { publishedRevision: { select: { reviewedAt: true } } },
     }),
+    // Same scope, opposite end. Ordering on the revision's `publishedAt` and not on the measure's
+    // `createdAt`: a measure can be extracted in March and published in August, and the question
+    // this answers is when the fiche started SHOWING something, not when we started working on it.
+    db.measure.findFirst({
+      where: scope,
+      orderBy: { publishedRevision: { publishedAt: "asc" } },
+      select: { publishedRevision: { select: { publishedAt: true } } },
+    }),
   ]);
 
   return {
@@ -309,6 +326,7 @@ export async function getPublicMeasureStatsByCandidacy(
     themesCoveredCount: byTheme.length,
     primarySourceMeasureCount,
     lastReviewedAt: lastReviewed?.publishedRevision?.reviewedAt ?? null,
+    firstPublishedAt: firstPublished?.publishedRevision?.publishedAt ?? null,
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCandidateSynthesisPrompt,
+  isSynthesisContradictedByMeasures,
   screenSynthesis,
   SYNTHESIS_MAX_WORDS,
   SYNTHESIS_MIN_WORDS,
@@ -187,5 +188,61 @@ describe("screenSynthesis", () => {
       // Defaulting to the low floor would silently accept thin texts everywhere.
       expect(screenSynthesis(short)).toMatchObject({ ok: false, reason: "trop_court" });
     });
+  });
+});
+
+describe("isSynthesisContradictedByMeasures", () => {
+  const generatedAt = new Date("2026-08-07T22:08:33.000Z");
+
+  it("drops a synthesis written before the candidacy had any published measure", () => {
+    // The reported bug: the synthesis of Nathalie Arthaud, generated on 7 August with an empty
+    // programme, ended on "aucune mesure n'est publiée dans le cadre de son programme" and stayed
+    // on the fiche after five measures were published on 20 August, directly above them.
+    expect(
+      isSynthesisContradictedByMeasures({
+        generatedAt,
+        firstMeasurePublishedAt: new Date("2026-08-20T21:23:10.000Z"),
+      })
+    ).toBe(true);
+  });
+
+  it("keeps a synthesis whose candidacy was already documented when it was written", () => {
+    // Measures published SINCE are drift, not a contradiction: the text describes a programme that
+    // still exists, it just describes less of it, and the block carries its own date for that.
+    expect(
+      isSynthesisContradictedByMeasures({
+        generatedAt,
+        firstMeasurePublishedAt: new Date("2026-08-07T10:26:46.000Z"),
+      })
+    ).toBe(false);
+  });
+
+  it("keeps a synthesis on a candidacy that still shows no measure", () => {
+    // Here "aucune mesure publiée" is what the page shows. Dropping the text would delete the
+    // accurate half about the person's record.
+    expect(isSynthesisContradictedByMeasures({ generatedAt, firstMeasurePublishedAt: null })).toBe(
+      false
+    );
+  });
+
+  it("drops an undated synthesis as soon as a measure is published", () => {
+    // Nothing dates the claim, so nothing can clear it against the measures below it.
+    expect(
+      isSynthesisContradictedByMeasures({
+        generatedAt: null,
+        firstMeasurePublishedAt: new Date("2026-08-20T21:23:10.000Z"),
+      })
+    ).toBe(true);
+    expect(
+      isSynthesisContradictedByMeasures({ generatedAt: null, firstMeasurePublishedAt: null })
+    ).toBe(false);
+  });
+
+  it("treats a measure published in the same instant as covered by the text", () => {
+    // Equality is not "after": the generation pass reads the measures and then writes its date, so
+    // an identical timestamp means the measure was in the prompt.
+    expect(
+      isSynthesisContradictedByMeasures({ generatedAt, firstMeasurePublishedAt: generatedAt })
+    ).toBe(false);
   });
 });

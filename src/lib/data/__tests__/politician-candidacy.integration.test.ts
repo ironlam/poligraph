@@ -91,6 +91,64 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
       sourceUrl: "https://example.org/partyonly",
       sourceLabel: "Déclaration",
     });
+    await seed("stale", {
+      status: "DECLARE",
+      sourceUrl: "https://example.org/stale",
+      sourceLabel: "Déclaration",
+    });
+    await seed("fresh", {
+      status: "DECLARE",
+      sourceUrl: "https://example.org/fresh",
+      sourceLabel: "Déclaration",
+    });
+
+    // Two candidacies with the same programme, published at the same instant, whose syntheses were
+    // written on either side of that instant. Everything else is equal, so the only thing the two
+    // assertions below can be reading is the staleness rule.
+    const { createMeasure, reviewMeasureRevision, publishMeasureRevision } =
+      await import("@/lib/measures/transitions");
+    async function publishMeasureFor(name: string, synthesisGeneratedAt: Date) {
+      await db.candidacyPresidential.create({
+        data: {
+          candidacyId: ids[`${name}Candidacy`]!,
+          publicationStatus: "PUBLISHED",
+          synthesis: "Aucune mesure n'est publiée dans le cadre de son programme.",
+          synthesisGeneratedAt,
+        },
+      });
+      const { measureId, revisionId } = await createMeasure({
+        politicianId: ids[name]!,
+        electionId: election.id,
+        candidacyId: ids[`${name}Candidacy`]!,
+        programEditionId: null,
+        attribution: "PERSONAL",
+        theme: "SANTE",
+        precedingMeasureId: null,
+        revision: {
+          text: `Mesure de test ${name}`,
+          precision: null,
+          validFrom: new Date("2026-01-01T00:00:00.000Z"),
+          extractionMethod: "MANUAL",
+          extractionConfidence: null,
+          extractorVersion: null,
+        },
+        sources: [
+          {
+            sourceKind: "PROGRAMME_PARTI",
+            tier: "PRIMARY",
+            url: `https://example.org/${name}-mesure`,
+            page: null,
+            publishedAt: new Date("2026-01-01T00:00:00.000Z"),
+          },
+        ],
+      });
+      await reviewMeasureRevision({ measureId, revisionId, reviewedBy: "test" });
+      await publishMeasureRevision({ measureId, revisionId });
+    }
+    // `publishMeasureRevision` stamps `publishedAt` with the clock, so the two dates straddle it by
+    // a year rather than by milliseconds.
+    await publishMeasureFor("stale", new Date("2020-01-01T00:00:00.000Z"));
+    await publishMeasureFor("fresh", new Date("2099-01-01T00:00:00.000Z"));
 
     const party = await db.party.create({
       data: {
@@ -129,6 +187,7 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
   });
 
   afterAll(async () => {
+    await db.measure.deleteMany({ where: { electionId } });
     await db.candidacy.deleteMany({ where: { electionId } });
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { id: electionId } });
@@ -165,6 +224,23 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
     const found = await loadPoliticianPresidentialCandidacy(ids.declared!);
     expect(found?.publishedMeasureCount).toBe(0);
     expect(found?.primarySourceMeasureCount).toBe(0);
+  });
+
+  // Le bug signalé sur la fiche de Nathalie Arthaud : la synthèse, écrite le 7 août sur une
+  // candidature encore vide, se terminait sur « aucune mesure n'est publiée dans le cadre de son
+  // programme » et restait affichée au-dessus des cinq mesures publiées le 20.
+  it("retire une synthèse écrite avant la première mesure publiée", async () => {
+    const found = await loadPoliticianPresidentialCandidacy(ids.stale!);
+    expect(found?.publishedMeasureCount).toBe(1);
+    expect(found?.synthesis).toBeNull();
+    expect(found?.synthesisGeneratedAt).toBeNull();
+  });
+
+  it("garde une synthèse écrite après la première mesure publiée", async () => {
+    const found = await loadPoliticianPresidentialCandidacy(ids.fresh!);
+    expect(found?.publishedMeasureCount).toBe(1);
+    expect(found?.synthesis).not.toBeNull();
+    expect(found?.synthesisGeneratedAt).not.toBeNull();
   });
 
   it("n'attribue pas à la personne une édition appartenant seulement à son parti", async () => {

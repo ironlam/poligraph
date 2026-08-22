@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidate-synthesis";
 import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
@@ -43,7 +44,11 @@ export type PoliticianCandidacy = {
   programmeIdentified: boolean;
   declaredAt: Date | null;
   withdrewAt: Date | null;
-  /** Generated summary of this candidacy, null until a generation pass has produced one. */
+  /**
+   * Generated summary of this candidacy, null until a generation pass has produced one — and null
+   * again once the measures published since have contradicted it. See
+   * `isSynthesisContradictedByMeasures`: the fiche shows no summary rather than a stale one.
+   */
   synthesis: string | null;
   synthesisGeneratedAt: Date | null;
   publishedMeasureCount: number;
@@ -115,6 +120,13 @@ export async function loadPoliticianPresidentialCandidacy(
     }),
   ]);
 
+  // Dropped together. The block's own caption dates the text ("Texte généré ... le 7 août"), so a
+  // date left behind without the text it dates has nothing to describe.
+  const synthesisContradicted = isSynthesisContradictedByMeasures({
+    generatedAt: row.presidentialData?.synthesisGeneratedAt ?? null,
+    firstMeasurePublishedAt: stats.firstPublishedAt,
+  });
+
   return {
     candidacyId: row.id,
     electionSlug: row.election.slug,
@@ -129,8 +141,10 @@ export async function loadPoliticianPresidentialCandidacy(
     programmeIdentified: programme !== null,
     declaredAt: row.presidentialData?.declaredAt ?? null,
     withdrewAt: row.presidentialData?.withdrewAt ?? null,
-    synthesis: row.presidentialData?.synthesis ?? null,
-    synthesisGeneratedAt: row.presidentialData?.synthesisGeneratedAt ?? null,
+    synthesis: synthesisContradicted ? null : (row.presidentialData?.synthesis ?? null),
+    synthesisGeneratedAt: synthesisContradicted
+      ? null
+      : (row.presidentialData?.synthesisGeneratedAt ?? null),
     publishedMeasureCount: stats.measureCount,
     themesCoveredCount: stats.themesCoveredCount,
     primarySourceMeasureCount: stats.primarySourceMeasureCount,

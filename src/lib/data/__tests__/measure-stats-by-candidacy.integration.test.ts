@@ -167,11 +167,26 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     expect(stats.lastReviewedAt).toBeInstanceOf(Date);
   });
 
+  // Sert à dater le programme lui-même, pas la dernière retouche : c'est ce qui permet de savoir
+  // si une synthèse écrite tel jour l'a été sur une candidature encore vide.
+  it("rend la date de publication de la plus ancienne mesure visible", async () => {
+    const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
+    expect(stats.firstPublishedAt).toBeInstanceOf(Date);
+
+    const publications = await db.measureRevision.findMany({
+      where: { publishedOf: { candidacyId: publishedCandidacyId } },
+      select: { publishedAt: true },
+    });
+    const earliest = Math.min(...publications.map((r) => r.publishedAt!.getTime()));
+    expect(stats.firstPublishedAt!.getTime()).toBe(earliest);
+  });
+
   it("ne compte rien pour une candidature à extension DRAFT", async () => {
     const stats = await getPublicMeasureStatsByCandidacy(draftExtensionCandidacyId);
     expect(stats.measureCount).toBe(0);
     expect(stats.primarySourceMeasureCount).toBe(0);
     expect(stats.lastReviewedAt).toBeNull();
+    expect(stats.firstPublishedAt).toBeNull();
   });
 
   it("ignore une source primaire portée par un brouillon non publié", async () => {

@@ -210,3 +210,44 @@ export function screenSynthesis(
 
   return { ok: true, text };
 }
+
+/**
+ * Whether a stored synthesis has been contradicted by the measures published since.
+ *
+ * The synthesis is a snapshot: it is written from the measures the candidacy held on the day it
+ * was generated, and nothing rewrites it when new ones are published. Most of that drift is
+ * harmless — a text written from thirty measures and read beside forty is incomplete, not false,
+ * and the block already dates itself so the reader can see how old it is.
+ *
+ * ONE case is not drift, it is an error: a synthesis written when the candidacy had NO published
+ * measure. The system prompt tells the model to state an empty programme in one sentence rather
+ * than pad, so those texts end on "aucune mesure n'est publiée dans le cadre de son programme" —
+ * and the fiche went on printing that sentence directly above the five measures it had published
+ * a fortnight later (observed on `nathalie-arthaud`, and on six other candidacies the same day).
+ *
+ * That state is detectable without storing anything extra, and exactly: if the EARLIEST currently
+ * public measure of the candidacy was published after the synthesis was generated, then the
+ * candidacy had none at all when the prompt was built, so its programme paragraph was written
+ * about an empty programme. Checked against production, the predicate agreed with the seventeen
+ * stored texts row for row — every one it flags claims an empty programme, and every one it keeps
+ * describes measures.
+ *
+ * A contradicted synthesis is not repaired here and not shown with a caveat: it is dropped, and
+ * the fiche renders without the block until a regeneration pass replaces it
+ * (`scripts/generate-candidate-syntheses.ts`). Hedged wording around a false sentence still
+ * publishes the false sentence.
+ */
+export function isSynthesisContradictedByMeasures(params: {
+  generatedAt: Date | null;
+  /** Publication date of the oldest measure the candidacy currently shows. Null when it shows none. */
+  firstMeasurePublishedAt: Date | null;
+}): boolean {
+  // No measure on the fiche: an empty programme paragraph is what the page shows, so nothing
+  // contradicts it.
+  if (params.firstMeasurePublishedAt === null) return false;
+  // A text we cannot date cannot be cleared. Every synthesis is written with its date by the
+  // generation script, so a null here means a hand write or a partial one, and the measures below
+  // are the surer thing.
+  if (params.generatedAt === null) return true;
+  return params.firstMeasurePublishedAt > params.generatedAt;
+}
