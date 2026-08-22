@@ -6,8 +6,13 @@ import { useRouter } from "next/navigation";
 import type { CandidacyStatus, PublicationStatus } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
 import { PUBLICATION_STATUS_LABELS, PUBLICATION_STATUS_STYLES } from "@/config/labels";
+import { formatDate } from "@/lib/utils";
 import type { CandidacyMeasureReadiness } from "@/lib/data/measures";
-import { setCandidacyPublicationAction, setProgramEditionPublicationAction } from "./actions";
+import {
+  regenerateCandidateSynthesisAction,
+  setCandidacyPublicationAction,
+  setProgramEditionPublicationAction,
+} from "./actions";
 
 const STATUS_LABELS: Record<string, string> = {
   DECLARE: "Déclaré",
@@ -21,6 +26,25 @@ export type ProgramEditionView = {
   label: string;
   version: number;
   publicationStatus: PublicationStatus;
+};
+
+/**
+ * What the fiche does with the stored synthesis, decided server-side by the same predicate the
+ * public read applies. Three states and not a date, because a date is not readable as a verdict:
+ * "7 août" tells a moderator nothing until they also know when the measures were published.
+ */
+export type SynthesisState = "MISSING" | "CONTRADICTED" | "CURRENT";
+
+const SYNTHESIS_LABELS: Record<SynthesisState, string> = {
+  MISSING: "Absente",
+  CONTRADICTED: "Démentie",
+  CURRENT: "À jour",
+};
+
+const SYNTHESIS_STYLES: Record<SynthesisState, string> = {
+  MISSING: "",
+  CONTRADICTED: "border-amber-400 text-amber-900 dark:border-amber-600 dark:text-amber-100",
+  CURRENT: "border-emerald-400 text-emerald-900 dark:border-emerald-600 dark:text-emerald-100",
 };
 
 export type CandidateRowView = {
@@ -37,6 +61,8 @@ export type CandidateRowView = {
   slogan: string | null;
   rank: number | null;
   readiness: CandidacyMeasureReadiness;
+  synthesisState: SynthesisState;
+  synthesisGeneratedAt: Date | null;
   editions: ProgramEditionView[];
 };
 
@@ -53,6 +79,7 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
 
   const held = rows.filter(isHoldingBackMeasures);
   const heldMeasureCount = held.reduce((total, row) => total + row.readiness.measureCount, 0);
+  const contradicted = rows.filter((row) => row.synthesisState === "CONTRADICTED");
 
   async function patchPresidential(id: string, body: Record<string, unknown>) {
     setBusy(id);
@@ -105,6 +132,27 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
         </div>
       )}
 
+      {/* The state the fiche is actually in, which nothing on this screen used to say. A moderator
+          publishing measures has no reason to suspect that a text generated weeks earlier now
+          denies them, and the public page shows no summary at all until it is regenerated. */}
+      {contradicted.length > 0 && (
+        <div
+          role="status"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
+        >
+          <p className="font-semibold">
+            {contradicted.length === 1
+              ? "1 synthèse démentie par les mesures publiées depuis"
+              : `${contradicted.length} synthèses démenties par les mesures publiées depuis`}
+          </p>
+          <p className="mt-1">
+            Écrites quand la candidature n&apos;avait aucune mesure, elles affirment un programme
+            vide. La fiche publique n&apos;affiche donc aucun résumé tant qu&apos;elles ne sont pas
+            régénérées : {contradicted.map((row) => row.candidateName).join(", ")}.
+          </p>
+        </div>
+      )}
+
       {error && (
         <p
           role="alert"
@@ -125,12 +173,14 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
               <th className="text-left px-3 py-2">Mesures prêtes</th>
               <th className="text-left px-3 py-2">Fiche publique</th>
               <th className="text-left px-3 py-2">Programme</th>
+              <th className="text-left px-3 py-2">Synthèse</th>
               <th className="text-left px-3 py-2">Slogan</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const publicationKey = `publication:${row.candidacyId}`;
+              const synthesisKey = `synthese:${row.candidacyId}`;
               const published = row.publicationStatus === "PUBLISHED";
               const locked = busy !== null || pending;
               return (
@@ -273,6 +323,38 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                       </ul>
                     )}
                   </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Badge variant="outline" className={SYNTHESIS_STYLES[row.synthesisState]}>
+                        {SYNTHESIS_LABELS[row.synthesisState]}
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          runAction(synthesisKey, () =>
+                            regenerateCandidateSynthesisAction({ candidacyId: row.candidacyId })
+                          )
+                        }
+                        disabled={locked || row.status !== "DECLARE" || !row.presidentialId}
+                        title={
+                          row.status !== "DECLARE"
+                            ? "Seule une candidature déclarée porte une synthèse"
+                            : !row.presidentialId
+                              ? "Publier la fiche crée les métadonnées où la synthèse est écrite"
+                              : undefined
+                        }
+                        aria-label={`Régénérer la synthèse de ${row.candidateName}`}
+                        className="inline-flex min-h-11 items-center justify-center rounded border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50 md:min-h-[36px]"
+                      >
+                        {busy === synthesisKey ? "Génération..." : "Régénérer"}
+                      </button>
+                      {row.synthesisGeneratedAt !== null && (
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(row.synthesisGeneratedAt)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 max-w-md">
                     <input
                       type="text"
@@ -295,7 +377,7 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
                   Aucune candidature enregistrée.
                 </td>
               </tr>

@@ -201,11 +201,14 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
   it("compte pour l'admin les mesures qu'une extension DRAFT retient", async () => {
     const readiness = await getMeasureReadinessByCandidacies([draftExtensionCandidacyId]);
 
-    expect(readiness.get(draftExtensionCandidacyId)).toEqual({
+    expect(readiness.get(draftExtensionCandidacyId)).toMatchObject({
       measureCount: 1,
       themesCoveredCount: 1,
       primarySourceMeasureCount: 1,
     });
+    // Datée alors même que la lecture publique compte zéro : c'est ce qui permet à l'écran d'admin
+    // de dire si la synthèse survivra à la publication de l'extension.
+    expect(readiness.get(draftExtensionCandidacyId)?.firstPublishedAt).toBeInstanceOf(Date);
   });
 
   it("agrège plusieurs candidatures en une lecture", async () => {
@@ -215,13 +218,13 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
       secondarySourceCandidacyId,
     ]);
 
-    expect(readiness.get(publishedCandidacyId)).toEqual({
+    expect(readiness.get(publishedCandidacyId)).toMatchObject({
       measureCount: 2,
       themesCoveredCount: 2,
       primarySourceMeasureCount: 1,
     });
     // Même piège de révision que la lecture publique : la source primaire du brouillon ne compte pas.
-    expect(readiness.get(secondarySourceCandidacyId)).toEqual({
+    expect(readiness.get(secondarySourceCandidacyId)).toMatchObject({
       measureCount: 1,
       themesCoveredCount: 1,
       primarySourceMeasureCount: 0,

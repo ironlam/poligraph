@@ -352,12 +352,24 @@ export type CandidacyMeasureReadiness = {
   measureCount: number;
   themesCoveredCount: number;
   primarySourceMeasureCount: number;
+  /**
+   * When the OLDEST of those measures was published. Null when there are none.
+   *
+   * The admin counterpart of `PublicMeasureStats.firstPublishedAt`, and it answers the same
+   * question `isSynthesisContradictedByMeasures` asks: would the fiche still display the stored
+   * synthesis. Read WITHOUT the candidacy gate like the rest of this shape, which is the useful
+   * reading for the screen it feeds: a moderator about to publish an extension needs to know
+   * whether the synthesis will survive that publication, and gating the date on the extension
+   * would answer "no measure, so nothing contradicts it" right up until the moment it does.
+   */
+  firstPublishedAt: Date | null;
 };
 
 export const EMPTY_MEASURE_READINESS: CandidacyMeasureReadiness = {
   measureCount: 0,
   themesCoveredCount: 0,
   primarySourceMeasureCount: 0,
+  firstPublishedAt: null,
 };
 
 /**
@@ -389,7 +401,7 @@ export async function getMeasureReadinessByCandidacies(
     ...PUBLIC_MEASURE_WHERE,
   };
 
-  const [byTheme, byPrimarySource] = await Promise.all([
+  const [byTheme, byPrimarySource, publications] = await Promise.all([
     db.measure.groupBy({ by: ["candidacyId", "theme"], where: scope, _count: { _all: true } }),
     db.measure.groupBy({
       by: ["candidacyId"],
@@ -401,6 +413,13 @@ export async function getMeasureReadinessByCandidacies(
         },
       },
       _count: { _all: true },
+    }),
+    // Rows rather than an aggregate: the date lives on the published REVISION, and Prisma's
+    // `groupBy` aggregates columns of the model it groups, not of a relation. Two scalars per
+    // measure, for a field that holds a few hundred, on an admin screen.
+    db.measure.findMany({
+      where: scope,
+      select: { candidacyId: true, publishedRevision: { select: { publishedAt: true } } },
     }),
   ]);
 
@@ -415,6 +434,15 @@ export async function getMeasureReadinessByCandidacies(
     if (row.candidacyId === null) continue;
     const current = readiness.get(row.candidacyId) ?? { ...EMPTY_MEASURE_READINESS };
     current.primarySourceMeasureCount = row._count._all;
+    readiness.set(row.candidacyId, current);
+  }
+  for (const row of publications) {
+    const publishedAt = row.publishedRevision?.publishedAt;
+    if (row.candidacyId === null || !publishedAt) continue;
+    const current = readiness.get(row.candidacyId) ?? { ...EMPTY_MEASURE_READINESS };
+    if (current.firstPublishedAt === null || publishedAt < current.firstPublishedAt) {
+      current.firstPublishedAt = publishedAt;
+    }
     readiness.set(row.candidacyId, current);
   }
 

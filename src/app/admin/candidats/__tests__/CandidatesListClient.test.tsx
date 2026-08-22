@@ -11,11 +11,15 @@ const setCandidacyPublicationMock = vi.fn<(input: unknown) => Promise<ActionResu
 const setProgramEditionPublicationMock = vi.fn<(input: unknown) => Promise<ActionResult>>(
   async () => ({ ok: true })
 );
+const regenerateCandidateSynthesisMock = vi.fn<(input: unknown) => Promise<ActionResult>>(
+  async () => ({ ok: true })
+);
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../actions", () => ({
   setCandidacyPublicationAction: (input: unknown) => setCandidacyPublicationMock(input),
   setProgramEditionPublicationAction: (input: unknown) => setProgramEditionPublicationMock(input),
+  regenerateCandidateSynthesisAction: (input: unknown) => regenerateCandidateSynthesisMock(input),
 }));
 
 function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
@@ -30,7 +34,14 @@ function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
     publicationStatus: "DRAFT",
     slogan: null,
     rank: null,
-    readiness: { measureCount: 26, themesCoveredCount: 11, primarySourceMeasureCount: 26 },
+    readiness: {
+      measureCount: 26,
+      themesCoveredCount: 11,
+      primarySourceMeasureCount: 26,
+      firstPublishedAt: new Date("2026-08-01T00:00:00.000Z"),
+    },
+    synthesisState: "CURRENT",
+    synthesisGeneratedAt: new Date("2026-08-07T00:00:00.000Z"),
     editions: [
       { id: "ed-1", label: "Premiers engagements", version: 1, publicationStatus: "DRAFT" },
     ],
@@ -118,7 +129,14 @@ describe("CandidatesListClient", () => {
           row({
             presidentialId: null,
             publicationStatus: null,
-            readiness: { measureCount: 0, themesCoveredCount: 0, primarySourceMeasureCount: 0 },
+            readiness: {
+              measureCount: 0,
+              themesCoveredCount: 0,
+              primarySourceMeasureCount: 0,
+              firstPublishedAt: null,
+            },
+            synthesisState: "MISSING",
+            synthesisGeneratedAt: null,
             editions: [],
           }),
         ]}
@@ -128,5 +146,60 @@ describe("CandidatesListClient", () => {
     expect(screen.getByText("Aucune")).toBeInTheDocument();
     expect(screen.getByText("Métadonnées absentes")).toBeInTheDocument();
     expect(screen.getByText("Aucune édition")).toBeInTheDocument();
+    expect(screen.getByText("Absente")).toBeInTheDocument();
+  });
+
+  it("régénère la synthèse d'une candidature depuis la liste", async () => {
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
+    );
+
+    expect(regenerateCandidateSynthesisMock).toHaveBeenCalledWith({ candidacyId: "cand-1" });
+  });
+
+  // Le bug d'origine : la synthèse d'Arthaud, écrite sur une candidature vide, niait les cinq
+  // mesures publiées deux semaines plus tard. Rien sur cet écran ne le disait.
+  it("nomme les candidatures dont la synthèse est démentie", () => {
+    render(
+      <CandidatesListClient
+        rows={[row({ publicationStatus: "PUBLISHED", synthesisState: "CONTRADICTED" })]}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "1 synthèse démentie par les mesures publiées depuis"
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Alix Démonstration");
+    expect(screen.getByText("Démentie")).toBeInTheDocument();
+  });
+
+  it("refuse la régénération sur une candidature qui n'est pas déclarée", () => {
+    // La règle du service : une candidature pressentie n'a demandé à personne de lire un résumé de
+    // son programme. Le bouton la porte aussi, plutôt que de laisser l'action répondre par un refus.
+    render(<CandidatesListClient rows={[row({ status: "PRESSENTI" })]} />);
+
+    expect(
+      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
+    ).toBeDisabled();
+  });
+
+  it("affiche l'échec d'une régénération au lieu de le taire", async () => {
+    regenerateCandidateSynthesisMock.mockResolvedValueOnce({
+      ok: false,
+      message: "Texte refusé par le contrôle : tiret_long.",
+    });
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Texte refusé par le contrôle : tiret_long."
+    );
   });
 });

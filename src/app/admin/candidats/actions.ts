@@ -7,6 +7,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { invalidateEntity } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
+import { generateCandidateSynthesis } from "@/services/candidate-synthesis";
 
 /**
  * The publication switches of a presidential candidacy.
@@ -34,6 +35,8 @@ const candidacyPublicationSchema = z
 const programEditionPublicationSchema = z
   .object({ programEditionId: z.string().min(1), status: publicationStatusSchema })
   .strict();
+
+const synthesisSchema = z.object({ candidacyId: z.string().min(1) }).strict();
 
 async function assertAuthenticated(): Promise<void> {
   if (!(await isAuthenticated())) throw new Error("Non autorisé");
@@ -169,6 +172,50 @@ export async function setProgramEditionPublicationAction(input: {
   });
 
   invalidatePresidentialCandidacyTags(edition.electionId);
+  revalidate();
+
+  return { ok: true };
+}
+
+/**
+ * Regenerates the synthesis of one candidacy, inline, on the moderator's click.
+ *
+ * Inline and not queued, following `regenerateScrutinPolicyTitle`: one candidacy is one or two
+ * provider calls, the moderator is watching the row, and a queue would put a job board between them
+ * and a text they want to read now. The batch is the script, which is why there is no "regenerate
+ * all" here — twenty candidacies inline is the request that times out.
+ *
+ * The generation itself, including the rule that only a DECLARED candidacy carries a synthesis,
+ * belongs to `@/services/candidate-synthesis`. This action adds what an admin surface owes: the
+ * session check, the input validation, the cache purge, and a refusal the moderator can read.
+ */
+export async function regenerateCandidateSynthesisAction(input: {
+  candidacyId: string;
+}): Promise<CandidacyActionResult> {
+  await assertAuthenticated();
+
+  const parsed = synthesisSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: "Requête invalide." };
+  }
+  const { candidacyId } = parsed.data;
+
+  const candidacy = await db.candidacy.findUnique({
+    where: { id: candidacyId },
+    select: { electionId: true },
+  });
+  if (!candidacy) {
+    return { ok: false, message: "Candidature introuvable." };
+  }
+
+  const result = await generateCandidateSynthesis(candidacyId, { persist: true });
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+
+  // The fiche reads the synthesis through `getPoliticianPresidentialCandidacy`, which carries this
+  // tag: without the purge the new text waits out the 24h ISR backstop behind the old one.
+  invalidatePresidentialCandidacyTags(candidacy.electionId);
   revalidate();
 
   return { ok: true };

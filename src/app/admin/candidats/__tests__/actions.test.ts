@@ -30,6 +30,11 @@ vi.mock("@/lib/presidentielle/candidacy-cache", () => ({
 }));
 vi.mock("@/lib/db", () => ({ db: dbMock }));
 
+const generateSynthesisMock = vi.fn<(id: string, options: unknown) => Promise<unknown>>();
+vi.mock("@/services/candidate-synthesis", () => ({
+  generateCandidateSynthesis: (id: string, options: unknown) => generateSynthesisMock(id, options),
+}));
+
 const SOURCED_CANDIDACY = {
   id: "cand-1",
   electionId: "elec-1",
@@ -55,6 +60,14 @@ beforeEach(() => {
   });
   dbMock.programEdition.update.mockResolvedValue({ id: "ed-1" });
   dbMock.auditLog.create.mockResolvedValue({ id: "audit-1" });
+  generateSynthesisMock.mockResolvedValue({
+    ok: true,
+    text: "Une synthèse.",
+    provider: "anthropic",
+    measureCount: 5,
+    mandateCount: 0,
+    persisted: true,
+  });
 });
 
 describe("actions de publication des candidatures", () => {
@@ -199,5 +212,68 @@ describe("actions de publication des candidatures", () => {
 
     expect(result).toEqual({ ok: false, message: "Requête invalide." });
     expect(dbMock.programEdition.update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Same doctrine as the two switches above: the action is a network endpoint, so an unauthenticated
+ * call must reach neither the provider nor the database.
+ */
+describe("régénération de la synthèse d'une candidature", () => {
+  it("n'appelle pas le générateur sans session", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    await expect(regenerateCandidateSynthesisAction({ candidacyId: "cand-1" })).rejects.toThrow();
+    expect(generateSynthesisMock).not.toHaveBeenCalled();
+  });
+
+  it("écrit la synthèse et purge le tag des surfaces présidentielles", async () => {
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
+
+    expect(result).toEqual({ ok: true });
+    expect(generateSynthesisMock).toHaveBeenCalledWith("cand-1", { persist: true });
+    // Sans cette purge, la fiche sert l'ancien texte jusqu'au filet ISR de 24 h.
+    expect(invalidateCandidacyTagsMock).toHaveBeenCalledWith("elec-1");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/candidats");
+  });
+
+  it("rend le refus du service au lieu de le traduire en échec générique", async () => {
+    generateSynthesisMock.mockResolvedValue({
+      ok: false,
+      reason: "non_declaree",
+      message: "Seule une candidature déclarée porte une synthèse.",
+    });
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Seule une candidature déclarée porte une synthèse.",
+    });
+    // Rien n'a changé : purger ferait recalculer les surfaces pour rien.
+    expect(invalidateCandidacyTagsMock).not.toHaveBeenCalled();
+  });
+
+  it("refuse une candidature introuvable sans appeler le générateur", async () => {
+    dbMock.candidacy.findUnique.mockResolvedValue(null);
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
+
+    expect(result).toEqual({ ok: false, message: "Candidature introuvable." });
+    expect(generateSynthesisMock).not.toHaveBeenCalled();
+  });
+
+  it("rejette une entrée qui ne porte pas d'identifiant", async () => {
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    const result = await regenerateCandidateSynthesisAction({ candidacyId: "" });
+
+    expect(result).toEqual({ ok: false, message: "Requête invalide." });
+    expect(generateSynthesisMock).not.toHaveBeenCalled();
   });
 });
