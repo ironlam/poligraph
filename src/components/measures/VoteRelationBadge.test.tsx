@@ -48,10 +48,23 @@ describe("VoteRelationBadge", () => {
     expect(abs.queryByText("Contre")).toBeNull();
   });
 
-  it("recherche non effectuée s'affiche comme périmètre non examiné, jamais comme une position", () => {
+  it("recherche non effectuée nomme son sujet et ne rend jamais une position", () => {
     const { container } = render(<VoteRelationBadge relation="SEARCH_NOT_DONE" />);
     expect(container.querySelector("[data-vote-position]")).toBeNull();
-    expect(screen.getByText(/périmètre non examiné/)).toBeInTheDocument();
+    expect(screen.getByText(/Vote au Parlement pas encore recherché/)).toBeInTheDocument();
+  });
+
+  it("distingue en clair la recherche non faite de la recherche sans résultat", () => {
+    // Les deux états ne se distinguaient que par le mot « périmètre », le seul de la paire qu'un
+    // lecteur ne pouvait pas résoudre depuis la page. Chacun dit maintenant de quoi il parle.
+    const pasFaite = render(<VoteRelationBadge relation="SEARCH_NOT_DONE" />);
+    expect(pasFaite.container.textContent).toContain("pas encore recherché");
+    expect(pasFaite.container.textContent).not.toContain("périmètre");
+    pasFaite.unmount();
+
+    const sansResultat = render(<VoteRelationBadge relation="NO_VOTE_IN_SCOPE" />);
+    expect(sansResultat.container.textContent).toContain("recherché, aucun trouvé");
+    expect(sansResultat.container.textContent).not.toContain("périmètre");
   });
 
   it("le détail sourcé est rendu quand il est fourni", () => {

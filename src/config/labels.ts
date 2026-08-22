@@ -671,16 +671,23 @@ export const VOTE_RELATION_POSITION_LABELS: Record<VoteRelation, string | null> 
   SEARCH_NOT_DONE: null,
 };
 
+// Each basis names its own subject, parliamentary votes, and says what we know about them in words a
+// reader meets nowhere else on the page. The previous wording was written from the inside: "périmètre
+// non examiné" and "périmètre examiné sans résultat" name an editorial workflow, not a fact about the
+// measure, and sitting next to a precision pill they read as a second qualification of the sentence
+// rather than as the state of our search for a vote. "Périmètre" also carried the whole distinction
+// between the two while being the one word in the pair a reader cannot resolve from the page.
+// The nine states are unchanged; only what they say is.
 export const VOTE_RELATION_BASIS_LABELS: Record<VoteRelation, string> = {
-  FAVORABLE_SAME_OBJECT: "même objet",
-  DEFAVORABLE_SAME_OBJECT: "même objet",
-  ABSTENTION_SAME_OBJECT: "même objet",
-  ABSENCE_SAME_OBJECT: "même objet",
-  DIFFERENT_POSITIONS: "même objet, plusieurs scrutins",
-  BROADER_TEXT: "texte plus large",
-  NOT_RECHECKED_SINCE_REFORMULATION: "reformulée depuis",
-  NO_VOTE_IN_SCOPE: "périmètre examiné sans résultat",
-  SEARCH_NOT_DONE: "périmètre non examiné",
+  FAVORABLE_SAME_OBJECT: "Vote sur le même objet",
+  DEFAVORABLE_SAME_OBJECT: "Vote sur le même objet",
+  ABSTENTION_SAME_OBJECT: "Vote sur le même objet",
+  ABSENCE_SAME_OBJECT: "Vote sur le même objet",
+  DIFFERENT_POSITIONS: "Plusieurs votes sur le même objet",
+  BROADER_TEXT: "Vote sur un texte plus large",
+  NOT_RECHECKED_SINCE_REFORMULATION: "Mesure reformulée depuis le vote trouvé",
+  NO_VOTE_IN_SCOPE: "Vote au Parlement recherché, aucun trouvé",
+  SEARCH_NOT_DONE: "Vote au Parlement pas encore recherché",
 };
 
 // Solid pill, white text. Hex values are the AA-verified variants of spec §9.2 (ratios >= 4,5:1 on white

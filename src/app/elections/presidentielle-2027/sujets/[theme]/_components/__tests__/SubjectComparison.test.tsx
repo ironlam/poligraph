@@ -210,7 +210,7 @@ describe("SubjectComparison", () => {
     // La fixture n'a pas de slug de politicien, donc le nom est un texte et non un lien.
     const ligne = screen.getAllByText("Alix")[0]!.closest("tr");
     expect(
-      within(ligne as HTMLElement).getByText(/périmètre examiné sans résultat/)
+      within(ligne as HTMLElement).getByText(/Vote au Parlement recherché, aucun trouvé/)
     ).toBeInTheDocument();
   });
 
@@ -343,8 +343,34 @@ describe("SubjectComparison", () => {
     }
     // La quatrième est repliée : présente dans le DOM (le `<details>` reste indexable et
     // opérable au clavier), annoncée pour ce qu'elle est.
-    expect(screen.getAllByText("+ 1 autre mesure sur ce sujet")).toHaveLength(2);
+    expect(screen.getAllByText("Lire la dernière mesure sur ce sujet")).toHaveLength(2);
     expect(screen.getAllByText(/Mesure 4\./)).toHaveLength(2);
+  });
+
+  it("rend les mesures repliées comme les autres, sans bloc indenté qui casse la lecture", () => {
+    // Régression : les mesures dépliées vivaient dans un `border-l-2 pl-3`, une citation dans la
+    // citation. Ouvrir le repli coupait la lecture d'une candidature en deux blocs de mise en forme
+    // différente, alors que la coupure entre les deux n'est qu'une limite d'affichage.
+    const cinq = [1, 2, 3, 4, 5].map((n) =>
+      subjectMeasure(measure({ id: `m-${n}`, text: `Mesure ${n}.` }), "SEARCH_NOT_DONE")
+    );
+    const { container } = render(
+      <SubjectComparison data={data({ candidates: [entry("Alix", cinq)] })} />
+    );
+
+    // Le repli des mesures, pas celui de la barre latérale des sujets.
+    const details = [...container.querySelectorAll("details")].filter((d) =>
+      d.textContent?.includes("Replier ces 2 mesures")
+    );
+    expect(details).toHaveLength(2);
+    for (const bloc of details) {
+      expect(bloc.querySelector(".border-l-2")).toBeNull();
+      expect(bloc.querySelector(".pl-3")).toBeNull();
+    }
+    // Et le repli propose les deux sens : sans « Replier », les mesures ouvertes n'ont plus de
+    // chemin de retour visible vers la forme courte.
+    expect(screen.getAllByText("Lire les 2 autres mesures sur ce sujet")).toHaveLength(2);
+    expect(screen.getAllByText("Replier ces 2 mesures")).toHaveLength(2);
   });
 
   it("ne replie rien quand la candidature porte trois mesures ou moins", () => {
@@ -353,8 +379,9 @@ describe("SubjectComparison", () => {
     );
     render(<SubjectComparison data={data({ candidates: [entry("Alix", trois)] })} />);
 
-    expect(screen.queryByText(/autre mesure sur ce sujet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lire la dernière mesure sur ce sujet/)).not.toBeInTheDocument();
     expect(screen.queryByText(/autres mesures sur ce sujet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Replier/)).not.toBeInTheDocument();
   });
 
   it("qualifie chaque mesure citée, jamais la première pour toutes", () => {
@@ -390,8 +417,8 @@ describe("SubjectComparison", () => {
     // Et deux états de vote différents sur la même ligne. Portée sur la ligne du tableau : le
     // paragraphe de méthode cite les mêmes libellés en bas de page.
     const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
-    expect(within(ligne).getAllByText(/périmètre non examiné/)).toHaveLength(1);
-    expect(within(ligne).getAllByText(/périmètre examiné sans résultat/)).toHaveLength(1);
+    expect(within(ligne).getAllByText(/Vote au Parlement pas encore recherché/)).toHaveLength(1);
+    expect(within(ligne).getAllByText(/Vote au Parlement recherché, aucun trouvé/)).toHaveLength(1);
   });
 
   it("porte le code couleur de chaque candidature, dans le tableau comme sur les cartes", () => {

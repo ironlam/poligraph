@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import {
   CHAMBER_SHORT_LABELS,
@@ -148,6 +149,16 @@ const QUOTED_MEASURE_LIMIT = 3;
  *
  * `<details>` rather than a state hook: the page is a server component, and the browser's own
  * disclosure is keyboard-operable and announced correctly without a line of JavaScript.
+ *
+ * The folded measures are rendered exactly like the quoted ones, in the same divided column. They
+ * used to sit in an indented block with its own left rule, which read as a quotation inside the
+ * quotation: opening the disclosure broke the reading of one candidacy in two, the first three
+ * measures at one indent and the rest at another, when the two groups are the same kind of thing
+ * and the split between them is an arbitrary display limit. One hairline between every measure,
+ * folded or not, and the disclosure becomes one more row of that column instead of a seam.
+ *
+ * The summary states both directions, because a control that keeps saying "voir les 2 autres" once
+ * they are already on screen leaves the reader with no visible way back to the short form.
  */
 function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: ThemeCategory }) {
   if (entry.measures.length === 0) {
@@ -157,18 +168,35 @@ function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: T
   const folded = entry.measures.slice(QUOTED_MEASURE_LIMIT);
 
   return (
-    <div className="space-y-3">
+    <div className="divide-y divide-border/70">
       {quoted.map((measure) => (
-        <QuotedMeasure key={measure.measure.id} entry={measure} />
+        <div key={measure.measure.id} className="py-3 first:pt-0 last:pb-0">
+          <QuotedMeasure entry={measure} />
+        </div>
       ))}
       {folded.length > 0 && (
         <details className="group">
-          <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid">
-            + {folded.length} {folded.length === 1 ? "autre mesure" : "autres mesures"} sur ce sujet
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+            />
+            <span className="group-open:hidden">
+              {folded.length === 1
+                ? "Lire la dernière mesure sur ce sujet"
+                : `Lire les ${folded.length} autres mesures sur ce sujet`}
+            </span>
+            <span className="hidden group-open:inline">
+              {folded.length === 1
+                ? "Replier cette mesure"
+                : `Replier ces ${folded.length} mesures`}
+            </span>
           </summary>
-          <div className="mt-2 space-y-3 border-l-2 border-border pl-3">
+          <div className="divide-y divide-border/70">
             {folded.map((other) => (
-              <QuotedMeasure key={other.measure.id} entry={other} />
+              <div key={other.measure.id} className="py-3 last:pb-0">
+                <QuotedMeasure entry={other} />
+              </div>
             ))}
           </div>
         </details>
@@ -460,9 +488,10 @@ function MethodCard() {
           string that exists nowhere: a reader would have looked for a wording they never meet. */}
       <p className="max-w-3xl text-sm text-muted-foreground">
         En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote. La
-        mention portée sous chaque mesure dit donc surtout où nous en sommes&nbsp;: «&nbsp;périmètre
-        non examiné&nbsp;» tant que nous n&apos;avons pas cherché de scrutin proche,
-        «&nbsp;périmètre examiné sans résultat&nbsp;» quand nous avons cherché sans rien trouver.
+        mention portée sous chaque mesure dit donc surtout où en est notre recherche de scrutin
+        proche&nbsp;: «&nbsp;vote au Parlement pas encore recherché&nbsp;» tant que nous ne
+        l&apos;avons pas faite, «&nbsp;vote au Parlement recherché, aucun trouvé&nbsp;» quand nous
+        avons cherché sans rien trouver, suivi du périmètre couvert et de la date de vérification.
         Une position ne s&apos;affiche que pour une candidature qui siégeait au moment où un texte
         proche a été soumis.
       </p>
