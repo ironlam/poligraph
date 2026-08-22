@@ -16,10 +16,15 @@
  * - `text` is the proposition as the booklet states it, condensed into one self-contained
  *   sentence. Nothing is added, and the figures the booklet gives are kept verbatim.
  * - `page` is the page of the booklet the sentence was read on, so a reviewer can check it.
- * - `sourceUrl` is the theme page of the programme, which is the public location the booklet is
- *   distributed from and the URL the existing Lisnard measures already carry. The booklets
- *   themselves have no stable public URL that could be verified, so none is invented here: the
- *   seed script refuses to write until each URL below answers 200.
+ * - `sourceUrl` is the public page the booklet is distributed from, and only a URL already known
+ *   to resolve. `/notre-programme/sante/` is the one the existing santé measures already carry;
+ *   the agriculture booklet gets `/notre-programme/` because the theme slugs of that site are not
+ *   uniform (`/notre-programme/generer-un-renouveau-civique/` is one of them), so
+ *   `/notre-programme/agriculture/` would be a guess, and a source that 404s is worse than a
+ *   broader one that resolves. The booklets themselves have no stable public URL that could be
+ *   verified, so none is invented: which booklet a measure comes from is carried by the label of
+ *   its `ProgramEdition`, and the page by `MeasureSource.page`. The seed script refuses to write
+ *   until each URL below answers 200.
  */
 
 import type {
@@ -488,10 +493,12 @@ export const LISNARD_CARNETS_SEED: ProgramSeed = {
     },
     {
       label: "Carnet Agriculture de Nouvelle Énergie, version relevée le 21 août 2026",
-      documentUrl: "https://www.unenouvelleenergie.fr/notre-programme/agriculture/",
+      // The index of the programme, not a `/notre-programme/agriculture/` guessed from the theme
+      // name: see the note on `sourceUrl` at the top of this file.
+      documentUrl: "https://www.unenouvelleenergie.fr/notre-programme/",
       publishedAt: COLLECTED_AT,
       sourceKind: "PROPOSITIONS_CANDIDAT",
-      sourceUrl: "https://www.unenouvelleenergie.fr/notre-programme/agriculture/",
+      sourceUrl: "https://www.unenouvelleenergie.fr/notre-programme/",
       measures: AGRICULTURE_MEASURES,
     },
   ],
