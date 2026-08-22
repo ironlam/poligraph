@@ -1,13 +1,28 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCandidateSynthesisPrompt,
+  buildSynthesisSystemPrompt,
   isSynthesisContradictedByMeasures,
   screenSynthesis,
+  synthesisFloor,
+  synthesisMaterial,
+  synthesisTargetRange,
   SYNTHESIS_MAX_WORDS,
-  SYNTHESIS_MIN_WORDS,
-  SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES,
   type CandidateSynthesisInput,
+  type SynthesisMaterial,
 } from "../candidate-synthesis";
+
+/**
+ * The four shapes of material, named after the production candidacies they are drawn from. The
+ * comparison that matters is between them, not against a hard-coded number.
+ */
+const FULL: SynthesisMaterial = { mandateCount: 10, voteCount: 1767, measureCount: 16 };
+/** Nathalie Arthaud : no mandate, no recorded vote, five measures. */
+const MEASURES_ONLY: SynthesisMaterial = { mandateCount: 0, voteCount: 0, measureCount: 5 };
+/** Karim Bouamrane : one mandate, nothing else. */
+const THIN_CAREER: SynthesisMaterial = { mandateCount: 1, voteCount: 0, measureCount: 0 };
+const BARE: SynthesisMaterial = { mandateCount: 0, voteCount: 0, measureCount: 0 };
+const FULL_FLOOR = synthesisFloor(FULL);
 
 const BASE: CandidateSynthesisInput = {
   candidateName: "Jeanne Martin",
@@ -92,6 +107,60 @@ describe("buildCandidateSynthesisPrompt", () => {
   });
 });
 
+describe("buildSynthesisSystemPrompt", () => {
+  // La seconde moitié du correctif. Le plancher peut suivre la matière ; tant que le modèle lit
+  // « entre 90 et 200 mots » sur une candidature jugée à 60, il meuble ou s'arrête court.
+  it("annonce la longueur que la matière porte, pas une longueur fixe", () => {
+    for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
+      const range = synthesisTargetRange(material);
+      expect(buildSynthesisSystemPrompt(material)).toContain(
+        `Entre ${range.min} et ${range.max} mots`
+      );
+    }
+  });
+
+  it("garde 90 mots pour une candidature entièrement documentée", () => {
+    // Rien ne change pour les candidatures qui passaient déjà : leurs textes font 124 à 169 mots.
+    expect(synthesisTargetRange(FULL).min).toBe(90);
+  });
+
+  it("demande moins à une candidature dont un pan est vide", () => {
+    expect(synthesisTargetRange(MEASURES_ONLY).min).toBeLessThan(synthesisTargetRange(FULL).min);
+    expect(synthesisTargetRange(THIN_CAREER).min).toBeLessThan(synthesisTargetRange(FULL).min);
+    expect(synthesisTargetRange(BARE).min).toBeLessThan(synthesisTargetRange(THIN_CAREER).min);
+  });
+
+  it("compte un millier de votes comme un parcours à décrire, sur trois mandats", () => {
+    // François Ruffin : trois mandats et mille votes, un dossier à décrire quoi qu'en dise le
+    // compte de mandats.
+    const ruffin: SynthesisMaterial = { mandateCount: 3, voteCount: 1003, measureCount: 79 };
+    expect(synthesisTargetRange(ruffin).min).toBe(synthesisTargetRange(FULL).min);
+  });
+
+  it("garde les règles absolues quelle que soit la matière", () => {
+    const prompt = buildSynthesisSystemPrompt(BARE);
+    expect(prompt).toContain("Ne mentionne AUCUNE affaire judiciaire");
+    expect(prompt).toContain("Aucun tiret cadratin");
+  });
+});
+
+describe("synthesisMaterial", () => {
+  it("reprend les trois comptes du prompt tel qu'il a été construit", () => {
+    expect(synthesisMaterial({ ...BASE, mandates: [], voteCount: 412 })).toEqual({
+      mandateCount: 0,
+      voteCount: 412,
+      measureCount: BASE.measures.length,
+    });
+  });
+
+  it("ne voit aucun parcours sans mandat ni vote", () => {
+    // Un suppléant qui a voté sans jamais figurer dans Mandate a bien un premier paragraphe ; sans
+    // ni l'un ni l'autre, il n'y en a pas.
+    const bare = synthesisMaterial({ ...BASE, mandates: [], voteCount: 0 });
+    expect(synthesisFloor(bare)).toBe(synthesisFloor({ ...BARE, measureCount: bare.measureCount }));
+  });
+});
+
 describe("screenSynthesis", () => {
   const good = `${words(120)}`;
 
@@ -134,7 +203,7 @@ describe("screenSynthesis", () => {
   });
 
   it("rejects a text below the floor", () => {
-    expect(screenSynthesis(words(SYNTHESIS_MIN_WORDS - 1))).toMatchObject({
+    expect(screenSynthesis(words(FULL_FLOOR - 1))).toMatchObject({
       ok: false,
       reason: "trop_court",
     });
@@ -148,45 +217,70 @@ describe("screenSynthesis", () => {
   });
 
   it("accepts exactly at both bounds", () => {
-    expect(screenSynthesis(words(SYNTHESIS_MIN_WORDS)).ok).toBe(true);
+    expect(screenSynthesis(words(FULL_FLOOR)).ok).toBe(true);
     expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS)).ok).toBe(true);
   });
 
-  describe("floor follows the material", () => {
-    // The contradiction this closes: the model is told to state an empty record in one
-    // sentence rather than pad, and a single high floor then rejected it for obeying.
-    // Thirteen of twenty candidacies failed that way on the first full run.
-    const short = words(40);
+  it("names the floor that applied, not a fixed one", () => {
+    const result = screenSynthesis(words(5), MEASURES_ONLY);
+    expect(result).toMatchObject({ ok: false, reason: "trop_court" });
+    expect(result.ok === false && result.detail).toBe(
+      `5 mots, minimum ${synthesisFloor(MEASURES_ONLY)}`
+    );
+  });
 
-    it("rejects a short text when there are measures to summarise", () => {
-      expect(screenSynthesis(short, { hasMeasures: true })).toMatchObject({
+  describe("le plancher refuse une non-réponse, il ne juge pas la longueur", () => {
+    // La contradiction supprimée : le plancher était la longueur voulue, donc tout texte plus court
+    // que l'idéal était jeté. Il ne retient plus que ce qui n'est pas une réponse.
+
+    it("accepte les 81 mots honnêtes d'une candidature sans parcours", () => {
+      // Le cas Arthaud, qui a échoué deux fois contre un plancher de 90 et laissé la fiche sans
+      // résumé.
+      expect(screenSynthesis(words(81), MEASURES_ONLY).ok).toBe(true);
+    });
+
+    it("accepte les textes courts que la production a déjà stockés", () => {
+      // Les plus courts en base : 27 mots (Clara Egger), 31 (Florian Philippot), 37 (Arthaud). Un
+      // plancher qui les refuse refuse du travail juste.
+      expect(screenSynthesis(words(27), { ...MEASURES_ONLY, measureCount: 2 }).ok).toBe(true);
+      expect(screenSynthesis(words(31), THIN_CAREER).ok).toBe(true);
+      expect(screenSynthesis(words(37), MEASURES_ONLY).ok).toBe(true);
+    });
+
+    it("refuse une réponse d'une ligne, quelle que soit la matière", () => {
+      for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
+        expect(screenSynthesis(words(5), material)).toMatchObject({
+          ok: false,
+          reason: "trop_court",
+        });
+      }
+    });
+
+    it("reste sous la longueur visée, partout", () => {
+      // La propriété qui empêche la régression de revenir : un texte pile à la cible ne peut
+      // jamais être refusé pour sa longueur.
+      for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
+        expect(synthesisFloor(material)).toBeLessThan(synthesisTargetRange(material).min);
+        expect(screenSynthesis(words(synthesisTargetRange(material).min), material).ok).toBe(true);
+      }
+    });
+
+    it("applique le plafond et les autres règles quelle que soit la matière", () => {
+      expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), BARE)).toMatchObject({
+        ok: false,
+        reason: "trop_long",
+      });
+      expect(screenSynthesis(`Une condamnation a été prononcée. ${words(40)}`, BARE)).toMatchObject(
+        { ok: false, reason: "judiciaire" }
+      );
+    });
+
+    it("retient le plancher le plus haut quand l'appelant ne dit rien", () => {
+      // Un appelant qui oublie de décrire sa matière obtient la réponse exigeante, pas un passe-droit.
+      expect(screenSynthesis(words(FULL_FLOOR - 1))).toMatchObject({
         ok: false,
         reason: "trop_court",
       });
-    });
-
-    it("accepts the same text when there is no measure", () => {
-      expect(screenSynthesis(short, { hasMeasures: false }).ok).toBe(true);
-    });
-
-    it("still refuses a near-empty text without measures", () => {
-      expect(
-        screenSynthesis(words(SYNTHESIS_MIN_WORDS_WITHOUT_MEASURES - 1), { hasMeasures: false })
-      ).toMatchObject({ ok: false, reason: "trop_court" });
-    });
-
-    it("applies the ceiling and the other rules whatever the material", () => {
-      expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), { hasMeasures: false })).toMatchObject(
-        { ok: false, reason: "trop_long" }
-      );
-      expect(
-        screenSynthesis(`Une condamnation a été prononcée. ${words(40)}`, { hasMeasures: false })
-      ).toMatchObject({ ok: false, reason: "judiciaire" });
-    });
-
-    it("keeps the strict floor when the caller says nothing", () => {
-      // Defaulting to the low floor would silently accept thin texts everywhere.
-      expect(screenSynthesis(short)).toMatchObject({ ok: false, reason: "trop_court" });
     });
   });
 });

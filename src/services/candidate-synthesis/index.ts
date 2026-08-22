@@ -18,8 +18,9 @@ import { callMistral, extractMistralText } from "@/lib/api/mistral";
 import { db } from "@/lib/db";
 import {
   buildCandidateSynthesisPrompt,
+  buildSynthesisSystemPrompt,
   screenSynthesis,
-  SYNTHESIS_SYSTEM_PROMPT,
+  synthesisMaterial,
   type CandidateSynthesisInput,
 } from "@/lib/presidentielle/candidate-synthesis";
 
@@ -205,12 +206,16 @@ export async function generateCandidateSynthesis(
     ),
   };
 
-  const hasMeasures = input.measures.length > 0;
+  // One reading of the material, handed to both halves. The prompt states the length the material
+  // supports and the screen enforces that same number: a model told 90 and judged at 60 pads, a
+  // model told 60 and judged at 90 fails for obeying.
+  const material = synthesisMaterial(input);
+  const system = buildSynthesisSystemPrompt(material);
   const prompt = buildCandidateSynthesisPrompt(input);
 
   let attempt: { text: string; provider: string };
   try {
-    attempt = await generate(SYNTHESIS_SYSTEM_PROMPT, prompt);
+    attempt = await generate(system, prompt);
   } catch (error) {
     return {
       ok: false,
@@ -218,7 +223,7 @@ export async function generateCandidateSynthesis(
       message: error instanceof Error ? error.message : String(error),
     };
   }
-  let screened = screenSynthesis(attempt.text, { hasMeasures });
+  let screened = screenSynthesis(attempt.text, material);
 
   // One retry, naming the rule that was broken. Measured on a first full run: the model obeys the
   // rules it is reminded of and slips on the ones it is only told once, the long dash above all.
@@ -227,7 +232,7 @@ export async function generateCandidateSynthesis(
   if (!screened.ok) {
     try {
       attempt = await generate(
-        SYNTHESIS_SYSTEM_PROMPT,
+        system,
         `${prompt}\n\nTa réponse précédente a été refusée : ${screened.detail}. Recommence en respectant cette règle.`
       );
     } catch (error) {
@@ -237,7 +242,7 @@ export async function generateCandidateSynthesis(
         message: error instanceof Error ? error.message : String(error),
       };
     }
-    screened = screenSynthesis(attempt.text, { hasMeasures });
+    screened = screenSynthesis(attempt.text, material);
   }
 
   if (!screened.ok) {
