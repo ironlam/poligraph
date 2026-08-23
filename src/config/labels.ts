@@ -49,6 +49,7 @@ import type {
   VisibilityBlocker,
 } from "@/lib/measures/moderation-state";
 import type { VoteRelation } from "@/lib/measures/vote-relation";
+import type { MeasureBadgeTier } from "@/components/measures/MeasureBadge";
 
 // Nombre de sièges à l'Assemblée nationale (XVIIe législature)
 export const AN_SEAT_COUNT = 577;
@@ -694,8 +695,25 @@ export const VOTE_RELATION_BASIS_LABELS: Record<VoteRelation, string> = {
   SEARCH_NOT_DONE: "Vote au Parlement à vérifier",
 };
 
-// Solid pill, white text. Hex values are the AA-verified variants of spec §9.2 (ratios >= 4,5:1 on white
-// text): #3d7a4e (5,13), #9e5454 (5,45), #6b7078 (4,98). Empty for the states with no position pill.
+// Which weight of `MeasureBadge` each state gets. The tier encodes importance, not category: a
+// recorded position is the strongest fact the page states, a vote found on a broader text is a
+// finding, and the last three describe where our own verification stands and appear under nearly
+// every measure, so they take the quietest form the family has.
+export const VOTE_RELATION_BADGE_TIER: Record<VoteRelation, MeasureBadgeTier> = {
+  FAVORABLE_SAME_OBJECT: "verdict",
+  DEFAVORABLE_SAME_OBJECT: "verdict",
+  ABSTENTION_SAME_OBJECT: "verdict",
+  ABSENCE_SAME_OBJECT: "verdict",
+  DIFFERENT_POSITIONS: "verdict",
+  BROADER_TEXT: "qualification",
+  NOT_RECHECKED_SINCE_REFORMULATION: "verification",
+  NO_VOTE_IN_SCOPE: "verification",
+  SEARCH_NOT_DONE: "verification",
+};
+
+// Solid fill, white text. Hex values are the AA-verified variants of spec §9.2 (ratios >= 4,5:1 on white
+// text): #3d7a4e (5,13), #9e5454 (5,45), #6b7078 (4,98). Read only for the states that carry a position
+// pill; empty for the others, which take their form from VOTE_RELATION_BADGE_TIER instead.
 export const VOTE_RELATION_PILL_CLASS: Record<VoteRelation, string> = {
   FAVORABLE_SAME_OBJECT: "bg-[#3d7a4e] text-white",
   DEFAVORABLE_SAME_OBJECT: "bg-[#9e5454] text-white",
@@ -1547,11 +1565,6 @@ export const MEASURE_PRECISION_LABELS: Record<MeasurePrecision, string> = {
 // figure is not a better measure than one stating an objective: it is a different kind of statement,
 // and grading it would be the ranking this site does not do. Same neutral slate as the vote
 // relations that state no position, distinguished by weight rather than by hue.
-export const MEASURE_PRECISION_PILL_CLASS: Record<MeasurePrecision, string> = {
-  CHIFFREE: "bg-[#6b7078] text-white",
-  OBJECTIF_SANS_CHIFFRE: "border border-border text-muted-foreground",
-};
-
 export const MEASURE_EXTRACTION_METHOD_LABELS: Record<MeasureExtractionMethod, string> = {
   MANUAL: "Saisie manuelle",
   AI_ASSISTED: "Assistée par IA",

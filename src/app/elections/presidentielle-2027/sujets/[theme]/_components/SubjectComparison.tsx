@@ -60,14 +60,28 @@ function MeasureSources({ sources }: { sources: PublicMeasure["sources"] }) {
   );
 
   return (
-    <ul aria-label="Sources de la mesure" className="space-y-0.5 text-xs text-muted-foreground">
+    <ul
+      aria-label="Sources de la mesure"
+      className="space-y-0.5 text-xs leading-snug text-muted-foreground-strong"
+    >
       {ordered.map((source) => (
         <li key={source.id}>
-          <a href={source.url} className="font-semibold underline" rel="nofollow noopener">
+          <a
+            href={source.url}
+            className="rounded underline decoration-border underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            rel="nofollow noopener"
+          >
             {MEASURE_SOURCE_KIND_LABELS[source.sourceKind]}
           </a>
-          {source.page !== null && `, ${source.page}`} · {SOURCE_TIER_LABELS[source.tier]} ·{" "}
-          {formatDate(source.publishedAt)}
+          {" · "}
+          {SOURCE_TIER_LABELS[source.tier]} · {formatDate(source.publishedAt)}
+          {/* `page` is free text and editors put whole proposal titles in it, which makes it the
+              longest run on the card and the least scanned. It moves to its own line so the part a
+              reader actually scans, nature then niveau then date, stays one short line. Demoting it
+              by colour instead was the obvious move and the wrong one: a lighter grey than
+              --muted-foreground-strong drops 12 px text under 4,5:1, and this repo sets that floor
+              itself. Position does the demotion, contrast stays where it was. */}
+          {source.page !== null && <span className="block">{source.page}</span>}
         </li>
       ))}
     </ul>
@@ -76,7 +90,7 @@ function MeasureSources({ sources }: { sources: PublicMeasure["sources"] }) {
 
 function WithdrawalLine({ withdrawal }: { withdrawal: NonNullable<PublicMeasure["withdrawal"]> }) {
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="text-xs text-muted-foreground-strong">
       Mesure retirée le {formatDate(withdrawal.withdrawnAt)}
       {withdrawal.sourceUrl !== null && withdrawal.sourceLabel !== null && (
         <>
@@ -104,13 +118,13 @@ function WithdrawalLine({ withdrawal }: { withdrawal: NonNullable<PublicMeasure[
  */
 function MeasureQualifiers({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
   return (
-    <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+    <div className="flex flex-wrap items-start gap-1.5">
       {entry.measure.precision !== null ? (
         <MeasurePrecisionBadge precision={entry.measure.precision} />
       ) : (
         <QualifiedEmptyCell
           absence={{ kind: "not_applicable", reason: "Précision non renseignée" }}
-          className="text-xs"
+          className="self-center text-xs"
         />
       )}
       <VoteRelationBadge
@@ -123,16 +137,36 @@ function MeasureQualifiers({ entry }: { entry: SubjectCandidateEntry["measures"]
   );
 }
 
-/** One quoted measure: its text, what qualifies it, its sources, and its withdrawal when there is one. */
+/**
+ * One quoted measure: its text, what qualifies it, its sources, and its withdrawal when there is one.
+ *
+ * Two measurements decide the layout here.
+ *
+ * `max-w-[64ch]` caps the line. The flexible column has no width of its own, so on a wide viewport
+ * the arithmetic of the container (1536 at the 2xl stop, less the page padding, the sidebar, the
+ * gutter, the identity column and the cell padding) left about 990 px for a single line of text:
+ * roughly 120 to 130 characters where the readable band is 45 to 75. That is the defect a reader
+ * feels as "hard to read" and it has nothing to do with the typeface. It is invisible on mobile,
+ * which is how it survived.
+ *
+ * The spacing is uneven on purpose. Everything used to sit at `space-y-1.5`, so the sentence, its
+ * qualifiers and its sources read as six equidistant blocks with nothing to group them. A wider gap
+ * before the metadata and a tighter one inside it lets proximity do what it is for: one statement,
+ * then the apparatus that backs it.
+ */
 function QuotedMeasure({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm leading-relaxed">&laquo;&nbsp;{entry.measure.text}&nbsp;&raquo;</p>
-      <MeasureQualifiers entry={entry} />
-      <MeasureSources sources={entry.measure.sources} />
-      {entry.measure.withdrawal !== null && (
-        <WithdrawalLine withdrawal={entry.measure.withdrawal} />
-      )}
+    <div className="max-w-[64ch]">
+      <p className="text-[0.9375rem] leading-[1.55]">
+        &laquo;&nbsp;{entry.measure.text}&nbsp;&raquo;
+      </p>
+      <div className="mt-2.5 space-y-1">
+        <MeasureQualifiers entry={entry} />
+        <MeasureSources sources={entry.measure.sources} />
+        {entry.measure.withdrawal !== null && (
+          <WithdrawalLine withdrawal={entry.measure.withdrawal} />
+        )}
+      </div>
     </div>
   );
 }
@@ -177,7 +211,7 @@ function ProposalCell({ entry, theme }: { entry: SubjectCandidateEntry; theme: T
       ))}
       {folded.length > 0 && (
         <details className="group">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 rounded text-xs font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 [&::-webkit-details-marker]:hidden">
             <ChevronRight
               aria-hidden="true"
               className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none"
@@ -235,11 +269,18 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
         ) : (
           <span className="text-sm font-bold">{candidate.candidateName}</span>
         )}
-        <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-          {candidate.partyLabel !== null && <>{candidate.partyLabel} · </>}
-          {defended === 0
-            ? "aucune mesure sur ce sujet"
-            : `${defended} ${defended === 1 ? "mesure" : "mesures"} sur ce sujet`}
+        {/* The count is dropped when the candidacy has nothing at all, because the cell beside it
+            already says "Aucune mesure publiée sur <thème>" and that sentence is the whole content
+            of the row: saying it twice made the emptiest card the most repetitive one. It stays
+            when measures exist but none is still defended, where "aucune mesure sur ce sujet" is
+            not a repetition but the distinction between a withdrawn measure and no measure. */}
+        <span className="mt-0.5 block text-xs font-normal text-muted-foreground-strong">
+          {candidate.partyLabel}
+          {candidate.partyLabel !== null && measures.length > 0 && " · "}
+          {measures.length > 0 &&
+            (defended === 0
+              ? "aucune mesure sur ce sujet"
+              : `${defended} ${defended === 1 ? "mesure" : "mesures"} sur ce sujet`)}
         </span>
       </span>
     </span>
@@ -372,7 +413,7 @@ function PlannedSections() {
       <dl className="mt-3 grid gap-4 sm:grid-cols-3">
         {planned.map((p) => (
           <div key={p.title}>
-            <dt className="text-sm font-semibold">{p.title}</dt>
+            <dt className="text-sm font-bold">{p.title}</dt>
             <dd className="mt-1 text-sm text-muted-foreground">{p.body}</dd>
           </div>
         ))}

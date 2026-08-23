@@ -31,22 +31,22 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
       aria-labelledby="gate-heading"
       className="rounded-lg border border-border bg-muted/40 p-4"
     >
-      <h2 id="gate-heading" className="text-base font-semibold">
+      <h2 id="gate-heading" className="text-base font-bold">
         Comparaison pas encore disponible sur ce sujet
       </h2>
       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">Ce qui manque pour comparer</p>
+        <p className="text-foreground">Ce qui manque pour comparer</p>
         <dl className="grid gap-2 sm:grid-cols-2">
           <div>
             <dt>Candidatures avec mesure vérifiée</dt>
-            <dd className="font-medium text-foreground">
+            <dd className="text-foreground">
               {data.candidaciesWithVerifiedMeasure} sur{" "}
               {data.requiredCandidaciesWithVerifiedMeasure} requises
             </dd>
           </div>
           <div>
             <dt>Taux de couverture</dt>
-            <dd className="font-medium text-foreground">
+            <dd className="text-foreground">
               {formatCoverageRate(
                 data.candidaciesWithVerifiedMeasure,
                 data.totalSourcedCandidacies
@@ -55,23 +55,23 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
           </div>
           <div>
             <dt>Révisions en attente de relecture</dt>
-            <dd className="font-medium text-foreground">
+            <dd className="text-foreground">
               {data.pendingReviewRevisionCount} {revisionWord}
             </dd>
           </div>
           <div>
             <dt>Dernière revue publique</dt>
-            <dd className="font-medium text-foreground">
+            <dd className="text-foreground">
               {data.lastReviewedAt !== null ? formatDate(data.lastReviewedAt) : "jamais relu"}
             </dd>
           </div>
           <div>
             <dt>Éditions de programme ne couvrant pas ce sujet</dt>
-            <dd className="font-medium text-foreground">Non calculable</dd>
+            <dd className="text-foreground">Non calculable</dd>
           </div>
           <div>
             <dt>Candidatures sans programme publié</dt>
-            <dd className="font-medium text-foreground">Non calculable</dd>
+            <dd className="text-foreground">Non calculable</dd>
           </div>
         </dl>
         <p className="text-xs">
