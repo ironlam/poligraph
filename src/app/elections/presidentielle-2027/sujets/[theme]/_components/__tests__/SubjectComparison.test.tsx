@@ -348,6 +348,152 @@ describe("SubjectComparison", () => {
     expect(screen.getAllByText(/Mesure 4\./)).toHaveLength(2);
   });
 
+  it("n'appelle aucune graisse que la fonte de texte ne publie pas", () => {
+    // La régression que ce test verrouille : Atkinson Hyperlegible est chargée en 400 et 700, les
+    // deux seules graisses de la famille. Le navigateur rabat 500 sur 400 et 600 sur 700, donc
+    // `font-medium` rendait une pastille en maigre et `font-semibold` rendait le lien de source
+    // aussi gras que le nom de la candidature. Quatre niveaux appelés, deux rendus, et une
+    // hiérarchie inversée. La fonte d'affichage (Outfit) publie 700 et 800 et n'est pas concernée.
+    const { container } = render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [
+              subjectMeasure(
+                measure({ id: "m-1", sources: [source()], precision: "CHIFFREE" }),
+                "SEARCH_NOT_DONE"
+              ),
+            ]),
+          ],
+        })}
+      />
+    );
+
+    // Et l'état fermé aussi : la carte de publication n'est pas rendue par le cas publiable.
+    const { container: ferme } = render(<SubjectComparison data={data({ publishable: false })} />);
+
+    for (const racine of [container, ferme]) {
+      const fantomes = [...racine.querySelectorAll<HTMLElement>("[class]")].filter((el) => {
+        const classes = el.className.toString();
+        return (
+          !classes.includes("font-display") &&
+          (classes.includes("font-medium") || classes.includes("font-semibold"))
+        );
+      });
+      expect(fantomes.map((el) => el.className.toString())).toEqual([]);
+    }
+  });
+
+  it("bride la longueur de ligne de la mesure et ne laisse plus la source la surclasser", () => {
+    // Deux défauts d'un coup. La colonne souple n'avait pas de largeur propre : sur un grand écran
+    // la mesure s'étalait sur environ 990 px, soit 120 à 130 caractères là où la bande lisible est
+    // 45 à 75. Et le lien de source, seul élément gras de la carte, pesait plus que la phrase qu'il
+    // source.
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [
+              subjectMeasure(
+                measure({ id: "m-1", text: "Encadrer les loyers.", sources: [source()] }),
+                "SEARCH_NOT_DONE"
+              ),
+            ]),
+          ],
+        })}
+      />
+    );
+
+    const phrase = screen.getAllByText(/Encadrer les loyers\./)[0]!;
+    expect(phrase.closest("[class*='max-w-']")).not.toBeNull();
+
+    for (const lien of screen.getAllByRole("link", { name: "Programme de parti" })) {
+      const classes = lien.className.toString();
+      expect(classes).not.toMatch(/font-(bold|semibold|medium|extrabold)/);
+      // Le soulignement reste : la couleur ne porte jamais seule l'affordance du lien.
+      expect(classes).toContain("underline");
+    }
+  });
+
+  it("range précision et état de vote dans la même famille de badges, à deux poids différents", () => {
+    // Le point de départ : une pastille pleine à côté d'un texte gris nu. Deux qualifications de la
+    // même phrase dans deux langages visuels, et celle sans forme passait pour un reste. Elles
+    // partagent maintenant une forme ; le niveau, lui, dit laquelle compte le plus.
+    const { container } = render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [
+              subjectMeasure(measure({ id: "m-1", precision: "CHIFFREE" }), "SEARCH_NOT_DONE"),
+              subjectMeasure(
+                measure({ id: "m-2", precision: "OBJECTIF_SANS_CHIFFRE" }),
+                "FAVORABLE_SAME_OBJECT"
+              ),
+            ]),
+          ],
+        })}
+      />
+    );
+
+    const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
+    const niveaux = [...ligne.querySelectorAll("[data-measure-badge]")].map((el) =>
+      el.getAttribute("data-measure-badge")
+    );
+    // Deux précisions en qualification, un vote enregistré en verdict, un état de recherche en
+    // vérification : la précision ne pèse plus autant qu'une position de vote.
+    expect(niveaux.filter((n) => n === "qualification")).toHaveLength(2);
+    expect(niveaux.filter((n) => n === "verdict")).toHaveLength(1);
+    expect(niveaux.filter((n) => n === "verification")).toHaveLength(1);
+
+    // Et les deux états de précision prennent la même forme : ils se distinguent par le mot, pas
+    // par un aplat contre un contour qui se lisait comme une note.
+    const precisions = [...container.querySelectorAll<HTMLElement>("[data-measure-precision]")];
+    const formes = new Set(precisions.map((el) => el.className.toString()));
+    expect(formes.size).toBe(1);
+  });
+
+  it("ne dit qu'une fois qu'une candidature ne porte aucune mesure", () => {
+    // La carte la plus vide était la plus répétitive : « aucune mesure sur ce sujet » sous le nom,
+    // puis « Aucune mesure publiée sur ... » juste en dessous, pour tout contenu.
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [
+            entry("Alix", [subjectMeasure(measure({ id: "m-1" }), "SEARCH_NOT_DONE")]),
+            entry("Chloe", []),
+          ],
+        })}
+      />
+    );
+
+    expect(screen.queryByText(/aucune mesure sur ce sujet/)).not.toBeInTheDocument();
+    // La phrase qui reste est celle qui nomme le thème, donc la plus informative des deux.
+    expect(screen.getAllByText(/Aucune mesure publiée sur Logement & Urbanisme/)).toHaveLength(2);
+  });
+
+  it("garde la distinction entre une mesure retirée et aucune mesure", () => {
+    // Le doublon levé au-dessus ne doit pas emporter ce cas : une candidature dont tout est retiré
+    // porte bien des mesures à l'écran, et « aucune mesure sur ce sujet » y dit autre chose.
+    const retiree = measure({
+      id: "m-out",
+      withdrawal: {
+        withdrawnAt: new Date("2027-03-01T00:00:00Z"),
+        sourceUrl: null,
+        sourceLabel: null,
+      },
+    });
+    render(
+      <SubjectComparison
+        data={data({
+          candidaciesWithVerifiedMeasure: 0,
+          candidates: [entry("Chloe", [subjectMeasure(retiree, "SEARCH_NOT_DONE")])],
+        })}
+      />
+    );
+
+    expect(screen.getAllByText(/aucune mesure sur ce sujet/)).toHaveLength(2);
+  });
+
   it("explique la mention de vote avant que le lecteur ne la rencontre, avec les libellés réels", () => {
     // La mention est l'état d'un rapprochement en cours ; rien sur la page ne disait que ce travail
     // existait, donc « à vérifier » sous une mesure pouvait passer pour une réserve sur la

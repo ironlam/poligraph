@@ -70,7 +70,7 @@ export function SubjectSidebar({
       {/* Below lg: a disclosure. `<details>` rather than a state hook, so it stays a server
           component and the browser gives keyboard operation and announcement for free. */}
       <details className="rounded-xl border border-border bg-card lg:hidden">
-        <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-4 text-sm font-semibold">
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-4 text-sm font-bold">
           <span>
             Les sujets{" "}
             <span className="font-normal text-muted-foreground">
