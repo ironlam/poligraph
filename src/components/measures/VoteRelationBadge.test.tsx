@@ -51,19 +51,19 @@ describe("VoteRelationBadge", () => {
   it("recherche non effectuée nomme son sujet et ne rend jamais une position", () => {
     const { container } = render(<VoteRelationBadge relation="SEARCH_NOT_DONE" />);
     expect(container.querySelector("[data-vote-position]")).toBeNull();
-    expect(screen.getByText(/Vote au Parlement pas encore recherché/)).toBeInTheDocument();
+    expect(screen.getByText(/Vote au Parlement à vérifier/)).toBeInTheDocument();
   });
 
   it("distingue en clair la recherche non faite de la recherche sans résultat", () => {
     // Les deux états ne se distinguaient que par le mot « périmètre », le seul de la paire qu'un
     // lecteur ne pouvait pas résoudre depuis la page. Chacun dit maintenant de quoi il parle.
     const pasFaite = render(<VoteRelationBadge relation="SEARCH_NOT_DONE" />);
-    expect(pasFaite.container.textContent).toContain("pas encore recherché");
+    expect(pasFaite.container.textContent).toContain("Vote au Parlement à vérifier");
     expect(pasFaite.container.textContent).not.toContain("périmètre");
     pasFaite.unmount();
 
     const sansResultat = render(<VoteRelationBadge relation="NO_VOTE_IN_SCOPE" />);
-    expect(sansResultat.container.textContent).toContain("recherché, aucun trouvé");
+    expect(sansResultat.container.textContent).toContain("vérifié, aucun scrutin proche");
     expect(sansResultat.container.textContent).not.toContain("périmètre");
   });
 

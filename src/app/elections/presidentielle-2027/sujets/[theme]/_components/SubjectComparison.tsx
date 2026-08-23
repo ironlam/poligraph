@@ -6,6 +6,7 @@ import {
   SOURCE_TIER_LABELS,
   THEME_ACCENT_BAR,
   THEME_CATEGORY_LABELS,
+  VOTE_RELATION_BASIS_LABELS,
 } from "@/config/labels";
 import { MeasurePrecisionBadge } from "@/components/measures/MeasurePrecisionBadge";
 import { QualifiedEmptyCell } from "@/components/measures/QualifiedEmptyCell";
@@ -321,6 +322,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
           <SubjectGate data={data} />
         ) : (
           <>
+            <VoteMentionLegend />
             <ComparisonTable data={data} />
             <FooterCard
               documented={documented}
@@ -376,6 +378,42 @@ function PlannedSections() {
         ))}
       </dl>
     </section>
+  );
+}
+
+/**
+ * What the mention under every measure is about, said once, before the reader meets it.
+ *
+ * The mention is the state of a rapprochement we are still building, measure by measure: which
+ * scrutins of the Assemblée nationale and the Sénat bear on the same object as a proposal. Nothing
+ * on the page said that work existed, so "à vérifier" under a measure had no antecedent, and a
+ * reader could take it for a reservation about the candidacy rather than about our own coverage.
+ *
+ * Here rather than in the method card at the bottom: a key that arrives after the table it explains
+ * is read, if at all, once the reader has already made sense of the labels on their own.
+ */
+function VoteMentionLegend() {
+  return (
+    <aside
+      aria-labelledby="legende-votes"
+      className="rounded-xl border border-border bg-muted/40 px-5 py-4"
+    >
+      <h2
+        id="legende-votes"
+        className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+      >
+        La mention sous chaque mesure
+      </h2>
+      <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+        Nous rapprochons chaque mesure des scrutins de l&apos;Assemblée nationale et du Sénat qui
+        portent sur le même objet. Ce travail se fait mesure par mesure et il est en cours&nbsp;:
+        «&nbsp;{VOTE_RELATION_BASIS_LABELS.SEARCH_NOT_DONE}&nbsp;» signale une mesure que nous
+        n&apos;avons pas encore rapprochée, «&nbsp;
+        {VOTE_RELATION_BASIS_LABELS.NO_VOTE_IN_SCOPE}&nbsp;» une mesure pour laquelle nous avons
+        cherché sans rien trouver. Dans ce second cas, les chambres et les législatures couvertes et
+        la date de la vérification suivent la mention.
+      </p>
+    </aside>
   );
 }
 
@@ -483,17 +521,15 @@ function FooterCard({
 function MethodCard() {
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      {/* The two states quoted here are the ones the badge actually renders today
-          (VOTE_RELATION_BASIS_LABELS). An earlier version quoted "aucun vote sur cet objet", a
-          string that exists nowhere: a reader would have looked for a wording they never meet. */}
+      {/* What the two search states mean is stated by `VoteMentionLegend`, above the table, where a
+          reader meets the mention for the first time. What is left here is the rule that decides
+          whether a POSITION can appear at all, which is a different fact and belongs next to the
+          link to the method page. */}
       <p className="max-w-3xl text-sm text-muted-foreground">
-        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote. La
-        mention portée sous chaque mesure dit donc surtout où en est notre recherche de scrutin
-        proche&nbsp;: «&nbsp;vote au Parlement pas encore recherché&nbsp;» tant que nous ne
-        l&apos;avons pas faite, «&nbsp;vote au Parlement recherché, aucun trouvé&nbsp;» quand nous
-        avons cherché sans rien trouver, suivi du périmètre couvert et de la date de vérification.
-        Une position ne s&apos;affiche que pour une candidature qui siégeait au moment où un texte
-        proche a été soumis.
+        En présidentielle, la plupart des mesures n&apos;ont jamais été soumises à un vote, et une
+        position pour ou contre ne s&apos;affiche que pour une candidature qui siégeait au moment où
+        un texte proche a été soumis. Une mesure sans position n&apos;est donc pas une mesure sans
+        travail de notre part.
       </p>
       <Link
         href="/methodologie"

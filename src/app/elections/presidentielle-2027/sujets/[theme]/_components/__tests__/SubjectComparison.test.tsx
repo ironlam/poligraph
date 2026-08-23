@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import { VOTE_RELATION_BASIS_LABELS } from "@/config/labels";
 import { describe, expect, it } from "vitest";
 import type { PublicMeasure } from "@/lib/data/measures";
 import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-page";
@@ -210,7 +211,7 @@ describe("SubjectComparison", () => {
     // La fixture n'a pas de slug de politicien, donc le nom est un texte et non un lien.
     const ligne = screen.getAllByText("Alix")[0]!.closest("tr");
     expect(
-      within(ligne as HTMLElement).getByText(/Vote au Parlement recherché, aucun trouvé/)
+      within(ligne as HTMLElement).getByText(/Vote au Parlement vérifié, aucun scrutin proche/)
     ).toBeInTheDocument();
   });
 
@@ -347,6 +348,36 @@ describe("SubjectComparison", () => {
     expect(screen.getAllByText(/Mesure 4\./)).toHaveLength(2);
   });
 
+  it("explique la mention de vote avant que le lecteur ne la rencontre, avec les libellés réels", () => {
+    // La mention est l'état d'un rapprochement en cours ; rien sur la page ne disait que ce travail
+    // existait, donc « à vérifier » sous une mesure pouvait passer pour une réserve sur la
+    // candidature plutôt que sur notre couverture. La légende cite les libellés depuis la source de
+    // vérité : un libellé changé sans elle laisserait une clé qui ne correspond à rien.
+    render(
+      <SubjectComparison
+        data={data({
+          candidates: [entry("Alix", [subjectMeasure(measure({ id: "m-1" }), "SEARCH_NOT_DONE")])],
+        })}
+      />
+    );
+
+    const legende = screen.getByRole("complementary", { name: /La mention sous chaque mesure/ });
+    expect(within(legende).getByText(/rapprochons chaque mesure des scrutins/)).toBeInTheDocument();
+    expect(within(legende).getByText(/travail se fait mesure par mesure/)).toBeInTheDocument();
+    for (const libelle of [
+      VOTE_RELATION_BASIS_LABELS.SEARCH_NOT_DONE,
+      VOTE_RELATION_BASIS_LABELS.NO_VOTE_IN_SCOPE,
+    ]) {
+      expect(legende.textContent).toContain(libelle);
+    }
+
+    // Et la légende précède le tableau qu'elle explique, au lieu de le suivre.
+    const tableau = screen.getByRole("table");
+    expect(
+      legende.compareDocumentPosition(tableau) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("rend les mesures repliées comme les autres, sans bloc indenté qui casse la lecture", () => {
     // Régression : les mesures dépliées vivaient dans un `border-l-2 pl-3`, une citation dans la
     // citation. Ouvrir le repli coupait la lecture d'une candidature en deux blocs de mise en forme
@@ -417,8 +448,10 @@ describe("SubjectComparison", () => {
     // Et deux états de vote différents sur la même ligne. Portée sur la ligne du tableau : le
     // paragraphe de méthode cite les mêmes libellés en bas de page.
     const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
-    expect(within(ligne).getAllByText(/Vote au Parlement pas encore recherché/)).toHaveLength(1);
-    expect(within(ligne).getAllByText(/Vote au Parlement recherché, aucun trouvé/)).toHaveLength(1);
+    expect(within(ligne).getAllByText(/Vote au Parlement à vérifier/)).toHaveLength(1);
+    expect(
+      within(ligne).getAllByText(/Vote au Parlement vérifié, aucun scrutin proche/)
+    ).toHaveLength(1);
   });
 
   it("porte le code couleur de chaque candidature, dans le tableau comme sur les cartes", () => {
