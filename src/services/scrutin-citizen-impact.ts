@@ -167,18 +167,55 @@ export { MISTRAL_MODEL };
  * but a model slip must never reach a page, so the closed set below is repaired
  * deterministically. `subject` is "les députés" / "les sénateurs".
  */
+// Parliamentary-procedure nouns a rewrite is allowed to key off of. Kept
+// narrow and shared so "assistez à"/"participez à" only fire when the object
+// is plainly about this scrutin's own proceedings — not the reader's
+// unrelated civic life (a public rally, a hearing, a sports event...).
+// Covers both the direct object ("un débat", "l'adoption") and the "une
+// étape de/du l'examen/vote/discussion/création/procédure" phrasing the
+// model also uses, confirmed against a full production-data audit.
+const PARLIAMENTARY_OBJECT =
+  "(?:(?:(?:un|ce|cette|le|une)\\s+|l['’])(?:vote|scrutin|débat|examen|adoption|séance|procédure)|" +
+  "une étape procédurale|" +
+  "(?:un moment|une étape)\\s+(?:de\\s+l['’]|du|de\\s+la|d['’]|de)\\s*(?:examen|vote|discussion|création|adoption|procédure|processus))";
+// Ways to name the thing this scrutin voted on, for "vous avez voté pour/contre X".
+const VOTE_TARGET_OBJECT =
+  "(?:ce|cet|cette|le|la|l['’])\\s+(?:amendement|texte|article|projet|proposition|mesure)";
+
 const READER_AS_VOTER_REWRITES: { pattern: RegExp; to: (subject: string) => string }[] = [
   { pattern: /\bvous votez sur\b/gi, to: (s) => `${s} ont voté sur` },
   { pattern: /\bvous allez voter sur\b/gi, to: (s) => `${s} ont voté sur` },
   { pattern: /\bvous avez voté sur\b/gi, to: (s) => `${s} ont voté sur` },
-  { pattern: /\bvous votez\b/gi, to: (s) => `${s} ont voté` },
-  // Bare "vous avez voté" (no trailing "sur") — covers relative clauses like
-  // "l'article 23, que vous avez voté, concerne..." or "sur lequel vous avez voté".
-  // Trailing lookahead (not \b): JS's \b only treats ASCII [A-Za-z0-9_] as "word"
-  // characters, so a plain \b right after the accented "é" never matches when
-  // "voté" is followed by punctuation like a comma — both sides read as
-  // "non-word" and no boundary is found.
-  { pattern: /\bvous avez voté(?!\p{L})/giu, to: (s) => `${s} ont voté` },
+  // NOTE: deliberately no bare "vous votez" pattern. A production-data audit
+  // found it firing on entirely unrelated, correct civic-education framing —
+  // "Vous votez chaque année le budget de l'État à travers vos représentants"
+  // (639 rows) and "Vous votez pour élire vos conseillers municipaux" (80+
+  // rows) both describe the reader's own, separate vote and got mangled into
+  // a circular "Les députés ont voté... à travers vos représentants". Present
+  // tense "vous votez" essentially never refers to THIS scrutin (a scrutin is
+  // always in the past by the time this text is read), so there is no safe
+  // bare form to add back — only the "sur" variant above is trustworthy.
+  //
+  // Bare "vous avez voté" is scoped two ways instead of matched unconditionally:
+  // Trailing lookahead everywhere below (not \b): JS's \b only treats ASCII
+  // [A-Za-z0-9_] as "word" characters, so a plain \b right after the accented
+  // "é" never matches when "voté" is followed by punctuation like a comma —
+  // both sides read as "non-word" and no boundary is found.
+  {
+    // Relative clause referring back to this scrutin: "l'article 23, que
+    // vous avez voté, concerne..." / "...sur lequel vous avez voté...". The
+    // lookbehind doesn't consume "que"/"sur lequel", so it's left untouched.
+    pattern: /(?<=\b(?:que|qu['’]|sur lequel|sur laquelle)\s)vous avez voté(?!\p{L})/giu,
+    to: (s) => `${s} ont voté`,
+  },
+  {
+    // Main clause naming what was voted on: "Vous avez voté pour cet
+    // amendement" / "...contre le texte". Excludes "si vous avez voté aux
+    // élections municipales" and similar — "élections/conseillers/maire" are
+    // not in VOTE_TARGET_OBJECT, so that reader-owned-vote framing is left alone.
+    pattern: new RegExp(`\\bvous avez voté(?=\\s+(?:pour|contre)\\s+${VOTE_TARGET_OBJECT})`, "giu"),
+    to: (s) => `${s} ont voté`,
+  },
   // "le texte que vous examinons" — same bug (reader cast as the body examining
   // the bill), different verb. Absorbs "que" into the replacement for the
   // elision ("qu'examinent"), since only "vous examinons" alone isn't wrong French.
@@ -187,16 +224,33 @@ const READER_AS_VOTER_REWRITES: { pattern: RegExp; to: (subject: string) => stri
     pattern: /\bvous assistez à (?:un|ce|le) (?:vote|scrutin) sur\b/gi,
     to: (s) => `${s} ont voté sur`,
   },
-  // Bare variants keep the rest of the sentence, so the trailing noun phrase
-  // ("... à un vote serré") stays grammatical.
-  { pattern: /\bvous assistez à/gi, to: (s) => `${s} ont pris part à` },
+  // Bare "assistez à"/"participez à" require a parliamentary-procedure object
+  // (see PARLIAMENTARY_OBJECT) — a production-data audit found the previous
+  // fully-unconditional versions rewriting the reader's OWN participation in
+  // public gatherings ("vous êtes concerné si vous participez à des
+  // rassemblements publics...", on a public-order bill) into a nonsensical
+  // claim about the deputies. The lookahead doesn't consume the object, so
+  // its exact wording ("un débat sur...", "l'examen d'une proposition...")
+  // survives untouched.
+  {
+    pattern: new RegExp(`\\bvous assistez à(?=\\s+${PARLIAMENTARY_OBJECT}\\b)`, "gi"),
+    to: (s) => `${s} ont pris part à`,
+  },
   {
     pattern: /\bvous (?:êtes|etes) appelé(?:·e|\(e\)|e)?s? à (?:voter sur|vous prononcer sur)\b/gi,
     to: (s) => `${s} se sont prononcés sur`,
   },
   { pattern: /\bvous vous prononcez sur\b/gi, to: (s) => `${s} se sont prononcés sur` },
-  { pattern: /\bvous participez à/gi, to: (s) => `${s} ont participé à` },
-  { pattern: /\bvotre vote\b/gi, to: () => "ce vote" },
+  {
+    pattern: new RegExp(`\\bvous participez à(?=\\s+${PARLIAMENTARY_OBJECT}\\b)`, "gi"),
+    to: (s) => `${s} ont participé à`,
+  },
+  // Scoped to the specific outcome phrasing the prompt itself uses (rule 6/7:
+  // "cette mesure entre en vigueur" / "n'a pas été retenue" — restated here as
+  // the model sometimes writes it as "Votre vote a été rejeté/adopté"). A bare
+  // \bvotre vote\b would also catch "Votre vote aux municipales..." or "Votre
+  // vote compte", which are legitimately about the reader's own ballot.
+  { pattern: /\bvotre vote(?=\s+a été (?:rejeté|adopté))\b/gi, to: () => "ce vote" },
 ];
 
 /**

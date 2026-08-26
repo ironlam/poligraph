@@ -153,6 +153,24 @@ describe("neutralizeReaderAsVoter", () => {
     );
   });
 
+  // Coverage for the fuller set of parliamentary-procedure phrasings the model
+  // actually produces (confirmed against a full production-data audit), so the
+  // P1 fix's narrower object list doesn't quietly stop catching real slips.
+  it("covers the elided and 'étape de/du' phrasings of the parliamentary object", () => {
+    expect(neutralizeReaderAsVoter("Vous assistez à l'examen d'une proposition.", "AN")).toBe(
+      "Les députés ont pris part à l'examen d'une proposition."
+    );
+    expect(
+      neutralizeReaderAsVoter("Vous assistez à une étape de l'examen d'un projet de loi.", "AN")
+    ).toBe("Les députés ont pris part à une étape de l'examen d'un projet de loi.");
+    expect(
+      neutralizeReaderAsVoter("Vous assistez à un moment de procédure pendant l'examen.", "AN")
+    ).toBe("Les députés ont pris part à un moment de procédure pendant l'examen.");
+    expect(
+      neutralizeReaderAsVoter("Vous assistez à une étape procédurale d'un projet de loi.", "AN")
+    ).toBe("Les députés ont pris part à une étape procédurale d'un projet de loi.");
+  });
+
   it("keeps the surrounding case when the formulation is mid-sentence", () => {
     expect(neutralizeReaderAsVoter("Concrètement, vous votez sur un budget.", "AN")).toBe(
       "Concrètement, les députés ont voté sur un budget."
@@ -170,6 +188,55 @@ describe("neutralizeReaderAsVoter", () => {
     // voting method — "vous" correctly refers to the reader's own future vote,
     // not to this scrutin. "voter" here has no "sur", so it must not match.
     const ok = "Vous allez voter pour élire vos conseillers municipaux à Paris, Lyon ou Marseille.";
+    expect(neutralizeReaderAsVoter(ok, "AN")).toBe(ok);
+  });
+
+  // Regression: a first version of this rewriter matched bare present-tense
+  // "vous votez" unconditionally. A full production-data audit found it firing
+  // on hundreds of rows of correct, unrelated civic-education framing and
+  // mangling them into circular nonsense — restored via the backfill, not
+  // reproduced here, but the rewriter must never do this again.
+  it("leaves bare present-tense 'vous votez' (no 'sur') untouched — no safe bare form exists", () => {
+    const budget =
+      "Vous votez chaque année le budget de l'État à travers vos représentants. Ce texte...";
+    expect(neutralizeReaderAsVoter(budget, "AN")).toBe(budget);
+    const municipal =
+      "Vous votez pour élire vos conseillers municipaux à Paris, Lyon ou Marseille.";
+    expect(neutralizeReaderAsVoter(municipal, "AN")).toBe(municipal);
+  });
+
+  // Regression: chatgpt-codex-connector review on PR #762 — the original
+  // unconditional "vous participez à"/"vous assistez à" rewrote the reader's
+  // own, unrelated civic participation. Real production case: a bill about
+  // police powers at public gatherings, whose "Qui est concerné ?" section
+  // legitimately named the reader's own attendance.
+  it("leaves 'participez à'/'assistez à' untouched without a parliamentary-procedure object", () => {
+    const rally =
+      "Vous êtes concerné si vous participez à des rassemblements publics, des manifestations...";
+    expect(neutralizeReaderAsVoter(rally, "AN")).toBe(rally);
+    const hearing = "Si vous assistez à une audition publique organisée par votre mairie...";
+    expect(neutralizeReaderAsVoter(hearing, "AN")).toBe(hearing);
+  });
+
+  it("leaves 'votre vote' untouched outside the specific rejeté/adopté outcome phrasing", () => {
+    const ownBallot = "Votre vote aux élections municipales compte, quel que soit votre choix.";
+    expect(neutralizeReaderAsVoter(ownBallot, "AN")).toBe(ownBallot);
+  });
+
+  // Regression: chatgpt-codex-connector review on PR #762 (P2) — "vous avez
+  // voté" naming what THIS scrutin voted on, without "sur", slipped through.
+  it("covers 'vous avez voté pour/contre' this scrutin's own target", () => {
+    expect(neutralizeReaderAsVoter("Vous avez voté pour cet amendement.", "AN")).toBe(
+      "Les députés ont voté pour cet amendement."
+    );
+    expect(neutralizeReaderAsVoter("Vous avez voté contre le texte.", "AN")).toBe(
+      "Les députés ont voté contre le texte."
+    );
+  });
+
+  it("leaves 'vous avez voté' about a different election untouched (main clause, no relative pronoun)", () => {
+    const ok =
+      "Vous êtes directement impacté si vous avez voté ou vous présentez comme candidat aux élections municipales.";
     expect(neutralizeReaderAsVoter(ok, "AN")).toBe(ok);
   });
 
