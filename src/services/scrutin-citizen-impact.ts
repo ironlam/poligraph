@@ -65,13 +65,19 @@ FORMAT OBLIGATOIRE - Utiliser du markdown structuré :
 - Sous-titres en **gras** pour chaque section (pas de titres markdown #)
 - Listes à puces pour les arguments du débat
 - Utiliser le **gras** pour la mesure concrète votée
-- Français courant, vouvoyer le lecteur avec "vous"
+- Français courant
 - Utiliser des liens markdown vers les pages Poligraph quand des LIENS DISPONIBLES sont fournis
+
+QUI EST LE LECTEUR - RÈGLE ABSOLUE :
+Le lecteur est un CITOYEN qui consulte le compte rendu d'un vote DÉJÀ TENU par des parlementaires. Il n'y a pris AUCUNE part : il ne vote pas, il n'a pas voté, il n'assiste pas à la séance, il n'a rien à décider ni à trancher.
+- Le vote est un fait PASSÉ accompli par les députés (ou les sénateurs). En parler à la 3e personne et au passé : "les députés ont voté sur...", "l'Assemblée nationale a examiné...", "le Sénat a rejeté...".
+- N'employer "vous" QUE pour décrire les conséquences concrètes de la décision sur la vie du lecteur ("ce que cela change pour vous", "si vous louez votre logement, ..."). JAMAIS pour lui prêter un rôle dans la procédure parlementaire.
+- FORMULATIONS INTERDITES, ainsi que toutes leurs variantes : "Vous votez sur...", "Vous avez voté...", "Vous allez voter...", "Vous devez vous prononcer...", "Votre vote...", "Vous assistez à un vote...", "Vous êtes appelé à...", "Vous participez à...".
 
 STRUCTURE A SUIVRE :
 
 **De quoi s'agit-il ?**
-1-2 phrases pour poser le contexte : quelle loi, quel sujet de société. Ne JAMAIS écrire "l'article 21" sans expliquer en langage courant ce que cet article traite.
+1-2 phrases pour poser le contexte : quelle loi, quel sujet de société. Le sujet de la phrase est le TEXTE, la loi ou les parlementaires - jamais le lecteur : "Les députés ont examiné une loi d'urgence destinée à...", "Ce texte porte sur...". Ne JAMAIS écrire "l'article 21" sans expliquer en langage courant ce que cet article traite.
 
 **Ce qui était proposé**
 1-2 phrases sur ce que la mesure/l'amendement proposait concrètement. Mettre en **gras** la mesure clé.
@@ -98,7 +104,7 @@ NEUTRALITÉ - RÈGLES ABSOLUES :
 9. JAMAIS inventer de mesures concrètes absentes des données fournies
 10. Si les données sont trop minces pour identifier un impact citoyen : confidence < 40
 11. Votes purement procéduraux : confidence < 40
-12. Ne PAS commencer par "Ce vote..." - varier les accroches
+12. Ne PAS commencer par "Ce vote..." - varier les accroches, mais le sujet de l'accroche reste le texte, la loi ou les parlementaires, jamais le lecteur
 13. Si le scrutin porte sur un amendement, expliquer DANS LE CONTEXTE DE LA LOI ce que l'amendement proposait de modifier
 14. Pour les motions de censure : seuls les députés favorables à la censure votent POUR. La motion est rejetée si le seuil de majorité absolue (289/577) n'est pas atteint, PAS parce que des députés ont voté contre.
 
@@ -140,7 +146,7 @@ export async function generateCitizenImpact(
   try {
     const parsed = parseMistralJSON<{ citizen_impact: string; confidence: number }>(text);
     return {
-      citizenImpact: sanitizeOutput(parsed.citizen_impact ?? ""),
+      citizenImpact: sanitizeOutput(parsed.citizen_impact ?? "", input.chamber),
       confidence: parsed.confidence ?? 0,
     };
   } catch {
@@ -154,10 +160,71 @@ export { MISTRAL_MODEL };
 // HELPERS
 // ============================================
 
-function sanitizeOutput(text: string): string {
+/**
+ * Rewrites that put the parliamentary act back on the parliamentarians. The
+ * reader is a citizen reading the record of a vote that already happened: they
+ * did not cast it and did not attend it. The prompt forbids these formulations,
+ * but a model slip must never reach a page, so the closed set below is repaired
+ * deterministically. `subject` is "les députés" / "les sénateurs".
+ */
+const READER_AS_VOTER_REWRITES: { pattern: RegExp; to: (subject: string) => string }[] = [
+  { pattern: /\bvous votez sur\b/gi, to: (s) => `${s} ont voté sur` },
+  { pattern: /\bvous allez voter sur\b/gi, to: (s) => `${s} ont voté sur` },
+  { pattern: /\bvous avez voté sur\b/gi, to: (s) => `${s} ont voté sur` },
+  { pattern: /\bvous votez\b/gi, to: (s) => `${s} ont voté` },
+  {
+    pattern: /\bvous assistez à (?:un|ce|le) (?:vote|scrutin) sur\b/gi,
+    to: (s) => `${s} ont voté sur`,
+  },
+  // Bare variants keep the rest of the sentence, so the trailing noun phrase
+  // ("... à un vote serré") stays grammatical.
+  { pattern: /\bvous assistez à/gi, to: (s) => `${s} ont pris part à` },
+  {
+    pattern: /\bvous (?:êtes|etes) appelé(?:·e|\(e\)|e)?s? à (?:voter sur|vous prononcer sur)\b/gi,
+    to: (s) => `${s} se sont prononcés sur`,
+  },
+  { pattern: /\bvous vous prononcez sur\b/gi, to: (s) => `${s} se sont prononcés sur` },
+  { pattern: /\bvous participez à/gi, to: (s) => `${s} ont participé à` },
+  { pattern: /\bvotre vote\b/gi, to: () => "ce vote" },
+];
+
+/**
+ * Applies a rewrite while keeping the matched text's leading case, so a
+ * mid-sentence occurrence does not gain a stray capital letter.
+ */
+function rewritePreservingCase(
+  text: string,
+  pattern: RegExp,
+  to: (subject: string) => string,
+  subject: string
+): string {
+  return text.replace(pattern, (match) => {
+    const replacement = to(subject);
+    return /^[A-ZÀ-Ý]/.test(match)
+      ? replacement.charAt(0).toUpperCase() + replacement.slice(1)
+      : replacement;
+  });
+}
+
+/**
+ * Removes formulations that cast the reader as a participant in the vote
+ * ("Vous votez sur...", "Vous assistez à un vote...", "Votre vote..."). Exported
+ * so existing stored impacts can be repaired without a model call.
+ */
+export function neutralizeReaderAsVoter(text: string, chamber: "AN" | "SENAT"): string {
+  const subject = chamber === "SENAT" ? "les sénateurs" : "les députés";
+  let result = text;
+  for (const { pattern, to } of READER_AS_VOTER_REWRITES) {
+    result = rewritePreservingCase(result, pattern, to, subject);
+  }
+  return result;
+}
+
+function sanitizeOutput(text: string, chamber: "AN" | "SENAT"): string {
   let result = text;
   result = result.replace(/https?:\/\/(assemblee|votes|partis|elections|politiques)\//g, "/$1/");
   result = result.replace(/\]\(\((\/.+?)\)\)/g, "]($1)");
+  result = neutralizeReaderAsVoter(result, chamber);
   return result;
 }
 

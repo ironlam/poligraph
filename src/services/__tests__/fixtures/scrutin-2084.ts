@@ -51,7 +51,7 @@ L'amendement a été rejeté de justesse, avec 37 voix pour et 38 contre.`;
  */
 export const CORRECT_CITIZEN_IMPACT = `**De quoi s'agit-il ?**
 
-Vous votez sur un texte qui cherche à renforcer la position des agriculteurs dans la chaîne agroalimentaire.
+Les députés ont examiné un texte qui cherche à renforcer la position des agriculteurs dans la chaîne agroalimentaire.
 
 **Ce qui était proposé**
 
