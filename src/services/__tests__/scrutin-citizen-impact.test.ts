@@ -164,4 +164,42 @@ describe("neutralizeReaderAsVoter", () => {
       "Si vous êtes locataire, cette mesure change le calcul de votre loyer. Vous pouvez consulter le dossier.";
     expect(neutralizeReaderAsVoter(ok, "AN")).toBe(ok);
   });
+
+  it("leaves a genuine upcoming-election 'vous' untouched (distinct from the parliamentary-vote bug)", () => {
+    // Real production case: a bill about the Paris/Lyon/Marseille municipal
+    // voting method — "vous" correctly refers to the reader's own future vote,
+    // not to this scrutin. "voter" here has no "sur", so it must not match.
+    const ok = "Vous allez voter pour élire vos conseillers municipaux à Paris, Lyon ou Marseille.";
+    expect(neutralizeReaderAsVoter(ok, "AN")).toBe(ok);
+  });
+
+  // Regression: found via a production-data audit — relative clauses ("que
+  // vous avez voté", "sur lequel vous avez voté") slipped past the original
+  // "vous avez voté sur" pattern because "sur" isn't immediately adjacent.
+  it("covers 'vous avez voté' in a relative clause, without a trailing 'sur'", () => {
+    expect(
+      neutralizeReaderAsVoter("L'article 23, que vous avez voté, concerne la priorité.", "AN")
+    ).toBe("L'article 23, que les députés ont voté, concerne la priorité.");
+    expect(
+      neutralizeReaderAsVoter("L'article 24, sur lequel vous avez voté, concerne...", "AN")
+    ).toBe("L'article 24, sur lequel les députés ont voté, concerne...");
+  });
+
+  // Regression: same production audit — a different verb entirely ("vous
+  // examinons" instead of "vous votez"), same underlying bug of casting the
+  // reader as the body examining the bill. Also fixes the broken conjugation.
+  it("covers 'que vous examinons' with correct elision and inversion", () => {
+    expect(
+      neutralizeReaderAsVoter(
+        "Le projet de loi que vous examinons vise à organiser les Jeux.",
+        "AN"
+      )
+    ).toBe("Le projet de loi qu'examinent les députés vise à organiser les Jeux.");
+    expect(
+      neutralizeReaderAsVoter(
+        "La proposition de loi que vous examinons porte sur la santé.",
+        "SENAT"
+      )
+    ).toBe("La proposition de loi qu'examinent les sénateurs porte sur la santé.");
+  });
 });

@@ -172,6 +172,17 @@ const READER_AS_VOTER_REWRITES: { pattern: RegExp; to: (subject: string) => stri
   { pattern: /\bvous allez voter sur\b/gi, to: (s) => `${s} ont voté sur` },
   { pattern: /\bvous avez voté sur\b/gi, to: (s) => `${s} ont voté sur` },
   { pattern: /\bvous votez\b/gi, to: (s) => `${s} ont voté` },
+  // Bare "vous avez voté" (no trailing "sur") — covers relative clauses like
+  // "l'article 23, que vous avez voté, concerne..." or "sur lequel vous avez voté".
+  // Trailing lookahead (not \b): JS's \b only treats ASCII [A-Za-z0-9_] as "word"
+  // characters, so a plain \b right after the accented "é" never matches when
+  // "voté" is followed by punctuation like a comma — both sides read as
+  // "non-word" and no boundary is found.
+  { pattern: /\bvous avez voté(?!\p{L})/giu, to: (s) => `${s} ont voté` },
+  // "le texte que vous examinons" — same bug (reader cast as the body examining
+  // the bill), different verb. Absorbs "que" into the replacement for the
+  // elision ("qu'examinent"), since only "vous examinons" alone isn't wrong French.
+  { pattern: /\bque vous examinons\b/gi, to: (s) => `qu'examinent ${s}` },
   {
     pattern: /\bvous assistez à (?:un|ce|le) (?:vote|scrutin) sur\b/gi,
     to: (s) => `${s} ont voté sur`,
