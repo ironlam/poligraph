@@ -417,6 +417,7 @@ export async function depublishMeasureAction(input: {
     await depublishMeasure({
       measureId: input.measureId,
       reason: input.reason,
+      depublishedBy: ACTOR,
       expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
     });
     revalidate(input.measureId);

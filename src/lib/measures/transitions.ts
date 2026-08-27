@@ -695,6 +695,8 @@ export async function publishMeasureRevision(input: {
 export async function depublishMeasure(input: {
   measureId: string;
   reason: string;
+  /** Set by authenticated editorial entrypoints so the removal itself is auditable. */
+  depublishedBy?: string;
   /**
    * The `Measure.updatedAt` the caller last saw. Without it, an old page depublishes a correction
    * that was published in the meantime, with a reason written about the previous formulation.
@@ -703,6 +705,9 @@ export async function depublishMeasure(input: {
 }): Promise<void> {
   if (input.reason.trim() === "") {
     throw new MeasureValidationError("Une dépublication exige un motif");
+  }
+  if (input.depublishedBy !== undefined && input.depublishedBy.trim() === "") {
+    throw new MeasureValidationError("Le responsable de la dépublication doit être identifié");
   }
 
   const { electionId } = await db.$transaction(async (tx) => {
@@ -723,6 +728,18 @@ export async function depublishMeasure(input: {
         depublicationReason: input.reason,
       },
     });
+
+    if (input.depublishedBy) {
+      await tx.auditLog.create({
+        data: {
+          action: "DEPUBLISH_MEASURE",
+          entityType: "Measure",
+          entityId: input.measureId,
+          changes: { reason: input.reason.trim() },
+          userId: input.depublishedBy,
+        },
+      });
+    }
 
     // Re-derives rather than just flipping visibility. With a draft in flight, the
     // reference revision becomes latestRevisionId, so the document must carry the draft
