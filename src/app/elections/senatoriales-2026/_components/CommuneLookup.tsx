@@ -392,12 +392,12 @@ function SenatorsList({ senators, where }: { senators: SittingSenator[]; where: 
           </li>
         ))}
       </ul>
-      {/* One discreet line for an absence that applies to the whole section, per the
-          MissingData pattern: senator vote participation is not shown because 323 of
-          339 sit at exactly 100 %, the Senate scrutin import recording no absences. */}
+      {/* One discreet line for an unavailable metric that applies to the whole section.
+          Public cutover waits for production validation of source and identity coverage. */}
       <p className="text-xs text-muted-foreground">
-        La participation aux scrutins n{"'"}est pas affichée pour les sénateurs : les données dont
-        nous disposons ne distinguent pas encore les absences.
+        La participation aux scrutins publics n{"'"}est pas affichée pour les sénateurs pendant la
+        validation de la complétude des listes officielles et des identités reliées. Elle ne mesure
+        pas la présence physique.
       </p>
     </div>
   );

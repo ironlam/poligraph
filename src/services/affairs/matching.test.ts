@@ -6,6 +6,7 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 
 import {
   EVOLUTION_MIN_OVERLAP_RATIO,
+  classifyAffairMatches,
   evolutionMatch,
   isPreDecisionStatus,
   pairingRestsOnWildcard,
@@ -93,6 +94,54 @@ describe("normalizeAffairTitle", () => {
 
   it("works without politician name", () => {
     expect(normalizeAffairTitle("Fraude fiscale")).toBe("fraude fiscale");
+  });
+});
+
+describe("classifyAffairMatches", () => {
+  it("propose une évolution seulement quand la cible plausible est unique", () => {
+    expect(
+      classifyAffairMatches([
+        {
+          affairId: "aff_1",
+          confidence: "POSSIBLE",
+          score: 0.55,
+          matchedBy: "evolution-title-overlap",
+        },
+      ])
+    ).toMatchObject({ kind: "UNIQUE_EVOLUTION", match: { affairId: "aff_1" } });
+  });
+
+  it("reste ambigu si un autre signal POSSIBLE vise une autre affaire", () => {
+    expect(
+      classifyAffairMatches([
+        {
+          affairId: "aff_1",
+          confidence: "POSSIBLE",
+          score: 0.55,
+          matchedBy: "evolution-title-overlap",
+        },
+        {
+          affairId: "aff_2",
+          confidence: "POSSIBLE",
+          score: 0.5,
+          matchedBy: "title-partial",
+        },
+      ])
+    ).toMatchObject({ kind: "POSSIBLE_AMBIGUOUS" });
+  });
+
+  it("préserve les rapprochements confiants et ne choisit pas entre deux HIGH", () => {
+    expect(
+      classifyAffairMatches([
+        { affairId: "aff_1", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+      ])
+    ).toMatchObject({ kind: "CONFIDENT_MATCH" });
+    expect(
+      classifyAffairMatches([
+        { affairId: "aff_1", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+        { affairId: "aff_2", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+      ])
+    ).toMatchObject({ kind: "CONFIDENT_AMBIGUOUS" });
   });
 });
 

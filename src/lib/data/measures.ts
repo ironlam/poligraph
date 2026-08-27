@@ -1,14 +1,20 @@
 import type { Prisma, ThemeCategory } from "@/generated/prisma";
+import {
+  MEASURE_ATTRIBUTION_LABELS,
+  MEASURE_PRECISION_LABELS,
+  THEME_CATEGORY_LABELS,
+} from "@/config/labels";
 import { db } from "@/lib/db";
+import { themeToSlug } from "@/lib/theme-utils";
+import { getPublicTrackedPresidentialCandidacyWhere } from "./presidential-candidacy-policy";
 import { PUBLIC_CANDIDACY_WHERE } from "./presidential-candidates-public";
 
 /**
- * The two cumulative publication conditions, as a reusable predicate.
+ * The cumulative public measure predicate.
  *
- * publicationStatus alone is not enough, and that is the whole point: the second condition
- * is about the state of the revision the pointer designates. A measure can be PUBLISHED
- * while pointing at a revision that was never reviewed, never published, has been
- * superseded, or carries no source, and each of those must stay invisible.
+ * publicationStatus alone is not enough. The designated revision must have reviewedAt and
+ * publishedAt set, supersededAt, discardedAt and rejectedAt unset, and at least one source.
+ * Every condition is required, so a measure pointing at an ineligible revision stays invisible.
  */
 const PUBLIC_MEASURE_WHERE = {
   publicationStatus: "PUBLISHED",
@@ -18,6 +24,7 @@ const PUBLIC_MEASURE_WHERE = {
     publishedAt: { not: null },
     supersededAt: null,
     discardedAt: null,
+    rejectedAt: null,
     sources: { some: {} },
   },
 } satisfies Prisma.MeasureWhereInput;
@@ -35,17 +42,8 @@ type MeasureRow = Prisma.MeasureGetPayload<{ include: typeof PUBLIC_MEASURE_INCL
 type PublishedRevision = NonNullable<MeasureRow["publishedRevision"]>;
 
 /**
- * The withdrawal state, as one object rather than three loose fields.
- *
- * Its PRESENCE is the fact that the candidate dropped the proposal, and that fact must
- * never be hidden: a page showing a withdrawn measure as if it were still defended is a
- * factual error, which is worse than a missing source label.
- *
- * That is why the two source fields are nullable inside a non-null object, which is the one
- * deviation from the shape asked for in review. withdrawMeasure() writes the three fields
- * together or none, so a partial state can only come from a direct database write, and the
- * audit reports it. Requiring both sources here would mean returning `withdrawal: null` on
- * such a row, which hides a real withdrawal to protect a type.
+ * The canonical withdrawal state. Its presence records that the candidate dropped the proposal.
+ * Historical source fields remain independently nullable so partial provenance is never hidden.
  */
 export type MeasureWithdrawal = {
   withdrawnAt: Date;
@@ -119,6 +117,165 @@ export type MeasureListOptions = { includeWithdrawn?: boolean };
 
 function withdrawalFilter(options?: MeasureListOptions): Prisma.MeasureWhereInput {
   return options?.includeWithdrawn ? {} : { withdrawnAt: null };
+}
+
+const PUBLIC_PRESIDENTIAL_MEASURE_SELECT = {
+  id: true,
+  publishedRevisionId: true,
+  theme: true,
+  attribution: true,
+  withdrawnAt: true,
+  withdrawnSourceUrl: true,
+  withdrawnSourceLabel: true,
+  publishedRevision: {
+    select: {
+      id: true,
+      text: true,
+      precision: true,
+      sources: {
+        select: {
+          sourceKind: true,
+          tier: true,
+          url: true,
+          page: true,
+          publishedAt: true,
+        },
+        orderBy: [{ publishedAt: "asc" }, { id: "asc" }],
+      },
+    },
+  },
+  candidacy: {
+    select: {
+      id: true,
+      candidateName: true,
+      politician: { select: { slug: true } },
+    },
+  },
+} satisfies Prisma.MeasureSelect;
+
+type PublicPresidentialMeasureRow = Prisma.MeasureGetPayload<{
+  select: typeof PUBLIC_PRESIDENTIAL_MEASURE_SELECT;
+}>;
+
+export type PublicPresidentialMeasure = {
+  measureId: string;
+  publishedRevisionId: string;
+  text: string;
+  precision: {
+    code: NonNullable<PublicPresidentialMeasureRow["publishedRevision"]>["precision"];
+    label: string | null;
+  };
+  theme: { code: ThemeCategory; label: string; slug: string; publicUrl: string };
+  attribution: { code: PublicPresidentialMeasureRow["attribution"]; label: string };
+  candidacy: {
+    candidacyId: string;
+    candidateName: string;
+    politicianSlug: string | null;
+    publicUrl: string | null;
+  };
+  sources: NonNullable<PublicPresidentialMeasureRow["publishedRevision"]>["sources"];
+  withdrawal: MeasureWithdrawal | null;
+};
+
+export type ListPublicPresidentialMeasuresOptions = {
+  electionId: string;
+  electionSlug: string;
+  candidateSlug?: string;
+  theme?: ThemeCategory;
+  includeWithdrawn?: boolean;
+  page: number;
+  limit: number;
+};
+
+export type PublicPresidentialMeasurePage = {
+  data: PublicPresidentialMeasure[];
+  total: number;
+};
+
+function toPublicPresidentialMeasure(
+  row: PublicPresidentialMeasureRow,
+  electionSlug: string
+): PublicPresidentialMeasure | null {
+  const revision = row.publishedRevision;
+  const candidacy = row.candidacy;
+  if (revision === null || row.publishedRevisionId === null || candidacy === null) return null;
+
+  const politicianSlug = candidacy.politician?.slug ?? null;
+  const themeSlug = themeToSlug(row.theme);
+  return {
+    measureId: row.id,
+    publishedRevisionId: row.publishedRevisionId,
+    text: revision.text,
+    precision: {
+      code: revision.precision,
+      label: revision.precision ? MEASURE_PRECISION_LABELS[revision.precision] : null,
+    },
+    theme: {
+      code: row.theme,
+      label: THEME_CATEGORY_LABELS[row.theme],
+      slug: themeSlug,
+      publicUrl: `/elections/${electionSlug}/sujets/${themeSlug}`,
+    },
+    attribution: {
+      code: row.attribution,
+      label: MEASURE_ATTRIBUTION_LABELS[row.attribution],
+    },
+    candidacy: {
+      candidacyId: candidacy.id,
+      candidateName: candidacy.candidateName,
+      politicianSlug,
+      publicUrl: politicianSlug ? `/elections/${electionSlug}/candidats/${politicianSlug}` : null,
+    },
+    sources: revision.sources,
+    withdrawal:
+      row.withdrawnAt !== null
+        ? {
+            withdrawnAt: row.withdrawnAt,
+            sourceUrl: row.withdrawnSourceUrl,
+            sourceLabel: row.withdrawnSourceLabel,
+          }
+        : null,
+  };
+}
+
+/**
+ * Database-paginated public read for presidential measures.
+ *
+ * The measure/revision gate and the published presidential-candidacy gate are cumulative. Neither
+ * a PUBLISHED measure alone nor a PUBLISHED candidacy extension alone can surface a row.
+ */
+export async function listPublicPresidentialMeasures(
+  options: ListPublicPresidentialMeasuresOptions
+): Promise<PublicPresidentialMeasurePage> {
+  const candidacyWhere: Prisma.CandidacyWhereInput = {
+    ...getPublicTrackedPresidentialCandidacyWhere(options.candidateSlug),
+    ...PUBLIC_CANDIDACY_WHERE,
+  };
+  const where: Prisma.MeasureWhereInput = {
+    electionId: options.electionId,
+    ...(options.theme ? { theme: options.theme } : {}),
+    ...PUBLIC_MEASURE_WHERE,
+    ...withdrawalFilter(options),
+    candidacy: { is: candidacyWhere },
+  };
+
+  const [total, rows] = await Promise.all([
+    db.measure.count({ where }),
+    db.measure.findMany({
+      where,
+      select: PUBLIC_PRESIDENTIAL_MEASURE_SELECT,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      skip: (options.page - 1) * options.limit,
+      take: options.limit,
+    }),
+  ]);
+
+  return {
+    total,
+    data: rows
+      .map((row) => toPublicPresidentialMeasure(row, options.electionSlug))
+      .filter((measure): measure is PublicPresidentialMeasure => measure !== null),
+  };
 }
 
 /**

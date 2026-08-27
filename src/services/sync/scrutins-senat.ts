@@ -7,7 +7,7 @@
  */
 
 import { db } from "@/lib/db";
-import { syncMetadata, hashVotes, ProgressTracker } from "@/lib/sync";
+import { syncMetadata, hashContent, hashVotes, ProgressTracker } from "@/lib/sync";
 import { computeGroupPositionsForScrutin } from "@/services/sync/compute-group-positions";
 import { writeVotesForScrutin } from "@/services/sync/scrutins-vote-writer";
 import { HTTPClient } from "@/lib/api/http-client";
@@ -16,6 +16,11 @@ import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
 import { VotePosition, VotingResult, DataSource, Chamber } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
 import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
+import {
+  assessSenateVoteSource,
+  mapSenateVotePosition,
+  type SenateSourceVote,
+} from "@/lib/votes/senate-participation";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -46,14 +51,10 @@ interface ScrutinMetadata {
   votesFor: number;
   votesAgainst: number;
   votesAbstain: number;
+  officialVoters: number | null;
+  officialNonVoters: number | null;
   result: VotingResult;
   sourceUrl: string;
-}
-
-interface SenatVote {
-  matricule: string;
-  vote: string; // "p" = pour, "c" = contre, "a" = abstention, "n" = non-votant
-  siege: number;
 }
 
 export interface ScrutinsSenatSyncStats {
@@ -96,7 +97,7 @@ async function getScrutinListForSession(session: number): Promise<string[]> {
 /**
  * Parse scrutin metadata from HTML page
  */
-function parseScrutinMetadata(
+export function parseScrutinMetadata(
   html: string,
   session: number,
   number: string
@@ -152,6 +153,10 @@ function parseScrutinMetadata(
     const votesFor = forMatch ? parseInt(forMatch[1]!) : 0;
     const votesAgainst = againstMatch ? parseInt(againstMatch[1]!) : 0;
     const votesAbstain = abstainMatch ? parseInt(abstainMatch[1]!) : 0;
+    const votersMatch = textContent.match(/(\d+)\s+votants/i);
+    const nonVotersMatch = textContent.match(
+      /N['’]ont\s+pas\s+pris\s+part\s+au\s+vote\s*:?\s*(\d+)/i
+    );
 
     // Determine result
     const hasAdoption = /Le\s+Sénat\s+a\s+adopté|a\s+été\s+adopté/i.test(textContent);
@@ -165,6 +170,8 @@ function parseScrutinMetadata(
       votesFor,
       votesAgainst,
       votesAbstain,
+      officialVoters: votersMatch ? parseInt(votersMatch[1]!, 10) : null,
+      officialNonVoters: nonVotersMatch ? parseInt(nonVotersMatch[1]!, 10) : null,
       result,
       sourceUrl: `${BASE_URL}/scrutin-public/${session}/scr${session}-${number}.html`,
     };
@@ -177,35 +184,23 @@ function parseScrutinMetadata(
 /**
  * Fetch individual votes from JSON endpoint
  */
-async function fetchVotesJson(session: number, number: string): Promise<SenatVote[]> {
-  try {
-    const { data } = await senatClient.get<{ votes?: SenatVote[] }>(
-      `/scrutin-public/${session}/scr${session}-${number}.json`,
-      { skipCache: true }
-    );
-    return data.votes || [];
-  } catch (error) {
-    console.error(`Error fetching votes JSON: ${error}`);
-    return [];
+async function fetchVotesJson(session: number, number: string): Promise<SenateSourceVote[]> {
+  const { data } = await senatClient.get<{ votes?: SenateSourceVote[] }>(
+    `/scrutin-public/${session}/scr${session}-${number}.json`,
+    { skipCache: true }
+  );
+  if (!Array.isArray(data.votes)) {
+    throw new Error("Réponse JSON Sénat sans liste de votes");
   }
+  return data.votes;
 }
 
-/**
- * Map Senate vote code to VotePosition
- */
-function mapVotePosition(code: string): VotePosition {
-  switch (code.toLowerCase()) {
-    case "p":
-      return "POUR";
-    case "c":
-      return "CONTRE";
-    case "a":
-      return "ABSTENTION";
-    case "n":
-      return "NON_VOTANT";
-    default:
-      return "ABSENT";
-  }
+function senateVotesSourceUrl(session: number, number: string): string {
+  return `${BASE_URL}/scrutin-public/${session}/scr${session}-${number}.json`;
+}
+
+function hashSenateSourceVotes(votes: SenateSourceVote[]): string {
+  return hashContent(JSON.stringify(votes));
 }
 
 /**
@@ -372,6 +367,27 @@ export async function syncScrutinsSenat(
 
           // Fetch votes JSON
           const votes = await fetchVotesJson(currentSession, number!);
+          const officialTotals =
+            metadata.officialVoters == null || metadata.officialNonVoters == null
+              ? null
+              : {
+                  voters: metadata.officialVoters,
+                  nonVoters: metadata.officialNonVoters,
+                  votesFor: metadata.votesFor,
+                  votesAgainst: metadata.votesAgainst,
+                  votesAbstain: metadata.votesAbstain,
+                };
+          const sourceAssessment = officialTotals
+            ? assessSenateVoteSource(votes, officialTotals)
+            : {
+                status: "INVALID" as const,
+                expectedCount: 0,
+                observedCount: votes.length,
+                reason: "official_totals_missing",
+              };
+          const sourceUrl = senateVotesSourceUrl(currentSession, number!);
+          const sourceHash = hashSenateSourceVotes(votes);
+          const fetchedAt = new Date();
 
           const externalId = `SENAT-${currentSession}-${number}`;
 
@@ -414,7 +430,39 @@ export async function syncScrutinsSenat(
               stats.scrutinsCreated++;
             }
 
-            // Process votes
+            const pendingImport = {
+              sourceUrl,
+              fetchedAt,
+              expectedCount: sourceAssessment.expectedCount,
+              observedCount: sourceAssessment.observedCount,
+              resolvedCount: 0,
+              sourceHash,
+              // COMPLETE is set only after the local vote rewrite succeeds.
+              status:
+                sourceAssessment.status === "COMPLETE"
+                  ? ("INCOMPLETE" as const)
+                  : sourceAssessment.status,
+              statusReason:
+                sourceAssessment.status === "COMPLETE"
+                  ? "pending_local_vote_rewrite"
+                  : sourceAssessment.reason,
+            };
+            await db.scrutinVoteImport.upsert({
+              where: { scrutinId: scrutin.id },
+              create: { scrutinId: scrutin.id, ...pendingImport },
+              update: pendingImport,
+            });
+
+            if (sourceAssessment.status !== "COMPLETE") {
+              stats.scrutinsSkipped++;
+              stats.errors.push(
+                `Session ${currentSession} n°${number}: source nominative ${sourceAssessment.status.toLowerCase()} (${sourceAssessment.reason})`
+              );
+              progress.tick();
+              continue;
+            }
+
+            // Process only validated source rows. Unknown codes cannot reach this mapping.
             const votesToCreate: { politicianId: string; position: VotePosition }[] = [];
 
             for (const vote of votes) {
@@ -422,7 +470,7 @@ export async function syncScrutinsSenat(
               if (politicianId) {
                 votesToCreate.push({
                   politicianId,
-                  position: mapVotePosition(vote.vote),
+                  position: mapSenateVotePosition(vote.vote),
                 });
               } else {
                 stats.senatorsNotFound.add(vote.matricule);
@@ -430,29 +478,35 @@ export async function syncScrutinsSenat(
             }
 
             // Check votes hash to skip unchanged scrutins
-            if (votesToCreate.length > 0) {
-              const newHash = hashVotes(votesToCreate);
+            const newHash = hashVotes(votesToCreate);
 
-              if (scrutin.votesHash === newHash) {
-                stats.votesSkipped += votesToCreate.length;
-              } else {
-                await writeVotesForScrutin({
-                  scrutinId: scrutin.id,
-                  votingDate: scrutin.votingDate,
-                  chamber: scrutin.chamber,
-                  scrutinType: scrutin.type,
-                  votes: votesToCreate,
-                });
+            if (scrutin.votesHash === newHash) {
+              stats.votesSkipped += votesToCreate.length;
+            } else {
+              await writeVotesForScrutin({
+                scrutinId: scrutin.id,
+                votingDate: scrutin.votingDate,
+                chamber: scrutin.chamber,
+                scrutinType: scrutin.type,
+                votes: votesToCreate,
+              });
 
-                await db.scrutin.update({
-                  where: { id: scrutin.id },
-                  data: { votesHash: newHash },
-                });
-
-                await computeGroupPositionsForScrutin(scrutin.id);
-                stats.votesCreated += votesToCreate.length;
-              }
+              await computeGroupPositionsForScrutin(scrutin.id);
+              stats.votesCreated += votesToCreate.length;
             }
+
+            await db.scrutinVoteImport.update({
+              where: { scrutinId: scrutin.id },
+              data: {
+                resolvedCount: votesToCreate.length,
+                status: "COMPLETE",
+                statusReason: null,
+              },
+            });
+            await db.scrutin.update({
+              where: { id: scrutin.id },
+              data: { votesHash: newHash },
+            });
 
             // Track max processed number for cursor
             if (numInt > maxProcessedNumber) {
@@ -461,12 +515,19 @@ export async function syncScrutinsSenat(
           } else {
             // Dry run: just count
             stats.scrutinsCreated++;
-            for (const vote of votes) {
-              if (!matriculeToId.has(vote.matricule)) {
-                stats.senatorsNotFound.add(vote.matricule);
-              } else {
-                stats.votesCreated++;
+            if (sourceAssessment.status === "COMPLETE") {
+              for (const vote of votes) {
+                if (!matriculeToId.has(vote.matricule)) {
+                  stats.senatorsNotFound.add(vote.matricule);
+                } else {
+                  stats.votesCreated++;
+                }
               }
+            } else {
+              stats.scrutinsSkipped++;
+              stats.errors.push(
+                `Session ${currentSession} n°${number}: source nominative ${sourceAssessment.status.toLowerCase()} (${sourceAssessment.reason})`
+              );
             }
           }
 

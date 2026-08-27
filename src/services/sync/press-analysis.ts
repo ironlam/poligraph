@@ -23,7 +23,7 @@ import {
   type DetectedAffair,
   type ArticleAnalysisResult,
 } from "@/services/press-analysis";
-import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matching";
+import { classifyAffairMatches, findMatchingAffairs } from "@/services/affairs/matching";
 import { syncMetadata } from "@/lib/sync";
 import { classifyArticleTier, type ArticleTier } from "@/config/press-keywords";
 import { MIN_CONFIDENCE_THRESHOLD } from "@/config/press-analysis";
@@ -32,8 +32,18 @@ import {
   assessPressAttribution,
   assessProcedureEvidence,
 } from "@/lib/affair-matching";
+import { previewAffairPolitician } from "@/lib/affair-matching/resolver";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import {
+  hashSourceContent,
+  previewAffairEventProposal,
+  proposeAffairEvent,
+  type PreviewAffairEventProposalOutcome,
+  type ProposeAffairEventOutcome,
+} from "@/services/affairs/proposals";
+import { IMPORTER_PRESS_ANALYSIS, withImportRun } from "@/services/affairs/import-run";
+import { isVerifiedAffairPressUrl } from "@/config/affair-sources";
 
 // ============================================
 // TYPES
@@ -56,6 +66,14 @@ export interface PressAnalysisStats {
   affairsEnriched: number;
   affairsCreated: number;
   affairsRejected: number;
+  proposalsPending: number;
+  proposalsDeduped: number;
+  proposalsWouldCreate: number;
+  proposalsDedupedPending: number;
+  proposalsDedupedTerminal: number;
+  eventsAlreadyApplied: number;
+  ambiguousMatches: number;
+  insufficientSourceProvenance: number;
   scrapeErrors: number;
   analysisErrors: number;
   sensitiveWarnings: number;
@@ -117,6 +135,14 @@ export async function syncPressAnalysis(
     affairsEnriched: 0,
     affairsCreated: 0,
     affairsRejected: 0,
+    proposalsPending: 0,
+    proposalsDeduped: 0,
+    proposalsWouldCreate: 0,
+    proposalsDedupedPending: 0,
+    proposalsDedupedTerminal: 0,
+    eventsAlreadyApplied: 0,
+    ambiguousMatches: 0,
+    insufficientSourceProvenance: 0,
     scrapeErrors: 0,
     analysisErrors: 0,
     sensitiveWarnings: 0,
@@ -164,101 +190,122 @@ export async function syncPressAnalysis(
   console.log(`  Tier 1 (Sonnet, mots-clés judiciaires): ${tier1Count}`);
   console.log(`  Tier 2 (Haiku, couverture large): ${classifiedArticles.length - tier1Count}\n`);
 
-  const scraper = getArticleScraper();
+  const execute = async (importRunId: string | null): Promise<PressAnalysisStats> => {
+    const scraper = getArticleScraper();
 
-  for (const article of classifiedArticles) {
-    stats.articlesProcessed++;
+    for (const article of classifiedArticles) {
+      stats.articlesProcessed++;
 
-    if (verbose) {
-      console.log(
-        `\n[${stats.articlesProcessed}/${classifiedArticles.length}] [${article.tier}] ${article.feedSource}: ${article.title.slice(0, 80)}...`
-      );
-    }
+      if (verbose) {
+        console.log(
+          `\n[${stats.articlesProcessed}/${classifiedArticles.length}] [${article.tier}] ${article.feedSource}: ${article.title.slice(0, 80)}...`
+        );
+      }
 
-    // Step 1: Get article content — scrape or fallback to RSS
-    let analysisContent: string;
+      // Step 1: Get article content, scrape or fallback to RSS
+      let analysisContent: string;
 
-    if (scraper.canScrape(article.feedSource)) {
-      const content = await scraper.extractArticle(article.url, article.feedSource);
+      if (scraper.canScrape(article.feedSource)) {
+        const content = await scraper.extractArticle(article.url, article.feedSource);
 
-      if (!content) {
-        stats.scrapeErrors++;
-        // Fallback to RSS title+description even for scrapable sources
-        analysisContent = buildRSSFallbackContent(article);
-        if (verbose) {
-          console.log("  ⚠ Scrape échoué, fallback RSS");
+        if (!content) {
+          stats.scrapeErrors++;
+          // Fallback to RSS title+description even for scrapable sources
+          analysisContent = buildRSSFallbackContent(article);
+          if (verbose) {
+            console.log("  ⚠ Scrape échoué, fallback RSS");
+          }
+        } else {
+          analysisContent = content.textContent;
+          if (verbose) {
+            console.log(`  Contenu extrait: ${content.length} chars`);
+          }
         }
       } else {
-        analysisContent = content.textContent;
+        // Paywalled source (lemonde, lefigaro): use RSS title+description
+        analysisContent = buildRSSFallbackContent(article);
         if (verbose) {
-          console.log(`  Contenu extrait: ${content.length} chars`);
+          console.log("  Source payante, analyse sur titre+description RSS");
         }
       }
-    } else {
-      // Paywalled source (lemonde, lefigaro) — use RSS title+description
-      analysisContent = buildRSSFallbackContent(article);
-      if (verbose) {
-        console.log("  Source payante, analyse sur titre+description RSS");
-      }
-    }
 
-    // Step 2: AI Analysis
-    try {
-      // Get pre-detected politician mentions from the article
-      const mentionedNames = article.mentions.map((m) => m.politician.fullName);
+      // Step 2: AI Analysis
+      try {
+        // Get pre-detected politician mentions from the article
+        const mentionedNames = article.mentions.map((m) => m.politician.fullName);
 
-      const result = await analyzeArticle({
-        title: article.title,
-        content: analysisContent,
-        feedSource: article.feedSource,
-        publishedAt: article.publishedAt,
-        mentionedPoliticians: mentionedNames,
-        tier: article.tier,
-      });
-
-      await processAnalyzedArticle(article, analysisContent, result, stats, {
-        dryRun,
-        verbose,
-      });
-    } catch (error) {
-      stats.analysisErrors++;
-      const errorMsg = error instanceof Error ? error.message : String(error);
-
-      // Detect quota/rate limit errors to avoid marking articles and to stop early
-      const isQuotaError = /usage.limits|quota|rate.limit|429|402/i.test(errorMsg);
-
-      if (!dryRun) {
-        await db.pressArticle.update({
-          where: { id: article.id },
-          data: {
-            // Don't mark as analyzed on quota errors so they can be retried
-            ...(isQuotaError ? {} : { aiAnalyzedAt: new Date() }),
-            aiAnalysisError: errorMsg.slice(0, 500),
-          },
+        const result = await analyzeArticle({
+          title: article.title,
+          content: analysisContent,
+          feedSource: article.feedSource,
+          publishedAt: article.publishedAt,
+          mentionedPoliticians: mentionedNames,
+          tier: article.tier,
         });
+
+        await processAnalyzedArticle(article, analysisContent, result, stats, {
+          dryRun,
+          verbose,
+          importRunId,
+        });
+      } catch (error) {
+        stats.analysisErrors++;
+        const errorMsg = error instanceof Error ? error.message : String(error);
+
+        // Detect quota/rate limit errors to avoid marking articles and to stop early
+        const isQuotaError = /usage.limits|quota|rate.limit|429|402/i.test(errorMsg);
+
+        if (!dryRun) {
+          await db.pressArticle.update({
+            where: { id: article.id },
+            data: {
+              // Don't mark as analyzed on quota errors so they can be retried
+              ...(isQuotaError ? {} : { aiAnalyzedAt: new Date() }),
+              aiAnalysisError: errorMsg.slice(0, 500),
+            },
+          });
+        }
+
+        if (isQuotaError) {
+          stats.quotaStopped = true;
+          console.error(`\n✗ API quota/rate limit error, stopping early: ${errorMsg}`);
+          break;
+        }
+
+        console.error(`  ✗ Analyse IA échouée: ${errorMsg}`);
       }
 
-      if (isQuotaError) {
-        stats.quotaStopped = true;
-        console.error(`\n✗ API quota/rate limit error, stopping early: ${errorMsg}`);
-        break;
-      }
-
-      console.error(`  ✗ Analyse IA échouée: ${errorMsg}`);
+      // Rate limit between AI calls
+      await sleep(getAIRateLimitMs());
     }
 
-    // Rate limit between AI calls
-    await sleep(getAIRateLimitMs());
-  }
+    // Update sync metadata
+    if (!dryRun) {
+      await syncMetadata.markCompleted(SYNC_SOURCE_KEY, {
+        itemCount: stats.articlesAnalyzed,
+      });
+    }
 
-  // Update sync metadata
-  if (!dryRun) {
-    await syncMetadata.markCompleted(SYNC_SOURCE_KEY, {
-      itemCount: stats.articlesAnalyzed,
+    return stats;
+  };
+
+  if (dryRun) return execute(null);
+
+  return withImportRun(IMPORTER_PRESS_ANALYSIS, async ({ importRunId, setStats }) => {
+    const result = await execute(importRunId);
+    setStats({
+      proposalsPending: result.proposalsPending,
+      proposalsDeduped: result.proposalsDeduped,
+      proposalsWouldCreate: result.proposalsWouldCreate,
+      proposalsDedupedPending: result.proposalsDedupedPending,
+      proposalsDedupedTerminal: result.proposalsDedupedTerminal,
+      eventsAlreadyApplied: result.eventsAlreadyApplied,
+      ambiguousMatches: result.ambiguousMatches,
+      insufficientSourceProvenance: result.insufficientSourceProvenance,
+      affairsCreated: result.affairsCreated,
     });
-  }
-
-  return stats;
+    return result;
+  });
 }
 
 /** Article fields needed to persist an analysis result. */
@@ -268,6 +315,23 @@ export interface AnalyzedArticleRef {
   title: string;
   feedSource: string;
   publishedAt: Date;
+}
+
+function normalizeExcerpt(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+/** Keeps only a model-proposed excerpt that is actually present in the source text. */
+export function findVerifiedPressExcerpt(
+  excerpts: string[],
+  analysisContent: string
+): string | null {
+  const normalizedContent = normalizeExcerpt(analysisContent);
+  for (const excerpt of excerpts) {
+    const normalized = normalizeExcerpt(excerpt);
+    if (normalized && normalizedContent.includes(normalized)) return excerpt.trim().slice(0, 500);
+  }
+  return null;
 }
 
 /**
@@ -284,9 +348,9 @@ export async function processAnalyzedArticle(
   analysisContent: string,
   result: ArticleAnalysisResult,
   stats: PressAnalysisStats,
-  options: { dryRun: boolean; verbose: boolean }
+  options: { dryRun: boolean; verbose: boolean; importRunId?: string | null }
 ): Promise<void> {
-  const { dryRun, verbose } = options;
+  const { dryRun, verbose, importRunId = null } = options;
 
   stats.articlesAnalyzed++;
 
@@ -347,7 +411,7 @@ export async function processAnalyzedArticle(
     }
 
     // Resolve politician via the deterministic resolver (full DB, no context window)
-    const resolveResult = await resolveAffairPolitician({
+    const resolverInput = {
       text: analysisContent,
       candidateNames: detected.mentionedNames,
       metadata: {
@@ -356,7 +420,10 @@ export async function processAnalyzedArticle(
         factsDate: detected.factsDate ? new Date(detected.factsDate) : null,
         court: detected.court ?? null,
       },
-    });
+    };
+    const resolveResult = dryRun
+      ? await previewAffairPolitician(resolverInput)
+      : await resolveAffairPolitician(resolverInput);
 
     if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
       if (verbose) {
@@ -408,21 +475,14 @@ export async function processAnalyzedArticle(
       politicianId,
       title: detected.title,
       category: detected.category as AffairCategory,
+      status: detected.status as AffairStatus,
     });
+    const routing = classifyAffairMatches(matches);
 
-    // Enrichment requires an unambiguous match: several affairs tied at HIGH means
-    // the evidence does not identify one (issue #520).
-    const picked = pickConfidentMatch(matches);
-    const bestMatch = picked.kind === "match" ? picked.match : null;
-
-    // Weaker signal, kept for the MENTION link only. Associating an article with
-    // an affair is additive and reversible, unlike writing judicial fields.
-    const looseMatch = matches[0] ?? null;
-
-    if (bestMatch) {
+    if (routing.kind === "CONFIDENT_MATCH") {
       // Enrich existing affair
       const enriched = await enrichAffairFromPress(
-        bestMatch.affairId,
+        routing.match.affairId,
         article.id,
         article.url,
         article.title,
@@ -434,20 +494,78 @@ export async function processAnalyzedArticle(
       );
       if (enriched) {
         stats.affairsEnriched++;
-        if (!dryRun) {
+        if (!dryRun && resolveResult.decisionId) {
           await db.affairPoliticianDecision.update({
             where: { id: resolveResult.decisionId },
-            data: { affairId: bestMatch.affairId },
+            data: { affairId: routing.match.affairId },
           });
         }
       }
-    } else if (detected.isNewRevelation) {
+      continue;
+    }
+
+    if (routing.kind === "CONFIDENT_AMBIGUOUS" || routing.kind === "POSSIBLE_AMBIGUOUS") {
+      stats.ambiguousMatches++;
+    }
+
+    if (detected.isNewRevelation) {
       // Reject low-confidence detections before creating
       if (detected.confidenceScore < MIN_CONFIDENCE_THRESHOLD) {
         await rejectLowConfidenceAffair(article.id, politicianId, detected, dryRun, verbose);
         stats.affairsRejected++;
         continue;
       }
+
+      if (
+        routing.kind === "UNIQUE_EVOLUTION" &&
+        detected.statusValidated === true &&
+        detected.categoryValidated === true
+      ) {
+        const sourceExcerpt = findVerifiedPressExcerpt(detected.excerpts, analysisContent);
+        if (sourceExcerpt && isVerifiedAffairPressUrl(article.url)) {
+          const eventInput = {
+            affairId: routing.match.affairId,
+            importer: IMPORTER_PRESS_ANALYSIS,
+            sourceUrl: article.url,
+            sourceTitle: article.title,
+            publishedAt: article.publishedAt,
+            publisher: feedSourceToPublisher(article.feedSource),
+            pressArticleId: article.id,
+            resolverDecisionId: resolveResult.decisionId,
+            sourceContentHash: hashSourceContent({
+              articleId: article.id,
+              sourceUrl: article.url,
+              publishedAt: article.publishedAt,
+              analysisContent,
+            }),
+            sourceExcerpt,
+            confidence: Math.round(routing.match.score * 100),
+            rationale:
+              `Candidat d’évolution unique (${routing.match.matchedBy}) pour une affaire ` +
+              `pré-décision du même politique. L’article est proposé comme nouvelle source ` +
+              `médiatique, sans modification automatique de l’état judiciaire.`,
+            extractorVersion: "press-evolution-v1",
+          };
+          let proposal;
+          if (dryRun) {
+            proposal = await previewAffairEventProposal(eventInput);
+          } else {
+            if (!importRunId) throw new Error("ImportRun presse absent pour la proposition");
+            proposal = await proposeAffairEvent({ ...eventInput, importRunId });
+          }
+          recordEventProposalOutcome(stats, proposal.outcome);
+          if (verbose && dryRun) {
+            console.log(`  [DRY-RUN] Proposition événement : ${proposal.outcome}`);
+          }
+          if (proposal.outcome !== "TARGET_INELIGIBLE") continue;
+        } else if (verbose) {
+          console.log("  - Source ou extrait insuffisant, conservation du brouillon de revue");
+        }
+        if (!sourceExcerpt || !isVerifiedAffairPressUrl(article.url)) {
+          stats.insufficientSourceProvenance++;
+        }
+      }
+
       // New revelation — create affair as DRAFT (no title prefix)
       const created = await createAffairFromPress(
         politicianId,
@@ -462,16 +580,33 @@ export async function processAnalyzedArticle(
         verbose
       );
       if (created) stats.affairsCreated++;
-    } else if (looseMatch) {
+    } else if (routing.kind === "NO_MATCH" && routing.looseMatch) {
       // Weaker match — link the article as a MENTION, without touching the affair
       if (!dryRun) {
-        await linkArticleToAffair(article.id, looseMatch.affairId, "MENTION");
+        await linkArticleToAffair(article.id, routing.looseMatch.affairId, "MENTION");
       }
       if (verbose) {
-        console.log(`  → Lien MENTION créé: article ↔ affaire ${looseMatch.affairId}`);
+        console.log(`  → Lien MENTION créé: article ↔ affaire ${routing.looseMatch.affairId}`);
       }
     }
   }
+}
+
+function recordEventProposalOutcome(
+  stats: PressAnalysisStats,
+  outcome: ProposeAffairEventOutcome | PreviewAffairEventProposalOutcome
+): void {
+  if (outcome === "CREATED") stats.proposalsPending++;
+  if (outcome === "WOULD_CREATE") stats.proposalsWouldCreate++;
+  if (outcome === "DEDUPED_PENDING") {
+    stats.proposalsDeduped++;
+    stats.proposalsDedupedPending++;
+  }
+  if (outcome === "DEDUPED_TERMINAL") {
+    stats.proposalsDeduped++;
+    stats.proposalsDedupedTerminal++;
+  }
+  if (outcome === "ALREADY_APPLIED") stats.eventsAlreadyApplied++;
 }
 
 // ============================================

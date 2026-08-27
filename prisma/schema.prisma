@@ -659,9 +659,10 @@ model Affair {
 
 // Timeline events for an affair
 model AffairEvent {
-  id       String @id @default(cuid())
-  affair   Affair @relation(fields: [affairId], references: [id], onDelete: Cascade)
-  affairId String
+  id          String  @id @default(cuid())
+  affair      Affair  @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  affairId    String
+  identityKey String? // Stable importer identity; null for historical/manual events
 
   date        DateTime
   type        AffairEventType
@@ -676,6 +677,7 @@ model AffairEvent {
 
   @@index([affairId])
   @@index([date])
+  @@unique([affairId, identityKey])
 }
 
 enum AffairEventType {
@@ -958,7 +960,8 @@ model Scrutin {
   votesHash String?
 
   // Relations
-  votes               Vote[]
+  votes                 Vote[]
+  individualVotesImport ScrutinVoteImport?
   dossierLegislatifId String?
   dossierLegislatif   LegislativeDossier? @relation(fields: [dossierLegislatifId], references: [id])
 
@@ -1017,6 +1020,26 @@ model Vote {
   // (Issue #377): index-only scan, drops the JOIN on Scrutin. Created in prod via
   // CREATE INDEX CONCURRENTLY.
   @@index([politicianId, scrutinType, votingDate(sort: Desc)])
+}
+
+/// Provenance and completeness of the official nominative vote source.
+/// Internal-only: individual identity coverage is recorded separately from official completeness.
+model ScrutinVoteImport {
+  id            String   @id @default(cuid())
+  scrutinId     String   @unique
+  scrutin       Scrutin  @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
+  sourceUrl     String
+  fetchedAt     DateTime
+  expectedCount Int
+  observedCount Int
+  resolvedCount Int
+  sourceHash    String
+  status        IndividualVoteDataStatus @default(UNVERIFIED)
+  statusReason  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
 }
 
 model ScrutinImportance {
@@ -1110,6 +1133,13 @@ enum VotePosition {
   ABSTENTION
   NON_VOTANT
   ABSENT
+}
+
+enum IndividualVoteDataStatus {
+  UNVERIFIED
+  COMPLETE
+  INCOMPLETE
+  INVALID
 }
 
 enum VotingResult {
@@ -2167,6 +2197,7 @@ model PoliticianParticipation {
   votesCount        Int
   eligibleScrutins  Int
   participationRate Float // 0-100, pre-computed
+  computationVersion String?
 
   // Denormalized display fields (avoid JOINs in read queries)
   firstName      String

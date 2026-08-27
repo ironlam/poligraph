@@ -5,6 +5,7 @@ import { AffairTimeline } from "./AffairTimeline";
 const mockEvents = [
   {
     id: "1",
+    identityKey: null,
     affairId: "affair-1",
     date: new Date("2020-01-15"),
     type: "REVELATION" as const,
@@ -16,6 +17,7 @@ const mockEvents = [
   },
   {
     id: "2",
+    identityKey: null,
     affairId: "affair-1",
     date: new Date("2020-06-20"),
     type: "MISE_EN_EXAMEN" as const,
@@ -27,6 +29,7 @@ const mockEvents = [
   },
   {
     id: "3",
+    identityKey: null,
     affairId: "affair-1",
     date: new Date("2021-03-10"),
     type: "CONDAMNATION" as const,

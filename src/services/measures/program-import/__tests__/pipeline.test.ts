@@ -4,10 +4,10 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 import { normalizeForDeduplication, jaccardSimilarity } from "../deduplication";
 import { normalizedTextAddsInformation } from "../extractor";
 import {
-  calculatePrimaryShare,
   canonicalizeProgramImportReport,
   filterExtractableSegments,
   formatProgramImportProgress,
+  PRIMARY_SHARE_UNAVAILABLE_REASON,
   renderMarkdownReport,
   type ProgramImportReport,
 } from "../pipeline";
@@ -259,12 +259,6 @@ describe("rapport d'import", () => {
     expect(filterExtractableSegments(segments).map((segment) => segment.id)).toEqual(["pdf-1-1"]);
   });
 
-  it("calcule la part primaire et laisse null sans proposition considérée", () => {
-    expect(calculatePrimaryShare(0, 0)).toBeNull();
-    expect(calculatePrimaryShare(3, 4)).toBe(75);
-    expect(calculatePrimaryShare(12, 12)).toBe(100);
-  });
-
   it("rend chaque proposition traçable jusqu'à son édition et son document", () => {
     const report: ProgramImportReport = {
       generatedAt: "2026-08-15T10:00:00.000Z",
@@ -298,7 +292,8 @@ describe("rapport d'import", () => {
           draftsExisting: 0,
           draftsAdded: 0,
           published: 0,
-          primaryShare: 100,
+          primaryShare: null,
+          primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
           themes: ["SOCIAL_TRAVAIL"],
           proposals: [
             {
@@ -344,8 +339,9 @@ describe("rapport d'import", () => {
     expect(markdown).toContain("Raison provenance: STABLE_TWO_COLUMN_GUTTER");
     expect(markdown).toContain("Citation exacte utilisée: non");
     expect(markdown).toContain("READY_FOR_REVIEW signifie uniquement");
-    expect(markdown).toContain("| François Ruffin | 1 | 1 | 1 | 0 | 100 % |");
+    expect(markdown).toContain("| François Ruffin | 1 | 1 | 1 | 0 | n/a |");
     expect(markdown).toContain("Part primaire");
+    expect(markdown).toContain(PRIMARY_SHARE_UNAVAILABLE_REASON);
   });
 
   it("réconcilie le rapport avec l'unique décision canonique", () => {
@@ -425,6 +421,8 @@ describe("rapport d'import", () => {
       expect(reported.accepted).toBe(isAcceptedProposal(reported));
     }
     expect(report.candidates[0]!.status).toBe("READY_FOR_REVIEW");
+    expect(report.candidates[0]!.primaryShare).toBeNull();
+    expect(report.candidates[0]!.primaryShareReason).toBe(PRIMARY_SHARE_UNAVAILABLE_REASON);
   });
 
   it("ne marque pas READY_FOR_REVIEW quand toutes les propositions sont écartées", () => {
@@ -455,7 +453,8 @@ describe("rapport d'import", () => {
           draftsExisting: 0,
           draftsAdded: 0,
           published: 0,
-          primaryShare: 100,
+          primaryShare: null,
+          primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
           themes: [],
           proposals: [
             {

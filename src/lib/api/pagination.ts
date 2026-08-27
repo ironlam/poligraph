@@ -34,6 +34,31 @@ export function parsePagination(
 }
 
 /**
+ * Parse pagination without correcting malformed client input.
+ *
+ * Public contracts that promise bounded integers use this variant so `1.5`, `0`, an unsafe
+ * integer or an out-of-range limit is rejected instead of being silently truncated or clamped.
+ */
+export function parseStrictPagination(
+  searchParams: URLSearchParams,
+  options?: PaginationOptions
+): PaginationResult | null {
+  const { defaultLimit = 50, maxLimit = 100 } = options ?? {};
+  const rawPage = searchParams.get("page");
+  const rawLimit = searchParams.get("limit");
+  const isPositiveInteger = (value: string): boolean => /^[1-9][0-9]*$/.test(value);
+
+  if (rawPage !== null && !isPositiveInteger(rawPage)) return null;
+  if (rawLimit !== null && !isPositiveInteger(rawLimit)) return null;
+
+  const page = rawPage === null ? 1 : Number(rawPage);
+  const limit = rawLimit === null ? defaultLimit : Number(rawLimit);
+  if (!Number.isSafeInteger(page) || !Number.isSafeInteger(limit) || limit > maxLimit) return null;
+
+  return { page, limit, skip: (page - 1) * limit };
+}
+
+/**
  * Build a pagination metadata object for API responses.
  */
 export function buildPaginationMeta(page: number, limit: number, total: number): PaginationMeta {

@@ -68,11 +68,16 @@ export interface ResolveResult {
   decisionId: string;
 }
 
+export type ResolvePreviewResult = Omit<ResolveResult, "decisionId"> & { decisionId: null };
+
 /**
  * Full resolver entry point. Loads politicians, prefilters, scores, judges,
  * persists, and returns the decision id.
  */
-export async function resolveAffairPolitician(input: AffairScoringInput): Promise<ResolveResult> {
+async function resolveAffairPoliticianInternal(
+  input: AffairScoringInput,
+  persist: boolean
+): Promise<ResolveResult | ResolvePreviewResult> {
   if (input.text.length > 100_000) {
     throw new Error("Affair text exceeds 100KB limit");
   }
@@ -87,11 +92,15 @@ export async function resolveAffairPolitician(input: AffairScoringInput): Promis
 
   const decision = scoreAffairAgainstCandidates(input, candidates, vocabulary);
 
-  const { decisionId } = await persistDecision({
-    text: input.text,
-    metadata: input.metadata,
-    decision,
-  });
+  const decisionId = persist
+    ? (
+        await persistDecision({
+          text: input.text,
+          metadata: input.metadata,
+          decision,
+        })
+      ).decisionId
+    : null;
 
   return {
     judgment: decision.judgment,
@@ -101,4 +110,15 @@ export async function resolveAffairPolitician(input: AffairScoringInput): Promis
     topCandidates: decision.topCandidates,
     decisionId,
   };
+}
+
+export async function resolveAffairPolitician(input: AffairScoringInput): Promise<ResolveResult> {
+  return resolveAffairPoliticianInternal(input, true) as Promise<ResolveResult>;
+}
+
+/** Runs the same resolver without creating an audit row, for strict dry-runs. */
+export async function previewAffairPolitician(
+  input: AffairScoringInput
+): Promise<ResolvePreviewResult> {
+  return resolveAffairPoliticianInternal(input, false) as Promise<ResolvePreviewResult>;
 }

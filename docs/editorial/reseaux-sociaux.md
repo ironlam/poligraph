@@ -101,7 +101,7 @@ Nos publications s'adressent à des citoyens de tous âges, adolescents et adult
 vulgarisation politique et civique. Ce lecteur n'a pas lu le texte dont nous parlons, ne connaît pas
 le vocabulaire de l'institution qui le produit, et n'a aucune raison de fournir un effort pour nous.
 
-Quatre conséquences, toutes vérifiables sur une publication finie.
+Chacune des conséquences ci-dessous se vérifie sur une publication finie.
 
 **Le vocabulaire de l'institution se traduit.** Les catégories de travail d'une administration ou
 d'une commission sont ses outils de classement, pas des explications. Un terme technique que rien ne
@@ -116,3 +116,34 @@ quelqu'un qui sait déjà ce qu'il a à dire. Il nomme l'objet dont il est quest
 catégorie à laquelle cet objet appartient.
 
 **Aucune métaphore en titre.** Imager, c'est renoncer à nommer.
+
+**Une suite de titres doit s'enchaîner.** Chaque titre répond à la question que le précédent laisse
+ouverte. Relus seuls, dans l'ordre, ils forment le raisonnement de la publication. Un titre qui
+annonce un contenu au lieu de le porter fait défiler le lecteur sans rien lui apprendre.
+
+**Une accroche ne présuppose pas ce qu'elle existe pour expliquer.** Lue seule, par quelqu'un qui
+ignore le sujet, elle doit délivrer une information. Si elle n'est claire que pour qui connaît déjà,
+elle est à réécrire.
+
+**Quand une accroche énonce une condition, c'est une condition nécessaire.** Beaucoup d'accroches
+n'énoncent aucune condition, et cette règle ne les concerne pas. Mais « quand X, alors Y » se lit
+mieux que « pour Y, il faut X » tout en affirmant bien davantage, puisque la première forme prétend
+que X suffit. Chercher un contre-exemple à sa propre accroche avant de la valider. Sur un compte
+dont l'argument est la vérifiabilité, publier une phrase logiquement fausse est le pire endroit où
+se tromper.
+
+## 11. Ce qui ne devient jamais une étiquette
+
+Les pastilles, mots-clés et vignettes d'une publication portent nos propres rubriques, c'est-à-dire
+la taxonomie du site. Elles n'accueillent jamais une catégorie de personnes : diagnostic, handicap,
+origine, situation sociale.
+
+Une pastille est un objet décoratif. Y placer une catégorie de personnes transforme la situation de
+quelqu'un en élément de communication, sur un visuel que l'intéressé verra passer dans son fil. Le
+tort est réel et il est évitable.
+
+Cela déplace aussi le sujet. Quand une publication porte sur le fonctionnement d'une institution,
+classer des personnes en marge lui fait dire autre chose que ce qu'elle démontre.
+
+Quand un terme désignant des personnes est nécessaire, il vit dans une phrase, avec sa source, et il
+énonce ce qu'il recouvre plutôt que de servir de rubrique.

@@ -17,6 +17,9 @@ import type {
   ProgramDocumentType,
 } from "./types";
 
+export const PRIMARY_SHARE_UNAVAILABLE_REASON =
+  "ProgramEdition ne distingue pas encore les sources primaires des sources secondaires.";
+
 export type ProgramImportOptions = {
   apply: boolean;
   candidate?: string;
@@ -103,8 +106,9 @@ type CandidateReport = {
   draftsExisting: number;
   draftsAdded: number;
   published: number;
-  /** Percentage from 0 to 100, or null when no proposal was considered. */
+  /** Kept nullable for compatibility with reports generated before source tiers were modeled. */
   primaryShare: number | null;
+  primaryShareReason?: string;
   themes: string[];
   proposals: CandidateReportProposal[];
   errors: string[];
@@ -113,11 +117,6 @@ type CandidateReport = {
   /** Technical eligibility only: at least one proposal can enter human review. */
   status: ProgramImportCandidateStatus;
 };
-
-export function calculatePrimaryShare(primaryCount: number, totalCount: number): number | null {
-  if (totalCount === 0) return null;
-  return Math.round((primaryCount / totalCount) * 10_000) / 100;
-}
 
 /** Fail closed: segments from a suspect PDF layer never reach the extractor. */
 export function filterExtractableSegments(segments: DocumentSegment[]): DocumentSegment[] {
@@ -204,6 +203,8 @@ export function canonicalizeProgramImportReport(report: ProgramImportReport): Pr
           : candidate.status;
       return {
         ...candidate,
+        primaryShare: null,
+        primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
         proposals,
         themes: [
           ...new Set(
@@ -329,6 +330,7 @@ export async function runProgramImport(
             (measure) => measure.publicationStatus === "PUBLISHED"
           ).length,
           primaryShare: null,
+          primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
           themes: [],
           proposals: [],
           errors: [],
@@ -341,7 +343,6 @@ export async function runProgramImport(
       ];
     })
   );
-  const provenanceCounts = new Map<string, { primary: number; total: number }>();
 
   for (const [editionIndex, edition] of editions.entries()) {
     const documentIndex = editionIndex + 1;
@@ -370,6 +371,7 @@ export async function runProgramImport(
       draftsAdded: 0,
       published: 0,
       primaryShare: null,
+      primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
       themes: [],
       proposals: [],
       errors: [],
@@ -482,10 +484,6 @@ export async function runProgramImport(
       }
       candidate.detected += proposals.length;
       report.propositions.detected += proposals.length;
-      const provenance = provenanceCounts.get(reportKey) ?? { primary: 0, total: 0 };
-      provenance.primary += proposals.length;
-      provenance.total += proposals.length;
-      provenanceCounts.set(reportKey, provenance);
       const exactSeen = new Set<string>();
       for (const { proposal, segment } of proposals) {
         if (proposal.classification === "MEASURE") report.propositions.measures += 1;
@@ -597,11 +595,11 @@ export async function runProgramImport(
     }
   }
 
-  report.candidates = [...reports.entries()].map(([reportKey, candidate]) => {
-    const provenance = provenanceCounts.get(reportKey) ?? { primary: 0, total: 0 };
+  report.candidates = [...reports.values()].map((candidate) => {
     return {
       ...candidate,
-      primaryShare: calculatePrimaryShare(provenance.primary, provenance.total),
+      primaryShare: null,
+      primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
       themes: [...new Set(candidate.themes)],
       status:
         candidate.errors.length === 0
@@ -645,7 +643,7 @@ export function renderMarkdownReport(report: ProgramImportReport): string {
   const rows = report.candidates
     .map(
       (c) =>
-        `| ${c.candidate} | ${c.documentsAnalyzed} | ${c.detected} | ${c.proposals.filter((proposal) => proposal.accepted).length} | ${c.draftsAdded} | ${c.primaryShare === null ? "-" : `${c.primaryShare} %`} | ${c.themes.join(", ") || "-"} | ${c.status} |`
+        `| ${c.candidate} | ${c.documentsAnalyzed} | ${c.detected} | ${c.proposals.filter((proposal) => proposal.accepted).length} | ${c.draftsAdded} | n/a | ${c.themes.join(", ") || "-"} | ${c.status} |`
     )
     .join("\n");
   const proposalDetails = report.candidates
@@ -660,5 +658,5 @@ export function renderMarkdownReport(report: ProgramImportReport): string {
       return `### ${candidate.candidate}\n\n${items}`;
     })
     .join("\n\n");
-  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}. Policy de décision: ${report.decisionPolicyVersion}.\n\n## Sémantique du statut\n\nREADY_FOR_REVIEW signifie uniquement qu’au moins une proposition est techniquement éligible à une revue humaine. Ce statut ne valide ni l’extraction, ni les mesures, ni leur publication.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs: ${report.documents.failed}\n- Pages PDF suspectes ou corrompues: ${report.documents.suspectPages ?? 0}\n- Segments bloqués pour provenance: ${report.documents.blockedSegments ?? 0}\n\n## Extraction\n\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Retenues | Drafts ajoutés | Part primaire | Thèmes | État |\n|---|---:|---:|---:|---:|---:|---|---|\n${rows}\n\n## Détail des propositions\n\n${proposalDetails || "Aucune proposition extraite."}\n`;
+  return `# Import des programmes Présidentielle 2027\n\nGénéré le ${report.generatedAt}, mode ${report.mode}. Policy de décision: ${report.decisionPolicyVersion}.\n\n## Sémantique du statut\n\nREADY_FOR_REVIEW signifie uniquement qu’au moins une proposition est techniquement éligible à une revue humaine. Ce statut ne valide ni l’extraction, ni les mesures, ni leur publication.\n\n## Corpus\n\n- Documents connus: ${report.documents.known}\n- Documents parsés: ${report.documents.parsed}\n- Échecs: ${report.documents.failed}\n- Pages PDF suspectes ou corrompues: ${report.documents.suspectPages ?? 0}\n- Segments bloqués pour provenance: ${report.documents.blockedSegments ?? 0}\n\n## Extraction\n\n- Propositions détectées: ${report.propositions.detected}\n- Mesures: ${report.propositions.measures}\n- Objectifs: ${report.propositions.objectives}\n- Ambiguës: ${report.propositions.ambiguous}\n- Rejetées: ${report.propositions.rejected}\n- Doublons: ${report.propositions.duplicates}\n\n## Base\n\n- Brouillons créés: ${report.database.draftsCreated}\n- Déjà présents: ${report.database.alreadyPresent}\n- Mesures publiées inchangées: ${report.database.publishedUnchanged}\n\n## Couverture par candidature ou parti\n\n| Candidat ou parti | Documents | Détectées | Retenues | Drafts ajoutés | Part primaire | Thèmes | État |\n|---|---:|---:|---:|---:|---:|---|---|\n${rows}\n\n_n/a : ${PRIMARY_SHARE_UNAVAILABLE_REASON}_\n\n## Détail des propositions\n\n${proposalDetails || "Aucune proposition extraite."}\n`;
 }

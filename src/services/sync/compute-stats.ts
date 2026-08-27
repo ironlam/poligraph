@@ -21,6 +21,7 @@ import { Prisma } from "@/generated/prisma";
 import type { Chamber, ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS, THEME_CATEGORY_ICONS } from "@/config/labels";
 import {
+  PARTICIPATION_METHOD_VERSION,
   resolveCurrentParliamentaryMandate,
   roundParticipationRate,
 } from "@/lib/votes/participation-publication";
@@ -56,9 +57,10 @@ interface PoliticianRow {
   votesCount: number;
   eligibleScrutins: number;
   participationRate: number;
+  computationVersion: string;
 }
 
-type RawPoliticianRow = Omit<PoliticianRow, "participationRate">;
+type RawPoliticianRow = Omit<PoliticianRow, "participationRate" | "computationVersion">;
 
 interface CurrentParliamentaryMandateRow {
   politicianId: string;
@@ -75,6 +77,7 @@ interface PartyAggRow {
   partySlug: string | null;
   avgParticipationRate: number;
   memberCount: number;
+  computationVersion: string;
 }
 
 interface GroupAggRow {
@@ -85,6 +88,7 @@ interface GroupAggRow {
   groupChamber: string;
   avgParticipationRate: number;
   memberCount: number;
+  computationVersion: string;
 }
 
 interface ThemeDistributionRow {
@@ -274,6 +278,7 @@ export async function computePoliticianParticipation(verbose = false): Promise<P
     .map((row) => ({
       ...row,
       participationRate: roundParticipationRate(row.votesCount, row.eligibleScrutins),
+      computationVersion: PARTICIPATION_METHOD_VERSION,
     }));
 
   if (verbose) console.log(`  → ${rows.length} politicians computed`);
@@ -433,6 +438,7 @@ function aggregateByParty(rows: PoliticianRow[]): PartyAggRow[] {
       avgParticipationRate:
         Math.round((v.rates.reduce((a, b) => a + b, 0) / v.rates.length) * 10) / 10,
       memberCount: v.rates.length,
+      computationVersion: PARTICIPATION_METHOD_VERSION,
     }))
     .sort((a, b) => a.avgParticipationRate - b.avgParticipationRate);
 }
@@ -468,6 +474,7 @@ function aggregateByGroup(rows: PoliticianRow[]): GroupAggRow[] {
       avgParticipationRate:
         Math.round((v.rates.reduce((a, b) => a + b, 0) / v.rates.length) * 10) / 10,
       memberCount: v.rates.length,
+      computationVersion: PARTICIPATION_METHOD_VERSION,
     }))
     .sort((a, b) => a.avgParticipationRate - b.avgParticipationRate);
 }
@@ -511,6 +518,7 @@ async function upsertPoliticianParticipation(
               votesCount: r.votesCount,
               eligibleScrutins: r.eligibleScrutins,
               participationRate: r.participationRate,
+              computationVersion: r.computationVersion,
               firstName: r.firstName,
               lastName: r.lastName,
               slug: r.slug,
@@ -788,7 +796,6 @@ export async function computeStats(
 
   await upsertStatsSnapshot("party-participation", anPartyAgg, d1, dryRun, verbose);
   await upsertStatsSnapshot("party-participation-AN", anPartyAgg, d1, dryRun, verbose);
-  await upsertStatsSnapshot("party-participation-SENAT", [], d1, dryRun, verbose);
 
   // 4. Aggregate and persist group participation
   if (verbose) console.log("\n[4/8] Computing group participation aggregates...");
@@ -796,7 +803,15 @@ export async function computeStats(
 
   await upsertStatsSnapshot("group-participation", anGroupAgg, d1, dryRun, verbose);
   await upsertStatsSnapshot("group-participation-AN", anGroupAgg, d1, dryRun, verbose);
-  await upsertStatsSnapshot("group-participation-SENAT", [], d1, dryRun, verbose);
+
+  // Old Senate snapshots must not survive the fail-closed candidate phase.
+  if (!dryRun) {
+    await db.statsSnapshot.deleteMany({
+      where: {
+        key: { in: ["party-participation-SENAT", "group-participation-SENAT"] },
+      },
+    });
+  }
 
   // 4b. Aggregate and persist group dissidence
   if (verbose) console.log("\n[4b/8] Computing group dissidence aggregates...");

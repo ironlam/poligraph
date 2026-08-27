@@ -6,7 +6,9 @@ import {
   summarizeProposalOfficialEvidence,
   summarizeProposalSourceLink,
 } from "@/lib/affairs/official-decision-verification";
-import type { Prisma, ProposalStatus } from "@/generated/prisma";
+import type { Prisma, ProposalStatus, SourceType } from "@/generated/prisma";
+import { parseAffairProposalPayload } from "@/lib/security/schemas/affair-proposal";
+import { parseAffairEventProposalContext } from "@/services/affairs/proposals";
 
 // Affaires v2, lot 1: review queue for importer-proposed affair changes.
 
@@ -22,6 +24,64 @@ const VALID_STATUSES: ProposalStatus[] = [
 
 function parseStatus(raw: string | null): ProposalStatus {
   return VALID_STATUSES.includes(raw as ProposalStatus) ? (raw as ProposalStatus) : "PENDING";
+}
+
+function proposalPresentation(row: {
+  affair: { id: string; publicationStatus: string } | null;
+  proposedPatch: unknown;
+  observedValues: unknown;
+  metadata: unknown;
+  source: SourceType;
+  sourceUrl: string | null;
+  sourceExcerpt: string | null;
+}) {
+  try {
+    const parsed = parseAffairProposalPayload(row.proposedPatch);
+    if (parsed.kind === "PATCH") {
+      const issues = row.affair ? [] : ["L’affaire cible a été supprimée"];
+      return {
+        payloadKind: "PATCH" as const,
+        eventPreview: null,
+        acceptanceEligible: issues.length === 0,
+        validationIssues: issues,
+      };
+    }
+    if (!row.affair) throw new Error("L’affaire cible a été supprimée");
+    if (!new Set(["DRAFT", "PUBLISHED"]).has(row.affair.publicationStatus)) {
+      throw new Error(`Le statut ${row.affair.publicationStatus} interdit l’ajout d’un événement`);
+    }
+    const context = parseAffairEventProposalContext({
+      affairId: row.affair.id,
+      proposedPatch: row.proposedPatch,
+      observedValues: row.observedValues,
+      metadata: row.metadata,
+      source: row.source,
+      sourceUrl: row.sourceUrl,
+      sourceExcerpt: row.sourceExcerpt,
+    });
+    return {
+      payloadKind: "ADD_EVENT" as const,
+      acceptanceEligible: true,
+      validationIssues: [],
+      eventPreview: {
+        date: context.event.date.toISOString(),
+        type: context.event.type,
+        title: context.event.title,
+        description: context.event.description ?? null,
+        sourceUrl: context.event.sourceUrl,
+        sourceTitle: context.event.sourceTitle,
+        identityKey: context.identityKey,
+        publisher: context.metadata.eventProposal.publisher,
+      },
+    };
+  } catch (error) {
+    return {
+      payloadKind: "INVALID" as const,
+      eventPreview: null,
+      acceptanceEligible: false,
+      validationIssues: [error instanceof Error ? error.message : "Proposition invalide"],
+    };
+  }
 }
 
 export const GET = withAdminAuth(async (request: NextRequest) => {
@@ -98,6 +158,7 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
 
       return {
         ...row,
+        ...proposalPresentation({ ...row, metadata }),
         officialEvidence,
         sourceLink,
       };

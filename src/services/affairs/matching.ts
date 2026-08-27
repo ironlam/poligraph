@@ -561,7 +561,10 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
     const normalizedCandidate = normalizeAffairTitle(candidate.title, politicianName);
 
     const samePoliticianAffairs = await db.affair.findMany({
-      where: { politicianId: candidate.politicianId },
+      where: {
+        politicianId: candidate.politicianId,
+        publicationStatus: { in: ["DRAFT", "PUBLISHED"] },
+      },
       // verdictDate discriminates repeated convictions for the same offense,
       // which titles alone cannot (issue #520). status gates the evolution
       // signal below, which only applies before a decision is handed down.
@@ -643,6 +646,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
         politicianId: candidate.politicianId,
         category: candidate.category,
         verdictDate: { gte: dateMin, lte: dateMax },
+        publicationStatus: { in: ["DRAFT", "PUBLISHED"] },
       },
       select: { id: true },
     });
@@ -692,4 +696,40 @@ export async function findEvolutionCandidates(candidate: MatchCandidate): Promis
 
   const matches = await findMatchingAffairs(candidate);
   return matches.filter((m) => m.matchedBy === "evolution-title-overlap");
+}
+
+export type AffairMatchRouting =
+  | { kind: "CONFIDENT_MATCH"; match: MatchResult }
+  | { kind: "CONFIDENT_AMBIGUOUS"; candidates: MatchResult[] }
+  | { kind: "UNIQUE_EVOLUTION"; match: MatchResult }
+  | { kind: "POSSIBLE_AMBIGUOUS"; candidates: MatchResult[] }
+  | { kind: "NO_MATCH"; looseMatch: MatchResult | null };
+
+/**
+ * Classifies one complete matcher result without hiding a competing signal.
+ * Importers must call the database matcher once, then route through this helper.
+ */
+export function classifyAffairMatches(matches: MatchResult[]): AffairMatchRouting {
+  const confident = pickConfidentMatch(matches);
+  if (confident.kind === "match") return { kind: "CONFIDENT_MATCH", match: confident.match };
+  if (confident.kind === "ambiguous") {
+    return { kind: "CONFIDENT_AMBIGUOUS", candidates: confident.candidates };
+  }
+
+  const possibleByAffair = new Map<string, MatchResult>();
+  for (const match of matches) {
+    if (match.confidence === "POSSIBLE" && !possibleByAffair.has(match.affairId)) {
+      possibleByAffair.set(match.affairId, match);
+    }
+  }
+  const possible = [...possibleByAffair.values()];
+  if (possible.length > 1) return { kind: "POSSIBLE_AMBIGUOUS", candidates: possible };
+  if (possible.length === 0) return { kind: "NO_MATCH", looseMatch: null };
+
+  const only = possible[0]!;
+  const evolution = matches.find(
+    (match) => match.affairId === only.affairId && match.matchedBy === "evolution-title-overlap"
+  );
+  if (evolution) return { kind: "UNIQUE_EVOLUTION", match: evolution };
+  return { kind: "NO_MATCH", looseMatch: only };
 }

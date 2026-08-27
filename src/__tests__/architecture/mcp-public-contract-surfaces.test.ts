@@ -64,6 +64,8 @@ const PARTY_SURFACES = [
   "src/app/api/compare/suggestions/route.ts",
   "src/app/api/deputies/by-commune/route.ts",
   "src/app/api/deputies/by-department/route.ts",
+  "src/app/api/elections/[slug]/candidacies/route.ts",
+  "src/app/api/elections/[slug]/measures/route.ts",
   "src/app/api/elections/[slug]/route.ts",
   "src/app/api/export/affaires/route.ts",
   "src/app/api/export/factchecks/route.ts",

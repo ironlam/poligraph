@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({
   db: {
+    politician: {
+      findMany: vi.fn(),
+    },
     syncMetadata: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
@@ -12,6 +15,7 @@ vi.mock("@/lib/db", () => ({
 import { db } from "@/lib/db";
 import {
   DISCOVER_AFFAIRS_CURSOR_KEY,
+  discoverAffairs,
   getDiscoverAffairsCursor,
   saveDiscoverAffairsCursor,
 } from "./discover-affairs";
@@ -83,5 +87,14 @@ describe("discover-affairs cursor", () => {
     const callArgs = vi.mocked(db.syncMetadata.upsert).mock.calls[0]![0];
     expect(callArgs.update.lastSyncAt).toBeInstanceOf(Date);
     expect((callArgs.update.lastSyncAt as Date).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it("ne déplace jamais le curseur en dry-run", async () => {
+    vi.mocked(db.syncMetadata.findUnique).mockResolvedValueOnce({ cursor: "Martin" } as never);
+    vi.mocked(db.politician.findMany).mockResolvedValueOnce([] as never);
+
+    await discoverAffairs({ limit: 10, dryRun: true });
+
+    expect(db.syncMetadata.upsert).not.toHaveBeenCalled();
   });
 });
