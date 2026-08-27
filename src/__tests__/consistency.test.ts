@@ -61,3 +61,17 @@ describe("Script consistency", () => {
     expect(missing, `Docs reference missing npm scripts:\n${missing.join("\n")}`).toEqual([]);
   });
 });
+
+describe("Daily sync orchestration", () => {
+  // syncPressAnalysis self-throttles at 6h (MIN_SYNC_INTERVAL_MS). The daily
+  // cron already fixes the cadence and its tightest gap is exactly 6h, so
+  // without --force any cron drift makes the step return having analyzed
+  // nothing, while still reporting success. The backlog then only grows.
+  it("press analysis runs on every scheduled daily sync", () => {
+    const content = read("scripts/sync-daily.ts");
+    const command = content.match(/npx tsx scripts\/sync-press-analysis\.ts[^`]*/)?.[0];
+
+    expect(command, "press analysis step not found in sync-daily.ts").toBeDefined();
+    expect(command).toContain("--force");
+  });
+});
