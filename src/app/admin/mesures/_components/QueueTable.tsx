@@ -47,7 +47,7 @@ export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
               </span>
             </th>
             <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
-              Sujet
+              Thème
             </th>
             <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
               État

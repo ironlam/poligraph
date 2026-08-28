@@ -49,7 +49,7 @@ export function MeasureSubtopicsPanel({
   return (
     <div className="space-y-4 rounded-lg border border-border p-4">
       <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        L’IA propose uniquement des termes de la taxonomie du sujet principal. Rien n’est public
+        L’IA propose uniquement des termes de la taxonomie du thème principal. Rien n’est public
         avant une validation humaine.
       </p>
 
@@ -65,7 +65,7 @@ export function MeasureSubtopicsPanel({
 
       {approved.length > 0 && (
         <div>
-          <h3 className="text-sm font-bold">Sous-sujets validés</h3>
+          <h3 className="text-sm font-bold">Sous-thèmes validés</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {approved.map((item) => (
               <li key={item.subtopicId} className="rounded-full bg-primary/10 px-3 py-1 text-sm">
@@ -153,7 +153,7 @@ export function MeasureSubtopicsPanel({
         disabled={pending || approved.length > 0}
         onClick={() => run(() => proposeSubtopicsAction({ measureId, revisionId }))}
       >
-        {pending ? "Traitement en cours…" : "Proposer des sous-sujets"}
+        {pending ? "Traitement en cours…" : "Proposer des sous-thèmes"}
       </Button>
       {approved.length > 0 && (
         <p className="text-xs text-muted-foreground">

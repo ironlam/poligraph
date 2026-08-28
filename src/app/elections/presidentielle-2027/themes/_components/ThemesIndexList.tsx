@@ -23,7 +23,7 @@ function SubjectLink({
 }: Pick<ThemesIndexData["themes"][number], "slug" | "theme" | "label">) {
   return (
     <Link
-      href={`/elections/presidentielle-2027/sujets/${slug}`}
+      href={`/elections/presidentielle-2027/themes/${slug}`}
       prefetch={false}
       className="flex min-h-11 items-center gap-3 rounded-lg font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
@@ -83,12 +83,12 @@ export function ThemesIndexList({ data }: ThemesIndexListProps) {
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">
-            Couverture du corpus Poligraph par sujet de la présidentielle 2027
+            Couverture du corpus Poligraph par thématique de la présidentielle 2027
           </caption>
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground-strong">
               <th scope="col" className="py-2 pr-3 text-left font-bold">
-                Sujet
+                Thème
               </th>
               <th scope="col" className="px-3 py-2 text-right font-bold">
                 Candidatures documentées

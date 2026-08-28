@@ -944,18 +944,22 @@ export const TIMELINE_CHAMBER_LABELS: Record<string, string> = {
 // ============================================
 
 export const THEME_CATEGORY_LABELS: Record<ThemeCategory, string> = {
-  ECONOMIE_BUDGET: "Économie & Budget",
-  SOCIAL_TRAVAIL: "Social & Travail",
-  SECURITE_JUSTICE: "Sécurité & Justice",
-  ENVIRONNEMENT_ENERGIE: "Environnement & Énergie",
+  ECONOMIE_BUDGET: "Économie et budget",
+  SOCIAL_TRAVAIL: "Questions sociales et travail",
+  EMPLOI_TRAVAIL: "Emploi et travail",
+  RETRAITES: "Retraites",
+  SOLIDARITES_PROTECTION_SOCIALE: "Solidarités et protection sociale",
+  SOCIETE_DROITS_LIBERTES: "Société, droits et libertés",
+  SECURITE_JUSTICE: "Sécurité et justice",
+  ENVIRONNEMENT_ENERGIE: "Environnement et énergie",
   SANTE: "Santé",
-  EDUCATION_CULTURE: "Éducation & Culture",
+  EDUCATION_CULTURE: "Éducation et culture",
   INSTITUTIONS: "Institutions",
-  AFFAIRES_ETRANGERES_DEFENSE: "Affaires étrangères & Défense",
-  NUMERIQUE_TECH: "Numérique & Tech",
+  AFFAIRES_ETRANGERES_DEFENSE: "Affaires étrangères et défense",
+  NUMERIQUE_TECH: "Numérique et technologies",
   IMMIGRATION: "Immigration",
-  AGRICULTURE_ALIMENTATION: "Agriculture & Alimentation",
-  LOGEMENT_URBANISME: "Logement & Urbanisme",
+  AGRICULTURE_ALIMENTATION: "Agriculture et alimentation",
+  LOGEMENT_URBANISME: "Logement et urbanisme",
   TRANSPORTS: "Transports",
 };
 
@@ -964,6 +968,14 @@ export const THEME_CATEGORY_COLORS: Record<ThemeCategory, string> = {
     "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700",
   SOCIAL_TRAVAIL:
     "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+  EMPLOI_TRAVAIL:
+    "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+  RETRAITES:
+    "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 dark:bg-fuchsia-900/40 dark:text-fuchsia-300 dark:border-fuchsia-700",
+  SOLIDARITES_PROTECTION_SOCIALE:
+    "bg-pink-100 text-pink-800 border-pink-300 dark:bg-pink-900/40 dark:text-pink-300 dark:border-pink-700",
+  SOCIETE_DROITS_LIBERTES:
+    "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
   SECURITE_JUSTICE:
     "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
   ENVIRONNEMENT_ENERGIE:
@@ -989,7 +1001,7 @@ export const THEME_CATEGORY_COLORS: Record<ThemeCategory, string> = {
 };
 
 /**
- * The same thirteen hues as THEME_CATEGORY_COLORS, solid rather than tinted, for the accent bar the
+ * The same hues as THEME_CATEGORY_COLORS, solid rather than tinted, for the accent bar the
  * subject page puts before a theme in its navigation and before a candidate in its table.
  *
  * A separate map and not a derivation: the badge palette pairs a 100-level background with an
@@ -1004,6 +1016,10 @@ export const THEME_ACCENT_BAR: Record<ThemeCategory, string> = {
   LOGEMENT_URBANISME: "bg-amber-500",
   SANTE: "bg-rose-600",
   SOCIAL_TRAVAIL: "bg-violet-600",
+  EMPLOI_TRAVAIL: "bg-violet-600",
+  RETRAITES: "bg-fuchsia-600",
+  SOLIDARITES_PROTECTION_SOCIALE: "bg-pink-600",
+  SOCIETE_DROITS_LIBERTES: "bg-blue-600",
   ECONOMIE_BUDGET: "bg-emerald-600",
   ENVIRONNEMENT_ENERGIE: "bg-green-600",
   SECURITE_JUSTICE: "bg-red-600",
@@ -1019,6 +1035,10 @@ export const THEME_ACCENT_BAR: Record<ThemeCategory, string> = {
 export const THEME_CATEGORY_ICONS: Record<ThemeCategory, string> = {
   ECONOMIE_BUDGET: "💰",
   SOCIAL_TRAVAIL: "👥",
+  EMPLOI_TRAVAIL: "💼",
+  RETRAITES: "🕰️",
+  SOLIDARITES_PROTECTION_SOCIALE: "🤝",
+  SOCIETE_DROITS_LIBERTES: "⚖️",
   SECURITE_JUSTICE: "🔒",
   ENVIRONNEMENT_ENERGIE: "🌿",
   SANTE: "🏥",

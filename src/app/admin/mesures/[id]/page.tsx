@@ -131,7 +131,7 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
             <dd className="text-muted-foreground">{context.election.title}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="font-medium">Sujet</dt>
+            <dt className="font-medium">Thème</dt>
             <dd className="text-muted-foreground">{THEME_CATEGORY_LABELS[context.theme]}</dd>
           </div>
           <div className="flex gap-2">
@@ -186,7 +186,7 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
 
       <section aria-labelledby="subtopics-heading">
         <h2 id="subtopics-heading" className="text-base font-semibold">
-          Sous-sujets
+          Sous-thèmes
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             proposés automatiquement, publiés après validation
           </span>

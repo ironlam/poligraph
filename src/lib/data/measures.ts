@@ -229,7 +229,7 @@ function toPublicPresidentialMeasure(
       code: row.theme,
       label: THEME_CATEGORY_LABELS[row.theme],
       slug: themeSlug,
-      publicUrl: `/elections/${electionSlug}/sujets/${themeSlug}`,
+      publicUrl: `/elections/${electionSlug}/themes/${themeSlug}`,
     },
     attribution: {
       code: row.attribution,

@@ -31,7 +31,7 @@ export function HubCorpusState({
 }: HubCorpusStateProps) {
   const comparableLabel =
     comparableThemeCount === themeCount && themeCount > 0
-      ? "tous comparables"
+      ? "toutes comparables"
       : `${comparableThemeCount} comparable${comparableThemeCount === 1 ? "" : "s"}`;
 
   return (
@@ -49,7 +49,7 @@ export function HubCorpusState({
                 {themeCount}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground-strong">
-                sujets suivis, {comparableLabel}
+                thématiques suivies, {comparableLabel}
               </p>
             </div>
           </div>
@@ -57,11 +57,11 @@ export function HubCorpusState({
             Les compteurs décrivent le corpus Poligraph, pas la totalité de la campagne.
           </p>
           <Link
-            href="/elections/presidentielle-2027/sujets"
+            href="/elections/presidentielle-2027/themes"
             prefetch={false}
             className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Couverture sujet par sujet
+            Couverture par thématique
             <ArrowRight aria-hidden="true" className="h-4 w-4" />
           </Link>
         </Card>

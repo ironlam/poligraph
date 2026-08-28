@@ -166,7 +166,7 @@ export function QueueFilters({
 
       <fieldset>
         <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Sujet
+          Thème
         </legend>
         <div className="mt-2 flex flex-wrap gap-2">
           {themeKeys.map((theme) => (

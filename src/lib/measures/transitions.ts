@@ -21,6 +21,7 @@ import { lockMeasure, lockMeasureCandidacy } from "./lock";
 import { syncSearchDocument } from "./search-sync";
 import { PUBLIC_PRESIDENTIAL_FICHE_WHERE } from "@/lib/presidentielle/publication";
 import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentielle/search-sync";
+import { isAllowedPresidentialMeasureTheme } from "@/lib/presidentielle/themes";
 
 export type MeasureSourceInput = {
   sourceKind: MeasureSourceKind;
@@ -65,9 +66,22 @@ async function assertContextIsCoherent(
   tx: DbTransactionClient,
   input: Pick<
     CreateMeasureInput,
-    "politicianId" | "electionId" | "candidacyId" | "programEditionId"
+    "politicianId" | "electionId" | "candidacyId" | "programEditionId" | "theme"
   >
 ): Promise<void> {
+  const election = await tx.election.findUnique({
+    where: { id: input.electionId },
+    select: { slug: true },
+  });
+  if (!election) {
+    throw new MeasureValidationError(`Élection ${input.electionId} introuvable`);
+  }
+  if (!isAllowedPresidentialMeasureTheme(election.slug, input.theme)) {
+    throw new MeasureValidationError(
+      "Le thème historique SOCIAL_TRAVAIL n'est pas autorisé pour une mesure présidentielle 2027"
+    );
+  }
+
   if (input.candidacyId) {
     const candidacy = await tx.candidacy.findUnique({
       where: { id: input.candidacyId },

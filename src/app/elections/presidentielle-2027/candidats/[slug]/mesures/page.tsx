@@ -62,7 +62,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const hasUtilityParams = Object.values(rawSearchParams).some((value) => value !== undefined);
   return {
     title: `Mesures de ${politician.fullName}, présidentielle 2027 | Poligraph`,
-    description: `Explorer les mesures documentées de ${politician.fullName} par sujet, avec leurs sources.`,
+    description: `Explorer les mesures documentées de ${politician.fullName} par thème, avec leurs sources.`,
     alternates: { canonical },
     robots:
       hasUtilityParams || !candidacy || candidacy.primarySourceMeasureCount === 0
@@ -166,7 +166,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
           </h1>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground-strong">
             {candidacy.publishedMeasureCount} mesures documentées et relues. Filtrez le programme
-            par sujet ou recherchez un terme précis.
+            par thème ou recherchez un terme précis.
           </p>
         </header>
 
@@ -200,7 +200,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
             </div>
             <div>
               <label htmlFor="measure-theme" className="mb-1.5 block text-sm font-bold">
-                Sujet
+                Thème
               </label>
               <Select
                 id="measure-theme"
@@ -208,7 +208,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
                 defaultValue={theme ? themeToSlug(theme) : ""}
                 className="min-h-11"
               >
-                <option value="">Tous les sujets</option>
+                <option value="">Toutes les thématiques</option>
                 {THEME_ENTRIES.map(([code, label]) => (
                   <option key={code} value={themeToSlug(code)}>
                     {label}
@@ -218,7 +218,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
             </div>
             <div>
               <label htmlFor="measure-subtopic" className="mb-1.5 block text-sm font-bold">
-                Sous-sujet
+                Sous-thème
               </label>
               <Select
                 id="measure-subtopic"
@@ -228,7 +228,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
                 disabled={subtopics.length === 0}
               >
                 <option value="">
-                  {subtopics.length === 0 ? "Aucun sous-sujet validé" : "Tous les sous-sujets"}
+                  {subtopics.length === 0 ? "Aucun sous-thème validé" : "Tous les sous-thèmes"}
                 </option>
                 {subtopics.map((item) => (
                   <option key={item.slug} value={item.slug}>
@@ -299,7 +299,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
                         </p>
                         <p className="mt-2 max-w-[75ch] text-base leading-7">{measure.text}</p>
                         {measure.subtopics.length > 0 && (
-                          <ul aria-label="Sous-sujets" className="mt-3 flex flex-wrap gap-2">
+                          <ul aria-label="Sous-thèmes" className="mt-3 flex flex-wrap gap-2">
                             {measure.subtopics.map((item) => (
                               <li
                                 key={item.slug}

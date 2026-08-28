@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const theme = parseThemeSlug(themeParam);
   if (theme === null) {
     return {
-      title: "Sujet introuvable | Présidentielle 2027",
+      title: "Thème introuvable | Présidentielle 2027",
       robots: { index: false, follow: true },
     };
   }
@@ -50,7 +50,7 @@ export default async function SubjectPage({ params }: PageProps) {
         items={[
           { label: "Élections", href: "/elections" },
           { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
-          { label: "Sujets", href: "/elections/presidentielle-2027/sujets" },
+          { label: "Thématiques", href: "/elections/presidentielle-2027/themes" },
           { label: THEME_CATEGORY_LABELS[theme] },
         ]}
       />

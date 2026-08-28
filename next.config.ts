@@ -109,6 +109,11 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        source: "/elections/presidentielle-2027/sujets/:path*",
+        destination: "/elections/presidentielle-2027/themes/:path*",
+        permanent: true,
+      },
+      {
         source: "/votes/:path*",
         destination: "/parlement/votes/:path*",
         statusCode: 308,

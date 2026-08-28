@@ -17,7 +17,7 @@ import type { HubTheme } from "@/lib/data/hub";
 export function HubSubjects({ themes }: { themes: HubTheme[] }) {
   const openCount = themes.filter((theme) => theme.publishable).length;
   const required = PUBLICATION_GATES.pageSujet.minCandidaciesWithVerifiedMeasure;
-  const heading = `${openCount} ${openCount === 1 ? "sujet peut" : "sujets peuvent"} déjà être comparé${openCount === 1 ? "" : "s"}`;
+  const heading = `${openCount} ${openCount === 1 ? "thématique peut" : "thématiques peuvent"} déjà être comparée${openCount === 1 ? "" : "s"}`;
 
   return (
     <section aria-labelledby="hub-sujets" className="space-y-4">
@@ -27,8 +27,8 @@ export function HubSubjects({ themes }: { themes: HubTheme[] }) {
         </h2>
 
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Un sujet s&apos;ouvre à la comparaison quand au moins {required} candidatures y portent
-          une mesure sourcée et relue.
+          Une thématique s&apos;ouvre à la comparaison quand au moins {required} candidatures y
+          portent une mesure sourcée et relue.
         </p>
       </div>
 
@@ -36,7 +36,7 @@ export function HubSubjects({ themes }: { themes: HubTheme[] }) {
         {themes.map((theme) => (
           <li key={theme.theme}>
             <Link
-              href={`/elections/presidentielle-2027/sujets/${theme.slug}`}
+              href={`/elections/presidentielle-2027/themes/${theme.slug}`}
               prefetch={false}
               className="flex min-h-11 items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5 transition-colors hover:border-primary hover:bg-muted/40 active:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none"
             >

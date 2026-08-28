@@ -31,7 +31,7 @@ import { OgLayout, OG_SIZE } from "@/lib/og-utils";
  */
 
 export const alt =
-  "Poligraph, présidentielle 2027 : pour chaque sujet, les propositions des candidats, leurs votes et leurs bilans.";
+  "Poligraph, présidentielle 2027 : pour chaque thème, les propositions des candidats, leurs votes et leurs bilans.";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 
@@ -75,7 +75,7 @@ export default function Image() {
         </span>
 
         <span style={{ fontSize: 32, lineHeight: 1.3, color: "#cbd5e1", maxWidth: 900 }}>
-          Pour chaque sujet : les propositions, les votes, les bilans.
+          Pour chaque thème : les propositions, les votes, les bilans.
         </span>
       </div>
     </OgLayout>,

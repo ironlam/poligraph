@@ -78,7 +78,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     });
 
   const title = `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`;
-  const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par sujet, avec leurs sources.`;
+  const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par thème, avec leurs sources.`;
 
   return {
     title,

@@ -194,7 +194,7 @@ describe("GET /api/elections/[slug]/measures", () => {
             code: "SANTE",
             label: "Santé",
             slug: "sante",
-            publicUrl: "/elections/presidentielle-2027/sujets/sante",
+            publicUrl: "/elections/presidentielle-2027/themes/sante",
           },
           attribution: { code: "PERSONAL", label: "Formulée personnellement" },
           candidacy: {
@@ -271,7 +271,7 @@ describe("GET /api/elections/[slug]/measures", () => {
             code: "SANTE",
             label: "Santé",
             slug: "sante",
-            publicUrl: "/elections/presidentielle-2027/sujets/sante",
+            publicUrl: "/elections/presidentielle-2027/themes/sante",
           },
           attribution: { code: "PERSONAL", label: "Formulée personnellement" },
           candidacy: {

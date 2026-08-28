@@ -57,7 +57,7 @@ describe("page publique d'une mesure présidentielle", () => {
     );
     expect(screen.getByRole("link", { name: /Comparer les mesures/ })).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/sujets/logement-urbanisme"
+      "/elections/presidentielle-2027/themes/logement-urbanisme"
     );
   });
 

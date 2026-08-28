@@ -236,8 +236,8 @@ function ProposalCell({
             />
             <span className="group-open:hidden">
               {folded.length === 1
-                ? "Lire la dernière mesure sur ce sujet"
-                : `Lire les ${folded.length} autres mesures sur ce sujet`}
+                ? "Lire la dernière mesure sur ce thème"
+                : `Lire les ${folded.length} autres mesures sur ce thème`}
             </span>
             <span className="hidden group-open:inline">
               {folded.length === 1
@@ -297,8 +297,8 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
           {candidate.partyLabel !== null && measures.length > 0 && " · "}
           {measures.length > 0 &&
             (defended === 0
-              ? "aucune mesure sur ce sujet"
-              : `${defended} ${defended === 1 ? "mesure" : "mesures"} sur ce sujet`)}
+              ? "aucune mesure sur ce thème"
+              : `${defended} ${defended === 1 ? "mesure" : "mesures"} sur ce thème`)}
         </span>
       </span>
     </span>
@@ -359,7 +359,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
           <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
             {data.totalMeasuresOnTheme}{" "}
             {data.totalMeasuresOnTheme === 1 ? "mesure documentée" : "mesures documentées"} sur ce
-            sujet, réparties entre {documented} {documented === 1 ? "candidature" : "candidatures"}.
+            thème, réparties entre {documented} {documented === 1 ? "candidature" : "candidatures"}.
             Classées par nom de famille.
           </p>
           {/* The candidacy's own declaration source used to sit in the first column, where six
@@ -407,16 +407,16 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
 function PlannedSections() {
   const planned = [
     {
-      title: "Les leviers d'un président sur ce sujet",
-      body: "Ce qu'un président décide réellement ici, et ce qui relève du Parlement, des collectivités ou de l'Union européenne. À écrire sujet par sujet.",
+      title: "Les leviers d'un président sur ce thème",
+      body: "Ce qu'un président décide réellement ici, et ce qui relève du Parlement, des collectivités ou de l'Union européenne. À écrire thème par thème.",
     },
     {
-      title: "Les votes au Parlement sur ce sujet",
-      body: "Les scrutins de l'Assemblée nationale et du Sénat portant sur ce sujet, avec leur issue et leur date. Le rattachement des scrutins aux sujets reste à construire.",
+      title: "Les votes au Parlement sur ce thème",
+      body: "Les scrutins de l'Assemblée nationale et du Sénat portant sur ce thème, avec leur issue et leur date. Le rattachement des scrutins aux thèmes reste à construire.",
     },
     {
-      title: "Les fonctions exercées sur ce sujet",
-      body: "Le ministère ou la commission qu'une candidature a occupé en rapport avec ce sujet. Demande de relier les mandats aux sujets, ce que la base ne fait pas encore.",
+      title: "Les fonctions exercées sur ce thème",
+      body: "Le ministère ou la commission qu'une candidature a occupé en rapport avec ce thème. Demande de relier les mandats aux thèmes, ce que la base ne fait pas encore.",
     },
   ];
 
@@ -562,7 +562,7 @@ function FooterCard({
   return (
     <p className="rounded-xl border border-border bg-card px-5 py-3.5 text-sm text-muted-foreground">
       {documented} {documented === 1 ? "candidature porte" : "candidatures portent"} une mesure sur
-      ce sujet, pour {total} au total. Jusqu&apos;à {QUOTED_MEASURE_LIMIT} mesures sont citées par
+      ce thème, pour {total} au total. Jusqu&apos;à {QUOTED_MEASURE_LIMIT} mesures sont citées par
       candidature&nbsp;; au-delà, les suivantes se déplient.
       {withoutMeasure > 0 && (
         <>

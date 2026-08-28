@@ -256,13 +256,13 @@ describe("PrioritesGate : ce qui reste consultable", () => {
   it("le dit franchement quand aucun sujet n'est comparable", () => {
     render(<PrioritesGate data={data()} evaluatedAt={evaluatedAt} />);
     expect(screen.getByText(/Aucun sujet n'est encore comparable/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Les 13 sujets" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Les 13 thématiques" })).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/sujets"
+      "/elections/presidentielle-2027/themes"
     );
   });
 
-  it("renvoie vers les sujets qui franchissent leur seuil", () => {
+  it("renvoie vers les thématiques qui franchissent leur seuil", () => {
     render(
       <PrioritesGate
         data={data({ publishableThemes: [{ slug: "logement-urbanisme", label: "Logement" }] })}
@@ -272,7 +272,7 @@ describe("PrioritesGate : ce qui reste consultable", () => {
     expect(screen.getByText(/1 sujet franchit son seuil aujourd'hui/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Logement" })).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/sujets/logement-urbanisme"
+      "/elections/presidentielle-2027/themes/logement-urbanisme"
     );
   });
 });

@@ -131,7 +131,7 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="new-theme" className={LABEL}>
-            Sujet
+            Thème
           </label>
           <select id="new-theme" name="theme" required className={FIELD}>
             {THEMES.map((theme) => (

@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Présidentielle 2027 : programmes, votes, bilans | Poligraph",
     description:
-      "Les candidatures à la présidentielle 2027, leurs mesures sourcées et relues par sujet et les votes qui les éclairent.",
+      "Les candidatures à la présidentielle 2027, leurs mesures sourcées et relues par thème et les votes qui les éclairent.",
     robots: publishable ? undefined : { index: false, follow: true },
     alternates: { canonical: "/elections/presidentielle-2027" },
   };
@@ -78,7 +78,7 @@ export default async function PresidentialHubPage() {
             Qu&apos;est-ce qui changerait pour vous ?
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-lg">
-            Pour chaque sujet : ce que les personnalités suivies proposent, ce qu&apos;elles ont
+            Pour chaque thème : ce que les personnalités suivies proposent, ce qu&apos;elles ont
             voté, et ce qu&apos;elles ont fait quand elles étaient au pouvoir.
           </p>
           {context.round1Date && (

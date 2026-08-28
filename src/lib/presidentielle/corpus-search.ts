@@ -83,7 +83,7 @@ export async function searchPresidentialCorpus(
     type: "subject",
     theme,
     label: THEME_CATEGORY_LABELS[theme],
-    url: `/elections/${election.slug}/sujets/${themeToSlug(theme)}`,
+    url: `/elections/${election.slug}/themes/${themeToSlug(theme)}`,
   }));
 
   const page = await searchPublicPage(query, {

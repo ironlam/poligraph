@@ -5,7 +5,7 @@ import type { ThemeCategory } from "@/generated/prisma";
  *
  * The display labels (THEME_CATEGORY_LABELS) are noun phrases meant for badges
  * and cards ("Santé", "Économie & Budget"). Injected into a sentence they give
- * incorrect French ("Votes sur Économie"), so the prepositional form lives here
+ * incorrect French ("Votes sur économie"), so the prepositional form lives here
  * instead of being patched case by case inside the page.
  *
  * Every phrase is written to read after "sur" ("Votes sur la santé"), which is
@@ -15,6 +15,10 @@ import type { ThemeCategory } from "@/generated/prisma";
 export const THEME_SEO_PHRASES: Record<ThemeCategory, string> = {
   ECONOMIE_BUDGET: "l'économie et le budget",
   SOCIAL_TRAVAIL: "les questions sociales et le travail",
+  EMPLOI_TRAVAIL: "l'emploi et le travail",
+  RETRAITES: "les retraites",
+  SOLIDARITES_PROTECTION_SOCIALE: "les solidarités et la protection sociale",
+  SOCIETE_DROITS_LIBERTES: "les droits et libertés dans la société",
   SECURITE_JUSTICE: "la sécurité et la justice",
   ENVIRONNEMENT_ENERGIE: "l'environnement et l'énergie",
   SANTE: "la santé",

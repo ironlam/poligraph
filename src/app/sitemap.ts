@@ -455,7 +455,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     presidentielleHubPublishable && presidentialThemesIndex !== null
       ? [
           {
-            url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/sujets`,
+            url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/themes`,
             lastModified: presidentielle2027?.updatedAt ?? new Date(),
             changeFrequency: "weekly" as const,
             priority: 0.5,
@@ -463,7 +463,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
           ...presidentialThemesIndex.themes
             .filter((theme) => theme.publishable)
             .map((theme) => ({
-              url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/sujets/${theme.slug}`,
+              url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/themes/${theme.slug}`,
               lastModified: theme.lastReviewedAt ?? presidentielle2027?.updatedAt ?? new Date(),
               changeFrequency: "weekly" as const,
               priority: 0.6,

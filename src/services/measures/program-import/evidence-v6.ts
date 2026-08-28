@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ThemeCategory } from "@/generated/prisma";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import type { DiscourseAnnotation, DiscourseRole } from "./discourse";
 import { getDiscourseAnnotationIndex } from "./discourse";
 import type { ExtractorRetryEvent } from "./extractor";
@@ -79,7 +80,7 @@ const blockIdSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 const blockIdsSchema = z.array(blockIdSchema);
 const normalizedTextSchema = z.string().min(1).nullable();
-const themeSchema = z.enum(ThemeCategory).nullable();
+const themeSchema = z.enum(THEMES_IN_ORDER).nullable();
 const confidenceSchema = z.number().min(0).max(1);
 const rationaleSchema = z.string().min(1).max(500);
 
@@ -381,7 +382,7 @@ Ne renvoie jamais sourceText. Sélectionne entre 1 et 8 IDs par proposition. Ne 
 export const EVIDENCE_OUTPUT_FORMAT = `Réponds uniquement avec un objet JSON de cette forme :
 {"proposals":[{"evidenceUnitIds":["p41-b03-u001","p41-b04-u001"],"commitmentAnchorIds":["p41-b04-u001"],"supportingIds":["p41-b03-u001"],"attributionBasis":"CANDIDATE_COMMITMENT|CANDIDATE_OBJECTIVE|EXPLICIT_ENDORSEMENT|THIRD_PARTY|HISTORICAL|EXISTING_POLICY|DIAGNOSIS|UNCLEAR","normalizedText":"formulation fidèle ou null","classification":"MEASURE|OBJECTIVE|VALUE|DIAGNOSIS|GENERAL_INTENT|AMBIGUOUS","theme":"une valeur ThemeCategory ou null","confidence":0.0,"rationale":"raison courte"}]}
 evidenceUnitIds contient obligatoirement entre 1 et 8 IDs.
-Les seules valeurs de thème sont ECONOMIE_BUDGET, SOCIAL_TRAVAIL, SECURITE_JUSTICE, ENVIRONNEMENT_ENERGIE, SANTE, EDUCATION_CULTURE, INSTITUTIONS, AFFAIRES_ETRANGERES_DEFENSE, NUMERIQUE_TECH, IMMIGRATION, AGRICULTURE_ALIMENTATION, LOGEMENT_URBANISME et TRANSPORTS.`;
+Les seules valeurs de thème sont ${THEMES_IN_ORDER.join(", ")}.`;
 
 function escapePromptText(value: string, maxLength: number): string {
   return value

@@ -28,7 +28,7 @@ function ThemeLinks({
         return (
           <li key={t.theme}>
             <Link
-              href={`/elections/presidentielle-2027/sujets/${t.slug}`}
+              href={`/elections/presidentielle-2027/themes/${t.slug}`}
               aria-current={isCurrent ? "page" : undefined}
               prefetch={false}
               className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 transition-colors ${
@@ -72,7 +72,7 @@ export function SubjectSidebar({
       <details className="rounded-xl border border-border bg-card lg:hidden">
         <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-4 text-sm font-bold">
           <span>
-            Les sujets{" "}
+            Les thématiques{" "}
             <span className="font-normal text-muted-foreground">
               ({themes.length}) &middot; {currentLabel}
             </span>
@@ -83,9 +83,9 @@ export function SubjectSidebar({
         </div>
       </details>
 
-      <nav aria-label="Les sujets" className="hidden lg:sticky lg:top-20 lg:block">
+      <nav aria-label="Les thématiques" className="hidden lg:sticky lg:top-20 lg:block">
         <p className="mb-2 px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          Les sujets
+          Les thématiques
         </p>
         <ThemeLinks themes={themes} current={current} />
       </nav>

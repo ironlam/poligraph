@@ -78,7 +78,7 @@ describe("PresidentialCorpusSearch", () => {
     expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("affiche les sujets avant les personnalités et les mesures", async () => {
+  it("affiche les thématiques avant les personnalités et les mesures", async () => {
     const result = response();
     result.total = 3;
     result.groups.subjects = [
@@ -86,7 +86,7 @@ describe("PresidentialCorpusSearch", () => {
         type: "subject",
         theme: "LOGEMENT_URBANISME",
         label: "Logement & Urbanisme",
-        url: "/elections/presidentielle-2027/sujets/logement-urbanisme",
+        url: "/elections/presidentielle-2027/themes/logement-urbanisme",
       },
     ];
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => result }));
@@ -98,7 +98,7 @@ describe("PresidentialCorpusSearch", () => {
     expect(within(listbox).getAllByRole("option")).toHaveLength(3);
     const headings = within(listbox).getAllByRole("heading");
     expect(headings.map((heading) => heading.textContent)).toEqual([
-      "Sujets",
+      "Thématiques",
       "Personnalités suivies",
       "Mesures",
     ]);

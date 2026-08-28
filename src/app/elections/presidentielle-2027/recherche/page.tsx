@@ -98,7 +98,7 @@ export default async function PresidentialSearchPage({
                   id="full-subjects-title"
                   className="font-display text-2xl font-extrabold tracking-tight"
                 >
-                  Sujets
+                  Thématiques
                 </h2>
                 <ul className="mt-4 space-y-3">
                   {result.subjects.map((subject) => (
@@ -111,7 +111,7 @@ export default async function PresidentialSearchPage({
                         <span>
                           <span className="block text-lg font-bold">{subject.label}</span>
                           <span className="mt-1 block text-sm text-muted-foreground">
-                            Sujet du corpus 2027
+                            Thème du corpus 2027
                           </span>
                         </span>
                         <ArrowRight aria-hidden="true" className="h-5 w-5 shrink-0" />

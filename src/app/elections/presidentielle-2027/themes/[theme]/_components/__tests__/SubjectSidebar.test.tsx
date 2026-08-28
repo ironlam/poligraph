@@ -30,7 +30,7 @@ describe("SubjectSidebar", () => {
   it("rend les deux mises en page, repli et rail", () => {
     const { container } = render(<SubjectSidebar themes={THEMES} current="LOGEMENT_URBANISME" />);
     expect(container.querySelector("details")).not.toBeNull();
-    expect(screen.getByRole("navigation", { name: "Les sujets" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Les thématiques" })).toBeInTheDocument();
   });
 
   it("marque le sujet courant pour les lecteurs d'écran, pas seulement par la couleur", () => {
@@ -65,7 +65,7 @@ describe("SubjectSidebar", () => {
     render(<SubjectSidebar themes={THEMES} current="LOGEMENT_URBANISME" />);
     expect(screen.getAllByRole("link", { name: /Santé/ })[0]).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/sujets/sante"
+      "/elections/presidentielle-2027/themes/sante"
     );
   });
 });

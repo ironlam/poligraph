@@ -1,19 +1,22 @@
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
-import { themeToSlug } from "@/lib/theme-utils";
+import { themeFromSlug, themeToSlug } from "@/lib/theme-utils";
 
-export { themeToSlug, themeFromSlug as parseThemeSlug } from "@/lib/theme-utils";
+export { themeToSlug } from "@/lib/theme-utils";
 
 export const PRESIDENTIELLE_2027_SLUG = "presidentielle-2027";
 
-/** Ordre éditorial d'affichage des 13 thèmes. */
-export const THEMES_IN_ORDER: ThemeCategory[] = [
+/** Taxonomie propre aux mesures présidentielles 2027. SOCIAL_TRAVAIL reste parlementaire. */
+export const THEMES_IN_ORDER = [
   "LOGEMENT_URBANISME",
   "SANTE",
-  "SOCIAL_TRAVAIL",
+  "EMPLOI_TRAVAIL",
+  "RETRAITES",
+  "SOLIDARITES_PROTECTION_SOCIALE",
   "ECONOMIE_BUDGET",
   "ENVIRONNEMENT_ENERGIE",
   "SECURITE_JUSTICE",
+  "SOCIETE_DROITS_LIBERTES",
   "EDUCATION_CULTURE",
   "IMMIGRATION",
   "TRANSPORTS",
@@ -21,7 +24,63 @@ export const THEMES_IN_ORDER: ThemeCategory[] = [
   "NUMERIQUE_TECH",
   "AFFAIRES_ETRANGERES_DEFENSE",
   "INSTITUTIONS",
-];
+] as const satisfies readonly ThemeCategory[];
+
+export type PresidentialThemeCategory = (typeof THEMES_IN_ORDER)[number];
+
+const PRESIDENTIAL_THEME_SET = new Set<ThemeCategory>(THEMES_IN_ORDER);
+
+export function isPresidentialTheme(theme: ThemeCategory): theme is PresidentialThemeCategory {
+  return PRESIDENTIAL_THEME_SET.has(theme);
+}
+
+/** A Measure attached to the 2027 presidential election must use this narrower taxonomy. */
+export function isAllowedPresidentialMeasureTheme(
+  electionSlug: string,
+  theme: ThemeCategory
+): boolean {
+  return electionSlug !== PRESIDENTIELLE_2027_SLUG || isPresidentialTheme(theme);
+}
+
+export function parseThemeSlug(slug: string): PresidentialThemeCategory | null {
+  const theme = themeFromSlug(slug);
+  return theme !== null && isPresidentialTheme(theme) ? theme : null;
+}
+
+export const PRESIDENTIAL_THEME_SEARCH_ALIASES: Record<
+  PresidentialThemeCategory,
+  readonly string[]
+> = {
+  LOGEMENT_URBANISME: ["habitat", "loyers", "construction", "urbanisme"],
+  SANTE: ["soins", "hôpital", "médecins", "prévention"],
+  EMPLOI_TRAVAIL: ["emploi", "travail", "chômage", "salaires"],
+  RETRAITES: ["retraite", "pensions", "âge de départ"],
+  SOLIDARITES_PROTECTION_SOCIALE: [
+    "solidarité",
+    "protection sociale",
+    "prestations",
+    "handicap",
+    "pauvreté",
+  ],
+  ECONOMIE_BUDGET: ["économie", "budget", "fiscalité", "entreprises", "pouvoir d'achat"],
+  ENVIRONNEMENT_ENERGIE: ["écologie", "climat", "énergie", "biodiversité"],
+  SECURITE_JUSTICE: ["sécurité", "police", "justice", "prisons"],
+  SOCIETE_DROITS_LIBERTES: [
+    "société",
+    "droits",
+    "libertés",
+    "égalité",
+    "discriminations",
+    "famille",
+  ],
+  EDUCATION_CULTURE: ["éducation", "école", "université", "culture", "sport"],
+  IMMIGRATION: ["immigration", "asile", "frontières", "nationalité", "intégration"],
+  TRANSPORTS: ["transport", "mobilité", "train", "routes", "automobile"],
+  AGRICULTURE_ALIMENTATION: ["agriculture", "alimentation", "pêche", "ruralité"],
+  NUMERIQUE_TECH: ["numérique", "technologies", "intelligence artificielle", "cybersécurité"],
+  AFFAIRES_ETRANGERES_DEFENSE: ["international", "diplomatie", "défense", "armée", "europe"],
+  INSTITUTIONS: ["institutions", "constitution", "démocratie", "élections", "collectivités"],
+};
 
 function normalizeThemeSearch(value: string): string {
   return value
@@ -40,7 +99,7 @@ export function findMatchingThemes(query: string): ThemeCategory[] {
   const queryTerms = normalized.split(" ");
   return THEMES_IN_ORDER.filter((theme) => {
     const searchable = normalizeThemeSearch(
-      `${THEME_CATEGORY_LABELS[theme]} ${themeToSlug(theme)}`
+      `${THEME_CATEGORY_LABELS[theme]} ${themeToSlug(theme)} ${PRESIDENTIAL_THEME_SEARCH_ALIASES[theme].join(" ")}`
     );
     const subjectTerms = searchable.split(" ");
     return queryTerms.every((queryTerm) =>

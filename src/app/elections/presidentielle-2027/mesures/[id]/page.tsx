@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description:
       "Mesure publique portée par " +
       measure.candidate.name +
-      " sur le sujet " +
+      " sur le thème " +
       THEME_CATEGORY_LABELS[measure.theme] +
       ".",
     alternates: { canonical },
@@ -48,7 +48,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
   if (measure === null) notFound();
 
   const canonical = "/elections/" + ELECTION_SLUG + "/mesures/" + measure.id;
-  const themeUrl = "/elections/" + ELECTION_SLUG + "/sujets/" + themeToSlug(measure.theme);
+  const themeUrl = "/elections/" + ELECTION_SLUG + "/themes/" + themeToSlug(measure.theme);
   const candidateUrl = "/elections/" + ELECTION_SLUG + "/candidats/" + measure.candidate.slug;
 
   return (

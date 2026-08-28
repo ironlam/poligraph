@@ -113,7 +113,7 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
           className="rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40"
         >
           Les compteurs et les filtres d&apos;étape portent sur les 500 premières mesures de la
-          sélection, pas sur la totalité. Restreindre par sujet ou par candidature pour retrouver
+          sélection, pas sur la totalité. Restreindre par thème ou par candidature pour retrouver
           des chiffres complets.
         </p>
       )}

@@ -54,7 +54,7 @@ describe("page complète de recherche présidentielle", () => {
           type: "subject",
           theme: "LOGEMENT_URBANISME",
           label: "Logement & Urbanisme",
-          url: "/elections/presidentielle-2027/sujets/logement-urbanisme",
+          url: "/elections/presidentielle-2027/themes/logement-urbanisme",
         },
       ],
       candidacies: [],
@@ -67,10 +67,10 @@ describe("page complète de recherche présidentielle", () => {
       })
     );
 
-    expect(screen.getByRole("heading", { level: 2, name: "Sujets" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Thématiques" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Logement & Urbanisme/ })).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/sujets/logement-urbanisme"
+      "/elections/presidentielle-2027/themes/logement-urbanisme"
     );
     expect(screen.queryByText(/Aucun résultat/)).not.toBeInTheDocument();
     expect(screen.queryByText(/sujet comparable/)).not.toBeInTheDocument();

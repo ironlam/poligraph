@@ -71,7 +71,7 @@ export function CandidateStats({
       value: measureCount,
       label: measureCount === 1 ? "proposition publiée" : "propositions publiées",
     },
-    { value: themesCoveredCount, label: "sujets couverts sur 13" },
+    { value: themesCoveredCount, label: "thématiques couvertes sur 13" },
     { value: mandateCount, label: mandateCount === 1 ? "mandat exercé" : "mandats exercés" },
   ];
 
@@ -164,7 +164,7 @@ export function CandidateThemes({
     <section aria-labelledby="mesures" className="space-y-4 rounded-xl border bg-card p-4 md:p-6">
       <div>
         <h2 id="mesures" className="font-display text-xl font-bold tracking-tight">
-          Son programme, sujet par sujet
+          Son programme, thème par thème
         </h2>
         {/* "Sa source" and not "le document dont elle est tirée": a measure may come from a
             speech, a debate, an interview or an article, which is why `programEditionId` is
@@ -173,7 +173,7 @@ export function CandidateThemes({
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           {showAllMeasures
             ? `${measureCount} ${measureCount === 1 ? "mesure documentée" : "mesures documentées"}, avec leurs sources.`
-            : `${measureCount} mesures documentées. Choisissez un sujet ou explorez l’ensemble du programme avec les filtres.`}
+            : `${measureCount} mesures documentées. Choisissez un thème ou explorez l’ensemble du programme avec les filtres.`}
         </p>
       </div>
 
@@ -206,7 +206,7 @@ export function CandidateThemes({
                 <div className="mt-3">
                   {t.subtopics.length > 0 && (
                     <ul
-                      aria-label={`Sous-sujets de ${THEME_CATEGORY_LABELS[t.theme]}`}
+                      aria-label={`Sous-thèmes de ${THEME_CATEGORY_LABELS[t.theme]}`}
                       className="mb-3 flex flex-wrap gap-2"
                     >
                       {t.subtopics.map((subtopic) => (
@@ -282,7 +282,7 @@ export function CandidateThemeSpread({ themes }: { themes: CandidateFicheDetail[
       className="space-y-3 rounded-xl border bg-card p-4 md:p-6"
     >
       <h2 id="repartition" className="font-display text-xl font-bold tracking-tight">
-        Les sujets les plus présents dans son programme
+        Les thématiques les plus présentes dans son programme
       </h2>
       <ul className="space-y-2">
         {top.map((t) => (
@@ -299,7 +299,7 @@ export function CandidateThemeSpread({ themes }: { themes: CandidateFicheDetail[
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Compte le nombre de mesures que nous avons documentées par sujet. Mesure ce dont la
+        Compte le nombre de mesures que nous avons documentées par thème. Mesure ce dont la
         candidature parle, pas ce qui a été réalisé.
       </p>
     </section>

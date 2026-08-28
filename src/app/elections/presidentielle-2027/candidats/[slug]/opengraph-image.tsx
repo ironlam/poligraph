@@ -171,7 +171,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           </span>
 
           <span style={{ fontSize: 26, color: "#94a3b8" }}>
-            Ses propositions, par sujet, avec leurs sources.
+            Ses propositions, par thème, avec leurs sources.
           </span>
         </div>
       </div>

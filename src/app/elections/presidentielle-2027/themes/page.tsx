@@ -18,11 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const publishable = data !== null && isHubPublishable(data.publishableSubjectPageCount);
 
   return {
-    title: "Couverture du corpus par sujet, présidentielle 2027 | Poligraph",
+    title: "Couverture du corpus par thématique, présidentielle 2027 | Poligraph",
     description:
-      "Candidatures documentées, mesures publiées et dernière revue éditoriale du corpus Poligraph pour chaque sujet de la présidentielle 2027.",
+      "Candidatures documentées, mesures publiées et dernière revue éditoriale du corpus Poligraph pour chaque thématique de la présidentielle 2027.",
     robots: publishable ? undefined : { index: false, follow: true },
-    alternates: { canonical: "/elections/presidentielle-2027/sujets" },
+    alternates: { canonical: "/elections/presidentielle-2027/themes" },
   };
 }
 
@@ -37,7 +37,7 @@ export default async function ThemesIndexPage() {
         items={[
           { label: "Élections", href: "/elections" },
           { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
-          { label: "Sujets" },
+          { label: "Thématiques" },
         ]}
       />
 
@@ -51,11 +51,11 @@ export default async function ThemesIndexPage() {
             Retour au hub
           </Link>
           <h1 className="font-display text-3xl font-extrabold tracking-tight md:text-4xl">
-            Où en est le corpus, sujet par sujet ?
+            Où en est le corpus, thématique par thématique ?
           </h1>
           <p className="text-muted-foreground">
-            Un sujet s&apos;ouvre à la comparaison à partir de {required} candidatures portant une
-            mesure sourcée et relue.
+            Une thématique s&apos;ouvre à la comparaison à partir de {required} candidatures
+            portant une mesure sourcée et relue.
           </p>
         </header>
 

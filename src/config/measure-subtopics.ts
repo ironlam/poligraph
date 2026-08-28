@@ -1,6 +1,6 @@
 import type { ThemeCategory } from "@/generated/prisma";
 
-export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-28-v1";
+export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-28-v2";
 
 export type MeasureSubtopicDefinition = {
   slug: string;
@@ -56,32 +56,60 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
   ),
 
   topic(
-    "SOCIAL_TRAVAIL",
+    "EMPLOI_TRAVAIL",
+    10,
+    "emploi-travail",
+    "Emploi et travail",
+    "Emploi, contrats, temps et conditions de travail."
+  ),
+  topic(
+    "EMPLOI_TRAVAIL",
+    20,
+    "salaires",
+    "Salaires",
+    "Rémunérations, salaire minimum et partage de la valeur."
+  ),
+  topic(
+    "EMPLOI_TRAVAIL",
+    30,
+    "dialogue-social",
+    "Dialogue social",
+    "Syndicats, représentation des salariés et négociation collective."
+  ),
+  topic(
+    "EMPLOI_TRAVAIL",
+    40,
+    "formation-professionnelle",
+    "Formation professionnelle",
+    "Apprentissage, reconversion et formation tout au long de la vie."
+  ),
+  topic(
+    "RETRAITES",
     10,
     "retraites",
     "Retraites",
     "Âge, cotisations et pensions de retraite."
   ),
   topic(
-    "SOCIAL_TRAVAIL",
-    20,
-    "emploi-travail",
-    "Emploi et travail",
-    "Emploi, contrats, temps et conditions de travail."
-  ),
-  topic(
-    "SOCIAL_TRAVAIL",
-    30,
-    "salaires",
-    "Salaires",
-    "Rémunérations, salaire minimum et partage de la valeur."
-  ),
-  topic(
-    "SOCIAL_TRAVAIL",
-    40,
+    "SOLIDARITES_PROTECTION_SOCIALE",
+    10,
     "protection-sociale",
     "Protection sociale",
     "Prestations, minima sociaux et sécurité sociale."
+  ),
+  topic(
+    "SOLIDARITES_PROTECTION_SOCIALE",
+    20,
+    "handicap-autonomie",
+    "Handicap et autonomie",
+    "Handicap, dépendance, accessibilité et accompagnement de l’autonomie."
+  ),
+  topic(
+    "SOLIDARITES_PROTECTION_SOCIALE",
+    30,
+    "pauvrete-precarite",
+    "Pauvreté et précarité",
+    "Lutte contre la pauvreté, exclusion et accès aux droits sociaux."
   ),
 
   topic(
@@ -106,11 +134,32 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
     "Politique pénitentiaire et conditions de détention."
   ),
   topic(
-    "SECURITE_JUSTICE",
+    "SOCIETE_DROITS_LIBERTES",
+    10,
+    "egalite-discriminations",
+    "Égalité et discriminations",
+    "Égalité devant la loi et lutte contre les discriminations."
+  ),
+  topic(
+    "SOCIETE_DROITS_LIBERTES",
+    20,
+    "droits-des-femmes",
+    "Droits des femmes",
+    "Égalité entre les femmes et les hommes et droits reproductifs."
+  ),
+  topic(
+    "SOCIETE_DROITS_LIBERTES",
+    30,
+    "famille-bioethique",
+    "Famille et bioéthique",
+    "Droit de la famille, filiation, bioéthique et fin de vie."
+  ),
+  topic(
+    "SOCIETE_DROITS_LIBERTES",
     40,
     "libertes-publiques",
     "Libertés publiques",
-    "Droits fondamentaux, libertés et maintien de l’ordre."
+    "Libertés d’expression, d’association, de manifestation et de conscience."
   ),
 
   topic(

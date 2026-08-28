@@ -44,7 +44,7 @@ describe("ThemesIndexList", () => {
     for (const logement of logements) {
       expect(logement).toHaveAttribute(
         "href",
-        "/elections/presidentielle-2027/sujets/logement-urbanisme"
+        "/elections/presidentielle-2027/themes/logement-urbanisme"
       );
     }
     expect(screen.getAllByText("Candidatures documentées").length).toBeGreaterThan(0);
@@ -61,7 +61,7 @@ describe("ThemesIndexList", () => {
     for (const numerique of numeriques) {
       expect(numerique).toHaveAttribute(
         "href",
-        "/elections/presidentielle-2027/sujets/numerique-tech"
+        "/elections/presidentielle-2027/themes/numerique-tech"
       );
     }
     expect(screen.getAllByText("Aucune revue publiée").length).toBeGreaterThan(0);

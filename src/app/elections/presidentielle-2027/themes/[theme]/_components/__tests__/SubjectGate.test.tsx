@@ -99,7 +99,7 @@ describe("SubjectGate", () => {
       <SubjectGate data={data({ fallbackPublishableTheme: { slug: "sante", label: "Santé" } })} />
     );
     const link = screen.getByRole("link", { name: "Santé" });
-    expect(link).toHaveAttribute("href", "/elections/presidentielle-2027/sujets/sante");
+    expect(link).toHaveAttribute("href", "/elections/presidentielle-2027/themes/sante");
   });
 
   it("n'affiche aucun lien de renvoi quand fallbackPublishableTheme est nul", () => {

@@ -331,7 +331,7 @@ export async function reviewSubtopicAction(input: {
 
   try {
     const parsed = subtopicReviewInputSchema.safeParse(input);
-    if (!parsed.success) throw new MeasureValidationError("Proposition de sous-sujet invalide");
+    if (!parsed.success) throw new MeasureValidationError("Proposition de sous-thème invalide");
     await reviewMeasureRevisionSubtopic({
       revisionId: parsed.data.revisionId,
       subtopicId: parsed.data.subtopicId,

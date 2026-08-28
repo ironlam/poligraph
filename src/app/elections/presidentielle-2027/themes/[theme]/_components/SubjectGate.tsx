@@ -32,7 +32,7 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
       className="rounded-lg border border-border bg-muted/40 p-4"
     >
       <h2 id="gate-heading" className="text-base font-bold">
-        Comparaison pas encore disponible sur ce sujet
+        Comparaison pas encore disponible sur ce thème
       </h2>
       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
         <p className="text-foreground">Ce qui manque pour comparer</p>
@@ -66,7 +66,7 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
             </dd>
           </div>
           <div>
-            <dt>Éditions de programme ne couvrant pas ce sujet</dt>
+            <dt>Éditions de programme ne couvrant pas ce thème</dt>
             <dd className="text-foreground">Non calculable</dd>
           </div>
           <div>
@@ -81,9 +81,9 @@ export function SubjectGate({ data }: { data: SubjectPageData }) {
       </div>
       {data.fallbackPublishableTheme !== null && (
         <p className="mt-4 text-sm">
-          Un sujet est comparable aujourd&apos;hui :{" "}
+          Un thème est comparable aujourd&apos;hui :{" "}
           <Link
-            href={`/elections/presidentielle-2027/sujets/${data.fallbackPublishableTheme.slug}`}
+            href={`/elections/presidentielle-2027/themes/${data.fallbackPublishableTheme.slug}`}
             className="underline"
           >
             {data.fallbackPublishableTheme.label}

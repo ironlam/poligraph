@@ -180,7 +180,7 @@ export function PresidentialCorpusSearch() {
           }}
         >
           <label htmlFor="presidential-corpus-query" className="mb-2 block font-bold">
-            Rechercher un sujet, une mesure ou une personnalité suivie
+            Rechercher un thème, une mesure ou une personnalité suivie
           </label>
           <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
             <Search aria-hidden="true" className="ml-4 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -270,7 +270,7 @@ export function PresidentialCorpusSearch() {
                       id={listboxId + "-subjects"}
                       className="px-4 pb-1 pt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground"
                     >
-                      Sujets
+                      Thématiques
                     </h3>
                     {response.groups.subjects.map((result) => {
                       const currentIndex = optionIndex++;
@@ -293,7 +293,7 @@ export function PresidentialCorpusSearch() {
                         >
                           <span className="block font-bold">{result.label}</span>
                           <span className="mt-1 block text-sm text-muted-foreground">
-                            Sujet du corpus 2027
+                            Thème du corpus 2027
                           </span>
                         </button>
                       );
@@ -409,7 +409,8 @@ export function PresidentialCorpusSearch() {
         )}
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
-        Recherche limitée aux sujets et contenus publics de l{"'"}élection présidentielle 2027. Une
+        Recherche limitée aux thématiques et contenus publics de l{"'"}élection présidentielle
+        2027. Une
         absence de résultat ne prouve pas qu{"'"}une proposition n{"'"}existe pas.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
