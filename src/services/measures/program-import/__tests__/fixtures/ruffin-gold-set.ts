@@ -1,11 +1,11 @@
-import type { ThemeCategory } from "@/generated/prisma";
+import type { PresidentialThemeCategory } from "@/lib/presidentielle/themes";
 import type { ExtractedProposal } from "../../types";
 
 export type RuffinGoldSetEntry = {
   id: string;
   sourceText: string;
   expectedClassification: ExtractedProposal["classification"];
-  expectedTheme: ThemeCategory | null;
+  expectedTheme: PresidentialThemeCategory | null;
   documentUrl: string;
   page: number;
   notes: string;
@@ -28,7 +28,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Pour en finir avec cette érosion du pouvoir d’achat, nous indexerons les salaires sur l’inflation, comme cela a existé jusqu’en 1982.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 15,
     notes: "Action explicite, mécanisme et cible identifiés.",
@@ -39,7 +39,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Pour en finir avec les grilles salariales en dessous du SMIC et permettre plus de progression au cours de la carrière, nous revaloriserons les grilles de classification.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 15,
     notes: "Action et objet réglementaire explicites.",
@@ -50,7 +50,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Lutter contre les horaires atypiques en rémunérant double les heures avant 8 h et après 18 h.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 16,
     notes: "Seuils horaires et niveau de rémunération présents.",
@@ -61,7 +61,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Pour quatre trimestres cotisés dans un métier exposé à la pénibilité, un trimestre supplémentaire de retraite sera accordé.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "RETRAITES",
     documentUrl: TRAVAIL_URL,
     page: 20,
     notes: "Barème chiffré et bénéficiaires explicites.",
@@ -73,7 +73,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Nous voulons que les salariés sous-traitants puissent bénéficier des mêmes droits que les salariés de l’entreprise donneuse d’ordre.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 21,
     notes: "Droit nouveau, population et référence de comparaison explicites.",
@@ -85,7 +85,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Il s’agit de contrôler et menacer de pénalités les entreprises qui renouvellent incessamment les contrats d’intérim de 3x6 mois.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 21,
     notes: "Contrôle, sanction et pratique ciblée sont présents.",
@@ -143,7 +143,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Nous créerons un véritable congé bénévole, ouvert à toutes et tous, y compris sans mandat statutaire, et sans perte de revenus.",
     expectedClassification: "MEASURE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: LOISIRS_URL,
     page: 25,
     notes: "Création, bénéficiaires et condition de rémunération explicites.",
@@ -189,7 +189,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Mieux payer celles et ceux qui prennent soin, qui accompagnent, qui nettoient, qui nourrissent.",
     expectedClassification: "OBJECTIVE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 14,
     notes: "Résultat recherché vérifiable, sans niveau de rémunération ni instrument.",
@@ -198,7 +198,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     id: "travail-objective-reconversion",
     sourceText: "Garantir un droit à la reconversion professionnelle.",
     expectedClassification: "OBJECTIVE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 20,
     notes: "Droit visé, modalités absentes de cet extrait isolé.",
@@ -237,7 +237,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     id: "travail-diagnosis-securite-sociale",
     sourceText: "La Sécurité sociale est aujourd’hui le premier payeur des effets du mal-travail.",
     expectedClassification: "DIAGNOSIS",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 13,
     notes: "Constat causal, aucune action annoncée.",
@@ -246,7 +246,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     id: "travail-diagnosis-bas-salaires",
     sourceText: "1,4 millions de salariés à bas salaires dont 600 000 salariés de 40 ans ou plus.",
     expectedClassification: "DIAGNOSIS",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 15,
     notes: "Donnée descriptive sur la population concernée.",
@@ -295,7 +295,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Macron a supprimé les contrats aidés en 2017, alors que les associations en étaient les principaux employeurs.",
     expectedClassification: "DIAGNOSIS",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: LOISIRS_URL,
     page: 19,
     notes: "Décision historique attribuée à un autre mandat, pas un engagement 2027.",
@@ -316,7 +316,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     id: "travail-value-representation",
     sourceText: "Notre tâche, c’est de défendre ceux qui en bavent contre ceux qui se gavent.",
     expectedClassification: "VALUE",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 11,
     notes: "Positionnement moral, sans politique publique définie.",
@@ -356,7 +356,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Nous voulons protéger en priorité celles et ceux qui n’ont pas de statut au sein du secteur privé.",
     expectedClassification: "GENERAL_INTENT",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 12,
     notes: "Population ciblée, action et mécanisme non définis.",
@@ -366,7 +366,7 @@ export const RUFFIN_GOLD_SET: RuffinGoldSetEntry[] = [
     sourceText:
       "Nous voulons aussi que les employeurs assument enfin le coût social de leurs choix économiques.",
     expectedClassification: "GENERAL_INTENT",
-    expectedTheme: "SOCIAL_TRAVAIL",
+    expectedTheme: "EMPLOI_TRAVAIL",
     documentUrl: TRAVAIL_URL,
     page: 13,
     notes: "Orientation générale, mécanisme absent de cette phrase.",
