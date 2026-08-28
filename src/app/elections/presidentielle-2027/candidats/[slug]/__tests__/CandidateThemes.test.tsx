@@ -79,7 +79,7 @@ describe("CandidateThemes", () => {
     );
 
     expect(screen.queryByText("Mesure 1.")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Voir les 16 mesures" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Voir ces mesures" })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats/camille-riviere/mesures?theme=sante"
     );
