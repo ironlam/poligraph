@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { createMeasure } from "@/lib/measures/transitions";
+import { createMeasure, type CreateMeasureInput } from "@/lib/measures/transitions";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { extractPromisesFromText } from "@/services/promises/extractor";
 import { classifyPresidentialTheme, classifyTheme } from "@/services/promises/theme-classifier";
@@ -72,6 +72,8 @@ export async function ingestMeasuresFromPress(opts: IngestOptions): Promise<Meas
     let articleErrored = false;
 
     try {
+      const plannedMeasures: CreateMeasureInput[] = [];
+
       for (const mention of article.mentions) {
         const candidacyId = candidacyByPolitician.get(mention.politicianId);
         if (candidacyId === undefined) {
@@ -96,7 +98,7 @@ export async function ingestMeasuresFromPress(opts: IngestOptions): Promise<Meas
           if (classification === null) {
             throw new Error("La mesure n'a pas pu être classée dans la taxonomie présidentielle");
           }
-          await createMeasure({
+          plannedMeasures.push({
             politicianId: mention.politicianId,
             electionId: opts.electionId,
             candidacyId,
@@ -125,8 +127,14 @@ export async function ingestMeasuresFromPress(opts: IngestOptions): Promise<Meas
               },
             ],
           });
-          result.created += 1;
         }
+      }
+
+      // Finish extraction and classification for the whole article before the first write. A
+      // transient classifier failure must not leave a partial article import marked as failed.
+      for (const input of plannedMeasures) {
+        await createMeasure(input);
+        result.created += 1;
       }
     } catch (err) {
       articleErrored = true;

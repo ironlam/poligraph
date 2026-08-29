@@ -1,6 +1,6 @@
 import type { ThemeCategory } from "@/generated/prisma";
 
-export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-28-v2";
+export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-29-v3";
 
 export type MeasureSubtopicDefinition = {
   slug: string;
@@ -151,7 +151,7 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
   topic(
     "SOCIETE_DROITS_LIBERTES",
     40,
-    "libertes-publiques",
+    "libertes-publiques-societe",
     "Libertés publiques",
     "Libertés d’expression, d’association, de manifestation et de conscience."
   ),

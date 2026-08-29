@@ -178,15 +178,20 @@ describe("page des mesures d'une candidature", () => {
     );
   });
 
-  it("écarte le thème historique Social et travail du filtre présidentiel", async () => {
+  it("garde le thème historique Social et travail lisible pendant la transition", async () => {
     const { default: Page } = await import("./page");
 
-    await expect(
-      Page({
+    render(
+      await Page({
         params,
         searchParams: Promise.resolve({ theme: "social-travail" }),
       })
-    ).rejects.toThrow("REDIRECT:/elections/presidentielle-2027/candidats/camille-riviere/mesures");
-    expect(mocks.listMeasures).not.toHaveBeenCalled();
+    );
+    expect(mocks.listMeasures).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "SOCIAL_TRAVAIL" })
+    );
+    expect(
+      screen.getByRole("option", { name: /ancienne classification/ })
+    ).toBeInTheDocument();
   });
 });

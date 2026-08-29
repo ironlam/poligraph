@@ -147,6 +147,30 @@ describe("ingestMeasuresFromPress", () => {
     );
   });
 
+  it("termine toutes les classifications avant de créer la première mesure", async () => {
+    arrange();
+    vi.mocked(extractPromisesFromText).mockResolvedValueOnce([
+      { text: "Augmenter le SMIC.", context: null, confidence: 0.8 },
+      { text: "Réformer les retraites.", context: null, confidence: 0.8 },
+    ] as never);
+    vi.mocked(classifyPresidentialTheme)
+      .mockResolvedValueOnce({
+        theme: "EMPLOI_TRAVAIL",
+        confidence: 0.9,
+        method: "haiku",
+      })
+      .mockResolvedValueOnce(null);
+
+    const result = await ingestMeasuresFromPress({ electionId: "elec-1" });
+
+    expect(result.extracted).toBe(2);
+    expect(result.created).toBe(0);
+    expect(createMeasure).not.toHaveBeenCalled();
+    expect(db.pressArticle.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ promiseScanStatus: "error" }) })
+    );
+  });
+
   it("marque « skipped » un article sans extraction", async () => {
     arrange();
     vi.mocked(extractPromisesFromText).mockResolvedValue([] as never);

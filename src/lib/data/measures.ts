@@ -13,6 +13,7 @@ import {
   PUBLIC_MEASURE_WHERE,
   PUBLIC_MEASURE_REVISION_WHERE,
 } from "@/lib/presidentielle/publication";
+import { isPresidentialTheme } from "@/lib/presidentielle/themes";
 
 /**
  * The cumulative public measure predicate.
@@ -571,7 +572,7 @@ export async function getPublicMeasureStatsByCandidacy(
 
   return {
     measureCount: byTheme.reduce((n, row) => n + row._count._all, 0),
-    themesCoveredCount: byTheme.length,
+    themesCoveredCount: byTheme.filter((row) => isPresidentialTheme(row.theme)).length,
     primarySourceMeasureCount,
     lastReviewedAt: lastReviewed?.publishedRevision?.reviewedAt ?? null,
     firstPublishedAt: firstPublished?.publishedRevision?.publishedAt ?? null,
@@ -677,7 +678,7 @@ export async function getMeasureReadinessByCandidacies(
     if (row.candidacyId === null) continue;
     const current = readiness.get(row.candidacyId) ?? { ...EMPTY_MEASURE_READINESS };
     current.measureCount += row._count._all;
-    current.themesCoveredCount += 1;
+    if (isPresidentialTheme(row.theme)) current.themesCoveredCount += 1;
     readiness.set(row.candidacyId, current);
   }
   for (const row of byPrimarySource) {

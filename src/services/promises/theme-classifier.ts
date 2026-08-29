@@ -85,7 +85,12 @@ async function classifyWithPrompt(
   text: string,
   promptTemplate: string
 ): Promise<{ theme?: string; confidence?: number } | null> {
-  const safe = text.replace(/<\/?[a-z]+>/gi, "").slice(0, 1000);
+  const safe = text
+    .replace(/<\/?[a-z]+>/gi, "")
+    .replace(/["\n\r]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
   const prompt = promptTemplate.replace("{{TEXT}}", safe);
   try {
     const response = await callAnthropic([{ role: "user", content: prompt }], {

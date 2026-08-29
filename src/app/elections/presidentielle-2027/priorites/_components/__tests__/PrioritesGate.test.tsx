@@ -256,7 +256,7 @@ describe("PrioritesGate : ce qui reste consultable", () => {
   it("le dit franchement quand aucune thématique n'est comparable", () => {
     render(<PrioritesGate data={data()} evaluatedAt={evaluatedAt} />);
     expect(screen.getByText(/Aucune thématique n'est encore comparable/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Les 13 thématiques" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Les 16 thématiques" })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/themes"
     );

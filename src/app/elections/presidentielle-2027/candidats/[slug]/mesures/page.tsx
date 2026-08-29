@@ -23,7 +23,7 @@ const ELECTION_SLUG = "presidentielle-2027";
 const PAGE_SIZE = 20;
 const MAX_PAGE = 10_000;
 const MAX_QUERY_LENGTH = 120;
-const THEME_ENTRIES = THEMES_IN_ORDER.map(
+const THEME_ENTRIES = [...THEMES_IN_ORDER, "SOCIAL_TRAVAIL" as const].map(
   (theme) => [theme, THEME_CATEGORY_LABELS[theme]] as const
 );
 
@@ -214,7 +214,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
                 <option value="">Toutes les thématiques</option>
                 {THEME_ENTRIES.map(([code, label]) => (
                   <option key={code} value={themeToSlug(code)}>
-                    {label}
+                    {code === "SOCIAL_TRAVAIL" ? `${label} (ancienne classification)` : label}
                   </option>
                 ))}
               </Select>
