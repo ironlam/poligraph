@@ -86,7 +86,12 @@ describe("architecture d'invalidation du cache des votes", () => {
       'revalidateRemoteCache(["votes"])',
       'name: "Législation (active, 3j)"',
     ]);
-    expect(dailyScript).toContain('revalidateRemoteCache(["dossiers", "stats", "politicians"])');
+    // "factchecks" belongs in the final purge because the Daily runs the Google
+    // Fact Check step; without it a freshly imported fact-check waited out the
+    // listing's 24h cache window before appearing.
+    expect(dailyScript).toContain(
+      'revalidateRemoteCache(["dossiers", "stats", "politicians", "factchecks"])'
+    );
     expect(dailyScript).toContain("...(!DRY_RUN");
   });
 

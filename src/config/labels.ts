@@ -1276,7 +1276,10 @@ export const FACTCHECK_RATING_DESCRIPTIONS: Record<FactCheckRating, string> = {
  * Whitelist of francophone fact-checking sources.
  * Non-francophone sources (Snopes, PolitiFact, Full Fact, Indian outlets, etc.)
  * are kept in DB but excluded from display queries.
- * Includes known name variants from the Google Fact Check API.
+ *
+ * One canonical label per outlet: the spelling variants the Google Fact Check
+ * API returns are folded onto these labels by canonicalizeFactCheckSource()
+ * before anything is stored or compared.
  */
 export const FACTCHECK_ALLOWED_SOURCES = [
   "TF1 Info",
@@ -1292,6 +1295,53 @@ export const FACTCHECK_ALLOWED_SOURCES = [
   "RTBF",
   "Fasocheck",
 ];
+
+/**
+ * Google returns a publisher's name as that publisher spells it in its own
+ * ClaimReview markup, and the spelling drifts over time: the same outlet
+ * arrives as "Franceinfo" then "franceinfo", "DE FACTO" then "De Facto",
+ * "AFP Factuel" then "Factuel AFP". Comparing the raw string against
+ * FACTCHECK_ALLOWED_SOURCES sent those reviews to DRAFT and kept them out of
+ * every public listing, which is what froze the public fact-check feed on its
+ * April 2026 entry while the sync kept importing.
+ *
+ * Case and accents are folded, so only spellings that differ by more than that
+ * need an entry here.
+ */
+const FACTCHECK_SOURCE_ALIASES: Record<string, string> = {
+  // AFP's French desk (factuel.afp.com), whose two words Google returns in
+  // either order. Its English desk publishes under "AFP Fact Check" and is
+  // deliberately absent: those reviews are in English, and the one moderation
+  // decision recorded on a fact-check unpublished exactly such a review.
+  "Factuel AFP": "AFP Factuel",
+};
+
+/** Case-, accent- and punctuation-insensitive key for one publisher name. */
+function factCheckSourceKey(source: string): string {
+  return source
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const CANONICAL_FACTCHECK_SOURCES = new Map<string, string>([
+  ...FACTCHECK_ALLOWED_SOURCES.map((label) => [factCheckSourceKey(label), label] as const),
+  ...Object.entries(FACTCHECK_SOURCE_ALIASES).map(
+    ([variant, label]) => [factCheckSourceKey(variant), label] as const
+  ),
+]);
+
+/**
+ * Fold a publisher name onto its canonical label. Unknown publishers are
+ * returned as they came (whitespace-tidied only): the allow-list, not this
+ * function, decides what is publishable.
+ */
+export function canonicalizeFactCheckSource(source: string): string {
+  const tidied = source.trim().replace(/\s+/g, " ");
+  return CANONICAL_FACTCHECK_SOURCES.get(factCheckSourceKey(tidied)) ?? tidied;
+}
 
 /**
  * Detect if a fact-check claimant is a specific person (politician)

@@ -135,6 +135,8 @@
     "audit:careers:export": "tsx scripts/audit-careers.ts --export",
     "audit:bio-quality": "tsx scripts/audit-bio-quality.ts",
     "audit:sync-health": "tsx scripts/audit-sync-health.ts",
+    "backfill:factcheck-sources": "dotenv -e .env -- tsx scripts/backfill-factcheck-sources.ts",
+    "backfill:factcheck-sources:apply": "dotenv -e .env -- tsx scripts/backfill-factcheck-sources.ts --apply --confirm-production",
     "backfill:citizen-impact-reader-role": "dotenv -e .env -- tsx scripts/backfill-citizen-impact-reader-role.ts",
     "backfill:citizen-impact-reader-role:apply": "dotenv -e .env -- tsx scripts/backfill-citizen-impact-reader-role.ts --apply --confirm-production",
     "perf:check": "dotenv -e .env -- tsx scripts/perf-check-vote-denorm.ts",
