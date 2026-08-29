@@ -243,13 +243,14 @@ const DAILY_STEPS: DailyStep[] = [
       return syncPress();
     },
   },
-  {
-    name: "press-analysis",
-    run: async () => {
-      const { syncPressAnalysis } = await import("@/services/sync/press-analysis");
-      return syncPressAnalysis({ limit: 100 });
-    },
-  },
+  // press-analysis step removed here (#765). It ran on the same 0 5,11,19 cron
+  // as the "Analyse presse IA" step in scripts/sync-daily.ts, sharing the
+  // 6h-throttle syncMetadata row that was supposed to gate it. That throttle
+  // isn't an atomic per-article claim, so when both schedulers fired close
+  // together they could both list the same unanalyzed articles before either
+  // marked them, paying for duplicate AI analyses and duplicate resolver
+  // decisions. scripts/sync-daily.ts is now the sole scheduler for press
+  // analysis and forces every run (no more throttle to race over).
   // No Judilibre step here, and none may be added (#337). Searching the corpus by
   // name produced 0 affairs over 156 decisions, because it is pseudonymised. The
   // replacement starts from a known reference and writes onto a CourtDecision, never

@@ -85,8 +85,19 @@ const steps: SyncStep[] = [
     command: `npx tsx scripts/sync-press.ts${dryRunFlag}`,
   },
   {
+    // --force bypasses the 6h self-throttle in syncPressAnalysis. That guard
+    // exists for an operator running the script by hand twice in a row; it
+    // used to also arbitrate between schedulers, since the Inngest sync-daily
+    // function ran this same step on the same 0 5,11,19 cron and shared its
+    // syncMetadata row. Whichever fired first took the window and the other
+    // returned in 2s having analyzed nothing, while still reporting success.
+    // Cron drift (15 to 45 min here) decided the winner, so the skips
+    // alternated: the backlog grew from 167 to 321 articles in 34h that way.
+    // The Inngest step is removed (see src/inngest/functions/sync-daily.ts)
+    // so this workflow is now the sole scheduler for press analysis: --force
+    // is safe because there is no longer a second process to race against.
     name: "Analyse presse IA (limit 100)",
-    command: `npx tsx scripts/sync-press-analysis.ts --limit=100${dryRunFlag}`,
+    command: `npx tsx scripts/sync-press-analysis.ts --limit=100 --force${dryRunFlag}`,
   },
   // Judilibre step disabled 2026-05-15 (Option C, audit:
   // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
