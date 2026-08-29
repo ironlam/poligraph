@@ -3,6 +3,7 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { THEME_ACCENT_BAR, THEME_CATEGORY_LABELS, VOTE_POSITION_LABELS } from "@/config/labels";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { cn, formatDate } from "@/lib/utils";
 
 /**
@@ -71,7 +72,10 @@ export function CandidateStats({
       value: measureCount,
       label: measureCount === 1 ? "proposition publiée" : "propositions publiées",
     },
-    { value: themesCoveredCount, label: "thématiques couvertes sur 13" },
+    {
+      value: themesCoveredCount,
+      label: `thématiques couvertes sur ${THEMES_IN_ORDER.length}`,
+    },
     { value: mandateCount, label: mandateCount === 1 ? "mandat exercé" : "mandats exercés" },
   ];
 

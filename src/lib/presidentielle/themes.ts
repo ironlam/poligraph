@@ -27,8 +27,10 @@ export const THEMES_IN_ORDER = [
 ] as const satisfies readonly ThemeCategory[];
 
 export type PresidentialThemeCategory = (typeof THEMES_IN_ORDER)[number];
+export type PresidentialThemeRouteCategory = PresidentialThemeCategory | "SOCIAL_TRAVAIL";
 
 const PRESIDENTIAL_THEME_SET = new Set<string>(THEMES_IN_ORDER);
+const PRESIDENTIAL_THEME_ROUTE_SET = new Set<string>([...THEMES_IN_ORDER, "SOCIAL_TRAVAIL"]);
 
 export function isPresidentialTheme(theme: string): theme is PresidentialThemeCategory {
   return PRESIDENTIAL_THEME_SET.has(theme);
@@ -42,9 +44,31 @@ export function isAllowedPresidentialMeasureTheme(
   return electionSlug !== PRESIDENTIELLE_2027_SLUG || isPresidentialTheme(theme);
 }
 
-export function parseThemeSlug(slug: string): PresidentialThemeCategory | null {
+/**
+ * Read compatibility while production still contains legacy presidential measures.
+ * SOCIAL_TRAVAIL remains forbidden for new writes and disappears from indexes as soon as the
+ * reclassification batch has emptied it.
+ */
+export function isReadablePresidentialMeasureTheme(
+  electionSlug: string,
+  theme: ThemeCategory
+): theme is PresidentialThemeRouteCategory {
+  return electionSlug !== PRESIDENTIELLE_2027_SLUG || PRESIDENTIAL_THEME_ROUTE_SET.has(theme);
+}
+
+export function parseThemeSlug(slug: string): PresidentialThemeRouteCategory | null {
   const theme = themeFromSlug(slug);
-  return theme !== null && isPresidentialTheme(theme) ? theme : null;
+  return theme !== null && PRESIDENTIAL_THEME_ROUTE_SET.has(theme)
+    ? (theme as PresidentialThemeRouteCategory)
+    : null;
+}
+
+export function getPresidentialThemeIndexOrder(
+  presentThemes: ReadonlySet<ThemeCategory>
+): readonly PresidentialThemeRouteCategory[] {
+  return presentThemes.has("SOCIAL_TRAVAIL")
+    ? [...THEMES_IN_ORDER, "SOCIAL_TRAVAIL"]
+    : THEMES_IN_ORDER;
 }
 
 export const PRESIDENTIAL_THEME_SEARCH_ALIASES: Record<

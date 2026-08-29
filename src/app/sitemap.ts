@@ -5,7 +5,7 @@ import { Prisma } from "@/generated/prisma";
 import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
-import { getAllThemeSlugs } from "@/lib/theme-utils";
+import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
@@ -534,7 +534,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       changeFrequency: "weekly",
       priority: 0.7,
     },
-    ...getAllThemeSlugs().map((slug) => ({
+    ...getAllLegacyThemeSlugs().map((slug) => ({
       url: `${SITE_URL}/parlement/votes/themes/${slug}`,
       lastModified: new Date(),
       changeFrequency: "weekly" as const,

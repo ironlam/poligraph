@@ -4,7 +4,7 @@ import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
-import { THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
+import { getPresidentialThemeIndexOrder, themeToSlug } from "@/lib/presidentielle/themes";
 import { getPublicMeasuresByElection, type PublicMeasure } from "./measures";
 import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
 
@@ -62,7 +62,8 @@ export async function loadThemesIndex(
     byTheme.set(m.theme, list);
   }
 
-  const themes: ThemeIndexEntry[] = THEMES_IN_ORDER.map((theme) => {
+  const indexedThemes = getPresidentialThemeIndexOrder(new Set(byTheme.keys()));
+  const themes: ThemeIndexEntry[] = indexedThemes.map((theme) => {
     const onTheme = byTheme.get(theme) ?? [];
     const defended = onTheme.filter((m) => m.withdrawal === null);
     const documentedCandidacies = new Set(onTheme.map((m) => m.candidacyId as string));

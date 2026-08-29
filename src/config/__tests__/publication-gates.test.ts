@@ -21,7 +21,7 @@ describe("publication-gates : politique v1 verrouillée", () => {
     expect(PUBLICATION_GATES.pageSujet.minCandidaciesWithVerifiedMeasure).toBe(2);
     expect(PUBLICATION_GATES.priorites.minVerifiedMeasures).toBe(15);
     expect(PUBLICATION_GATES.priorites.minThemesCovered).toBe(5);
-    expect(PUBLICATION_GATES.priorites.totalThemes).toBe(13);
+    expect(PUBLICATION_GATES.priorites.totalThemes).toBe(16);
     expect(PUBLICATION_GATES.priorites.minPrimarySourceShare).toBe(0.6);
     expect(PUBLICATION_GATES.priorites.maxCoverageRatio).toBe(3);
     expect(PUBLICATION_GATES.priorites.minEligibleCandidacies).toBe(2);

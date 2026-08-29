@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   findMatchingThemes,
+  getPresidentialThemeIndexOrder,
   themeToSlug,
   parseThemeSlug,
   THEMES_IN_ORDER,
@@ -14,7 +15,7 @@ describe("theme route helpers", () => {
     for (const theme of THEMES_IN_ORDER) {
       expect(parseThemeSlug(themeToSlug(theme))).toBe(theme);
     }
-    expect(parseThemeSlug(themeToSlug("SOCIAL_TRAVAIL"))).toBeNull();
+    expect(parseThemeSlug(themeToSlug("SOCIAL_TRAVAIL"))).toBe("SOCIAL_TRAVAIL");
   });
   it("maps LOGEMENT_URBANISME to logement-urbanisme", () => {
     expect(themeToSlug("LOGEMENT_URBANISME")).toBe("logement-urbanisme");
@@ -32,6 +33,13 @@ describe("theme route helpers", () => {
   });
   it("pins the slug", () => {
     expect(PRESIDENTIELLE_2027_SLUG).toBe("presidentielle-2027");
+  });
+  it("n'expose le thème historique que tant que des mesures le portent", () => {
+    expect(getPresidentialThemeIndexOrder(new Set(["SANTE"]))).toEqual(THEMES_IN_ORDER);
+    expect(getPresidentialThemeIndexOrder(new Set(["SOCIAL_TRAVAIL"]))).toEqual([
+      ...THEMES_IN_ORDER,
+      "SOCIAL_TRAVAIL",
+    ]);
   });
   it("retrouve un thème par un mot de son libellé, accents neutralisés", () => {
     expect(findMatchingThemes("Logement")).toEqual(["LOGEMENT_URBANISME"]);

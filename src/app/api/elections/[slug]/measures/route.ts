@@ -7,7 +7,7 @@ import {
   hasPublicTrackedPresidentialCandidacy,
 } from "@/lib/data/presidential-candidacy-field";
 import { listPublicPresidentialMeasures } from "@/lib/data/measures";
-import { isAllowedPresidentialMeasureTheme } from "@/lib/presidentielle/themes";
+import { isReadablePresidentialMeasureTheme } from "@/lib/presidentielle/themes";
 import { themeFromSlug } from "@/lib/theme-utils";
 
 function parseOptionalBoolean(value: string | null): boolean | null | undefined {
@@ -59,7 +59,7 @@ export const GET = withPublicRoute(async (request, context) => {
       { status: 400 }
     );
   }
-  if (theme != null && !isAllowedPresidentialMeasureTheme(election.slug, theme)) {
+  if (theme != null && !isReadablePresidentialMeasureTheme(election.slug, theme)) {
     return NextResponse.json({ error: "Thème invalide" }, { status: 400 });
   }
 
