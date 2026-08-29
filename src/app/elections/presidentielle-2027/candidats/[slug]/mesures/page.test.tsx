@@ -190,8 +190,6 @@ describe("page des mesures d'une candidature", () => {
     expect(mocks.listMeasures).toHaveBeenCalledWith(
       expect.objectContaining({ theme: "SOCIAL_TRAVAIL" })
     );
-    expect(
-      screen.getByRole("option", { name: /ancienne classification/ })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /ancienne classification/ })).toBeInTheDocument();
   });
 });
