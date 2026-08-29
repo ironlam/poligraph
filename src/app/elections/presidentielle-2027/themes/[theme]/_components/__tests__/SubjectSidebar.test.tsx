@@ -33,14 +33,14 @@ describe("SubjectSidebar", () => {
     expect(screen.getByRole("navigation", { name: "Les thématiques" })).toBeInTheDocument();
   });
 
-  it("marque le sujet courant pour les lecteurs d'écran, pas seulement par la couleur", () => {
+  it("marque le thème courant pour les lecteurs d'écran, pas seulement par la couleur", () => {
     render(<SubjectSidebar themes={THEMES} current="SANTE" />);
     const courants = screen.getAllByRole("link", { current: "page" });
     expect(courants).toHaveLength(2);
     for (const lien of courants) expect(lien).toHaveTextContent("Santé");
   });
 
-  it("garde un sujet sans aucune mesure dans la liste", () => {
+  it("garde un thème sans aucune mesure dans la liste", () => {
     // Le vide est une information : masquer le sujet ferait paraître le corpus plus complet.
     render(<SubjectSidebar themes={THEMES} current="LOGEMENT_URBANISME" />);
     expect(screen.getAllByRole("link", { name: /Institutions/ })).toHaveLength(2);
@@ -61,7 +61,7 @@ describe("SubjectSidebar", () => {
     expect(lien).not.toHaveAccessibleName(expect.stringContaining("1 mesures"));
   });
 
-  it("pointe chaque sujet vers sa page", () => {
+  it("pointe chaque thème vers sa page", () => {
     render(<SubjectSidebar themes={THEMES} current="LOGEMENT_URBANISME" />);
     expect(screen.getAllByRole("link", { name: /Santé/ })[0]).toHaveAttribute(
       "href",

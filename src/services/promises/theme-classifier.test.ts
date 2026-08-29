@@ -9,6 +9,7 @@ import { callAnthropic, parseAnthropicJSON } from "@/lib/api/anthropic";
 import {
   classifyByRules,
   classifyByHaiku,
+  classifyPresidentialTheme,
   classifyTheme,
 } from "@/services/promises/theme-classifier";
 
@@ -86,5 +87,37 @@ describe("classifyTheme", () => {
     const result = await classifyTheme("Bonjour, c'est une belle journée.");
     expect(result.theme).toBe("INSTITUTIONS");
     expect(result.confidence).toBeCloseTo(0.1);
+  });
+});
+
+describe("classifyPresidentialTheme", () => {
+  beforeEach(() => {
+    vi.mocked(callAnthropic).mockReset();
+    vi.mocked(parseAnthropicJSON).mockReset();
+  });
+
+  it("accepte un thème présidentiel issu de la taxonomie détaillée", async () => {
+    vi.mocked(callAnthropic).mockResolvedValueOnce({
+      content: [{ type: "text", text: '{"theme":"RETRAITES","confidence":0.9}' }],
+    } as never);
+    vi.mocked(parseAnthropicJSON).mockReturnValueOnce({ theme: "RETRAITES", confidence: 0.9 });
+
+    await expect(classifyPresidentialTheme("Ramener la retraite à 60 ans.")).resolves.toEqual({
+      theme: "RETRAITES",
+      confidence: 0.9,
+      method: "haiku",
+    });
+  });
+
+  it("refuse explicitement SOCIAL_TRAVAIL", async () => {
+    vi.mocked(callAnthropic).mockResolvedValueOnce({
+      content: [{ type: "text", text: '{"theme":"SOCIAL_TRAVAIL","confidence":1}' }],
+    } as never);
+    vi.mocked(parseAnthropicJSON).mockReturnValueOnce({
+      theme: "SOCIAL_TRAVAIL",
+      confidence: 1,
+    });
+
+    await expect(classifyPresidentialTheme("Augmenter le SMIC.")).resolves.toBeNull();
   });
 });

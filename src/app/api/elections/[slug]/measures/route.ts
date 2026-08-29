@@ -7,6 +7,7 @@ import {
   hasPublicTrackedPresidentialCandidacy,
 } from "@/lib/data/presidential-candidacy-field";
 import { listPublicPresidentialMeasures } from "@/lib/data/measures";
+import { isAllowedPresidentialMeasureTheme } from "@/lib/presidentielle/themes";
 import { themeFromSlug } from "@/lib/theme-utils";
 
 function parseOptionalBoolean(value: string | null): boolean | null | undefined {
@@ -57,6 +58,9 @@ export const GET = withPublicRoute(async (request, context) => {
       { error: "Ce contrat est réservé aux élections présidentielles" },
       { status: 400 }
     );
+  }
+  if (theme != null && !isAllowedPresidentialMeasureTheme(election.slug, theme)) {
+    return NextResponse.json({ error: "Thème invalide" }, { status: 400 });
   }
 
   const candidateSlug = candidateSlugParam ?? undefined;

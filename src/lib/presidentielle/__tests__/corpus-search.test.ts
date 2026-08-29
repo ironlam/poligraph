@@ -83,8 +83,8 @@ describe("searchPresidentialCorpus", () => {
       {
         type: "subject",
         theme: "LOGEMENT_URBANISME",
-        label: "Logement & Urbanisme",
-        url: "/elections/presidentielle-test/sujets/logement-urbanisme",
+        label: "Logement et urbanisme",
+        url: "/elections/presidentielle-test/themes/logement-urbanisme",
       },
     ]);
   });

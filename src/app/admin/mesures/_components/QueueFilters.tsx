@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PUBLICATION_STATE_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
 import type { ThemeCategory } from "@/generated/prisma";
 import type { PublicationState } from "@/lib/measures/moderation-state";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import type { MeasureQueueCandidateOption, MeasureQueueResult } from "../_data/queue-query";
 
 /**
@@ -64,7 +65,7 @@ export function QueueFilters({
   result: MeasureQueueResult;
   candidates: MeasureQueueCandidateOption[];
 }) {
-  const themeKeys = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+  const themeKeys: readonly ThemeCategory[] = THEMES_IN_ORDER;
 
   return (
     <div className="space-y-4 rounded-lg border border-border p-4">

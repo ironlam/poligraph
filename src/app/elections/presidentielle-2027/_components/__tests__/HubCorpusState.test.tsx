@@ -19,7 +19,7 @@ describe("HubCorpusState", () => {
     );
 
     expect(screen.getByRole("heading", { name: "État du corpus" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Couverture sujet par sujet/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Couverture par thématique/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/themes"
     );

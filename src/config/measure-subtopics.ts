@@ -83,13 +83,7 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
     "Formation professionnelle",
     "Apprentissage, reconversion et formation tout au long de la vie."
   ),
-  topic(
-    "RETRAITES",
-    10,
-    "retraites",
-    "Retraites",
-    "Âge, cotisations et pensions de retraite."
-  ),
+  topic("RETRAITES", 10, "retraites", "Retraites", "Âge, cotisations et pensions de retraite."),
   topic(
     "SOLIDARITES_PROTECTION_SOCIALE",
     10,

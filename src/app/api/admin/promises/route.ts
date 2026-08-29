@@ -5,11 +5,12 @@ import { withValidation } from "@/lib/security/validate";
 import { createPromiseSchema } from "@/lib/security/schemas";
 import { getRequestMeta } from "@/lib/security/audit";
 import { getPromisesForModeration } from "@/lib/data/promises";
-import { PROMISE_EXTRACTION_STATUS_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
+import { PROMISE_EXTRACTION_STATUS_LABELS } from "@/config/labels";
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 
 const STATUS_KEYS = new Set(Object.keys(PROMISE_EXTRACTION_STATUS_LABELS));
-const THEME_KEYS = new Set(Object.keys(THEME_CATEGORY_LABELS));
+const THEME_KEYS = new Set<string>(LEGACY_THEME_CATEGORIES);
 
 export const GET = withAdminAuth(async (request) => {
   const { searchParams } = new URL(request.url);

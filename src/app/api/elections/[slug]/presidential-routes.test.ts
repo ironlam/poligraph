@@ -327,6 +327,20 @@ describe("GET /api/elections/[slug]/measures", () => {
     expect(mocks.listPublicPresidentialMeasures).not.toHaveBeenCalled();
   });
 
+  it("refuse le thème historique Social et travail pour la présidentielle 2027", async () => {
+    const response = await getMeasures(
+      new NextRequest(
+        "https://poligraph.fr/api/elections/presidentielle-2027/measures?theme=social-travail"
+      ),
+      context
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Thème invalide" });
+    expect(mocks.getPublicElectionIdentity).toHaveBeenCalledWith("presidentielle-2027");
+    expect(mocks.listPublicPresidentialMeasures).not.toHaveBeenCalled();
+  });
+
   it("retourne 404 pour une élection ou une candidature absente", async () => {
     mocks.getPublicElectionIdentity.mockResolvedValueOnce(null);
     const missingElection = await getMeasures(

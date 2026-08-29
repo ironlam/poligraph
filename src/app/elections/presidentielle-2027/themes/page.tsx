@@ -54,8 +54,8 @@ export default async function ThemesIndexPage() {
             Où en est le corpus, thématique par thématique ?
           </h1>
           <p className="text-muted-foreground">
-            Une thématique s&apos;ouvre à la comparaison à partir de {required} candidatures
-            portant une mesure sourcée et relue.
+            Une thématique s&apos;ouvre à la comparaison à partir de {required} candidatures portant
+            une mesure sourcée et relue.
           </p>
         </header>
 

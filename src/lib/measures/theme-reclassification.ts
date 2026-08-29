@@ -38,10 +38,14 @@ function assertEvidenceIsValid(evidence: ThemeReclassificationEvidence): void {
     throw new MeasureValidationError("La requalification exige un hash de rapport SHA-256");
   }
   if (!Number.isFinite(evidence.confidence) || evidence.confidence < 0 || evidence.confidence > 1) {
-    throw new MeasureValidationError("La confiance de requalification doit être comprise entre 0 et 1");
+    throw new MeasureValidationError(
+      "La confiance de requalification doit être comprise entre 0 et 1"
+    );
   }
   if (evidence.classifierVersion.trim() === "" || evidence.taxonomyVersion.trim() === "") {
-    throw new MeasureValidationError("La requalification exige les versions du classificateur et de la taxonomie");
+    throw new MeasureValidationError(
+      "La requalification exige les versions du classificateur et de la taxonomie"
+    );
   }
   if (evidence.rationale.trim() === "") {
     throw new MeasureValidationError("La requalification exige une justification");
@@ -95,7 +99,11 @@ export async function reclassifyMeasureTheme(
       input.expectedUpdatedAt &&
       measure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()
     ) {
-      throw new MeasureConcurrencyError(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
+      throw new MeasureConcurrencyError(
+        input.measureId,
+        input.expectedUpdatedAt,
+        measure.updatedAt
+      );
     }
     if (!isAllowedPresidentialMeasureTheme(measure.election.slug, input.targetTheme)) {
       throw new MeasureValidationError("Ce thème n'est pas autorisé pour cette élection");
@@ -183,9 +191,7 @@ export type ThemeReclassificationBatchFailure = {
   stale: boolean;
 };
 
-export async function reclassifyMeasureThemeBatch(
-  inputs: ReclassifyMeasureThemeInput[]
-): Promise<{
+export async function reclassifyMeasureThemeBatch(inputs: ReclassifyMeasureThemeInput[]): Promise<{
   changedCount: number;
   unchangedCount: number;
   failures: ThemeReclassificationBatchFailure[];

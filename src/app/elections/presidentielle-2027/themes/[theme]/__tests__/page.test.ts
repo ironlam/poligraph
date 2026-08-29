@@ -17,7 +17,7 @@ beforeEach(() => {
   mockGet.mockReset();
 });
 
-describe("generateMetadata de la page sujet", () => {
+describe("generateMetadata de la page thème", () => {
   it("noindex et titre explicite pour un thème inconnu, sans lire les données", async () => {
     const meta = await generateMetadata(props("pas-un-theme"));
     expect(meta.robots).toEqual({ index: false, follow: true });
@@ -25,7 +25,7 @@ describe("generateMetadata de la page sujet", () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it("indexable une fois le seuil de page sujet franchi", async () => {
+  it("indexable une fois le seuil de page thème franchi", async () => {
     mockGet.mockResolvedValue({ publishable: true } as never);
     const meta = await generateMetadata(props("logement-urbanisme"));
     expect(meta.robots).toBeUndefined();

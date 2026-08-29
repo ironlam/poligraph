@@ -26,7 +26,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     );
   });
 
-  it("noindex quand aucune page sujet n'est publiable", async () => {
+  it("noindex quand aucune page thème n'est publiable", async () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],
@@ -36,7 +36,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     expect(meta.robots).toEqual({ index: false, follow: true });
   });
 
-  it("indexable une fois au moins une page sujet publiable", async () => {
+  it("indexable une fois au moins une page thème publiable", async () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],

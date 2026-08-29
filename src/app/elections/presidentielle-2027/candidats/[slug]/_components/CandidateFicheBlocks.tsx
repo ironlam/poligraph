@@ -212,7 +212,7 @@ export function CandidateThemes({
                       {t.subtopics.map((subtopic) => (
                         <li key={subtopic.slug}>
                           <Link
-                            href={`${programmeUrl}?theme=${t.slug}&sous-sujet=${subtopic.slug}`}
+                            href={`${programmeUrl}?theme=${t.slug}&sous-theme=${subtopic.slug}`}
                             prefetch={false}
                             className="inline-flex min-h-11 items-center rounded-full border border-border bg-muted/40 px-3 text-sm hover:border-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >

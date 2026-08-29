@@ -28,7 +28,7 @@ describe("HubSubjects", () => {
       "href",
       "/elections/presidentielle-2027/themes/logement-urbanisme"
     );
-    // Un sujet fermé reste cliquable : sa page dit ce qui manque pour l'ouvrir.
+    // Une thématique fermée reste cliquable : sa page dit ce qui manque pour l'ouvrir.
     expect(screen.getByRole("link", { name: /Santé/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/themes/sante"
@@ -41,7 +41,7 @@ describe("HubSubjects", () => {
         themes={[
           theme(),
           theme({ theme: "SANTE", slug: "sante", publishable: true }),
-          theme({ theme: "SOCIAL_TRAVAIL", slug: "social-travail", publishable: true }),
+          theme({ theme: "EMPLOI_TRAVAIL", slug: "emploi-travail", publishable: true }),
         ]}
       />
     );
@@ -62,7 +62,7 @@ describe("HubSubjects", () => {
 
     expect(screen.queryByText("Comparaison ouverte")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "1 sujet peut déjà être comparé" })
+      screen.getByRole("heading", { name: "1 thématique peut déjà être comparée" })
     ).toBeInTheDocument();
   });
 

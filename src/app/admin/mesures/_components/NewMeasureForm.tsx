@@ -14,6 +14,7 @@ import type {
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { createMeasureAction } from "../actions";
 import type { CandidacyOption } from "../_data/candidacies-query";
 
@@ -33,7 +34,7 @@ const BUTTON =
 const FIELD = "mt-1 min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm";
 const LABEL = "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
-const THEMES = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+const THEMES: readonly ThemeCategory[] = THEMES_IN_ORDER;
 const ATTRIBUTIONS = Object.keys(MEASURE_ATTRIBUTION_LABELS) as MeasureAttribution[];
 const SOURCE_KINDS = Object.keys(MEASURE_SOURCE_KIND_LABELS) as MeasureSourceKind[];
 const TIERS = Object.keys(SOURCE_TIER_LABELS) as SourceTier[];

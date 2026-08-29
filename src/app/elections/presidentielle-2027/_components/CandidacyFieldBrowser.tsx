@@ -69,7 +69,7 @@ function PublishedContent({ candidacy }: { candidacy: HubCandidacy }) {
       <p className="text-sm font-medium text-foreground">
         {candidacy.themesCoveredCount === 1
           ? "Des propositions sont disponibles sur 1 thème"
-          : `Des propositions sont disponibles sur ${candidacy.themesCoveredCount} thèmes`}
+          : `Des propositions sont disponibles sur ${candidacy.themesCoveredCount} thématiques`}
       </p>
     );
   }

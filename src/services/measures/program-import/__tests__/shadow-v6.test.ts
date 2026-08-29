@@ -155,7 +155,7 @@ describe("V6 shadow READ-ONLY", () => {
         attributionBasis: "CANDIDATE_COMMITMENT",
         normalizedText: "Créer une caisse publique pour financer la formation des salariés.",
         classification: "MEASURE",
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
         confidence: 0.93,
         rationale: "Le titre et le paragraphe établissent l'action.",
         outputGuards: [],
@@ -288,7 +288,7 @@ describe("V6 shadow READ-ONLY", () => {
     expect(proposal.preparedCandidate).toMatchObject({
       classification: "MEASURE",
       formulation: "Créer une caisse publique pour financer la formation des salariés.",
-      theme: "SOCIAL_TRAVAIL",
+      theme: "EMPLOI_TRAVAIL",
       draftContext: {
         candidacyId: "candidacy-ruffin",
         programEditionId: "edition-travail",
@@ -406,7 +406,7 @@ describe("V6 shadow READ-ONLY", () => {
           attributionBasis: "CANDIDATE_COMMITMENT",
           normalizedText: "Créer un fonds public pour la formation.",
           classification: "MEASURE",
-          theme: "SOCIAL_TRAVAIL",
+          theme: "EMPLOI_TRAVAIL",
           confidence: 0.91,
           rationale: "Action explicite.",
           outputGuards: [],

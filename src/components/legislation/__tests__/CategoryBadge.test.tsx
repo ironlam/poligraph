@@ -5,7 +5,7 @@ import { CategoryBadge } from "@/components/legislation/CategoryBadge";
 describe("CategoryBadge", () => {
   it("affiche le label du thème quand un thème est fourni", () => {
     render(<CategoryBadge theme="ECONOMIE_BUDGET" />);
-    expect(screen.getByText("Économie & Budget")).toBeInTheDocument();
+    expect(screen.getByText("Économie et budget")).toBeInTheDocument();
   });
 
   it("donne la priorité au thème sur la catégorie héritée", () => {

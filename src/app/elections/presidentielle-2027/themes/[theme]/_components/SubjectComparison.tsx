@@ -412,11 +412,11 @@ function PlannedSections() {
     },
     {
       title: "Les votes au Parlement sur ce thème",
-      body: "Les scrutins de l'Assemblée nationale et du Sénat portant sur ce thème, avec leur issue et leur date. Le rattachement des scrutins aux thèmes reste à construire.",
+      body: "Les scrutins de l'Assemblée nationale et du Sénat portant sur ce thème, avec leur issue et leur date. Le rattachement des scrutins aux thématiques reste à construire.",
     },
     {
       title: "Les fonctions exercées sur ce thème",
-      body: "Le ministère ou la commission qu'une candidature a occupé en rapport avec ce thème. Demande de relier les mandats aux thèmes, ce que la base ne fait pas encore.",
+      body: "Le ministère ou la commission qu'une candidature a occupé en rapport avec ce thème. Demande de relier les mandats aux thématiques, ce que la base ne fait pas encore.",
     },
   ];
 

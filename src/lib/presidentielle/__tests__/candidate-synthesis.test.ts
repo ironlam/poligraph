@@ -81,7 +81,7 @@ describe("buildCandidateSynthesisPrompt", () => {
       "SANTE",
       "TRANSPORTS",
       "ECONOMIE_BUDGET",
-      "SOCIAL_TRAVAIL",
+      "EMPLOI_TRAVAIL",
       "SECURITE_JUSTICE",
       "ENVIRONNEMENT_ENERGIE",
       "EDUCATION_CULTURE",
@@ -96,7 +96,7 @@ describe("buildCandidateSynthesisPrompt", () => {
     const coverage = prompt.match(/<couverture_attendue>\n(.+)\n<\/couverture_attendue>/)?.[1];
 
     expect(coverage?.match(/,/g)).toHaveLength(7);
-    expect(coverage).not.toContain("Numérique et technologie");
+    expect(coverage).not.toContain("Transports");
   });
 
   it("states an empty record rather than omitting the section", () => {

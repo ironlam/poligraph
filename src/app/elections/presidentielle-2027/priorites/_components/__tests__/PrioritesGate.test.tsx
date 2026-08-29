@@ -253,9 +253,9 @@ describe("PrioritesGate : les conditions globales", () => {
 });
 
 describe("PrioritesGate : ce qui reste consultable", () => {
-  it("le dit franchement quand aucun sujet n'est comparable", () => {
+  it("le dit franchement quand aucune thématique n'est comparable", () => {
     render(<PrioritesGate data={data()} evaluatedAt={evaluatedAt} />);
-    expect(screen.getByText(/Aucun sujet n'est encore comparable/)).toBeInTheDocument();
+    expect(screen.getByText(/Aucune thématique n'est encore comparable/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Les 13 thématiques" })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/themes"
@@ -269,7 +269,7 @@ describe("PrioritesGate : ce qui reste consultable", () => {
         evaluatedAt={evaluatedAt}
       />
     );
-    expect(screen.getByText(/1 sujet franchit son seuil aujourd'hui/)).toBeInTheDocument();
+    expect(screen.getByText(/1 thématique franchit son seuil aujourd'hui/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Logement" })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/themes/logement-urbanisme"

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PUBLICATION_STATE_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
+import { PUBLICATION_STATE_LABELS } from "@/config/labels";
 import type { ThemeCategory } from "@/generated/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import type { PublicationState } from "@/lib/measures/moderation-state";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { BatchPublishPanel } from "./_components/BatchPublishPanel";
 import { BatchReviewPanel } from "./_components/BatchReviewPanel";
 import { QueueFilters, type QueueFilterState } from "./_components/QueueFilters";
@@ -20,7 +21,7 @@ export const metadata = {
 const PAGE_SIZE = 25;
 
 const PUBLICATION_KEYS = Object.keys(PUBLICATION_STATE_LABELS) as PublicationState[];
-const THEME_KEYS = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+const THEME_KEYS: readonly ThemeCategory[] = THEMES_IN_ORDER;
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

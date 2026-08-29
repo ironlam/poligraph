@@ -45,7 +45,7 @@ function candidate(): DraftablePreparedMeasureCandidate {
   return {
     classification: "MEASURE",
     formulation: "Créer une caisse publique de formation.",
-    theme: "SOCIAL_TRAVAIL",
+    theme: "EMPLOI_TRAVAIL",
     confidence: 0.92,
     evidenceSnapshot: validEvidenceSnapshot(),
     reviewReadiness: "READY_FOR_REVIEW",
@@ -136,7 +136,7 @@ describe("planificateur DRAFT V6", () => {
     mocks.measureFindMany.mockResolvedValue([
       {
         candidacyId: "candidacy-ruffin",
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
         latestRevision: { text: "Créer une caisse publique de formation professionnelle." },
       },
     ]);

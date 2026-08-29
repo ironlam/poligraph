@@ -195,9 +195,7 @@ describe("requalification thématique d'une mesure", () => {
       evidence,
     };
 
-    await expect(reclassifyMeasureThemeBatch([item, item])).rejects.toThrow(
-      "plusieurs décisions"
-    );
+    await expect(reclassifyMeasureThemeBatch([item, item])).rejects.toThrow("plusieurs décisions");
     await expect(reclassifyMeasureThemeBatch([item])).resolves.toEqual({
       changedCount: 0,
       unchangedCount: 1,

@@ -36,7 +36,7 @@ function data(over: Partial<ThemesIndexData> = {}): ThemesIndexData {
 }
 
 describe("ThemesIndexList", () => {
-  it("lie chaque thème à sa page sujet et affiche les quatre indicateurs de couverture", () => {
+  it("lie chaque thème à sa page et affiche les quatre indicateurs de couverture", () => {
     render(<ThemesIndexList data={data()} />);
 
     const logements = screen.getAllByRole("link", { name: /Logement & Urbanisme/ });

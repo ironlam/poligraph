@@ -28,9 +28,9 @@ export const THEMES_IN_ORDER = [
 
 export type PresidentialThemeCategory = (typeof THEMES_IN_ORDER)[number];
 
-const PRESIDENTIAL_THEME_SET = new Set<ThemeCategory>(THEMES_IN_ORDER);
+const PRESIDENTIAL_THEME_SET = new Set<string>(THEMES_IN_ORDER);
 
-export function isPresidentialTheme(theme: ThemeCategory): theme is PresidentialThemeCategory {
+export function isPresidentialTheme(theme: string): theme is PresidentialThemeCategory {
   return PRESIDENTIAL_THEME_SET.has(theme);
 }
 

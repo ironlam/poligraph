@@ -409,9 +409,8 @@ export function PresidentialCorpusSearch() {
         )}
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
-        Recherche limitée aux thématiques et contenus publics de l{"'"}élection présidentielle
-        2027. Une
-        absence de résultat ne prouve pas qu{"'"}une proposition n{"'"}existe pas.
+        Recherche limitée aux thématiques et contenus publics de l{"'"}élection présidentielle 2027.
+        Une absence de résultat ne prouve pas qu{"'"}une proposition n{"'"}existe pas.
       </p>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {liveMessage}

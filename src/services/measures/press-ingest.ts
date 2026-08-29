@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { createMeasure } from "@/lib/measures/transitions";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { extractPromisesFromText } from "@/services/promises/extractor";
-import { classifyTheme } from "@/services/promises/theme-classifier";
+import { classifyPresidentialTheme, classifyTheme } from "@/services/promises/theme-classifier";
 
 /**
  * Extracting campaign measures from press articles.
@@ -38,7 +39,7 @@ export async function ingestMeasuresFromPress(opts: IngestOptions): Promise<Meas
 
   const election = await db.election.findUnique({
     where: { id: opts.electionId },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
   if (election === null) {
     throw new Error(`Élection ${opts.electionId} introuvable`);
@@ -88,7 +89,13 @@ export async function ingestMeasuresFromPress(opts: IngestOptions): Promise<Meas
         if (opts.dryRun) continue;
 
         for (const candidate of candidates) {
-          const classification = await classifyTheme(candidate.text);
+          const classification =
+            election.slug === PRESIDENTIELLE_2027_SLUG
+              ? await classifyPresidentialTheme(candidate.text)
+              : await classifyTheme(candidate.text);
+          if (classification === null) {
+            throw new Error("La mesure n'a pas pu être classée dans la taxonomie présidentielle");
+          }
           await createMeasure({
             politicianId: mention.politicianId,
             electionId: opts.electionId,

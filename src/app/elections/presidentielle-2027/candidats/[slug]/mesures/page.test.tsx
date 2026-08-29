@@ -108,6 +108,32 @@ describe("page des mesures d'une candidature", () => {
     );
   });
 
+  it("emploie sous-theme dans le filtre public et accepte encore l'ancien paramètre", async () => {
+    mocks.getSubtopicCounts.mockResolvedValue([{ slug: "salaires", label: "Salaires", count: 4 }]);
+    const { default: Page } = await import("./page");
+
+    const rendered = render(
+      await Page({
+        params,
+        searchParams: Promise.resolve({ "sous-theme": "salaires" }),
+      })
+    );
+
+    expect(screen.getByLabelText("Sous-thème")).toHaveAttribute("name", "sous-theme");
+    expect(mocks.listMeasures).toHaveBeenLastCalledWith(
+      expect.objectContaining({ subtopicSlug: "salaires" })
+    );
+
+    rendered.unmount();
+    await Page({
+      params,
+      searchParams: Promise.resolve({ "sous-sujet": "salaires" }),
+    });
+    expect(mocks.listMeasures).toHaveBeenLastCalledWith(
+      expect.objectContaining({ subtopicSlug: "salaires" })
+    );
+  });
+
   it("ramène une page démesurée à une valeur sûre avant la requête Prisma", async () => {
     const { default: Page } = await import("./page");
     render(
@@ -150,5 +176,17 @@ describe("page des mesures d'une candidature", () => {
     expect(filtered.alternates?.canonical).toBe(
       "/elections/presidentielle-2027/candidats/camille-riviere/mesures"
     );
+  });
+
+  it("écarte le thème historique Social et travail du filtre présidentiel", async () => {
+    const { default: Page } = await import("./page");
+
+    await expect(
+      Page({
+        params,
+        searchParams: Promise.resolve({ theme: "social-travail" }),
+      })
+    ).rejects.toThrow("REDIRECT:/elections/presidentielle-2027/candidats/camille-riviere/mesures");
+    expect(mocks.listMeasures).not.toHaveBeenCalled();
   });
 });

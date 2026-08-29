@@ -112,7 +112,9 @@ describe("annuaire présidentiel", () => {
     expect(
       screen.getByText("Programme identifié, aucune proposition encore publiée sur Poligraph")
     ).toBeInTheDocument();
-    expect(screen.getByText("Des propositions sont disponibles sur 3 thèmes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Des propositions sont disponibles sur 3 thématiques")
+    ).toBeInTheDocument();
   });
 
   it("sépare visuellement statut public et contenu disponible", () => {

@@ -32,8 +32,8 @@ export function HubClosedState({
           ? "Aucune mesure n'est encore publiée."
           : `${verifiedMeasureCount} ${verifiedMeasureCount === 1 ? "mesure publiée" : "mesures publiées"} à ce jour.`}{" "}
         Une thématique s&apos;ouvre à la comparaison quand au moins {required} candidatures y
-        portent une mesure sourcée et relue, et aucune des {themeCount} thématiques n&apos;atteint ce
-        seuil.
+        portent une mesure sourcée et relue, et aucune des {themeCount} thématiques n&apos;atteint
+        ce seuil.
       </p>
     </section>
   );

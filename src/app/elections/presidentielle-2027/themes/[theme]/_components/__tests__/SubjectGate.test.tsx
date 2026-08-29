@@ -94,7 +94,7 @@ describe("SubjectGate", () => {
     expect(screen.getByText(/jamais relu/i)).toBeInTheDocument();
   });
 
-  it("propose un renvoi vers un sujet comparable quand fallbackPublishableTheme est fourni", () => {
+  it("propose un renvoi vers un thème comparable quand fallbackPublishableTheme est fourni", () => {
     render(
       <SubjectGate data={data({ fallbackPublishableTheme: { slug: "sante", label: "Santé" } })} />
     );

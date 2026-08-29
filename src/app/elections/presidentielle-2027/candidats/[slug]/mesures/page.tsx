@@ -16,14 +16,16 @@ import {
 } from "@/lib/data/measures";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
 import { getPolitician } from "@/lib/data/politicians";
-import { themeFromSlug, themeToSlug } from "@/lib/theme-utils";
+import { parseThemeSlug, THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
 import { cn } from "@/lib/utils";
 
 const ELECTION_SLUG = "presidentielle-2027";
 const PAGE_SIZE = 20;
 const MAX_PAGE = 10_000;
 const MAX_QUERY_LENGTH = 120;
-const THEME_ENTRIES = Object.entries(THEME_CATEGORY_LABELS) as [ThemeCategory, string][];
+const THEME_ENTRIES = THEMES_IN_ORDER.map(
+  (theme) => [theme, THEME_CATEGORY_LABELS[theme]] as const
+);
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type PageProps = {
@@ -45,7 +47,7 @@ function buildMeasuresUrl(
 ): string {
   const params = new URLSearchParams();
   if (values.theme) params.set("theme", themeToSlug(values.theme));
-  if (values.subtopic) params.set("sous-sujet", values.subtopic);
+  if (values.subtopic) params.set("sous-theme", values.subtopic);
   if (values.query) params.set("q", values.query);
   if (values.page && values.page > 1) params.set("page", String(values.page));
   const queryString = params.toString();
@@ -83,9 +85,10 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
   if (!candidacy || candidacy.primarySourceMeasureCount === 0) notFound();
 
   const rawTheme = firstParam(rawSearchParams.theme);
-  const parsedTheme = rawTheme ? themeFromSlug(rawTheme) : undefined;
+  const parsedTheme = rawTheme ? parseThemeSlug(rawTheme) : undefined;
   const query = (firstParam(rawSearchParams.q) ?? "").trim().slice(0, MAX_QUERY_LENGTH);
-  const rawSubtopic = firstParam(rawSearchParams["sous-sujet"]);
+  const rawSubtopic =
+    firstParam(rawSearchParams["sous-theme"]) ?? firstParam(rawSearchParams["sous-sujet"]);
   const paginationParams = new URLSearchParams();
   const rawPage = firstParam(rawSearchParams.page);
   if (rawPage) paginationParams.set("page", rawPage);
@@ -222,7 +225,7 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
               </label>
               <Select
                 id="measure-subtopic"
-                name="sous-sujet"
+                name="sous-theme"
                 defaultValue={subtopic ?? ""}
                 className="min-h-11"
                 disabled={subtopics.length === 0}

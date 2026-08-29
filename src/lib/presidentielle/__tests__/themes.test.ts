@@ -10,10 +10,11 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import type { ThemeCategory } from "@/generated/prisma";
 
 describe("theme route helpers", () => {
-  it("round-trips every ThemeCategory", () => {
-    for (const theme of Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[]) {
+  it("round-trips every presidential theme", () => {
+    for (const theme of THEMES_IN_ORDER) {
       expect(parseThemeSlug(themeToSlug(theme))).toBe(theme);
     }
+    expect(parseThemeSlug(themeToSlug("SOCIAL_TRAVAIL"))).toBeNull();
   });
   it("maps LOGEMENT_URBANISME to logement-urbanisme", () => {
     expect(themeToSlug("LOGEMENT_URBANISME")).toBe("logement-urbanisme");
@@ -22,24 +23,27 @@ describe("theme route helpers", () => {
     expect(parseThemeSlug("not-a-theme")).toBeNull();
     expect(parseThemeSlug("")).toBeNull();
   });
-  it("lists all 13 themes once", () => {
-    expect(THEMES_IN_ORDER).toHaveLength(13);
-    expect(new Set(THEMES_IN_ORDER)).toEqual(new Set(Object.keys(THEME_CATEGORY_LABELS)));
+  it("lists all 16 presidential themes once", () => {
+    expect(THEMES_IN_ORDER).toHaveLength(16);
+    const allThemes = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+    expect(new Set(THEMES_IN_ORDER)).toEqual(
+      new Set(allThemes.filter((theme) => theme !== "SOCIAL_TRAVAIL"))
+    );
   });
   it("pins the slug", () => {
     expect(PRESIDENTIELLE_2027_SLUG).toBe("presidentielle-2027");
   });
-  it("retrouve un sujet par un mot de son libellé, accents neutralisés", () => {
+  it("retrouve un thème par un mot de son libellé, accents neutralisés", () => {
     expect(findMatchingThemes("Logement")).toEqual(["LOGEMENT_URBANISME"]);
     expect(findMatchingThemes("santé")).toEqual(["SANTE"]);
   });
-  it("complète les mots d'un sujet à partir de trois caractères", () => {
+  it("complète les mots d'un thème à partir de trois caractères", () => {
     expect(findMatchingThemes("loge")).toEqual(["LOGEMENT_URBANISME"]);
     expect(findMatchingThemes("urban")).toEqual(["LOGEMENT_URBANISME"]);
     expect(findMatchingThemes("sant")).toEqual(["SANTE"]);
     expect(findMatchingThemes("lo")).toEqual([]);
   });
-  it("ne transforme pas un mot étranger à la taxonomie en sujet", () => {
+  it("ne transforme pas un mot étranger à la taxonomie en thème", () => {
     expect(findMatchingThemes("introuvable")).toEqual([]);
   });
 });
