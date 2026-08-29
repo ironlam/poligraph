@@ -86,7 +86,7 @@ async function classifyWithPrompt(
   promptTemplate: string
 ): Promise<{ theme?: string; confidence?: number } | null> {
   const safe = text
-    .replace(/<\/?[a-z]+>/gi, "")
+    .replace(/[<>]/g, " ")
     .replace(/["\n\r]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
