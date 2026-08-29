@@ -231,7 +231,7 @@ export function CandidateThemes({
                       "min-h-11 w-full justify-between whitespace-normal px-4 text-left sm:w-auto"
                     )}
                   >
-                    Voir les {t.measureCount} {t.measureCount === 1 ? "mesure" : "mesures"}
+                    Voir {t.measureCount === 1 ? "cette mesure" : "ces mesures"}
                     <ArrowRight aria-hidden="true" />
                   </Link>
                 </div>
