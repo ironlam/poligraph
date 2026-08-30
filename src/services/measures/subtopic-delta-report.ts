@@ -1,14 +1,14 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   MEASURE_SUBTOPICS,
   MEASURE_SUBTOPIC_PREVIOUS_TAXONOMY_VERSION,
   MEASURE_SUBTOPIC_TAXONOMY_VERSION,
 } from "@/config/measure-subtopics";
 import { getSubtopicDeltaCorpusPage } from "@/lib/data/measure-subtopic-delta";
+import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-fingerprint";
 import { classifyMeasureForSubtopicDelta } from "@/services/measures/subtopic-delta-classifier";
 import {
   selectSubtopicDeltaCandidates,
-  type DeltaMeasureInput,
   type DeltaSelectedMeasure,
   type DeltaSelectionResult,
 } from "@/lib/measures/subtopic-delta-selection";
@@ -56,21 +56,6 @@ export type SubtopicDeltaReport = {
   results: SubtopicDeltaDecisionRecord[];
   errors: Array<{ measureId: string; revisionId: string; message: string; control: boolean }>;
 };
-
-export function createSubtopicDeltaSourceFingerprint(
-  measure: Pick<DeltaMeasureInput, "revisionId" | "sourceUpdatedAt" | "text" | "details">
-): string {
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        revisionId: measure.revisionId,
-        sourceUpdatedAt: measure.sourceUpdatedAt,
-        text: measure.text,
-        details: measure.details,
-      })
-    )
-    .digest("hex");
-}
 
 function increment(counter: Record<string, number>, key: string): void {
   counter[key] = (counter[key] ?? 0) + 1;

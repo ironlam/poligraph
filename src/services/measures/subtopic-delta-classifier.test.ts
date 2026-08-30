@@ -88,4 +88,27 @@ describe("décision différentielle structurée", () => {
     const messages = mocks.callMistral.mock.calls[0]?.[0] as Array<{ content: string }>;
     expect(messages[0]?.content).toContain(distantEvidence);
   });
+
+  it("répartit les passages pour une candidate retenue sans signal lexical", async () => {
+    const distantEvidence = "Combattre les discriminations raciales dans les services publics";
+    mocks.parseMistralJSON.mockReturnValue({
+      decision: "APPLIES",
+      confidence: 0.95,
+      justification: "Les discriminations raciales sont explicitement visées.",
+      evidenceExcerpt: distantEvidence,
+    });
+    const { classifyMeasureForSubtopicDelta } =
+      await import("@/services/measures/subtopic-delta-classifier");
+    await classifyMeasureForSubtopicDelta({
+      subtopic,
+      measure: {
+        ...measure,
+        text: `${"Préambule sans rapport. ".repeat(80)} ${distantEvidence}`,
+        selectionReasons: [{ signal: "NEIGHBOR_SUBTOPIC", values: ["egalite-discriminations"] }],
+      },
+    });
+
+    const messages = mocks.callMistral.mock.calls[0]?.[0] as Array<{ content: string }>;
+    expect(messages[0]?.content).toContain(distantEvidence);
+  });
 });

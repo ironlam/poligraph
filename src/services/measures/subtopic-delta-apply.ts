@@ -1,14 +1,12 @@
 import { z } from "zod";
 import { MEASURE_SUBTOPICS, MEASURE_SUBTOPIC_TAXONOMY_VERSION } from "@/config/measure-subtopics";
 import { getSubtopicDeltaApplySnapshot } from "@/lib/data/measure-subtopic-delta";
+import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-fingerprint";
 import {
   proposeMeasureRevisionSubtopicDelta,
   syncMeasureSubtopicTaxonomy,
 } from "@/lib/measures/subtopics";
-import {
-  createSubtopicDeltaSourceFingerprint,
-  type SubtopicDeltaReport,
-} from "@/services/measures/subtopic-delta-report";
+import type { SubtopicDeltaReport } from "@/services/measures/subtopic-delta-report";
 
 const selectionReasonSchema = z
   .object({
@@ -182,6 +180,7 @@ export async function applySubtopicDeltaReport(value: unknown): Promise<ApplySub
   const ignored: ApplySubtopicDeltaResult["ignored"] = [];
   for (const suggestion of suggestions) {
     const outcome = await proposeMeasureRevisionSubtopicDelta({
+      measureId: suggestion.measureId,
       revisionId: suggestion.revisionId,
       subtopicSlug: report.subtopic.slug,
       confidence: suggestion.confidence,

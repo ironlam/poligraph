@@ -54,17 +54,23 @@ function relevantPassages(value: string, lexicalTerms: string[]): string[] {
   for (let offset = 0; offset < value.length; offset += 160) {
     chunks.push(value.slice(offset, offset + 200));
   }
-  const matched =
-    lexicalTerms.length === 0
-      ? []
-      : chunks.filter(
-          (chunk) =>
-            findDeltaLexicalMatches(
-              { text: chunk, details: null },
-              { label: lexicalTerms[0]!, aliases: lexicalTerms.slice(1) }
-            ).length > 0
+  const matched = chunks.filter(
+    (chunk) =>
+      lexicalTerms.length > 0 &&
+      findDeltaLexicalMatches(
+        { text: chunk, details: null },
+        { label: lexicalTerms[0]!, aliases: lexicalTerms.slice(1) }
+      ).length > 0
+  );
+  const distributed =
+    lexicalTerms.length > 0 || chunks.length <= 6
+      ? chunks
+      : Array.from(
+          { length: 6 },
+          (_, index) => chunks[Math.round(((chunks.length - 1) * index) / 5)]!
         );
-  return [...new Set([chunks[0]!, ...matched].map((chunk) => sanitizePromptText(chunk, 200)))]
+  const selected = lexicalTerms.length > 0 ? [chunks[0]!, ...matched] : distributed;
+  return [...new Set(selected.map((chunk) => sanitizePromptText(chunk, 200)))]
     .filter(Boolean)
     .slice(0, 6);
 }

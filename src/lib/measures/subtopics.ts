@@ -1,4 +1,8 @@
-import type { MeasureSubtopicAssignmentStatus, ThemeCategory } from "@/generated/prisma";
+import {
+  Prisma,
+  type MeasureSubtopicAssignmentStatus,
+  type ThemeCategory,
+} from "@/generated/prisma";
 import {
   getMeasureSubtopicsForTheme,
   MEASURE_SUBTOPIC_TAXONOMY_VERSION,
@@ -9,8 +13,10 @@ import { db } from "@/lib/db";
 import { invalidateMeasureTags } from "@/lib/measures/cache";
 import { MeasureValidationError } from "@/lib/measures/errors";
 import { syncSearchDocument } from "@/lib/measures/search-sync";
+import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-fingerprint";
 
 const CLASSIFIER_MODEL = "mistral-small-latest";
+const MAX_SUBTOPICS_PER_REVISION = 3;
 
 function sanitizeMeasureText(value: string): string {
   return value
@@ -101,7 +107,7 @@ Réponds uniquement avec un objet JSON de cette forme :
           item.confidence <= 1
       )
       .filter((item, index, all) => all.findIndex((other) => other.slug === item.slug) === index)
-      .slice(0, 3),
+      .slice(0, MAX_SUBTOPICS_PER_REVISION),
     classifierVersion: `${resolvedModel}:v1`,
   };
 }
@@ -122,6 +128,7 @@ export async function getPreviouslyClassifiedMeasureRevisionIds(): Promise<strin
 }
 
 export async function proposeMeasureRevisionSubtopicDelta(input: {
+  measureId: string;
   revisionId: string;
   subtopicSlug: string;
   confidence: number;
@@ -136,6 +143,43 @@ export async function proposeMeasureRevisionSubtopicDelta(input: {
   proposedBy?: string;
 }): Promise<{ created: boolean; status: string }> {
   return db.$transaction(async (tx) => {
+    const currentRows = await tx.$queryRaw<
+      Array<{
+        measureId: string;
+        revisionId: string;
+        text: string;
+        details: string | null;
+        updatedAt: Date;
+      }>
+    >(Prisma.sql`
+      SELECT
+        m.id AS "measureId",
+        r.id AS "revisionId",
+        r.text,
+        r.details,
+        r."updatedAt"
+      FROM "Measure" m
+      JOIN "MeasureRevision" r ON r.id = m."publishedRevisionId"
+      WHERE m.id = ${input.measureId}
+      FOR UPDATE OF m
+    `);
+    const current = currentRows[0];
+    const currentFingerprint = current
+      ? createSubtopicDeltaSourceFingerprint({
+          revisionId: current.revisionId,
+          sourceUpdatedAt: current.updatedAt.toISOString(),
+          text: current.text,
+          details: current.details,
+        })
+      : null;
+    if (
+      !current ||
+      current.revisionId !== input.revisionId ||
+      currentFingerprint !== input.sourceFingerprint
+    ) {
+      throw new MeasureValidationError("La mesure a changé depuis le dry-run");
+    }
+
     const subtopic = await tx.measureSubtopic.findUnique({
       where: { slug: input.subtopicSlug },
       select: { id: true, active: true },
@@ -152,6 +196,13 @@ export async function proposeMeasureRevisionSubtopicDelta(input: {
       select: { status: true },
     });
     if (existing) return { created: false, status: existing.status };
+
+    const activeAssignmentCount = await tx.measureRevisionSubtopic.count({
+      where: { revisionId: input.revisionId, status: { not: "REJECTED" } },
+    });
+    if (activeAssignmentCount >= MAX_SUBTOPICS_PER_REVISION) {
+      return { created: false, status: "SUBTOPIC_LIMIT_REACHED" };
+    }
 
     const inserted = await tx.measureRevisionSubtopic.createMany({
       data: [
@@ -291,6 +342,21 @@ export async function reviewMeasureRevisionSubtopic(input: {
     });
     if (!assignment || assignment.status !== "SUGGESTED") {
       throw new MeasureValidationError("Cette proposition a déjà été traitée");
+    }
+
+    if (input.status === "APPROVED") {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id
+        FROM "Measure"
+        WHERE id = ${assignment.revision.measure.id}
+        FOR UPDATE
+      `);
+      const approvedCount = await tx.measureRevisionSubtopic.count({
+        where: { revisionId: input.revisionId, status: "APPROVED" },
+      });
+      if (approvedCount >= MAX_SUBTOPICS_PER_REVISION) {
+        throw new MeasureValidationError("Cette révision possède déjà trois sous-thèmes approuvés");
+      }
     }
 
     const updated = await tx.measureRevisionSubtopic.updateMany({

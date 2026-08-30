@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   updateAssignments: vi.fn(),
   deleteAssignments: vi.fn(),
   createAssignments: vi.fn(),
+  countAssignments: vi.fn(),
+  queryRaw: vi.fn(),
   createAudit: vi.fn(),
   invalidateMeasureTags: vi.fn(),
   syncSearchDocument: vi.fn(),
@@ -46,10 +48,12 @@ const transactionClient = {
   measureSubtopic: { findUnique: mocks.findSubtopicInTransaction },
   measureRevisionSubtopic: {
     findUnique: mocks.findAssignment,
+    count: mocks.countAssignments,
     updateMany: mocks.updateAssignments,
     deleteMany: mocks.deleteAssignments,
     createMany: mocks.createAssignments,
   },
+  $queryRaw: mocks.queryRaw,
   auditLog: { create: mocks.createAudit },
 };
 
@@ -74,6 +78,16 @@ describe("classification des sous-sujets de mesure", () => {
     mocks.transaction.mockImplementation(async (callback) => callback(transactionClient));
     mocks.findSubtopics.mockResolvedValue([]);
     mocks.findSubtopicInTransaction.mockResolvedValue({ id: "subtopic-1", active: true });
+    mocks.queryRaw.mockResolvedValue([
+      {
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        text: "Lutter contre le racisme.",
+        details: null,
+        updatedAt: new Date("2026-08-30T00:00:00.000Z"),
+      },
+    ]);
+    mocks.countAssignments.mockResolvedValue(0);
     mocks.deleteAssignments.mockResolvedValue({ count: 0 });
     mocks.createAssignments.mockResolvedValue({ count: 0 });
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
@@ -153,6 +167,7 @@ describe("classification des sous-sujets de mesure", () => {
 
     await expect(
       proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
         revisionId: "revision-1",
         subtopicSlug: "racisme-antisemitisme",
         confidence: 0.97,
@@ -163,7 +178,7 @@ describe("classification des sous-sujets de mesure", () => {
         justification: "Le texte vise explicitement le racisme.",
         evidenceExcerpt: "Lutter contre le racisme",
         selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
-        sourceFingerprint: "fingerprint",
+        sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
         proposedBy: "cli",
       })
     ).resolves.toEqual({ created: true, status: "SUGGESTED" });
@@ -187,6 +202,32 @@ describe("classification des sous-sujets de mesure", () => {
 
     await expect(
       proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
+      })
+    ).resolves.toEqual({ created: false, status: "APPROVED" });
+
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuse une suggestion si la mesure publiée a changé dans la transaction", async () => {
+    mocks.queryRaw.mockResolvedValue([]);
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
         revisionId: "revision-1",
         subtopicSlug: "racisme-antisemitisme",
         confidence: 0.97,
@@ -199,10 +240,32 @@ describe("classification des sous-sujets de mesure", () => {
         selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
         sourceFingerprint: "fingerprint",
       })
-    ).resolves.toEqual({ created: false, status: "APPROVED" });
-
+    ).rejects.toThrow("a changé depuis le dry-run");
     expect(mocks.createAssignments).not.toHaveBeenCalled();
-    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("ne crée pas une quatrième attribution active", async () => {
+    mocks.findAssignment.mockResolvedValue(null);
+    mocks.countAssignments.mockResolvedValue(3);
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
+      })
+    ).resolves.toEqual({ created: false, status: "SUBTOPIC_LIMIT_REACHED" });
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
   });
 
   it("retrouve les révisions déjà classées à partir du journal d'audit", async () => {
@@ -238,6 +301,26 @@ describe("classification des sous-sujets de mesure", () => {
     ).rejects.toThrow("déjà été traitée");
     expect(mocks.createAudit).not.toHaveBeenCalled();
     expect(mocks.invalidateMeasureTags).not.toHaveBeenCalled();
+  });
+
+  it("refuse d’approuver un quatrième sous-thème", async () => {
+    mocks.findAssignment.mockResolvedValue({
+      status: "SUGGESTED",
+      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+    });
+    mocks.countAssignments.mockResolvedValue(3);
+    const { reviewMeasureRevisionSubtopic } = await import("../subtopics");
+
+    await expect(
+      reviewMeasureRevisionSubtopic({
+        revisionId: "revision-1",
+        subtopicId: "subtopic-1",
+        status: "APPROVED",
+        reviewedBy: "admin",
+      })
+    ).rejects.toThrow("déjà trois sous-thèmes approuvés");
+    expect(mocks.updateAssignments).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
   });
 
   it("invalide les caches publics après une décision humaine", async () => {

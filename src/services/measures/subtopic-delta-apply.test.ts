@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURE_SUBTOPIC_TAXONOMY_VERSION } from "@/config/measure-subtopics";
-import { createSubtopicDeltaSourceFingerprint } from "@/services/measures/subtopic-delta-report";
+import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-fingerprint";
 
 const mocks = vi.hoisted(() => ({
   getApplySnapshot: vi.fn(),
@@ -104,6 +104,7 @@ describe("application d’un rapport différentiel", () => {
 
     expect(result).toEqual({ runId: "run-1", created: 1, ignored: [] });
     expect(mocks.proposeDelta).toHaveBeenCalledWith({
+      measureId: "measure-1",
       revisionId: "revision-1",
       subtopicSlug: "racisme-antisemitisme",
       confidence: 0.99,
