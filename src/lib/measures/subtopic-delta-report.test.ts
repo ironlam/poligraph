@@ -86,4 +86,18 @@ describe("rapport différentiel sans écriture", () => {
     ]);
     expect(report.suggestionsThatWouldBeCreated).toEqual([]);
   });
+
+  it("reprend après le curseur fourni", async () => {
+    const { generateSubtopicDeltaDryRun } = await import("@/lib/measures/subtopic-delta-report");
+    await generateSubtopicDeltaDryRun({
+      subtopicSlug: "racisme-antisemitisme",
+      electionSlug: "presidentielle-2027",
+      limit: 50,
+      after: "measure-before",
+    });
+
+    expect(mocks.findMeasures).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: { id: "measure-before" }, skip: 1, take: 50 })
+    );
+  });
 });

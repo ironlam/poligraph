@@ -14,6 +14,7 @@
     "measures:extract-press": "tsx scripts/measures-extract-from-press.ts",
     "measures:import-programs": "tsx scripts/import-presidential-programs.ts",
     "measures:classify-subtopics": "tsx --env-file=.env scripts/classify-measure-subtopics.ts",
+    "measures:classify-subtopic-delta": "tsx --env-file=.env scripts/classify-measure-subtopic-delta.ts",
     "measures:generate-contexts": "tsx --env-file=.env scripts/generate-measure-contexts.ts",
     "start": "next start",
     "lint": "eslint",
