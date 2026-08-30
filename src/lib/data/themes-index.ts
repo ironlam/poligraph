@@ -4,9 +4,15 @@ import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import {
+  selectFeaturedSubtopics,
+  type FeaturedSubtopic,
+} from "@/lib/presidentielle/featured-subtopics";
 import { getPresidentialThemeIndexOrder, themeToSlug } from "@/lib/presidentielle/themes";
 import { getPublicMeasuresByElection, type PublicMeasure } from "./measures";
 import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
+
+export type { FeaturedSubtopic } from "@/lib/presidentielle/featured-subtopics";
 
 /**
  * The read authority for the themes index / hub gate.
@@ -36,6 +42,7 @@ export type ThemeIndexEntry = {
 export type ThemesIndexData = {
   electionSlug: string;
   themes: ThemeIndexEntry[];
+  featuredSubtopics: FeaturedSubtopic[];
   publishableSubjectPageCount: number;
 };
 
@@ -89,6 +96,11 @@ export async function loadThemesIndex(
   return {
     electionSlug,
     themes,
+    featuredSubtopics: selectFeaturedSubtopics(
+      measures.filter(
+        (measure) => measure.candidacyId !== null && publicIds.has(measure.candidacyId)
+      )
+    ),
     publishableSubjectPageCount: themes.filter((t) => t.publishable).length,
   };
 }

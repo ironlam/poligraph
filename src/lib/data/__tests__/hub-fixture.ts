@@ -123,18 +123,39 @@ export async function seedHubFixture(
   const alpha = await candidacyWithPublishedExtension("Alpha", "PRESSENTI", "#123456");
   const bravo = await candidacyWithPublishedExtension("Bravo", "DECLARE");
 
-  await publishMeasure(
+  const alphaHousing = await publishMeasure(
     alpha.politicianId,
     alpha.candidacyId,
     THEME_LOGEMENT,
     "Encadrer les loyers dans les zones tendues."
   );
-  await publishMeasure(
+  const bravoHousing = await publishMeasure(
     bravo.politicianId,
     bravo.candidacyId,
     THEME_LOGEMENT,
     "Construire 500 000 logements sociaux sur le quinquennat."
   );
+
+  const housingSubtopic = await db.measureSubtopic.create({
+    data: {
+      slug: `${options.electionSlug}-acces-logement`,
+      label: "Accès au logement",
+      description: "Mesures relatives à l'accès au logement.",
+      theme: THEME_LOGEMENT,
+    },
+  });
+  await db.measureRevisionSubtopic.createMany({
+    data: [alphaHousing.revisionId, bravoHousing.revisionId].map((revisionId) => ({
+      revisionId,
+      subtopicId: housingSubtopic.id,
+      status: "APPROVED" as const,
+      method: "MANUAL",
+      classifierVersion: "fixture",
+      taxonomyVersion: "fixture",
+      reviewedAt: new Date("2027-01-02T00:00:00Z"),
+      reviewedBy: "fixture",
+    })),
+  });
 
   // Charlie: envisagé, complete source, DRAFT CandidacyPresidential extension carrying a
   // published measure. Must surface in the hub field (the field != the published fiches), but

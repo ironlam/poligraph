@@ -7,6 +7,7 @@ function data(over: Partial<ThemesIndexData> = {}): ThemesIndexData {
   return {
     electionSlug: "presidentielle-2027",
     publishableSubjectPageCount: 1,
+    featuredSubtopics: [],
     themes: [
       {
         theme: "LOGEMENT_URBANISME",

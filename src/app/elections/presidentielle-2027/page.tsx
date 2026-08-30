@@ -13,6 +13,7 @@ import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
 import { HubSubjects } from "./_components/HubSubjects";
+import { HubTopics } from "./_components/HubTopics";
 import { PresidentialHubNav } from "./_components/PresidentialHubNav";
 import { PresidentialCorpusSearch } from "./_components/PresidentialCorpusSearch";
 
@@ -116,6 +117,8 @@ export default async function PresidentialHubPage() {
             themeCount={themeCount}
           />
         )}
+
+        <HubTopics subtopics={context.featuredSubtopics} />
 
         <HubSubjects themes={context.themes} />
 
