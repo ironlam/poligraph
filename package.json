@@ -18,6 +18,7 @@
     "measures:classify-subtopics": "tsx --env-file=.env scripts/classify-measure-subtopics.ts",
     "measures:classify-subtopic-delta": "tsx --env-file=.env scripts/classify-measure-subtopic-delta.ts",
     "measures:generate-contexts": "tsx --env-file=.env scripts/generate-measure-contexts.ts",
+    "measures:regenerate-contexts": "tsx --env-file=.env scripts/regenerate-measure-contexts.ts",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
