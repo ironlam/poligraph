@@ -37,7 +37,7 @@ const providerOutput = (refs: string[], career = CAREER) =>
     .join("")}</programme></synthese>`;
 /** Internal provider output and the reader-facing text obtained after evidence screening. */
 const ACCEPTED = providerOutput(["M1"]);
-const STORED = `${CAREER}.\n\nSon programme comprend notamment les engagements suivants. Rouvrir des maternités de proximité.`;
+const STORED = `${CAREER}.\n\nParmi les mesures publiées figurent « Rouvrir des maternités de proximité ».`;
 
 function anthropicText(text: string) {
   return { content: [{ type: "text", text }] };
@@ -256,7 +256,7 @@ describe("generateCandidateSynthesis", () => {
     expect(result).toMatchObject({ ok: true });
     expect(callAnthropicMock).toHaveBeenCalledTimes(2);
     const stored = dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis as string;
-    expect(stored).toContain("Augmenter les impôts des entreprises.");
+    expect(stored).toContain("« Augmenter les impôts des entreprises »");
     expect(stored).not.toContain("Supprimer");
   });
 
@@ -304,7 +304,7 @@ describe("generateCandidateSynthesis", () => {
     const retryPrompt = callAnthropicMock.mock.calls[1]![0][0].content as string;
     expect(retryPrompt).toContain("mention « tribunal »");
     expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
-      "Créer un tribunal spécialisé."
+      "« Créer un tribunal spécialisé »"
     );
   });
 
@@ -335,7 +335,7 @@ describe("generateCandidateSynthesis", () => {
     expect(result).toMatchObject({ ok: true });
     expect(callAnthropicMock).toHaveBeenCalledTimes(1);
     expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
-      "source219."
+      "source219 »"
     );
   });
 
