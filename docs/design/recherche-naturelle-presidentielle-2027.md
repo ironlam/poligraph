@@ -93,6 +93,27 @@ npm run search:reindex -- --election=presidentielle-2027 --entity-type=MEASURE
 npm run search:embed -- --election=presidentielle-2027 --entity-type=MEASURE --stale-only
 ```
 
+Le lot d’indexation sémantique peut être contrôlé sans appel à Mistral ni écriture :
+
+```bash
+npm run search:embed -- \
+  --election=presidentielle-2027 \
+  --entity-type=MEASURE \
+  --limit=500 \
+  --dry-run
+```
+
+Après application séparée de la migration pgvector, retirer `--dry-run` construit uniquement les
+vecteurs absents ou périmés. La commande accepte `--after=IDENTIFIANT` pour reprendre après le
+dernier curseur affiché et `--stale-only=false` uniquement pour une reconstruction volontaire.
+L’indexation des candidatures se lance séparément avec `--entity-type=CANDIDACY`.
+
+Le modèle `mistral-embed` produit 1 024 dimensions. Le texte envoyé est limité à 500 caractères,
+traité par lots de 16 et identifié par un hash versionné. Une mise à jour du document lexical rend
+le vecteur détectablement périmé sans bloquer la publication. `SearchEmbedding` n’expose aucune
+politique de lecture anonyme : la future recherche vectorielle devra toujours joindre
+`SearchDocument` et vérifier son élection et sa visibilité publique avant de classer les résultats.
+
 L'administration expose les deux opérations avec progression, reprise sur curseur et audit du
 nombre de documents publics sans embedding. Aucun bouton ne lance une reconstruction synchrone dans
 une requête HTTP.
