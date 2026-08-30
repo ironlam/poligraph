@@ -50,4 +50,14 @@ describe("ContextGenerationBatchPanel", () => {
     );
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it("explique pourquoi aucune génération automatique n’est proposée", () => {
+    render(<ContextGenerationBatchPanel measureIds={[]} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Génération assistée des contextes" })
+    ).toBeVisible();
+    expect(screen.getByText(/Aucune mesure de cette page/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Générer/ })).not.toBeInTheDocument();
+  });
 });

@@ -157,7 +157,7 @@ export function QueueFilters({
             [
               ["SUBTOPICS_PENDING", "Sous-thèmes à valider"],
               ["SUBTOPICS_APPROVED", "Sous-thèmes validés"],
-              ["DETAILS_MISSING", "Contexte à compléter"],
+              ["DETAILS_MISSING", "Contextes manquants"],
             ] as const
           ).map(([state, label]) => (
             <Link

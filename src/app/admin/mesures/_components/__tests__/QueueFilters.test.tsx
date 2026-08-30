@@ -79,7 +79,7 @@ describe("QueueFilters", () => {
       "aria-current",
       "true"
     );
-    expect(screen.getByRole("link", { name: "Contexte à compléter 8" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Contextes manquants 8" })).toBeInTheDocument();
   });
 
   it("conserve le périmètre du corpus public dans les liens et la recherche", () => {
