@@ -29,6 +29,8 @@ describe("pages de méthodologie", () => {
     expect(
       screen.getByRole("heading", { name: "Extraction, relecture et publication" })
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Thèmes et sous-thèmes" })).toBeInTheDocument();
+    expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
     expect(
       screen.getByText(/Elle ne prouve pas qu'une proposition n'existe pas/)
     ).toBeInTheDocument();

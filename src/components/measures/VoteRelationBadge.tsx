@@ -23,12 +23,11 @@ import { MeasureBadge } from "./MeasureBadge";
  * and its sourced detail as a line underneath. That is the strongest fact the page can state and it
  * stays the loudest thing in the row.
  *
- * A state WITHOUT a position used to be bare grey text sitting next to a filled pill, so a reader
- * could not tell it was a qualification at all. It now carries the same badge form as the precision,
- * on the tier its content deserves: `qualification` for a vote we found on a broader text, which is
- * a finding, and `verification` for the three states that describe where our own search stands. The
- * sourced detail moves under the badge instead of being glued to the label behind a colon, so a
- * badge never has to hold a date and a chamber list inside itself.
+ * A state WITHOUT a position used to be bare grey text, so a reader could not tell it was a
+ * qualification at all. It now carries the badge form on the tier its content deserves:
+ * `qualification` for a vote found on a broader text, and `verification` for the three states that
+ * describe where our own search stands. The sourced detail moves under the badge instead of being
+ * glued to the label behind a colon, so a badge never has to hold a date and a chamber list.
  */
 const VERIFICATION_ICON: Partial<Record<VoteRelation, typeof Clock>> = {
   SEARCH_NOT_DONE: Clock,

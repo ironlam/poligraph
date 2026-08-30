@@ -3,9 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { MarkdownText } from "@/components/ui/markdown";
-import { MeasurePrecisionBadge } from "@/components/measures/MeasurePrecisionBadge";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import {
@@ -115,19 +113,6 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             {measure.text}
           </h1>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            {measure.precision && (
-              <span className="inline-flex items-center gap-1">
-                <MeasurePrecisionBadge precision={measure.precision} />
-                <InfoTooltip
-                  text={
-                    measure.precision === "CHIFFREE"
-                      ? "La formulation comporte une quantité, écrite en chiffres ou en toutes lettres. Cela ne signifie pas que son coût ou sa faisabilité ont été évalués."
-                      : "La formulation fixe un objectif sans quantité explicite."
-                  }
-                  className="-my-3 min-h-11 min-w-11"
-                />
-              </span>
-            )}
             <span className="text-sm text-muted-foreground">
               Revue par Poligraph le {formatDate(measure.reviewedAt)}.{" "}
               <Link

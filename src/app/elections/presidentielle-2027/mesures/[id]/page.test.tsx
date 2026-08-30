@@ -69,7 +69,7 @@ describe("page publique d'une mesure présidentielle", () => {
       </TooltipProvider>
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(detail.text);
-    expect(screen.getByText("Objectif quantifié")).toBeInTheDocument();
+    expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
     expect(screen.getByText("Source primaire")).toBeInTheDocument();
     expect(screen.getByText("Programme de candidature")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ce que prévoit la mesure" })).toBeInTheDocument();
