@@ -72,7 +72,7 @@ export type PublicPresidentialMeasureDetail = {
     candidateName: string;
     candidateSlug: string;
     party: string | null;
-    sharedSubtopics: string[];
+    sharedSubtopics: Array<{ slug: string; label: string }>;
   }>;
 };
 
@@ -240,7 +240,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
           party: related.candidacy.party?.shortName ?? related.candidacy.party?.name ?? null,
           sharedSubtopics: related.publishedRevision.subtopics
             .filter(({ subtopic }) => currentSubtopicSlugs.has(subtopic.slug))
-            .map(({ subtopic }) => subtopic.label),
+            .map(({ subtopic }) => ({ slug: subtopic.slug, label: subtopic.label })),
         },
       ];
     })

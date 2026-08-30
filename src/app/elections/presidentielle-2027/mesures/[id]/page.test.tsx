@@ -82,6 +82,10 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(screen.getByText("territoires concernés")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notions abordées" })).toBeInTheDocument();
     expect(screen.getByText("Logement social")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Logement social" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/recherche?sous-theme=logement-social"
+    );
     expect(
       screen.getByText("Construction, attribution et financement du logement social.")
     ).toBeInTheDocument();
@@ -113,7 +117,7 @@ describe("page publique d'une mesure présidentielle", () => {
           candidateName: "Alex Martin",
           candidateSlug: "alex-martin",
           party: "Parti Test",
-          sharedSubtopics: ["Encadrement des loyers"],
+          sharedSubtopics: [{ slug: "encadrement-loyers", label: "Encadrement des loyers" }],
         },
       ],
     });
@@ -132,6 +136,10 @@ describe("page publique d'une mesure présidentielle", () => {
       "/elections/presidentielle-2027/mesures/alex-martin-encadrer-les-loyers"
     );
     expect(screen.getByText("Encadrement des loyers")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Encadrement des loyers" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/recherche?sous-theme=encadrement-loyers"
+    );
   });
 
   it("n'invente aucun vote quand aucun lien public n'existe", async () => {

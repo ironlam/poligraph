@@ -25,6 +25,7 @@ import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candid
 import { getPolitician } from "@/lib/data/politicians";
 import { parseThemeSlug, THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
 import { cn } from "@/lib/utils";
+import { PresidentialSubtopicLink } from "../../../_components/PresidentialSubtopicLink";
 
 const ELECTION_SLUG = "presidentielle-2027";
 const PAGE_SIZE = 20;
@@ -318,11 +319,15 @@ export default async function CandidateMeasuresPage({ params, searchParams }: Pa
                         {measure.subtopics.length > 0 && (
                           <ul aria-label="Sous-thèmes" className="mt-3 flex flex-wrap gap-2">
                             {measure.subtopics.map((item) => (
-                              <li
-                                key={item.slug}
-                                className="rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium"
-                              >
-                                {item.label}
+                              <li key={item.slug}>
+                                <PresidentialSubtopicLink
+                                  slug={item.slug}
+                                  label={item.label}
+                                  href={buildMeasuresUrl(slug, {
+                                    theme: measure.theme.code,
+                                    subtopic: item.slug,
+                                  })}
+                                />
                               </li>
                             ))}
                           </ul>

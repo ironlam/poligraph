@@ -19,6 +19,7 @@ import { SITE_URL } from "@/config/site";
 import { buildMeasureSeoDescription, truncateAtWord } from "@/lib/presidentielle/measure-seo";
 import { themeToSlug } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
+import { PresidentialSubtopicLink } from "../../_components/PresidentialSubtopicLink";
 
 const ELECTION_SLUG = "presidentielle-2027";
 
@@ -148,7 +149,13 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
               {measure.subtopics.map((subtopic) => (
                 <div key={subtopic.slug} className="rounded-xl border border-border bg-card p-4">
-                  <dt className="font-display text-lg font-bold">{subtopic.label}</dt>
+                  <dt>
+                    <PresidentialSubtopicLink
+                      slug={subtopic.slug}
+                      label={subtopic.label}
+                      className="justify-start border-0 bg-transparent px-0 font-display text-lg font-bold shadow-none hover:bg-transparent hover:underline"
+                    />
+                  </dt>
                   <dd className="mt-1 text-sm leading-relaxed text-muted-foreground-strong">
                     {subtopic.description}
                   </dd>
@@ -243,25 +250,32 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             </div>
             <ul className="mt-5 grid gap-3 md:grid-cols-2">
               {measure.relatedMeasures.map((related) => (
-                <li key={related.slug}>
+                <li
+                  key={related.slug}
+                  className="flex h-full min-h-32 flex-col rounded-2xl border border-border bg-card p-5"
+                >
                   <Link
                     href={`/elections/${ELECTION_SLUG}/mesures/${related.slug}`}
                     prefetch={false}
-                    className="group flex h-full min-h-32 flex-col rounded-2xl border border-border bg-card p-5 hover:border-primary/60 hover:bg-accent/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    className="group min-h-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   >
-                    <span className="text-sm font-bold text-primary">
+                    <span className="block text-sm font-bold text-primary">
                       {related.candidateName}
                       {related.party ? ` · ${related.party}` : ""}
                     </span>
-                    <span className="mt-2 line-clamp-3 leading-relaxed text-foreground group-hover:underline">
+                    <span className="mt-2 line-clamp-3 block leading-relaxed text-foreground group-hover:underline">
                       {related.text}
                     </span>
-                    {related.sharedSubtopics.length > 0 && (
-                      <span className="mt-3 text-xs text-muted-foreground">
-                        {related.sharedSubtopics.join(" · ")}
-                      </span>
-                    )}
                   </Link>
+                  {related.sharedSubtopics.length > 0 && (
+                    <ul aria-label="Sous-thèmes partagés" className="mt-3 flex flex-wrap gap-2">
+                      {related.sharedSubtopics.map((subtopic) => (
+                        <li key={subtopic.slug}>
+                          <PresidentialSubtopicLink slug={subtopic.slug} label={subtopic.label} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
