@@ -78,7 +78,10 @@ describe("page publique d'une mesure présidentielle", () => {
         {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
       </TooltipProvider>
     );
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(detail.text);
+    const title = screen.getByRole("heading", { level: 1 });
+    expect(title).toHaveTextContent(detail.text);
+    expect(title).toHaveClass("max-w-[36ch]");
+    expect(title.closest("article")).toHaveClass("max-w-6xl");
     expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
     expect(screen.getByText("Source primaire")).toBeInTheDocument();
     expect(screen.getByText("Programme de candidature")).toBeInTheDocument();
