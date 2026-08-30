@@ -184,6 +184,18 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).not.toContain("santé ».");
   });
 
+  it("preserves terminal ellipses from published measures", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [{ theme: "SANTE", text: "Créer des centres de santé..." }],
+    };
+    const result = screenCandidateSynthesis(structured(["M1"]), input);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain("« Créer des centres de santé... »");
+    expect(result.ok && result.text).not.toContain("santé... ».");
+  });
+
   it("refuses valid-length prose that omits an expected theme", () => {
     expect(screenCandidateSynthesis(structured(["M1"]), BASE)).toMatchObject({
       ok: false,

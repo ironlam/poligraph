@@ -340,12 +340,12 @@ function formatFrenchList(values: string[]): string {
 }
 
 function sourceTextForQuote(value: string): string {
-  return value.replace(/[.]+$/u, "");
+  return value.replace(/(?<!\.)\.$/u, "");
 }
 
 function formatProgrammeText(references: ProgrammeReference[]): string {
   const quotedMeasures = references.map((reference) => `« ${sourceTextForQuote(reference.text)} »`);
-  const terminalPunctuation = /[!?] »$/u.test(quotedMeasures.at(-1) ?? "") ? "" : ".";
+  const terminalPunctuation = /(?:[!?…]|\.\.\.) »$/u.test(quotedMeasures.at(-1) ?? "") ? "" : ".";
   return `Parmi les mesures publiées figurent ${formatFrenchList(quotedMeasures)}${terminalPunctuation}`;
 }
 

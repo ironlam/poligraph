@@ -39,7 +39,7 @@ export default async function ProgrammesPage() {
         name="Programmes politiques et présidentielle 2027"
         description="Les mesures des candidats à la présidentielle 2027 et les derniers programmes officiels documentés des partis politiques français."
         url="https://poligraph.fr/programmes"
-        numberOfItems={platforms.length + (presidentialContext === null ? 0 : 1)}
+        numberOfItems={platforms.length + (presidentialContext?.hubPublishable === true ? 1 : 0)}
       />
       <Breadcrumb items={[{ label: "Programmes" }]} />
 
@@ -54,7 +54,7 @@ export default async function ProgrammesPage() {
           </p>
         </header>
 
-        {presidentialContext !== null && (
+        {presidentialContext?.hubPublishable === true && (
           <section
             aria-labelledby="presidentielle-programmes-title"
             className="overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.035]"

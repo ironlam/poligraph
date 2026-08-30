@@ -91,4 +91,21 @@ describe("page programmes", () => {
       "/elections/presidentielle-2027"
     );
   });
+
+  it("ne promet pas de comparaison avant le seuil de publication du hub", async () => {
+    vi.mocked(getHubMeasureContext).mockResolvedValue({
+      ...context,
+      hubPublishable: false,
+      publishableSubjectPageCount: 0,
+    });
+
+    render(await ProgrammesPage());
+
+    expect(
+      screen.queryByRole("heading", { name: "Comparer les programmes des candidats" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Explorer la présidentielle 2027/ })
+    ).not.toBeInTheDocument();
+  });
 });
