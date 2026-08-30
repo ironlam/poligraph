@@ -15,6 +15,11 @@ import {
   PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
 } from "@/lib/presidentielle/publication";
 import { deriveVoteRelation, type VoteRelation } from "@/lib/measures/vote-relation";
+import { readEvidenceSnapshot } from "@/lib/measures/evidence-snapshot";
+import {
+  GENERATED_CONTEXT_DRAFT_ACTION,
+  readGeneratedContextClaims,
+} from "@/lib/measures/context-provenance";
 
 export type PublicPresidentialMeasureDetail = {
   id: string;
@@ -23,6 +28,11 @@ export type PublicPresidentialMeasureDetail = {
   theme: ThemeCategory;
   text: string;
   details: string | null;
+  contextClaims: Array<{
+    text: string;
+    documentUrl: string;
+    references: Array<{ unitId: string; page: number | null }>;
+  }>;
   precision: MeasurePrecision | null;
   attribution: MeasureAttribution;
   reviewedAt: Date;
@@ -102,6 +112,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
         select: {
           text: true,
           details: true,
+          evidenceSnapshot: true,
           precision: true,
           reviewedAt: true,
           publishedAt: true,
@@ -178,53 +189,86 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
   const currentSubtopics = revision.subtopics.map(({ subtopic }) => subtopic);
   const currentSubtopicSlugs = new Set(currentSubtopics.map((subtopic) => subtopic.slug));
 
-  const relatedRows = await db.measure.findMany({
-    where: {
-      id: { not: row.id },
-      electionId: row.election.id,
-      theme: row.theme,
-      ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
-      ...(currentSubtopics.length > 0
-        ? {
-            publishedRevision: {
-              is: {
-                ...PUBLIC_MEASURE_REVISION_WHERE,
-                subtopics: {
-                  some: {
-                    status: "APPROVED" as const,
-                    subtopic: {
-                      active: true,
-                      slug: { in: currentSubtopics.map((subtopic) => subtopic.slug) },
+  const [contextAudit, relatedRows] = await Promise.all([
+    revision.details === null
+      ? Promise.resolve(null)
+      : db.auditLog.findFirst({
+          where: {
+            action: GENERATED_CONTEXT_DRAFT_ACTION,
+            entityType: "MeasureRevision",
+            entityId: publishedRevisionId,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { changes: true },
+        }),
+    db.measure.findMany({
+      where: {
+        id: { not: row.id },
+        electionId: row.election.id,
+        theme: row.theme,
+        ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+        ...(currentSubtopics.length > 0
+          ? {
+              publishedRevision: {
+                is: {
+                  ...PUBLIC_MEASURE_REVISION_WHERE,
+                  subtopics: {
+                    some: {
+                      status: "APPROVED" as const,
+                      subtopic: {
+                        active: true,
+                        slug: { in: currentSubtopics.map((subtopic) => subtopic.slug) },
+                      },
                     },
                   },
                 },
               },
+            }
+          : {}),
+      },
+      select: {
+        slug: true,
+        publishedRevision: {
+          select: {
+            text: true,
+            subtopics: {
+              where: { status: "APPROVED", subtopic: { active: true } },
+              select: { subtopic: { select: { slug: true, label: true } } },
             },
-          }
-        : {}),
-    },
-    select: {
-      slug: true,
-      publishedRevision: {
-        select: {
-          text: true,
-          subtopics: {
-            where: { status: "APPROVED", subtopic: { active: true } },
-            select: { subtopic: { select: { slug: true, label: true } } },
+          },
+        },
+        candidacy: {
+          select: {
+            candidateName: true,
+            party: { select: { name: true, shortName: true } },
+            politician: { select: { slug: true } },
           },
         },
       },
-      candidacy: {
-        select: {
-          candidateName: true,
-          party: { select: { name: true, shortName: true } },
-          politician: { select: { slug: true } },
-        },
-      },
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    take: 100,
-  });
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: 100,
+    }),
+  ]);
+
+  const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
+  const contextClaims =
+    contextAudit !== null && evidence.status === "VALID"
+      ? readGeneratedContextClaims(contextAudit.changes).flatMap((claim) => {
+          const references = claim.evidenceUnitIds.flatMap((unitId) => {
+            const unit = evidence.snapshot.units.find((candidate) => candidate.unitId === unitId);
+            return unit ? [{ unitId, page: unit.page }] : [];
+          });
+          return references.length > 0
+            ? [
+                {
+                  text: claim.text,
+                  documentUrl: evidence.snapshot.documentUrl,
+                  references,
+                },
+              ]
+            : [];
+        })
+      : [];
 
   // One proposal per other personality keeps this a navigation aid rather than another long list.
   // Alphabetical sorting is explicit and carries no editorial ranking.
@@ -258,6 +302,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
     theme: row.theme,
     text: revision.text,
     details: revision.details,
+    contextClaims,
     precision: revision.precision,
     attribution: row.attribution,
     reviewedAt: revision.reviewedAt,

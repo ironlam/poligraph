@@ -70,6 +70,24 @@ function generatedContext(details: string, evidenceUnitIds = ["pdf-12-2-u001", "
   };
 }
 
+function measureWithSupportingContext(context: string) {
+  const snapshot = validEvidenceSnapshot();
+  const anchor = snapshot.units.find((unit) => unit.role === "COMMITMENT_ANCHOR");
+  const supporting = snapshot.units.find((unit) => unit.role === "SUPPORTING_CONTEXT");
+  if (!anchor || !supporting) throw new Error("Preuve de test incomplète");
+  const hash = createHash("sha256").update(context, "utf8").digest("hex");
+  supporting.rawExactText = context;
+  supporting.canonicalText = context;
+  supporting.rawTextHash = hash;
+  supporting.canonicalTextHash = hash;
+  snapshot.canonicalEvidenceHash = createHash("sha256")
+    .update(`${anchor.canonicalText}\n\n${context}`, "utf8")
+    .digest("hex");
+  return measure({
+    publishedRevision: { ...measure().publishedRevision, evidenceSnapshot: snapshot },
+  });
+}
+
 describe("génération de contexte sourcé", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -339,6 +357,27 @@ describe("génération de contexte sourcé", () => {
       mocks.parseMistralJSON.mockReturnValue(
         generatedContext(
           `Le programme rattache cette proposition à ${quantity} dans les territoires concernés et la présente comme un élément de contexte distinct.`
+        )
+      );
+      const { generateMeasureContextDraft } = await import("../context-generation");
+
+      await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
+        "quantité absente de la preuve citée"
+      );
+    }
+  );
+
+  it.each([
+    { evidence: "Le document ne prévoit aucun logement vacant.", generated: "un logement" },
+    { evidence: "Le document prévoit un logement vacant.", generated: "aucun logement" },
+  ])(
+    "refuse d'inverser la quantité entre « $evidence » et « $generated »",
+    async ({ evidence, generated }) => {
+      mocks.findMeasure.mockResolvedValue(measureWithSupportingContext(evidence));
+      mocks.parseMistralJSON.mockReturnValue(
+        generatedContext(
+          `Le programme rattache cette proposition à ${generated} dans les territoires concernés et la présente comme un élément de contexte distinct.`,
+          ["pdf-13-1-u001"]
         )
       );
       const { generateMeasureContextDraft } = await import("../context-generation");

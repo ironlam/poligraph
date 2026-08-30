@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { db } from "@/lib/db";
+import {
+  GENERATED_CONTEXT_DRAFT_ACTION,
+  generatedContextClaimSchema,
+  type GeneratedContextClaim,
+} from "@/lib/measures/context-provenance";
 import { readEvidenceSnapshot } from "@/lib/measures/evidence-snapshot";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 import { lockMeasure } from "@/lib/measures/lock";
@@ -12,19 +17,9 @@ const PROMPT_VERSION = "measure-context-v7";
 const TERMINAL_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_TERMINAL_RESULT";
 const INVALID_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_INVALID_RESULT";
 const RESERVED_CONTEXT_GENERATION_ACTION = "RESERVE_CONTEXT_GENERATION";
-const GENERATED_CONTEXT_DRAFT_ACTION = "GENERATE_CONTEXT_DRAFT";
 const CONTEXT_GENERATION_LEASE_MS = 15 * 60 * 1_000;
 const MIN_DETAILS_LENGTH = 80;
 const MAX_DETAILS_LENGTH = 1_000;
-
-const generatedContextClaimSchema = z
-  .object({
-    text: z.string().trim().min(10).max(500),
-    evidenceUnitIds: z.array(z.string().min(1)).max(8),
-  })
-  .strict();
-
-type GeneratedContextClaim = z.infer<typeof generatedContextClaimSchema>;
 
 const generatedContextSchema = z
   .object({
@@ -297,6 +292,11 @@ function normalizeEvidenceText(value: string): string {
     .trim();
 }
 
+function includesWholeEvidencePhrase(evidence: string, phrase: string): boolean {
+  const escapedPhrase = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapedPhrase}(?![\\p{L}\\p{N}_])`, "u").test(evidence);
+}
+
 function assertGroundedLexicalQuantities(text: string, citedEvidenceText: string): void {
   const normalizedEvidence = normalizeEvidenceText(citedEvidenceText);
   const textWithoutMinisterialTitle = text.replace(
@@ -310,7 +310,7 @@ function assertGroundedLexicalQuantities(text: string, citedEvidenceText: string
     ...(text.match(FRACTIONAL_TIER_PATTERN) ?? []),
   ];
   for (const match of matches) {
-    if (!normalizedEvidence.includes(normalizeEvidenceText(match))) {
+    if (!includesWholeEvidencePhrase(normalizedEvidence, normalizeEvidenceText(match))) {
       throw new MeasureValidationError(
         `Le contexte généré contient une quantité absente de la preuve citée : ${match}`
       );

@@ -10,6 +10,10 @@ import type {
   ThemeCategory,
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
+import {
+  GENERATED_CONTEXT_DRAFT_ACTION,
+  type GeneratedContextClaim,
+} from "@/lib/measures/context-provenance";
 import { invalidateMeasureTags } from "./cache";
 import {
   createV6CorrectionFingerprint,
@@ -251,7 +255,7 @@ export type DraftMeasureRevisionInput = {
   preserveEvidenceFromRevisionId?: string;
   correctedBy?: string;
   generatedContext?: {
-    claims: Array<{ text: string; evidenceUnitIds: string[] }>;
+    claims: GeneratedContextClaim[];
     evidenceUnitIds: string[];
     generatedBy: string;
     ipAddress: string;
@@ -372,7 +376,7 @@ export async function draftMeasureRevision(
     if (input.preserveEvidenceFromRevisionId) {
       await tx.auditLog.create({
         data: {
-          action: input.generatedContext ? "GENERATE_CONTEXT_DRAFT" : "CORRECT_DRAFT",
+          action: input.generatedContext ? GENERATED_CONTEXT_DRAFT_ACTION : "CORRECT_DRAFT",
           entityType: "MeasureRevision",
           entityId: revision.id,
           changes: {

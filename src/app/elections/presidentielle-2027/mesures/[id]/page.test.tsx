@@ -18,6 +18,13 @@ const detail = {
   theme: "LOGEMENT_URBANISME",
   text: "Construire davantage de logements accessibles",
   details: "La source précise les **territoires concernés** et le calendrier annoncé.",
+  contextClaims: [
+    {
+      text: "La source précise les territoires concernés et le calendrier annoncé.",
+      documentUrl: "https://example.org/programme",
+      references: [{ unitId: "pdf-12-u001", page: 12 }],
+    },
+  ],
   precision: "CHIFFREE",
   attribution: "PERSONAL",
   reviewedAt: new Date("2026-08-20T00:00:00Z"),
@@ -73,9 +80,10 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(screen.getByText("Source primaire")).toBeInTheDocument();
     expect(screen.getByText("Programme de candidature")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ce que prévoit la mesure" })).toBeInTheDocument();
+    expect(screen.getByText("Vérifier les affirmations dans la source")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Voir les sources utilisées pour ce contexte" })
-    ).toHaveAttribute("href", "#sources");
+      screen.getByRole("link", { name: "Consulter l'extrait source, page 12, lien externe" })
+    ).toHaveAttribute("href", "https://example.org/programme");
     expect(screen.getByRole("heading", { name: "Dans le programme" })).toBeInTheDocument();
     expect(screen.getByText("Formulée personnellement")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Consulter le programme/ })).toHaveAttribute(
