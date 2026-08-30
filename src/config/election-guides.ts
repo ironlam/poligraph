@@ -8,7 +8,8 @@ export interface ElectionGuideSection {
 
 /**
  * Practical guide content per election type.
- * Displayed on election detail pages when FEATURES.ELECTION_GUIDE_SECTION is enabled.
+ * Displayed on election detail pages when the `ELECTION_GUIDE_SECTION` feature flag is enabled.
+ * Flags are rows in `FeatureFlag`, read through `isFeatureEnabled()` in `src/lib/feature-flags.ts`.
  */
 export const ELECTION_GUIDES: Partial<Record<ElectionType, ElectionGuideSection[]>> = {
   MUNICIPALES: [
