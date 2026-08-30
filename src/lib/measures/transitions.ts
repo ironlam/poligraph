@@ -251,6 +251,7 @@ export type DraftMeasureRevisionInput = {
   preserveEvidenceFromRevisionId?: string;
   correctedBy?: string;
   generatedContext?: {
+    claims: Array<{ text: string; evidenceUnitIds: string[] }>;
     evidenceUnitIds: string[];
     generatedBy: string;
     ipAddress: string;
@@ -379,6 +380,7 @@ export async function draftMeasureRevision(
             evidenceSnapshotPreserved: true,
             ...(input.generatedContext
               ? {
+                  claims: input.generatedContext.claims,
                   evidenceUnitIds: input.generatedContext.evidenceUnitIds,
                   generatedBy: input.generatedContext.generatedBy,
                   model: input.generatedContext.model,
