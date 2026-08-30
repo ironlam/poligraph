@@ -189,6 +189,8 @@ function contextSkipMessage(reason: ContextGenerationSkipReason): string {
       return "Une génération a déjà conclu que cette révision ne pouvait pas produire de contexte exploitable.";
     case "NO_USEFUL_CONTEXT":
       return "Mistral n'a trouvé aucun contexte utile distinct de la formulation.";
+    case "NOT_REGENERATABLE_CONTEXT":
+      return "Ce contexte ne correspond pas à une ancienne génération remplaçable.";
   }
 }
 

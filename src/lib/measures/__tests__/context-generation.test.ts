@@ -45,19 +45,27 @@ vi.mock("@/lib/measures/transitions", () => ({
 }));
 
 function measure(overrides: Record<string, unknown> = {}) {
+  const revision = {
+    id: "revision-1",
+    text: "Créer un droit aux vacances.",
+    details: null,
+    precision: "OBJECTIF_SANS_CHIFFRE",
+    validFrom: new Date("2026-08-01T00:00:00Z"),
+    evidenceSnapshot: validEvidenceSnapshot(),
+    reviewedAt: new Date("2026-08-20T00:00:00Z"),
+    publishedAt: new Date("2026-08-21T00:00:00Z"),
+    discardedAt: null,
+    rejectedAt: null,
+    extractionMethod: "AI_ASSISTED",
+    extractorVersion: null,
+  };
   return {
     id: "measure-1",
     updatedAt: new Date("2026-08-30T00:00:00Z"),
     latestRevisionId: "revision-1",
     publishedRevisionId: "revision-1",
-    publishedRevision: {
-      id: "revision-1",
-      text: "Créer un droit aux vacances.",
-      details: null,
-      precision: "OBJECTIF_SANS_CHIFFRE",
-      validFrom: new Date("2026-08-01T00:00:00Z"),
-      evidenceSnapshot: validEvidenceSnapshot(),
-    },
+    publishedRevision: revision,
+    latestRevision: revision,
     revisions: [],
     ...overrides,
   };
@@ -171,6 +179,130 @@ describe("génération de contexte sourcé", () => {
 
     await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow("attribution mécanique");
     expect(mocks.callMistral).toHaveBeenCalledTimes(2);
+  });
+
+  it("régénère un contexte publié dans un nouveau brouillon sans toucher à la révision publique", async () => {
+    const oldContextRevision = {
+      ...measure().publishedRevision,
+      details: "Ancien contexte publié et validé par la rédaction.",
+      extractorVersion: "mistral-small-2506:measure-context-v8",
+    };
+    mocks.findMeasure.mockResolvedValue(
+      measure({ publishedRevision: oldContextRevision, latestRevision: oldContextRevision })
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(
+      generateMeasureContextDraft("measure-1", {
+        regenerateFromPromptVersion: "measure-context-v8",
+      })
+    ).resolves.toMatchObject({ status: "CREATED" });
+    expect(mocks.draftMeasureRevision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preserveEvidenceFromRevisionId: "revision-1",
+        revision: expect.objectContaining({
+          extractorVersion: "mistral-small-2506:measure-context-v9",
+        }),
+      })
+    );
+  });
+
+  it("remplace uniquement un brouillon IA non relu provenant de la version demandée", async () => {
+    const activeDraft = {
+      ...measure().publishedRevision,
+      id: "revision-v8-draft",
+      details: "Ancien contexte généré en attente de relecture.",
+      reviewedAt: null,
+      publishedAt: null,
+      extractorVersion: "mistral-small-2506:measure-context-v8",
+    };
+    mocks.findMeasure.mockResolvedValue(
+      measure({ latestRevisionId: activeDraft.id, latestRevision: activeDraft })
+    );
+    mocks.findMeasureForUpdate.mockResolvedValue({
+      latestRevisionId: activeDraft.id,
+      publishedRevisionId: "revision-1",
+      updatedAt: new Date("2026-08-30T00:00:00Z"),
+    });
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(
+      generateMeasureContextDraft("measure-1", {
+        regenerateFromPromptVersion: "measure-context-v8",
+      })
+    ).resolves.toMatchObject({ status: "CREATED" });
+    expect(mocks.draftMeasureRevision).toHaveBeenCalledWith(
+      expect.objectContaining({ preserveEvidenceFromRevisionId: activeDraft.id })
+    );
+  });
+
+  it("refuse de remplacer un brouillon humain ou une version différente", async () => {
+    const activeDraft = {
+      ...measure().publishedRevision,
+      id: "revision-human-draft",
+      details: "Correction éditoriale en cours.",
+      reviewedAt: null,
+      publishedAt: null,
+      extractionMethod: "MANUAL",
+      extractorVersion: null,
+    };
+    mocks.findMeasure.mockResolvedValue(
+      measure({ latestRevisionId: activeDraft.id, latestRevision: activeDraft })
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(
+      generateMeasureContextDraft("measure-1", {
+        regenerateFromPromptVersion: "measure-context-v8",
+      })
+    ).resolves.toEqual({ status: "SKIPPED", reason: "NOT_REGENERATABLE_CONTEXT" });
+    expect(mocks.callMistral).not.toHaveBeenCalled();
+  });
+
+  it("sélectionne les contextes publiés et les brouillons IA de l'ancienne version", async () => {
+    mocks.findMeasures.mockResolvedValue([
+      {
+        id: "measure-published-v8",
+        latestRevisionId: "revision-published-v8",
+        publishedRevisionId: "revision-published-v8",
+        latestRevision: {
+          evidenceSnapshot: validEvidenceSnapshot(),
+          reviewedAt: new Date("2026-08-20T00:00:00Z"),
+          publishedAt: new Date("2026-08-21T00:00:00Z"),
+        },
+      },
+      {
+        id: "measure-draft-v8",
+        latestRevisionId: "revision-draft-v8",
+        publishedRevisionId: "revision-base",
+        latestRevision: {
+          evidenceSnapshot: validEvidenceSnapshot(),
+          reviewedAt: null,
+          publishedAt: null,
+        },
+      },
+    ]);
+    const { findMeasureContextRegenerationCandidateIds } = await import("../context-generation");
+
+    await expect(
+      findMeasureContextRegenerationCandidateIds({
+        electionSlug: "presidentielle-2027",
+        fromPromptVersion: "measure-context-v8",
+        limit: 10,
+        scope: "all",
+      })
+    ).resolves.toEqual(["measure-published-v8", "measure-draft-v8"]);
+    expect(mocks.findMeasures).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          latestRevision: {
+            is: expect.objectContaining({
+              extractorVersion: { endsWith: ":measure-context-v8" },
+            }),
+          },
+        }),
+      })
+    );
   });
 
   it("transmet au modèle le locuteur et le rôle discursif de chaque preuve", async () => {
