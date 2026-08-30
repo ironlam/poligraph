@@ -1,26 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS extensions;
 
--- Older local databases installed vector in public through docker/init.sql. CREATE EXTENSION IF
--- NOT EXISTS does not move an existing extension, so normalize its schema before referencing the
--- qualified type. Moving the extension preserves dependent columns because PostgreSQL tracks them
--- by object identifier.
-DO $$
-DECLARE
-  installed_schema TEXT;
-BEGIN
-  SELECT namespace.nspname
-  INTO installed_schema
-  FROM pg_extension AS extension
-  JOIN pg_namespace AS namespace ON namespace.oid = extension.extnamespace
-  WHERE extension.extname = 'vector';
-
-  IF installed_schema IS NULL THEN
-    CREATE EXTENSION vector WITH SCHEMA extensions;
-  ELSIF installed_schema <> 'extensions' THEN
-    EXECUTE 'ALTER EXTENSION vector SET SCHEMA extensions';
-  END IF;
-END
-$$;
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 
 CREATE TABLE "SearchEmbedding" (
   "id" TEXT NOT NULL,
