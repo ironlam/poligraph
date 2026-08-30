@@ -32,6 +32,15 @@ const listMeasureQueueCandidatesMock = vi.fn(async () => []);
 const queryBatchReviewGroupsMock = vi.fn(async (_filters?: unknown) => []);
 const queryBatchPublishGroupsMock = vi.fn(async (_filters?: unknown) => []);
 const filterMeasureContextCandidateIdsMock = vi.fn(async (_ids?: string[]) => []);
+const queryMeasureEnrichmentCoverageMock = vi.fn(async () => ({
+  total: 0,
+  withDetails: 0,
+  withApprovedSubtopics: 0,
+  withQualifications: 0,
+  withVoteLinks: 0,
+  withSourceLocation: 0,
+  withHistory: 0,
+}));
 
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => redirectMock(path),
@@ -62,6 +71,10 @@ vi.mock("../_data/batch-publish-query", () => ({
 
 vi.mock("../_data/batch-review-query", () => ({
   queryBatchReviewGroups: (filters: unknown) => queryBatchReviewGroupsMock(filters),
+}));
+
+vi.mock("../_data/enrichment-coverage-query", () => ({
+  queryMeasureEnrichmentCoverage: () => queryMeasureEnrichmentCoverageMock(),
 }));
 
 vi.mock("../_data/detail-query", () => ({
@@ -114,6 +127,7 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(queryBatchReviewGroupsMock).not.toHaveBeenCalled();
     expect(queryBatchPublishGroupsMock).not.toHaveBeenCalled();
     expect(filterMeasureContextCandidateIdsMock).not.toHaveBeenCalled();
+    expect(queryMeasureEnrichmentCoverageMock).not.toHaveBeenCalled();
   });
 
   it("redirige le détail vers la connexion en l'absence de session", async () => {
@@ -146,6 +160,7 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(listMeasureQueueCandidatesMock).toHaveBeenCalledTimes(1);
     expect(queryBatchReviewGroupsMock).toHaveBeenCalledTimes(1);
     expect(queryBatchPublishGroupsMock).toHaveBeenCalledTimes(1);
+    expect(queryMeasureEnrichmentCoverageMock).toHaveBeenCalledTimes(1);
   });
 
   it("transmet le filtre de candidature à toute la file et aux deux actions par lot", async () => {
