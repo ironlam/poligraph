@@ -4,5 +4,6 @@
 -- uuid-ossp: UUID generation (Prisma default)
 
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-CREATE EXTENSION IF NOT EXISTS "vector";
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
