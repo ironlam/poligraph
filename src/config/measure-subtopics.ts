@@ -1,6 +1,7 @@
 import type { ThemeCategory } from "@/generated/prisma";
 
 export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-30-v4";
+export const MEASURE_SUBTOPIC_PREVIOUS_TAXONOMY_VERSION = "2026-08-29-v3";
 
 export type MeasureSubtopicDefinition = {
   slug: string;
@@ -9,6 +10,7 @@ export type MeasureSubtopicDefinition = {
   theme: ThemeCategory;
   aliases: string[];
   classifierGuidance?: string;
+  selectionNeighborSlugs?: string[];
   sortOrder: number;
 };
 
@@ -19,9 +21,19 @@ function topic(
   label: string,
   description: string,
   aliases: string[] = [],
-  classifierGuidance?: string
+  classifierGuidance?: string,
+  selectionNeighborSlugs?: string[]
 ): MeasureSubtopicDefinition {
-  return { theme, sortOrder, slug, label, description, aliases, classifierGuidance };
+  return {
+    theme,
+    sortOrder,
+    slug,
+    label,
+    description,
+    aliases,
+    classifierGuidance,
+    selectionNeighborSlugs,
+  };
 }
 
 /**
@@ -145,7 +157,8 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
     "Racisme et antisémitisme",
     "Prévention et lutte contre le racisme, l’antisémitisme, la xénophobie et les discriminations fondées sur l’origine ou l’appartenance réelle ou supposée.",
     ["racisme", "raciste", "antisémitisme", "antisémite", "xénophobie", "discriminations raciales"],
-    "Utiliser pour l’origine, la couleur de peau, l’appartenance ethnique ou religieuse réelle ou supposée, le racisme, l’antisémitisme ou la xénophobie. Le thème parent unique est une limite de la taxonomie actuelle, ce sous-thème n’est pas encore une facette transversale."
+    "Utiliser pour l’origine, la couleur de peau, l’appartenance ethnique ou religieuse réelle ou supposée, le racisme, l’antisémitisme ou la xénophobie. Le thème parent unique est une limite de la taxonomie actuelle, ce sous-thème n’est pas encore une facette transversale.",
+    ["egalite-discriminations"]
   ),
   topic(
     "SOCIETE_DROITS_LIBERTES",
