@@ -13,7 +13,7 @@ import { lockMeasure } from "@/lib/measures/lock";
 import { draftMeasureRevision } from "@/lib/measures/transitions";
 
 const MODEL = "mistral-small-latest";
-const PROMPT_VERSION = "measure-context-v7";
+const PROMPT_VERSION = "measure-context-v8";
 const TERMINAL_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_TERMINAL_RESULT";
 const INVALID_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_INVALID_RESULT";
 const RESERVED_CONTEXT_GENERATION_ACTION = "RESERVE_CONTEXT_GENERATION";
@@ -21,23 +21,13 @@ const CONTEXT_GENERATION_LEASE_MS = 15 * 60 * 1_000;
 const MIN_DETAILS_LENGTH = 80;
 const MAX_DETAILS_LENGTH = 1_000;
 
+const generatedDetailsSchema = z.string().min(MIN_DETAILS_LENGTH).max(MAX_DETAILS_LENGTH);
+
 const generatedContextSchema = z
   .object({
-    details: z.string().trim().min(MIN_DETAILS_LENGTH).max(MAX_DETAILS_LENGTH).nullable(),
     claims: z.array(generatedContextClaimSchema).max(6),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.details === null && value.claims.length > 0) {
-      context.addIssue({
-        code: "custom",
-        message: "Un contexte absent ne peut pas avoir de preuve",
-      });
-    }
-    if (value.details !== null && value.claims.length === 0) {
-      context.addIssue({ code: "custom", message: "Chaque contexte doit avoir une preuve" });
-    }
-  });
+  .strict();
 
 export type ContextGenerationSkipReason =
   | "ACTIVE_DRAFT"
@@ -79,6 +69,12 @@ function readAuditOutcome(changes: unknown): string | null {
   return typeof outcome === "string" ? outcome : null;
 }
 
+function isInvalidResultForCurrentPrompt(changes: unknown): boolean {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return true;
+  const promptVersion = (changes as Record<string, unknown>).promptVersion;
+  return typeof promptVersion !== "string" || promptVersion === PROMPT_VERSION;
+}
+
 function getContextAttemptState(
   revisionId: string,
   attempts: Array<{ action: string; changes: unknown; entityId: string }>
@@ -101,12 +97,12 @@ function getContextAttemptState(
       continue;
     }
     if (attempt.action === INVALID_CONTEXT_RESULT_ACTION) {
-      invalidResults += 1;
+      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
       continue;
     }
     const outcome = readAuditOutcome(attempt.changes);
     if (outcome === "INVALID_GENERATED_CONTEXT") {
-      invalidResults += 1;
+      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
       continue;
     }
     // Old terminal rows without an outcome and explicit NO_USEFUL_CONTEXT results stay terminal.
@@ -258,7 +254,7 @@ function sanitizeSourceText(value: string): string {
 }
 
 const NUMERIC_TOKEN_PATTERN =
-  /(?<![\p{L}\p{N}_])[+\-\u2212]?(?:\d{1,3}(?:[\s\u00a0\u202f]\d{3})+|\d+)(?:[.,]\d+)?(?:[\s\u00a0\u202f]*(?:%|millions?|milliards?|euros?))?(?![\p{L}\p{N}_])/giu;
+  /(?<![\p{L}\p{N}_])[+\-\u2212]?(?:\d{1,3}(?:[\s\u00a0\u202f]\d{3})+|\d+)(?:[.,]\d+)?(?:[\s\u00a0\u202f]*(?:%|€|millions?|milliards?|euros?))?(?![\p{L}\p{N}_])/giu;
 
 function numericTokens(value: string): Set<string> {
   const tokens = value.match(NUMERIC_TOKEN_PATTERN);
@@ -269,6 +265,9 @@ function numericTokens(value: string): Set<string> {
         .replace(/\u2212/g, "-")
         .replace(/(?<=\d)[\s\u00a0\u202f](?=\d)/g, "")
         .replace(/[\s\u00a0\u202f]+/g, " ")
+        .replace(/[\s\u00a0\u202f]*(?:€|euros?)$/u, " euro")
+        .replace(/[\s\u00a0\u202f]+millions?$/u, " million")
+        .replace(/[\s\u00a0\u202f]+milliards?$/u, " milliard")
     )
   );
 }
@@ -367,14 +366,10 @@ function validateGeneratedContext(
   details: string;
   evidenceUnitIds: string[];
 } | null {
-  if (parsed.details === null) return null;
-  const details = normalizeGeneratedText(parsed.details);
-  const claimedText = normalizeGeneratedText(parsed.claims.map((claim) => claim.text).join(" "));
-  if (details !== claimedText) {
-    throw new MeasureValidationError(
-      "Le contexte généré contient du texte qui n'est rattaché à aucune preuve"
-    );
-  }
+  if (parsed.claims.length === 0) return null;
+  const details = generatedDetailsSchema.parse(
+    normalizeGeneratedText(parsed.claims.map((claim) => claim.text).join(" "))
+  );
 
   const unitsById = new Map(units.map((unit) => [unit.unitId, unit]));
   const allCitedIds = new Set<string>();
@@ -652,8 +647,7 @@ Règles :
 - ne répète pas simplement la formulation de la mesure ;
 - écris entre 40 et 120 mots, en français clair ;
 - découpe le texte en affirmations et rattache chaque affirmation uniquement aux unités qui la prouvent ;
-- la concaténation des champs text, dans leur ordre, doit être exactement égale à details ;
-- si les unités n'apportent aucun contexte distinct, renvoie details à null et claims à un tableau vide.
+- si les unités n'apportent aucun contexte distinct, renvoie claims à un tableau vide.
 
 <formulation>${sanitizeSourceText(revision.text)}</formulation>
 <preuves>
@@ -661,7 +655,7 @@ ${sourceUnits}
 </preuves>
 
 Réponds uniquement en JSON :
-{"details":"texte ou null","claims":[{"text":"affirmation","evidenceUnitIds":["identifiant"]}]}`;
+{"claims":[{"text":"affirmation","evidenceUnitIds":["identifiant"]}]}`;
 
   const maxAttempts = attemptState === "ONE_INVALID_RESULT" ? 1 : 2;
   let generated:
