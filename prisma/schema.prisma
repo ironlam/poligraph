@@ -2801,10 +2801,35 @@ model SearchDocument {
   indexedAt       DateTime @default(now())
   sourceUpdatedAt DateTime // the reference revision's updatedAt at indexing time
 
+  semanticEmbedding SearchEmbedding?
+
   @@unique([entityType, entityId])
   @@index([searchVector], type: Gin)
   @@index([visibility])
   @@index([electionId, visibility])
+}
+
+// Semantic vector derived from one SearchDocument. It is deliberately separate from the
+// historical ChatEmbedding RAG table: public election search has stricter visibility, freshness
+// and provider-version requirements. Prisma cannot read or write the vector itself, so the
+// embedding service owns that column through parameterized SQL.
+model SearchEmbedding {
+  id String @id @default(cuid())
+
+  searchDocumentId String         @unique
+  searchDocument   SearchDocument @relation(fields: [searchDocumentId], references: [id], onDelete: Cascade)
+
+  model           String
+  dimensions      Int
+  contentHash     String
+  sourceUpdatedAt DateTime
+  embedding       Unsupported("extensions.vector(1024)")
+
+  embeddedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([model, sourceUpdatedAt])
 }
 
 // ============================================

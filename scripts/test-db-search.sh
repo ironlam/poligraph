@@ -66,7 +66,7 @@ done
 
 echo "[test:db:search] engine + extensions"
 "${COMPOSE[@]}" exec -T db-search psql -U poligraph_test -d poligraph_test -c \
-  "SELECT current_setting('server_version') AS version, string_agg(extname, ',' ORDER BY extname) AS extensions FROM pg_extension WHERE extname = 'unaccent';"
+  "SELECT current_setting('server_version') AS version, string_agg(extname, ',' ORDER BY extname) AS extensions FROM pg_extension WHERE extname IN ('unaccent', 'vector');"
 
 echo "[test:db:search] prisma generate"
 npx prisma generate
