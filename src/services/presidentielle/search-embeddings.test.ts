@@ -69,6 +69,19 @@ describe("index sémantique présidentiel", () => {
     ).toBe("Encadrer les loyers dans les métropoles");
   });
 
+  it("préserve les termes structurés ajoutés après un corps long", () => {
+    const content = buildSearchEmbeddingContent(
+      "Encadrer les loyers",
+      `${"détail documentaire ".repeat(80)}\n\nGabriel Attal\n\nRenaissance\n\nLogement et urbanisme\n\nEncadrement des loyers`
+    );
+
+    expect(content).toContain("Gabriel Attal");
+    expect(content).toContain("Renaissance");
+    expect(content).toContain("Logement et urbanisme");
+    expect(content).toContain("Encadrement des loyers");
+    expect(content.length).toBeLessThanOrEqual(500);
+  });
+
   it("réordonne les vecteurs et refuse une dimension inattendue", () => {
     const first = Array(PRESIDENTIAL_SEARCH_EMBEDDING_DIMENSIONS).fill(0.1);
     const second = Array(PRESIDENTIAL_SEARCH_EMBEDDING_DIMENSIONS).fill(0.2);

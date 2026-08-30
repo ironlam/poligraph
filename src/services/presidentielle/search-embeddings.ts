@@ -5,6 +5,7 @@ import {
   PRESIDENTIAL_SEARCH_EMBEDDING_DIMENSIONS,
   PRESIDENTIAL_SEARCH_EMBEDDING_MAX_CHARACTERS,
   PRESIDENTIAL_SEARCH_EMBEDDING_MODEL,
+  PRESIDENTIAL_SEARCH_EMBEDDING_TAIL_CHARACTERS,
   PRESIDENTIAL_SEARCH_EMBEDDING_VERSION,
 } from "@/config/presidential-search-embedding";
 import { callMistralEmbeddings } from "@/lib/api/mistral";
@@ -64,7 +65,18 @@ export function buildSearchEmbeddingContent(title: string, body: string): string
   const content = normalizedBody.startsWith(normalizedTitle)
     ? normalizedBody
     : `${normalizedTitle} ${normalizedBody}`.trim();
-  return content.slice(0, PRESIDENTIAL_SEARCH_EMBEDDING_MAX_CHARACTERS).trim();
+  if (content.length <= PRESIDENTIAL_SEARCH_EMBEDDING_MAX_CHARACTERS) return content;
+
+  // Measure SearchDocuments append candidate, party, theme and approved subtopics after the
+  // formulation and details. Preserve that structured tail instead of letting a long detail field
+  // consume the whole embedding budget.
+  const prefixLength =
+    PRESIDENTIAL_SEARCH_EMBEDDING_MAX_CHARACTERS -
+    PRESIDENTIAL_SEARCH_EMBEDDING_TAIL_CHARACTERS -
+    1;
+  const prefix = content.slice(0, prefixLength).trimEnd();
+  const tail = content.slice(-PRESIDENTIAL_SEARCH_EMBEDDING_TAIL_CHARACTERS).trimStart();
+  return `${prefix} ${tail}`.trim();
 }
 
 export function hashSearchEmbeddingContent(content: string): string {
