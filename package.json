@@ -11,6 +11,7 @@
     "search:audit": "tsx scripts/search-audit.ts",
     "search:evaluate": "tsx --env-file=.env scripts/evaluate-presidential-search.ts",
     "search:reindex": "tsx --env-file=.env scripts/search-reindex.ts",
+    "search:embed": "tsx --env-file=.env scripts/search-embed.ts",
     "measures:migrate-promises": "tsx scripts/migrate-promises-to-measures.ts",
     "measures:extract-press": "tsx scripts/measures-extract-from-press.ts",
     "measures:import-programs": "tsx scripts/import-presidential-programs.ts",

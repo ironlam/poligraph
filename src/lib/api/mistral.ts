@@ -1,6 +1,7 @@
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 
 const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
+const MISTRAL_EMBEDDINGS_API_URL = "https://api.mistral.ai/v1/embeddings";
 
 function getApiKey(): string {
   const apiKey = process.env.MISTRAL_API_KEY;
@@ -28,6 +29,37 @@ export interface MistralResponse {
     finish_reason: string;
   }>;
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+export interface MistralEmbeddingResponse {
+  model: string;
+  data: Array<{ index: number; embedding: number[] }>;
+  usage?: { prompt_tokens: number; total_tokens: number };
+}
+
+export async function callMistralEmbeddings(
+  inputs: string[],
+  options: { model: string }
+): Promise<MistralEmbeddingResponse> {
+  if (inputs.length === 0) throw new Error("Mistral embeddings requires at least one input");
+
+  const response = await fetch(MISTRAL_EMBEDDINGS_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getApiKey()}`,
+    },
+    body: JSON.stringify({ model: options.model, input: inputs, encoding_format: "float" }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(`Mistral embeddings API error ${response.status}: ${errorText}`);
+  }
+
+  const json = (await response.json()) as MistralEmbeddingResponse;
+  if (json.usage?.total_tokens) _mistralTokensUsed += json.usage.total_tokens;
+  return json;
 }
 
 export async function callMistral(
