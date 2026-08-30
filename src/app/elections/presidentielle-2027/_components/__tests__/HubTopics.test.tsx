@@ -23,7 +23,7 @@ describe("HubTopics", () => {
     expect(screen.getByText("Santé")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Accès aux soins/ })).toHaveAttribute(
       "href",
-      "/elections/presidentielle-2027/recherche?q=Acc%C3%A8s+aux+soins"
+      "/elections/presidentielle-2027/recherche?sous-theme=acces-aux-soins"
     );
   });
 

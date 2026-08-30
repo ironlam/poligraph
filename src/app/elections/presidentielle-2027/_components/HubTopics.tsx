@@ -27,7 +27,7 @@ export function HubTopics({ subtopics }: { subtopics: FeaturedSubtopic[] }) {
             <Link
               href={{
                 pathname: "/elections/presidentielle-2027/recherche",
-                query: { q: subtopic.label },
+                query: { "sous-theme": subtopic.slug },
               }}
               prefetch={false}
               className={cn(

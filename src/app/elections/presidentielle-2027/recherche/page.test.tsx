@@ -42,7 +42,49 @@ describe("page complète de recherche présidentielle", () => {
       name: /Construire davantage de logements accessibles sur tout le territoire/,
     });
     expect(link).toHaveAttribute("href", "/elections/presidentielle-2027/mesures/m1");
-    expect(search).toHaveBeenCalledWith("presidentielle-2027", "logement", 50);
+    expect(search).toHaveBeenCalledWith("presidentielle-2027", "logement", 50, {
+      subtopicSlug: undefined,
+      page: 1,
+    });
+  });
+
+  it("transmet le slug validé et affiche la pagination d'un sous-thème", async () => {
+    search.mockResolvedValue({
+      query: "Accès aux soins",
+      total: 74,
+      subjects: [],
+      candidacies: [],
+      measures: [
+        {
+          type: "measure",
+          id: "m2",
+          text: "Ouvrir des centres de santé",
+          url: "/elections/presidentielle-2027/mesures/m2",
+          candidateName: "Camille Rivière",
+          theme: "SANTE",
+          precision: null,
+          sourceLabel: null,
+        },
+      ],
+      filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },
+      page: 1,
+      totalPages: 2,
+    });
+
+    render(
+      await PresidentialSearchPage({
+        searchParams: Promise.resolve({ "sous-theme": "acces-aux-soins" }),
+      })
+    );
+
+    expect(search).toHaveBeenCalledWith("presidentielle-2027", "", 50, {
+      subtopicSlug: "acces-aux-soins",
+      page: 1,
+    });
+    expect(screen.getByRole("link", { name: "Suivant" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/recherche?sous-theme=acces-aux-soins&page=2"
+    );
   });
 
   it("présente un thème comme un résultat sans message vide ni promesse de comparabilité", async () => {

@@ -7,6 +7,7 @@ import type {
   ThemeCategory,
 } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { listPublicPresidentialMeasures } from "@/lib/data/measures";
 import { searchPublicPage } from "@/lib/search/query";
 import { toPresidentialLexicalQuery } from "@/lib/presidentielle/natural-query";
 import {
@@ -57,6 +58,14 @@ export type PresidentialCorpusSearchResult = {
   subjects: PresidentialSubjectSearchResult[];
   candidacies: PresidentialCandidacySearchResult[];
   measures: PresidentialMeasureSearchResult[];
+  filter?: { type: "subtopic"; slug: string; label: string };
+  page?: number;
+  totalPages?: number;
+};
+
+export type PresidentialCorpusSearchOptions = {
+  subtopicSlug?: string;
+  page?: number;
 };
 
 function clampLimit(limit: number): number {
@@ -72,7 +81,8 @@ function clampLimit(limit: number): number {
 export async function searchPresidentialCorpus(
   electionSlug: string,
   rawQuery: string,
-  limit = 12
+  limit = 12,
+  options: PresidentialCorpusSearchOptions = {}
 ): Promise<PresidentialCorpusSearchResult | null> {
   const query = rawQuery.trim().slice(0, 200);
   const election = await db.election.findUnique({
@@ -80,6 +90,60 @@ export async function searchPresidentialCorpus(
     select: { id: true, slug: true },
   });
   if (election === null) return null;
+
+  const subtopicSlug = options.subtopicSlug?.trim().slice(0, 100);
+  if (subtopicSlug) {
+    const subtopic = await db.measureSubtopic.findUnique({
+      where: { slug: subtopicSlug },
+      select: { slug: true, label: true, active: true },
+    });
+    if (subtopic === null || !subtopic.active) {
+      return { query: "", total: 0, subjects: [], candidacies: [], measures: [] };
+    }
+
+    let page = Math.min(Math.max(Math.trunc(options.page ?? 1), 1), 1_000);
+    const pageSize = clampLimit(limit);
+    let measurePage = await listPublicPresidentialMeasures({
+      electionId: election.id,
+      electionSlug: election.slug,
+      subtopicSlug: subtopic.slug,
+      page,
+      limit: pageSize,
+    });
+    const totalPages = Math.max(1, Math.ceil(measurePage.total / pageSize));
+    if (page > totalPages) {
+      page = totalPages;
+      measurePage = await listPublicPresidentialMeasures({
+        electionId: election.id,
+        electionSlug: election.slug,
+        subtopicSlug: subtopic.slug,
+        page,
+        limit: pageSize,
+      });
+    }
+    const measures: PresidentialMeasureSearchResult[] = measurePage.data.map((measure) => ({
+      type: "measure",
+      id: measure.measureId,
+      text: measure.text,
+      url: measure.publicUrl,
+      candidateName: measure.candidacy.candidateName,
+      theme: measure.theme.code,
+      precision: measure.precision.code,
+      sourceLabel: measure.sources[0]?.sourceKind ?? null,
+    }));
+
+    return {
+      query: subtopic.label,
+      total: measurePage.total,
+      subjects: [],
+      candidacies: [],
+      measures,
+      filter: { type: "subtopic", slug: subtopic.slug, label: subtopic.label },
+      page,
+      totalPages,
+    };
+  }
+
   if (query.length < 2) {
     return { query, total: 0, subjects: [], candidacies: [], measures: [] };
   }

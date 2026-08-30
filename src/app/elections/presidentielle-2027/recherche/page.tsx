@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { SimplePagination } from "@/components/ui/SimplePagination";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import {
   CANDIDACY_STATUS_LABELS,
@@ -23,13 +24,29 @@ export const metadata: Metadata = {
 export default async function PresidentialSearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    "sous-theme"?: string | string[];
+    page?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const raw = Array.isArray(params.q) ? params.q[0] : params.q;
   const query = raw?.trim().slice(0, 200) ?? "";
-  const result = await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50);
+  const rawSubtopic = Array.isArray(params["sous-theme"])
+    ? params["sous-theme"][0]
+    : params["sous-theme"];
+  const subtopicSlug = rawSubtopic?.trim().slice(0, 100) || undefined;
+  const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
+  const parsedPage = Number.parseInt(rawPage ?? "1", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const result = await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50, {
+    subtopicSlug,
+    page,
+  });
   const hasResults = result !== null && result.total > 0;
+  const hasSearch = query.length >= 2 || subtopicSlug !== undefined;
+  const resultLabel = result?.query || query;
 
   return (
     <main className="container mx-auto px-4 pb-12 pt-4">
@@ -72,14 +89,16 @@ export default async function PresidentialSearchPage({
           </button>
         </form>
 
-        {query.length < 2 ? (
+        {!hasSearch ? (
           <p className="mt-10 text-muted-foreground">
             Saisissez au moins deux caractères pour rechercher dans le corpus public.
           </p>
         ) : !hasResults ? (
           <section className="mt-10 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-display text-2xl font-extrabold">
-              Aucun résultat pour « {query} »
+              {subtopicSlug
+                ? "Aucune mesure publiée dans ce sous-thème"
+                : `Aucun résultat pour « ${resultLabel} »`}
             </h2>
             <p className="mt-3 text-muted-foreground">
               Le corpus public de Poligraph ne contient, à ce jour, aucune mesure publiée ni
@@ -187,6 +206,17 @@ export default async function PresidentialSearchPage({
                   })}
                 </ul>
               </section>
+            )}
+            {result.filter?.type === "subtopic" && result.page && result.totalPages && (
+              <SimplePagination
+                page={result.page}
+                totalPages={result.totalPages}
+                buildUrl={(targetPage) => {
+                  const search = new URLSearchParams({ "sous-theme": result.filter!.slug });
+                  if (targetPage > 1) search.set("page", String(targetPage));
+                  return `${PAGE_PATH}?${search.toString()}`;
+                }}
+              />
             )}
           </div>
         )}
