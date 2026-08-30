@@ -13,6 +13,7 @@ function measure(id: string, overrides: Partial<DeltaMeasureInput> = {}): DeltaM
   return {
     measureId: id,
     revisionId: `revision-${id}`,
+    sourceUpdatedAt: "2026-08-30T00:00:00.000Z",
     candidateName: "Candidate Exemple",
     theme: "SOCIETE_DROITS_LIBERTES",
     text: "Une mesure sans terme particulier.",

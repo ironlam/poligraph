@@ -11,6 +11,7 @@ export type DeltaExistingAssignment = {
 export type DeltaMeasureInput = {
   measureId: string;
   revisionId: string;
+  sourceUpdatedAt: string;
   candidateName: string;
   theme: ThemeCategory;
   text: string;
