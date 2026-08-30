@@ -29,7 +29,7 @@ vi.mock("@/lib/db", () => ({
           findUniqueOrThrow: mocks.findMeasureForUpdate,
           update: mocks.updateMeasure,
         },
-        auditLog: { create: mocks.createAuditLog },
+        auditLog: { create: mocks.createAuditLog, findMany: mocks.findAuditLogs },
       })
     ),
   },
@@ -313,7 +313,7 @@ describe("génération de contexte sourcé", () => {
     const { generateMeasureContextDraft } = await import("../context-generation");
 
     await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
-      "écrire les quantités sourcées en chiffres"
+      "quantité absente de la preuve citée"
     );
   });
 
@@ -328,7 +328,23 @@ describe("génération de contexte sourcé", () => {
       const { generateMeasureContextDraft } = await import("../context-generation");
 
       await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
-        "écrire les quantités sourcées en chiffres"
+        "quantité absente de la preuve citée"
+      );
+    }
+  );
+
+  it.each(["aucun logement", "un bénéficiaire", "une première phase", "un tiers des Français"])(
+    "refuse la quantité non sourcée « %s »",
+    async (quantity) => {
+      mocks.parseMistralJSON.mockReturnValue(
+        generatedContext(
+          `Le programme rattache cette proposition à ${quantity} dans les territoires concernés et la présente comme un élément de contexte distinct.`
+        )
+      );
+      const { generateMeasureContextDraft } = await import("../context-generation");
+
+      await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
+        "quantité absente de la preuve citée"
       );
     }
   );
@@ -559,6 +575,48 @@ describe("génération de contexte sourcé", () => {
     const { filterMeasureContextCandidateIds } = await import("../context-generation");
 
     await expect(filterMeasureContextCandidateIds(["measure-exhausted"])).resolves.toEqual([]);
+  });
+
+  it("exclut temporairement une révision réservée par une autre génération", async () => {
+    const candidate = {
+      id: "measure-reserved",
+      latestRevisionId: "revision-reserved",
+      publishedRevisionId: "revision-reserved",
+      publishedRevision: { evidenceSnapshot: validEvidenceSnapshot() },
+    };
+    mocks.findMeasures.mockResolvedValue([candidate]);
+    mocks.findAuditLogs.mockResolvedValue([
+      {
+        action: "RESERVE_CONTEXT_GENERATION",
+        changes: { expiresAt: "2999-01-01T00:00:00.000Z" },
+        entityId: "revision-reserved",
+      },
+    ]);
+    const { filterMeasureContextCandidateIds } = await import("../context-generation");
+
+    await expect(filterMeasureContextCandidateIds(["measure-reserved"])).resolves.toEqual([]);
+  });
+
+  it("réautorise une génération dont la réservation a expiré", async () => {
+    const candidate = {
+      id: "measure-expired",
+      latestRevisionId: "revision-expired",
+      publishedRevisionId: "revision-expired",
+      publishedRevision: { evidenceSnapshot: validEvidenceSnapshot() },
+    };
+    mocks.findMeasures.mockResolvedValue([candidate]);
+    mocks.findAuditLogs.mockResolvedValue([
+      {
+        action: "RESERVE_CONTEXT_GENERATION",
+        changes: { expiresAt: "2020-01-01T00:00:00.000Z" },
+        entityId: "revision-expired",
+      },
+    ]);
+    const { filterMeasureContextCandidateIds } = await import("../context-generation");
+
+    await expect(filterMeasureContextCandidateIds(["measure-expired"])).resolves.toEqual([
+      "measure-expired",
+    ]);
   });
 
   it("réautorise une nouvelle révision publiée après un ancien contexte généré", async () => {

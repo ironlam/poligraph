@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { db } from "@/lib/db";
@@ -10,7 +11,9 @@ const MODEL = "mistral-small-latest";
 const PROMPT_VERSION = "measure-context-v7";
 const TERMINAL_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_TERMINAL_RESULT";
 const INVALID_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_INVALID_RESULT";
+const RESERVED_CONTEXT_GENERATION_ACTION = "RESERVE_CONTEXT_GENERATION";
 const GENERATED_CONTEXT_DRAFT_ACTION = "GENERATE_CONTEXT_DRAFT";
+const CONTEXT_GENERATION_LEASE_MS = 15 * 60 * 1_000;
 const MIN_DETAILS_LENGTH = 80;
 const MAX_DETAILS_LENGTH = 1_000;
 
@@ -20,6 +23,8 @@ const generatedContextClaimSchema = z
     evidenceUnitIds: z.array(z.string().min(1)).max(8),
   })
   .strict();
+
+type GeneratedContextClaim = z.infer<typeof generatedContextClaimSchema>;
 
 const generatedContextSchema = z
   .object({
@@ -71,7 +76,7 @@ function getGeneratedContextSourceRevisionId(changes: unknown): string | null {
   return typeof previousRevisionId === "string" ? previousRevisionId : null;
 }
 
-type ContextAttemptState = "AVAILABLE" | "ONE_INVALID_RESULT" | "TERMINAL";
+type ContextAttemptState = "AVAILABLE" | "ONE_INVALID_RESULT" | "IN_PROGRESS" | "TERMINAL";
 
 function readAuditOutcome(changes: unknown): string | null {
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) return null;
@@ -84,12 +89,22 @@ function getContextAttemptState(
   attempts: Array<{ action: string; changes: unknown; entityId: string }>
 ): ContextAttemptState {
   let invalidResults = 0;
+  let hasActiveReservation = false;
   for (const attempt of attempts) {
     if (attempt.action === GENERATED_CONTEXT_DRAFT_ACTION) {
       if (getGeneratedContextSourceRevisionId(attempt.changes) === revisionId) return "TERMINAL";
       continue;
     }
     if (attempt.entityId !== revisionId) continue;
+    if (attempt.action === RESERVED_CONTEXT_GENERATION_ACTION) {
+      const changes =
+        attempt.changes && typeof attempt.changes === "object" && !Array.isArray(attempt.changes)
+          ? (attempt.changes as Record<string, unknown>)
+          : null;
+      const expiresAt = typeof changes?.expiresAt === "string" ? Date.parse(changes.expiresAt) : 0;
+      if (Number.isFinite(expiresAt) && expiresAt > Date.now()) hasActiveReservation = true;
+      continue;
+    }
     if (attempt.action === INVALID_CONTEXT_RESULT_ACTION) {
       invalidResults += 1;
       continue;
@@ -103,6 +118,7 @@ function getContextAttemptState(
     return "TERMINAL";
   }
   if (invalidResults >= 2) return "TERMINAL";
+  if (hasActiveReservation) return "IN_PROGRESS";
   return invalidResults === 1 ? "ONE_INVALID_RESULT" : "AVAILABLE";
 }
 
@@ -113,7 +129,13 @@ async function findContextAttempts(revisionIds: string[]) {
       entityType: "MeasureRevision",
       OR: [
         {
-          action: { in: [TERMINAL_CONTEXT_RESULT_ACTION, INVALID_CONTEXT_RESULT_ACTION] },
+          action: {
+            in: [
+              TERMINAL_CONTEXT_RESULT_ACTION,
+              INVALID_CONTEXT_RESULT_ACTION,
+              RESERVED_CONTEXT_GENERATION_ACTION,
+            ],
+          },
           entityId: { in: revisionIds },
         },
         ...revisionIds.map((revisionId) => ({
@@ -129,7 +151,8 @@ async function findContextAttempts(revisionIds: string[]) {
 export async function hasContextAttemptForRevision(revisionId: string | null): Promise<boolean> {
   if (!revisionId) return false;
   const attempts = await findContextAttempts([revisionId]);
-  return getContextAttemptState(revisionId, attempts) === "TERMINAL";
+  const state = getContextAttemptState(revisionId, attempts);
+  return state === "TERMINAL" || state === "IN_PROGRESS";
 }
 
 function isEligibleContextCandidate(
@@ -147,7 +170,10 @@ function isEligibleContextCandidate(
 async function getAttemptedContextRevisionIds(revisionIds: string[]): Promise<Set<string>> {
   const attempts = await findContextAttempts(revisionIds);
   return new Set(
-    revisionIds.filter((revisionId) => getContextAttemptState(revisionId, attempts) === "TERMINAL")
+    revisionIds.filter((revisionId) => {
+      const state = getContextAttemptState(revisionId, attempts);
+      return state === "TERMINAL" || state === "IN_PROGRESS";
+    })
   );
 }
 
@@ -252,24 +278,65 @@ function numericTokens(value: string): Set<string> {
 }
 
 const SPELLED_OUT_QUANTITY_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:zéro|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingts?|trente|quarante|cinquante|soixante|cents?|mille|milliers?|millions?|milliards?|dizaines?|douzaines?|quinzaines?|vingtaines?|trentaines?|quarantaines?|cinquantaines?|soixantaines?|centaines?|plusieurs|quelques|majorité|minorité|moitié|quarts?|doubles?|triples?|quadruples?|pour[\s\u00a0\u202f]+cent)(?![\p{L}\p{N}_])/iu;
+  /(?<![\p{L}\p{N}_])(?:zéro|aucun|aucune|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingts?|trente|quarante|cinquante|soixante|cents?|mille|milliers?|millions?|milliards?|dizaines?|douzaines?|quinzaines?|vingtaines?|trentaines?|quarantaines?|cinquantaines?|soixantaines?|centaines?|plusieurs|quelques|majorité|minorité|moitié|quarts?|doubles?|triples?|quadruples?|pour[\s\u00a0\u202f]+cent)(?![\p{L}\p{N}_])/giu;
+
+const CONTEXTUAL_SINGULAR_QUANTITY_PATTERN =
+  /(?<![\p{L}\p{N}_])(?:un|une)[\s\u00a0\u202f]+(?:bénéficiaire|personne|emploi|poste|euro|logement|place|année|mois|jour|heure|établissement|entreprise|agent|salarié|fonctionnaire|famille|ménage|enfant|élève|étudiant|enseignant|médecin|lit)(?:e|s|es)?(?![\p{L}\p{N}_])/giu;
+
+const SPELLED_OUT_ORDINAL_PATTERN =
+  /(?<![\p{L}\p{N}_])(?:premi(?:er|ère|ers|ères)|seconds?|secondes?|deuxièmes?|troisièmes?|quatrièmes?|cinquièmes?|sixièmes?|septièmes?|huitièmes?|neuvièmes?|dixièmes?|onzièmes?|douzièmes?|treizièmes?|quatorzièmes?|quinzièmes?|seizièmes?|vingtièmes?|centièmes?|millièmes?)(?![\p{L}\p{N}_])/giu;
+
+const FRACTIONAL_TIER_PATTERN =
+  /(?<![\p{L}\p{N}_])(?:un|deux|le)[\s\u00a0\u202f]+tiers?(?:[\s\u00a0\u202f]+)(?:des|du|de[\s\u00a0\u202f]+la|de[\s\u00a0\u202f]+l[’'])(?![\p{L}\p{N}_])/giu;
+
+function normalizeEvidenceText(value: string): string {
+  return value
+    .toLocaleLowerCase("fr")
+    .replace(/[’']/g, "'")
+    .replace(/[\s\u00a0\u202f]+/g, " ")
+    .trim();
+}
+
+function assertGroundedLexicalQuantities(text: string, citedEvidenceText: string): void {
+  const normalizedEvidence = normalizeEvidenceText(citedEvidenceText);
+  const textWithoutMinisterialTitle = text.replace(
+    /(?<![\p{L}\p{N}_])premi(?:er|ère)[\s\u00a0\u202f]+ministre(?![\p{L}\p{N}_])/giu,
+    ""
+  );
+  const matches = [
+    ...(textWithoutMinisterialTitle.match(SPELLED_OUT_QUANTITY_PATTERN) ?? []),
+    ...(text.match(CONTEXTUAL_SINGULAR_QUANTITY_PATTERN) ?? []),
+    ...(textWithoutMinisterialTitle.match(SPELLED_OUT_ORDINAL_PATTERN) ?? []),
+    ...(text.match(FRACTIONAL_TIER_PATTERN) ?? []),
+  ];
+  for (const match of matches) {
+    if (!normalizedEvidence.includes(normalizeEvidenceText(match))) {
+      throw new MeasureValidationError(
+        `Le contexte généré contient une quantité absente de la preuve citée : ${match}`
+      );
+    }
+  }
+}
 
 function assertGroundedNumbers(
   text: string,
-  citedUnits: Array<{ numbers: Array<{ raw: string; normalized: string; role: string }> }>
+  citedUnits: Array<{
+    numbers: Array<{ raw: string; normalized: string; role: string }>;
+    rawExactText: string;
+  }>
 ): void {
   const textWithoutNumericTokens = text.replace(NUMERIC_TOKEN_PATTERN, "");
-  if (SPELLED_OUT_QUANTITY_PATTERN.test(textWithoutNumericTokens)) {
-    throw new MeasureValidationError(
-      "Le contexte généré doit écrire les quantités sourcées en chiffres"
-    );
-  }
+  const citedEvidenceText = citedUnits.map((unit) => unit.rawExactText).join(" ");
+  assertGroundedLexicalQuantities(textWithoutNumericTokens, citedEvidenceText);
   const allowedNumbers = new Set<string>();
   for (const unit of citedUnits) {
+    const sourceTokens = numericTokens(unit.rawExactText);
     for (const number of unit.numbers) {
       if (number.role !== "CONTENT") continue;
-      for (const token of numericTokens(`${number.raw} ${number.normalized}`)) {
-        allowedNumbers.add(token);
+      const normalizedNumber = number.normalized.replace(",", ".");
+      for (const token of sourceTokens) {
+        const tokenNumber = token.match(/[\d.,]+/u)?.[0]?.replace(",", ".");
+        if (tokenNumber === normalizedNumber) allowedNumbers.add(token);
       }
     }
   }
@@ -291,10 +358,11 @@ function validateGeneratedContext(
   units: Array<{
     unitId: string;
     numbers: Array<{ raw: string; normalized: string; role: string }>;
+    rawExactText: string;
   }>,
   supportingIds: ReadonlySet<string>
 ): {
-  claims: Array<{ text: string; evidenceUnitIds: string[] }>;
+  claims: GeneratedContextClaim[];
   details: string;
   evidenceUnitIds: string[];
 } | null {
@@ -360,6 +428,78 @@ async function recordInvalidContextResult(input: {
       ipAddress: input.ipAddress,
       userAgent: input.userAgent,
     },
+  });
+}
+
+async function reserveContextGeneration(input: {
+  expectedUpdatedAt: Date;
+  generatedBy: string;
+  ipAddress: string;
+  measureId: string;
+  revisionId: string;
+  userAgent: string;
+}): Promise<Exclude<ContextAttemptState, "IN_PROGRESS" | "TERMINAL"> | null> {
+  return db.$transaction(async (tx) => {
+    await lockMeasure(tx, input.measureId);
+    const currentMeasure = await tx.measure.findUniqueOrThrow({
+      where: { id: input.measureId },
+      select: { latestRevisionId: true, publishedRevisionId: true, updatedAt: true },
+    });
+    if (currentMeasure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
+      throw new MeasureConcurrencyError(
+        input.measureId,
+        input.expectedUpdatedAt,
+        currentMeasure.updatedAt
+      );
+    }
+    if (
+      currentMeasure.latestRevisionId !== input.revisionId ||
+      currentMeasure.publishedRevisionId !== input.revisionId
+    ) {
+      throw new MeasureValidationError("La révision publiée a changé avant la génération");
+    }
+    const attempts = await tx.auditLog.findMany({
+      where: {
+        entityType: "MeasureRevision",
+        OR: [
+          {
+            action: {
+              in: [
+                TERMINAL_CONTEXT_RESULT_ACTION,
+                INVALID_CONTEXT_RESULT_ACTION,
+                RESERVED_CONTEXT_GENERATION_ACTION,
+              ],
+            },
+            entityId: input.revisionId,
+          },
+          {
+            action: GENERATED_CONTEXT_DRAFT_ACTION,
+            changes: { path: ["previousRevisionId"], equals: input.revisionId },
+          },
+        ],
+      },
+      select: { action: true, changes: true, entityId: true },
+    });
+    const state = getContextAttemptState(input.revisionId, attempts);
+    if (state === "TERMINAL" || state === "IN_PROGRESS") return null;
+    const now = new Date();
+    await tx.auditLog.create({
+      data: {
+        action: RESERVED_CONTEXT_GENERATION_ACTION,
+        entityType: "MeasureRevision",
+        entityId: input.revisionId,
+        changes: {
+          measureId: input.measureId,
+          runId: randomUUID(),
+          expiresAt: new Date(now.getTime() + CONTEXT_GENERATION_LEASE_MS).toISOString(),
+          promptVersion: PROMPT_VERSION,
+        },
+        userId: input.generatedBy,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      },
+    });
+    return state;
   });
 }
 
@@ -467,12 +607,6 @@ export async function generateMeasureContextDraft(
   if (measure.latestRevisionId !== measure.publishedRevisionId) {
     return { status: "SKIPPED", reason: "ACTIVE_DRAFT" };
   }
-  const previousAttempts = await findContextAttempts([revision.id]);
-  const attemptState = getContextAttemptState(revision.id, previousAttempts);
-  if (attemptState === "TERMINAL") {
-    return { status: "SKIPPED", reason: "PREVIOUS_CONTEXT_ATTEMPT" };
-  }
-
   const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
   if (evidence.status !== "VALID") {
     return { status: "SKIPPED", reason: "NO_VALID_EVIDENCE" };
@@ -483,6 +617,17 @@ export async function generateMeasureContextDraft(
   );
   if (supportingIds.size === 0 || !units.some((unit) => supportingIds.has(unit.unitId))) {
     return { status: "SKIPPED", reason: "NO_SUPPORTING_CONTEXT" };
+  }
+  const attemptState = await reserveContextGeneration({
+    expectedUpdatedAt: options.expectedUpdatedAt ?? measure.updatedAt,
+    generatedBy: options.generatedBy ?? "system",
+    ipAddress: options.ipAddress ?? "unknown",
+    measureId,
+    revisionId: revision.id,
+    userAgent: options.userAgent ?? "unknown",
+  });
+  if (attemptState === null) {
+    return { status: "SKIPPED", reason: "PREVIOUS_CONTEXT_ATTEMPT" };
   }
 
   const sourceUnits = units
@@ -520,7 +665,7 @@ Réponds uniquement en JSON :
   const maxAttempts = attemptState === "ONE_INVALID_RESULT" ? 1 : 2;
   let generated:
     | {
-        claims: Array<{ text: string; evidenceUnitIds: string[] }>;
+        claims: GeneratedContextClaim[];
         details: string;
         evidenceUnitIds: string[];
         model: string;

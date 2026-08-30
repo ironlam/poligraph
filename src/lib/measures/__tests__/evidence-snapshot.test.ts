@@ -102,7 +102,7 @@ describe("EvidenceSnapshotV3 persistant", () => {
     expect(unit.rawExactText).not.toBe(unit.canonicalText);
     expect(unit.numbers).toEqual([
       { raw: "2", normalized: "2", role: "STRUCTURAL" },
-      { raw: "67 millions", normalized: "67000000", role: "CONTENT" },
+      { raw: "67", normalized: "67", role: "CONTENT" },
     ]);
   });
 });

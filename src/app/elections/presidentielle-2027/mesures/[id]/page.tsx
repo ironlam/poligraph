@@ -134,6 +134,14 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             <MarkdownText className="mt-4 max-w-[72ch] leading-relaxed text-foreground">
               {measure.details}
             </MarkdownText>
+            {measure.sources.length > 0 && (
+              <Link
+                href="#sources"
+                className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                Voir les sources utilisées pour ce contexte
+              </Link>
+            )}
           </section>
         )}
 
@@ -282,7 +290,11 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           </section>
         )}
 
-        <section aria-labelledby="sources-title" className="border-t border-border py-8">
+        <section
+          id="sources"
+          aria-labelledby="sources-title"
+          className="border-t border-border py-8"
+        >
           <h2 id="sources-title" className="font-display text-2xl font-extrabold">
             Sources
           </h2>

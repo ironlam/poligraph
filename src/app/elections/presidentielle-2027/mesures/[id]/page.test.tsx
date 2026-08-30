@@ -73,6 +73,9 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(screen.getByText("Source primaire")).toBeInTheDocument();
     expect(screen.getByText("Programme de candidature")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ce que prévoit la mesure" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Voir les sources utilisées pour ce contexte" })
+    ).toHaveAttribute("href", "#sources");
     expect(screen.getByRole("heading", { name: "Dans le programme" })).toBeInTheDocument();
     expect(screen.getByText("Formulée personnellement")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Consulter le programme/ })).toHaveAttribute(
