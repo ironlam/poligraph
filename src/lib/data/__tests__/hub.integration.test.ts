@@ -186,7 +186,7 @@ describeIfDisposableDb("hub", () => {
       expect(context.featuredSubtopics).toContainEqual({
         slug: `${SLUG}-acces-logement`,
         label: "Accès au logement",
-        theme: THEME_LOGEMENT,
+        theme: "LOGEMENT_URBANISME",
         themeLabel: "Logement et urbanisme",
         measureCount: 2,
         candidacyCount: 2,
