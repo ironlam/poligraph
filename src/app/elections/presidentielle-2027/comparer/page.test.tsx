@@ -31,7 +31,7 @@ describe("comparaison présidentielle", () => {
               slug: "ouvrir-un-centre",
               text: "Ouvrir un centre de santé.",
               sourceUrl: "https://example.org/source",
-              subtopics: [],
+              subtopics: [{ slug: "acces-aux-soins", label: "Accès aux soins" }],
               precision: "CHIFFREE",
               qualifications: [{ id: "q1", label: "Financement précisé" }],
               withdrawal: null,
@@ -64,6 +64,10 @@ describe("comparaison présidentielle", () => {
     expect(screen.getByText("Ouvrir un centre de santé.")).toBeInTheDocument();
     expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
     expect(screen.getByText("Financement précisé")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Accès aux soins" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/recherche?sous-theme=acces-aux-soins"
+    );
     expect(screen.getByText(/Poligraph n'a pas encore trouvé ou traité/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Voir la mesure" })).toHaveAttribute(
       "href",

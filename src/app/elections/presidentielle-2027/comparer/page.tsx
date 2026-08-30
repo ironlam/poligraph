@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { getPresidentialComparison } from "@/lib/data/presidential-comparison";
 import { cn, formatDate } from "@/lib/utils";
 import { PresidentialHubNav } from "../_components/PresidentialHubNav";
+import { PresidentialSubtopicLink } from "../_components/PresidentialSubtopicLink";
 
 const ELECTION_SLUG = "presidentielle-2027";
 const COMPARISON_PATH = `/elections/${ELECTION_SLUG}/comparer`;
@@ -268,11 +269,11 @@ export default async function PresidentialComparisonPage({
                             {measure.subtopics.length > 0 && (
                               <ul aria-label="Sous-thèmes" className="mt-3 flex flex-wrap gap-1.5">
                                 {measure.subtopics.map((subtopic) => (
-                                  <li
-                                    key={subtopic.slug}
-                                    className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs"
-                                  >
-                                    {subtopic.label}
+                                  <li key={subtopic.slug}>
+                                    <PresidentialSubtopicLink
+                                      slug={subtopic.slug}
+                                      label={subtopic.label}
+                                    />
                                   </li>
                                 ))}
                               </ul>

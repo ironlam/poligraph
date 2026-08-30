@@ -66,7 +66,7 @@ describe("page des mesures d'une candidature", () => {
             label: "Logement & Urbanisme",
           },
           sources: [{ url: "https://example.org/programme.pdf" }],
-          subtopics: [],
+          subtopics: [{ slug: "encadrement-loyers", label: "Encadrement des loyers" }],
         },
       ],
     });
@@ -164,6 +164,10 @@ describe("page des mesures d'une candidature", () => {
     expect(screen.getByRole("link", { name: /source externe de la mesure/i })).toHaveAttribute(
       "rel",
       expect.stringContaining("noopener")
+    );
+    expect(screen.getByRole("link", { name: "Encadrement des loyers" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/candidats/camille-riviere/mesures?theme=logement-urbanisme&sous-theme=encadrement-loyers"
     );
   });
 
