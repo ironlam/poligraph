@@ -3,6 +3,7 @@ import type { ThemeCategory } from "@/generated/prisma";
 export type PresidentialSearchExpectation =
   | { kind: "theme"; theme: ThemeCategory }
   | { kind: "candidacy"; name: string }
+  | { kind: "candidate-theme"; name: string; theme: ThemeCategory }
   | { kind: "none" };
 
 export type PresidentialSearchEvaluationCase = {
@@ -126,14 +127,45 @@ export const PRESIDENTIAL_SEARCH_EVALUATION_CASES: readonly PresidentialSearchEv
   ),
 
   candidacy("candidate-arthaud", "Nathalie Arthaud", "Nathalie Arthaud"),
-  candidacy("candidate-attal", "Gabriel Attal", "Gabriel Attal"),
+  {
+    id: "candidate-theme-attal-logement",
+    category: "candidate",
+    query: "Que propose Gabriel Attal sur le logement ?",
+    expectations: [{ kind: "candidate-theme", name: "Gabriel Attal", theme: "LOGEMENT_URBANISME" }],
+  },
   candidacy("candidate-cazeneuve", "Bernard Cazeneuve", "Bernard Cazeneuve"),
   candidacy("candidate-lisnard", "David Lisnard", "David Lisnard"),
-  candidacy("candidate-le-pen", "Marine Le Pen", "Marine Le Pen"),
-  candidacy("candidate-melenchon", "Jean-Luc Mélenchon", "Jean-Luc Mélenchon"),
-  candidacy("candidate-philippe", "Édouard Philippe", "Édouard Philippe"),
+  {
+    id: "candidate-theme-le-pen-immigration",
+    category: "candidate",
+    query: "Que propose Marine Le Pen sur l'immigration ?",
+    expectations: [{ kind: "candidate-theme", name: "Marine Le Pen", theme: "IMMIGRATION" }],
+  },
+  {
+    id: "candidate-theme-melenchon-retraites",
+    category: "candidate",
+    query: "Que propose Jean-Luc Mélenchon sur les retraites ?",
+    expectations: [{ kind: "candidate-theme", name: "Jean-Luc Mélenchon", theme: "RETRAITES" }],
+  },
+  {
+    id: "candidate-theme-philippe-economie",
+    category: "candidate",
+    query: "Que propose Édouard Philippe pour l'économie ?",
+    expectations: [{ kind: "candidate-theme", name: "Édouard Philippe", theme: "ECONOMIE_BUDGET" }],
+  },
   candidacy("candidate-retailleau", "Bruno Retailleau", "Bruno Retailleau"),
-  candidacy("candidate-tondelier", "Marine Tondelier", "Marine Tondelier"),
+  {
+    id: "candidate-theme-tondelier-environnement",
+    category: "candidate",
+    query: "Que propose Marine Tondelier sur l'environnement ?",
+    expectations: [
+      {
+        kind: "candidate-theme",
+        name: "Marine Tondelier",
+        theme: "ENVIRONNEMENT_ENERGIE",
+      },
+    ],
+  },
   candidacy("candidate-asselineau", "François Asselineau", "François Asselineau"),
 
   theme("approximate-loge", "approximate", "loge", "LOGEMENT_URBANISME"),

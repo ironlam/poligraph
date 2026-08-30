@@ -17,8 +17,8 @@ export type PresidentialSearchCaseEvaluation = {
   total: number;
   returned: number;
   relevantInTopK: number;
-  recallAtK: number;
-  precisionAtK: number;
+  recallAtK: number | null;
+  precisionAtK: number | null;
   passed: boolean;
   expectations: PresidentialSearchExpectation[];
   topResults: RankedResult[];
@@ -77,6 +77,13 @@ function matches(expectation: PresidentialSearchExpectation, result: RankedResul
       (result.kind === "measure" && result.theme === expectation.theme)
     );
   }
+  if (expectation.kind === "candidate-theme") {
+    return (
+      result.kind === "measure" &&
+      result.theme === expectation.theme &&
+      normalize(result.candidateName) === normalize(expectation.name)
+    );
+  }
   return (
     (result.kind === "candidacy" && normalize(result.name) === normalize(expectation.name)) ||
     (result.kind === "measure" && normalize(result.candidateName) === normalize(expectation.name))
@@ -104,11 +111,9 @@ export function evaluatePresidentialSearchCase(input: {
     positiveExpectations.some((expectation) => matches(expectation, result))
   ).length;
   const recallAtK = expectsNone
-    ? Number(ranked.length === 0)
+    ? null
     : matchedExpectations / Math.max(positiveExpectations.length, 1);
-  const precisionAtK = expectsNone
-    ? Number(ranked.length === 0)
-    : relevantInTopK / Math.max(topResults.length, 1);
+  const precisionAtK = expectsNone ? null : relevantInTopK / input.topK;
 
   return {
     id: input.testCase.id,
@@ -144,6 +149,12 @@ export function buildPresidentialSearchEvaluationReport(input: {
   generatedAt?: Date;
 }): PresidentialSearchEvaluationReport {
   const negatives = input.cases.filter((item) => item.category === "negative");
+  const positiveRecall = input.cases.flatMap((item) =>
+    item.recallAtK === null ? [] : [item.recallAtK]
+  );
+  const positivePrecision = input.cases.flatMap((item) =>
+    item.precisionAtK === null ? [] : [item.precisionAtK]
+  );
   return {
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     electionSlug: input.electionSlug,
@@ -151,8 +162,8 @@ export function buildPresidentialSearchEvaluationReport(input: {
     topK: input.topK,
     queryCount: input.cases.length,
     metrics: {
-      recallAtK: average(input.cases.map((item) => item.recallAtK)),
-      precisionAtK: average(input.cases.map((item) => item.precisionAtK)),
+      recallAtK: average(positiveRecall),
+      precisionAtK: average(positivePrecision),
       zeroResultRate:
         input.cases.filter((item) => item.returned === 0).length / Math.max(input.cases.length, 1),
       negativeFalsePositiveRate:

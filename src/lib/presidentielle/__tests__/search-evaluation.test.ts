@@ -45,7 +45,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 1 });
+    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 0.4 });
   });
 
   it("signale un faux positif sur une requête négative", () => {
@@ -65,7 +65,39 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, precisionAtK: 0 });
+    expect(evaluation).toMatchObject({ passed: false, recallAtK: null, precisionAtK: null });
+  });
+
+  it("exige qu'un résultat candidat plus thème soit une mesure à l'intersection", () => {
+    const evaluation = evaluatePresidentialSearchCase({
+      testCase: {
+        id: "candidate-theme",
+        category: "candidate",
+        query: "Alice Martin santé",
+        expectations: [{ kind: "candidate-theme", name: "Alice Martin", theme: "SANTE" }],
+      },
+      result: {
+        ...emptyBase,
+        total: 2,
+        subjects: [{ type: "subject", theme: "SANTE", label: "Santé", url: "/sante" }],
+        candidacies: [
+          {
+            type: "candidacy",
+            id: "candidate-1",
+            name: "Alice Martin",
+            url: "/alice",
+            photoUrl: null,
+            blobPhotoUrl: null,
+            status: "DECLARE",
+            party: null,
+          },
+        ],
+      },
+      latencyMs: 10,
+      topK: 5,
+    });
+
+    expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, relevantInTopK: 0 });
   });
 
   it("agrège les métriques et les percentiles sans masquer les cas individuels", () => {
@@ -104,7 +136,7 @@ describe("évaluation de la recherche présidentielle", () => {
 
     expect(report.metrics).toEqual({
       recallAtK: 1,
-      precisionAtK: 1,
+      precisionAtK: 0.2,
       zeroResultRate: 0.5,
       negativeFalsePositiveRate: 0,
       latencyP50Ms: 20,
