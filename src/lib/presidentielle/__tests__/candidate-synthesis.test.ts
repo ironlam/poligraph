@@ -172,6 +172,18 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).not.toMatch(/<engagement|<synthese>/);
   });
 
+  it("preserves question and exclamation marks from published measures", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [{ theme: "SANTE", text: "Créer un droit opposable à la santé ?" }],
+    };
+    const result = screenCandidateSynthesis(structured(["M1"]), input);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain("« Créer un droit opposable à la santé ? »");
+    expect(result.ok && result.text).not.toContain("santé ».");
+  });
+
   it("refuses valid-length prose that omits an expected theme", () => {
     expect(screenCandidateSynthesis(structured(["M1"]), BASE)).toMatchObject({
       ok: false,

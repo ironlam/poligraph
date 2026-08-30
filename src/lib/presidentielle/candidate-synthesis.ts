@@ -339,15 +339,14 @@ function formatFrenchList(values: string[]): string {
   return `${values.slice(0, -1).join(", ")} et ${values.at(-1)}`;
 }
 
-function sourceTextWithoutTerminalPunctuation(value: string): string {
-  return value.replace(/[.!?]+$/u, "");
+function sourceTextForQuote(value: string): string {
+  return value.replace(/[.]+$/u, "");
 }
 
 function formatProgrammeText(references: ProgrammeReference[]): string {
-  const quotedMeasures = references.map(
-    (reference) => `« ${sourceTextWithoutTerminalPunctuation(reference.text)} »`
-  );
-  return `Parmi les mesures publiées figurent ${formatFrenchList(quotedMeasures)}.`;
+  const quotedMeasures = references.map((reference) => `« ${sourceTextForQuote(reference.text)} »`);
+  const terminalPunctuation = /[!?] »$/u.test(quotedMeasures.at(-1) ?? "") ? "" : ".";
+  return `Parmi les mesures publiées figurent ${formatFrenchList(quotedMeasures)}${terminalPunctuation}`;
 }
 
 function wordCount(value: string): number {
@@ -483,7 +482,7 @@ export function screenCandidateSynthesis(
     (theme) =>
       selectedReferences
         .filter((reference) => reference.theme === theme)
-        .map((reference) => sourceTextWithoutTerminalPunctuation(reference.text))
+        .map((reference) => sourceTextForQuote(reference.text))
         .sort((a, b) => wordCount(a) - wordCount(b))[0]!
   );
   return screenSynthesis({
