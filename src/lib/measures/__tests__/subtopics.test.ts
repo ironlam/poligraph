@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   createAssignments: vi.fn(),
   countAssignments: vi.fn(),
   queryRaw: vi.fn(),
+  findEligibleMeasures: vi.fn(),
   createAudit: vi.fn(),
   invalidateMeasureTags: vi.fn(),
   syncSearchDocument: vi.fn(),
@@ -54,6 +55,7 @@ const transactionClient = {
     createMany: mocks.createAssignments,
   },
   $queryRaw: mocks.queryRaw,
+  measure: { findMany: mocks.findEligibleMeasures },
   auditLog: { create: mocks.createAudit },
 };
 
@@ -86,12 +88,14 @@ describe("classification des sous-sujets de mesure", () => {
       {
         measureId: "measure-1",
         revisionId: "revision-1",
+        candidacyId: "candidacy-1",
         theme: "SOCIETE_DROITS_LIBERTES",
         text: "Lutter contre le racisme.",
         details: null,
         updatedAt: new Date("2026-08-30T00:00:00.000Z"),
       },
     ]);
+    mocks.findEligibleMeasures.mockResolvedValue([{ id: "measure-1" }]);
     mocks.countAssignments.mockResolvedValue(0);
     mocks.deleteAssignments.mockResolvedValue({ count: 0 });
     mocks.createAssignments.mockResolvedValue({ count: 0 });
@@ -249,6 +253,29 @@ describe("classification des sous-sujets de mesure", () => {
     expect(mocks.createAssignments).not.toHaveBeenCalled();
   });
 
+  it("refuse une mesure retirée ou dépubliée après le dry-run", async () => {
+    mocks.findEligibleMeasures.mockResolvedValue([]);
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
+      })
+    ).rejects.toThrow("ne fait plus partie du corpus public");
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
+  });
+
   it("ne crée pas une quatrième attribution active", async () => {
     mocks.findAssignment.mockResolvedValue(null);
     mocks.countAssignments.mockResolvedValue(3);
@@ -278,6 +305,7 @@ describe("classification des sous-sujets de mesure", () => {
       {
         measureId: "measure-1",
         revisionId: "revision-1",
+        candidacyId: "candidacy-1",
         theme: "ECONOMIE_BUDGET",
         text: "Lutter contre le racisme.",
         details: null,
@@ -306,6 +334,7 @@ describe("classification des sous-sujets de mesure", () => {
   });
 
   it("valide tout le lot avant de créer la première suggestion", async () => {
+    mocks.findEligibleMeasures.mockResolvedValue([{ id: "measure-1" }, { id: "measure-2" }]);
     const { proposeMeasureRevisionSubtopicDeltaBatch } = await import("../subtopics");
     const common = {
       subtopicSlug: "racisme-antisemitisme",
