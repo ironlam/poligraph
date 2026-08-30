@@ -10,11 +10,13 @@ import { BatchReviewPanel } from "./_components/BatchReviewPanel";
 import { QueueFilters, type QueueFilterState } from "./_components/QueueFilters";
 import { QueueTable } from "./_components/QueueTable";
 import { ContextGenerationBatchPanel } from "./_components/ContextGenerationBatchPanel";
+import { EnrichmentCoveragePanel } from "./_components/EnrichmentCoveragePanel";
 import { buttonVariants } from "@/components/ui/button";
 import { filterMeasureContextCandidateIds } from "@/lib/measures/context-generation";
 import { cn } from "@/lib/utils";
 import { queryBatchPublishGroups } from "./_data/batch-publish-query";
 import { queryBatchReviewGroups } from "./_data/batch-review-query";
+import { queryMeasureEnrichmentCoverage } from "./_data/enrichment-coverage-query";
 import {
   listMeasureQueueCandidates,
   queryMeasureQueue,
@@ -74,26 +76,31 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
     : undefined;
   const candidacyId = asString(params.candidat);
   const q = asString(params.q);
+  const publicCorpus =
+    asString(params.corpus) === "presidentielle-2027" ? "PRESIDENTIELLE_2027" : undefined;
 
   const pageParam = Number(asString(params.page) ?? "1");
   const page = Number.isFinite(pageParam) ? Math.max(1, Math.trunc(pageParam)) : 1;
 
-  const [result, candidates, batchReviewGroups, batchPublishGroups] = await Promise.all([
-    queryMeasureQueue({
-      publication,
-      theme,
-      candidacyId,
-      withdrawn,
-      anomaliesOnly,
-      enrichment,
-      q,
-      take: PAGE_SIZE,
-      skip: (page - 1) * PAGE_SIZE,
-    }),
-    listMeasureQueueCandidates(),
-    queryBatchReviewGroups({ candidacyId }),
-    queryBatchPublishGroups({ candidacyId }),
-  ]);
+  const [result, candidates, batchReviewGroups, batchPublishGroups, enrichmentCoverage] =
+    await Promise.all([
+      queryMeasureQueue({
+        publication,
+        theme,
+        candidacyId,
+        withdrawn,
+        anomaliesOnly,
+        enrichment,
+        publicCorpus,
+        q,
+        take: PAGE_SIZE,
+        skip: (page - 1) * PAGE_SIZE,
+      }),
+      listMeasureQueueCandidates(),
+      queryBatchReviewGroups({ candidacyId }),
+      queryBatchPublishGroups({ candidacyId }),
+      queryMeasureEnrichmentCoverage(),
+    ]);
 
   const current: QueueFilterState = {
     publication,
@@ -103,6 +110,7 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
     enrichment,
     withdrawn,
     q,
+    publicCorpus,
   };
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
   const contextCandidateIds =
@@ -172,6 +180,8 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
         </p>
       )}
 
+      <EnrichmentCoveragePanel coverage={enrichmentCoverage} />
+
       <QueueFilters current={current} result={result} candidates={candidates} />
 
       {enrichmentWorkflow !== null && firstMeasure !== undefined ? (
@@ -221,6 +231,9 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
             if (enrichment) query.set("enrichissement", enrichment);
             if (withdrawn) query.set("retrait", withdrawn);
             if (q) query.set("q", q);
+            if (publicCorpus === "PRESIDENTIELLE_2027") {
+              query.set("corpus", "presidentielle-2027");
+            }
             query.set("page", String(number));
 
             return (
