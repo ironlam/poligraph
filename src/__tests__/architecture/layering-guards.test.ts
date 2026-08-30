@@ -173,20 +173,32 @@ function isPrismaDelegate(expression: ts.Expression): boolean {
   return ts.isIdentifier(base) && (base.text === "db" || base.text === "prisma");
 }
 
+/** True when `expression` is `db` or `prisma` itself. */
+function isPrismaRoot(expression: ts.Expression): boolean {
+  return ts.isIdentifier(expression) && (expression.text === "db" || expression.text === "prisma");
+}
+
 function mutationViolations(unit: SourceUnit): Violation[] {
   const violations: Violation[] = [];
 
   walkNodes(unit.source, (node) => {
-    if (!ts.isCallExpression(node)) return;
-    const callee = node.expression;
-    if (!ts.isPropertyAccessExpression(callee)) return;
+    // Prisma raw execution has two shapes, and only one of them is a call:
+    //   db.$executeRaw`UPDATE …`        TaggedTemplateExpression  ← the idiom used in this repo
+    //   db.$executeRawUnsafe(statement)  CallExpression
+    // Checking calls alone would let the common form through while claiming to cover it.
+    const callee = ts.isCallExpression(node)
+      ? node.expression
+      : ts.isTaggedTemplateExpression(node)
+        ? node.tag
+        : undefined;
+
+    if (callee === undefined || !ts.isPropertyAccessExpression(callee)) return;
 
     const method = callee.name.text;
 
-    // db.$executeRaw`...` / db.$executeRawUnsafe(...)
+    // `$queryRaw` reads; only `$executeRaw*` writes.
     if (method.startsWith("$executeRaw")) {
-      const base = callee.expression;
-      if (ts.isIdentifier(base) && (base.text === "db" || base.text === "prisma")) {
+      if (isPrismaRoot(callee.expression)) {
         violations.push({
           file: unit.file,
           line: lineOf(unit, node),
@@ -196,6 +208,8 @@ function mutationViolations(unit: SourceUnit): Violation[] {
       return;
     }
 
+    // A delegate mutation is always a call: `db.affair.update({ … })`.
+    if (!ts.isCallExpression(node)) return;
     if (!MUTATIONS.has(method)) return;
     if (!isPrismaDelegate(callee.expression)) return;
 
@@ -284,13 +298,47 @@ describe("L-01 layering contract", () => {
       expect(mutationViolations(probe)).toHaveLength(1);
     });
 
+    it("detects raw execution written as a tagged template", () => {
+      // The form the codebase actually uses (prominence.ts, municipales-*.ts). A tagged template
+      // is a TaggedTemplateExpression, not a CallExpression: checking only calls let this through.
+      const probe: SourceUnit = {
+        file: "src/lib/data/probe.ts",
+        source: ts.createSourceFile(
+          "probe.ts",
+          'export const touch = () => db.$executeRaw`UPDATE "Affair" SET "title" = \'x\'`;\n',
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TS
+        ),
+      };
+
+      expect(mutationViolations(probe)).toHaveLength(1);
+    });
+
+    it("detects raw execution written as a call", () => {
+      const probe: SourceUnit = {
+        file: "src/lib/data/probe.ts",
+        source: ts.createSourceFile(
+          "probe.ts",
+          "export const touch = () => db.$executeRawUnsafe(statement);\n",
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TS
+        ),
+      };
+
+      expect(mutationViolations(probe)).toHaveLength(1);
+    });
+
     it("leaves reads alone", () => {
       const probe: SourceUnit = {
         file: "src/lib/data/probe.ts",
         source: ts.createSourceFile(
           "probe.ts",
           "export const read = () => db.affair.findMany({ take: 10 });\n" +
-            "export const total = () => db.affair.count();\n",
+            "export const total = () => db.affair.count();\n" +
+            // $queryRaw reads. Only $executeRaw* writes.
+            "export const raw = () => db.$queryRaw`SELECT 1`;\n",
           ts.ScriptTarget.Latest,
           true,
           ts.ScriptKind.TS
