@@ -89,7 +89,7 @@ export default async function ProgrammesPage() {
                 <div className="rounded-xl border bg-background p-4">
                   <dt className="flex items-center gap-2 text-sm text-muted-foreground">
                     <UsersRound className="h-4 w-4" aria-hidden="true" />
-                    Candidats documentés
+                    Personnalités documentées
                   </dt>
                   <dd className="mt-1 font-display text-2xl font-bold">
                     {candidaciesWithMeasures.length.toLocaleString("fr-FR")}

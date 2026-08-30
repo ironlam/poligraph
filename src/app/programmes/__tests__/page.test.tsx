@@ -63,9 +63,9 @@ beforeEach(() => {
       partyColor: null,
       partyShortName: null,
       partyLogoUrl: null,
-      measureCount: 0,
-      themesCoveredCount: 0,
-      programmeAbsence: "non_depouille",
+      measureCount: 2,
+      themesCoveredCount: 1,
+      programmeAbsence: null,
     },
   ]);
 });
@@ -77,7 +77,7 @@ describe("page programmes", () => {
     expect(metadata.alternates?.canonical).toBe("/programmes");
   });
 
-  it("met le corpus présidentiel en avant sans compter les candidatures non documentées", async () => {
+  it("compte neutralement les personnalités documentées quel que soit leur statut", async () => {
     render(await ProgrammesPage());
 
     expect(
@@ -85,7 +85,8 @@ describe("page programmes", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("845")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("Personnalités documentées")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Explorer la présidentielle 2027/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027"
