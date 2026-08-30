@@ -38,7 +38,7 @@ describe("décision différentielle structurée", () => {
 
   it("sanitise le contenu et renvoie une décision bornée", async () => {
     const { classifyMeasureForSubtopicDelta } =
-      await import("@/lib/measures/subtopic-delta-classifier");
+      await import("@/services/measures/subtopic-delta-classifier");
     const result = await classifyMeasureForSubtopicDelta({ measure, subtopic });
 
     expect(result).toMatchObject({
@@ -59,10 +59,33 @@ describe("décision différentielle structurée", () => {
       evidenceExcerpt: "Un passage inventé par le modèle",
     });
     const { classifyMeasureForSubtopicDelta } =
-      await import("@/lib/measures/subtopic-delta-classifier");
+      await import("@/services/measures/subtopic-delta-classifier");
 
     await expect(classifyMeasureForSubtopicDelta({ measure, subtopic })).rejects.toThrow(
       "ne provient pas"
     );
+  });
+
+  it("conserve le passage lexical même lorsqu’il se trouve loin dans le texte", async () => {
+    const distantEvidence = "Combattre les discriminations raciales dans les services publics";
+    mocks.parseMistralJSON.mockReturnValue({
+      decision: "APPLIES",
+      confidence: 0.95,
+      justification: "Les discriminations raciales sont explicitement visées.",
+      evidenceExcerpt: distantEvidence,
+    });
+    const { classifyMeasureForSubtopicDelta } =
+      await import("@/services/measures/subtopic-delta-classifier");
+    await classifyMeasureForSubtopicDelta({
+      subtopic,
+      measure: {
+        ...measure,
+        text: `${"Préambule sans rapport. ".repeat(80)} ${distantEvidence}.`,
+        selectionReasons: [{ signal: "LEXICAL", values: ["discriminations raciales"] }],
+      },
+    });
+
+    const messages = mocks.callMistral.mock.calls[0]?.[0] as Array<{ content: string }>;
+    expect(messages[0]?.content).toContain(distantEvidence);
   });
 });

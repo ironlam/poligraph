@@ -121,6 +121,78 @@ export async function getPreviouslyClassifiedMeasureRevisionIds(): Promise<strin
   return attempts.map((attempt) => attempt.entityId);
 }
 
+export async function proposeMeasureRevisionSubtopicDelta(input: {
+  revisionId: string;
+  subtopicSlug: string;
+  confidence: number;
+  classifierVersion: string;
+  taxonomyVersion: string;
+  runId: string;
+  decision: "APPLIES";
+  justification: string;
+  evidenceExcerpt: string;
+  selectionReasons: Array<{ signal: string; values: string[] }>;
+  sourceFingerprint: string;
+  proposedBy?: string;
+}): Promise<{ created: boolean; status: string }> {
+  return db.$transaction(async (tx) => {
+    const subtopic = await tx.measureSubtopic.findUnique({
+      where: { slug: input.subtopicSlug },
+      select: { id: true, active: true },
+    });
+    if (!subtopic?.active) throw new MeasureValidationError("Sous-thème introuvable ou inactif");
+
+    const existing = await tx.measureRevisionSubtopic.findUnique({
+      where: {
+        revisionId_subtopicId: {
+          revisionId: input.revisionId,
+          subtopicId: subtopic.id,
+        },
+      },
+      select: { status: true },
+    });
+    if (existing) return { created: false, status: existing.status };
+
+    const inserted = await tx.measureRevisionSubtopic.createMany({
+      data: [
+        {
+          revisionId: input.revisionId,
+          subtopicId: subtopic.id,
+          status: "SUGGESTED",
+          confidence: input.confidence,
+          method: "AI_ASSISTED",
+          classifierVersion: input.classifierVersion,
+          taxonomyVersion: input.taxonomyVersion,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    if (inserted.count === 0) return { created: false, status: "CONCURRENT_ASSIGNMENT" };
+
+    await tx.auditLog.create({
+      data: {
+        action: "PROPOSE_SUBTOPIC_DELTA",
+        entityType: "MeasureRevision",
+        entityId: input.revisionId,
+        changes: {
+          runId: input.runId,
+          subtopic: input.subtopicSlug,
+          taxonomyVersion: input.taxonomyVersion,
+          classifierVersion: input.classifierVersion,
+          confidence: input.confidence,
+          decision: input.decision,
+          justification: input.justification,
+          evidenceExcerpt: input.evidenceExcerpt,
+          selectionReasons: input.selectionReasons,
+          sourceFingerprint: input.sourceFingerprint,
+        },
+        userId: input.proposedBy ?? "system",
+      },
+    });
+    return { created: true, status: "SUGGESTED" };
+  });
+}
+
 export async function proposeMeasureRevisionSubtopics(
   revisionId: string,
   options: { dryRun?: boolean; proposedBy?: string; skipTaxonomySync?: boolean } = {}

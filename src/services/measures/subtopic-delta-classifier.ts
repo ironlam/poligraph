@@ -1,9 +1,13 @@
 import { z } from "zod";
 import type { MeasureSubtopicDefinition } from "@/config/measure-subtopics";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
-import type { DeltaSelectedMeasure } from "@/lib/measures/subtopic-delta-selection";
+import {
+  findDeltaLexicalMatches,
+  type DeltaSelectedMeasure,
+} from "@/lib/measures/subtopic-delta-selection";
 
 const MODEL = "mistral-small-latest";
+/** Version du contrat de décision, indépendante du nom de modèle résolu. */
 export const SUBTOPIC_DELTA_CLASSIFIER_VERSION = "subtopic-delta-v1";
 
 const decisionSchema = z
@@ -44,12 +48,37 @@ function assertEvidenceComesFromMeasure(evidence: string, source: string): void 
   }
 }
 
+function relevantPassages(value: string, lexicalTerms: string[]): string[] {
+  if (value.trim() === "") return [];
+  const chunks: string[] = [];
+  for (let offset = 0; offset < value.length; offset += 160) {
+    chunks.push(value.slice(offset, offset + 200));
+  }
+  const matched =
+    lexicalTerms.length === 0
+      ? []
+      : chunks.filter(
+          (chunk) =>
+            findDeltaLexicalMatches(
+              { text: chunk, details: null },
+              { label: lexicalTerms[0]!, aliases: lexicalTerms.slice(1) }
+            ).length > 0
+        );
+  return [...new Set([chunks[0]!, ...matched].map((chunk) => sanitizePromptText(chunk, 200)))]
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
 export async function classifyMeasureForSubtopicDelta(input: {
   measure: DeltaSelectedMeasure;
   subtopic: MeasureSubtopicDefinition;
 }): Promise<SubtopicDeltaDecision> {
-  const text = sanitizePromptText(input.measure.text, 2_000);
-  const details = sanitizePromptText(input.measure.details ?? "", 1_500);
+  const lexicalTerms = input.measure.selectionReasons
+    .filter((reason) => reason.signal === "LEXICAL")
+    .flatMap((reason) => reason.values);
+  const textPassages = relevantPassages(input.measure.text, lexicalTerms);
+  const detailPassages = relevantPassages(input.measure.details ?? "", lexicalTerms);
+  const sourcePassages = [...textPassages, ...detailPassages];
   const reasons = input.measure.selectionReasons
     .map((reason) => `${reason.signal}: ${reason.values.join(", ")}`)
     .join(" ; ");
@@ -63,9 +92,9 @@ alias: ${input.subtopic.aliases.map((alias) => sanitizePromptText(alias, 100)).j
 périmètre: ${sanitizePromptText(input.subtopic.classifierGuidance ?? "", 800)}
 </sous_theme>
 
-<raison_selection>${sanitizePromptText(reasons, 800)}</raison_selection>
-<formulation>${text}</formulation>
-<contexte>${details}</contexte>
+<raison_selection>${sanitizePromptText(reasons, 200)}</raison_selection>
+<formulation>${textPassages.map((passage) => `<passage>${passage}</passage>`).join("")}</formulation>
+<contexte>${detailPassages.map((passage) => `<passage>${passage}</passage>`).join("")}</contexte>
 
 Réponds uniquement en JSON :
 {"decision":"APPLIES|DOES_NOT_APPLY|UNCERTAIN","confidence":0.0,"justification":"raison concise","evidenceExcerpt":"extrait exact"}`;
@@ -77,7 +106,7 @@ Réponds uniquement en JSON :
     responseFormat: { type: "json_object" },
   });
   const parsed = decisionSchema.parse(parseMistralJSON<unknown>(extractMistralText(response)));
-  assertEvidenceComesFromMeasure(parsed.evidenceExcerpt, `${text} ${details}`);
+  assertEvidenceComesFromMeasure(parsed.evidenceExcerpt, sourcePassages.join(" "));
 
   return {
     ...parsed,

@@ -1,36 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURE_SUBTOPIC_TAXONOMY_VERSION } from "@/config/measure-subtopics";
-import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-report";
+import { createSubtopicDeltaSourceFingerprint } from "@/services/measures/subtopic-delta-report";
 
 const mocks = vi.hoisted(() => ({
-  findMeasures: vi.fn(),
-  findSubtopic: vi.fn(),
-  findAssignment: vi.fn(),
-  createAssignments: vi.fn(),
-  deleteAssignments: vi.fn(),
-  createAudit: vi.fn(),
-  transaction: vi.fn(),
+  getApplySnapshot: vi.fn(),
+  proposeDelta: vi.fn(),
   syncTaxonomy: vi.fn(),
 }));
 
-const transactionClient = {
-  measureRevisionSubtopic: {
-    findUnique: mocks.findAssignment,
-    createMany: mocks.createAssignments,
-    deleteMany: mocks.deleteAssignments,
-  },
-  auditLog: { create: mocks.createAudit },
-};
-
-vi.mock("@/lib/db", () => ({
-  db: {
-    measure: { findMany: mocks.findMeasures },
-    measureSubtopic: { findUniqueOrThrow: mocks.findSubtopic },
-    $transaction: mocks.transaction,
-  },
+vi.mock("@/lib/data/measure-subtopic-delta", () => ({
+  getSubtopicDeltaApplySnapshot: mocks.getApplySnapshot,
 }));
 vi.mock("@/lib/measures/subtopics", () => ({
   syncMeasureSubtopicTaxonomy: mocks.syncTaxonomy,
+  proposeMeasureRevisionSubtopicDelta: mocks.proposeDelta,
 }));
 
 const source = {
@@ -80,7 +63,7 @@ function report() {
     totalEligibleMeasures: 1,
     scannedMeasures: 1,
     nextAfter: null,
-    selectedCandidates: 1,
+    selectedMeasureCount: 1,
     selectionBySignal: { LEXICAL: 1, NEIGHBOR_SUBTOPIC: 0, SEARCH_INDEX: 0, CONTROL: 0 },
     decisions: { APPLIES: 1, DOES_NOT_APPLY: 0, UNCERTAIN: 0 },
     distribution: {
@@ -98,73 +81,84 @@ function report() {
 describe("application d’un rapport différentiel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.findMeasures.mockResolvedValue([
-      {
-        id: "measure-1",
-        publishedRevision: {
-          id: source.revisionId,
-          text: source.text,
-          details: source.details,
-          updatedAt: new Date(source.sourceUpdatedAt),
+    mocks.getApplySnapshot.mockResolvedValue({
+      electionMatches: true,
+      measures: [
+        {
+          id: "measure-1",
+          publishedRevision: {
+            id: source.revisionId,
+            text: source.text,
+            details: source.details,
+            updatedAt: new Date(source.sourceUpdatedAt),
+          },
         },
-      },
-    ]);
-    mocks.findSubtopic.mockResolvedValue({ id: "subtopic-1", active: true });
-    mocks.findAssignment.mockResolvedValue(null);
-    mocks.createAssignments.mockResolvedValue({ count: 1 });
-    mocks.transaction.mockImplementation(async (callback) => callback(transactionClient));
+      ],
+    });
+    mocks.proposeDelta.mockResolvedValue({ created: true, status: "SUGGESTED" });
   });
 
   it("crée uniquement une suggestion et audite sa provenance", async () => {
-    const { applySubtopicDeltaReport } = await import("@/lib/measures/subtopic-delta-apply");
+    const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
     const result = await applySubtopicDeltaReport(report());
 
     expect(result).toEqual({ runId: "run-1", created: 1, ignored: [] });
-    expect(mocks.createAssignments).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          status: "SUGGESTED",
-          taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
-        }),
-      ],
-      skipDuplicates: true,
+    expect(mocks.proposeDelta).toHaveBeenCalledWith({
+      revisionId: "revision-1",
+      subtopicSlug: "racisme-antisemitisme",
+      confidence: 0.99,
+      classifierVersion: "mistral:subtopic-delta-v1",
+      taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
+      runId: "run-1",
+      decision: "APPLIES",
+      justification: "La mesure vise explicitement le racisme.",
+      evidenceExcerpt: "Lutter contre le racisme",
+      selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+      sourceFingerprint: decision.sourceFingerprint,
+      proposedBy: "cli",
     });
-    expect(mocks.createAudit).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        action: "PROPOSE_SUBTOPIC_DELTA",
-        changes: expect.objectContaining({ runId: "run-1", subtopic: "racisme-antisemitisme" }),
-      }),
-    });
-    expect(mocks.deleteAssignments).not.toHaveBeenCalled();
   });
 
   it("préserve une attribution existante et reste idempotent", async () => {
-    mocks.findAssignment.mockResolvedValue({ status: "APPROVED" });
-    const { applySubtopicDeltaReport } = await import("@/lib/measures/subtopic-delta-apply");
+    mocks.proposeDelta.mockResolvedValue({ created: false, status: "APPROVED" });
+    const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
     const result = await applySubtopicDeltaReport(report());
 
     expect(result.ignored).toEqual([{ revisionId: "revision-1", status: "APPROVED" }]);
-    expect(mocks.createAssignments).not.toHaveBeenCalled();
-    expect(mocks.createAudit).not.toHaveBeenCalled();
+    expect(mocks.proposeDelta).toHaveBeenCalledOnce();
   });
 
   it("refuse tout changement de source avant la première écriture", async () => {
-    mocks.findMeasures.mockResolvedValue([
-      {
-        id: "measure-1",
-        publishedRevision: {
-          id: source.revisionId,
-          text: "Texte modifié.",
-          details: null,
-          updatedAt: new Date(source.sourceUpdatedAt),
+    mocks.getApplySnapshot.mockResolvedValue({
+      electionMatches: true,
+      measures: [
+        {
+          id: "measure-1",
+          publishedRevision: {
+            id: source.revisionId,
+            text: "Texte modifié.",
+            details: null,
+            updatedAt: new Date(source.sourceUpdatedAt),
+          },
         },
-      },
-    ]);
-    const { applySubtopicDeltaReport } = await import("@/lib/measures/subtopic-delta-apply");
+      ],
+    });
+    const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
 
     await expect(applySubtopicDeltaReport(report())).rejects.toThrow("a changé");
     expect(mocks.syncTaxonomy).not.toHaveBeenCalled();
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.proposeDelta).not.toHaveBeenCalled();
+  });
+
+  it("refuse une élection qui ne correspond plus au rapport", async () => {
+    mocks.getApplySnapshot.mockResolvedValue({ electionMatches: false, measures: [] });
+    const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
+
+    await expect(applySubtopicDeltaReport(report())).rejects.toThrow(
+      "ne correspond plus à la base"
+    );
+    expect(mocks.syncTaxonomy).not.toHaveBeenCalled();
+    expect(mocks.proposeDelta).not.toHaveBeenCalled();
   });
 
   it("refuse qu’une décision autre que APPLIES soit injectée dans les suggestions", async () => {
@@ -173,7 +167,7 @@ describe("application d’un rapport différentiel", () => {
       ...decision,
       decision: "UNCERTAIN",
     };
-    const { applySubtopicDeltaReport } = await import("@/lib/measures/subtopic-delta-apply");
+    const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
 
     await expect(applySubtopicDeltaReport(incoherent)).rejects.toThrow(
       "ne correspond pas aux décisions APPLIES"

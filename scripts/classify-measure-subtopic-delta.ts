@@ -4,9 +4,9 @@ import { db } from "../src/lib/db";
 import {
   applySubtopicDeltaReport,
   parseSubtopicDeltaReport,
-} from "../src/lib/measures/subtopic-delta-apply";
+} from "../src/services/measures/subtopic-delta-apply";
 import { parseSubtopicDeltaCLIOptions } from "../src/lib/measures/subtopic-delta-options";
-import { generateSubtopicDeltaDryRun } from "../src/lib/measures/subtopic-delta-report";
+import { generateSubtopicDeltaDryRun } from "../src/services/measures/subtopic-delta-report";
 
 const REPORT_DIRECTORY = resolve(process.cwd(), ".tmp/measure-subtopic-delta");
 
@@ -52,7 +52,9 @@ async function main(): Promise<void> {
     const reportPath = resolve(REPORT_DIRECTORY, `${report.runId}.json`);
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     console.log(`${report.scannedMeasures} mesure(s) parcourue(s).`);
-    console.log(`${report.selectedCandidates} candidate(s) envoyée(s) au classificateur.`);
+    console.log(
+      `${report.selectedMeasureCount} mesure(s) candidate(s) envoyée(s) au classificateur.`
+    );
     console.log(
       `${report.decisions.APPLIES} APPLIES, ${report.decisions.DOES_NOT_APPLY} DOES_NOT_APPLY, ${report.decisions.UNCERTAIN} UNCERTAIN, ${report.errors.length} erreur(s).`
     );

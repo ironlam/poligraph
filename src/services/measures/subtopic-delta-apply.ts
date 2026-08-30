@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { MEASURE_SUBTOPICS, MEASURE_SUBTOPIC_TAXONOMY_VERSION } from "@/config/measure-subtopics";
-import { db } from "@/lib/db";
+import { getSubtopicDeltaApplySnapshot } from "@/lib/data/measure-subtopic-delta";
+import {
+  proposeMeasureRevisionSubtopicDelta,
+  syncMeasureSubtopicTaxonomy,
+} from "@/lib/measures/subtopics";
 import {
   createSubtopicDeltaSourceFingerprint,
   type SubtopicDeltaReport,
-} from "@/lib/measures/subtopic-delta-report";
-import { syncMeasureSubtopicTaxonomy } from "@/lib/measures/subtopics";
-import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
+} from "@/services/measures/subtopic-delta-report";
 
 const selectionReasonSchema = z
   .object({
@@ -61,7 +63,7 @@ export const subtopicDeltaReportSchema = z
     totalEligibleMeasures: z.number().int().nonnegative(),
     scannedMeasures: z.number().int().nonnegative(),
     nextAfter: z.string().nullable(),
-    selectedCandidates: z.number().int().nonnegative(),
+    selectedMeasureCount: z.number().int().nonnegative(),
     selectionBySignal: z
       .object({
         LEXICAL: z.number().int().nonnegative(),
@@ -144,21 +146,16 @@ export async function applySubtopicDeltaReport(value: unknown): Promise<ApplySub
   const report = parseSubtopicDeltaReport(value);
   const suggestions = report.suggestionsThatWouldBeCreated;
   const configuredSubtopic = MEASURE_SUBTOPICS.find((item) => item.slug === report.subtopic.slug)!;
-  const measures = await db.measure.findMany({
-    where: {
-      id: { in: suggestions.map((suggestion) => suggestion.measureId) },
-      electionId: report.election.id,
-      theme: configuredSubtopic.theme,
-      ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
-    },
-    select: {
-      id: true,
-      publishedRevision: {
-        select: { id: true, text: true, details: true, updatedAt: true },
-      },
-    },
+  const snapshot = await getSubtopicDeltaApplySnapshot({
+    electionSlug: report.election.slug,
+    electionId: report.election.id,
+    theme: configuredSubtopic.theme,
+    measureIds: suggestions.map((suggestion) => suggestion.measureId),
   });
-  const measuresById = new Map(measures.map((measure) => [measure.id, measure]));
+  if (!snapshot.electionMatches) {
+    throw new Error("L’élection du rapport ne correspond plus à la base");
+  }
+  const measuresById = new Map(snapshot.measures.map((measure) => [measure.id, measure]));
 
   for (const suggestion of suggestions) {
     const measure = measuresById.get(suggestion.measureId);
@@ -181,64 +178,22 @@ export async function applySubtopicDeltaReport(value: unknown): Promise<ApplySub
   }
 
   await syncMeasureSubtopicTaxonomy();
-  const subtopic = await db.measureSubtopic.findUniqueOrThrow({
-    where: { slug: report.subtopic.slug },
-    select: { id: true, active: true },
-  });
-  if (!subtopic.active) throw new Error("Le sous-thème est inactif");
-
   let created = 0;
   const ignored: ApplySubtopicDeltaResult["ignored"] = [];
   for (const suggestion of suggestions) {
-    const outcome = await db.$transaction(async (tx) => {
-      const existing = await tx.measureRevisionSubtopic.findUnique({
-        where: {
-          revisionId_subtopicId: {
-            revisionId: suggestion.revisionId,
-            subtopicId: subtopic.id,
-          },
-        },
-        select: { status: true },
-      });
-      if (existing) return { created: false, status: existing.status };
-
-      const inserted = await tx.measureRevisionSubtopic.createMany({
-        data: [
-          {
-            revisionId: suggestion.revisionId,
-            subtopicId: subtopic.id,
-            status: "SUGGESTED",
-            confidence: suggestion.confidence,
-            method: "AI_ASSISTED",
-            classifierVersion: suggestion.classifierVersion,
-            taxonomyVersion: report.taxonomy.currentVersion,
-          },
-        ],
-        skipDuplicates: true,
-      });
-      if (inserted.count === 0) return { created: false, status: "CONCURRENT_ASSIGNMENT" };
-
-      await tx.auditLog.create({
-        data: {
-          action: "PROPOSE_SUBTOPIC_DELTA",
-          entityType: "MeasureRevision",
-          entityId: suggestion.revisionId,
-          changes: {
-            runId: report.runId,
-            subtopic: report.subtopic.slug,
-            taxonomyVersion: report.taxonomy.currentVersion,
-            classifierVersion: suggestion.classifierVersion,
-            confidence: suggestion.confidence,
-            decision: suggestion.decision,
-            justification: suggestion.justification,
-            evidenceExcerpt: suggestion.evidenceExcerpt,
-            selectionReasons: suggestion.selectionReasons,
-            sourceFingerprint: suggestion.sourceFingerprint,
-          },
-          userId: "cli",
-        },
-      });
-      return { created: true, status: "SUGGESTED" };
+    const outcome = await proposeMeasureRevisionSubtopicDelta({
+      revisionId: suggestion.revisionId,
+      subtopicSlug: report.subtopic.slug,
+      confidence: suggestion.confidence,
+      classifierVersion: suggestion.classifierVersion,
+      taxonomyVersion: report.taxonomy.currentVersion,
+      runId: report.runId,
+      decision: "APPLIES",
+      justification: suggestion.justification,
+      evidenceExcerpt: suggestion.evidenceExcerpt,
+      selectionReasons: suggestion.selectionReasons,
+      sourceFingerprint: suggestion.sourceFingerprint,
+      proposedBy: "cli",
     });
     if (outcome.created) created += 1;
     else ignored.push({ revisionId: suggestion.revisionId, status: outcome.status });

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   upsertSubtopic: vi.fn(),
   findSubtopics: vi.fn(),
+  findSubtopicInTransaction: vi.fn(),
   findAuditLogs: vi.fn(),
   findAssignment: vi.fn(),
   updateAssignments: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/lib/measures/search-sync", () => ({
 }));
 
 const transactionClient = {
+  measureSubtopic: { findUnique: mocks.findSubtopicInTransaction },
   measureRevisionSubtopic: {
     findUnique: mocks.findAssignment,
     updateMany: mocks.updateAssignments,
@@ -71,6 +73,7 @@ describe("classification des sous-sujets de mesure", () => {
     mocks.findAuditLogs.mockResolvedValue([]);
     mocks.transaction.mockImplementation(async (callback) => callback(transactionClient));
     mocks.findSubtopics.mockResolvedValue([]);
+    mocks.findSubtopicInTransaction.mockResolvedValue({ id: "subtopic-1", active: true });
     mocks.deleteAssignments.mockResolvedValue({ count: 0 });
     mocks.createAssignments.mockResolvedValue({ count: 0 });
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
@@ -141,6 +144,65 @@ describe("classification des sous-sujets de mesure", () => {
         changes: expect.objectContaining({ classifierVersion: "mistral-small-2506:v1" }),
       }),
     });
+  });
+
+  it("ajoute une suggestion différentielle sans toucher aux autres sous-thèmes", async () => {
+    mocks.findAssignment.mockResolvedValue(null);
+    mocks.createAssignments.mockResolvedValue({ count: 1 });
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "fingerprint",
+        proposedBy: "cli",
+      })
+    ).resolves.toEqual({ created: true, status: "SUGGESTED" });
+
+    expect(mocks.deleteAssignments).not.toHaveBeenCalled();
+    expect(mocks.createAssignments).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ status: "SUGGESTED", subtopicId: "subtopic-1" })],
+      skipDuplicates: true,
+    });
+    expect(mocks.createAudit).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "PROPOSE_SUBTOPIC_DELTA",
+        changes: expect.objectContaining({ runId: "run-1" }),
+      }),
+    });
+  });
+
+  it("préserve une attribution approuvée pendant une application différentielle", async () => {
+    mocks.findAssignment.mockResolvedValue({ status: "APPROVED" });
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "fingerprint",
+      })
+    ).resolves.toEqual({ created: false, status: "APPROVED" });
+
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
   });
 
   it("retrouve les révisions déjà classées à partir du journal d'audit", async () => {
