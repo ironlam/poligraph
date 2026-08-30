@@ -13,7 +13,7 @@ import { lockMeasure } from "@/lib/measures/lock";
 import { draftMeasureRevision } from "@/lib/measures/transitions";
 
 const MODEL = "mistral-small-latest";
-const PROMPT_VERSION = "measure-context-v8";
+const PROMPT_VERSION = "measure-context-v9";
 const TERMINAL_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_TERMINAL_RESULT";
 const INVALID_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_INVALID_RESULT";
 const RESERVED_CONTEXT_GENERATION_ACTION = "RESERVE_CONTEXT_GENERATION";
@@ -353,6 +353,14 @@ function normalizeGeneratedText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function assertNaturalAttribution(text: string): void {
+  if (/(?:^|[.!?]\s+)(?:Le document|Le programme)\b/iu.test(text)) {
+    throw new MeasureValidationError(
+      "Le contexte généré emploie une attribution mécanique au document ou au programme"
+    );
+  }
+}
+
 function validateGeneratedContext(
   parsed: z.infer<typeof generatedContextSchema>,
   units: Array<{
@@ -389,6 +397,7 @@ function validateGeneratedContext(
       return unit ? [unit] : [];
     });
     assertGroundedNumbers(claim.text, citedUnits);
+    assertNaturalAttribution(claim.text);
     for (const id of citedIds) allCitedIds.add(id);
   }
   if (![...allCitedIds].some((id) => supportingIds.has(id))) {
@@ -638,14 +647,16 @@ Règles :
 - utilise uniquement les faits explicitement présents dans les unités ;
 - ces unités proviennent exclusivement de la source attachée à la mesure, ne complète jamais avec une connaissance ou un site externe ;
 - n'ajoute aucune conséquence, faisabilité, intention, appréciation ou connaissance extérieure ;
-- attribue au document toute analyse, tout diagnostic ou toute appréciation qu'il formule, par exemple avec « Le programme estime que » ou « Le document présente » ;
+- attribue toute analyse, tout diagnostic ou toute appréciation à sa source avec une seule formulation naturelle, par exemple « Selon la source citée, ... » ;
+- décris ensuite l'engagement avec « La mesure prévoit ... » ou « La mesure propose ... » lorsque cela apporte une information distincte du titre ;
+- N'écris jamais « Le document » ni « Le programme » en début de phrase ;
 - respecte le locuteur de chaque unité : une parole de QUOTED_THIRD_PARTY, LEGAL_OR_INSTITUTIONAL_SOURCE ou HISTORICAL_ACTOR ne doit jamais être attribuée au programme ;
 - si tu utilises une telle unité, indique explicitement qu'elle rapporte les propos ou la position d'un tiers, d'une source juridique ou institutionnelle, ou d'un acteur historique, sans inventer son identité ;
 - n'utilise pas une unité dont le locuteur est UNRESOLVED pour attribuer une affirmation au programme ;
 - une quantité n'est autorisée que si elle figure exactement dans l'unité citée par l'affirmation ; conserve sa valeur et écris-la en chiffres ;
 - ne présente jamais l'argumentaire du programme comme un fait établi ;
 - ne répète pas simplement la formulation de la mesure ;
-- écris entre 40 et 120 mots, en français clair ;
+- écris une ou deux phrases, entre 40 et 100 mots, en français clair ;
 - découpe le texte en affirmations et rattache chaque affirmation uniquement aux unités qui la prouvent ;
 - si les unités n'apportent aucun contexte distinct, renvoie claims à un tableau vide.
 

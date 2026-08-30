@@ -107,7 +107,7 @@ describe("génération de contexte sourcé", () => {
     mocks.extractMistralText.mockReturnValue("{}");
     mocks.parseMistralJSON.mockReturnValue(
       generatedContext(
-        "Le programme présente cette proposition comme un droit aux vacances. Il part du constat qu’une partie de la population ne part pas en vacances et rattache la mesure à cet enjeu."
+        "Selon la source citée, une partie de la population ne part pas en vacances. La mesure prévoit de créer un droit aux vacances en réponse à ce constat."
       )
     );
     mocks.draftMeasureRevision.mockResolvedValue({ revisionId: "revision-2" });
@@ -129,7 +129,7 @@ describe("génération de contexte sourcé", () => {
         preserveEvidenceFromRevisionId: "revision-1",
         revision: expect.objectContaining({
           extractionMethod: "AI_ASSISTED",
-          extractorVersion: "mistral-small-2506:measure-context-v8",
+          extractorVersion: "mistral-small-2506:measure-context-v9",
           details: expect.stringContaining("droit aux vacances"),
         }),
         generatedContext: expect.objectContaining({
@@ -140,7 +140,7 @@ describe("génération de contexte sourcé", () => {
           ],
           evidenceUnitIds: ["pdf-12-2-u001", "pdf-13-1-u001"],
           ipAddress: "203.0.113.8",
-          promptVersion: "measure-context-v8",
+          promptVersion: "measure-context-v9",
           userAgent: "vitest-agent",
         }),
       })
@@ -155,6 +155,22 @@ describe("génération de contexte sourcé", () => {
       ],
       expect.any(Object)
     );
+    const prompt = mocks.callMistral.mock.calls[0]?.[0]?.[0]?.content;
+    expect(prompt).toContain("Selon la source citée");
+    expect(prompt).toContain("La mesure prévoit");
+    expect(prompt).toContain("N'écris jamais « Le document » ni « Le programme »");
+  });
+
+  it("refuse les attributions mécaniques avant de créer un brouillon", async () => {
+    mocks.parseMistralJSON.mockReturnValue(
+      generatedContext(
+        "Le document présente cette proposition comme une réponse au constat qu'une partie de la population ne part pas en vacances."
+      )
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow("attribution mécanique");
+    expect(mocks.callMistral).toHaveBeenCalledTimes(2);
   });
 
   it("transmet au modèle le locuteur et le rôle discursif de chaque preuve", async () => {
@@ -279,10 +295,9 @@ describe("génération de contexte sourcé", () => {
   });
 
   it("accepte une quantité exacte lorsqu'elle est rattachée à la preuve qui la contient", async () => {
-    const firstClaim =
-      "Le programme présente cette proposition comme un droit destiné à 67 millions de personnes.";
+    const firstClaim = "La mesure prévoit un droit destiné à 67 millions de personnes.";
     const secondClaim =
-      "Le document la rattache au constat qu’une partie de la population ne part pas en vacances.";
+      "Selon la source citée, une partie de la population ne part pas en vacances.";
     mocks.parseMistralJSON.mockReturnValue({
       claims: [
         { text: firstClaim, evidenceUnitIds: ["pdf-12-2-u001"] },
@@ -306,7 +321,7 @@ describe("génération de contexte sourcé", () => {
     );
     mocks.parseMistralJSON.mockReturnValue(
       generatedContext(
-        "Le programme présente cette proposition comme une aide de 2000 euros destinée aux personnes concernées par le dispositif.",
+        "La mesure prévoit une aide de 2000 euros destinée aux personnes concernées par le dispositif.",
         ["pdf-13-1-u001"]
       )
     );
@@ -338,7 +353,7 @@ describe("génération de contexte sourcé", () => {
 
   it("construit le contexte depuis les seules affirmations sourcées", async () => {
     const claim =
-      "Le programme présente cette proposition comme un droit aux vacances et la rattache au constat qu’une partie de la population ne part pas en vacances.";
+      "Selon la source citée, une partie de la population ne part pas en vacances. La mesure prévoit de créer un droit aux vacances en réponse à ce constat.";
     mocks.parseMistralJSON.mockReturnValue({
       claims: [
         {
@@ -711,7 +726,7 @@ describe("génération de contexte sourcé", () => {
         action: "GENERATE_CONTEXT_INVALID_RESULT",
         changes: {
           outcome: "INVALID_GENERATED_CONTEXT",
-          promptVersion: "measure-context-v7",
+          promptVersion: "measure-context-v8",
         },
         entityId: "revision-old-prompt",
       },
@@ -719,7 +734,7 @@ describe("génération de contexte sourcé", () => {
         action: "GENERATE_CONTEXT_TERMINAL_RESULT",
         changes: {
           outcome: "INVALID_GENERATED_CONTEXT",
-          promptVersion: "measure-context-v7",
+          promptVersion: "measure-context-v8",
         },
         entityId: "revision-old-prompt",
       },
@@ -798,7 +813,7 @@ describe("génération de contexte sourcé", () => {
 
   it("accepte un sous-ensemble pertinent des unités fournies au modèle", async () => {
     const details =
-      "Le programme rattache cette proposition au constat qu'une partie de la population ne part pas en vacances, sans ajouter d'autre justification dans cet extrait.";
+      "Selon la source citée, une partie de la population ne part pas en vacances. Cet extrait n'apporte pas d'autre justification à la mesure.";
     mocks.parseMistralJSON.mockReturnValue(generatedContext(details, ["pdf-13-1-u001"]));
     const { generateMeasureContextDraft } = await import("../context-generation");
 
@@ -848,7 +863,7 @@ describe("génération de contexte sourcé", () => {
   it("accepte l'attribution des propos à un tiers sans la confondre avec une fraction", async () => {
     mocks.parseMistralJSON.mockReturnValue(
       generatedContext(
-        "Le document rapporte les propos d'un tiers et les distingue de la position défendue par le programme dans cette proposition."
+        "Selon la source citée, ces propos viennent d'un tiers et sont distincts de la position défendue dans cette proposition."
       )
     );
     const { generateMeasureContextDraft } = await import("../context-generation");
@@ -861,7 +876,7 @@ describe("génération de contexte sourcé", () => {
   it("accepte le titre de Première ministre sans le confondre avec un ordinal", async () => {
     mocks.parseMistralJSON.mockReturnValue(
       generatedContext(
-        "Le document attribue cette proposition à la Première ministre et la présente comme une orientation défendue par le programme."
+        "Selon la source citée, cette proposition est attribuée à la Première ministre et constitue une orientation défendue dans cette mesure."
       )
     );
     const { generateMeasureContextDraft } = await import("../context-generation");

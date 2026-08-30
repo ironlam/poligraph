@@ -60,6 +60,8 @@ export type PublicMeasure = {
   /** The published revision this measure points at. Non-null here: the where clause requires it. */
   publishedRevisionId: string;
   text: string;
+  /** Source-backed context published with the reviewed formulation, when available. */
+  details: string | null;
   /** Date of the human review that authorized the published formulation. */
   reviewedAt: Date;
   precision: PublishedRevision["precision"];
@@ -90,6 +92,7 @@ function toPublicMeasure(row: MeasureRow): PublicMeasure | null {
     slug: row.slug,
     publishedRevisionId: revision.id,
     text: revision.text,
+    details: revision.details,
     reviewedAt: revision.reviewedAt!,
     precision: revision.precision,
     theme: row.theme,

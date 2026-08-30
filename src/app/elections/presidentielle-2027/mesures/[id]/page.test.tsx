@@ -22,7 +22,10 @@ const detail = {
     {
       text: "La source précise les territoires concernés et le calendrier annoncé.",
       documentUrl: "https://example.org/programme",
-      references: [{ unitId: "pdf-12-u001", page: 12 }],
+      references: [
+        { unitId: "pdf-12-u001", page: 12 },
+        { unitId: "pdf-12-u002", page: 12 },
+      ],
     },
   ],
   precision: "CHIFFREE",
@@ -79,11 +82,13 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
     expect(screen.getByText("Source primaire")).toBeInTheDocument();
     expect(screen.getByText("Programme de candidature")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Ce que prévoit la mesure" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Contexte et précisions" })).toBeInTheDocument();
     expect(screen.getByText("Vérifier les affirmations dans la source")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Consulter l'extrait source, page 12, lien externe" })
-    ).toHaveAttribute("href", "https://example.org/programme");
+    const evidenceLinks = screen.getAllByRole("link", {
+      name: "Consulter l'extrait source, page 12, lien externe",
+    });
+    expect(evidenceLinks).toHaveLength(1);
+    expect(evidenceLinks[0]).toHaveAttribute("href", "https://example.org/programme");
     expect(screen.getByRole("heading", { name: "Dans le programme" })).toBeInTheDocument();
     expect(screen.getByText("Formulée personnellement")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Consulter le programme/ })).toHaveAttribute(

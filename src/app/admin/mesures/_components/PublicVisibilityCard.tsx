@@ -5,6 +5,7 @@ import {
 } from "@/config/labels";
 import type { PublicMeasure } from "@/lib/data/measures";
 import type { ModerationState } from "@/lib/measures/moderation-state";
+import { MarkdownText } from "@/components/ui/markdown";
 
 /**
  * What the public actually gets for this measure.
@@ -51,6 +52,15 @@ export function PublicVisibilityCard({
           <blockquote className="border-l-2 border-border pl-3 text-sm">
             {publicMeasure.text}
           </blockquote>
+
+          {publicMeasure.details !== null && (
+            <div>
+              <h3 className="text-sm font-medium">Contexte publié</h3>
+              <MarkdownText className="mt-2 text-sm leading-relaxed text-foreground">
+                {publicMeasure.details}
+              </MarkdownText>
+            </div>
+          )}
 
           {publicMeasure.withdrawal !== null && (
             <div className="rounded border border-border bg-muted/40 p-3 text-sm">
