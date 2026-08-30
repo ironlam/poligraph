@@ -60,7 +60,12 @@ async function classifySubtopics(
   }
 
   const vocabulary = allowed
-    .map((item) => `${item.slug}: ${item.label}. ${item.description}`)
+    .map(
+      (item) =>
+        `${item.slug}: ${item.label}. ${item.description}` +
+        (item.aliases.length > 0 ? ` Termes associés : ${item.aliases.join(", ")}.` : "") +
+        (item.classifierGuidance ? ` Périmètre : ${item.classifierGuidance}` : "")
+    )
     .join("\n");
   const prompt = `Classe uniquement le texte de mesure fourni. N'infère ni parti, ni candidat, ni intention. Utilise zéro à trois sous-sujets parmi la liste fermée. Ne choisis rien si le texte est trop vague.
 
