@@ -21,7 +21,7 @@ import {
   type ListResult,
   type CommuneResult,
 } from "./parse-wide-results";
-import { USER_AGENT } from "@/config/site";
+import { decodeAndSplit, downloadBuffer } from "./csv-download";
 
 // ── Data source URLs ────────────────────────────────────────────────────────
 
@@ -58,27 +58,6 @@ type ListWithRound2 = ListResult & {
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Decode a Latin-1 buffer, split by lines, skip header, split each line by delimiter. */
-function decodeAndSplit(buf: Buffer, delimiter: string): string[][] {
-  const text = buf.toString("latin1");
-  const lines = text.split(/\r?\n/);
-  // Skip header line
-  const dataLines = lines.slice(1);
-  return dataLines.filter((line) => line.trim().length > 0).map((line) => line.split(delimiter));
-}
-
-/** Download a URL and return the body as a Buffer. */
-async function downloadBuffer(url: string): Promise<Buffer> {
-  const response = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT },
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
 
 // ── Main sync function ──────────────────────────────────────────────────────
 
