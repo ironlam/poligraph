@@ -258,7 +258,7 @@ function sanitizeSourceText(value: string): string {
 }
 
 const NUMERIC_TOKEN_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:\d{1,3}(?:[\s\u00a0\u202f]\d{3})+|\d+)(?:[.,]\d+)?(?:[\s\u00a0\u202f]*(?:%|millions?|milliards?|euros?))?(?![\p{L}\p{N}_])/giu;
+  /(?<![\p{L}\p{N}_])[+\-\u2212]?(?:\d{1,3}(?:[\s\u00a0\u202f]\d{3})+|\d+)(?:[.,]\d+)?(?:[\s\u00a0\u202f]*(?:%|millions?|milliards?|euros?))?(?![\p{L}\p{N}_])/giu;
 
 function numericTokens(value: string): Set<string> {
   const tokens = value.match(NUMERIC_TOKEN_PATTERN);
@@ -266,6 +266,7 @@ function numericTokens(value: string): Set<string> {
     (tokens ?? []).map((token) =>
       token
         .toLocaleLowerCase("fr")
+        .replace(/\u2212/g, "-")
         .replace(/(?<=\d)[\s\u00a0\u202f](?=\d)/g, "")
         .replace(/[\s\u00a0\u202f]+/g, " ")
     )
@@ -273,7 +274,7 @@ function numericTokens(value: string): Set<string> {
 }
 
 const SPELLED_OUT_QUANTITY_PATTERN =
-  /(?<![\p{L}\p{N}_])(?:zéro|aucun|aucune|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingts?|trente|quarante|cinquante|soixante|cents?|mille|milliers?|millions?|milliards?|dizaines?|douzaines?|quinzaines?|vingtaines?|trentaines?|quarantaines?|cinquantaines?|soixantaines?|centaines?|plusieurs|quelques|majorité|minorité|moitié|quarts?|doubles?|triples?|quadruples?|pour[\s\u00a0\u202f]+cent)(?![\p{L}\p{N}_])/giu;
+  /(?<![\p{L}\p{N}_])(?:zéro|aucun|aucune|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingts?|trente|quarante|cinquante|soixante|cents?|mille|milliers?|millions?|milliards?|dizaines?|douzaines?|quinzaines?|vingtaines?|trentaines?|quarantaines?|cinquantaines?|soixantaines?|centaines?|plusieurs|quelques|nombre|nombreux|nombreuses|majorité|minorité|moitié|quarts?|doubles?|triples?|quadruples?|pour[\s\u00a0\u202f]+cent)(?![\p{L}\p{N}_])/giu;
 
 const CONTEXTUAL_SINGULAR_QUANTITY_PATTERN =
   /(?<![\p{L}\p{N}_])(?:un|une)[\s\u00a0\u202f]+(?:bénéficiaire|personne|emploi|poste|euro|logement|place|année|mois|jour|heure|établissement|entreprise|agent|salarié|fonctionnaire|famille|ménage|enfant|élève|étudiant|enseignant|médecin|lit)(?:e|s|es)?(?![\p{L}\p{N}_])/giu;

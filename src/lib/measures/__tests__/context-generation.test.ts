@@ -295,6 +295,19 @@ describe("génération de contexte sourcé", () => {
     });
   });
 
+  it("refuse d'inverser le signe d'une quantité présente dans la preuve", async () => {
+    mocks.parseMistralJSON.mockReturnValue(
+      generatedContext(
+        "Le programme présente cette proposition comme un droit destiné à -67 millions de personnes."
+      )
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
+      "quantité absente de la preuve citée"
+    );
+  });
+
   it("refuse qu'un numéro de proposition justifie une quantité inventée", async () => {
     mocks.parseMistralJSON.mockReturnValue(
       generatedContext(
@@ -335,21 +348,23 @@ describe("génération de contexte sourcé", () => {
     );
   });
 
-  it.each(["plusieurs milliers d’emplois", "une centaine de bénéficiaires"])(
-    "refuse aussi la quantité approximative « %s »",
-    async (quantity) => {
-      mocks.parseMistralJSON.mockReturnValue(
-        generatedContext(
-          `Le programme rattache cette proposition à un objectif qui concernerait ${quantity}, sans apporter davantage d'éléments de contexte.`
-        )
-      );
-      const { generateMeasureContextDraft } = await import("../context-generation");
+  it.each([
+    "plusieurs milliers d’emplois",
+    "une centaine de bénéficiaires",
+    "de nombreuses personnes",
+    "un grand nombre de personnes",
+  ])("refuse aussi la quantité approximative « %s »", async (quantity) => {
+    mocks.parseMistralJSON.mockReturnValue(
+      generatedContext(
+        `Le programme rattache cette proposition à un objectif qui concernerait ${quantity}, sans apporter davantage d'éléments de contexte.`
+      )
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
 
-      await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
-        "quantité absente de la preuve citée"
-      );
-    }
-  );
+    await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
+      "quantité absente de la preuve citée"
+    );
+  });
 
   it.each(["aucun logement", "un bénéficiaire", "une première phase", "un tiers des Français"])(
     "refuse la quantité non sourcée « %s »",
