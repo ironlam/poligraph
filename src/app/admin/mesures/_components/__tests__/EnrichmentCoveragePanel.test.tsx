@@ -26,7 +26,7 @@ describe("EnrichmentCoveragePanel", () => {
     expect(screen.getByText("58 %")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Compléter 2.102 contextes/ })).toHaveAttribute(
       "href",
-      "/admin/mesures?enrichissement=DETAILS_MISSING"
+      "/admin/mesures?corpus=presidentielle-2027&enrichissement=DETAILS_MISSING"
     );
   });
 

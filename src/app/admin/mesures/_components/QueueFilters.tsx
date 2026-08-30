@@ -25,6 +25,7 @@ export type QueueFilterState = {
   enrichment: EnrichmentState | undefined;
   withdrawn: "only" | "exclude" | undefined;
   q: string | undefined;
+  publicCorpus: "PRESIDENTIELLE_2027" | undefined;
 };
 
 const BASE_PATH = "/admin/mesures";
@@ -53,6 +54,9 @@ function hrefWith(current: QueueFilterState, patch: Partial<QueueFilterState>): 
   if (next.enrichment) params.set("enrichissement", next.enrichment);
   if (next.withdrawn) params.set("retrait", next.withdrawn);
   if (next.q) params.set("q", next.q);
+  if (next.publicCorpus === "PRESIDENTIELLE_2027") {
+    params.set("corpus", "presidentielle-2027");
+  }
 
   const query = params.toString();
   return query === "" ? BASE_PATH : `${BASE_PATH}?${query}`;
@@ -244,6 +248,9 @@ export function QueueFilters({
           <input type="hidden" name="enrichissement" value={current.enrichment} />
         )}
         {current.withdrawn && <input type="hidden" name="retrait" value={current.withdrawn} />}
+        {current.publicCorpus === "PRESIDENTIELLE_2027" ? (
+          <input type="hidden" name="corpus" value="presidentielle-2027" />
+        ) : null}
 
         <div className="flex-1">
           <label

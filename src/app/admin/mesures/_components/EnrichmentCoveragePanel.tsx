@@ -60,7 +60,7 @@ export function EnrichmentCoveragePanel({ coverage }: { coverage: MeasureEnrichm
         </div>
         {missingDetails > 0 ? (
           <Link
-            href="/admin/mesures?enrichissement=DETAILS_MISSING"
+            href="/admin/mesures?corpus=presidentielle-2027&enrichissement=DETAILS_MISSING"
             prefetch={false}
             className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
           >

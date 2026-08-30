@@ -1,5 +1,6 @@
 import type { Prisma, ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 import {
   deriveModerationState,
   MODERATION_MEASURE_SELECT,
@@ -41,6 +42,7 @@ export type MeasureQueueFilters = {
   withdrawn?: "only" | "exclude";
   anomaliesOnly?: boolean;
   enrichment?: EnrichmentState;
+  publicCorpus?: "PRESIDENTIELLE_2027";
   q?: string;
   take?: number;
   skip?: number;
@@ -111,6 +113,13 @@ function clampSkip(skip: number | undefined): number {
 function buildWhere(filters: MeasureQueueFilters): Prisma.MeasureWhereInput {
   const where: Prisma.MeasureWhereInput = {};
 
+  if (filters.publicCorpus === "PRESIDENTIELLE_2027") {
+    Object.assign(where, {
+      election: { slug: "presidentielle-2027" },
+      ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+    });
+  }
+
   if (filters.theme && filters.theme.length > 0) where.theme = { in: filters.theme };
   if (filters.electionId) where.electionId = filters.electionId;
   if (filters.candidacyId) where.candidacyId = filters.candidacyId;
@@ -124,6 +133,24 @@ function buildWhere(filters: MeasureQueueFilters): Prisma.MeasureWhereInput {
     // the substring behaviour the index refuses to give.
     const like = filters.q.trim();
     where.revisions = { some: { text: { contains: like, mode: "insensitive" } } };
+  }
+
+  if (filters.enrichment === "DETAILS_MISSING") {
+    const missingDetails = { OR: [{ details: null }, { details: "" }] };
+    where.AND = [
+      {
+        OR: [
+          {
+            publishedRevisionId: { not: null },
+            publishedRevision: { is: missingDetails },
+          },
+          {
+            publishedRevisionId: null,
+            latestRevision: { is: missingDetails },
+          },
+        ],
+      },
+    ];
   }
 
   return where;
@@ -203,14 +230,27 @@ export async function queryMeasureQueue(
   const take = clampTake(filters.take);
   const skip = clampSkip(filters.skip);
 
-  const scanned = await db.measure.findMany({
-    where: buildWhere(filters),
+  const where = buildWhere(filters);
+  const scanQuery = {
+    where,
     select: QUEUE_SELECT,
-    // Oldest first: a queue that shows the newest extractions first leaves the oldest
-    // untreated measures at the bottom forever. The page states the order.
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "asc" } as const,
     take: QUEUE_SCAN_CAP + 1,
-  });
+  };
+  const detailsMissingIsDatabaseFiltered = filters.enrichment === "DETAILS_MISSING";
+  const [scanned, exactPage, exactTotal] = await Promise.all([
+    db.measure.findMany(scanQuery),
+    detailsMissingIsDatabaseFiltered
+      ? db.measure.findMany({
+          where,
+          select: QUEUE_SELECT,
+          orderBy: { createdAt: "asc" },
+          skip,
+          take,
+        })
+      : Promise.resolve(null),
+    detailsMissingIsDatabaseFiltered ? db.measure.count({ where }) : Promise.resolve(null),
+  ]);
 
   const scanCapped = scanned.length > QUEUE_SCAN_CAP;
   const rows = scanned.slice(0, QUEUE_SCAN_CAP).map(toQueueRow);
@@ -232,6 +272,20 @@ export async function queryMeasureQueue(
     if (row.suggestedSubtopicCount > 0) enrichmentCounts.SUBTOPICS_PENDING += 1;
     if (row.approvedSubtopicCount > 0) enrichmentCounts.SUBTOPICS_APPROVED += 1;
     if (!row.hasDetails) enrichmentCounts.DETAILS_MISSING += 1;
+  }
+
+  if (exactTotal !== null) enrichmentCounts.DETAILS_MISSING = exactTotal;
+
+  if (exactPage !== null && exactTotal !== null) {
+    return {
+      rows: exactPage.map(toQueueRow).filter((row) => matchesDerivedFilters(row, filters)),
+      total: exactTotal,
+      counts,
+      anomalyCount,
+      withdrawnCount,
+      enrichmentCounts,
+      scanCapped,
+    };
   }
 
   const matching = rows.filter((row) => matchesDerivedFilters(row, filters));

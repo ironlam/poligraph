@@ -65,7 +65,12 @@ export async function queryMeasureEnrichmentCoverage(): Promise<MeasureEnrichmen
     db.measure.count({
       where: withPublishedRevision({ qualifications: { some: {} } }),
     }),
-    db.measure.count({ where: { ...base, voteLinks: { some: {} } } }),
+    db.measureRevision.count({
+      where: {
+        publishedOf: { is: base },
+        applicableVoteLinks: { some: {} },
+      },
+    }),
     db.measure.count({
       where: withPublishedRevision({ sources: { some: { page: { not: null } } } }),
     }),

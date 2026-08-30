@@ -21,6 +21,7 @@ const CURRENT: QueueFilterState = {
   enrichment: "SUBTOPICS_PENDING",
   withdrawn: "exclude",
   q: "hôpital",
+  publicCorpus: undefined,
 };
 
 const CANDIDATES = [
@@ -79,5 +80,21 @@ describe("QueueFilters", () => {
       "true"
     );
     expect(screen.getByRole("link", { name: "Contexte à compléter 8" })).toBeInTheDocument();
+  });
+
+  it("conserve le périmètre du corpus public dans les liens et la recherche", () => {
+    const { container } = render(
+      <QueueFilters
+        current={{ ...CURRENT, publicCorpus: "PRESIDENTIELLE_2027" }}
+        result={RESULT}
+        candidates={CANDIDATES}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Camille Exemple" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("corpus=presidentielle-2027")
+    );
+    expect(container.querySelector('input[name="corpus"]')).toHaveValue("presidentielle-2027");
   });
 });

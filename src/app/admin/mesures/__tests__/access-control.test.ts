@@ -180,6 +180,25 @@ describe("accès aux écrans de modération des mesures", () => {
     });
   });
 
+  it("transmet le périmètre public présidentiel à la file", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { default: QueuePage } = await import("../page");
+
+    await QueuePage({
+      searchParams: Promise.resolve({
+        corpus: "presidentielle-2027",
+        enrichissement: "DETAILS_MISSING",
+      }),
+    });
+
+    expect(queryMeasureQueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrichment: "DETAILS_MISSING",
+        publicCorpus: "PRESIDENTIELLE_2027",
+      })
+    );
+  });
+
   it("garde les trois écrans hors des index", async () => {
     // A crawled admin page would publish unreviewed editorial text under our name.
     const queue = await import("../page");

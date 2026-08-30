@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { countMock } = vi.hoisted(() => ({ countMock: vi.fn() }));
+const { measureCountMock, revisionCountMock } = vi.hoisted(() => ({
+  measureCountMock: vi.fn(),
+  revisionCountMock: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
-  db: { measure: { count: countMock } },
+  db: {
+    measure: { count: measureCountMock },
+    measureRevision: { count: revisionCountMock },
+  },
 }));
 
 import { queryMeasureEnrichmentCoverage } from "../enrichment-coverage-query";
@@ -14,14 +20,14 @@ describe("queryMeasureEnrichmentCoverage", () => {
   });
 
   it("retourne les sept compteurs exacts du corpus public", async () => {
-    countMock
+    measureCountMock
       .mockResolvedValueOnce(2200)
       .mockResolvedValueOnce(98)
       .mockResolvedValueOnce(982)
       .mockResolvedValueOnce(12)
-      .mockResolvedValueOnce(8)
       .mockResolvedValueOnce(1277)
       .mockResolvedValueOnce(4);
+    revisionCountMock.mockResolvedValueOnce(8);
 
     await expect(queryMeasureEnrichmentCoverage()).resolves.toEqual({
       total: 2200,
@@ -33,8 +39,9 @@ describe("queryMeasureEnrichmentCoverage", () => {
       withHistory: 4,
     });
 
-    expect(countMock).toHaveBeenCalledTimes(7);
-    for (const [request] of countMock.mock.calls) {
+    expect(measureCountMock).toHaveBeenCalledTimes(6);
+    expect(revisionCountMock).toHaveBeenCalledOnce();
+    for (const [request] of measureCountMock.mock.calls) {
       expect(request.where).toEqual(
         expect.objectContaining({
           election: { slug: "presidentielle-2027" },
@@ -46,11 +53,12 @@ describe("queryMeasureEnrichmentCoverage", () => {
   });
 
   it("compte uniquement les sous-thèmes validés et actifs", async () => {
-    countMock.mockResolvedValue(0);
+    measureCountMock.mockResolvedValue(0);
+    revisionCountMock.mockResolvedValue(0);
 
     await queryMeasureEnrichmentCoverage();
 
-    expect(countMock).toHaveBeenNthCalledWith(
+    expect(measureCountMock).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
         where: expect.objectContaining({
@@ -64,5 +72,24 @@ describe("queryMeasureEnrichmentCoverage", () => {
         }),
       })
     );
+  });
+
+  it("compte uniquement les votes applicables à la révision publiée", async () => {
+    measureCountMock.mockResolvedValue(0);
+    revisionCountMock.mockResolvedValue(0);
+
+    await queryMeasureEnrichmentCoverage();
+
+    expect(revisionCountMock).toHaveBeenCalledWith({
+      where: {
+        publishedOf: {
+          is: expect.objectContaining({
+            election: { slug: "presidentielle-2027" },
+            publicationStatus: "PUBLISHED",
+          }),
+        },
+        applicableVoteLinks: { some: {} },
+      },
+    });
   });
 });
