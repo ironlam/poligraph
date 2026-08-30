@@ -57,8 +57,9 @@ export function ContextGenerationBatchPanel({ measureIds }: { measureIds: string
         </>
       ) : (
         <p className="mt-3 rounded border border-border bg-muted/40 p-3 text-sm leading-relaxed">
-          Aucune mesure de cette page ne dispose actuellement d’extraits de preuve permettant une
-          génération automatique. Le contexte peut être rédigé manuellement depuis chaque fiche.
+          Aucune mesure de cette page n’est actuellement éligible à la génération automatique. Une
+          preuve contextuelle peut manquer, un brouillon peut être actif ou une tentative peut déjà
+          avoir été enregistrée. Consultez la fiche pour connaître sa situation.
         </p>
       )}
       {message && (
