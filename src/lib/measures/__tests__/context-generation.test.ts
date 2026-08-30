@@ -65,12 +65,14 @@ function measure(overrides: Record<string, unknown> = {}) {
 
 function generatedContext(details: string, evidenceUnitIds = ["pdf-12-2-u001", "pdf-13-1-u001"]) {
   return {
-    details,
     claims: [{ text: details, evidenceUnitIds }],
   };
 }
 
-function measureWithSupportingContext(context: string) {
+function measureWithSupportingContext(
+  context: string,
+  numbers: Array<{ raw: string; normalized: string; role: "STRUCTURAL" | "CONTENT" }> = []
+) {
   const snapshot = validEvidenceSnapshot();
   const anchor = snapshot.units.find((unit) => unit.role === "COMMITMENT_ANCHOR");
   const supporting = snapshot.units.find((unit) => unit.role === "SUPPORTING_CONTEXT");
@@ -78,6 +80,7 @@ function measureWithSupportingContext(context: string) {
   const hash = createHash("sha256").update(context, "utf8").digest("hex");
   supporting.rawExactText = context;
   supporting.canonicalText = context;
+  supporting.numbers = numbers;
   supporting.rawTextHash = hash;
   supporting.canonicalTextHash = hash;
   snapshot.canonicalEvidenceHash = createHash("sha256")
@@ -126,7 +129,7 @@ describe("génération de contexte sourcé", () => {
         preserveEvidenceFromRevisionId: "revision-1",
         revision: expect.objectContaining({
           extractionMethod: "AI_ASSISTED",
-          extractorVersion: "mistral-small-2506:measure-context-v7",
+          extractorVersion: "mistral-small-2506:measure-context-v8",
           details: expect.stringContaining("droit aux vacances"),
         }),
         generatedContext: expect.objectContaining({
@@ -137,7 +140,7 @@ describe("génération de contexte sourcé", () => {
           ],
           evidenceUnitIds: ["pdf-12-2-u001", "pdf-13-1-u001"],
           ipAddress: "203.0.113.8",
-          promptVersion: "measure-context-v7",
+          promptVersion: "measure-context-v8",
           userAgent: "vitest-agent",
         }),
       })
@@ -281,7 +284,6 @@ describe("génération de contexte sourcé", () => {
     const secondClaim =
       "Le document la rattache au constat qu’une partie de la population ne part pas en vacances.";
     mocks.parseMistralJSON.mockReturnValue({
-      details: `${firstClaim} ${secondClaim}`,
       claims: [
         { text: firstClaim, evidenceUnitIds: ["pdf-12-2-u001"] },
         { text: secondClaim, evidenceUnitIds: ["pdf-13-1-u001"] },
@@ -293,6 +295,71 @@ describe("génération de contexte sourcé", () => {
       status: "CREATED",
       evidenceUnitIds: ["pdf-12-2-u001", "pdf-13-1-u001"],
     });
+  });
+
+  it("reconnaît le symbole euro et son libellé comme la même unité", async () => {
+    mocks.findMeasure.mockResolvedValue(
+      measureWithSupportingContext(
+        "Le programme prévoit une aide de 2 000 € pour les personnes concernées.",
+        [{ raw: "2 000", normalized: "2000", role: "CONTENT" }]
+      )
+    );
+    mocks.parseMistralJSON.mockReturnValue(
+      generatedContext(
+        "Le programme présente cette proposition comme une aide de 2000 euros destinée aux personnes concernées par le dispositif.",
+        ["pdf-13-1-u001"]
+      )
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(generateMeasureContextDraft("measure-1")).resolves.toMatchObject({
+      status: "CREATED",
+    });
+  });
+
+  it("refuse d'ajouter l'unité euro à un nombre qui n'en a pas dans la preuve", async () => {
+    mocks.findMeasure.mockResolvedValue(
+      measureWithSupportingContext("Le programme évoque 2000 personnes concernées.", [
+        { raw: "2000", normalized: "2000", role: "CONTENT" },
+      ])
+    );
+    mocks.parseMistralJSON.mockReturnValue(
+      generatedContext(
+        "Le programme présente cette proposition comme une aide de 2000 euros destinée aux personnes concernées par le dispositif.",
+        ["pdf-13-1-u001"]
+      )
+    );
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(generateMeasureContextDraft("measure-1")).rejects.toThrow(
+      "quantité absente de la preuve citée"
+    );
+  });
+
+  it("construit le contexte depuis les seules affirmations sourcées", async () => {
+    const claim =
+      "Le programme présente cette proposition comme un droit aux vacances et la rattache au constat qu’une partie de la population ne part pas en vacances.";
+    mocks.parseMistralJSON.mockReturnValue({
+      claims: [
+        {
+          text: claim,
+          evidenceUnitIds: ["pdf-12-2-u001", "pdf-13-1-u001"],
+        },
+      ],
+    });
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(generateMeasureContextDraft("measure-1")).resolves.toMatchObject({
+      status: "CREATED",
+      details: claim,
+    });
+    expect(mocks.draftMeasureRevision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        measureId: "measure-1",
+        revision: expect.objectContaining({ details: claim }),
+      })
+    );
+    expect(mocks.callMistral.mock.calls[0]?.[0]?.[0]?.content).not.toContain('"details"');
   });
 
   it("refuse d'inverser le signe d'une quantité présente dans la preuve", async () => {
@@ -512,7 +579,7 @@ describe("génération de contexte sourcé", () => {
   });
 
   it("accepte que le modèle juge le contexte insuffisant sans créer de brouillon", async () => {
-    mocks.parseMistralJSON.mockReturnValue({ details: null, claims: [] });
+    mocks.parseMistralJSON.mockReturnValue({ claims: [] });
     const { generateMeasureContextDraft } = await import("../context-generation");
 
     await expect(generateMeasureContextDraft("measure-1")).resolves.toEqual({
@@ -530,7 +597,7 @@ describe("génération de contexte sourcé", () => {
   });
 
   it("refuse de tracer une issue terminale à partir d'une version devenue obsolète", async () => {
-    mocks.parseMistralJSON.mockReturnValue({ details: null, claims: [] });
+    mocks.parseMistralJSON.mockReturnValue({ claims: [] });
     mocks.findMeasureForUpdate.mockResolvedValue({
       latestRevisionId: "revision-1",
       publishedRevisionId: "revision-1",
@@ -629,6 +696,39 @@ describe("génération de contexte sourcé", () => {
     const { filterMeasureContextCandidateIds } = await import("../context-generation");
 
     await expect(filterMeasureContextCandidateIds(["measure-exhausted"])).resolves.toEqual([]);
+  });
+
+  it("réouvre le budget après une évolution du générateur", async () => {
+    const candidate = {
+      id: "measure-old-prompt",
+      latestRevisionId: "revision-old-prompt",
+      publishedRevisionId: "revision-old-prompt",
+      publishedRevision: { evidenceSnapshot: validEvidenceSnapshot() },
+    };
+    mocks.findMeasures.mockResolvedValue([candidate]);
+    mocks.findAuditLogs.mockResolvedValue([
+      {
+        action: "GENERATE_CONTEXT_INVALID_RESULT",
+        changes: {
+          outcome: "INVALID_GENERATED_CONTEXT",
+          promptVersion: "measure-context-v7",
+        },
+        entityId: "revision-old-prompt",
+      },
+      {
+        action: "GENERATE_CONTEXT_TERMINAL_RESULT",
+        changes: {
+          outcome: "INVALID_GENERATED_CONTEXT",
+          promptVersion: "measure-context-v7",
+        },
+        entityId: "revision-old-prompt",
+      },
+    ]);
+    const { filterMeasureContextCandidateIds } = await import("../context-generation");
+
+    await expect(filterMeasureContextCandidateIds(["measure-old-prompt"])).resolves.toEqual([
+      "measure-old-prompt",
+    ]);
   });
 
   it("exclut temporairement une révision réservée par une autre génération", async () => {
@@ -772,7 +872,7 @@ describe("génération de contexte sourcé", () => {
   });
 
   it("invalide le jeton de version avec l'issue terminale", async () => {
-    mocks.parseMistralJSON.mockReturnValue({ details: null, claims: [] });
+    mocks.parseMistralJSON.mockReturnValue({ claims: [] });
     const { generateMeasureContextDraft } = await import("../context-generation");
 
     await generateMeasureContextDraft("measure-1");
