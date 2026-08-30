@@ -100,6 +100,14 @@ export default function PresidentialMeasuresMethodologyPage() {
               sous-thèmes issus d&apos;une taxonomie fermée peuvent être proposés automatiquement,
               mais ils ne deviennent publics qu&apos;après validation humaine.
             </p>
+            <p>
+              Lorsqu&apos;un sous-thème est ajouté à cette taxonomie, Poligraph analyse uniquement
+              les mesures susceptibles d&apos;être concernées et un petit échantillon témoin. Cette
+              analyse produit des suggestions, jamais des validations automatiques. La version de la
+              taxonomie, les critères de sélection et la décision proposée sont conservés dans le
+              journal d&apos;audit. Une personne doit ensuite approuver chaque rattachement avant
+              son affichage public.
+            </p>
           </div>
         </section>
 

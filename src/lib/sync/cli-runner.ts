@@ -21,6 +21,7 @@
  */
 
 import { db } from "../db";
+import { parseCLIOptions } from "../cli/parse-options";
 import { formatHeader, formatResults } from "./result-formatter";
 import type { CLIOptionDefinition, SyncHandler, SyncOptions, SyncResult } from "./types";
 
@@ -45,38 +46,8 @@ const STANDARD_OPTIONS: CLIOptionDefinition[] = [
  * Parse command line arguments
  */
 function parseArgs(args: string[], customOptions?: SyncHandler["options"]): SyncOptions {
-  const options: SyncOptions = {};
   const allOptions = [...STANDARD_OPTIONS, ...(customOptions ?? [])];
-
-  for (const arg of args) {
-    // Handle --key=value format
-    if (arg.includes("=")) {
-      const [key, value] = arg.split("=", 2);
-      const optDef = allOptions.find((o) => o.name === key || o.alias === key);
-      if (optDef) {
-        const optName = optDef.name
-          .replace(/^--/, "")
-          .replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-        if (optDef.type === "number") {
-          options[optName] = parseInt(value!, 10);
-        } else {
-          options[optName] = value;
-        }
-      }
-      continue;
-    }
-
-    // Handle boolean flags
-    const optDef = allOptions.find((o) => o.name === arg || o.alias === arg);
-    if (optDef && optDef.type === "boolean") {
-      const optName = optDef.name
-        .replace(/^--/, "")
-        .replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-      options[optName] = true;
-    }
-  }
-
-  return options;
+  return parseCLIOptions(args, allOptions) as SyncOptions;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { ThemeCategory } from "@/generated/prisma";
 
-export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-29-v3";
+export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-30-v4";
+export const MEASURE_SUBTOPIC_PREVIOUS_TAXONOMY_VERSION = "2026-08-29-v3";
 
 export type MeasureSubtopicDefinition = {
   slug: string;
@@ -8,6 +9,8 @@ export type MeasureSubtopicDefinition = {
   description: string;
   theme: ThemeCategory;
   aliases: string[];
+  classifierGuidance?: string;
+  selectionNeighborSlugs?: string[];
   sortOrder: number;
 };
 
@@ -17,9 +20,20 @@ function topic(
   slug: string,
   label: string,
   description: string,
-  aliases: string[] = []
+  aliases: string[] = [],
+  classifierGuidance?: string,
+  selectionNeighborSlugs?: string[]
 ): MeasureSubtopicDefinition {
-  return { theme, sortOrder, slug, label, description, aliases };
+  return {
+    theme,
+    sortOrder,
+    slug,
+    label,
+    description,
+    aliases,
+    classifierGuidance,
+    selectionNeighborSlugs,
+  };
 }
 
 /**
@@ -132,25 +146,37 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
     10,
     "egalite-discriminations",
     "Égalité et discriminations",
-    "Égalité devant la loi et lutte contre les discriminations."
+    "Égalité devant la loi et lutte contre les discriminations.",
+    [],
+    "Utiliser pour les discriminations génériques ou fondées sur un critère autre que l’origine ou l’appartenance réelle ou supposée. Peut être associé à racisme-antisemitisme quand les deux périmètres sont explicitement traités."
   ),
   topic(
     "SOCIETE_DROITS_LIBERTES",
     20,
+    "racisme-antisemitisme",
+    "Racisme et antisémitisme",
+    "Prévention et lutte contre le racisme, l’antisémitisme, la xénophobie et les discriminations fondées sur l’origine ou l’appartenance réelle ou supposée.",
+    ["racisme", "raciste", "antisémitisme", "antisémite", "xénophobie", "discriminations raciales"],
+    "Utiliser pour l’origine, la couleur de peau, l’appartenance ethnique ou religieuse réelle ou supposée, le racisme, l’antisémitisme ou la xénophobie. Le thème parent unique est une limite de la taxonomie actuelle, ce sous-thème n’est pas encore une facette transversale.",
+    ["egalite-discriminations"]
+  ),
+  topic(
+    "SOCIETE_DROITS_LIBERTES",
+    30,
     "droits-des-femmes",
     "Droits des femmes",
     "Égalité entre les femmes et les hommes et droits reproductifs."
   ),
   topic(
     "SOCIETE_DROITS_LIBERTES",
-    30,
+    40,
     "famille-bioethique",
     "Famille et bioéthique",
     "Droit de la famille, filiation, bioéthique et fin de vie."
   ),
   topic(
     "SOCIETE_DROITS_LIBERTES",
-    40,
+    50,
     "libertes-publiques-societe",
     "Libertés publiques",
     "Libertés d’expression, d’association, de manifestation et de conscience."

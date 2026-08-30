@@ -5,36 +5,10 @@ import {
   syncMeasureSubtopicTaxonomy,
 } from "../src/lib/measures/subtopics";
 import { getMistralTokensUsed } from "../src/lib/api/mistral";
-
-type Options = {
-  electionSlug: string;
-  candidateSlug?: string;
-  limit: number;
-  dryRun: boolean;
-  force: boolean;
-};
-
-function valueAfter(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  return index === -1 ? undefined : args[index + 1];
-}
-
-function parseOptions(args: string[]): Options {
-  const rawLimit = Number(valueAfter(args, "--limit") ?? "50");
-  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 500) {
-    throw new Error("--limit doit être un entier compris entre 1 et 500");
-  }
-  return {
-    electionSlug: valueAfter(args, "--election") ?? "presidentielle-2027",
-    candidateSlug: valueAfter(args, "--candidate"),
-    limit: rawLimit,
-    dryRun: args.includes("--dry-run"),
-    force: args.includes("--force"),
-  };
-}
+import { parseMeasureSubtopicClassificationOptions } from "../src/lib/measures/subtopic-classification-options";
 
 async function main(): Promise<void> {
-  const options = parseOptions(process.argv.slice(2));
+  const options = parseMeasureSubtopicClassificationOptions(process.argv.slice(2));
   if (!process.env.MISTRAL_API_KEY) {
     throw new Error("MISTRAL_API_KEY doit être définie dans .env");
   }
