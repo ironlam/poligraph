@@ -144,6 +144,16 @@ résultats, précision, taux de zéro résultat, faux positifs éditoriaux, late
 requête. Le lancement exige une amélioration mesurable sur les synonymes et les phrases, sans
 régression sur les noms propres et les recherches exactes.
 
+Le benchmark lexical de référence se lance en lecture seule avec :
+
+```bash
+npm run search:evaluate -- --election=presidentielle-2027 --top-k=5 --limit=12
+```
+
+Il exécute les 50 cas éditoriaux de `src/config/presidential-search-evaluation.ts` et écrit un
+rapport JSON dans `.tmp/presidential-search-evaluation/`. Ce rapport doit être conservé hors Git
+avec les données d'analyse privées, puis comparé aux rapports vectoriel et hybride du même corpus.
+
 ## Découpage proposé
 
 1. Jeu d'évaluation et instrumentation de la recherche actuelle.
