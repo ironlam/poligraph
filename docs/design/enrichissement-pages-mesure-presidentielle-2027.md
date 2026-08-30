@@ -43,11 +43,19 @@ Règles proposées :
 - 80 à 250 mots lorsque la source contient réellement ces informations ;
 - aucune reformulation sur la faisabilité, l'intention ou les effets supposés ;
 - chaque élément doit être vérifiable dans une source attachée à la révision ;
+- chaque affirmation générée doit conserver les identifiants exacts des extraits qui la soutiennent ;
+- une quantité est admise uniquement lorsqu'elle figure dans l'extrait cité par l'affirmation ;
 - génération par IA autorisée comme proposition de brouillon, jamais comme publication automatique ;
 - validation humaine et date de revue obligatoires.
 
 Lorsque la source ne dit rien de plus que le titre, le bloc reste absent. Un texte redondant ferait
 baisser la valeur de la page au lieu de l'améliorer.
+
+Les définitions externes ne doivent pas être enregistrées dans `MeasureRevision.details`. Ce champ
+décrit le contenu du programme et son origine ne doit pas devenir ambiguë. Un futur bloc « Repères
+pour comprendre » utilisera un circuit distinct, avec une source fournie par le document lui-même ou
+une source institutionnelle officielle, son URL, sa date de vérification et une validation humaine.
+Une source journalistique ou généraliste ne suffira pas pour générer automatiquement une définition.
 
 ### 2. Repères structurés
 
