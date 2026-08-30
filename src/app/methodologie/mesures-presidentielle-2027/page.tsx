@@ -69,6 +69,13 @@ export default function PresidentialMeasuresMethodologyPage() {
               édition de programme existe, la fiche indique le document, sa date et
               l&apos;emplacement connu de la mesure.
             </p>
+            <p>
+              Le contexte qui explique ce que prévoit une mesure repose uniquement sur sa source
+              attachée. Une définition ajoutée pour expliquer une notion technique suit un circuit
+              distinct : elle doit provenir de la source elle-même ou d&apos;un site institutionnel
+              officiel, avec son URL et sa date de vérification. Elle n&apos;est jamais présentée
+              comme un élément du programme.
+            </p>
           </div>
         </section>
 
@@ -86,6 +93,11 @@ export default function PresidentialMeasuresMethodologyPage() {
               L&apos;intelligence artificielle peut aider à extraire ou classer un contenu. Elle ne
               publie pas une mesure, ne lui prête pas une intention et ne décide pas seule des
               rapprochements présentés au public.
+            </p>
+            <p>
+              Lorsqu&apos;elle propose un contexte, chaque affirmation est rattachée aux extraits
+              qui la soutiennent. Une quantité n&apos;est conservée que si elle figure dans
+              l&apos;extrait cité. Le résultat reste un brouillon soumis à une relecture humaine.
             </p>
           </div>
         </section>

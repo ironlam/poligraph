@@ -134,6 +134,44 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             <MarkdownText className="mt-4 max-w-[72ch] leading-relaxed text-foreground">
               {measure.details}
             </MarkdownText>
+            {measure.contextClaims.length > 0 ? (
+              <details className="group mt-5 max-w-[72ch] rounded-xl border border-border bg-card">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 py-3 font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+                  Vérifier les affirmations dans la source
+                </summary>
+                <ol className="space-y-4 border-t border-border px-4 py-4">
+                  {measure.contextClaims.map((claim, claimIndex) => (
+                    <li key={`${claim.text}-${claimIndex}`}>
+                      <p className="text-sm leading-relaxed text-foreground">{claim.text}</p>
+                      <ul className="mt-2 flex flex-wrap gap-3">
+                        {claim.references.map((reference) => (
+                          <li key={reference.unitId}>
+                            <a
+                              href={claim.documentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Consulter l'extrait source${reference.page === null ? "" : `, page ${reference.page}`}, lien externe`}
+                              className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                            >
+                              Extrait source
+                              {reference.page === null ? "" : `, page ${reference.page}`}
+                              <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            ) : measure.sources.length > 0 ? (
+              <Link
+                href="#sources"
+                className="mt-3 inline-flex min-h-11 items-center font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                Voir les sources utilisées pour ce contexte
+              </Link>
+            ) : null}
           </section>
         )}
 
@@ -282,7 +320,11 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           </section>
         )}
 
-        <section aria-labelledby="sources-title" className="border-t border-border py-8">
+        <section
+          id="sources"
+          aria-labelledby="sources-title"
+          className="border-t border-border py-8"
+        >
           <h2 id="sources-title" className="font-display text-2xl font-extrabold">
             Sources
           </h2>
