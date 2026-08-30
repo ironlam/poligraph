@@ -77,11 +77,16 @@ describe("classification des sous-sujets de mesure", () => {
     mocks.findAuditLogs.mockResolvedValue([]);
     mocks.transaction.mockImplementation(async (callback) => callback(transactionClient));
     mocks.findSubtopics.mockResolvedValue([]);
-    mocks.findSubtopicInTransaction.mockResolvedValue({ id: "subtopic-1", active: true });
+    mocks.findSubtopicInTransaction.mockResolvedValue({
+      id: "subtopic-1",
+      active: true,
+      theme: "SOCIETE_DROITS_LIBERTES",
+    });
     mocks.queryRaw.mockResolvedValue([
       {
         measureId: "measure-1",
         revisionId: "revision-1",
+        theme: "SOCIETE_DROITS_LIBERTES",
         text: "Lutter contre le racisme.",
         details: null,
         updatedAt: new Date("2026-08-30T00:00:00.000Z"),
@@ -265,6 +270,72 @@ describe("classification des sous-sujets de mesure", () => {
         sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
       })
     ).resolves.toEqual({ created: false, status: "SUBTOPIC_LIMIT_REACHED" });
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
+  });
+
+  it("refuse une suggestion après un changement concurrent de thème", async () => {
+    mocks.queryRaw.mockResolvedValue([
+      {
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        theme: "ECONOMIE_BUDGET",
+        text: "Lutter contre le racisme.",
+        details: null,
+        updatedAt: new Date("2026-08-30T00:00:00.000Z"),
+      },
+    ]);
+    const { proposeMeasureRevisionSubtopicDelta } = await import("../subtopics");
+
+    await expect(
+      proposeMeasureRevisionSubtopicDelta({
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.97,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: "2026-08-30-v4",
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "Le texte vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
+      })
+    ).rejects.toThrow("ne correspond plus au sous-thème");
+    expect(mocks.createAssignments).not.toHaveBeenCalled();
+  });
+
+  it("valide tout le lot avant de créer la première suggestion", async () => {
+    const { proposeMeasureRevisionSubtopicDeltaBatch } = await import("../subtopics");
+    const common = {
+      subtopicSlug: "racisme-antisemitisme",
+      confidence: 0.97,
+      classifierVersion: "mistral:subtopic-delta-v1",
+      taxonomyVersion: "2026-08-30-v4",
+      runId: "run-1",
+      decision: "APPLIES" as const,
+      justification: "Le texte vise explicitement le racisme.",
+      evidenceExcerpt: "Lutter contre le racisme",
+      selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+    };
+
+    await expect(
+      proposeMeasureRevisionSubtopicDeltaBatch([
+        {
+          ...common,
+          measureId: "measure-1",
+          revisionId: "revision-1",
+          sourceFingerprint: "e63c756297de972f6128871c12d4f0b7635dd3c2661eb1785b0ce8ef95f7f618",
+        },
+        {
+          ...common,
+          measureId: "measure-2",
+          revisionId: "revision-2",
+          sourceFingerprint: "fingerprint-2",
+        },
+      ])
+    ).rejects.toThrow("measure-2 a changé depuis le dry-run");
+    expect(mocks.findAssignment).not.toHaveBeenCalled();
     expect(mocks.createAssignments).not.toHaveBeenCalled();
   });
 

@@ -52,7 +52,36 @@ function normalize(value: string): string {
 function termVariants(rawTerm: string): string[] {
   const term = normalize(rawTerm).trim();
   if (term === "") return [];
-  return term.endsWith("s") ? [term] : [term, `${term}s`];
+  const invariantWords = new Set([
+    "a",
+    "au",
+    "aux",
+    "contre",
+    "de",
+    "des",
+    "du",
+    "en",
+    "et",
+    "la",
+    "le",
+    "les",
+    "ou",
+    "pour",
+    "sans",
+    "sur",
+  ]);
+  const words = term.split(" ");
+  const singular = words
+    .map((word) =>
+      !invariantWords.has(word) && word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word
+    )
+    .join(" ");
+  const plural = words
+    .map((word) =>
+      !invariantWords.has(word) && word.length > 3 && !word.endsWith("s") ? `${word}s` : word
+    )
+    .join(" ");
+  return [...new Set([term, singular, plural])];
 }
 
 export function findDeltaLexicalMatches(

@@ -33,6 +33,15 @@ describe("sélection différentielle des sous-thèmes", () => {
     ).toContain("antisémite");
   });
 
+  it("sélectionne la forme singulière d’un alias pluriel", () => {
+    expect(
+      findDeltaLexicalMatches(
+        { text: "Interdire toute discrimination raciale à l’embauche.", details: null },
+        subtopic
+      )
+    ).toContain("discriminations raciales");
+  });
+
   it("sélectionne une mesure rattachée à un sous-thème voisin", () => {
     const result = selectSubtopicDeltaCandidates({
       measures: [

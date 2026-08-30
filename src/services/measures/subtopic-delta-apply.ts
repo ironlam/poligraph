@@ -3,7 +3,7 @@ import { MEASURE_SUBTOPICS, MEASURE_SUBTOPIC_TAXONOMY_VERSION } from "@/config/m
 import { getSubtopicDeltaApplySnapshot } from "@/lib/data/measure-subtopic-delta";
 import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-delta-fingerprint";
 import {
-  proposeMeasureRevisionSubtopicDelta,
+  proposeMeasureRevisionSubtopicDeltaBatch,
   syncMeasureSubtopicTaxonomy,
 } from "@/lib/measures/subtopics";
 import type { SubtopicDeltaReport } from "@/services/measures/subtopic-delta-report";
@@ -118,6 +118,9 @@ function assertReportCoherence(report: SubtopicDeltaReport): void {
   ) {
     throw new Error("Le sous-thème du rapport ne correspond plus à la taxonomie");
   }
+  if (report.results.some((result) => result.theme !== configured.theme)) {
+    throw new Error("Une mesure du rapport ne correspond pas au thème du sous-thème");
+  }
   if (
     report.parameters.subtopic !== report.subtopic.slug ||
     report.parameters.election !== report.election.slug
@@ -176,10 +179,8 @@ export async function applySubtopicDeltaReport(value: unknown): Promise<ApplySub
   }
 
   await syncMeasureSubtopicTaxonomy();
-  let created = 0;
-  const ignored: ApplySubtopicDeltaResult["ignored"] = [];
-  for (const suggestion of suggestions) {
-    const outcome = await proposeMeasureRevisionSubtopicDelta({
+  const outcomes = await proposeMeasureRevisionSubtopicDeltaBatch(
+    suggestions.map((suggestion) => ({
       measureId: suggestion.measureId,
       revisionId: suggestion.revisionId,
       subtopicSlug: report.subtopic.slug,
@@ -193,10 +194,12 @@ export async function applySubtopicDeltaReport(value: unknown): Promise<ApplySub
       selectionReasons: suggestion.selectionReasons,
       sourceFingerprint: suggestion.sourceFingerprint,
       proposedBy: "cli",
-    });
-    if (outcome.created) created += 1;
-    else ignored.push({ revisionId: suggestion.revisionId, status: outcome.status });
-  }
+    }))
+  );
+  const created = outcomes.filter((outcome) => outcome.created).length;
+  const ignored = outcomes
+    .filter((outcome) => !outcome.created)
+    .map((outcome) => ({ revisionId: outcome.revisionId, status: outcome.status }));
 
   return { runId: report.runId, created, ignored };
 }

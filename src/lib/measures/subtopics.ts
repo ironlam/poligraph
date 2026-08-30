@@ -127,7 +127,7 @@ export async function getPreviouslyClassifiedMeasureRevisionIds(): Promise<strin
   return attempts.map((attempt) => attempt.entityId);
 }
 
-export async function proposeMeasureRevisionSubtopicDelta(input: {
+export type MeasureRevisionSubtopicDeltaProposal = {
   measureId: string;
   revisionId: string;
   subtopicSlug: string;
@@ -141,12 +141,33 @@ export async function proposeMeasureRevisionSubtopicDelta(input: {
   selectionReasons: Array<{ signal: string; values: string[] }>;
   sourceFingerprint: string;
   proposedBy?: string;
-}): Promise<{ created: boolean; status: string }> {
+};
+
+export type MeasureRevisionSubtopicDeltaOutcome = {
+  revisionId: string;
+  created: boolean;
+  status: string;
+};
+
+export async function proposeMeasureRevisionSubtopicDeltaBatch(
+  proposals: MeasureRevisionSubtopicDeltaProposal[]
+): Promise<MeasureRevisionSubtopicDeltaOutcome[]> {
+  if (proposals.length === 0) return [];
+  if (new Set(proposals.map((proposal) => proposal.measureId)).size !== proposals.length) {
+    throw new MeasureValidationError("Le lot contient plusieurs propositions pour une mesure");
+  }
+  const subtopicSlugs = new Set(proposals.map((proposal) => proposal.subtopicSlug));
+  if (subtopicSlugs.size !== 1) {
+    throw new MeasureValidationError("Le lot doit viser un seul sous-thème");
+  }
+
   return db.$transaction(async (tx) => {
+    const measureIds = proposals.map((proposal) => proposal.measureId).sort();
     const currentRows = await tx.$queryRaw<
       Array<{
         measureId: string;
         revisionId: string;
+        theme: ThemeCategory;
         text: string;
         details: string | null;
         updatedAt: Date;
@@ -155,93 +176,136 @@ export async function proposeMeasureRevisionSubtopicDelta(input: {
       SELECT
         m.id AS "measureId",
         r.id AS "revisionId",
+        m.theme,
         r.text,
         r.details,
         r."updatedAt"
       FROM "Measure" m
       JOIN "MeasureRevision" r ON r.id = m."publishedRevisionId"
-      WHERE m.id = ${input.measureId}
+      WHERE m.id IN (${Prisma.join(measureIds)})
+      ORDER BY m.id
       FOR UPDATE OF m
     `);
-    const current = currentRows[0];
-    const currentFingerprint = current
-      ? createSubtopicDeltaSourceFingerprint({
-          revisionId: current.revisionId,
-          sourceUpdatedAt: current.updatedAt.toISOString(),
-          text: current.text,
-          details: current.details,
-        })
-      : null;
-    if (
-      !current ||
-      current.revisionId !== input.revisionId ||
-      currentFingerprint !== input.sourceFingerprint
-    ) {
-      throw new MeasureValidationError("La mesure a changé depuis le dry-run");
-    }
 
     const subtopic = await tx.measureSubtopic.findUnique({
-      where: { slug: input.subtopicSlug },
-      select: { id: true, active: true },
+      where: { slug: proposals[0]!.subtopicSlug },
+      select: { id: true, active: true, theme: true },
     });
     if (!subtopic?.active) throw new MeasureValidationError("Sous-thème introuvable ou inactif");
 
-    const existing = await tx.measureRevisionSubtopic.findUnique({
-      where: {
-        revisionId_subtopicId: {
-          revisionId: input.revisionId,
-          subtopicId: subtopic.id,
-        },
-      },
-      select: { status: true },
-    });
-    if (existing) return { created: false, status: existing.status };
-
-    const activeAssignmentCount = await tx.measureRevisionSubtopic.count({
-      where: { revisionId: input.revisionId, status: { not: "REJECTED" } },
-    });
-    if (activeAssignmentCount >= MAX_SUBTOPICS_PER_REVISION) {
-      return { created: false, status: "SUBTOPIC_LIMIT_REACHED" };
+    const currentByMeasureId = new Map(currentRows.map((row) => [row.measureId, row]));
+    for (const proposal of proposals) {
+      const current = currentByMeasureId.get(proposal.measureId);
+      const currentFingerprint = current
+        ? createSubtopicDeltaSourceFingerprint({
+            revisionId: current.revisionId,
+            sourceUpdatedAt: current.updatedAt.toISOString(),
+            text: current.text,
+            details: current.details,
+          })
+        : null;
+      if (
+        !current ||
+        current.revisionId !== proposal.revisionId ||
+        currentFingerprint !== proposal.sourceFingerprint
+      ) {
+        throw new MeasureValidationError(
+          `La mesure ${proposal.measureId} a changé depuis le dry-run`
+        );
+      }
+      if (current.theme !== subtopic.theme) {
+        throw new MeasureValidationError(
+          `Le thème de la mesure ${proposal.measureId} ne correspond plus au sous-thème`
+        );
+      }
     }
 
-    const inserted = await tx.measureRevisionSubtopic.createMany({
-      data: [
-        {
-          revisionId: input.revisionId,
-          subtopicId: subtopic.id,
-          status: "SUGGESTED",
-          confidence: input.confidence,
-          method: "AI_ASSISTED",
-          classifierVersion: input.classifierVersion,
-          taxonomyVersion: input.taxonomyVersion,
+    const outcomes: MeasureRevisionSubtopicDeltaOutcome[] = [];
+    for (const proposal of proposals) {
+      const existing = await tx.measureRevisionSubtopic.findUnique({
+        where: {
+          revisionId_subtopicId: {
+            revisionId: proposal.revisionId,
+            subtopicId: subtopic.id,
+          },
         },
-      ],
-      skipDuplicates: true,
-    });
-    if (inserted.count === 0) return { created: false, status: "CONCURRENT_ASSIGNMENT" };
+        select: { status: true },
+      });
+      if (existing) {
+        outcomes.push({
+          revisionId: proposal.revisionId,
+          created: false,
+          status: existing.status,
+        });
+        continue;
+      }
 
-    await tx.auditLog.create({
-      data: {
-        action: "PROPOSE_SUBTOPIC_DELTA",
-        entityType: "MeasureRevision",
-        entityId: input.revisionId,
-        changes: {
-          runId: input.runId,
-          subtopic: input.subtopicSlug,
-          taxonomyVersion: input.taxonomyVersion,
-          classifierVersion: input.classifierVersion,
-          confidence: input.confidence,
-          decision: input.decision,
-          justification: input.justification,
-          evidenceExcerpt: input.evidenceExcerpt,
-          selectionReasons: input.selectionReasons,
-          sourceFingerprint: input.sourceFingerprint,
+      const activeAssignmentCount = await tx.measureRevisionSubtopic.count({
+        where: { revisionId: proposal.revisionId, status: { not: "REJECTED" } },
+      });
+      if (activeAssignmentCount >= MAX_SUBTOPICS_PER_REVISION) {
+        outcomes.push({
+          revisionId: proposal.revisionId,
+          created: false,
+          status: "SUBTOPIC_LIMIT_REACHED",
+        });
+        continue;
+      }
+
+      const inserted = await tx.measureRevisionSubtopic.createMany({
+        data: [
+          {
+            revisionId: proposal.revisionId,
+            subtopicId: subtopic.id,
+            status: "SUGGESTED",
+            confidence: proposal.confidence,
+            method: "AI_ASSISTED",
+            classifierVersion: proposal.classifierVersion,
+            taxonomyVersion: proposal.taxonomyVersion,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (inserted.count === 0) {
+        outcomes.push({
+          revisionId: proposal.revisionId,
+          created: false,
+          status: "CONCURRENT_ASSIGNMENT",
+        });
+        continue;
+      }
+
+      await tx.auditLog.create({
+        data: {
+          action: "PROPOSE_SUBTOPIC_DELTA",
+          entityType: "MeasureRevision",
+          entityId: proposal.revisionId,
+          changes: {
+            runId: proposal.runId,
+            subtopic: proposal.subtopicSlug,
+            taxonomyVersion: proposal.taxonomyVersion,
+            classifierVersion: proposal.classifierVersion,
+            confidence: proposal.confidence,
+            decision: proposal.decision,
+            justification: proposal.justification,
+            evidenceExcerpt: proposal.evidenceExcerpt,
+            selectionReasons: proposal.selectionReasons,
+            sourceFingerprint: proposal.sourceFingerprint,
+          },
+          userId: proposal.proposedBy ?? "system",
         },
-        userId: input.proposedBy ?? "system",
-      },
-    });
-    return { created: true, status: "SUGGESTED" };
+      });
+      outcomes.push({ revisionId: proposal.revisionId, created: true, status: "SUGGESTED" });
+    }
+    return outcomes;
   });
+}
+
+export async function proposeMeasureRevisionSubtopicDelta(
+  input: MeasureRevisionSubtopicDeltaProposal
+): Promise<{ created: boolean; status: string }> {
+  const [outcome] = await proposeMeasureRevisionSubtopicDeltaBatch([input]);
+  return { created: outcome!.created, status: outcome!.status };
 }
 
 export async function proposeMeasureRevisionSubtopics(

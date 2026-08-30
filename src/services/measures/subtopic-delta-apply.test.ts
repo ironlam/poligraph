@@ -4,7 +4,7 @@ import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-de
 
 const mocks = vi.hoisted(() => ({
   getApplySnapshot: vi.fn(),
-  proposeDelta: vi.fn(),
+  proposeDeltaBatch: vi.fn(),
   syncTaxonomy: vi.fn(),
 }));
 
@@ -13,7 +13,7 @@ vi.mock("@/lib/data/measure-subtopic-delta", () => ({
 }));
 vi.mock("@/lib/measures/subtopics", () => ({
   syncMeasureSubtopicTaxonomy: mocks.syncTaxonomy,
-  proposeMeasureRevisionSubtopicDelta: mocks.proposeDelta,
+  proposeMeasureRevisionSubtopicDeltaBatch: mocks.proposeDeltaBatch,
 }));
 
 const source = {
@@ -95,7 +95,9 @@ describe("application d’un rapport différentiel", () => {
         },
       ],
     });
-    mocks.proposeDelta.mockResolvedValue({ created: true, status: "SUGGESTED" });
+    mocks.proposeDeltaBatch.mockResolvedValue([
+      { revisionId: "revision-1", created: true, status: "SUGGESTED" },
+    ]);
   });
 
   it("crée uniquement une suggestion et audite sa provenance", async () => {
@@ -103,30 +105,34 @@ describe("application d’un rapport différentiel", () => {
     const result = await applySubtopicDeltaReport(report());
 
     expect(result).toEqual({ runId: "run-1", created: 1, ignored: [] });
-    expect(mocks.proposeDelta).toHaveBeenCalledWith({
-      measureId: "measure-1",
-      revisionId: "revision-1",
-      subtopicSlug: "racisme-antisemitisme",
-      confidence: 0.99,
-      classifierVersion: "mistral:subtopic-delta-v1",
-      taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
-      runId: "run-1",
-      decision: "APPLIES",
-      justification: "La mesure vise explicitement le racisme.",
-      evidenceExcerpt: "Lutter contre le racisme",
-      selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
-      sourceFingerprint: decision.sourceFingerprint,
-      proposedBy: "cli",
-    });
+    expect(mocks.proposeDeltaBatch).toHaveBeenCalledWith([
+      {
+        measureId: "measure-1",
+        revisionId: "revision-1",
+        subtopicSlug: "racisme-antisemitisme",
+        confidence: 0.99,
+        classifierVersion: "mistral:subtopic-delta-v1",
+        taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
+        runId: "run-1",
+        decision: "APPLIES",
+        justification: "La mesure vise explicitement le racisme.",
+        evidenceExcerpt: "Lutter contre le racisme",
+        selectionReasons: [{ signal: "LEXICAL", values: ["racisme"] }],
+        sourceFingerprint: decision.sourceFingerprint,
+        proposedBy: "cli",
+      },
+    ]);
   });
 
   it("préserve une attribution existante et reste idempotent", async () => {
-    mocks.proposeDelta.mockResolvedValue({ created: false, status: "APPROVED" });
+    mocks.proposeDeltaBatch.mockResolvedValue([
+      { revisionId: "revision-1", created: false, status: "APPROVED" },
+    ]);
     const { applySubtopicDeltaReport } = await import("@/services/measures/subtopic-delta-apply");
     const result = await applySubtopicDeltaReport(report());
 
     expect(result.ignored).toEqual([{ revisionId: "revision-1", status: "APPROVED" }]);
-    expect(mocks.proposeDelta).toHaveBeenCalledOnce();
+    expect(mocks.proposeDeltaBatch).toHaveBeenCalledOnce();
   });
 
   it("refuse tout changement de source avant la première écriture", async () => {
@@ -148,7 +154,7 @@ describe("application d’un rapport différentiel", () => {
 
     await expect(applySubtopicDeltaReport(report())).rejects.toThrow("a changé");
     expect(mocks.syncTaxonomy).not.toHaveBeenCalled();
-    expect(mocks.proposeDelta).not.toHaveBeenCalled();
+    expect(mocks.proposeDeltaBatch).not.toHaveBeenCalled();
   });
 
   it("refuse une élection qui ne correspond plus au rapport", async () => {
@@ -159,7 +165,7 @@ describe("application d’un rapport différentiel", () => {
       "ne correspond plus à la base"
     );
     expect(mocks.syncTaxonomy).not.toHaveBeenCalled();
-    expect(mocks.proposeDelta).not.toHaveBeenCalled();
+    expect(mocks.proposeDeltaBatch).not.toHaveBeenCalled();
   });
 
   it("refuse qu’une décision autre que APPLIES soit injectée dans les suggestions", async () => {
