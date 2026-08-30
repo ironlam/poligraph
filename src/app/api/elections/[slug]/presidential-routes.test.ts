@@ -241,6 +241,13 @@ describe("GET /api/elections/[slug]/measures", () => {
       limit: 100,
     });
     expect(body.pagination).toEqual({ page: 2, limit: 100, total: 1, totalPages: 1 });
+    expect(body.meta.precisionField).toEqual({
+      deprecated: true,
+      meaning:
+        "Indique uniquement si la formulation comporte une quantité explicite, en chiffres ou en toutes lettres.",
+      caveat:
+        "Ce champ ne décrit pas la nature de l'engagement et n'évalue ni son coût, ni son efficacité, ni sa faisabilité.",
+    });
     expect(Object.keys(body.data[0]).sort()).toEqual([
       "attribution",
       "candidacy",

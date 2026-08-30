@@ -87,7 +87,16 @@ export const GET = withPublicRoute(async (request, context) => {
       election,
       data: result.data,
       pagination: buildPaginationMeta(page, limit, result.total),
-      meta: { includeWithdrawn: includeWithdrawn ?? false },
+      meta: {
+        includeWithdrawn: includeWithdrawn ?? false,
+        precisionField: {
+          deprecated: true,
+          meaning:
+            "Indique uniquement si la formulation comporte une quantité explicite, en chiffres ou en toutes lettres.",
+          caveat:
+            "Ce champ ne décrit pas la nature de l'engagement et n'évalue ni son coût, ni son efficacité, ni sa faisabilité.",
+        },
+      },
     }),
     "daily"
   );
