@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const findElection = vi.fn();
 const findCandidacies = vi.fn();
 const findMeasures = vi.fn();
+const findSubtopic = vi.fn();
+const listMeasures = vi.fn();
 const searchPublicPage = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
     election: { findUnique: (...args: unknown[]) => findElection(...args) },
     candidacy: { findMany: (...args: unknown[]) => findCandidacies(...args) },
     measure: { findMany: (...args: unknown[]) => findMeasures(...args) },
+    measureSubtopic: { findUnique: (...args: unknown[]) => findSubtopic(...args) },
   },
+}));
+vi.mock("@/lib/data/measures", () => ({
+  listPublicPresidentialMeasures: (...args: unknown[]) => listMeasures(...args),
 }));
 vi.mock("@/lib/search/query", () => ({
   searchPublicPage: (...args: unknown[]) => searchPublicPage(...args),
@@ -100,6 +106,49 @@ describe("searchPresidentialCorpus", () => {
     const result = await searchPresidentialCorpus("presidentielle-test", "a", 8);
     expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
     expect(searchPublicPage).not.toHaveBeenCalled();
+  });
+
+  it("filtre un sous-thème sur son rattachement validé et conserve la pagination", async () => {
+    findSubtopic.mockResolvedValue({
+      slug: "acces-aux-soins",
+      label: "Accès aux soins",
+      active: true,
+    });
+    listMeasures.mockResolvedValue({
+      total: 74,
+      data: [
+        {
+          measureId: "measure-subtopic",
+          text: "Ouvrir des centres de santé",
+          publicUrl: "/elections/presidentielle-test/mesures/ouvrir-des-centres-de-sante",
+          candidacy: { candidateName: "Alice Martin" },
+          theme: { code: "SANTE" },
+          precision: { code: null },
+          sources: [{ sourceKind: "PROGRAMME_CANDIDAT" }],
+        },
+      ],
+    });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "", 50, {
+      subtopicSlug: "acces-aux-soins",
+      page: 2,
+    });
+
+    expect(listMeasures).toHaveBeenCalledWith({
+      electionId: "election-1",
+      electionSlug: "presidentielle-test",
+      subtopicSlug: "acces-aux-soins",
+      page: 2,
+      limit: 50,
+    });
+    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      query: "Accès aux soins",
+      total: 74,
+      page: 2,
+      totalPages: 2,
+      filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },
+    });
   });
 
   it("retire la formulation d’une question avant la recherche lexicale", async () => {

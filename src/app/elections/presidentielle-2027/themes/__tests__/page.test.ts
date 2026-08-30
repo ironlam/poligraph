@@ -18,6 +18,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],
+      featuredSubtopics: [],
       publishableSubjectPageCount: 1,
     });
     const meta = await generateMetadata();
@@ -28,6 +29,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],
+      featuredSubtopics: [],
       publishableSubjectPageCount: 0,
     });
     const meta = await generateMetadata();
@@ -38,6 +40,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],
+      featuredSubtopics: [],
       publishableSubjectPageCount: 1,
     });
     const meta = await generateMetadata();
@@ -54,6 +57,7 @@ describe("generateMetadata de l'index des thématiques", () => {
     mockGet.mockResolvedValue({
       electionSlug: "presidentielle-2027",
       themes: [],
+      featuredSubtopics: [],
       publishableSubjectPageCount: 1,
     });
     const meta = await generateMetadata();

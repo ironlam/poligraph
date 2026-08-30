@@ -43,7 +43,7 @@ const FIELD_LIMIT = 240;
  * the tightest margin being 27 words against a floor of 25.
  */
 export const SYNTHESIS_MAX_WORDS = 200;
-/** Eight programme themes plus a career paragraph fit without turning into a list. */
+/** Five programme themes plus a career paragraph fit without turning into a catalogue. */
 export const LARGE_SYNTHESIS_MAX_WORDS = 250;
 /** Below one hundred measures, the existing 200-word format already carries the material. */
 export const LARGE_PROGRAMME_MEASURES = 100;
@@ -243,8 +243,9 @@ function buildProgrammePlan(input: CandidateSynthesisInput): ProgrammePlan {
   );
   // Theme frequency is context, not an editorial ranking. It gives a stable, candidate-agnostic
   // answer to “principal themes” while the explicit cap prevents the largest family swallowing the
-  // paragraph. Eight short examples fit the large 250-word format; five fit the standard one.
-  const coverageLimit = input.measures.length >= LARGE_PROGRAMME_MEASURES ? 8 : 5;
+  // paragraph. Five examples fit the large 250-word format; three fit the standard one. A longer
+  // selection reads like an extraction dump rather than a summary, especially on mobile.
+  const coverageLimit = input.measures.length >= LARGE_PROGRAMME_MEASURES ? 5 : 3;
   return {
     references,
     expectedThemes: themes.slice(0, coverageLimit).map(([theme]) => theme),
@@ -332,8 +333,20 @@ export type SynthesisScreen =
 export const EMPTY_PROGRAMME_SENTENCE =
   "Aucune mesure n'est publiée dans le cadre de son programme.";
 
-function asSentence(value: string): string {
-  return /[.!?]$/u.test(value) ? value : `${value}.`;
+function formatFrenchList(values: string[]): string {
+  if (values.length <= 1) return values[0] ?? "";
+  if (values.length === 2) return `${values[0]} et ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")} et ${values.at(-1)}`;
+}
+
+function sourceTextForQuote(value: string): string {
+  return value.replace(/(?<!\.)\.$/u, "");
+}
+
+function formatProgrammeText(references: ProgrammeReference[]): string {
+  const quotedMeasures = references.map((reference) => `« ${sourceTextForQuote(reference.text)} »`);
+  const terminalPunctuation = /(?:[!?…]|\.\.\.) »$/u.test(quotedMeasures.at(-1) ?? "") ? "" : ".";
+  return `Parmi les mesures publiées figurent ${formatFrenchList(quotedMeasures)}${terminalPunctuation}`;
 }
 
 function wordCount(value: string): number {
@@ -461,9 +474,7 @@ export function screenCandidateSynthesis(
     }
   }
 
-  const programmeText = `Son programme comprend notamment les engagements suivants. ${selectedReferences
-    .map((reference) => asSentence(reference.text))
-    .join(" ")}`;
+  const programmeText = formatProgrammeText(selectedReferences);
   // Coverage needs one measure per expected theme, never every measure the provider selected. When
   // it chose two, exempt the shorter one: the second is optional and remains inside the cap. Text
   // from a non-required theme is optional too and is never deducted.
@@ -471,7 +482,7 @@ export function screenCandidateSynthesis(
     (theme) =>
       selectedReferences
         .filter((reference) => reference.theme === theme)
-        .map((reference) => asSentence(reference.text))
+        .map((reference) => sourceTextForQuote(reference.text))
         .sort((a, b) => wordCount(a) - wordCount(b))[0]!
   );
   return screenSynthesis({

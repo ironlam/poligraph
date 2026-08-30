@@ -8,6 +8,7 @@ import {
   type PublicPresidentialCandidacyFieldEntry,
 } from "./presidential-candidacy-field";
 import { loadThemesIndex } from "./themes-index";
+import type { FeaturedSubtopic } from "./themes-index";
 import { getLatestPresidentialReviewDate } from "./measures";
 
 /**
@@ -60,6 +61,8 @@ export type HubMeasureContext = {
   lastReviewedAt: Date | null;
   /** The thirteen subjects in reading order, so the hub can name them without a second read. */
   themes: HubTheme[];
+  /** A bounded, diversified set of human-approved subtopics for direct corpus exploration. */
+  featuredSubtopics: FeaturedSubtopic[];
 };
 
 /**
@@ -121,6 +124,7 @@ export async function loadHubMeasureContext(
       slug,
       publishable,
     })),
+    featuredSubtopics: themesIndex.featuredSubtopics,
   };
 }
 

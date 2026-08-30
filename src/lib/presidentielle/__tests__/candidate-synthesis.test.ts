@@ -76,7 +76,7 @@ describe("buildCandidateSynthesisPrompt", () => {
     expect(prompt).toContain("[M1] Rouvrir des maternités de proximité.");
   });
 
-  it("asks a large programme to cover its eight most represented themes", () => {
+  it("asks a large programme to cover its five most represented themes", () => {
     const themes = [
       "SANTE",
       "TRANSPORTS",
@@ -95,7 +95,7 @@ describe("buildCandidateSynthesisPrompt", () => {
     const prompt = buildCandidateSynthesisPrompt({ ...BASE, measures });
     const coverage = prompt.match(/<couverture_attendue>\n(.+)\n<\/couverture_attendue>/)?.[1];
 
-    expect(coverage?.match(/,/g)).toHaveLength(7);
+    expect(coverage?.match(/,/g)).toHaveLength(4);
     expect(coverage).not.toContain("Transports");
   });
 
@@ -165,9 +165,35 @@ describe("screenCandidateSynthesis", () => {
     const result = screenCandidateSynthesis(structured(["M1", "M3"]), BASE);
 
     expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).toContain("Rouvrir des maternités de proximité.");
-    expect(result.ok && result.text).toContain("Rétablir des trains de nuit sur six lignes.");
+    expect(result.ok && result.text).toContain(
+      "Parmi les mesures publiées figurent « Rouvrir des maternités de proximité » et « Rétablir des trains de nuit sur six lignes »."
+    );
+    expect(result.ok && result.text).not.toContain("engagements suivants");
     expect(result.ok && result.text).not.toMatch(/<engagement|<synthese>/);
+  });
+
+  it("preserves question and exclamation marks from published measures", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [{ theme: "SANTE", text: "Créer un droit opposable à la santé ?" }],
+    };
+    const result = screenCandidateSynthesis(structured(["M1"]), input);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain("« Créer un droit opposable à la santé ? »");
+    expect(result.ok && result.text).not.toContain("santé ».");
+  });
+
+  it("preserves terminal ellipses from published measures", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [{ theme: "SANTE", text: "Créer des centres de santé..." }],
+    };
+    const result = screenCandidateSynthesis(structured(["M1"]), input);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain("« Créer des centres de santé... »");
+    expect(result.ok && result.text).not.toContain("santé... ».");
   });
 
   it("refuses valid-length prose that omits an expected theme", () => {
@@ -201,7 +227,7 @@ describe("screenCandidateSynthesis", () => {
       reason: "format_structure",
     });
     const accepted = screenCandidateSynthesis(structured(["M1"]), input);
-    expect(accepted.ok && accepted.text).toContain("Augmenter les impôts des entreprises.");
+    expect(accepted.ok && accepted.text).toContain("« Augmenter les impôts des entreprises »");
     expect(accepted.ok && accepted.text).not.toContain("Supprimer");
   });
 
@@ -253,7 +279,7 @@ describe("screenCandidateSynthesis", () => {
     const generated = `<synthese><parcours>${career}. Il a comparu devant un tribunal.</parcours><programme><engagement ref="M1" /></programme></synthese>`;
 
     expect(sourced).toMatchObject({ ok: true });
-    expect(sourced.ok && sourced.text).toContain("Créer un tribunal spécialisé.");
+    expect(sourced.ok && sourced.text).toContain("« Créer un tribunal spécialisé »");
     expect(screenCandidateSynthesis(generated, input)).toMatchObject({
       ok: false,
       reason: "judiciaire",
@@ -282,7 +308,7 @@ describe("screenCandidateSynthesis", () => {
     const result = screenCandidateSynthesis(structured(["M1"]), input);
 
     expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).toContain("source219.");
+    expect(result.ok && result.text).toContain("source219 »");
   });
 
   it("charges an optional second source from the same theme against the maximum", () => {
