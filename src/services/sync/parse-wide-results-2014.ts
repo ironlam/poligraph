@@ -8,6 +8,8 @@
  * Source: data.gouv.fr - Resultats des elections municipales 2014
  */
 
+import { parseIntSafe } from "./csv-download";
+
 import {
   reconstructInseeCode,
   parseFrenchDecimal,
@@ -17,12 +19,6 @@ import {
 
 const FIXED_COLS = 17;
 const BLOCK_SIZE = 11;
-
-/** Parse an integer string, stripping leading zeros and whitespace. */
-function parseIntSafe(s: string): number {
-  if (!s || s.trim() === "") return 0;
-  return parseInt(s.replace(/\s/g, ""), 10) || 0;
-}
 
 /** Safe column access. */
 function col(cols: string[], index: number): string {

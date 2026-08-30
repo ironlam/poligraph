@@ -7,6 +7,8 @@
  * Source: data.gouv.fr — Résultats des élections municipales 2020
  */
 
+import { parseIntSafe } from "./csv-download";
+
 const FIXED_COLS = 18;
 const BLOCK_SIZE = 12;
 
@@ -55,12 +57,6 @@ export interface CommuneResult {
 export function parseFrenchDecimal(s: string): number {
   if (!s || s.trim() === "") return 0;
   return parseFloat(s.replace(",", "."));
-}
-
-/** Parse an integer string, stripping whitespace (thousand separators). Returns 0 for empty. */
-function parseIntSafe(s: string): number {
-  if (!s || s.trim() === "") return 0;
-  return parseInt(s.replace(/\s/g, ""), 10) || 0;
 }
 
 /**
