@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { EnrichmentCoveragePanel } from "../EnrichmentCoveragePanel";
 
 describe("EnrichmentCoveragePanel", () => {
-  it("présente la couverture et une action accessible vers les contextes manquants", () => {
+  it("présente la couverture et un lien explicite vers les contextes manquants", () => {
     render(
       <EnrichmentCoveragePanel
         coverage={{
@@ -24,7 +24,9 @@ describe("EnrichmentCoveragePanel", () => {
     expect(screen.getByText("4 %")).toBeInTheDocument();
     expect(screen.getByText("45 %")).toBeInTheDocument();
     expect(screen.getByText("58 %")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Compléter 2.102 contextes/ })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: /Voir les 2.102 contextes manquants/ })
+    ).toHaveAttribute(
       "href",
       "/admin/mesures?corpus=presidentielle-2027&enrichissement=DETAILS_MISSING"
     );
@@ -45,6 +47,6 @@ describe("EnrichmentCoveragePanel", () => {
       />
     );
 
-    expect(screen.queryByRole("link", { name: /Compléter/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /contextes manquants/ })).not.toBeInTheDocument();
   });
 });

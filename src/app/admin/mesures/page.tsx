@@ -182,7 +182,9 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
 
       <EnrichmentCoveragePanel coverage={enrichmentCoverage} />
 
-      <QueueFilters current={current} result={result} candidates={candidates} />
+      {enrichment === "DETAILS_MISSING" && (
+        <ContextGenerationBatchPanel measureIds={contextCandidateIds} />
+      )}
 
       {enrichmentWorkflow !== null && firstMeasure !== undefined ? (
         <section
@@ -210,9 +212,7 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      {enrichment === "DETAILS_MISSING" && (
-        <ContextGenerationBatchPanel measureIds={contextCandidateIds} />
-      )}
+      <QueueFilters current={current} result={result} candidates={candidates} />
 
       <BatchReviewPanel groups={batchReviewGroups} />
 

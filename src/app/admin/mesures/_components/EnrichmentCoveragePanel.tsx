@@ -64,7 +64,7 @@ export function EnrichmentCoveragePanel({ coverage }: { coverage: MeasureEnrichm
             prefetch={false}
             className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
           >
-            Compléter {missingDetails.toLocaleString("fr-FR")} contextes
+            Voir les {missingDetails.toLocaleString("fr-FR")} contextes manquants
           </Link>
         ) : null}
       </div>
