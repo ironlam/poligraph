@@ -172,6 +172,13 @@ const INCLUSION_CRITERIA = [
   },
 ];
 
+/**
+ * Long by line count, not by complexity: cyclomatic 6 over 556 lines, no data access, no state.
+ * It is a static editorial page whose content happens to be verbose.
+ *
+ * Left whole on purpose during the 2026-08 split of the largest components. Cutting it into
+ * sections would add files and indirection without removing a single decision from the reader.
+ */
 export default function SourcesPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
