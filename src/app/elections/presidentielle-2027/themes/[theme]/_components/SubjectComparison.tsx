@@ -8,7 +8,6 @@ import {
   THEME_CATEGORY_LABELS,
   VOTE_RELATION_BASIS_LABELS,
 } from "@/config/labels";
-import { MeasurePrecisionBadge } from "@/components/measures/MeasurePrecisionBadge";
 import { QualifiedEmptyCell } from "@/components/measures/QualifiedEmptyCell";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import type { ThemeCategory } from "@/generated/prisma";
@@ -22,7 +21,7 @@ import { SubjectSidebar } from "./SubjectSidebar";
 
 /**
  * A public subject page: for one theme, every publicly visible candidacy on one row, with what it
- * proposes, whether a close text was ever voted, and how precise the measure is.
+ * proposes and whether a close text was ever voted.
  *
  * Up to three measures per candidacy are quoted, the rest fold into a disclosure. The comparison
  * this page exists for happens between candidacies, not inside one.
@@ -105,36 +104,15 @@ function WithdrawalLine({ withdrawal }: { withdrawal: NonNullable<PublicMeasure[
   );
 }
 
-/**
- * How precise a measure is, and whether a close text was ever voted.
- *
- * Both qualify ONE measure, so they sit with the measure they qualify. They used to be two columns
- * of the table, reading `measures[0]`, which was true only as long as a row quoted exactly one
- * measure; quoting three under a "Précision" column showing a single badge would have attributed
- * the first measure's qualification to the two below it.
- *
- * A null precision is NOT "pas encore relu". Publication requires `reviewedAt` to be set
- * (`PUBLIC_MEASURE_WHERE`), so a visible measure has been reviewed by construction and that label
- * would contradict the very predicate that let it appear.
- */
-function MeasureQualifiers({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
+/** The parliamentary comparison status belongs to the exact measure it qualifies. */
+function MeasureVoteRelation({ entry }: { entry: SubjectCandidateEntry["measures"][number] }) {
   return (
-    <div className="flex flex-wrap items-start gap-1.5">
-      {entry.measure.precision !== null ? (
-        <MeasurePrecisionBadge precision={entry.measure.precision} />
-      ) : (
-        <QualifiedEmptyCell
-          absence={{ kind: "not_applicable", reason: "Précision non renseignée" }}
-          className="self-center text-xs"
-        />
-      )}
-      <VoteRelationBadge
-        relation={entry.voteRelation}
-        basisDetails={
-          entry.voteReference !== null ? composeVoteBasis(entry.voteReference) : undefined
-        }
-      />
-    </div>
+    <VoteRelationBadge
+      relation={entry.voteRelation}
+      basisDetails={
+        entry.voteReference !== null ? composeVoteBasis(entry.voteReference) : undefined
+      }
+    />
   );
 }
 
@@ -172,7 +150,7 @@ function QuotedMeasure({
         &laquo;&nbsp;{entry.measure.text}&nbsp;&raquo;
       </Link>
       <div className="mt-2.5 space-y-1">
-        <MeasureQualifiers entry={entry} />
+        <MeasureVoteRelation entry={entry} />
         <MeasureSources sources={entry.measure.sources} />
         {entry.measure.withdrawal !== null && (
           <WithdrawalLine withdrawal={entry.measure.withdrawal} />
@@ -314,11 +292,10 @@ function CandidateIdentity({ entry }: { entry: SubjectCandidateEntry }) {
  * from the only column with content, which at anything under a very wide viewport squeezed the
  * quoted measure down to one word per line. It comes back the day the mapping exists.
  *
- * "Déjà soumis au vote ?" and "Précision de la mesure" are gone as COLUMNS, not as content: a column
- * holds one value per row, and a row now quotes up to three measures with a precision and a vote
- * relation each. Both are rendered by `MeasureQualifiers` under the sentence they qualify, which is
- * also where a reader looks for them. The vote states keep their nine values and their badge, so
- * they still start varying the moment a scrutin is linked to a measure.
+ * "Déjà soumis au vote ?" is gone as a column: a row now quotes up to three measures with a vote
+ * relation each. That relation is rendered under the sentence it qualifies, which is also where a
+ * reader looks for it. The vote states keep their nine values and their badge, so they still start
+ * varying the moment a scrutin is linked to a measure.
  */
 const COLUMNS = [
   { title: "Candidat·e", hint: "Par nom de famille" },
@@ -326,7 +303,7 @@ const COLUMNS = [
   // or an article, and the source line under each quote names which.
   {
     title: "Ce qu'il ou elle propose",
-    hint: "Jusqu'à trois mesures citées, chacune avec sa source, sa précision et sa relation aux votes",
+    hint: "Jusqu'à trois mesures citées, chacune avec sa source et sa relation aux votes",
   },
 ];
 
@@ -461,11 +438,6 @@ function MeasureMentionsGuide() {
       </summary>
       <div className="space-y-3 border-t border-border px-5 py-4 text-sm text-muted-foreground">
         <p>
-          La mention <strong className="text-foreground">«&nbsp;chiffrée&nbsp;»</strong> indique que
-          la formulation contient un objectif numérique explicite. Ce badge n&apos;évalue ni le coût
-          ni la faisabilité.
-        </p>
-        <p>
           Nous rapprochons chaque mesure des scrutins de l&apos;Assemblée nationale et du Sénat sur
           le même objet. «&nbsp;{VOTE_RELATION_BASIS_LABELS.SEARCH_NOT_DONE}&nbsp;» signifie que ce
           rapprochement reste à faire. «&nbsp;{VOTE_RELATION_BASIS_LABELS.NO_VOTE_IN_SCOPE}&nbsp;»
@@ -499,7 +471,7 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
         <table className="w-full min-w-[560px] table-fixed border-collapse text-left">
           <caption className="sr-only">
             Ce que chaque candidature propose sur {THEME_CATEGORY_LABELS[data.theme]}, chaque mesure
-            citée avec sa source, sa précision et sa relation aux votes.
+            citée avec sa source et sa relation aux votes.
           </caption>
           <colgroup>
             <col className="w-[200px]" />
@@ -541,10 +513,10 @@ function ComparisonTable({ data }: { data: SubjectPageData }) {
           shrinking the type to fit would make the quote unreadable, so the layout changes rather
           than the content: the card carries exactly what the row carries, stacked.
 
-          The definition list of vote relation and precision is gone from here too. It used to
-          restate at the bottom of the card what the table said in its side columns; now that both
-          travel under the sentence they qualify, repeating them per card would separate a
-          qualification from the only measure it is true of. */}
+          The definition list of vote relations is gone from here too. It used to restate at the
+          bottom of the card what the table said in its side columns; now that the relation travels
+          under the sentence it qualifies, repeating it per card would separate it from the only
+          measure it is true of. */}
       <ul className="space-y-3 lg:hidden">
         {data.candidates.map((entry) => (
           <li key={entry.candidate.id} className="rounded-xl border border-border bg-card p-4">

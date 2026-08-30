@@ -675,8 +675,8 @@ export const VOTE_RELATION_POSITION_LABELS: Record<VoteRelation, string | null> 
 // Each basis names its own subject, parliamentary votes, and says where the verification stands in
 // words a reader meets nowhere else on the page. The previous wording was written from the inside:
 // "périmètre non examiné" and "périmètre examiné sans résultat" name an editorial workflow, not a
-// fact about the measure, and sitting next to a precision pill they read as a second qualification
-// of the sentence rather than as the state of our work. "Périmètre" also carried the whole
+// fact about the measure, and they read as a qualification of the sentence rather than as the
+// state of our work. "Périmètre" also carried the whole
 // distinction between the two while being the one word in the pair a reader cannot resolve from the
 // page. The two search states now share a prefix and differ only in their tail, "à vérifier" against
 // "vérifié", which is also the verb the sourced detail already uses ("vérifié le ..."). What that

@@ -281,23 +281,20 @@ describe("SubjectComparison", () => {
     expect(screen.getAllByText(/Aucune mesure publiée sur Logement/).length).toBe(2);
   });
 
-  it("ne dit jamais d'une mesure publiée qu'elle n'est pas relue", () => {
-    // Une mesure n'est publique que si `reviewedAt` est renseigné : « Pas encore relu » y
-    // contredirait le prédicat qui l'a rendue visible. Une précision nulle se dit pour ce qu'elle
-    // est, une qualification manquante.
+  it("ne rend aucun état de précision sur une mesure publiée", () => {
     const { container } = render(
       <SubjectComparison
         data={data({
           candidates: [
-            entry("Alix", [subjectMeasure(measure({ precision: null }), "SEARCH_NOT_DONE")]),
+            entry("Alix", [subjectMeasure(measure({ precision: "CHIFFREE" }), "SEARCH_NOT_DONE")]),
           ],
         })}
       />
     );
 
-    expect(container.querySelector('[data-absence-kind="not_reviewed"]')).toBeNull();
-    expect(screen.queryByText(/Pas encore relu/)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Précision non renseignée").length).toBe(2);
+    expect(container.querySelector("[data-measure-precision]")).toBeNull();
+    expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
+    expect(screen.queryByText("Objectif non quantifié")).not.toBeInTheDocument();
   });
 
   it("ne compte pas une mesure retirée comme une mesure portée", () => {
@@ -444,43 +441,6 @@ describe("SubjectComparison", () => {
     }
   });
 
-  it("range précision et état de vote dans la même famille de badges, à deux poids différents", () => {
-    // Le point de départ : une pastille pleine à côté d'un texte gris nu. Deux qualifications de la
-    // même phrase dans deux langages visuels, et celle sans forme passait pour un reste. Elles
-    // partagent maintenant une forme ; le niveau, lui, dit laquelle compte le plus.
-    const { container } = render(
-      <SubjectComparison
-        data={data({
-          candidates: [
-            entry("Alix", [
-              subjectMeasure(measure({ id: "m-1", precision: "CHIFFREE" }), "SEARCH_NOT_DONE"),
-              subjectMeasure(
-                measure({ id: "m-2", precision: "OBJECTIF_SANS_CHIFFRE" }),
-                "FAVORABLE_SAME_OBJECT"
-              ),
-            ]),
-          ],
-        })}
-      />
-    );
-
-    const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
-    const niveaux = [...ligne.querySelectorAll("[data-measure-badge]")].map((el) =>
-      el.getAttribute("data-measure-badge")
-    );
-    // Deux précisions en qualification, un vote enregistré en verdict, un état de recherche en
-    // vérification : la précision ne pèse plus autant qu'une position de vote.
-    expect(niveaux.filter((n) => n === "qualification")).toHaveLength(2);
-    expect(niveaux.filter((n) => n === "verdict")).toHaveLength(1);
-    expect(niveaux.filter((n) => n === "verification")).toHaveLength(1);
-
-    // Et les deux états de précision prennent la même forme : ils se distinguent par le mot, pas
-    // par un aplat contre un contour qui se lisait comme une note.
-    const precisions = [...container.querySelectorAll<HTMLElement>("[data-measure-precision]")];
-    const formes = new Set(precisions.map((el) => el.className.toString()));
-    expect(formes.size).toBe(1);
-  });
-
   it("ne dit qu'une fois qu'une candidature ne porte aucune mesure", () => {
     // La carte la plus vide était la plus répétitive : « aucune mesure sur ce sujet » sous le nom,
     // puis « Aucune mesure publiée sur ... » juste en dessous, pour tout contenu.
@@ -592,10 +552,7 @@ describe("SubjectComparison", () => {
     expect(screen.queryByText(/Replier/)).not.toBeInTheDocument();
   });
 
-  it("qualifie chaque mesure citée, jamais la première pour toutes", () => {
-    // Précision et relation aux votes portent sur UNE mesure. Tant qu'elles vivaient en colonnes
-    // lisant `measures[0]`, citer trois phrases aurait attribué aux deux suivantes la
-    // qualification de la première.
+  it("rattache chaque état de vote à la mesure citée sans afficher sa précision", () => {
     render(
       <SubjectComparison
         data={data({
@@ -619,10 +576,9 @@ describe("SubjectComparison", () => {
       />
     );
 
-    // Une pastille chiffrée pour la première, une absence qualifiée pour la seconde, pas l'inverse.
-    expect(screen.getAllByText("Objectif quantifié")).toHaveLength(2);
-    expect(screen.getAllByText("Précision non renseignée")).toHaveLength(2);
-    // Et deux états de vote différents sur la même ligne. Portée sur la ligne du tableau : le
+    expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
+    expect(screen.queryByText("Précision non renseignée")).not.toBeInTheDocument();
+    // Deux états de vote différents restent associés aux deux mesures. Portée sur la ligne du tableau : le
     // paragraphe de méthode cite les mêmes libellés en bas de page.
     const ligne = screen.getAllByText("Alix")[0]!.closest("tr") as HTMLElement;
     expect(within(ligne).getAllByText(/Vote au Parlement à vérifier/)).toHaveLength(1);

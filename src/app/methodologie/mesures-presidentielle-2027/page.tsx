@@ -92,18 +92,13 @@ export default function PresidentialMeasuresMethodologyPage() {
 
         <section aria-labelledby="classification-title">
           <h2 id="classification-title" className="font-display text-2xl font-bold">
-            Thèmes, sous-thèmes et niveau de précision
+            Thèmes et sous-thèmes
           </h2>
           <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
             <p>
               Chaque mesure appartient à l&apos;un des seize thèmes communs au corpus. Des
               sous-thèmes issus d&apos;une taxonomie fermée peuvent être proposés automatiquement,
               mais ils ne deviennent publics qu&apos;après validation humaine.
-            </p>
-            <p>
-              Le niveau « Objectif quantifié » indique que la formulation comporte une quantité,
-              écrite en chiffres ou en toutes lettres. Il ne signifie pas que Poligraph a évalué le
-              coût, l&apos;efficacité ou la faisabilité de la proposition.
             </p>
           </div>
         </section>

@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ChevronDown, ExternalLink, SlidersHorizontal } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MeasureBadge } from "@/components/measures/MeasureBadge";
-import { MeasurePrecisionBadge } from "@/components/measures/MeasurePrecisionBadge";
 import { buttonVariants } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { getPresidentialComparison } from "@/lib/data/presidential-comparison";
@@ -257,11 +256,8 @@ export default async function PresidentialComparisonPage({
                         {candidate.measures.map((measure) => (
                           <li key={measure.id} className="p-4 md:p-5">
                             <p className="text-sm leading-relaxed">{measure.text}</p>
-                            {(measure.precision !== null || measure.qualifications.length > 0) && (
+                            {measure.qualifications.length > 0 && (
                               <div className="mt-3 flex flex-wrap gap-1.5">
-                                {measure.precision !== null && (
-                                  <MeasurePrecisionBadge precision={measure.precision} />
-                                )}
                                 {measure.qualifications.map((qualification) => (
                                   <MeasureBadge key={qualification.id} tier="qualification">
                                     {qualification.label}

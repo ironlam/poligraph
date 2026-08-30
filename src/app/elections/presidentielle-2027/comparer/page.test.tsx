@@ -32,8 +32,8 @@ describe("comparaison présidentielle", () => {
               text: "Ouvrir un centre de santé.",
               sourceUrl: "https://example.org/source",
               subtopics: [],
-              precision: null,
-              qualifications: [],
+              precision: "CHIFFREE",
+              qualifications: [{ id: "q1", label: "Financement précisé" }],
               withdrawal: null,
             },
           ],
@@ -62,6 +62,8 @@ describe("comparaison présidentielle", () => {
 
     expect(screen.getByRole("heading", { name: "Santé", level: 2 })).toBeInTheDocument();
     expect(screen.getByText("Ouvrir un centre de santé.")).toBeInTheDocument();
+    expect(screen.queryByText("Objectif quantifié")).not.toBeInTheDocument();
+    expect(screen.getByText("Financement précisé")).toBeInTheDocument();
     expect(screen.getByText(/Poligraph n'a pas encore trouvé ou traité/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Voir la mesure" })).toHaveAttribute(
       "href",
