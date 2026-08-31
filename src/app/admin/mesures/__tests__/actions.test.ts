@@ -72,6 +72,7 @@ const readerGuidesMock = {
   reviewReaderGuideMention: vi.fn(async () => undefined),
   saveReaderGuideDraft: vi.fn(async () => "guide-1"),
   publishReaderGuide: vi.fn(async () => undefined),
+  deactivateReaderGuide: vi.fn(async () => 1),
 };
 vi.mock("@/lib/measures/reader-guides", () => readerGuidesMock);
 
@@ -186,6 +187,10 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
       call: () => a.publishReaderGuideAction({ guideId: "guide-1" }),
     },
     {
+      name: "deactivateReaderGuideAction",
+      call: () => a.deactivateReaderGuideAction({ guideId: "guide-1" }),
+    },
+    {
       name: "generateContextDraftAction",
       call: () =>
         a.generateContextDraftAction({
@@ -260,6 +265,7 @@ describe("actions éditoriales : la session", () => {
     expect(readerGuidesMock.reviewReaderGuideMention).not.toHaveBeenCalled();
     expect(readerGuidesMock.saveReaderGuideDraft).not.toHaveBeenCalled();
     expect(readerGuidesMock.publishReaderGuide).not.toHaveBeenCalled();
+    expect(readerGuidesMock.deactivateReaderGuide).not.toHaveBeenCalled();
     expect(contextGenerationMock.generateMeasureContextDraft).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
@@ -282,6 +288,7 @@ describe("actions éditoriales : la session", () => {
     expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.deactivateReaderGuide).toHaveBeenCalledTimes(1);
     expect(contextGenerationMock.generateMeasureContextDraft).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledWith("rev-1", "admin", {
       ipAddress: "203.0.113.8",
@@ -296,6 +303,10 @@ describe("actions éditoriales : la session", () => {
       { ipAddress: "203.0.113.8", userAgent: "vitest-agent" }
     );
     expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledWith("guide-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+    expect(readerGuidesMock.deactivateReaderGuide).toHaveBeenCalledWith("guide-1", "admin", {
       ipAddress: "203.0.113.8",
       userAgent: "vitest-agent",
     });

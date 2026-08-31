@@ -1,7 +1,7 @@
 import { MEASURE_READER_GUIDES } from "@/config/measure-reader-guides";
 import { db } from "@/lib/db";
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
-import { syncSearchDocument } from "@/lib/measures/search-sync";
+import { syncSearchDocument, syncSearchDocuments } from "@/lib/measures/search-sync";
 import { invalidateMeasureTags } from "@/lib/measures/cache";
 import { MeasureValidationError } from "@/lib/measures/errors";
 import {
@@ -32,6 +32,12 @@ export type ReaderGuideAuditMetadata = {
   ipAddress?: string;
   userAgent?: string;
 };
+
+const PROGRAM_SOURCE_KINDS = [
+  "PROGRAMME_PARTI",
+  "PROGRAMME_CANDIDAT",
+  "PROPOSITIONS_CANDIDAT",
+] as const;
 
 function findGuide(term: string, canonicalLabel: string, guides: GuideMatch[]): GuideMatch | null {
   const candidates = new Set([
@@ -335,7 +341,12 @@ async function validateReaderGuideDraft(input: ReaderGuideDraftInput): Promise<v
     throw new MeasureValidationError("Une source de programme doit être rattachée à une révision");
   }
   const source = await db.measureSource.findFirst({
-    where: { measureRevisionId: input.sourceRevisionId, url: input.sourceUrl },
+    where: {
+      measureRevisionId: input.sourceRevisionId,
+      url: input.sourceUrl,
+      tier: "PRIMARY",
+      sourceKind: { in: [...PROGRAM_SOURCE_KINDS] },
+    },
     select: { id: true },
   });
   if (!source)
@@ -420,7 +431,12 @@ export async function publishReaderGuide(
         throw new MeasureValidationError("La source de programme n'est pas rattachée");
       }
       const source = await tx.measureSource.findFirst({
-        where: { measureRevisionId: guide.sourceRevisionId, url: guide.sourceUrl },
+        where: {
+          measureRevisionId: guide.sourceRevisionId,
+          url: guide.sourceUrl,
+          tier: "PRIMARY",
+          sourceKind: { in: [...PROGRAM_SOURCE_KINDS] },
+        },
         select: { id: true },
       });
       if (!source) throw new MeasureValidationError("La source de programme n'est plus valide");
@@ -440,6 +456,54 @@ export async function publishReaderGuide(
       },
     });
   });
+}
+
+export async function deactivateReaderGuide(
+  guideId: string,
+  actor: string,
+  auditMetadata: ReaderGuideAuditMetadata = {}
+): Promise<number> {
+  const measures = await db.$transaction(async (tx) => {
+    const guide = await tx.measureReaderGuide.findUnique({
+      where: { id: guideId },
+      select: { active: true, publicationStatus: true },
+    });
+    if (!guide || guide.publicationStatus !== "PUBLISHED") {
+      throw new MeasureValidationError("Ce repère n'est pas publié");
+    }
+    if (guide.active) {
+      await tx.measureReaderGuide.update({ where: { id: guideId }, data: { active: false } });
+      await tx.auditLog.create({
+        data: {
+          action: "DEACTIVATE_READER_GUIDE",
+          entityType: "MeasureReaderGuide",
+          entityId: guideId,
+          changes: { active: false },
+          userId: actor,
+          ...auditMetadata,
+        },
+      });
+    }
+    const mentions = await tx.measureRevisionReaderGuide.findMany({
+      where: { guideId, status: "APPROVED" },
+      select: {
+        revision: { select: { measure: { select: { id: true, electionId: true } } } },
+      },
+    });
+    return [
+      ...new Map(
+        mentions.map(({ revision }) => [revision.measure.id, revision.measure] as const)
+      ).values(),
+    ];
+  });
+  for (let index = 0; index < measures.length; index += 25) {
+    await syncSearchDocuments(
+      db,
+      measures.slice(index, index + 25).map(({ id }) => id)
+    );
+  }
+  for (const measure of measures) invalidateMeasureTags(measure.id, measure.electionId);
+  return measures.length;
 }
 
 export async function listReaderGuideDetectionCandidates(input: {

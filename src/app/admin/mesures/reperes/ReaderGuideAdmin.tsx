@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { MeasureReaderGuideSourceKind, PublicationStatus } from "@/generated/prisma";
 import {
+  deactivateReaderGuideAction,
   publishReaderGuideAction,
   saveReaderGuideDraftAction,
   type ActionResult,
@@ -16,6 +17,7 @@ type Guide = {
   label: string;
   definition: string;
   aliases: string[];
+  active: boolean;
   sourceKind: MeasureReaderGuideSourceKind;
   sourceUrl: string;
   sourceLabel: string;
@@ -102,7 +104,12 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
                     {guide.sourcePublisher}
                   </a>
                   <p className="text-xs text-muted-foreground">
-                    Statut : {guide.publicationStatus === "PUBLISHED" ? "publié" : "brouillon"}
+                    Statut :{" "}
+                    {guide.publicationStatus === "DRAFT"
+                      ? "brouillon"
+                      : guide.active
+                        ? "publié"
+                        : "désactivé"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -129,6 +136,27 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
                         Publier
                       </Button>
                     </>
+                  )}
+                  {guide.publicationStatus === "PUBLISHED" && guide.active && (
+                    <Button
+                      variant="outline"
+                      className="min-h-11 text-destructive"
+                      disabled={pending}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            "Désactiver ce repère ? Il disparaîtra immédiatement de toutes les mesures publiques."
+                          )
+                        )
+                          return;
+                        run(
+                          () => deactivateReaderGuideAction({ guideId: guide.id }),
+                          "Repère désactivé."
+                        );
+                      }}
+                    >
+                      Désactiver
+                    </Button>
                   )}
                 </div>
               </div>
@@ -205,7 +233,8 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
                 id="reader-guide-source-revision-help"
                 className="mt-1 block text-xs text-muted-foreground"
               >
-                Identifiant visible dans l’URL de la révision depuis la fiche d’administration.
+                Identifiant affiché dans l’historique des révisions sur la fiche d’administration de
+                la mesure.
               </span>
             </label>
           )}

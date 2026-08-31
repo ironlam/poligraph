@@ -40,6 +40,7 @@ import {
   reviewMeasureRevisionSubtopic,
 } from "@/lib/measures/subtopics";
 import {
+  deactivateReaderGuide,
   proposeReaderGuidesForRevision,
   publishReaderGuide,
   reviewReaderGuideMention,
@@ -488,6 +489,23 @@ export async function publishReaderGuideAction(input: unknown): Promise<ActionRe
     if (!parsed.success) throw new MeasureValidationError("Repère invalide");
     const requestMetadata = await getAuditRequestMetadata();
     await publishReaderGuide(parsed.data.guideId, ACTOR, requestMetadata);
+    revalidatePath("/admin/mesures/reperes");
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function deactivateReaderGuideAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ guideId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Repère invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    await deactivateReaderGuide(parsed.data.guideId, ACTOR, requestMetadata);
     revalidatePath("/admin/mesures/reperes");
     return { ok: true };
   } catch (error) {

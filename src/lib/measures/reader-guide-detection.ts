@@ -81,9 +81,10 @@ Exclure : vocabulaire quotidien, noms de personnes, jugements politiques, concep
   });
   const parsed = parseMistralJSON<{ detections?: unknown[] }>(extractMistralText(response));
   const seen = new Set<string>();
+  const evidenceCorpus = `${text} ${details}`.toLowerCase();
   return (parsed.detections ?? []).flatMap((value) => {
     const detection = parseDetection(value);
-    if (!detection || !text.toLowerCase().includes(detection.evidenceSpan.toLowerCase())) return [];
+    if (!detection || !evidenceCorpus.includes(detection.evidenceSpan.toLowerCase())) return [];
     const normalized = normalizeReaderGuideTerm(detection.term);
     if (!normalized || seen.has(normalized)) return [];
     seen.add(normalized);

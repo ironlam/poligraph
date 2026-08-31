@@ -18,6 +18,15 @@ Une suggestion n'est jamais publique. Le site affiche uniquement un rattachement
 un repère actif et `PUBLISHED`. Chaque création, publication, suggestion et décision produit une
 entrée dans `AuditLog`.
 
+Une source de programme doit être une source primaire de type programme de parti, programme de
+candidature ou propositions de candidature déjà rattachée à la révision. Une interview ou un
+article de presse ne peut pas être présenté comme une source de programme.
+
+Un repère publié dont la définition ou la source devient incorrecte peut être désactivé depuis
+`/admin/mesures/reperes`. La désactivation est auditée, le retire immédiatement des pages publiques
+et resynchronise les documents de recherche concernés. Une définition corrigée est ensuite créée et
+validée comme un nouveau repère, afin de conserver l'historique de la version retirée.
+
 ## Synchroniser le catalogue
 
 Le catalogue relu dans `src/config/measure-reader-guides.ts` crée des brouillons et ne remplace

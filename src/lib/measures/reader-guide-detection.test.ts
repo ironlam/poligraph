@@ -58,4 +58,34 @@ describe("détection des repères citoyens", () => {
     expect(prompt).toContain("ne rédige aucune définition");
     expect(prompt).toContain("<mesure>Supprimer les zones à faibles émissions.</mesure>");
   });
+
+  it("accepte un extrait probant présent uniquement dans le contexte documenté", async () => {
+    vi.mocked(callMistral).mockResolvedValue({
+      content: JSON.stringify({
+        detections: [
+          {
+            term: "kafala judiciaire",
+            canonicalLabel: "Kafala judiciaire",
+            evidenceSpan: "recours à la kafala judiciaire",
+            needsExplanation: true,
+            reason: "Mécanisme juridique non expliqué",
+            confidence: 0.91,
+          },
+        ],
+      }),
+    } as never);
+
+    const result = await detectReaderGuideTerms({
+      text: "Modifier les règles d'adoption.",
+      details: "La mesure prévoit un recours à la kafala judiciaire.",
+      knownLabels: [],
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        term: "kafala judiciaire",
+        evidenceSpan: "recours à la kafala judiciaire",
+      }),
+    ]);
+  });
 });
