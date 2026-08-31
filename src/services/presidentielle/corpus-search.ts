@@ -7,6 +7,7 @@ import type {
 import { db } from "@/lib/db";
 import { searchPublicPage } from "@/lib/search/query";
 import { toPresidentialLexicalQuery } from "@/lib/presidentielle/natural-query";
+import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import {
   PUBLIC_HUB_CANDIDACY_WHERE,
   PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
@@ -274,8 +275,7 @@ export async function searchPresidentialCorpus(
                 precision: true,
                 sources: {
                   orderBy: { publishedAt: "asc" },
-                  take: 1,
-                  select: { sourceKind: true, url: true },
+                  select: { sourceKind: true, tier: true, url: true },
                 },
               },
             },
@@ -318,6 +318,8 @@ export async function searchPresidentialCorpus(
   const measuresById = new Map(
     measureRows.flatMap((row) => {
       if (row.publishedRevision === null || row.candidacy === null) return [];
+      const sourceUrl = pickMeasureSourceUrl(row.publishedRevision.sources);
+      const source = row.publishedRevision.sources.find((item) => item.url === sourceUrl);
       const result: PresidentialMeasureSearchResult = {
         type: "measure",
         id: row.id,
@@ -327,8 +329,8 @@ export async function searchPresidentialCorpus(
         candidateSlug: row.candidacy.politician?.slug ?? null,
         theme: row.theme,
         precision: row.publishedRevision.precision,
-        sourceLabel: row.publishedRevision.sources[0]?.sourceKind ?? null,
-        sourceUrl: row.publishedRevision.sources[0]?.url ?? null,
+        sourceLabel: source?.sourceKind ?? null,
+        sourceUrl,
       };
       return [[row.id, result] as const];
     })

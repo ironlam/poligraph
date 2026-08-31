@@ -73,7 +73,18 @@ describe("searchPresidentialCorpus", () => {
         publishedRevision: {
           text: "Construire des logements publics",
           precision: null,
-          sources: [{ sourceKind: "PROGRAMME_CANDIDAT", url: "https://example.org/programme" }],
+          sources: [
+            {
+              sourceKind: "INTERVIEW_PRESSE",
+              tier: "SECONDARY",
+              url: "https://example.org/interview",
+            },
+            {
+              sourceKind: "PROGRAMME_CANDIDAT",
+              tier: "PRIMARY",
+              url: "https://example.org/programme",
+            },
+          ],
         },
         candidacy: { candidateName: "Alice Martin", politician: { slug: "alice-martin" } },
       },
@@ -116,6 +127,8 @@ describe("searchPresidentialCorpus", () => {
     expect(result?.measures[0]).toMatchObject({
       text: "Construire des logements publics",
       url: "/elections/presidentielle-test/mesures/alice-martin-construire-des-logements-publics",
+      sourceLabel: "PROGRAMME_CANDIDAT",
+      sourceUrl: "https://example.org/programme",
     });
     expect(result?.subjects).toEqual([
       {
