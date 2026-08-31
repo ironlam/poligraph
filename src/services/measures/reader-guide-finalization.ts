@@ -55,6 +55,19 @@ export type ReaderGuideFinalizationItem = {
   publishesGuide: boolean;
 };
 
+export type ReaderGuideFinalizationGuideSnapshot = {
+  id: string;
+  slug: string;
+  label: string;
+  definition: string;
+  aliases: string[];
+  sourceKind: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  sourcePublisher: string;
+  sourceRevisionId: string | null;
+};
+
 export type ReaderGuideFinalizationPlan = {
   electionSlug: string;
   scanned: number;
@@ -62,18 +75,8 @@ export type ReaderGuideFinalizationPlan = {
   unresolved: number;
   invalidGuides: number;
   duplicates: number;
-  guidesToPublish: Array<{
-    id: string;
-    slug: string;
-    label: string;
-    definition: string;
-    aliases: string[];
-    sourceKind: string;
-    sourceUrl: string;
-    sourceLabel: string;
-    sourcePublisher: string;
-    sourceRevisionId: string | null;
-  }>;
+  guideSnapshots: ReaderGuideFinalizationGuideSnapshot[];
+  guidesToPublish: ReaderGuideFinalizationGuideSnapshot[];
   unresolvedTerms: Array<{ normalizedTerm: string; example: string; occurrences: number }>;
   nextAfter: string | null;
   items: ReaderGuideFinalizationItem[];
@@ -81,6 +84,48 @@ export type ReaderGuideFinalizationPlan = {
 
 export function hashReaderGuideFinalizationPlan(plan: ReaderGuideFinalizationPlan): string {
   return createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+}
+
+function snapshotGuide(guide: FinalizationGuide): ReaderGuideFinalizationGuideSnapshot {
+  return {
+    id: guide.id,
+    slug: guide.slug,
+    label: guide.label,
+    definition: guide.definition,
+    aliases: guide.aliases,
+    sourceKind: guide.sourceKind,
+    sourceUrl: guide.sourceUrl,
+    sourceLabel: guide.sourceLabel,
+    sourcePublisher: guide.sourcePublisher,
+    sourceRevisionId: guide.sourceRevisionId,
+  };
+}
+
+export function isReaderGuideFinalizationRetryCompatible(
+  reviewed: ReaderGuideFinalizationPlan,
+  current: ReaderGuideFinalizationPlan
+): boolean {
+  if (reviewed.electionSlug !== current.electionSlug) return false;
+  const reviewedItems = new Map(reviewed.items.map((item) => [item.mentionId, item]));
+  const reviewedGuides = new Map(reviewed.guideSnapshots.map((guide) => [guide.id, guide]));
+  const stableItem = ({
+    reason: _reason,
+    publishesGuide: _publishesGuide,
+    ...item
+  }: ReaderGuideFinalizationItem) => item;
+  return (
+    current.items.every((item) => {
+      const reviewedItem = reviewedItems.get(item.mentionId);
+      return (
+        reviewedItem !== undefined &&
+        JSON.stringify(stableItem(reviewedItem)) === JSON.stringify(stableItem(item))
+      );
+    }) &&
+    current.guideSnapshots.every((guide) => {
+      const reviewedGuide = reviewedGuides.get(guide.id);
+      return reviewedGuide !== undefined && JSON.stringify(reviewedGuide) === JSON.stringify(guide);
+    })
+  );
 }
 
 function guidePublicationBlocker(guide: FinalizationGuide): string | null {
@@ -186,30 +231,21 @@ export function planReaderGuideFinalization(input: {
     });
   }
 
-  const guidesToPublish = [
+  const guideSnapshots = [
     ...new Map(
       items
-        .filter((item) => item.outcome === "READY" && item.publishesGuide && item.guideId)
+        .filter((item) => item.outcome === "READY" && item.guideId)
         .map((item) => {
           const guide = byId.get(item.guideId!)!;
-          return [
-            guide.id,
-            {
-              id: guide.id,
-              slug: guide.slug,
-              label: guide.label,
-              definition: guide.definition,
-              aliases: guide.aliases,
-              sourceKind: guide.sourceKind,
-              sourceUrl: guide.sourceUrl,
-              sourceLabel: guide.sourceLabel,
-              sourcePublisher: guide.sourcePublisher,
-              sourceRevisionId: guide.sourceRevisionId,
-            },
-          ] as const;
+          return [guide.id, snapshotGuide(guide)] as const;
         })
     ).values(),
   ];
+  const guidesToPublish = guideSnapshots.filter((guide) =>
+    items.some(
+      (item) => item.outcome === "READY" && item.publishesGuide && item.guideId === guide.id
+    )
+  );
   const unresolvedTerms = [
     ...items
       .filter((item) => item.outcome === "UNRESOLVED")
@@ -236,6 +272,7 @@ export function planReaderGuideFinalization(input: {
     unresolved: items.filter((item) => item.outcome === "UNRESOLVED").length,
     invalidGuides: items.filter((item) => item.outcome === "INVALID_GUIDE").length,
     duplicates: items.filter((item) => item.outcome === "DUPLICATE").length,
+    guideSnapshots,
     guidesToPublish,
     unresolvedTerms,
     nextAfter: input.mentions.at(-1)?.id ?? null,
@@ -247,16 +284,22 @@ async function listMentions(input: {
   electionSlug: string;
   limit?: number;
   after?: string;
+  mentionIds?: string[];
 }): Promise<FinalizationMention[]> {
   const mentions: FinalizationMention[] = [];
   let cursor = input.after;
-  let remaining = input.limit ?? Number.POSITIVE_INFINITY;
+  let remaining = input.mentionIds?.length ?? input.limit ?? Number.POSITIVE_INFINITY;
   while (remaining > 0) {
     const take = Math.min(500, remaining);
+    const id = input.mentionIds
+      ? { in: input.mentionIds, ...(cursor ? { gt: cursor } : {}) }
+      : cursor
+        ? { gt: cursor }
+        : undefined;
     const rows = await db.measureRevisionReaderGuide.findMany({
       where: {
         status: "SUGGESTED",
-        ...(cursor ? { id: { gt: cursor } } : {}),
+        ...(id ? { id } : {}),
         revision: {
           publishedOf: {
             is: {
@@ -298,6 +341,7 @@ export async function prepareReaderGuideFinalization(input: {
   electionSlug: string;
   limit?: number;
   after?: string;
+  mentionIds?: string[];
 }): Promise<ReaderGuideFinalizationPlan> {
   const [guides, mentions] = await Promise.all([
     db.measureReaderGuide.findMany({
@@ -349,26 +393,43 @@ export async function applyReaderGuideFinalization(
   const ready = plan.items.filter(
     (item) => item.outcome === "READY" && item.guideId !== null && !failedGuideIds.has(item.guideId)
   );
-  for (let index = 0; index < ready.length; index += 5) {
-    const batch = ready.slice(index, index + 5);
+  const byMeasure = [
+    ...ready
+      .reduce((groups, item) => {
+        const group = groups.get(item.measureId) ?? [];
+        group.push(item);
+        groups.set(item.measureId, group);
+        return groups;
+      }, new Map<string, ReaderGuideFinalizationItem[]>())
+      .values(),
+  ];
+  for (let index = 0; index < byMeasure.length; index += 5) {
+    const groups = byMeasure.slice(index, index + 5);
     const outcomes = await Promise.all(
-      batch.map(async (item) => {
-        try {
-          await reviewReaderGuideMention({
-            mentionId: item.mentionId,
-            guideId: item.guideId!,
-            status: "APPROVED",
-            reviewedBy: actor,
-          });
-          return null;
-        } catch (error) {
-          return `${item.mentionId}: ${error instanceof Error ? error.message : String(error)}`;
+      groups.map(async (items) => {
+        const groupErrors: string[] = [];
+        let groupApproved = 0;
+        for (const item of items) {
+          try {
+            await reviewReaderGuideMention({
+              mentionId: item.mentionId,
+              guideId: item.guideId!,
+              status: "APPROVED",
+              reviewedBy: actor,
+            });
+            groupApproved += 1;
+          } catch (error) {
+            groupErrors.push(
+              `${item.mentionId}: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
         }
+        return { groupApproved, groupErrors };
       })
     );
-    for (const error of outcomes) {
-      if (error) errors.push(error);
-      else approvedMentions += 1;
+    for (const outcome of outcomes) {
+      approvedMentions += outcome.groupApproved;
+      errors.push(...outcome.groupErrors);
     }
   }
   return { publishedGuides, approvedMentions, errors };

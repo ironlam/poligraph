@@ -5,6 +5,7 @@ import { parseReaderGuideFinalizationOptions } from "../src/lib/measures/reader-
 import {
   applyReaderGuideFinalization,
   hashReaderGuideFinalizationPlan,
+  isReaderGuideFinalizationRetryCompatible,
   prepareReaderGuideFinalization,
   type ReaderGuideFinalizationPlan,
 } from "../src/services/measures/reader-guide-finalization";
@@ -54,11 +55,19 @@ async function main(): Promise<void> {
   const selection = reviewedReport?.parameters ?? options;
   const plan = await prepareReaderGuideFinalization({
     electionSlug: selection.electionSlug,
-    ...(selection.limit !== undefined ? { limit: selection.limit } : {}),
-    ...(selection.after ? { after: selection.after } : {}),
+    ...(reviewedReport
+      ? { mentionIds: reviewedReport.plan.items.map((item) => item.mentionId) }
+      : {
+          ...(selection.limit !== undefined ? { limit: selection.limit } : {}),
+          ...(selection.after ? { after: selection.after } : {}),
+        }),
   });
   const planHash = hashReaderGuideFinalizationPlan(plan);
-  if (reviewedReport && planHash !== reviewedReport.planHash) {
+  if (
+    reviewedReport &&
+    planHash !== reviewedReport.planHash &&
+    !isReaderGuideFinalizationRetryCompatible(reviewedReport.plan, plan)
+  ) {
     throw new Error(
       "Le lot a changé depuis le dry-run. Générez et relisez un nouveau rapport avant application."
     );

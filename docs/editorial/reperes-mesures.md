@@ -88,6 +88,9 @@ npm run measures:finalize-reader-guides -- \
   --report scripts/.local/reader-guide-finalization-IDENTIFIANT.json
 ```
 
+La même commande peut être relancée après une interruption. Les décisions déjà appliquées sont
+ignorées et le reste du rapport relu est repris, sans intégrer de nouvelle suggestion.
+
 `--confirm-reviewed` indique que la personne qui lance la commande assume la validation
 éditoriale du lot. La commande ne crée jamais une définition à partir d'un simple terme. Les
 suggestions sans repère correspondant et les brouillons incomplets restent dans le rapport pour

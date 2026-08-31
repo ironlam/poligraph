@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyReaderGuideFinalization,
   hashReaderGuideFinalizationPlan,
+  isReaderGuideFinalizationRetryCompatible,
   planReaderGuideFinalization,
 } from "./reader-guide-finalization";
 
@@ -114,6 +115,39 @@ describe("finalisation en lot des repères", () => {
     );
   });
 
+  it("autorise la reprise du même rapport sans accepter de nouveau rattachement", () => {
+    const reviewed = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [{ ...publishedGuide, publicationStatus: "DRAFT" }],
+      mentions: [
+        mention({ id: "1", term: "ZFE", normalizedTerm: "zfe" }),
+        mention({ id: "2", term: "ZFE", normalizedTerm: "zfe" }),
+      ],
+    });
+    const remaining = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [publishedGuide],
+      mentions: [mention({ id: "2", term: "ZFE", normalizedTerm: "zfe" })],
+    });
+    const withNewMention = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [publishedGuide],
+      mentions: [
+        mention({ id: "2", term: "ZFE", normalizedTerm: "zfe" }),
+        mention({ id: "3", term: "ZFE", normalizedTerm: "zfe" }),
+      ],
+    });
+    const withChangedDefinition = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [{ ...publishedGuide, definition: "Une définition modifiée après la relecture." }],
+      mentions: [mention({ id: "2", term: "ZFE", normalizedTerm: "zfe" })],
+    });
+
+    expect(isReaderGuideFinalizationRetryCompatible(reviewed, remaining)).toBe(true);
+    expect(isReaderGuideFinalizationRetryCompatible(reviewed, withNewMention)).toBe(false);
+    expect(isReaderGuideFinalizationRetryCompatible(reviewed, withChangedDefinition)).toBe(false);
+  });
+
   it("laisse les termes inconnus et les brouillons incomplets hors du lot", () => {
     const invalidGuide = {
       ...publishedGuide,
@@ -176,5 +210,42 @@ describe("finalisation en lot des repères", () => {
       status: "APPROVED",
       reviewedBy: "cli:reader-guides:run-1",
     });
+  });
+
+  it("sérialise les validations qui synchronisent la même mesure", async () => {
+    let active = 0;
+    let maxActive = 0;
+    serviceMocks.review.mockImplementation(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await Promise.resolve();
+      active -= 1;
+    });
+    const secondGuide = {
+      ...publishedGuide,
+      id: "guide-kafala",
+      slug: "kafala-judiciaire",
+      label: "Kafala judiciaire",
+      aliases: ["kafala"],
+    };
+    const first = mention({ id: "1", term: "ZFE", normalizedTerm: "zfe" });
+    const second = mention({
+      id: "2",
+      term: "Kafala",
+      normalizedTerm: "kafala",
+      guideId: "guide-kafala",
+    });
+    second.revision.id = first.revision.id;
+    second.revision.publishedOf = first.revision.publishedOf;
+    const plan = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [publishedGuide, secondGuide],
+      mentions: [first, second],
+    });
+
+    const result = await applyReaderGuideFinalization(plan, "cli:reader-guides:run-2");
+
+    expect(result.approvedMentions).toBe(2);
+    expect(maxActive).toBe(1);
   });
 });
