@@ -141,6 +141,17 @@ export default function PresidentialMeasuresMethodologyPage() {
               rattachement à une mesure est validé séparément et conservé dans le journal
               d&apos;audit.
             </p>
+            <p>
+              Les définitions validées sont regroupées dans un glossaire et reliées aux mesures, aux
+              thèmes et aux candidats concernés.{" "}
+              <Link
+                href="/elections/presidentielle-2027/reperes"
+                className="font-semibold text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                Consulter les repères de la présidentielle 2027
+              </Link>
+              .
+            </p>
           </div>
         </section>
 

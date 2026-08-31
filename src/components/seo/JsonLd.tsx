@@ -207,6 +207,70 @@ export function BreadcrumbJsonLd({ items }: BreadcrumbJsonLdProps) {
   );
 }
 
+interface DefinedTermJsonLdProps {
+  name: string;
+  description: string;
+  url: string;
+  alternateNames?: string[];
+  sourceUrl: string;
+  termSetUrl: string;
+}
+
+/** A reviewed civic definition attached to its source and to the presidential glossary. */
+export function DefinedTermJsonLd({
+  name,
+  description,
+  url,
+  alternateNames = [],
+  sourceUrl,
+  termSetUrl,
+}: DefinedTermJsonLdProps) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "DefinedTerm",
+    name,
+    description,
+    url,
+    ...(alternateNames.length > 0 && { alternateName: alternateNames }),
+    sameAs: sourceUrl,
+    inDefinedTermSet: {
+      "@type": "DefinedTermSet",
+      name: "Repères pour comprendre les programmes de la présidentielle 2027",
+      url: termSetUrl,
+    },
+  };
+
+  return (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
+  );
+}
+
+interface DefinedTermSetJsonLdProps {
+  name: string;
+  description: string;
+  url: string;
+  terms: Array<{ name: string; url: string }>;
+}
+
+export function DefinedTermSetJsonLd({ name, description, url, terms }: DefinedTermSetJsonLdProps) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "DefinedTermSet",
+    name,
+    description,
+    url,
+    hasDefinedTerm: terms.map((term) => ({
+      "@type": "DefinedTerm",
+      name: term.name,
+      url: term.url,
+    })),
+  };
+
+  return (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
+  );
+}
+
 interface FAQJsonLdProps {
   questions: Array<{
     question: string;

@@ -103,11 +103,28 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
       { theme: "SANTE", label: "Santé", slug: "sante", measureCount: 0, publishable: false },
     ],
     totalMeasuresOnTheme: 4,
+    readerGuides: [],
     ...over,
   };
 }
 
 describe("SubjectComparison", () => {
+  it("relie les repères techniques du thème à leur page éditoriale", () => {
+    render(
+      <SubjectComparison
+        data={data({
+          readerGuides: [
+            { slug: "zones-faibles-emissions", label: "Zone à faibles émissions", measureCount: 2 },
+          ],
+        })}
+      />
+    );
+    expect(screen.getByRole("link", { name: /Zone à faibles émissions/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/reperes/zones-faibles-emissions"
+    );
+  });
+
   it("annonce le critère de tri réellement appliqué", () => {
     render(<SubjectComparison data={data()} />);
     expect(screen.getByText(/Classées par nom de famille/)).toBeInTheDocument();

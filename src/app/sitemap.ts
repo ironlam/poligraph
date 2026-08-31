@@ -14,6 +14,11 @@ import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 import { getPublicPresidentialCandidates } from "@/lib/data/presidential-candidates-public";
 import { getPublicMeasureStatsByCandidacy } from "@/lib/data/measures";
+import { loadPresidentialReaderGuideIndex } from "@/lib/data/presidential-reader-guides";
+import {
+  presidentialReaderGuidePath,
+  presidentialReaderGuidesPath,
+} from "@/lib/presidentielle/reader-guide-paths";
 import {
   SIGNIFICANT_MANDATE_TYPES,
   MAIRE_MIN_COMMUNE_POPULATION,
@@ -409,6 +414,15 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     presidentielle2027 === undefined
       ? null
       : await loadThemesIndex(presidentielle2027.id, PRESIDENTIELLE_2027_SLUG);
+  // The loader applies isIndexableReaderGuide(), the same pure predicate used by route metadata.
+  // The sitemap therefore cannot announce a glossary stub that the detail route marks noindex.
+  const presidentialReaderGuides =
+    presidentielle2027 === undefined
+      ? []
+      : await loadPresidentialReaderGuideIndex(presidentielle2027.id);
+  const indexablePresidentialReaderGuides = presidentialReaderGuides.filter(
+    (guide) => guide.indexable
+  );
   const presidentielleHubPublishable =
     presidentialThemesIndex !== null &&
     isHubPublishable(presidentialThemesIndex.publishableSubjectPageCount);
@@ -476,6 +490,27 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
               changeFrequency: "weekly" as const,
               priority: 0.6,
             })),
+        ]
+      : [];
+
+  const presidentialReaderGuidePages: MetadataRoute.Sitemap =
+    indexablePresidentialReaderGuides.length > 0
+      ? [
+          {
+            url: `${SITE_URL}${presidentialReaderGuidesPath()}`,
+            lastModified: indexablePresidentialReaderGuides.reduce(
+              (latest, guide) => (guide.updatedAt > latest ? guide.updatedAt : latest),
+              presidentielle2027?.updatedAt ?? new Date(0)
+            ),
+            changeFrequency: "weekly" as const,
+            priority: 0.5,
+          },
+          ...indexablePresidentialReaderGuides.map((guide) => ({
+            url: `${SITE_URL}${presidentialReaderGuidePath(guide.slug)}`,
+            lastModified: guide.updatedAt,
+            changeFrequency: "weekly" as const,
+            priority: 0.5,
+          })),
         ]
       : [];
 
@@ -558,6 +593,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...electionPages,
     ...presidentialDirectoryPages,
     ...presidentialSubjectPages,
+    ...presidentialReaderGuidePages,
     ...candidateFichePages,
     ...presidentialMeasurePages,
     ...departmentPages,

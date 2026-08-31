@@ -373,6 +373,18 @@ describe("doctrine — presidentielle-2027 hub stays out of the sitemap while un
     );
     expect(electionShard).toContain("...presidentialMeasurePages");
   });
+
+  it("annonce uniquement les repères substantiels reliés au corpus public", () => {
+    expect(electionShard).toContain("loadPresidentialReaderGuideIndex");
+    expect(electionShard).toContain("guide.indexable");
+    expect(electionShard).toContain("const presidentialReaderGuidePages");
+    expect(electionShard).toContain("presidentialReaderGuidesPath()");
+    expect(electionShard).toContain("presidentialReaderGuidePath(guide.slug)");
+    expect(electionShard).toContain("...presidentialReaderGuidePages");
+    expect(electionShard).toMatch(
+      /const presidentialReaderGuidePages:[\s\S]*=\s*indexablePresidentialReaderGuides\.length > 0/
+    );
+  });
 });
 
 describe("doctrine — la recherche présidentielle reste une surface utilitaire", () => {

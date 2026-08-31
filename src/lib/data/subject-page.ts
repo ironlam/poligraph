@@ -81,6 +81,8 @@ export type SubjectPageData = {
   }[];
   /** Currently-defended measures on this theme, across the whole published population. */
   totalMeasuresOnTheme: number;
+  /** Reviewed technical terms present in currently defended measures on this theme. */
+  readerGuides: Array<{ slug: string; label: string; measureCount: number }>;
 };
 
 /**
@@ -173,6 +175,19 @@ export async function loadSubjectPageData(
     entries.push({ candidate, measures: subjectMeasures });
   }
 
+  const readerGuideCounts = new Map<string, { label: string; measureIds: Set<string> }>();
+  for (const measure of measures) {
+    if (measure.withdrawal !== null) continue;
+    for (const guide of measure.readerGuides) {
+      const current = readerGuideCounts.get(guide.slug) ?? {
+        label: guide.label,
+        measureIds: new Set<string>(),
+      };
+      current.measureIds.add(measure.id);
+      readerGuideCounts.set(guide.slug, current);
+    }
+  }
+
   return {
     theme,
     electionSlug,
@@ -194,6 +209,13 @@ export async function loadSubjectPageData(
     })),
     totalMeasuresOnTheme:
       themesIndex.themes.find((t) => t.theme === theme)?.currentlyDefendedMeasureCount ?? 0,
+    readerGuides: [...readerGuideCounts.entries()]
+      .map(([slug, guide]) => ({
+        slug,
+        label: guide.label,
+        measureCount: guide.measureIds.size,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr")),
   };
 }
 

@@ -26,6 +26,7 @@ const context: HubMeasureContext = {
   lastReviewedAt: new Date("2026-08-30"),
   themes: [],
   featuredSubtopics: [],
+  featuredReaderGuides: [],
 };
 
 beforeEach(() => {

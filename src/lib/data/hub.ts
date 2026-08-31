@@ -10,6 +10,7 @@ import {
 import { loadThemesIndex } from "./themes-index";
 import type { FeaturedSubtopic } from "./themes-index";
 import { getLatestPresidentialReviewDate } from "./measures";
+import { loadPresidentialReaderGuideIndex } from "./presidential-reader-guides";
 
 /**
  * The two read authorities for the presidential hub page.
@@ -63,6 +64,13 @@ export type HubMeasureContext = {
   themes: HubTheme[];
   /** A bounded, diversified set of human-approved subtopics for direct corpus exploration. */
   featuredSubtopics: FeaturedSubtopic[];
+  /** A bounded set of reviewed definitions with the broadest current corpus coverage. */
+  featuredReaderGuides: Array<{
+    slug: string;
+    label: string;
+    measureCount: number;
+    candidateCount: number;
+  }>;
 };
 
 /**
@@ -84,7 +92,7 @@ export async function loadHubMeasureContext(
   electionId: string,
   electionSlug: string
 ): Promise<HubMeasureContext> {
-  const [election, themesIndex, lastReviewedAt] = await Promise.all([
+  const [election, themesIndex, lastReviewedAt, readerGuides] = await Promise.all([
     db.election.findUniqueOrThrow({
       where: { id: electionId },
       select: {
@@ -97,6 +105,7 @@ export async function loadHubMeasureContext(
     }),
     loadThemesIndex(electionId, electionSlug),
     getLatestPresidentialReviewDate(electionId),
+    loadPresidentialReaderGuideIndex(electionId),
   ]);
 
   // Derived from the themes index rather than a fresh getPublicMeasuresByElection() read: the
@@ -125,6 +134,16 @@ export async function loadHubMeasureContext(
       publishable,
     })),
     featuredSubtopics: themesIndex.featuredSubtopics,
+    featuredReaderGuides: readerGuides
+      .filter((guide) => guide.indexable)
+      .sort((a, b) => b.measures.length - a.measures.length || a.label.localeCompare(b.label, "fr"))
+      .slice(0, 6)
+      .map((guide) => ({
+        slug: guide.slug,
+        label: guide.label,
+        measureCount: guide.measures.length,
+        candidateCount: guide.candidateCount,
+      })),
   };
 }
 

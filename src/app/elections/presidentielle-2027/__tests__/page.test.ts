@@ -26,6 +26,7 @@ function context(over: Partial<HubMeasureContext> = {}): HubMeasureContext {
     lastReviewedAt: null,
     themes: [],
     featuredSubtopics: [],
+    featuredReaderGuides: [],
     ...over,
   };
 }

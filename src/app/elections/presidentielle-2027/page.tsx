@@ -14,6 +14,7 @@ import { HubCorpusState } from "./_components/HubCorpusState";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
 import { HubSubjects } from "./_components/HubSubjects";
 import { HubTopics } from "./_components/HubTopics";
+import { HubReaderGuides } from "./_components/HubReaderGuides";
 import { PresidentialHubNav } from "./_components/PresidentialHubNav";
 import { PresidentialCorpusSearch } from "./_components/PresidentialCorpusSearch";
 
@@ -121,6 +122,8 @@ export default async function PresidentialHubPage() {
         <HubTopics subtopics={context.featuredSubtopics} />
 
         <HubSubjects themes={context.themes} />
+
+        <HubReaderGuides guides={context.featuredReaderGuides} />
 
         <HubCandidacyOverview candidacies={field} />
 

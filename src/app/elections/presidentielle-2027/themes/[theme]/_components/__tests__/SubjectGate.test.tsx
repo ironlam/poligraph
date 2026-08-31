@@ -26,6 +26,7 @@ function data(over: Partial<SubjectPageData> = {}): SubjectPageData {
       { theme: "SANTE", label: "Santé", slug: "sante", measureCount: 0, publishable: false },
     ],
     totalMeasuresOnTheme: 4,
+    readerGuides: [],
     ...over,
   };
 }
