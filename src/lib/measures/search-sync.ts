@@ -36,6 +36,21 @@ const SEARCH_MEASURE_SELECT = {
         where: { status: "APPROVED" },
         select: { subtopic: { select: { label: true, aliases: true } } },
       },
+      readerGuideMentions: {
+        where: {
+          status: "APPROVED",
+          guide: {
+            is: {
+              active: true,
+              publicationStatus: "PUBLISHED",
+              reviewedAt: { not: null },
+            },
+          },
+        },
+        select: {
+          guide: { select: { label: true, aliases: true, definition: true } },
+        },
+      },
     },
   },
   latestRevision: {
@@ -47,6 +62,21 @@ const SEARCH_MEASURE_SELECT = {
       subtopics: {
         where: { status: "APPROVED" },
         select: { subtopic: { select: { label: true, aliases: true } } },
+      },
+      readerGuideMentions: {
+        where: {
+          status: "APPROVED",
+          guide: {
+            is: {
+              active: true,
+              publicationStatus: "PUBLISHED",
+              reviewedAt: { not: null },
+            },
+          },
+        },
+        select: {
+          guide: { select: { label: true, aliases: true, definition: true } },
+        },
       },
     },
   },
@@ -66,6 +96,9 @@ function buildSearchDocument(
     subtopic.label,
     ...subtopic.aliases,
   ]);
+  const readerGuideTerms = reference.readerGuideMentions.flatMap(({ guide }) =>
+    guide ? [guide.label, ...guide.aliases, guide.definition] : []
+  );
   const contextualBody = [
     reference.text,
     reference.details,
@@ -73,6 +106,7 @@ function buildSearchDocument(
     partyLabel,
     THEME_CATEGORY_LABELS[measure.theme],
     ...subtopicTerms,
+    ...readerGuideTerms,
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -20,6 +20,8 @@
     "measures:classify-subtopic-delta": "tsx --env-file=.env scripts/classify-measure-subtopic-delta.ts",
     "measures:generate-contexts": "tsx --env-file=.env scripts/generate-measure-contexts.ts",
     "measures:regenerate-contexts": "tsx --env-file=.env scripts/regenerate-measure-contexts.ts",
+    "measures:sync-reader-guides": "tsx --env-file=.env scripts/sync-measure-reader-guides.ts",
+    "measures:detect-reader-guides": "tsx --env-file=.env scripts/detect-measure-reader-guides.ts",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
