@@ -143,7 +143,10 @@ describe("finalisation en lot des repères", () => {
       mentions: [mention({ id: "2", term: "ZFE", normalizedTerm: "zfe" })],
     });
 
-    expect(isReaderGuideFinalizationRetryCompatible(reviewed, remaining)).toBe(true);
+    expect(isReaderGuideFinalizationRetryCompatible(reviewed, remaining)).toBe(false);
+    expect(isReaderGuideFinalizationRetryCompatible(reviewed, remaining, new Set(["1"]))).toBe(
+      true
+    );
     expect(isReaderGuideFinalizationRetryCompatible(reviewed, withNewMention)).toBe(false);
     expect(isReaderGuideFinalizationRetryCompatible(reviewed, withChangedDefinition)).toBe(false);
   });

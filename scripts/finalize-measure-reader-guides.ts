@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parseReaderGuideFinalizationOptions } from "../src/lib/measures/reader-guide-finalization-options";
 import {
   applyReaderGuideFinalization,
+  getFinalizedReaderGuideMentionIds,
   hashReaderGuideFinalizationPlan,
   isReaderGuideFinalizationRetryCompatible,
   prepareReaderGuideFinalization,
@@ -63,10 +64,15 @@ async function main(): Promise<void> {
         }),
   });
   const planHash = hashReaderGuideFinalizationPlan(plan);
+  const finalizedMentionIds = reviewedReport
+    ? await getFinalizedReaderGuideMentionIds(
+        reviewedReport.plan.items.map((item) => item.mentionId)
+      )
+    : new Set<string>();
   if (
     reviewedReport &&
     planHash !== reviewedReport.planHash &&
-    !isReaderGuideFinalizationRetryCompatible(reviewedReport.plan, plan)
+    !isReaderGuideFinalizationRetryCompatible(reviewedReport.plan, plan, finalizedMentionIds)
   ) {
     throw new Error(
       "Le lot a changé depuis le dry-run. Générez et relisez un nouveau rapport avant application."

@@ -103,10 +103,12 @@ function snapshotGuide(guide: FinalizationGuide): ReaderGuideFinalizationGuideSn
 
 export function isReaderGuideFinalizationRetryCompatible(
   reviewed: ReaderGuideFinalizationPlan,
-  current: ReaderGuideFinalizationPlan
+  current: ReaderGuideFinalizationPlan,
+  finalizedMentionIds: ReadonlySet<string> = new Set()
 ): boolean {
   if (reviewed.electionSlug !== current.electionSlug) return false;
   const reviewedItems = new Map(reviewed.items.map((item) => [item.mentionId, item]));
+  const currentMentionIds = new Set(current.items.map((item) => item.mentionId));
   const reviewedGuides = new Map(reviewed.guideSnapshots.map((guide) => [guide.id, guide]));
   const stableItem = ({
     reason: _reason,
@@ -114,6 +116,9 @@ export function isReaderGuideFinalizationRetryCompatible(
     ...item
   }: ReaderGuideFinalizationItem) => item;
   return (
+    reviewed.items.every(
+      (item) => currentMentionIds.has(item.mentionId) || finalizedMentionIds.has(item.mentionId)
+    ) &&
     current.items.every((item) => {
       const reviewedItem = reviewedItems.get(item.mentionId);
       return (
@@ -126,6 +131,23 @@ export function isReaderGuideFinalizationRetryCompatible(
       return reviewedGuide !== undefined && JSON.stringify(reviewedGuide) === JSON.stringify(guide);
     })
   );
+}
+
+export async function getFinalizedReaderGuideMentionIds(
+  mentionIds: string[]
+): Promise<Set<string>> {
+  const finalized = new Set<string>();
+  for (let index = 0; index < mentionIds.length; index += 500) {
+    const rows = await db.measureRevisionReaderGuide.findMany({
+      where: {
+        id: { in: mentionIds.slice(index, index + 500) },
+        status: { in: ["APPROVED", "REJECTED"] },
+      },
+      select: { id: true },
+    });
+    for (const row of rows) finalized.add(row.id);
+  }
+  return finalized;
 }
 
 function guidePublicationBlocker(guide: FinalizationGuide): string | null {
