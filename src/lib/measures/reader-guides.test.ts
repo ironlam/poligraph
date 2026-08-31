@@ -137,7 +137,9 @@ describe("workflow des repères citoyens", () => {
       status: "SUGGESTED",
       guideId: "guide-1",
       revisionId: "revision-1",
-      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
     });
     mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
       publicationStatus: "DRAFT",
@@ -160,7 +162,9 @@ describe("workflow des repères citoyens", () => {
       status: "SUGGESTED",
       guideId: "guide-1",
       revisionId: "revision-1",
-      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
     });
     mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
       publicationStatus: "PUBLISHED",
@@ -176,7 +180,7 @@ describe("workflow des repères citoyens", () => {
       reviewedBy: "admin",
     });
 
-    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(2);
     expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.syncSearch.mock.invocationCallOrder[0]!
     );
@@ -188,7 +192,9 @@ describe("workflow des repères citoyens", () => {
       status: "SUGGESTED",
       guideId: "guide-1",
       revisionId: "revision-1",
-      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
     });
     mocks.tx.measure.findFirst.mockResolvedValue(null);
     const { reviewReaderGuideMention } = await import("./reader-guides");
@@ -209,7 +215,8 @@ describe("workflow des repères citoyens", () => {
       }),
       select: { id: true },
     });
-    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
       mocks.tx.measure.findFirst.mock.invocationCallOrder[0]!
     );
     expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();

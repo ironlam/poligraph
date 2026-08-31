@@ -11,7 +11,7 @@ import {
 } from "@/lib/measures/reader-guide-detection";
 import { detectReaderGuideTerms } from "@/services/measures/reader-guide-detection";
 import { isOfficialInstitutionUrl } from "@/lib/measures/reader-guide-source";
-import { lockMeasure } from "@/lib/measures/lock";
+import { lockMeasure, lockMeasureCandidacy } from "@/lib/measures/lock";
 import { Prisma } from "@/generated/prisma";
 
 type GuideMatch = {
@@ -262,11 +262,16 @@ export async function reviewReaderGuideMention(input: {
           status: true,
           guideId: true,
           revisionId: true,
-          revision: { select: { measure: { select: { id: true, electionId: true } } } },
+          revision: {
+            select: { measure: { select: { id: true, electionId: true, candidacyId: true } } },
+          },
         },
       });
       if (!mention || mention.status !== "SUGGESTED") {
         throw new MeasureValidationError("Cette proposition a déjà été traitée");
+      }
+      if (mention.revision.measure.candidacyId) {
+        await lockMeasureCandidacy(tx, mention.revision.measure.candidacyId);
       }
       const guideId = input.guideId ?? mention.guideId;
       if (input.status === "APPROVED") {
