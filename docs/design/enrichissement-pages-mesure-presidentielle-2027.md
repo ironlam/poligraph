@@ -167,6 +167,17 @@ ne permet honnêtement aucun enrichissement.
 
 ### Commandes de génération
 
+Mesurer l'entonnoir complet avant une génération ou une campagne de relecture :
+
+```bash
+npm run measures:audit-contexts -- --election presidentielle-2027
+```
+
+Le rapport distingue les contextes publics, les brouillons en attente, les mesures sans preuve
+structurée, les sources qui ne contiennent aucun contexte distinct de la formulation et les
+tentatives déjà terminées. Un faible taux public ne signifie donc pas automatiquement que toutes
+les autres mesures peuvent recevoir un résumé utile.
+
 Prévisualiser le nombre de mesures éligibles sans appeler Mistral ni écrire en base :
 
 ```bash

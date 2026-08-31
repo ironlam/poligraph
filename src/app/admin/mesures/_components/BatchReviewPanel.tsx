@@ -44,9 +44,16 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
           <summary className="min-h-11 cursor-pointer py-2 text-primary underline">
             Vérifier le contenu du lot
           </summary>
-          <ol className="mt-2 max-h-72 max-w-2xl list-decimal space-y-2 overflow-y-auto pl-5">
+          <ol className="mt-2 max-h-96 max-w-3xl list-decimal space-y-4 overflow-y-auto pl-5">
             {group.items.map((item) => (
-              <li key={item.revisionId}>{item.text}</li>
+              <li key={item.revisionId}>
+                <span className="font-medium">{item.text}</span>
+                {item.details ? (
+                  <span className="mt-1 block text-muted-foreground">
+                    Contexte proposé : {item.details}
+                  </span>
+                ) : null}
+              </li>
             ))}
           </ol>
         </details>
@@ -112,8 +119,9 @@ export function BatchReviewPanel({ groups }: { groups: BatchReviewGroup[] }) {
         Relecture par lot
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Chaque lot contient uniquement les brouillons actifs et sourcés d{"'"}une édition. Cette
-        étape ne publie rien. Une fois la relecture enregistrée, le lot passe dans la section de
+        Chaque lot contient uniquement des brouillons actifs et sourcés. Les corrections de contexte
+        sont incluses seulement si la formulation publique reste strictement identique. Cette étape
+        ne publie rien. Une fois la relecture enregistrée, le lot passe dans la section de
         publication.
       </p>
       <div className="mt-4 space-y-3">

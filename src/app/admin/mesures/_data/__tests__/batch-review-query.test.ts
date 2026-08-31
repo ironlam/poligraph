@@ -25,7 +25,13 @@ describe("queryBatchReviewGroups", () => {
         measures: [
           {
             id: "measure-1",
-            latestRevision: { id: "revision-1", text: "Créer un service public du logement." },
+            publicationStatus: "DRAFT",
+            publishedRevision: null,
+            latestRevision: {
+              id: "revision-1",
+              text: "Créer un service public du logement.",
+              details: null,
+            },
           },
         ],
       },
@@ -43,6 +49,7 @@ describe("queryBatchReviewGroups", () => {
             measureId: "measure-1",
             revisionId: "revision-1",
             text: "Créer un service public du logement.",
+            details: null,
           },
         ],
         hasMore: false,
@@ -50,30 +57,94 @@ describe("queryBatchReviewGroups", () => {
     ]);
   });
 
-  it("demande uniquement les premières publications non relues et sourcées", async () => {
+  it("demande les premières publications et les contextes v9 non relus", async () => {
     findManyMock.mockResolvedValue([]);
 
     await queryBatchReviewGroups();
 
     expect(findManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           measures: {
-            some: expect.objectContaining({
-              publicationStatus: "DRAFT",
-              publishedRevisionId: null,
-              latestRevision: {
-                is: expect.objectContaining({
-                  reviewedAt: null,
-                  rejectedAt: null,
-                  sources: { some: {} },
+            some: {
+              OR: expect.arrayContaining([
+                expect.objectContaining({ publicationStatus: "DRAFT" }),
+                expect.objectContaining({
+                  publicationStatus: "PUBLISHED",
+                  latestRevision: {
+                    is: expect.objectContaining({
+                      extractorVersion: { endsWith: ":measure-context-v9" },
+                      reviewedAt: null,
+                    }),
+                  },
                 }),
-              },
-            }),
+              ]),
+            },
           },
-        },
+        }),
       })
     );
+  });
+
+  it("inclut une correction de contexte sans changement de formulation", async () => {
+    findManyMock.mockResolvedValue([
+      {
+        id: "edition-1",
+        label: "Cahier 1",
+        version: 1,
+        candidacy: { candidateName: "Candidate Exemple" },
+        party: null,
+        election: { title: "Élection présidentielle de 2027" },
+        measures: [
+          {
+            id: "measure-1",
+            publicationStatus: "PUBLISHED",
+            publishedRevision: { text: "Créer un service public du logement." },
+            latestRevision: {
+              id: "revision-context",
+              text: "Créer un service public du logement.",
+              details: "La mesure prévoit une gestion publique des logements concernés.",
+            },
+          },
+        ],
+      },
+    ]);
+
+    const [group] = await queryBatchReviewGroups();
+
+    expect(group?.items).toEqual([
+      expect.objectContaining({
+        revisionId: "revision-context",
+        details: "La mesure prévoit une gestion publique des logements concernés.",
+      }),
+    ]);
+  });
+
+  it("exclut une correction de contexte qui modifie la formulation publique", async () => {
+    findManyMock.mockResolvedValue([
+      {
+        id: "edition-1",
+        label: "Cahier 1",
+        version: 1,
+        candidacy: { candidateName: "Candidate Exemple" },
+        party: null,
+        election: { title: "Élection présidentielle de 2027" },
+        measures: [
+          {
+            id: "measure-1",
+            publicationStatus: "PUBLISHED",
+            publishedRevision: { text: "Texte public" },
+            latestRevision: {
+              id: "revision-context",
+              text: "Texte modifié",
+              details: "Contexte",
+            },
+          },
+        ],
+      },
+    ]);
+
+    await expect(queryBatchReviewGroups()).resolves.toEqual([]);
   });
 
   it("borne le lot à la candidature sélectionnée", async () => {

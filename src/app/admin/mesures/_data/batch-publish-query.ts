@@ -1,8 +1,9 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { MAX_MEASURE_PUBLICATION_BATCH_SIZE } from "@/lib/measures/batch-publication";
+import { MEASURE_CONTEXT_PROMPT_VERSION } from "@/lib/measures/context-provenance";
 
-const ELIGIBLE_MEASURE_WHERE = {
+const FIRST_PUBLICATION_WHERE = {
   publicationStatus: "DRAFT",
   publishedRevisionId: null,
   latestRevision: {
@@ -16,11 +17,42 @@ const ELIGIBLE_MEASURE_WHERE = {
   },
 } satisfies Prisma.MeasureWhereInput;
 
+const GENERATED_CONTEXT_CORRECTION_WHERE = {
+  publicationStatus: "PUBLISHED",
+  publishedRevision: {
+    is: {
+      reviewedAt: { not: null },
+      publishedAt: { not: null },
+      supersededAt: null,
+      discardedAt: null,
+      rejectedAt: null,
+    },
+  },
+  latestRevision: {
+    is: {
+      details: { not: null },
+      extractionMethod: "AI_ASSISTED",
+      extractorVersion: { endsWith: `:${MEASURE_CONTEXT_PROMPT_VERSION}` },
+      reviewedAt: { not: null },
+      publishedAt: null,
+      discardedAt: null,
+      supersededAt: null,
+      rejectedAt: null,
+      sources: { some: {} },
+    },
+  },
+} satisfies Prisma.MeasureWhereInput;
+
+const ELIGIBLE_MEASURE_WHERE = {
+  OR: [FIRST_PUBLICATION_WHERE, GENERATED_CONTEXT_CORRECTION_WHERE],
+} satisfies Prisma.MeasureWhereInput;
+
 export type BatchPublishItem = {
   measureId: string;
   revisionId: string;
   expectedUpdatedAt: string;
   text: string;
+  details: string | null;
 };
 
 export type BatchPublishGroup = {
@@ -64,7 +96,9 @@ export async function queryBatchPublishGroups(
         select: {
           id: true,
           updatedAt: true,
-          latestRevision: { select: { id: true, text: true } },
+          publicationStatus: true,
+          publishedRevision: { select: { text: true } },
+          latestRevision: { select: { id: true, text: true, details: true } },
         },
         orderBy: { createdAt: "asc" },
         take: MAX_MEASURE_PUBLICATION_BATCH_SIZE + 1,
@@ -78,12 +112,20 @@ export async function queryBatchPublishGroups(
       .slice(0, MAX_MEASURE_PUBLICATION_BATCH_SIZE)
       .flatMap((measure): BatchPublishItem[] => {
         if (measure.latestRevision === null) return [];
+        const isContextCorrection = measure.publicationStatus === "PUBLISHED";
+        if (
+          isContextCorrection &&
+          measure.latestRevision.text !== measure.publishedRevision?.text
+        ) {
+          return [];
+        }
         return [
           {
             measureId: measure.id,
             revisionId: measure.latestRevision.id,
             expectedUpdatedAt: measure.updatedAt.toISOString(),
             text: measure.latestRevision.text,
+            details: measure.latestRevision.details,
           },
         ];
       });

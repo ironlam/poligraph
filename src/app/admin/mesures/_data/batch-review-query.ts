@@ -1,8 +1,9 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { MAX_MEASURE_REVIEW_BATCH_SIZE } from "@/lib/measures/batch-review";
+import { MEASURE_CONTEXT_PROMPT_VERSION } from "@/lib/measures/context-provenance";
 
-const ELIGIBLE_MEASURE_WHERE = {
+const FIRST_PUBLICATION_WHERE = {
   publicationStatus: "DRAFT",
   publishedRevisionId: null,
   latestRevision: {
@@ -17,10 +18,41 @@ const ELIGIBLE_MEASURE_WHERE = {
   },
 } satisfies Prisma.MeasureWhereInput;
 
+const GENERATED_CONTEXT_CORRECTION_WHERE = {
+  publicationStatus: "PUBLISHED",
+  publishedRevision: {
+    is: {
+      reviewedAt: { not: null },
+      publishedAt: { not: null },
+      supersededAt: null,
+      discardedAt: null,
+      rejectedAt: null,
+    },
+  },
+  latestRevision: {
+    is: {
+      details: { not: null },
+      extractionMethod: "AI_ASSISTED",
+      extractorVersion: { endsWith: `:${MEASURE_CONTEXT_PROMPT_VERSION}` },
+      reviewedAt: null,
+      publishedAt: null,
+      discardedAt: null,
+      supersededAt: null,
+      rejectedAt: null,
+      sources: { some: {} },
+    },
+  },
+} satisfies Prisma.MeasureWhereInput;
+
+const ELIGIBLE_MEASURE_WHERE = {
+  OR: [FIRST_PUBLICATION_WHERE, GENERATED_CONTEXT_CORRECTION_WHERE],
+} satisfies Prisma.MeasureWhereInput;
+
 export type BatchReviewItem = {
   measureId: string;
   revisionId: string;
   text: string;
+  details: string | null;
 };
 
 export type BatchReviewGroup = {
@@ -59,7 +91,9 @@ export async function queryBatchReviewGroups(
         where: eligibleWhere,
         select: {
           id: true,
-          latestRevision: { select: { id: true, text: true } },
+          publicationStatus: true,
+          publishedRevision: { select: { text: true } },
+          latestRevision: { select: { id: true, text: true, details: true } },
         },
         orderBy: { createdAt: "asc" },
         take: MAX_MEASURE_REVIEW_BATCH_SIZE + 1,
@@ -73,11 +107,21 @@ export async function queryBatchReviewGroups(
       .slice(0, MAX_MEASURE_REVIEW_BATCH_SIZE)
       .flatMap((measure): BatchReviewItem[] => {
         if (measure.latestRevision === null) return [];
+        const isContextCorrection = measure.publicationStatus === "PUBLISHED";
+        // Context batches may only add sourced details to an unchanged public formulation.
+        // Every other correction remains an individual editorial decision.
+        if (
+          isContextCorrection &&
+          measure.latestRevision.text !== measure.publishedRevision?.text
+        ) {
+          return [];
+        }
         return [
           {
             measureId: measure.id,
             revisionId: measure.latestRevision.id,
             text: measure.latestRevision.text,
+            details: measure.latestRevision.details,
           },
         ];
       });
