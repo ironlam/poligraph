@@ -10,10 +10,6 @@ import {
 const FIRST_PUBLICATION_WHERE = buildFirstPublicationWhere("REVIEW");
 const GENERATED_CONTEXT_CORRECTION_WHERE = buildGeneratedContextCorrectionWhere("REVIEW");
 
-const ELIGIBLE_MEASURE_WHERE = {
-  OR: [FIRST_PUBLICATION_WHERE, GENERATED_CONTEXT_CORRECTION_WHERE],
-} satisfies Prisma.MeasureWhereInput;
-
 export type BatchReviewItem = {
   measureId: string;
   revisionId: string;
@@ -40,59 +36,75 @@ export async function queryBatchReviewGroups(
     candidacyId?: string;
   } = {}
 ): Promise<BatchReviewGroup[]> {
-  const eligibleWhere: Prisma.MeasureWhereInput = filters.candidacyId
-    ? { ...ELIGIBLE_MEASURE_WHERE, candidacyId: filters.candidacyId }
-    : ELIGIBLE_MEASURE_WHERE;
-
-  const editions = await db.programEdition.findMany({
-    where: {
-      ...(filters.candidacyId ? { candidacyId: filters.candidacyId } : {}),
-      measures: { some: eligibleWhere },
-    },
-    select: {
-      id: true,
-      label: true,
-      version: true,
-      candidacy: { select: { candidateName: true } },
-      party: { select: { name: true } },
-      election: { select: { title: true } },
-      measures: {
-        where: eligibleWhere,
-        select: {
-          id: true,
-          publicationStatus: true,
-          publishedRevision: { select: { text: true } },
-          latestRevision: { select: { id: true, text: true, details: true } },
-        },
-        orderBy: { createdAt: "asc" },
-        take: MAX_MEASURE_REVIEW_BATCH_SIZE + 1,
+  const queryKind = (where: Prisma.MeasureWhereInput) => {
+    const eligibleWhere = filters.candidacyId
+      ? { ...where, candidacyId: filters.candidacyId }
+      : where;
+    return db.programEdition.findMany({
+      where: {
+        ...(filters.candidacyId ? { candidacyId: filters.candidacyId } : {}),
+        measures: { some: eligibleWhere },
       },
-    },
-    orderBy: [{ publishedAt: "asc" }, { version: "asc" }],
-  });
-
-  return editions.flatMap((edition) => {
-    const items = edition.measures.flatMap((measure): BatchReviewItem[] => {
-      if (measure.latestRevision === null) return [];
-      const batchKind: MeasureBatchKind =
-        measure.publicationStatus === "PUBLISHED" ? "CONTEXT_CORRECTION" : "FIRST_PUBLICATION";
-      return [
-        {
-          measureId: measure.id,
-          revisionId: measure.latestRevision.id,
-          text: measure.latestRevision.text,
-          details: measure.latestRevision.details,
-          batchKind,
+      select: {
+        id: true,
+        label: true,
+        version: true,
+        candidacy: { select: { candidateName: true } },
+        party: { select: { name: true } },
+        election: { select: { title: true } },
+        measures: {
+          where: eligibleWhere,
+          select: {
+            id: true,
+            publicationStatus: true,
+            publishedRevision: { select: { text: true } },
+            latestRevision: { select: { id: true, text: true, details: true } },
+          },
+          orderBy: { createdAt: "asc" },
+          take: MAX_MEASURE_REVIEW_BATCH_SIZE + 1,
         },
-      ];
+      },
+      orderBy: [{ publishedAt: "asc" }, { version: "asc" }],
     });
+  };
 
-    if (items.length === 0) return [];
-    return (["FIRST_PUBLICATION", "CONTEXT_CORRECTION"] as const).flatMap((batchKind) => {
-      const kindItems = items
-        .filter((item) => item.batchKind === batchKind)
-        .slice(0, MAX_MEASURE_REVIEW_BATCH_SIZE);
-      if (kindItems.length === 0) return [];
+  const [firstPublicationEditions, contextCorrectionEditions] = await Promise.all([
+    queryKind(FIRST_PUBLICATION_WHERE),
+    queryKind(GENERATED_CONTEXT_CORRECTION_WHERE),
+  ]);
+
+  const serialize = (
+    editions: Awaited<ReturnType<typeof queryKind>>,
+    batchKind: MeasureBatchKind
+  ): BatchReviewGroup[] =>
+    editions.flatMap((edition) => {
+      const items = edition.measures.flatMap((measure): BatchReviewItem[] => {
+        if (measure.latestRevision === null) return [];
+        if (
+          (batchKind === "FIRST_PUBLICATION" && measure.publicationStatus !== "DRAFT") ||
+          (batchKind === "CONTEXT_CORRECTION" && measure.publicationStatus !== "PUBLISHED")
+        ) {
+          return [];
+        }
+        if (
+          batchKind === "CONTEXT_CORRECTION" &&
+          measure.latestRevision.text !== measure.publishedRevision?.text
+        ) {
+          return [];
+        }
+        return [
+          {
+            measureId: measure.id,
+            revisionId: measure.latestRevision.id,
+            text: measure.latestRevision.text,
+            details: measure.latestRevision.details,
+            batchKind,
+          },
+        ];
+      });
+
+      if (items.length === 0) return [];
+      const kindItems = items.slice(0, MAX_MEASURE_REVIEW_BATCH_SIZE);
       return [
         {
           programEditionId: edition.id,
@@ -102,13 +114,15 @@ export async function queryBatchReviewGroups(
             edition.candidacy?.candidateName ?? edition.party?.name ?? "Propriétaire inconnu",
           electionTitle: edition.election.title,
           items: kindItems,
-          hasMore:
-            items.filter((item) => item.batchKind === batchKind).length >
-            MAX_MEASURE_REVIEW_BATCH_SIZE,
+          hasMore: items.length > MAX_MEASURE_REVIEW_BATCH_SIZE,
           batchKind,
           groupKey: `${edition.id}:${batchKind}`,
         },
       ];
     });
-  });
+
+  return [
+    ...serialize(firstPublicationEditions, "FIRST_PUBLICATION"),
+    ...serialize(contextCorrectionEditions, "CONTEXT_CORRECTION"),
+  ];
 }

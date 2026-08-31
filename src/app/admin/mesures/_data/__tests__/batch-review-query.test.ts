@@ -65,24 +65,20 @@ describe("queryBatchReviewGroups", () => {
 
     await queryBatchReviewGroups();
 
-    expect(findManyMock).toHaveBeenCalledWith(
+    expect(findManyMock).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         where: expect.objectContaining({
           measures: {
-            some: {
-              OR: expect.arrayContaining([
-                expect.objectContaining({ publicationStatus: "DRAFT" }),
-                expect.objectContaining({
-                  publicationStatus: "PUBLISHED",
-                  latestRevision: {
-                    is: expect.objectContaining({
-                      extractorVersion: { endsWith: ":measure-context-v9" },
-                      reviewedAt: null,
-                    }),
-                  },
+            some: expect.objectContaining({
+              publicationStatus: "PUBLISHED",
+              latestRevision: {
+                is: expect.objectContaining({
+                  extractorVersion: { endsWith: ":measure-context-v9" },
+                  reviewedAt: null,
                 }),
-              ]),
-            },
+              },
+            }),
           },
         }),
       })
@@ -123,7 +119,7 @@ describe("queryBatchReviewGroups", () => {
     ]);
   });
 
-  it("laisse la transition verrouillée refuser une correction incohérente", async () => {
+  it("exclut de l'interface une correction de contexte incohérente", async () => {
     findManyMock.mockResolvedValue([
       {
         id: "edition-1",
@@ -147,10 +143,7 @@ describe("queryBatchReviewGroups", () => {
       },
     ]);
 
-    const [group] = await queryBatchReviewGroups();
-    expect(group?.items).toEqual([
-      expect.objectContaining({ revisionId: "revision-context", batchKind: "CONTEXT_CORRECTION" }),
-    ]);
+    await expect(queryBatchReviewGroups()).resolves.toEqual([]);
   });
 
   it("borne le lot à la candidature sélectionnée", async () => {

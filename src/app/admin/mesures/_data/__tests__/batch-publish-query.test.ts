@@ -67,24 +67,20 @@ describe("queryBatchPublishGroups", () => {
 
     await queryBatchPublishGroups();
 
-    expect(findManyMock).toHaveBeenCalledWith(
+    expect(findManyMock).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         where: expect.objectContaining({
           measures: {
-            some: {
-              OR: expect.arrayContaining([
-                expect.objectContaining({ publicationStatus: "DRAFT" }),
-                expect.objectContaining({
-                  publicationStatus: "PUBLISHED",
-                  latestRevision: {
-                    is: expect.objectContaining({
-                      extractorVersion: { endsWith: ":measure-context-v9" },
-                      reviewedAt: { not: null },
-                    }),
-                  },
+            some: expect.objectContaining({
+              publicationStatus: "PUBLISHED",
+              latestRevision: {
+                is: expect.objectContaining({
+                  extractorVersion: { endsWith: ":measure-context-v9" },
+                  reviewedAt: { not: null },
                 }),
-              ]),
-            },
+              },
+            }),
           },
         }),
       })
