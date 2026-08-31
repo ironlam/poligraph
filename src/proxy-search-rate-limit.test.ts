@@ -3,9 +3,9 @@ import { NextRequest } from "next/server";
 import { buildRateLimitExceededResponse, getRateLimitTier } from "@/proxy";
 
 describe("quota de la recherche présidentielle", () => {
-  it("applique le quota recherche à la page hybride et à son autocomplétion", () => {
+  it("isole le quota de la page hybride de celui de son autocomplétion", () => {
     expect(getRateLimitTier("/elections/presidentielle-2027/recherche")).toBe("search");
-    expect(getRateLimitTier("/api/elections/presidentielle-2027/recherche")).toBe("search");
+    expect(getRateLimitTier("/api/elections/presidentielle-2027/recherche")).toBe("autocomplete");
   });
 
   it("réécrit une page limitée vers un état HTML sans exposer la réponse JSON de l'API", async () => {

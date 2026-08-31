@@ -17,6 +17,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 const MIN_QUERY_LENGTH = 2;
+const AUTOCOMPLETE_DELAY_MS = 500;
 const RESULTS_PATH = "/elections/presidentielle-2027/recherche";
 
 type ApiResponse = {
@@ -99,7 +100,7 @@ export function PresidentialCorpusSearch() {
         if ((error as Error).name === "AbortError" || currentRequest !== requestId.current) return;
         setStatus("error");
       }
-    }, 150);
+    }, AUTOCOMPLETE_DELAY_MS);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
