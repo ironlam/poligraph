@@ -63,7 +63,7 @@ describe("PresidentialCorpusSearch", () => {
 
   async function runDebounce() {
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(500);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -79,6 +79,27 @@ describe("PresidentialCorpusSearch", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("n'envoie qu'une suggestion pendant la saisie continue d'une phrase naturelle", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => response() });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PresidentialCorpusSearch />);
+    const input = screen.getByRole("combobox");
+    const sentence = "Je veux des informations sur les mesures de retraite";
+
+    for (let index = 1; index <= sentence.length; index += 1) {
+      fireEvent.change(input, { target: { value: sentence.slice(0, index) } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("affiche les thématiques avant les personnalités et les mesures", async () => {

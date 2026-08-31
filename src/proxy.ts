@@ -16,13 +16,14 @@ import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
-type RateLimitTier = "general" | "search" | "export" | "admin" | "subscribe";
+type RateLimitTier = "general" | "search" | "autocomplete" | "export" | "admin" | "subscribe";
 
 const PRESIDENTIAL_SEARCH_PAGE_PATH = "/elections/presidentielle-2027/recherche";
 
 const TIER_CONFIG: Record<RateLimitTier, { tokens: number; window: string }> = {
   general: { tokens: 60, window: "1m" },
   search: { tokens: 30, window: "1m" },
+  autocomplete: { tokens: 60, window: "1m" },
   export: { tokens: 5, window: "1m" },
   admin: { tokens: 30, window: "1m" },
   subscribe: { tokens: 8, window: "1m" },
@@ -164,11 +165,9 @@ export function getRateLimitTier(pathname: string): RateLimitTier | null {
     return "subscribe";
   }
   if (pathname.startsWith("/api/export")) return "export";
-  if (
-    pathname === PRESIDENTIAL_SEARCH_PAGE_PATH ||
-    pathname.startsWith("/api/elections/presidentielle-2027/recherche")
-  ) {
-    return "search";
+  if (pathname === PRESIDENTIAL_SEARCH_PAGE_PATH) return "search";
+  if (pathname.startsWith("/api/elections/presidentielle-2027/recherche")) {
+    return "autocomplete";
   }
   if (pathname.startsWith("/api/search")) return "search";
   if (pathname.startsWith("/api/")) return "general";
