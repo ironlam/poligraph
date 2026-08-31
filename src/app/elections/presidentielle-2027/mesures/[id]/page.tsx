@@ -100,7 +100,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           { label: "Mesure", href: canonical },
         ]}
       />
-      <article className="container mx-auto max-w-5xl px-4">
+      <article className="container mx-auto max-w-6xl px-4">
         <header className="border-b border-border pb-8 pt-3">
           <Link
             href={themeUrl}
@@ -109,7 +109,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             {themeLabel}
           </Link>
           <h1
-            className={`mt-3 max-w-[28ch] font-display font-extrabold leading-[1.08] tracking-tight ${titleClass}`}
+            className={`mt-3 max-w-[36ch] font-display font-extrabold leading-[1.08] tracking-tight ${titleClass}`}
           >
             {measure.text}
           </h1>
@@ -129,13 +129,13 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
         {measure.details !== null && (
           <section aria-labelledby="details-title" className="border-b border-border py-8">
             <h2 id="details-title" className="font-display text-2xl font-extrabold">
-              Ce que prévoit la mesure
+              Contexte et précisions
             </h2>
-            <MarkdownText className="mt-4 max-w-[72ch] leading-relaxed text-foreground">
+            <MarkdownText className="mt-4 max-w-[80ch] leading-relaxed text-foreground">
               {measure.details}
             </MarkdownText>
             {measure.contextClaims.length > 0 ? (
-              <details className="group mt-5 max-w-[72ch] rounded-xl border border-border bg-card">
+              <details className="group mt-5 max-w-[80ch] rounded-xl border border-border bg-card">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 py-3 font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
                   Vérifier les affirmations dans la source
                 </summary>
@@ -144,21 +144,28 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
                     <li key={`${claim.text}-${claimIndex}`}>
                       <p className="text-sm leading-relaxed text-foreground">{claim.text}</p>
                       <ul className="mt-2 flex flex-wrap gap-3">
-                        {claim.references.map((reference) => (
-                          <li key={reference.unitId}>
-                            <a
-                              href={claim.documentUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`Consulter l'extrait source${reference.page === null ? "" : `, page ${reference.page}`}, lien externe`}
-                              className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                            >
-                              Extrait source
-                              {reference.page === null ? "" : `, page ${reference.page}`}
-                              <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                            </a>
-                          </li>
-                        ))}
+                        {claim.references
+                          .filter(
+                            (reference, index, references) =>
+                              references.findIndex(
+                                (candidate) => candidate.page === reference.page
+                              ) === index
+                          )
+                          .map((reference) => (
+                            <li key={reference.page ?? "unknown-page"}>
+                              <a
+                                href={claim.documentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={`Consulter l'extrait source${reference.page === null ? "" : `, page ${reference.page}`}, lien externe`}
+                                className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                              >
+                                Extrait source
+                                {reference.page === null ? "" : `, page ${reference.page}`}
+                                <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                              </a>
+                            </li>
+                          ))}
                       </ul>
                     </li>
                   ))}

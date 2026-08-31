@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const GENERATED_CONTEXT_DRAFT_ACTION = "GENERATE_CONTEXT_DRAFT";
+export const MEASURE_CONTEXT_PROMPT_VERSION = "measure-context-v9";
 
 export const generatedContextClaimSchema = z
   .object({

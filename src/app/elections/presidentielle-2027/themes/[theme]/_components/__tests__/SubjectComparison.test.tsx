@@ -12,6 +12,7 @@ function measure(over: Partial<PublicMeasure> = {}): PublicMeasure {
     slug: "camille-riviere-encadrer-les-loyers",
     publishedRevisionId: "rev-1",
     text: "Encadrer les loyers.",
+    details: null,
     reviewedAt: new Date("2027-01-16T00:00:00Z"),
     precision: "OBJECTIF_SANS_CHIFFRE",
     theme: "LOGEMENT_URBANISME",

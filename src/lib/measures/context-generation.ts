@@ -4,6 +4,7 @@ import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mis
 import { db } from "@/lib/db";
 import {
   GENERATED_CONTEXT_DRAFT_ACTION,
+  MEASURE_CONTEXT_PROMPT_VERSION,
   generatedContextClaimSchema,
   type GeneratedContextClaim,
 } from "@/lib/measures/context-provenance";
@@ -11,9 +12,10 @@ import { readEvidenceSnapshot } from "@/lib/measures/evidence-snapshot";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 import { lockMeasure } from "@/lib/measures/lock";
 import { draftMeasureRevision } from "@/lib/measures/transitions";
+import type { MeasureContextRegenerationScope } from "./context-regeneration-options";
 
 const MODEL = "mistral-small-latest";
-const PROMPT_VERSION = "measure-context-v8";
+const PROMPT_VERSION = MEASURE_CONTEXT_PROMPT_VERSION;
 const TERMINAL_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_TERMINAL_RESULT";
 const INVALID_CONTEXT_RESULT_ACTION = "GENERATE_CONTEXT_INVALID_RESULT";
 const RESERVED_CONTEXT_GENERATION_ACTION = "RESERVE_CONTEXT_GENERATION";
@@ -36,7 +38,8 @@ export type ContextGenerationSkipReason =
   | "NO_VALID_EVIDENCE"
   | "NO_SUPPORTING_CONTEXT"
   | "PREVIOUS_CONTEXT_ATTEMPT"
-  | "NO_USEFUL_CONTEXT";
+  | "NO_USEFUL_CONTEXT"
+  | "NOT_REGENERATABLE_CONTEXT";
 
 export type ContextGenerationResult =
   | {
@@ -69,7 +72,7 @@ function readAuditOutcome(changes: unknown): string | null {
   return typeof outcome === "string" ? outcome : null;
 }
 
-function isInvalidResultForCurrentPrompt(changes: unknown): boolean {
+function isAttemptForCurrentPrompt(changes: unknown): boolean {
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) return true;
   const promptVersion = (changes as Record<string, unknown>).promptVersion;
   return typeof promptVersion !== "string" || promptVersion === PROMPT_VERSION;
@@ -83,10 +86,16 @@ function getContextAttemptState(
   let hasActiveReservation = false;
   for (const attempt of attempts) {
     if (attempt.action === GENERATED_CONTEXT_DRAFT_ACTION) {
-      if (getGeneratedContextSourceRevisionId(attempt.changes) === revisionId) return "TERMINAL";
+      if (
+        isAttemptForCurrentPrompt(attempt.changes) &&
+        getGeneratedContextSourceRevisionId(attempt.changes) === revisionId
+      ) {
+        return "TERMINAL";
+      }
       continue;
     }
     if (attempt.entityId !== revisionId) continue;
+    if (!isAttemptForCurrentPrompt(attempt.changes)) continue;
     if (attempt.action === RESERVED_CONTEXT_GENERATION_ACTION) {
       const changes =
         attempt.changes && typeof attempt.changes === "object" && !Array.isArray(attempt.changes)
@@ -97,12 +106,12 @@ function getContextAttemptState(
       continue;
     }
     if (attempt.action === INVALID_CONTEXT_RESULT_ACTION) {
-      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
+      invalidResults += 1;
       continue;
     }
     const outcome = readAuditOutcome(attempt.changes);
     if (outcome === "INVALID_GENERATED_CONTEXT") {
-      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
+      invalidResults += 1;
       continue;
     }
     // Old terminal rows without an outcome and explicit NO_USEFUL_CONTEXT results stay terminal.
@@ -245,6 +254,115 @@ export async function findMeasureContextCandidateIds(
   return eligibleIds;
 }
 
+export async function findMeasureContextRegenerationCandidateIds(
+  input: {
+    electionSlug: string;
+    fromPromptVersion: string;
+    limit: number;
+    scope: MeasureContextRegenerationScope;
+  },
+  pageSize = 250
+): Promise<string[]> {
+  if (input.limit < 1 || input.limit > 100) {
+    throw new MeasureValidationError("La limite de régénération doit être comprise entre 1 et 100");
+  }
+  if (input.fromPromptVersion === PROMPT_VERSION) {
+    throw new MeasureValidationError(
+      "La version à régénérer doit être antérieure à la version courante"
+    );
+  }
+
+  const lifecycleFilters = [
+    ...(input.scope === "drafts" || input.scope === "all"
+      ? [
+          {
+            extractionMethod: "AI_ASSISTED" as const,
+            reviewedAt: null,
+            publishedAt: null,
+          },
+        ]
+      : []),
+    ...(input.scope === "published" || input.scope === "all"
+      ? [
+          {
+            reviewedAt: { not: null },
+            publishedAt: { not: null },
+            supersededAt: null,
+          },
+        ]
+      : []),
+  ];
+  const eligibleIds: string[] = [];
+  let cursor: string | undefined;
+
+  while (eligibleIds.length < input.limit) {
+    const candidates = await db.measure.findMany({
+      where: {
+        election: { slug: input.electionSlug },
+        publicationStatus: "PUBLISHED",
+        latestRevision: {
+          is: {
+            details: { not: null },
+            extractorVersion: { endsWith: `:${input.fromPromptVersion}` },
+            discardedAt: null,
+            rejectedAt: null,
+            OR: lifecycleFilters,
+          },
+        },
+      },
+      select: {
+        id: true,
+        latestRevisionId: true,
+        publishedRevisionId: true,
+        latestRevision: {
+          select: {
+            evidenceSnapshot: true,
+            reviewedAt: true,
+            publishedAt: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: pageSize,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+
+    const attemptedContextRevisionIds = await getAttemptedContextRevisionIds(
+      candidates.flatMap(({ latestRevisionId }) => (latestRevisionId ? [latestRevisionId] : []))
+    );
+
+    for (const candidate of candidates) {
+      const revision = candidate.latestRevision;
+      if (!revision) continue;
+      if (
+        candidate.latestRevisionId &&
+        attemptedContextRevisionIds.has(candidate.latestRevisionId)
+      ) {
+        continue;
+      }
+      const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
+      if (evidence.status !== "VALID" || evidence.snapshot.supportingIds.length === 0) continue;
+      const isPublished =
+        candidate.latestRevisionId === candidate.publishedRevisionId &&
+        revision.reviewedAt !== null &&
+        revision.publishedAt !== null;
+      const isDraft =
+        candidate.latestRevisionId !== candidate.publishedRevisionId &&
+        revision.reviewedAt === null &&
+        revision.publishedAt === null;
+      if (!isPublished && !isDraft) continue;
+      eligibleIds.push(candidate.id);
+      if (eligibleIds.length === input.limit) break;
+    }
+
+    if (candidates.length < pageSize) break;
+    cursor = candidates.at(-1)?.id;
+    if (!cursor) break;
+  }
+
+  return eligibleIds;
+}
+
 function sanitizeSourceText(value: string): string {
   return value
     .replace(/[<>&"\n\r]/g, " ")
@@ -353,6 +471,14 @@ function normalizeGeneratedText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function assertNaturalAttribution(text: string): void {
+  if (/(?:^|[.!?]\s+)(?:Le document|Le programme)\b/iu.test(text)) {
+    throw new MeasureValidationError(
+      "Le contexte généré emploie une attribution mécanique au document ou au programme"
+    );
+  }
+}
+
 function validateGeneratedContext(
   parsed: z.infer<typeof generatedContextSchema>,
   units: Array<{
@@ -389,6 +515,7 @@ function validateGeneratedContext(
       return unit ? [unit] : [];
     });
     assertGroundedNumbers(claim.text, citedUnits);
+    assertNaturalAttribution(claim.text);
     for (const id of citedIds) allCitedIds.add(id);
   }
   if (![...allCitedIds].some((id) => supportingIds.has(id))) {
@@ -428,6 +555,7 @@ async function recordInvalidContextResult(input: {
 }
 
 async function reserveContextGeneration(input: {
+  allowUnpublishedDraft: boolean;
   expectedUpdatedAt: Date;
   generatedBy: string;
   ipAddress: string;
@@ -439,7 +567,19 @@ async function reserveContextGeneration(input: {
     await lockMeasure(tx, input.measureId);
     const currentMeasure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true, updatedAt: true },
+      select: {
+        latestRevisionId: true,
+        publishedRevisionId: true,
+        updatedAt: true,
+        latestRevision: {
+          select: {
+            reviewedAt: true,
+            publishedAt: true,
+            discardedAt: true,
+            rejectedAt: true,
+          },
+        },
+      },
     });
     if (currentMeasure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
       throw new MeasureConcurrencyError(
@@ -450,9 +590,19 @@ async function reserveContextGeneration(input: {
     }
     if (
       currentMeasure.latestRevisionId !== input.revisionId ||
-      currentMeasure.publishedRevisionId !== input.revisionId
+      (!input.allowUnpublishedDraft && currentMeasure.publishedRevisionId !== input.revisionId)
     ) {
       throw new MeasureValidationError("La révision publiée a changé avant la génération");
+    }
+    if (
+      input.allowUnpublishedDraft &&
+      (!currentMeasure.latestRevision ||
+        currentMeasure.latestRevision.reviewedAt !== null ||
+        currentMeasure.latestRevision.publishedAt !== null ||
+        currentMeasure.latestRevision.discardedAt !== null ||
+        currentMeasure.latestRevision.rejectedAt !== null)
+    ) {
+      throw new MeasureValidationError("Le brouillon a été relu ou a changé avant la régénération");
     }
     const attempts = await tx.auditLog.findMany({
       where: {
@@ -500,6 +650,7 @@ async function reserveContextGeneration(input: {
 }
 
 async function recordTerminalContextResult(input: {
+  allowUnpublishedDraft: boolean;
   generatedBy: string;
   measureId: string;
   model: string;
@@ -525,7 +676,7 @@ async function recordTerminalContextResult(input: {
     }
     if (
       currentMeasure.latestRevisionId !== input.revisionId ||
-      currentMeasure.publishedRevisionId !== input.revisionId
+      (!input.allowUnpublishedDraft && currentMeasure.publishedRevisionId !== input.revisionId)
     ) {
       throw new MeasureValidationError("La révision publiée a changé pendant la génération");
     }
@@ -566,6 +717,7 @@ export async function generateMeasureContextDraft(
     expectedUpdatedAt?: Date;
     generatedBy?: string;
     ipAddress?: string;
+    regenerateFromPromptVersion?: string;
     userAgent?: string;
   } = {}
 ): Promise<ContextGenerationResult> {
@@ -584,6 +736,28 @@ export async function generateMeasureContextDraft(
           precision: true,
           validFrom: true,
           evidenceSnapshot: true,
+          reviewedAt: true,
+          publishedAt: true,
+          discardedAt: true,
+          rejectedAt: true,
+          extractionMethod: true,
+          extractorVersion: true,
+        },
+      },
+      latestRevision: {
+        select: {
+          id: true,
+          text: true,
+          details: true,
+          precision: true,
+          validFrom: true,
+          evidenceSnapshot: true,
+          reviewedAt: true,
+          publishedAt: true,
+          discardedAt: true,
+          rejectedAt: true,
+          extractionMethod: true,
+          extractorVersion: true,
         },
       },
     },
@@ -595,13 +769,47 @@ export async function generateMeasureContextDraft(
   ) {
     throw new MeasureConcurrencyError(measureId, options.expectedUpdatedAt, measure.updatedAt);
   }
-  const revision = measure.publishedRevision;
-  if (!revision || !measure.publishedRevisionId) {
+  if (!measure.publishedRevision || !measure.publishedRevisionId) {
     return { status: "SKIPPED", reason: "NO_PUBLISHED_REVISION" };
   }
-  if (revision.details?.trim()) return { status: "SKIPPED", reason: "ALREADY_HAS_DETAILS" };
-  if (measure.latestRevisionId !== measure.publishedRevisionId) {
-    return { status: "SKIPPED", reason: "ACTIVE_DRAFT" };
+  const regenerationVersion = options.regenerateFromPromptVersion?.trim();
+  if (regenerationVersion === PROMPT_VERSION) {
+    throw new MeasureValidationError(
+      "La version à régénérer doit être antérieure à la version courante"
+    );
+  }
+
+  const revision = regenerationVersion ? measure.latestRevision : measure.publishedRevision;
+  if (!revision) return { status: "SKIPPED", reason: "NOT_REGENERATABLE_CONTEXT" };
+
+  if (regenerationVersion) {
+    const isRequestedVersion =
+      revision.extractorVersion?.endsWith(`:${regenerationVersion}`) === true;
+    const isCurrentPublishedRevision =
+      revision.id === measure.publishedRevisionId &&
+      measure.latestRevisionId === measure.publishedRevisionId &&
+      revision.reviewedAt !== null &&
+      revision.publishedAt !== null;
+    const isReplaceableDraft =
+      revision.id === measure.latestRevisionId &&
+      revision.id !== measure.publishedRevisionId &&
+      revision.extractionMethod === "AI_ASSISTED" &&
+      revision.reviewedAt === null &&
+      revision.publishedAt === null;
+    if (
+      !isRequestedVersion ||
+      !revision.details?.trim() ||
+      revision.discardedAt !== null ||
+      revision.rejectedAt !== null ||
+      (!isCurrentPublishedRevision && !isReplaceableDraft)
+    ) {
+      return { status: "SKIPPED", reason: "NOT_REGENERATABLE_CONTEXT" };
+    }
+  } else {
+    if (revision.details?.trim()) return { status: "SKIPPED", reason: "ALREADY_HAS_DETAILS" };
+    if (measure.latestRevisionId !== measure.publishedRevisionId) {
+      return { status: "SKIPPED", reason: "ACTIVE_DRAFT" };
+    }
   }
   const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
   if (evidence.status !== "VALID") {
@@ -615,6 +823,7 @@ export async function generateMeasureContextDraft(
     return { status: "SKIPPED", reason: "NO_SUPPORTING_CONTEXT" };
   }
   const attemptState = await reserveContextGeneration({
+    allowUnpublishedDraft: revision.id !== measure.publishedRevisionId,
     expectedUpdatedAt: options.expectedUpdatedAt ?? measure.updatedAt,
     generatedBy: options.generatedBy ?? "system",
     ipAddress: options.ipAddress ?? "unknown",
@@ -638,14 +847,16 @@ Règles :
 - utilise uniquement les faits explicitement présents dans les unités ;
 - ces unités proviennent exclusivement de la source attachée à la mesure, ne complète jamais avec une connaissance ou un site externe ;
 - n'ajoute aucune conséquence, faisabilité, intention, appréciation ou connaissance extérieure ;
-- attribue au document toute analyse, tout diagnostic ou toute appréciation qu'il formule, par exemple avec « Le programme estime que » ou « Le document présente » ;
+- attribue toute analyse, tout diagnostic ou toute appréciation à sa source avec une seule formulation naturelle, par exemple « Selon la source citée, ... » ;
+- décris ensuite l'engagement avec « La mesure prévoit ... » ou « La mesure propose ... » lorsque cela apporte une information distincte du titre ;
+- N'écris jamais « Le document » ni « Le programme » en début de phrase ;
 - respecte le locuteur de chaque unité : une parole de QUOTED_THIRD_PARTY, LEGAL_OR_INSTITUTIONAL_SOURCE ou HISTORICAL_ACTOR ne doit jamais être attribuée au programme ;
 - si tu utilises une telle unité, indique explicitement qu'elle rapporte les propos ou la position d'un tiers, d'une source juridique ou institutionnelle, ou d'un acteur historique, sans inventer son identité ;
 - n'utilise pas une unité dont le locuteur est UNRESOLVED pour attribuer une affirmation au programme ;
 - une quantité n'est autorisée que si elle figure exactement dans l'unité citée par l'affirmation ; conserve sa valeur et écris-la en chiffres ;
 - ne présente jamais l'argumentaire du programme comme un fait établi ;
 - ne répète pas simplement la formulation de la mesure ;
-- écris entre 40 et 120 mots, en français clair ;
+- écris une ou deux phrases, entre 40 et 100 mots, en français clair ;
 - découpe le texte en affirmations et rattache chaque affirmation uniquement aux unités qui la prouvent ;
 - si les unités n'apportent aucun contexte distinct, renvoie claims à un tableau vide.
 
@@ -690,6 +901,7 @@ Réponds uniquement en JSON :
       const validated = validateGeneratedContext(parsed, units, supportingIds);
       if (validated === null) {
         await recordTerminalContextResult({
+          allowUnpublishedDraft: revision.id !== measure.publishedRevisionId,
           generatedBy: options.generatedBy ?? "system",
           expectedUpdatedAt: options.expectedUpdatedAt ?? measure.updatedAt,
           ipAddress: options.ipAddress ?? "unknown",
@@ -724,6 +936,7 @@ Réponds uniquement en JSON :
         await recordInvalidContextResult(auditInput);
       } else {
         await recordTerminalContextResult({
+          allowUnpublishedDraft: revision.id !== measure.publishedRevisionId,
           ...auditInput,
           expectedUpdatedAt: options.expectedUpdatedAt ?? measure.updatedAt,
           outcome: "INVALID_GENERATED_CONTEXT",
