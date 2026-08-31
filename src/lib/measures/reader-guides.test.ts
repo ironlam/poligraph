@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const tx = {
+    $queryRaw: vi.fn(),
     measureRevisionReaderGuide: {
       createMany: vi.fn(),
       findUnique: vi.fn(),
@@ -79,6 +80,7 @@ describe("workflow des repères citoyens", () => {
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValue({ count: 0 });
     mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
+    mocks.tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
   });
 
   it("crée uniquement une suggestion et reste idempotent", async () => {
@@ -149,6 +151,34 @@ describe("workflow des repères citoyens", () => {
       })
     ).rejects.toThrow(/doit être publié/);
     expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("verrouille la mesure avant une validation et sa synchronisation de recherche", async () => {
+    mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
+      status: "SUGGESTED",
+      guideId: "guide-1",
+      revisionId: "revision-1",
+      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+    });
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
+      publicationStatus: "PUBLISHED",
+      active: true,
+    });
+    mocks.tx.measureRevisionReaderGuide.findFirst.mockResolvedValue(null);
+    mocks.tx.measureRevisionReaderGuide.updateMany.mockResolvedValue({ count: 1 });
+    const { reviewReaderGuideMention } = await import("./reader-guides");
+
+    await reviewReaderGuideMention({
+      mentionId: "mention-1",
+      status: "APPROVED",
+      reviewedBy: "admin",
+    });
+
+    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.syncSearch.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith("measure-1", "election-1");
   });
 
   it("limite une source de programme aux documents programmatiques primaires", async () => {

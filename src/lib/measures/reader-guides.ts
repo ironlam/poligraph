@@ -256,6 +256,11 @@ export async function reviewReaderGuideMention(input: {
       if (!mention || mention.status !== "SUGGESTED") {
         throw new MeasureValidationError("Cette proposition a déjà été traitée");
       }
+      // SearchDocument is rebuilt inside this transaction. A database-level lock is required:
+      // separate admin or CLI processes can review two guides for the same measure concurrently,
+      // and an in-process queue cannot coordinate them. The second transaction resumes only after
+      // the first committed, so its search sync observes every approved guide.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${mention.revision.measure.id}, 0))`;
       const guideId = input.guideId ?? mention.guideId;
       if (input.status === "APPROVED") {
         if (!guideId) throw new MeasureValidationError("Choisissez un repère avant de valider");
