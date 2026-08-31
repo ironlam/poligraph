@@ -38,6 +38,19 @@ describe("page complète de recherche présidentielle", () => {
     expect(metadata.alternates?.canonical).toBe("/elections/presidentielle-2027/recherche");
   });
 
+  it("affiche un état HTML accessible sans lancer la recherche lorsque le quota est atteint", async () => {
+    render(
+      await PresidentialSearchPage({
+        searchParams: Promise.resolve({ q: "retraites", limite: "1" }),
+      })
+    );
+
+    expect(search).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Trop de recherches ont été lancées en peu de temps"
+    );
+  });
+
   it("affiche le texte complet et le lien canonique de la mesure", async () => {
     render(await PresidentialSearchPage({ searchParams: Promise.resolve({ q: "logement" }) }));
     const link = screen.getByRole("link", {

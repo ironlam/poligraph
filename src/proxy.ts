@@ -18,6 +18,8 @@ import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 
 type RateLimitTier = "general" | "search" | "export" | "admin" | "subscribe";
 
+const PRESIDENTIAL_SEARCH_PAGE_PATH = "/elections/presidentielle-2027/recherche";
+
 const TIER_CONFIG: Record<RateLimitTier, { tokens: number; window: string }> = {
   general: { tokens: 60, window: "1m" },
   search: { tokens: 30, window: "1m" },
@@ -163,7 +165,7 @@ export function getRateLimitTier(pathname: string): RateLimitTier | null {
   }
   if (pathname.startsWith("/api/export")) return "export";
   if (
-    pathname === "/elections/presidentielle-2027/recherche" ||
+    pathname === PRESIDENTIAL_SEARCH_PAGE_PATH ||
     pathname.startsWith("/api/elections/presidentielle-2027/recherche")
   ) {
     return "search";
@@ -269,20 +271,7 @@ async function applyApiRateLimit(
   }
 
   if (!success) {
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
-    const headers: Record<string, string> = {
-      "Retry-After": String(retryAfter),
-      "X-RateLimit-Limit": String(limit),
-      "X-RateLimit-Remaining": "0",
-      "X-RateLimit-Reset": String(reset),
-      ...(isV1Route(pathname) ? CORS_HEADERS : {}),
-    };
-    const limited = NextResponse.json(
-      { error: "Trop de requêtes. Réessayez plus tard." },
-      { status: 429, headers }
-    );
-    applySubscribeCors(request, limited);
-    return limited;
+    return buildRateLimitExceededResponse(request, limit, reset);
   }
 
   const response = NextResponse.next();
@@ -294,6 +283,34 @@ async function applyApiRateLimit(
   }
   applySubscribeCors(request, response);
   return response;
+}
+
+export function buildRateLimitExceededResponse(
+  request: NextRequest,
+  limit: number,
+  reset: number
+): NextResponse {
+  const pathname = request.nextUrl.pathname;
+  const headers: Record<string, string> = {
+    "Retry-After": String(Math.max(0, Math.ceil((reset - Date.now()) / 1000))),
+    "X-RateLimit-Limit": String(limit),
+    "X-RateLimit-Remaining": "0",
+    "X-RateLimit-Reset": String(reset),
+    ...(isV1Route(pathname) ? CORS_HEADERS : {}),
+  };
+
+  if (pathname === PRESIDENTIAL_SEARCH_PAGE_PATH) {
+    const target = request.nextUrl.clone();
+    target.searchParams.set("limite", "1");
+    return NextResponse.rewrite(target, { status: 429, headers });
+  }
+
+  const limited = NextResponse.json(
+    { error: "Trop de requêtes. Réessayez plus tard." },
+    { status: 429, headers }
+  );
+  applySubscribeCors(request, limited);
+  return limited;
 }
 
 /**

@@ -28,9 +28,12 @@ export default async function PresidentialSearchPage({
     q?: string | string[];
     "sous-theme"?: string | string[];
     page?: string | string[];
+    limite?: string | string[];
   }>;
 }) {
   const params = await searchParams;
+  const rawLimit = Array.isArray(params.limite) ? params.limite[0] : params.limite;
+  const isRateLimited = rawLimit === "1";
   const raw = Array.isArray(params.q) ? params.q[0] : params.q;
   const query = raw?.trim().slice(0, 200) ?? "";
   const rawSubtopic = Array.isArray(params["sous-theme"])
@@ -40,11 +43,13 @@ export default async function PresidentialSearchPage({
   const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
   const parsedPage = Number.parseInt(rawPage ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
-  const result = await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50, {
-    subtopicSlug,
-    page,
-    strategy: subtopicSlug ? "lexical" : "hybrid",
-  });
+  const result = isRateLimited
+    ? null
+    : await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50, {
+        subtopicSlug,
+        page,
+        strategy: subtopicSlug ? "lexical" : "hybrid",
+      });
   const hasResults = result !== null && result.total > 0;
   const hasSearch = query.length >= 2 || subtopicSlug !== undefined;
   const resultLabel = result?.query || query;
@@ -137,7 +142,17 @@ export default async function PresidentialSearchPage({
           la réponse. <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
         </p>
 
-        {!hasSearch ? (
+        {isRateLimited ? (
+          <section role="alert" className="mt-10 rounded-2xl border border-border bg-card p-6">
+            <h2 className="font-display text-2xl font-extrabold">
+              Trop de recherches ont été lancées en peu de temps
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Patientez une minute, puis relancez votre recherche. Cette limite protège la
+              disponibilité du service pour tous.
+            </p>
+          </section>
+        ) : !hasSearch ? (
           <p className="mt-10 text-muted-foreground">
             Saisissez au moins deux caractères pour rechercher dans le corpus public.
           </p>
