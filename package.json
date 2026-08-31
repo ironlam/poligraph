@@ -22,6 +22,7 @@
     "measures:regenerate-contexts": "tsx --env-file=.env scripts/regenerate-measure-contexts.ts",
     "measures:sync-reader-guides": "tsx --env-file=.env scripts/sync-measure-reader-guides.ts",
     "measures:detect-reader-guides": "tsx --env-file=.env scripts/detect-measure-reader-guides.ts",
+    "measures:finalize-reader-guides": "tsx --env-file=.env scripts/finalize-measure-reader-guides.ts",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",

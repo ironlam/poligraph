@@ -11,8 +11,9 @@ coût, sa faisabilité ou son opportunité.
    existant. Une suggestion inconnue reste conservée sans définition.
 3. Une personne rédige ou vérifie le repère à partir de la source du programme ou d'une source
    institutionnelle officielle.
-4. La publication du repère et son rattachement à une révision sont deux décisions humaines
-   distinctes.
+4. La publication du repère et son rattachement à une révision sont des décisions humaines. Elles
+   peuvent être prises séparément dans l'administration ou réunies dans une commande de
+   finalisation après la lecture humaine du lot.
 
 Une suggestion n'est jamais publique. Le site affiche uniquement un rattachement `APPROVED` vers
 un repère actif et `PUBLISHED`. Chaque création, publication, suggestion et décision produit une
@@ -60,6 +61,45 @@ npm run measures:detect-reader-guides -- \
 L'application crée uniquement des suggestions. Leur validation se fait sur la fiche admin de la
 mesure. Une validation resynchronise le document de recherche concerné et invalide uniquement les
 caches de cette mesure et de son élection.
+
+## Finaliser un lot relu
+
+Pour un petit volume, l'administration permet de publier un repère puis d'approuver chaque
+rattachement séparément. Après avoir lu un lot important, une commande regroupe ces opérations.
+Elle publie les brouillons déjà complets et sourcés, résout les termes par libellé ou alias, puis
+approuve les rattachements correspondants. Chaque opération conserve son audit, sa synchronisation
+de recherche et son invalidation de cache.
+
+La simulation est sans écriture et produit un rapport dans `scripts/.local/` :
+
+```bash
+npm run measures:finalize-reader-guides -- \
+  --election presidentielle-2027 \
+  --all \
+  --dry-run
+```
+
+Chaque proposition du rapport contient le texte de la mesure, l'extrait probant et la raison de
+détection, en plus du repère proposé. Ces éléments participent à l'empreinte du lot relu.
+
+Après lecture du rapport et du lot, une seule commande finalise toutes les entrées prêtes :
+
+```bash
+npm run measures:finalize-reader-guides -- \
+  --apply \
+  --confirm-reviewed \
+  --report scripts/.local/reader-guide-finalization-IDENTIFIANT.json
+```
+
+La même commande peut être relancée après une interruption. Les décisions déjà appliquées sont
+ignorées et le reste du rapport relu est repris, sans intégrer de nouvelle suggestion.
+
+`--confirm-reviewed` indique que la personne qui lance la commande assume la validation
+éditoriale du lot. La commande ne crée jamais une définition à partir d'un simple terme. Les
+suggestions sans repère correspondant et les brouillons incomplets restent dans le rapport pour
+traitement ultérieur. `--limit` et `--after` permettent de limiter ou reprendre un lot, mais ne se
+combinent pas avec `--all`. L'application reprend exclusivement le rapport fourni et s'arrête si
+une suggestion ou un repère a changé depuis le dry-run.
 
 ## Publication et maillage public
 

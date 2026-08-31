@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const tx = {
+    $queryRaw: vi.fn(),
     measureRevisionReaderGuide: {
       createMany: vi.fn(),
       findUnique: vi.fn(),
@@ -9,7 +10,13 @@ const mocks = vi.hoisted(() => {
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
-    measureReaderGuide: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    measureReaderGuide: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    measure: { findFirst: vi.fn() },
     measureReaderGuideDetectionRun: { upsert: vi.fn() },
     measureSource: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -73,6 +80,9 @@ describe("workflow des repères citoyens", () => {
     mocks.tx.measureRevisionReaderGuide.createMany
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValue({ count: 0 });
+    mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
+    mocks.tx.$queryRaw.mockResolvedValue([{ id: "measure-1" }]);
+    mocks.tx.measure.findFirst.mockResolvedValue({ id: "measure-1" });
   });
 
   it("crée uniquement une suggestion et reste idempotent", async () => {
@@ -127,7 +137,9 @@ describe("workflow des repères citoyens", () => {
       status: "SUGGESTED",
       guideId: "guide-1",
       revisionId: "revision-1",
-      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
     });
     mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
       publicationStatus: "DRAFT",
@@ -143,6 +155,72 @@ describe("workflow des repères citoyens", () => {
       })
     ).rejects.toThrow(/doit être publié/);
     expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("verrouille la mesure avant une validation et sa synchronisation de recherche", async () => {
+    mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
+      status: "SUGGESTED",
+      guideId: "guide-1",
+      revisionId: "revision-1",
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
+    });
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
+      publicationStatus: "PUBLISHED",
+      active: true,
+    });
+    mocks.tx.measureRevisionReaderGuide.findFirst.mockResolvedValue(null);
+    mocks.tx.measureRevisionReaderGuide.updateMany.mockResolvedValue({ count: 1 });
+    const { reviewReaderGuideMention } = await import("./reader-guides");
+
+    await reviewReaderGuideMention({
+      mentionId: "mention-1",
+      status: "APPROVED",
+      reviewedBy: "admin",
+    });
+
+    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.syncSearch.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith("measure-1", "election-1");
+  });
+
+  it("refuse un lot si la révision relue n'est plus la révision publique", async () => {
+    mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
+      status: "SUGGESTED",
+      guideId: "guide-1",
+      revisionId: "revision-1",
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
+    });
+    mocks.tx.measure.findFirst.mockResolvedValue(null);
+    const { reviewReaderGuideMention } = await import("./reader-guides");
+
+    await expect(
+      reviewReaderGuideMention({
+        mentionId: "mention-1",
+        expectedPublicRevisionId: "revision-1",
+        status: "APPROVED",
+        reviewedBy: "admin",
+      })
+    ).rejects.toThrow(/révision publique a changé/);
+
+    expect(mocks.tx.measure.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: "measure-1",
+        publishedRevisionId: "revision-1",
+      }),
+      select: { id: true },
+    });
+    expect(mocks.tx.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.tx.measure.findFirst.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();
+    expect(mocks.syncSearch).not.toHaveBeenCalled();
   });
 
   it("limite une source de programme aux documents programmatiques primaires", async () => {
@@ -177,6 +255,60 @@ describe("workflow des repères citoyens", () => {
       },
       select: { id: true },
     });
+  });
+
+  it("publie seulement le brouillon dont le contenu a été relu", async () => {
+    const guide = {
+      id: "guide-1",
+      slug: "zones-faibles-emissions",
+      label: "Zone à faibles émissions (ZFE)",
+      definition: "Une définition institutionnelle suffisamment complète pour être publiée.",
+      aliases: ["ZFE"],
+      publicationStatus: "DRAFT",
+      sourceKind: "OFFICIAL_INSTITUTION" as const,
+      sourceUrl: "https://www.ecologie.gouv.fr/politiques-publiques/zones-faibles-emissions-zfe",
+      sourceLabel: "Zones à faibles émissions",
+      sourcePublisher: "Ministère de la Transition écologique",
+      sourceRevisionId: null,
+    };
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue(guide);
+    const { publishReaderGuide } = await import("./reader-guides");
+
+    await publishReaderGuide("guide-1", "admin", {}, guide);
+
+    expect(mocks.tx.measureReaderGuide.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: "guide-1",
+        definition: guide.definition,
+        aliases: { equals: ["ZFE"] },
+        sourceUrl: guide.sourceUrl,
+      }),
+      data: expect.objectContaining({ publicationStatus: "PUBLISHED", reviewedBy: "admin" }),
+    });
+  });
+
+  it("refuse la publication si le brouillon change après la relecture", async () => {
+    const guide = {
+      id: "guide-1",
+      slug: "zones-faibles-emissions",
+      label: "Zone à faibles émissions (ZFE)",
+      definition: "Une définition institutionnelle suffisamment complète pour être publiée.",
+      aliases: ["ZFE"],
+      publicationStatus: "DRAFT",
+      sourceKind: "OFFICIAL_INSTITUTION" as const,
+      sourceUrl: "https://www.ecologie.gouv.fr/politiques-publiques/zones-faibles-emissions-zfe",
+      sourceLabel: "Zones à faibles émissions",
+      sourcePublisher: "Ministère de la Transition écologique",
+      sourceRevisionId: null,
+    };
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue(guide);
+    mocks.tx.measureReaderGuide.updateMany.mockResolvedValueOnce({ count: 0 });
+    const { publishReaderGuide } = await import("./reader-guides");
+
+    await expect(publishReaderGuide("guide-1", "admin", {}, guide)).rejects.toThrow(
+      /changé depuis la relecture/
+    );
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it("désactive un repère publié et resynchronise chaque mesure concernée une fois", async () => {
