@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { MAX_MEASURE_PUBLICATION_BATCH_SIZE } from "@/lib/measures/batch-publication";
 import { MEASURE_CONTEXT_PROMPT_VERSION } from "@/lib/measures/context-provenance";
+import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
 
 const FIRST_PUBLICATION_WHERE = {
   publicationStatus: "DRAFT",
@@ -53,6 +54,7 @@ export type BatchPublishItem = {
   expectedUpdatedAt: string;
   text: string;
   details: string | null;
+  batchKind: MeasureBatchKind;
 };
 
 export type BatchPublishGroup = {
@@ -63,12 +65,13 @@ export type BatchPublishGroup = {
   electionTitle: string;
   items: BatchPublishItem[];
   hasMore: boolean;
+  batchKind: MeasureBatchKind;
+  groupKey: string;
 };
 
 /**
- * Returns only first publications whose active revision was already reviewed. Corrections and
- * republications remain individual actions because replacing public text or reversing a legal
- * depublication requires a decision tied to that exact measure.
+ * Returns first publications and generated context corrections already reviewed. Corrections that
+ * alter the public formulation and republications remain individual decisions.
  */
 export async function queryBatchPublishGroups(
   filters: {
@@ -101,47 +104,56 @@ export async function queryBatchPublishGroups(
           latestRevision: { select: { id: true, text: true, details: true } },
         },
         orderBy: { createdAt: "asc" },
-        take: MAX_MEASURE_PUBLICATION_BATCH_SIZE + 1,
       },
     },
     orderBy: [{ publishedAt: "asc" }, { version: "asc" }],
   });
 
   return editions.flatMap((edition) => {
-    const items = edition.measures
-      .slice(0, MAX_MEASURE_PUBLICATION_BATCH_SIZE)
-      .flatMap((measure): BatchPublishItem[] => {
-        if (measure.latestRevision === null) return [];
-        const isContextCorrection = measure.publicationStatus === "PUBLISHED";
-        if (
-          isContextCorrection &&
-          measure.latestRevision.text !== measure.publishedRevision?.text
-        ) {
-          return [];
-        }
-        return [
-          {
-            measureId: measure.id,
-            revisionId: measure.latestRevision.id,
-            expectedUpdatedAt: measure.updatedAt.toISOString(),
-            text: measure.latestRevision.text,
-            details: measure.latestRevision.details,
-          },
-        ];
-      });
+    const items = edition.measures.flatMap((measure): BatchPublishItem[] => {
+      if (measure.latestRevision === null) return [];
+      if (
+        measure.publicationStatus === "PUBLISHED" &&
+        measure.latestRevision.text !== measure.publishedRevision?.text
+      ) {
+        return [];
+      }
+      const batchKind: MeasureBatchKind =
+        measure.publicationStatus === "PUBLISHED" ? "CONTEXT_CORRECTION" : "FIRST_PUBLICATION";
+      return [
+        {
+          measureId: measure.id,
+          revisionId: measure.latestRevision.id,
+          expectedUpdatedAt: measure.updatedAt.toISOString(),
+          text: measure.latestRevision.text,
+          details: measure.latestRevision.details,
+          batchKind,
+        },
+      ];
+    });
 
     if (items.length === 0) return [];
-    return [
-      {
-        programEditionId: edition.id,
-        editionLabel: edition.label,
-        editionVersion: edition.version,
-        ownerLabel:
-          edition.candidacy?.candidateName ?? edition.party?.name ?? "Propriétaire inconnu",
-        electionTitle: edition.election.title,
-        items,
-        hasMore: edition.measures.length > MAX_MEASURE_PUBLICATION_BATCH_SIZE,
-      },
-    ];
+    return (["FIRST_PUBLICATION", "CONTEXT_CORRECTION"] as const).flatMap((batchKind) => {
+      const kindItems = items
+        .filter((item) => item.batchKind === batchKind)
+        .slice(0, MAX_MEASURE_PUBLICATION_BATCH_SIZE);
+      if (kindItems.length === 0) return [];
+      return [
+        {
+          programEditionId: edition.id,
+          editionLabel: edition.label,
+          editionVersion: edition.version,
+          ownerLabel:
+            edition.candidacy?.candidateName ?? edition.party?.name ?? "Propriétaire inconnu",
+          electionTitle: edition.election.title,
+          items: kindItems,
+          hasMore:
+            items.filter((item) => item.batchKind === batchKind).length >
+            MAX_MEASURE_PUBLICATION_BATCH_SIZE,
+          batchKind,
+          groupKey: `${edition.id}:${batchKind}`,
+        },
+      ];
+    });
   });
 }

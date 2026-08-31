@@ -1,5 +1,6 @@
 import { MeasureValidationError } from "@/lib/measures/errors";
 import { reviewMeasureRevision } from "@/lib/measures/transitions";
+import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
 
 /**
  * A human must be able to inspect the complete batch before confirming it. Keeping the same
@@ -10,6 +11,7 @@ export const MAX_MEASURE_REVIEW_BATCH_SIZE = 100;
 export type MeasureReviewBatchItem = {
   measureId: string;
   revisionId: string;
+  batchKind: MeasureBatchKind;
 };
 
 export type MeasureReviewBatchFailure = MeasureReviewBatchItem & {

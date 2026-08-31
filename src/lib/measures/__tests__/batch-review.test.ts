@@ -14,6 +14,7 @@ import { MAX_MEASURE_REVIEW_BATCH_SIZE, reviewMeasureRevisionBatch } from "../ba
 const item = (number: number) => ({
   measureId: `measure-${number}`,
   revisionId: `revision-${number}`,
+  batchKind: "FIRST_PUBLICATION" as const,
 });
 
 describe("reviewMeasureRevisionBatch", () => {
@@ -58,6 +59,7 @@ describe("reviewMeasureRevisionBatch", () => {
         Array.from({ length: MAX_MEASURE_REVIEW_BATCH_SIZE + 1 }, (_, index) => ({
           measureId: `measure-${index}`,
           revisionId: `revision-${index}`,
+          batchKind: "FIRST_PUBLICATION" as const,
         })),
         "admin"
       )

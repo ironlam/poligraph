@@ -15,10 +15,11 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
     startTransition(async () => {
       setResult(
         await publishReviewedBatchAction({
-          items: group.items.map(({ measureId, revisionId, expectedUpdatedAt }) => ({
+          items: group.items.map(({ measureId, revisionId, expectedUpdatedAt, batchKind }) => ({
             measureId,
             revisionId,
             expectedUpdatedAt,
+            batchKind,
           })),
         })
       );
@@ -33,7 +34,10 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.electionTitle}, {count} révision{count > 1 ? "s" : ""} relue
+            {group.batchKind === "CONTEXT_CORRECTION"
+              ? "Corrections de contexte"
+              : "Premières publications"}
+            , {group.electionTitle}, {count} révision{count > 1 ? "s" : ""} relue
             {count > 1 ? "s" : ""} et sourcée{count > 1 ? "s" : ""}
           </p>
         </div>
@@ -50,6 +54,15 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
                     Contexte relu : {item.details}
                   </span>
                 ) : null}
+                <a
+                  href={`/admin/mesures/${item.measureId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Vérifier la mesure et ses preuves dans un nouvel onglet : ${item.text}`}
+                  className="mt-2 inline-flex min-h-11 items-center text-primary underline"
+                >
+                  Vérifier la mesure et ses preuves
+                </a>
               </li>
             ))}
           </ol>
@@ -133,7 +146,7 @@ export function BatchPublishPanel({ groups }: { groups: BatchPublishGroup[] }) {
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
-          <BatchPublishCard key={group.programEditionId} group={group} />
+          <BatchPublishCard key={group.groupKey} group={group} />
         ))}
       </div>
     </section>

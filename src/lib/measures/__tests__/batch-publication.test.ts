@@ -17,6 +17,7 @@ import {
 const item = (number: number) => ({
   measureId: `measure-${number}`,
   revisionId: `revision-${number}`,
+  batchKind: "FIRST_PUBLICATION" as const,
   expectedUpdatedAt: new Date(`2027-01-${String(number).padStart(2, "0")}T10:00:00.000Z`),
 });
 

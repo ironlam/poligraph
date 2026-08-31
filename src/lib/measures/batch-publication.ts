@@ -1,5 +1,6 @@
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
 import { publishMeasureRevision } from "@/lib/measures/transitions";
+import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
 
 /**
  * A bounded batch keeps one explicit human decision manageable and prevents an authenticated
@@ -12,6 +13,7 @@ export type MeasurePublicationBatchItem = {
   measureId: string;
   revisionId: string;
   expectedUpdatedAt: Date;
+  batchKind: MeasureBatchKind;
 };
 
 export type MeasurePublicationBatchFailure = {

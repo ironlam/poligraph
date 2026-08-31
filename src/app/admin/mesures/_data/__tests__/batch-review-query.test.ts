@@ -39,13 +39,16 @@ describe("queryBatchReviewGroups", () => {
 
     await expect(queryBatchReviewGroups()).resolves.toEqual([
       {
+        batchKind: "FIRST_PUBLICATION",
         programEditionId: "edition-1",
+        groupKey: "edition-1:FIRST_PUBLICATION",
         editionLabel: "Cahier 1",
         editionVersion: 1,
         ownerLabel: "Candidate Exemple",
         electionTitle: "Élection présidentielle de 2027",
         items: [
           {
+            batchKind: "FIRST_PUBLICATION",
             measureId: "measure-1",
             revisionId: "revision-1",
             text: "Créer un service public du logement.",

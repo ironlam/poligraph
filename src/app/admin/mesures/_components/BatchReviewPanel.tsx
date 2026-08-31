@@ -18,7 +18,11 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
     if (!confirmed || isPending) return;
     startTransition(async () => {
       const actionResult = await reviewDraftBatchAction({
-        items: group.items.map(({ measureId, revisionId }) => ({ measureId, revisionId })),
+        items: group.items.map(({ measureId, revisionId, batchKind }) => ({
+          measureId,
+          revisionId,
+          batchKind,
+        })),
       });
       if (actionResult.ok) {
         router.refresh();
@@ -36,7 +40,10 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.electionTitle}, {count} brouillon{count > 1 ? "s" : ""} sourcé
+            {group.batchKind === "CONTEXT_CORRECTION"
+              ? "Corrections de contexte"
+              : "Premières publications"}
+            , {group.electionTitle}, {count} brouillon{count > 1 ? "s" : ""} sourcé
             {count > 1 ? "s" : ""}
           </p>
         </div>
@@ -53,6 +60,15 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
                     Contexte proposé : {item.details}
                   </span>
                 ) : null}
+                <a
+                  href={`/admin/mesures/${item.measureId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Vérifier la mesure et ses preuves dans un nouvel onglet : ${item.text}`}
+                  className="mt-2 inline-flex min-h-11 items-center text-primary underline"
+                >
+                  Vérifier la mesure et ses preuves
+                </a>
               </li>
             ))}
           </ol>
@@ -126,7 +142,7 @@ export function BatchReviewPanel({ groups }: { groups: BatchReviewGroup[] }) {
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
-          <BatchReviewCard key={group.programEditionId} group={group} />
+          <BatchReviewCard key={group.groupKey} group={group} />
         ))}
       </div>
     </section>
