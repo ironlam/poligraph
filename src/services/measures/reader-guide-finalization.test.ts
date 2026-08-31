@@ -43,9 +43,12 @@ function mention(input: {
     guideId: input.guideId ?? null,
     term: input.term,
     normalizedTerm: input.normalizedTerm,
+    evidenceSpan: `Extrait probant pour ${input.term}`,
+    reason: "Terme technique non expliqué dans la mesure",
     confidence: 0.94,
     revision: {
       id: `revision-${input.id}`,
+      text: `Mesure publique contenant ${input.term}.`,
       readerGuideMentions: (input.approvedGuideIds ?? []).map((guideId) => ({ guideId })),
       publishedOf: { id: `measure-${input.id}`, electionId: "election-1" },
     },
@@ -65,6 +68,9 @@ describe("finalisation en lot des repères", () => {
       outcome: "READY",
       guideId: "guide-zfe",
       publishesGuide: false,
+      measureText: "Mesure publique contenant ZFE.",
+      evidenceSpan: "Extrait probant pour ZFE",
+      detectionReason: "Terme technique non expliqué dans la mesure",
     });
   });
 

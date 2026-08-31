@@ -33,9 +33,12 @@ type FinalizationMention = {
   guideId: string | null;
   term: string;
   normalizedTerm: string;
+  evidenceSpan: string;
+  reason: string;
   confidence: number;
   revision: {
     id: string;
+    text: string;
     readerGuideMentions: Array<{ guideId: string | null }>;
     publishedOf: { id: string; electionId: string } | null;
   };
@@ -46,6 +49,9 @@ export type ReaderGuideFinalizationItem = {
   revisionId: string;
   measureId: string;
   term: string;
+  measureText: string;
+  evidenceSpan: string;
+  detectionReason: string;
   confidence: number;
   guideId: string | null;
   guideSlug: string | null;
@@ -213,6 +219,9 @@ export function planReaderGuideFinalization(input: {
       revisionId: mention.revision.id,
       measureId: measure.id,
       term: mention.term,
+      measureText: mention.revision.text,
+      evidenceSpan: mention.evidenceSpan,
+      detectionReason: mention.reason,
       confidence: mention.confidence,
       guideId: guide?.id ?? null,
       guideSlug: guide?.slug ?? null,
@@ -338,10 +347,13 @@ async function listMentions(input: {
         guideId: true,
         term: true,
         normalizedTerm: true,
+        evidenceSpan: true,
+        reason: true,
         confidence: true,
         revision: {
           select: {
             id: true,
+            text: true,
             readerGuideMentions: {
               where: { status: "APPROVED" },
               select: { guideId: true },

@@ -79,6 +79,9 @@ npm run measures:finalize-reader-guides -- \
   --dry-run
 ```
 
+Chaque proposition du rapport contient le texte de la mesure, l'extrait probant et la raison de
+détection, en plus du repère proposé. Ces éléments participent à l'empreinte du lot relu.
+
 Après lecture du rapport et du lot, une seule commande finalise toutes les entrées prêtes :
 
 ```bash
