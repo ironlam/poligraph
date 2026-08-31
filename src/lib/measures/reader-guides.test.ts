@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
     $queryRaw: vi.fn(),
     measureRevisionReaderGuide: {
       createMany: vi.fn(),
+      deleteMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -80,6 +81,8 @@ describe("workflow des repères citoyens", () => {
     mocks.tx.measureRevisionReaderGuide.createMany
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValue({ count: 0 });
+    mocks.tx.measureRevisionReaderGuide.updateMany.mockResolvedValue({ count: 0 });
+    mocks.tx.measureRevisionReaderGuide.deleteMany.mockResolvedValue({ count: 0 });
     mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
     mocks.tx.$queryRaw.mockResolvedValue([{ id: "measure-1" }]);
     mocks.tx.measure.findFirst.mockResolvedValue({ id: "measure-1" });
@@ -130,6 +133,53 @@ describe("workflow des repères citoyens", () => {
         userAgent: "vitest-agent",
       }),
     });
+  });
+
+  it("retire uniquement les suggestions IA obsolètes lors d'une nouvelle version", async () => {
+    mocks.detect.mockResolvedValue([]);
+    mocks.tx.measureRevisionReaderGuide.deleteMany.mockResolvedValue({ count: 2 });
+    const { proposeReaderGuidesForRevision } = await import("./reader-guides");
+
+    await proposeReaderGuidesForRevision("revision-1", "admin");
+
+    expect(mocks.tx.measureRevisionReaderGuide.deleteMany).toHaveBeenCalledWith({
+      where: {
+        revisionId: "revision-1",
+        status: "SUGGESTED",
+        method: "AI_ASSISTED",
+        detectorVersion: { not: "mistral-small-latest:reader-guides-v2" },
+      },
+    });
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({ supersededSuggestionsRemoved: 2 }),
+      }),
+    });
+  });
+
+  it("actualise une suggestion IA d'une ancienne version sans créer de doublon", async () => {
+    mocks.tx.measureRevisionReaderGuide.updateMany.mockResolvedValueOnce({ count: 1 });
+    const { proposeReaderGuidesForRevision } = await import("./reader-guides");
+
+    const result = await proposeReaderGuidesForRevision("revision-1", "admin");
+
+    expect(result.created).toBe(0);
+    expect(mocks.tx.measureRevisionReaderGuide.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          revisionId: "revision-1",
+          normalizedTerm: "zones a faibles emissions",
+          status: "SUGGESTED",
+          method: "AI_ASSISTED",
+          detectorVersion: { not: "mistral-small-latest:reader-guides-v2" },
+        }),
+        data: expect.objectContaining({
+          guideId: "guide-1",
+          detectorVersion: "mistral-small-latest:reader-guides-v2",
+        }),
+      })
+    );
+    expect(mocks.tx.measureRevisionReaderGuide.createMany).not.toHaveBeenCalled();
   });
 
   it("refuse d'approuver un rattachement vers un repère non publié", async () => {

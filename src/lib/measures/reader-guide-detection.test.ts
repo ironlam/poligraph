@@ -62,4 +62,30 @@ describe("détection des repères citoyens", () => {
       }),
     ]);
   });
+
+  it("écarte les verbes et formulations génériques rejetés pendant la revue éditoriale", () => {
+    const result = parseReaderGuideDetections(
+      [
+        {
+          term: "abroger",
+          canonicalLabel: "Abrogation",
+          evidenceSpan: "abroger la réforme",
+          needsExplanation: true,
+          reason: "Terme juridique",
+          confidence: 0.9,
+        },
+        {
+          term: "référendum",
+          canonicalLabel: "Référendum",
+          evidenceSpan: "organiser un référendum",
+          needsExplanation: true,
+          reason: "Mécanisme institutionnel",
+          confidence: 0.9,
+        },
+      ],
+      "Abroger la réforme puis organiser un référendum."
+    );
+
+    expect(result.map(({ term }) => term)).toEqual(["référendum"]);
+  });
 });

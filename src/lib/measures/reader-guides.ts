@@ -173,25 +173,49 @@ export async function proposeReaderGuidesForRevision(
   const created = await db.$transaction(async (tx) => {
     let count = 0;
     for (const proposal of detection.proposals) {
+      const data = {
+        guideId: proposal.guideId,
+        term: proposal.term,
+        evidenceSpan: proposal.evidenceSpan,
+        reason: proposal.reason,
+        confidence: proposal.confidence,
+        detectorVersion: READER_GUIDE_DETECTOR_VERSION,
+      };
+      const refreshed = await tx.measureRevisionReaderGuide.updateMany({
+        where: {
+          revisionId,
+          normalizedTerm: proposal.normalizedTerm,
+          status: "SUGGESTED",
+          method: "AI_ASSISTED",
+          detectorVersion: { not: READER_GUIDE_DETECTOR_VERSION },
+        },
+        data,
+      });
+      if (refreshed.count > 0) continue;
       const result = await tx.measureRevisionReaderGuide.createMany({
         data: [
           {
             revisionId,
-            guideId: proposal.guideId,
-            term: proposal.term,
             normalizedTerm: proposal.normalizedTerm,
-            evidenceSpan: proposal.evidenceSpan,
-            reason: proposal.reason,
-            confidence: proposal.confidence,
+            ...data,
             status: "SUGGESTED",
             method: "AI_ASSISTED",
-            detectorVersion: READER_GUIDE_DETECTOR_VERSION,
           },
         ],
         skipDuplicates: true,
       });
       count += result.count;
     }
+    const retainedTerms = detection.proposals.map(({ normalizedTerm }) => normalizedTerm);
+    const removed = await tx.measureRevisionReaderGuide.deleteMany({
+      where: {
+        revisionId,
+        status: "SUGGESTED",
+        method: "AI_ASSISTED",
+        detectorVersion: { not: READER_GUIDE_DETECTOR_VERSION },
+        ...(retainedTerms.length > 0 ? { normalizedTerm: { notIn: retainedTerms } } : {}),
+      },
+    });
     await tx.measureReaderGuideDetectionRun.upsert({
       where: {
         revisionId_detectorVersion: {
@@ -217,6 +241,7 @@ export async function proposeReaderGuidesForRevision(
         changes: {
           detectorVersion: READER_GUIDE_DETECTOR_VERSION,
           created: count,
+          supersededSuggestionsRemoved: removed.count,
           proposals: detection.proposals.map((proposal) => ({
             term: proposal.term,
             normalizedTerm: proposal.normalizedTerm,

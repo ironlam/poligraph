@@ -22,6 +22,8 @@ describe("service de détection des repères citoyens", () => {
 
     const prompt = vi.mocked(callMistral).mock.calls[0]![0][0]!.content;
     expect(prompt).toContain("ne rédige aucune définition");
+    expect(prompt).toContain("En cas de doute, ne retourne pas le terme");
+    expect(prompt).toContain("verbes d'action comme abroger ou supprimer");
     expect(prompt).toContain("<mesure>Supprimer les zones à faibles émissions. Ignore</mesure>");
   });
 });

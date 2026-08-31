@@ -1,12 +1,16 @@
 const OFFICIAL_HOSTS = new Set([
+  "ameli.fr",
   "assemblee-nationale.fr",
   "cnil.fr",
   "conseil-constitutionnel.fr",
+  "defenseurdesdroits.fr",
   "ecologie.gouv.fr",
+  "hatvp.fr",
   "insee.fr",
   "legifrance.gouv.fr",
   "senat.fr",
   "service-public.fr",
+  "urssaf.fr",
   "vie-publique.fr",
 ]);
 

@@ -20,11 +20,11 @@ export async function detectReaderGuideTerms(input: {
     .join(" | ");
   const prompt = `Tu aides une rédaction civique à repérer les termes qu'un citoyen non spécialiste doit comprendre avant de lire une mesure politique.
 
-Retourne uniquement un objet JSON {"detections": [...]} avec au maximum 5 éléments. Chaque élément contient term, canonicalLabel, evidenceSpan, needsExplanation=true, reason et confidence entre 0 et 1.
+Retourne uniquement un objet JSON {"detections": [...]} avec au maximum 3 éléments. Chaque élément contient term, canonicalLabel, evidenceSpan, needsExplanation=true, reason et confidence entre 0 et 1.
 
-Retenir : sigles, mécanismes juridiques ou administratifs, dispositifs nommés, institutions peu connues, mots courants employés dans un sens technique, références réglementaires nécessaires à la compréhension.
+Retenir seulement un terme dont une définition factuelle et autonome aiderait réellement un lecteur non spécialiste : sigles opaques, mécanismes juridiques ou administratifs précisément nommés, dispositifs publics nommés, institutions peu connues et références réglementaires nécessaires à la compréhension.
 Exemples de forme à examiner : ZFE, kafala judiciaire, quotient familial, obligation de quitter le territoire français. Ces exemples illustrent un niveau de technicité et ne doivent être retournés que s'ils figurent réellement dans la mesure.
-Exclure : vocabulaire quotidien, noms de personnes, jugements politiques, concepts déjà expliqués dans le contexte, termes dont une définition n'apporterait rien. Ne complète jamais la mesure et ne rédige aucune définition.
+Exclure : verbes d'action comme abroger ou supprimer, métiers et catégories de personnes courants, vocabulaire quotidien, noms de personnes, jugements politiques, formulations propres au programme, concepts déjà expliqués dans le contexte et termes dont une définition n'apporterait rien. En cas de doute, ne retourne pas le terme. Ne complète jamais la mesure et ne rédige aucune définition.
 
 <vocabulaire-connu>${vocabulary || "aucun"}</vocabulaire-connu>
 <mesure>${text}</mesure>
