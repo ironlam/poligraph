@@ -348,11 +348,10 @@ export async function searchPresidentialCorpus(
     }
   }
 
-  const rankedResults =
-    options.strategy === "semantic"
-      ? page.hits.reduce<
-          Array<PresidentialCandidacySearchResult | PresidentialMeasureSearchResult>
-        >((results, hit) => {
+  const rankedResults = options.strategy
+    ? page.hits.reduce<Array<PresidentialCandidacySearchResult | PresidentialMeasureSearchResult>>(
+        (results, hit) => {
+          if (explicitCandidacyIds.includes(hit.entityId)) return results;
           if (hit.entityType === "CANDIDACY") {
             const candidacy = candidaciesById.get(hit.entityId);
             if (candidacy) results.push(candidacy);
@@ -362,8 +361,13 @@ export async function searchPresidentialCorpus(
             if (measure) results.push(measure);
           }
           return results;
-        }, [])
-      : undefined;
+        },
+        explicitCandidacyIds.flatMap((id) => {
+          const candidacy = candidaciesById.get(id);
+          return candidacy ? [candidacy] : [];
+        })
+      )
+    : undefined;
 
   const hydratedIndexedCandidacies = indexedCandidacyIds.filter((id) => candidaciesById.has(id));
   const discardedFromPage = page.hits.length - hydratedIndexedCandidacies.length - measures.length;

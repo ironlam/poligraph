@@ -232,4 +232,21 @@ describe("searchPresidentialCorpus", () => {
 
     expect(result?.rankedResults?.map((item) => item.type)).toEqual(["measure", "candidacy"]);
   });
+
+  it("conserve aussi le rang hybride entre mesures et candidatures", async () => {
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "hybrid",
+      total: 2,
+      hits: [
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+      ],
+    });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "habitat", 8, {
+      strategy: "hybrid",
+    });
+
+    expect(result?.rankedResults?.map((item) => item.type)).toEqual(["measure", "candidacy"]);
+  });
 });

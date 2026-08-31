@@ -202,12 +202,13 @@ calcul :
 
 | Stratégie  | Rappel@5 | Précision@5 | Faux positifs négatifs | Latence p95 |
 | ---------- | -------: | ----------: | ---------------------: | ----------: |
-| Lexicale   |    0,783 |       0,609 |                    0 % |      201 ms |
+| Lexicale   |    0,783 |       0,609 |                    0 % |      199 ms |
 | Sémantique |    0,957 |       0,826 |                    0 % |      450 ms |
-| Hybride    |    1,000 |       0,835 |                    0 % |      703 ms |
+| Hybride    |    1,000 |       0,830 |                    0 % |      842 ms |
 
-Le léger recul de précision de la fusion face au vectoriel seul est compensé par un rappel complet
-et par la protection des recherches exactes. Il ne justifie pas un second appel de reranking.
+La fusion atteint un rappel complet et conserve une précision légèrement supérieure au vectoriel
+seul, tout en protégeant les recherches exactes. Ces résultats ne justifient pas un second appel de
+reranking.
 
 L'autocomplétion reste explicitement lexicale. Seule la soumission de la page complète utilise la
 recherche hybride. Si Mistral dépasse le délai maximal de 2,5 secondes, atteint son quota ou renvoie
