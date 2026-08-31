@@ -8,6 +8,7 @@ export type ReaderGuideFinalizationOptions = {
   apply: boolean;
   dryRun: boolean;
   confirmReviewed: boolean;
+  report?: string;
 };
 
 export function parseReaderGuideFinalizationOptions(
@@ -21,16 +22,21 @@ export function parseReaderGuideFinalizationOptions(
     { name: "--dry-run", type: "boolean" },
     { name: "--apply", type: "boolean" },
     { name: "--confirm-reviewed", type: "boolean" },
+    { name: "--report", type: "string" },
   ]);
   const apply = parsed.apply === true;
   const dryRun = parsed.dryRun === true;
   const all = parsed.all === true;
   const confirmReviewed = parsed.confirmReviewed === true;
+  const report = typeof parsed.report === "string" ? parsed.report : undefined;
   if (apply === dryRun) throw new Error("Choisir exactement une option parmi --dry-run et --apply");
   if (all && parsed.limit !== undefined) {
     throw new Error("--all et --limit ne peuvent pas être utilisés ensemble");
   }
-  if (!all && parsed.limit === undefined) {
+  if (all && parsed.after !== undefined) {
+    throw new Error("--all et --after ne peuvent pas être utilisés ensemble");
+  }
+  if (dryRun && !all && parsed.limit === undefined) {
     throw new Error("Choisir --all ou fournir --limit");
   }
   if (apply && !confirmReviewed) {
@@ -38,6 +44,21 @@ export function parseReaderGuideFinalizationOptions(
   }
   if (dryRun && confirmReviewed) {
     throw new Error("--confirm-reviewed est réservé au mode --apply");
+  }
+  if (apply && !report) {
+    throw new Error("--apply exige --report avec le rapport de dry-run relu");
+  }
+  if (dryRun && report) {
+    throw new Error("--report est réservé au mode --apply");
+  }
+  if (
+    apply &&
+    (parsed.election !== undefined ||
+      parsed.limit !== undefined ||
+      parsed.after !== undefined ||
+      parsed.all !== undefined)
+  ) {
+    throw new Error("Avec --apply, le périmètre provient uniquement de --report");
   }
   const limit = parsed.limit;
   if (
@@ -54,5 +75,6 @@ export function parseReaderGuideFinalizationOptions(
     apply,
     dryRun,
     confirmReviewed,
+    ...(report ? { report } : {}),
   };
 }

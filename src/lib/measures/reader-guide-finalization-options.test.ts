@@ -26,8 +26,18 @@ describe("options CLI de finalisation des repères", () => {
       /--confirm-reviewed/
     );
     expect(
-      parseReaderGuideFinalizationOptions(["--all", "--apply", "--confirm-reviewed"])
-    ).toMatchObject({ all: true, apply: true, confirmReviewed: true });
+      parseReaderGuideFinalizationOptions([
+        "--apply",
+        "--confirm-reviewed",
+        "--report",
+        "scripts/.local/report.json",
+      ])
+    ).toMatchObject({
+      all: false,
+      apply: true,
+      confirmReviewed: true,
+      report: "scripts/.local/report.json",
+    });
   });
 
   it("refuse les périmètres et modes ambigus", () => {
@@ -38,5 +48,17 @@ describe("options CLI de finalisation des repères", () => {
       /exactement une/
     );
     expect(() => parseReaderGuideFinalizationOptions(["--dry-run"])).toThrow(/--all/);
+    expect(() =>
+      parseReaderGuideFinalizationOptions(["--all", "--after", "mention-10", "--dry-run"])
+    ).toThrow(/ne peuvent pas/);
+    expect(() =>
+      parseReaderGuideFinalizationOptions([
+        "--all",
+        "--apply",
+        "--confirm-reviewed",
+        "--report",
+        "report.json",
+      ])
+    ).toThrow(/périmètre/);
   });
 });

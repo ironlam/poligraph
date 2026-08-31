@@ -1,21 +1,68 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseReaderGuideFinalizationOptions } from "../src/lib/measures/reader-guide-finalization-options";
 import {
   applyReaderGuideFinalization,
+  hashReaderGuideFinalizationPlan,
   prepareReaderGuideFinalization,
-} from "../src/lib/measures/reader-guide-finalization";
+  type ReaderGuideFinalizationPlan,
+} from "../src/services/measures/reader-guide-finalization";
+
+type DryRunReport = {
+  mode: "dry-run";
+  parameters: {
+    electionSlug: string;
+    limit?: number;
+    after?: string;
+    all: boolean;
+  };
+  plan: ReaderGuideFinalizationPlan;
+  planHash: string;
+};
+
+async function loadReviewedReport(path: string): Promise<DryRunReport> {
+  const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("mode" in parsed) ||
+    parsed.mode !== "dry-run" ||
+    !("parameters" in parsed) ||
+    typeof parsed.parameters !== "object" ||
+    parsed.parameters === null ||
+    !("plan" in parsed) ||
+    typeof parsed.plan !== "object" ||
+    parsed.plan === null ||
+    !("planHash" in parsed) ||
+    typeof parsed.planHash !== "string"
+  ) {
+    throw new Error("Le rapport fourni n'est pas un dry-run de finalisation valide");
+  }
+  const report = parsed as DryRunReport;
+  if (hashReaderGuideFinalizationPlan(report.plan) !== report.planHash) {
+    throw new Error("Le rapport de dry-run a été modifié après sa génération");
+  }
+  return report;
+}
 
 async function main(): Promise<void> {
   const options = parseReaderGuideFinalizationOptions(process.argv.slice(2));
   const runId = randomUUID();
   const actor = `cli:reader-guides:${runId}`;
+  const reviewedReport = options.apply ? await loadReviewedReport(options.report!) : null;
+  const selection = reviewedReport?.parameters ?? options;
   const plan = await prepareReaderGuideFinalization({
-    electionSlug: options.electionSlug,
-    ...(options.limit !== undefined ? { limit: options.limit } : {}),
-    ...(options.after ? { after: options.after } : {}),
+    electionSlug: selection.electionSlug,
+    ...(selection.limit !== undefined ? { limit: selection.limit } : {}),
+    ...(selection.after ? { after: selection.after } : {}),
   });
+  const planHash = hashReaderGuideFinalizationPlan(plan);
+  if (reviewedReport && planHash !== reviewedReport.planHash) {
+    throw new Error(
+      "Le lot a changé depuis le dry-run. Générez et relisez un nouveau rapport avant application."
+    );
+  }
   const applied = options.apply
     ? await applyReaderGuideFinalization(plan, actor)
     : { publishedGuides: 0, approvedMentions: 0, errors: [] };
@@ -31,7 +78,9 @@ async function main(): Promise<void> {
         createdAt: new Date().toISOString(),
         mode: options.apply ? "apply" : "dry-run",
         parameters: options,
+        sourceReport: options.report ?? null,
         plan,
+        planHash,
         applied,
       },
       null,
@@ -39,7 +88,7 @@ async function main(): Promise<void> {
     )
   );
 
-  console.log(`${plan.scanned} proposition(s) relue(s) par la commande.`);
+  console.log(`${plan.scanned} proposition(s) incluse(s) dans le lot.`);
   console.log(`${plan.ready} rattachement(s) prêt(s).`);
   console.log(`${plan.guidesToPublish.length} repère(s) sourcé(s) à publier.`);
   console.log(`${plan.unresolved} terme(s) sans repère sourcé.`);
@@ -61,7 +110,7 @@ async function main(): Promise<void> {
     console.log("Simulation uniquement. Aucune écriture effectuée.");
   }
   console.log(`Rapport : ${reportPath}`);
-  if (plan.nextAfter && options.limit !== undefined && plan.scanned === options.limit) {
+  if (plan.nextAfter && selection.limit !== undefined && plan.scanned === selection.limit) {
     console.log(`Lot suivant : --after ${plan.nextAfter}`);
   }
   if (applied.errors.length > 0) process.exitCode = 1;

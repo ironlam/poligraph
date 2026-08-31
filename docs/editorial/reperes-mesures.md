@@ -83,17 +83,17 @@ Après lecture du rapport et du lot, une seule commande finalise toutes les entr
 
 ```bash
 npm run measures:finalize-reader-guides -- \
-  --election presidentielle-2027 \
-  --all \
   --apply \
-  --confirm-reviewed
+  --confirm-reviewed \
+  --report scripts/.local/reader-guide-finalization-IDENTIFIANT.json
 ```
 
 `--confirm-reviewed` indique que la personne qui lance la commande assume la validation
 éditoriale du lot. La commande ne crée jamais une définition à partir d'un simple terme. Les
 suggestions sans repère correspondant et les brouillons incomplets restent dans le rapport pour
 traitement ultérieur. `--limit` et `--after` permettent de limiter ou reprendre un lot, mais ne se
-combinent pas avec `--all`.
+combinent pas avec `--all`. L'application reprend exclusivement le rapport fourni et s'arrête si
+une suggestion ou un repère a changé depuis le dry-run.
 
 ## Publication et maillage public
 

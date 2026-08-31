@@ -1,5 +1,6 @@
-import { db } from "@/lib/db";
+import { createHash } from "node:crypto";
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
+import { db } from "@/lib/db";
 import { normalizeReaderGuideTerm } from "@/lib/measures/reader-guide-detection";
 import { isOfficialInstitutionUrl } from "@/lib/measures/reader-guide-source";
 import { publishReaderGuide, reviewReaderGuideMention } from "@/lib/measures/reader-guides";
@@ -66,6 +67,10 @@ export type ReaderGuideFinalizationPlan = {
   nextAfter: string | null;
   items: ReaderGuideFinalizationItem[];
 };
+
+export function hashReaderGuideFinalizationPlan(plan: ReaderGuideFinalizationPlan): string {
+  return createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+}
 
 function guidePublicationBlocker(guide: FinalizationGuide): string | null {
   if (guide.publicationStatus === "PUBLISHED") return null;
