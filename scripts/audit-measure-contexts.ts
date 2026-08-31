@@ -46,6 +46,7 @@ async function main() {
     queuedForGeneration: queuedIds.length,
     terminalNoUsefulContext: 0,
     terminalInvalidContext: 0,
+    terminalHistoricalContext: 0,
     retryableInvalidContext: 0,
     generationInProgress: 0,
     unexplainedEligibleExclusions: 0,
@@ -103,7 +104,12 @@ async function main() {
       attempt.changes && typeof attempt.changes === "object" && !Array.isArray(attempt.changes)
         ? (attempt.changes as Record<string, unknown>)
         : {};
-    if (changes.promptVersion !== MEASURE_CONTEXT_PROMPT_VERSION) continue;
+    if (
+      typeof changes.promptVersion === "string" &&
+      changes.promptVersion !== MEASURE_CONTEXT_PROMPT_VERSION
+    ) {
+      continue;
+    }
     const state = states.get(attempt.entityId) ?? {
       activeReservation: false,
       invalidCount: 0,
@@ -124,7 +130,8 @@ async function main() {
     if (state.terminal === "NO_USEFUL_CONTEXT") report.terminalNoUsefulContext += 1;
     else if (state.terminal === "INVALID_GENERATED_CONTEXT" || state.invalidCount >= 2) {
       report.terminalInvalidContext += 1;
-    } else if (state.activeReservation) report.generationInProgress += 1;
+    } else if (state.terminal !== null) report.terminalHistoricalContext += 1;
+    else if (state.activeReservation) report.generationInProgress += 1;
     else if (state.invalidCount === 1) report.retryableInvalidContext += 1;
   }
   report.unexplainedEligibleExclusions = Math.max(
@@ -133,6 +140,7 @@ async function main() {
       report.queuedForGeneration -
       report.terminalNoUsefulContext -
       report.terminalInvalidContext -
+      report.terminalHistoricalContext -
       report.retryableInvalidContext -
       report.generationInProgress
   );

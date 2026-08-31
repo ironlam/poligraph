@@ -1,49 +1,14 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { MAX_MEASURE_REVIEW_BATCH_SIZE } from "@/lib/measures/batch-review";
-import { MEASURE_CONTEXT_PROMPT_VERSION } from "@/lib/measures/context-provenance";
 import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
+import {
+  buildFirstPublicationWhere,
+  buildGeneratedContextCorrectionWhere,
+} from "./batch-eligibility";
 
-const FIRST_PUBLICATION_WHERE = {
-  publicationStatus: "DRAFT",
-  publishedRevisionId: null,
-  latestRevision: {
-    is: {
-      reviewedAt: null,
-      publishedAt: null,
-      discardedAt: null,
-      supersededAt: null,
-      rejectedAt: null,
-      sources: { some: {} },
-    },
-  },
-} satisfies Prisma.MeasureWhereInput;
-
-const GENERATED_CONTEXT_CORRECTION_WHERE = {
-  publicationStatus: "PUBLISHED",
-  publishedRevision: {
-    is: {
-      reviewedAt: { not: null },
-      publishedAt: { not: null },
-      supersededAt: null,
-      discardedAt: null,
-      rejectedAt: null,
-    },
-  },
-  latestRevision: {
-    is: {
-      details: { not: null },
-      extractionMethod: "AI_ASSISTED",
-      extractorVersion: { endsWith: `:${MEASURE_CONTEXT_PROMPT_VERSION}` },
-      reviewedAt: null,
-      publishedAt: null,
-      discardedAt: null,
-      supersededAt: null,
-      rejectedAt: null,
-      sources: { some: {} },
-    },
-  },
-} satisfies Prisma.MeasureWhereInput;
+const FIRST_PUBLICATION_WHERE = buildFirstPublicationWhere("REVIEW");
+const GENERATED_CONTEXT_CORRECTION_WHERE = buildGeneratedContextCorrectionWhere("REVIEW");
 
 const ELIGIBLE_MEASURE_WHERE = {
   OR: [FIRST_PUBLICATION_WHERE, GENERATED_CONTEXT_CORRECTION_WHERE],
@@ -100,6 +65,7 @@ export async function queryBatchReviewGroups(
           latestRevision: { select: { id: true, text: true, details: true } },
         },
         orderBy: { createdAt: "asc" },
+        take: MAX_MEASURE_REVIEW_BATCH_SIZE + 1,
       },
     },
     orderBy: [{ publishedAt: "asc" }, { version: "asc" }],
@@ -108,12 +74,6 @@ export async function queryBatchReviewGroups(
   return editions.flatMap((edition) => {
     const items = edition.measures.flatMap((measure): BatchReviewItem[] => {
       if (measure.latestRevision === null) return [];
-      if (
-        measure.publicationStatus === "PUBLISHED" &&
-        measure.latestRevision.text !== measure.publishedRevision?.text
-      ) {
-        return [];
-      }
       const batchKind: MeasureBatchKind =
         measure.publicationStatus === "PUBLISHED" ? "CONTEXT_CORRECTION" : "FIRST_PUBLICATION";
       return [

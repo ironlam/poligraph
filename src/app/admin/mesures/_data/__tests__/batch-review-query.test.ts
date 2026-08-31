@@ -123,7 +123,7 @@ describe("queryBatchReviewGroups", () => {
     ]);
   });
 
-  it("exclut une correction de contexte qui modifie la formulation publique", async () => {
+  it("laisse la transition verrouillée refuser une correction incohérente", async () => {
     findManyMock.mockResolvedValue([
       {
         id: "edition-1",
@@ -147,7 +147,10 @@ describe("queryBatchReviewGroups", () => {
       },
     ]);
 
-    await expect(queryBatchReviewGroups()).resolves.toEqual([]);
+    const [group] = await queryBatchReviewGroups();
+    expect(group?.items).toEqual([
+      expect.objectContaining({ revisionId: "revision-context", batchKind: "CONTEXT_CORRECTION" }),
+    ]);
   });
 
   it("borne le lot à la candidature sélectionnée", async () => {
