@@ -265,6 +265,7 @@ export async function reviewReaderGuideMention(input: {
   expectedPublicRevisionId?: string;
   status: "APPROVED" | "REJECTED";
   reviewedBy: string;
+  invalidateCache?: boolean;
   ipAddress?: string;
   userAgent?: string;
 }): Promise<void> {
@@ -366,7 +367,7 @@ export async function reviewReaderGuideMention(input: {
     }
     throw error;
   }
-  invalidateMeasureTags(measure.id, measure.electionId);
+  if (input.invalidateCache !== false) invalidateMeasureTags(measure.id, measure.electionId);
 }
 
 export type ReaderGuideDraftInput = {

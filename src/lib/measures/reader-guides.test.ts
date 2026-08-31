@@ -237,6 +237,35 @@ describe("workflow des repères citoyens", () => {
     expect(mocks.invalidate).toHaveBeenCalledWith("measure-1", "election-1");
   });
 
+  it("n'invalide pas le cache Next quand la validation vient d'un processus CLI", async () => {
+    mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
+      status: "SUGGESTED",
+      guideId: "guide-1",
+      revisionId: "revision-1",
+      revision: {
+        measure: { id: "measure-1", electionId: "election-1", candidacyId: "candidacy-1" },
+      },
+    });
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
+      publicationStatus: "PUBLISHED",
+      active: true,
+    });
+    mocks.tx.measureRevisionReaderGuide.findFirst.mockResolvedValue(null);
+    mocks.tx.measureRevisionReaderGuide.updateMany.mockResolvedValue({ count: 1 });
+    const { reviewReaderGuideMention } = await import("./reader-guides");
+    const input = {
+      mentionId: "mention-1",
+      status: "APPROVED" as const,
+      reviewedBy: "cli:reader-guides:test",
+      invalidateCache: false,
+    };
+
+    await reviewReaderGuideMention(input);
+
+    expect(mocks.syncSearch).toHaveBeenCalledWith(mocks.tx, "measure-1");
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+
   it("refuse un lot si la révision relue n'est plus la révision publique", async () => {
     mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
       status: "SUGGESTED",

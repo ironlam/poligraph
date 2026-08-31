@@ -227,6 +227,7 @@ describe("finalisation en lot des repères", () => {
       expectedPublicRevisionId: "revision-1",
       status: "APPROVED",
       reviewedBy: "cli:reader-guides:run-1",
+      invalidateCache: false,
     });
   });
 

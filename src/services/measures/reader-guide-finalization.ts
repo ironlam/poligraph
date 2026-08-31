@@ -451,6 +451,9 @@ export async function applyReaderGuideFinalization(
               expectedPublicRevisionId: item.revisionId,
               status: "APPROVED",
               reviewedBy: actor,
+              // revalidateTag requires a Next request store, which a CLI process does not have.
+              // Search documents are still synchronized inside reviewReaderGuideMention().
+              invalidateCache: false,
             });
             groupApproved += 1;
           } catch (error) {
