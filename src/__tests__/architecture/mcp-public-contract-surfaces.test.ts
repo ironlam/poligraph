@@ -117,6 +117,8 @@ const PARTY_SURFACES = [
   "src/app/elections/presidentielle-2027/page.tsx",
   "src/app/elections/presidentielle-2027/priorites/page.tsx",
   "src/app/elections/presidentielle-2027/recherche/page.tsx",
+  "src/app/elections/presidentielle-2027/reperes/[slug]/page.tsx",
+  "src/app/elections/presidentielle-2027/reperes/page.tsx",
   "src/app/elections/presidentielle-2027/themes/[theme]/page.tsx",
   "src/app/elections/presidentielle-2027/themes/page.tsx",
   "src/app/factchecks/[slug]/page.tsx",
