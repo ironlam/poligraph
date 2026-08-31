@@ -25,7 +25,10 @@ vi.mock("@/services/presidentielle/hybrid-search", () => ({
   searchPresidentialPage: (...args: unknown[]) => searchPresidentialPage(...args),
 }));
 
-import { searchPresidentialCorpus } from "../corpus-search";
+import {
+  candidateNameIsMentioned,
+  searchPresidentialCorpus,
+} from "@/services/presidentielle/corpus-search";
 
 describe("searchPresidentialCorpus", () => {
   beforeEach(() => {
@@ -70,11 +73,17 @@ describe("searchPresidentialCorpus", () => {
         publishedRevision: {
           text: "Construire des logements publics",
           precision: null,
-          sources: [{ sourceKind: "PROGRAMME_CANDIDAT" }],
+          sources: [{ sourceKind: "PROGRAMME_CANDIDAT", url: "https://example.org/programme" }],
         },
-        candidacy: { candidateName: "Alice Martin" },
+        candidacy: { candidateName: "Alice Martin", politician: { slug: "alice-martin" } },
       },
     ]);
+  });
+
+  it("détecte localement un nom complet ou un nom de famille dans une question", () => {
+    expect(candidateNameIsMentioned("Que propose Marine Le Pen ?", "Marine Le Pen")).toBe(true);
+    expect(candidateNameIsMentioned("Le programme de Mélenchon", "Jean-Luc Mélenchon")).toBe(true);
+    expect(candidateNameIsMentioned("Que proposent les candidats ?", "Marine Le Pen")).toBe(false);
   });
 
   it("scope l'index et réhydrate en deux requêtes publiques bornées", async () => {
@@ -137,10 +146,10 @@ describe("searchPresidentialCorpus", () => {
           measureId: "measure-subtopic",
           text: "Ouvrir des centres de santé",
           publicUrl: "/elections/presidentielle-test/mesures/ouvrir-des-centres-de-sante",
-          candidacy: { candidateName: "Alice Martin" },
+          candidacy: { candidateName: "Alice Martin", politicianSlug: "alice-martin" },
           theme: { code: "SANTE" },
           precision: { code: null },
-          sources: [{ sourceKind: "PROGRAMME_CANDIDAT" }],
+          sources: [{ sourceKind: "PROGRAMME_CANDIDAT", url: "https://example.org/programme" }],
         },
       ],
     });

@@ -10,13 +10,14 @@ import { db } from "@/lib/db";
 import { searchPublicPage, type SearchHit, type SearchPublicPage } from "@/lib/search/query";
 import { validateMistralEmbeddingBatch } from "@/services/presidentielle/search-embeddings";
 import { getOrCreatePresidentialQueryEmbedding } from "@/services/presidentielle/query-embedding-cache";
+import { reservePresidentialSemanticSearchBudget } from "@/services/presidentielle/semantic-search-budget";
 
 const RRF_K = 60;
 
-export type PresidentialSearchStrategy = "lexical" | "hybrid";
+export type PresidentialSearchStrategy = "lexical" | "semantic" | "hybrid";
 
 export type PresidentialSearchPage = SearchPublicPage & {
-  strategy: "lexical" | "hybrid" | "lexical-fallback";
+  strategy: "lexical" | "semantic" | "hybrid" | "lexical-fallback";
   semanticMaxSimilarity?: number | null;
 };
 
@@ -87,9 +88,21 @@ async function searchSemantic(input: {
   limit: number;
 }): Promise<SemanticSearchHit[]> {
   const vector = await getOrCreatePresidentialQueryEmbedding(input.query, async () => {
+    const budget = await reservePresidentialSemanticSearchBudget();
+    if (!budget.allowed) {
+      throw new Error(`budget sémantique indisponible (${budget.reason})`);
+    }
+    const startedAt = performance.now();
     const response = await callMistralEmbeddings([input.query], {
       model: PRESIDENTIAL_SEARCH_EMBEDDING_MODEL,
       signal: AbortSignal.timeout(PRESIDENTIAL_SEARCH_QUERY_TIMEOUT_MS),
+    });
+    console.info("Recherche sémantique présidentielle", {
+      provider: "Mistral",
+      model: PRESIDENTIAL_SEARCH_EMBEDDING_MODEL,
+      latencyMs: Math.round(performance.now() - startedAt),
+      promptTokens: response.usage?.prompt_tokens ?? null,
+      totalTokens: response.usage?.total_tokens ?? null,
     });
     return validateMistralEmbeddingBatch(response.data, 1)[0]!;
   });
@@ -122,13 +135,34 @@ export async function searchPresidentialPage(input: {
   limit: number;
   strategy: PresidentialSearchStrategy;
 }): Promise<PresidentialSearchPage> {
+  if (input.strategy === "lexical") {
+    return {
+      ...(await searchPublicPage(input.lexicalQuery ?? input.query, {
+        electionId: input.electionId,
+        limit: input.limit,
+      })),
+      strategy: "lexical",
+    };
+  }
+
+  if (input.strategy === "semantic") {
+    const semanticHits = await searchSemantic(input);
+    const semanticMaxSimilarity = semanticHits[0]?.similarity ?? null;
+    const hits = semanticHits
+      .filter((hit) => hit.similarity >= PRESIDENTIAL_SEARCH_SEMANTIC_MIN_SIMILARITY)
+      .slice(0, input.limit);
+    return {
+      hits,
+      total: hits.length,
+      strategy: "semantic",
+      semanticMaxSimilarity,
+    };
+  }
+
   const lexicalPromise = searchPublicPage(input.lexicalQuery ?? input.query, {
     electionId: input.electionId,
     limit: input.limit,
   });
-  if (input.strategy === "lexical") {
-    return { ...(await lexicalPromise), strategy: "lexical" };
-  }
 
   const [lexical, semanticResult] = await Promise.all([
     lexicalPromise,

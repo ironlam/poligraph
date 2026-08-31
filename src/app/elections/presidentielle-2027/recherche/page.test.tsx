@@ -23,9 +23,11 @@ describe("page complète de recherche présidentielle", () => {
           text: "Construire davantage de logements accessibles sur tout le territoire",
           url: "/elections/presidentielle-2027/mesures/m1",
           candidateName: "Camille Rivière",
+          candidateSlug: "camille-riviere",
           theme: "LOGEMENT_URBANISME",
           precision: null,
           sourceLabel: null,
+          sourceUrl: null,
         },
       ],
     });
@@ -49,6 +51,52 @@ describe("page complète de recherche présidentielle", () => {
     });
   });
 
+  it("regroupe les mesures, expose leur source et prépare une comparaison", async () => {
+    search.mockResolvedValue({
+      query: "transports",
+      total: 2,
+      subjects: [],
+      candidacies: [],
+      measures: [
+        {
+          type: "measure",
+          id: "m1",
+          text: "Développer les trains de nuit",
+          url: "/elections/presidentielle-2027/mesures/m1",
+          candidateName: "Camille Rivière",
+          candidateSlug: "camille-riviere",
+          theme: "TRANSPORTS",
+          precision: null,
+          sourceLabel: "PROGRAMME_CANDIDAT",
+          sourceUrl: "https://example.org/camille",
+        },
+        {
+          type: "measure",
+          id: "m2",
+          text: "Renforcer les transports régionaux",
+          url: "/elections/presidentielle-2027/mesures/m2",
+          candidateName: "Alex Martin",
+          candidateSlug: "alex-martin",
+          theme: "TRANSPORTS",
+          precision: null,
+          sourceLabel: "PROGRAMME_CANDIDAT",
+          sourceUrl: "https://example.org/alex",
+        },
+      ],
+    });
+
+    render(await PresidentialSearchPage({ searchParams: Promise.resolve({ q: "transports" }) }));
+
+    expect(screen.getByRole("heading", { level: 3, name: "Transports" })).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: /ouvrir dans un nouvel onglet/ })[0]
+    ).toHaveAttribute("href", "https://example.org/camille");
+    expect(screen.getByRole("link", { name: /Comparer ces candidats/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/comparer?candidat=camille-riviere&candidat=alex-martin&theme=transports"
+    );
+  });
+
   it("transmet le slug validé et affiche la pagination d'un sous-thème", async () => {
     search.mockResolvedValue({
       query: "Accès aux soins",
@@ -62,9 +110,11 @@ describe("page complète de recherche présidentielle", () => {
           text: "Ouvrir des centres de santé",
           url: "/elections/presidentielle-2027/mesures/m2",
           candidateName: "Camille Rivière",
+          candidateSlug: "camille-riviere",
           theme: "SANTE",
           precision: null,
           sourceLabel: null,
+          sourceUrl: null,
         },
       ],
       filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },

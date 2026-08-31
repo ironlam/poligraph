@@ -51,8 +51,10 @@ exactement par son nom ou son titre reste prioritaire. La recherche sémantique 
 formulations proches, par exemple « faire baisser les loyers » face à une mesure parlant
 « d'encadrement locatif ».
 
-Le reranking externe n'est déclenché que si la fusion produit plus de douze résultats plausibles et
-peu discriminés. Cette condition évite un second appel payant sur les requêtes simples.
+La première version ne fait pas de reranking externe. Le benchmark hybride atteint déjà le niveau
+de rappel attendu et un second appel payant ajouterait de la latence sans gain démontré. Cette
+décision devra être réévaluée seulement si des requêtes éditoriales documentent un défaut de
+classement que la fusion réciproque ne corrige pas.
 
 ### 3. Format des résultats
 
@@ -120,10 +122,9 @@ une requête HTTP.
 
 ## Modèles et maîtrise des coûts
 
-La première version utilise un modèle d'embedding multilingue Mistral. L'interprétation facultative
-d'une requête complexe et la synthèse de résultats utilisent un petit modèle Mistral avec sortie
-JSON validée. Les identifiants de modèles et leurs tarifs doivent être vérifiés au moment de
-l'implémentation, puis consignés dans la configuration, jamais écrits dans le composant.
+La première version utilise le modèle d'embedding multilingue `mistral-embed`. Elle ne génère ni
+interprétation ni synthèse de la réponse. Les identifiants de modèles restent dans la configuration,
+jamais dans le composant.
 
 Garde-fous de coût :
 
@@ -136,6 +137,12 @@ Garde-fous de coût :
 - repli immédiat vers la recherche lexicale en cas de quota, délai dépassé ou erreur fournisseur ;
 - réindexation différentielle par révision, avec traitement par lots et concurrence bornée.
 
+Les plafonds partagés sont fixés par défaut à 5 000 embeddings par jour et 100 000 sur trente jours.
+Ils peuvent être abaissés avec `PRESIDENTIAL_SEARCH_DAILY_EMBEDDING_LIMIT` et
+`PRESIDENTIAL_SEARCH_MONTHLY_EMBEDDING_LIMIT`. En production, l'absence du compteur Upstash coupe
+la branche sémantique et conserve la réponse lexicale. Le journal technique conserve fournisseur,
+modèle, latence et tokens, jamais le texte recherché.
+
 Cloudflare Workers n'est pas nécessaire au premier déploiement. Vercel, PostgreSQL et le rate limit
 existant suffisent pour exécuter le parcours. Cloudflare pourra servir plus tard de cache de requêtes
 ou de protection supplémentaire, mais ne doit pas devenir un second backend tant qu'une limite
@@ -145,9 +152,8 @@ mesurée ne le justifie pas.
 
 - conserver un vrai formulaire GET et une page de résultats utilisable sans JavaScript ;
 - afficher un libellé visible et des exemples de questions, sans faux historique de conversation ;
-- annoncer « Recherche sémantique en cours » puis le nombre de résultats via `aria-live` ;
-- déplacer le focus vers le titre des résultats seulement après une soumission volontaire, jamais
-  pendant l'autocomplétion ;
+- annoncer le nombre de résultats via `aria-live`. Le formulaire GET recharge une page complète et
+  laisse le navigateur annoncer la navigation, sans simuler un état asynchrone trompeur ;
 - rendre chaque résultat comme un lien autonome avec candidat, thème et source lisibles hors
   contexte ;
 - éviter l'animation de texte tapé et respecter `prefers-reduced-motion` ;
@@ -180,6 +186,28 @@ npm run search:evaluate -- \
   --top-k=5 \
   --limit=12
 ```
+
+La contribution vectorielle seule se mesure séparément, sans résultat lexical ni carte de thème :
+
+```bash
+npm run search:evaluate -- \
+  --election=presidentielle-2027 \
+  --strategy=semantic \
+  --top-k=5 \
+  --limit=12
+```
+
+Calibration du 31 août 2026 sur les 50 requêtes éditoriales, après exclusion des cartes de thème du
+calcul :
+
+| Stratégie  | Rappel@5 | Précision@5 | Faux positifs négatifs | Latence p95 |
+| ---------- | -------: | ----------: | ---------------------: | ----------: |
+| Lexicale   |    0,783 |       0,609 |                    0 % |      201 ms |
+| Sémantique |    0,978 |       0,843 |                    0 % |      925 ms |
+| Hybride    |    1,000 |       0,835 |                    0 % |      703 ms |
+
+Le léger recul de précision de la fusion face au vectoriel seul est compensé par un rappel complet
+et par la protection des recherches exactes. Il ne justifie pas un second appel de reranking.
 
 L'autocomplétion reste explicitement lexicale. Seule la soumission de la page complète utilise la
 recherche hybride. Si Mistral dépasse le délai maximal de 2,5 secondes, atteint son quota ou renvoie

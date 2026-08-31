@@ -29,13 +29,15 @@ function parseOptions(args: string[]): {
     typeof parsed.election === "string" ? parsed.election : "presidentielle-2027";
   const topK = typeof parsed.topK === "number" ? parsed.topK : 5;
   const limit = typeof parsed.limit === "number" ? parsed.limit : 12;
-  const strategy = parsed.strategy === "hybrid" ? "hybrid" : "lexical";
+  const strategy =
+    parsed.strategy === "hybrid" || parsed.strategy === "semantic" ? parsed.strategy : "lexical";
   if (
     parsed.strategy !== undefined &&
     parsed.strategy !== "lexical" &&
-    parsed.strategy !== "hybrid"
+    parsed.strategy !== "hybrid" &&
+    parsed.strategy !== "semantic"
   ) {
-    throw new Error("--strategy doit valoir lexical ou hybrid");
+    throw new Error("--strategy doit valoir lexical, semantic ou hybrid");
   }
   if (!Number.isInteger(topK) || topK < 1 || topK > 20) {
     throw new Error("--top-k doit être un entier compris entre 1 et 20");

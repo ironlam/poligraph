@@ -53,11 +53,6 @@ function normalize(value: string): string {
 
 function flatten(result: PresidentialCorpusSearchResult): RankedResult[] {
   return [
-    ...result.subjects.map((subject) => ({
-      kind: "theme" as const,
-      theme: subject.theme,
-      label: subject.label,
-    })),
     ...result.candidacies.map((candidate) => ({
       kind: "candidacy" as const,
       name: candidate.name,

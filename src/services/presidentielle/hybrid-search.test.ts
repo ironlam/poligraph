@@ -70,6 +70,18 @@ describe("recherche hybride présidentielle", () => {
     expect(callMistralEmbeddings).not.toHaveBeenCalled();
   });
 
+  it("isole les résultats sémantiques pour mesurer leur apport", async () => {
+    const result = await searchPresidentialPage({
+      electionId: "election-1",
+      query: "réduire la fracture médicale",
+      limit: 8,
+      strategy: "semantic",
+    });
+    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ strategy: "semantic", total: 1 });
+    expect(result.hits.map((item) => item.entityId)).toEqual(["semantic"]);
+  });
+
   it("fusionne les résultats après un seul embedding de requête", async () => {
     const result = await searchPresidentialPage({
       electionId: "election-1",

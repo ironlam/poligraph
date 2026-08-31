@@ -31,6 +31,7 @@ export type PresidentialCandidacySearchResult = {
   type: "candidacy";
   id: string;
   name: string;
+  slug: string;
   url: string;
   photoUrl: string | null;
   blobPhotoUrl: string | null;
@@ -44,9 +45,11 @@ export type PresidentialMeasureSearchResult = {
   text: string;
   url: string;
   candidateName: string;
+  candidateSlug: string | null;
   theme: ThemeCategory;
   precision: MeasurePrecision | null;
   sourceLabel: MeasureSourceKind | null;
+  sourceUrl: string | null;
 };
 
 export type PresidentialSubjectSearchResult = {
@@ -65,7 +68,7 @@ export type PresidentialCorpusSearchResult = {
   filter?: { type: "subtopic"; slug: string; label: string };
   page?: number;
   totalPages?: number;
-  searchStrategy?: "lexical" | "hybrid" | "lexical-fallback";
+  searchStrategy?: "lexical" | "semantic" | "hybrid" | "lexical-fallback";
   semanticMaxSimilarity?: number | null;
 };
 
@@ -78,6 +81,24 @@ export type PresidentialCorpusSearchOptions = {
 function clampLimit(limit: number): number {
   if (!Number.isFinite(limit)) return 12;
   return Math.min(Math.max(Math.trunc(limit), 1), MAX_RESULTS);
+}
+
+function normalizeCandidateText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .toLocaleLowerCase("fr")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Pins an explicitly named candidacy without asking the semantic model to recognize a person. */
+export function candidateNameIsMentioned(query: string, candidateName: string): boolean {
+  const normalizedQuery = ` ${normalizeCandidateText(query)} `;
+  const words = normalizeCandidateText(candidateName).split(" ").filter(Boolean);
+  const aliases = [words.join(" "), words.slice(1).join(" "), words.at(-1) ?? ""];
+  return aliases.some((alias) => alias.length >= 4 && normalizedQuery.includes(` ${alias} `));
 }
 
 /**
@@ -137,9 +158,11 @@ export async function searchPresidentialCorpus(
       text: measure.text,
       url: measure.publicUrl,
       candidateName: measure.candidacy.candidateName,
+      candidateSlug: measure.candidacy.politicianSlug ?? null,
       theme: measure.theme.code,
       precision: measure.precision.code,
       sourceLabel: measure.sources[0]?.sourceKind ?? null,
+      sourceUrl: measure.sources[0]?.url ?? null,
     }));
 
     return {
@@ -168,6 +191,21 @@ export async function searchPresidentialCorpus(
     url: `/elections/${election.slug}/themes/${themeToSlug(theme)}`,
   }));
 
+  const publicCandidaciesPromise = db.candidacy.findMany({
+    where: {
+      electionId: election.id,
+      ...PUBLIC_HUB_CANDIDACY_WHERE,
+    },
+    select: {
+      id: true,
+      candidateName: true,
+      status: true,
+      politician: {
+        select: { slug: true, photoUrl: true, blobPhotoUrl: true },
+      },
+      party: { select: { name: true, shortName: true } },
+    },
+  });
   const lexicalQuery = toPresidentialLexicalQuery(query);
   let page = await searchPresidentialPage({
     query,
@@ -187,7 +225,7 @@ export async function searchPresidentialCorpus(
     });
     page = { ...fallback, strategy: page.strategy };
   }
-  const candidacyIds = page.hits
+  const indexedCandidacyIds = page.hits
     .filter((hit) => hit.entityType === "CANDIDACY")
     .map((hit) => hit.entityId);
   const measureIds = page.hits
@@ -195,24 +233,7 @@ export async function searchPresidentialCorpus(
     .map((hit) => hit.entityId);
 
   const [candidacyRows, measureRows] = await Promise.all([
-    candidacyIds.length === 0
-      ? []
-      : db.candidacy.findMany({
-          where: {
-            id: { in: candidacyIds },
-            electionId: election.id,
-            ...PUBLIC_HUB_CANDIDACY_WHERE,
-          },
-          select: {
-            id: true,
-            candidateName: true,
-            status: true,
-            politician: {
-              select: { slug: true, photoUrl: true, blobPhotoUrl: true },
-            },
-            party: { select: { name: true, shortName: true } },
-          },
-        }),
+    publicCandidaciesPromise,
     measureIds.length === 0
       ? []
       : db.measure.findMany({
@@ -232,13 +253,14 @@ export async function searchPresidentialCorpus(
                 sources: {
                   orderBy: { publishedAt: "asc" },
                   take: 1,
-                  select: { sourceKind: true },
+                  select: { sourceKind: true, url: true },
                 },
               },
             },
             candidacy: {
               select: {
                 candidateName: true,
+                politician: { select: { slug: true } },
               },
             },
           },
@@ -252,6 +274,7 @@ export async function searchPresidentialCorpus(
         type: "candidacy",
         id: row.id,
         name: row.candidateName,
+        slug: row.politician.slug,
         url: `/elections/${election.slug}/candidats/${row.politician.slug}`,
         photoUrl: row.politician.photoUrl,
         blobPhotoUrl: row.politician.blobPhotoUrl,
@@ -261,6 +284,9 @@ export async function searchPresidentialCorpus(
       return [[row.id, result] as const];
     })
   );
+  const explicitCandidacyIds = candidacyRows
+    .filter((row) => candidateNameIsMentioned(query, row.candidateName))
+    .map((row) => row.id);
   const measuresById = new Map(
     measureRows.flatMap((row) => {
       if (row.publishedRevision === null || row.candidacy === null) return [];
@@ -270,9 +296,11 @@ export async function searchPresidentialCorpus(
         text: row.publishedRevision.text,
         url: `/elections/${election.slug}/mesures/${row.slug}`,
         candidateName: row.candidacy.candidateName,
+        candidateSlug: row.candidacy.politician?.slug ?? null,
         theme: row.theme,
         precision: row.publishedRevision.precision,
         sourceLabel: row.publishedRevision.sources[0]?.sourceKind ?? null,
+        sourceUrl: row.publishedRevision.sources[0]?.url ?? null,
       };
       return [[row.id, result] as const];
     })
@@ -280,20 +308,28 @@ export async function searchPresidentialCorpus(
 
   const candidacies: PresidentialCandidacySearchResult[] = [];
   const measures: PresidentialMeasureSearchResult[] = [];
+  for (const candidacyId of explicitCandidacyIds) {
+    const candidacy = candidaciesById.get(candidacyId);
+    if (candidacy) candidacies.push(candidacy);
+  }
   for (const hit of page.hits) {
     if (hit.entityType === "CANDIDACY") {
       const candidacy = candidaciesById.get(hit.entityId);
-      if (candidacy) candidacies.push(candidacy);
+      if (candidacy && !explicitCandidacyIds.includes(candidacy.id)) candidacies.push(candidacy);
     } else if (hit.entityType === "MEASURE") {
       const measure = measuresById.get(hit.entityId);
       if (measure) measures.push(measure);
     }
   }
 
-  const discardedFromPage = page.hits.length - candidacies.length - measures.length;
+  const hydratedIndexedCandidacies = indexedCandidacyIds.filter((id) => candidaciesById.has(id));
+  const discardedFromPage = page.hits.length - hydratedIndexedCandidacies.length - measures.length;
   return {
     query,
-    total: subjects.length + Math.max(0, page.total - discardedFromPage),
+    total:
+      subjects.length +
+      Math.max(0, page.total - discardedFromPage) +
+      explicitCandidacyIds.filter((id) => !indexedCandidacyIds.includes(id)).length,
     subjects,
     candidacies,
     measures,

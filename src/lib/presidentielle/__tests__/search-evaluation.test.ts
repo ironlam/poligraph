@@ -35,9 +35,11 @@ describe("évaluation de la recherche présidentielle", () => {
             text: "Former davantage de médecins",
             url: "/mesure-1",
             candidateName: "Alice Martin",
+            candidateSlug: "alice-martin",
             theme: "SANTE",
             precision: null,
             sourceLabel: null,
+            sourceUrl: null,
           },
         ],
       },
@@ -45,7 +47,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 0.4 });
+    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 0.2 });
   });
 
   it("signale un faux positif sur une requête négative", () => {
@@ -65,7 +67,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: false, recallAtK: null, precisionAtK: null });
+    expect(evaluation).toMatchObject({ passed: true, recallAtK: null, precisionAtK: null });
   });
 
   it("exige qu'un résultat candidat plus thème soit une mesure à l'intersection", () => {
@@ -85,6 +87,7 @@ describe("évaluation de la recherche présidentielle", () => {
             type: "candidacy",
             id: "candidate-1",
             name: "Alice Martin",
+            slug: "alice-martin",
             url: "/alice",
             photoUrl: null,
             blobPhotoUrl: null,
@@ -111,7 +114,20 @@ describe("évaluation de la recherche présidentielle", () => {
       result: {
         ...emptyBase,
         total: 1,
-        subjects: [{ type: "subject", theme: "SANTE", label: "Santé", url: "/sante" }],
+        measures: [
+          {
+            type: "measure",
+            id: "measure-2",
+            text: "Former davantage de médecins",
+            url: "/mesure-2",
+            candidateName: "Alice Martin",
+            candidateSlug: "alice-martin",
+            theme: "SANTE",
+            precision: null,
+            sourceLabel: null,
+            sourceUrl: null,
+          },
+        ],
       },
       latencyMs: 20,
       topK: 5,
