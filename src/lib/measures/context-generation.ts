@@ -321,9 +321,19 @@ export async function findMeasureContextRegenerationCandidateIds(
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
+    const attemptedContextRevisionIds = await getAttemptedContextRevisionIds(
+      candidates.flatMap(({ latestRevisionId }) => (latestRevisionId ? [latestRevisionId] : []))
+    );
+
     for (const candidate of candidates) {
       const revision = candidate.latestRevision;
       if (!revision) continue;
+      if (
+        candidate.latestRevisionId &&
+        attemptedContextRevisionIds.has(candidate.latestRevisionId)
+      ) {
+        continue;
+      }
       const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
       if (evidence.status !== "VALID" || evidence.snapshot.supportingIds.length === 0) continue;
       const isPublished =

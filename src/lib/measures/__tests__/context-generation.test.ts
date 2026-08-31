@@ -305,6 +305,48 @@ describe("génération de contexte sourcé", () => {
     );
   });
 
+  it("écarte les tentatives terminales avant d'appliquer la limite de régénération", async () => {
+    const regenerationCandidate = (id: string) => ({
+      id: `measure-${id}`,
+      latestRevisionId: `revision-${id}`,
+      publishedRevisionId: `revision-${id}`,
+      latestRevision: {
+        evidenceSnapshot: validEvidenceSnapshot(),
+        reviewedAt: new Date("2026-08-20T00:00:00Z"),
+        publishedAt: new Date("2026-08-21T00:00:00Z"),
+      },
+    });
+    mocks.findMeasures
+      .mockResolvedValueOnce([regenerationCandidate("terminal"), regenerationCandidate("eligible")])
+      .mockResolvedValueOnce([regenerationCandidate("next")]);
+    mocks.findAuditLogs
+      .mockResolvedValueOnce([
+        {
+          action: "GENERATE_CONTEXT_TERMINAL_RESULT",
+          changes: { outcome: "NO_USEFUL_CONTEXT" },
+          entityId: "revision-terminal",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const { findMeasureContextRegenerationCandidateIds } = await import("../context-generation");
+
+    await expect(
+      findMeasureContextRegenerationCandidateIds(
+        {
+          electionSlug: "presidentielle-2027",
+          fromPromptVersion: "measure-context-v8",
+          limit: 2,
+          scope: "published",
+        },
+        2
+      )
+    ).resolves.toEqual(["measure-eligible", "measure-next"]);
+    expect(mocks.findMeasures).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: { id: "measure-eligible" }, skip: 1 })
+    );
+  });
+
   it("transmet au modèle le locuteur et le rôle discursif de chaque preuve", async () => {
     const snapshot = validEvidenceSnapshot();
     const supportingUnit = snapshot.units.find((unit) => unit.unitId === "pdf-13-1-u001");
