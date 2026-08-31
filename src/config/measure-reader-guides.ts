@@ -179,7 +179,7 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "Un marché public est un contrat conclu contre paiement entre un acheteur public et un " +
       "opérateur économique pour répondre à un besoin en travaux, fournitures ou services. Sa " +
       "passation obéit aux règles de la commande publique.",
-    aliases: ["marchés publics", "commande publique", "contrat de la commande publique"],
+    aliases: ["marchés publics"],
     sourceUrl:
       "https://www.economie.gouv.fr/files/files/directions_services/daj/marches_publics/conseil_acheteurs/fiches-techniques/champs-application/contrats-cp-et-autres-contrats-2019.pdf",
     sourceLabel: "Les contrats de la commande publique et autres contrats",
