@@ -65,6 +65,8 @@ export type PresidentialCorpusSearchResult = {
   subjects: PresidentialSubjectSearchResult[];
   candidacies: PresidentialCandidacySearchResult[];
   measures: PresidentialMeasureSearchResult[];
+  /** Unified hydrated order used when a retrieval strategy must be evaluated without UI grouping. */
+  rankedResults?: Array<PresidentialCandidacySearchResult | PresidentialMeasureSearchResult>;
   filter?: { type: "subtopic"; slug: string; label: string };
   page?: number;
   totalPages?: number;
@@ -346,6 +348,23 @@ export async function searchPresidentialCorpus(
     }
   }
 
+  const rankedResults =
+    options.strategy === "semantic"
+      ? page.hits.reduce<
+          Array<PresidentialCandidacySearchResult | PresidentialMeasureSearchResult>
+        >((results, hit) => {
+          if (hit.entityType === "CANDIDACY") {
+            const candidacy = candidaciesById.get(hit.entityId);
+            if (candidacy) results.push(candidacy);
+          }
+          if (hit.entityType === "MEASURE") {
+            const measure = measuresById.get(hit.entityId);
+            if (measure) results.push(measure);
+          }
+          return results;
+        }, [])
+      : undefined;
+
   const hydratedIndexedCandidacies = indexedCandidacyIds.filter((id) => candidaciesById.has(id));
   const discardedFromPage = page.hits.length - hydratedIndexedCandidacies.length - measures.length;
   return {
@@ -357,6 +376,7 @@ export async function searchPresidentialCorpus(
     subjects,
     candidacies,
     measures,
+    rankedResults,
     searchStrategy: page.strategy,
     semanticMaxSimilarity: page.semanticMaxSimilarity,
   };

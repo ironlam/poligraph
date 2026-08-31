@@ -103,6 +103,53 @@ describe("évaluation de la recherche présidentielle", () => {
     expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, relevantInTopK: 0 });
   });
 
+  it("évalue l'ordre unifié fourni par la recherche vectorielle", () => {
+    const candidacy = {
+      type: "candidacy" as const,
+      id: "candidate-1",
+      name: "Alice Martin",
+      slug: "alice-martin",
+      url: "/alice",
+      photoUrl: null,
+      blobPhotoUrl: null,
+      status: "DECLARE" as const,
+      party: null,
+    };
+    const measure = {
+      type: "measure" as const,
+      id: "measure-1",
+      text: "Construire des logements",
+      url: "/mesure-1",
+      candidateName: "Bob Durand",
+      candidateSlug: "bob-durand",
+      theme: "LOGEMENT_URBANISME" as const,
+      precision: null,
+      sourceLabel: null,
+      sourceUrl: null,
+    };
+
+    const evaluation = evaluatePresidentialSearchCase({
+      testCase: {
+        id: "ranked-candidate",
+        category: "candidate",
+        query: "Alice Martin",
+        expectations: [{ kind: "candidacy", name: "Alice Martin" }],
+      },
+      result: {
+        ...emptyBase,
+        total: 2,
+        candidacies: [candidacy],
+        measures: [measure],
+        rankedResults: [measure, candidacy],
+      },
+      latencyMs: 10,
+      topK: 1,
+    });
+
+    expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, relevantInTopK: 0 });
+    expect(evaluation.topResults[0]).toMatchObject({ kind: "measure" });
+  });
+
   it("agrège les métriques et les percentiles sans masquer les cas individuels", () => {
     const passing = evaluatePresidentialSearchCase({
       testCase: {

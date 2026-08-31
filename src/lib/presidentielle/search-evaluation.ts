@@ -52,18 +52,17 @@ function normalize(value: string): string {
 }
 
 function flatten(result: PresidentialCorpusSearchResult): RankedResult[] {
-  return [
-    ...result.candidacies.map((candidate) => ({
-      kind: "candidacy" as const,
-      name: candidate.name,
-    })),
-    ...result.measures.map((measure) => ({
-      kind: "measure" as const,
-      text: measure.text,
-      candidateName: measure.candidateName,
-      theme: measure.theme,
-    })),
-  ];
+  const rankedResults = result.rankedResults ?? [...result.candidacies, ...result.measures];
+  return rankedResults.map((item) =>
+    item.type === "candidacy"
+      ? { kind: "candidacy" as const, name: item.name }
+      : {
+          kind: "measure" as const,
+          text: item.text,
+          candidateName: item.candidateName,
+          theme: item.theme,
+        }
+  );
 }
 
 function matches(expectation: PresidentialSearchExpectation, result: RankedResult): boolean {

@@ -215,4 +215,21 @@ describe("searchPresidentialCorpus", () => {
     expect(searchPublicPage).not.toHaveBeenCalled();
     expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
   });
+
+  it("conserve le rang vectoriel entre mesures et candidatures", async () => {
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "semantic",
+      total: 2,
+      hits: [
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+      ],
+    });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "Alice logement", 8, {
+      strategy: "semantic",
+    });
+
+    expect(result?.rankedResults?.map((item) => item.type)).toEqual(["measure", "candidacy"]);
+  });
 });
