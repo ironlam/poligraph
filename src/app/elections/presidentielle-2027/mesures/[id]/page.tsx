@@ -201,7 +201,7 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
                   <h3 className="font-display text-lg font-bold">
                     <Link
                       href={presidentialReaderGuidePath(guide.slug)}
-                      className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >
                       {guide.label}
                     </Link>

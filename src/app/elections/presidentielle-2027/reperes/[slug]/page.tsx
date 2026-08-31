@@ -138,7 +138,7 @@ export default async function PresidentialReaderGuidePage({ params }: PageProps)
                   <h3 className="font-display text-xl font-bold">
                     <Link
                       href={`/elections/presidentielle-2027/candidats/${candidateSlug}`}
-                      className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     >
                       {candidate.candidateName}
                     </Link>
@@ -151,7 +151,7 @@ export default async function PresidentialReaderGuidePage({ params }: PageProps)
                       <li key={measure.slug} className="py-3 first:pt-0 last:pb-0">
                         <Link
                           href={`/elections/presidentielle-2027/mesures/${measure.slug}`}
-                          className="leading-relaxed text-foreground underline decoration-border underline-offset-2 hover:text-primary hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                          className="inline-flex min-h-11 items-center leading-relaxed text-foreground underline decoration-border underline-offset-2 hover:text-primary hover:decoration-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                         >
                           {measure.text}
                         </Link>

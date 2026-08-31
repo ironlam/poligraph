@@ -83,14 +83,7 @@ export default async function PresidentialReaderGuidesPage() {
             {guides.map((guide) => (
               <li key={guide.slug}>
                 <article className="flex h-full flex-col rounded-2xl border border-border bg-card p-5">
-                  <h2 className="font-display text-xl font-bold">
-                    <Link
-                      href={presidentialReaderGuidePath(guide.slug)}
-                      className="rounded text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                    >
-                      {guide.label}
-                    </Link>
-                  </h2>
+                  <h2 className="font-display text-xl font-bold">{guide.label}</h2>
                   <p className="mt-3 flex-1 text-sm leading-relaxed text-foreground">
                     {guide.definition}
                   </p>
