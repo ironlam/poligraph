@@ -18,6 +18,10 @@ import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { buildMeasureSeoDescription, truncateAtWord } from "@/lib/presidentielle/measure-seo";
 import { themeToSlug } from "@/lib/presidentielle/themes";
+import {
+  presidentialReaderGuidePath,
+  presidentialReaderGuidesPath,
+} from "@/lib/presidentielle/reader-guide-paths";
 import { formatDate } from "@/lib/utils";
 import { PresidentialSubtopicLink } from "../../_components/PresidentialSubtopicLink";
 
@@ -194,7 +198,14 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               {measure.readerGuides.map((guide) => (
                 <article key={guide.slug} className="rounded-2xl border border-border bg-card p-5">
-                  <h3 className="font-display text-lg font-bold">{guide.label}</h3>
+                  <h3 className="font-display text-lg font-bold">
+                    <Link
+                      href={presidentialReaderGuidePath(guide.slug)}
+                      className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      {guide.label}
+                    </Link>
+                  </h3>
                   <p className="mt-2 leading-relaxed text-foreground">{guide.definition}</p>
                   <a
                     href={guide.sourceUrl}
@@ -209,6 +220,12 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
                 </article>
               ))}
             </div>
+            <Link
+              href={presidentialReaderGuidesPath()}
+              className="mt-4 inline-flex min-h-11 items-center font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Consulter tous les repères de la présidentielle 2027
+            </Link>
           </section>
         )}
 

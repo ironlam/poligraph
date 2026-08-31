@@ -15,6 +15,7 @@ import type { PublicMeasure } from "@/lib/data/measures";
 import type { PublicVoteReference } from "@/lib/measures/vote-links";
 import type { SubjectCandidateEntry, SubjectPageData } from "@/lib/data/subject-page";
 import { themeToSlug } from "@/lib/presidentielle/themes";
+import { presidentialReaderGuidePath } from "@/lib/presidentielle/reader-guide-paths";
 import { formatDate } from "@/lib/utils";
 import { SubjectGate } from "./SubjectGate";
 import { SubjectSidebar } from "./SubjectSidebar";
@@ -357,6 +358,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
         ) : (
           <>
             <ComparisonTable data={data} />
+            <ReaderGuideLinks guides={data.readerGuides} />
             <MeasureMentionsGuide />
             <FooterCard
               documented={documented}
@@ -369,6 +371,32 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ReaderGuideLinks({ guides }: { guides: SubjectPageData["readerGuides"] }) {
+  if (guides.length === 0) return null;
+  return (
+    <section aria-labelledby="reader-guides-theme" className="rounded-xl border border-border p-5">
+      <h2 id="reader-guides-theme" className="font-display text-lg font-bold">
+        Repères pour comprendre ce thème
+      </h2>
+      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Définitions sourcées des dispositifs et termes techniques présents dans ces mesures.
+      </p>
+      <ul className="mt-4 flex flex-wrap gap-2">
+        {guides.map((guide) => (
+          <li key={guide.slug}>
+            <Link
+              href={presidentialReaderGuidePath(guide.slug)}
+              className="inline-flex min-h-11 items-center rounded-full border border-border px-4 py-2 text-sm font-bold hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              {guide.label} · {guide.measureCount}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
