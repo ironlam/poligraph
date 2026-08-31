@@ -70,7 +70,10 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
       sourcePublisher: guide.sourcePublisher,
       sourceRevisionId: guide.sourceRevisionId ?? "",
     });
-    document.getElementById("reader-guide-form")?.scrollIntoView({ behavior: "smooth" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document
+      .getElementById("reader-guide-form")
+      ?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
   }
 
   return (

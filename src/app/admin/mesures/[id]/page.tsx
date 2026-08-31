@@ -251,6 +251,7 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
               guideId: mention.guideId,
               guideLabel: mention.guide?.label ?? null,
               guidePublicationStatus: mention.guide?.publicationStatus ?? null,
+              guideActive: mention.guide?.active ?? null,
             }))}
             guides={readerGuides}
           />

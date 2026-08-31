@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deleteSearchDocuments, upsertSearchDocuments } from "../documents";
+import { deleteSearchDocuments, upsertSearchDocument, upsertSearchDocuments } from "../documents";
 
 const makeInput = (index: number) => ({
   entityType: "MEASURE" as const,
@@ -14,6 +14,19 @@ const makeInput = (index: number) => ({
 });
 
 describe("écritures groupées des documents de recherche", () => {
+  it("invalide le vecteur sémantique avant de modifier le texte indexé", async () => {
+    const tx = {
+      searchDocument: { upsert: vi.fn(async () => ({ id: "document-1" })) },
+      $executeRaw: vi.fn(async () => 0),
+    };
+
+    await upsertSearchDocument(tx as never, makeInput(1));
+
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    const firstCall = tx.$executeRaw.mock.calls[0] as unknown as [TemplateStringsArray];
+    expect(firstCall[0].join("?")).toContain('DELETE FROM "SearchEmbedding"');
+  });
+
   it("borne chaque lot à cent documents", async () => {
     const tx = {
       searchDocument: { createMany: vi.fn(async (_args: { data: unknown[] }) => ({ count: 0 })) },
@@ -28,7 +41,7 @@ describe("écritures groupées des documents de recherche", () => {
     expect(tx.searchDocument.createMany).toHaveBeenCalledTimes(2);
     expect(tx.searchDocument.createMany.mock.calls[0]?.[0]?.data).toHaveLength(100);
     expect(tx.searchDocument.createMany.mock.calls[1]?.[0]?.data).toHaveLength(1);
-    expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(4);
   });
 
   it("type explicitement les dates du VALUES utilisé par PostgreSQL", async () => {
@@ -40,7 +53,7 @@ describe("écritures groupées des documents de recherche", () => {
     await upsertSearchDocuments(tx as never, [makeInput(1)]);
 
     const calls = tx.$executeRaw.mock.calls as unknown as Array<[{ strings: string[] }]>;
-    const query = calls[0]![0];
+    const query = calls[1]![0];
     expect(query.strings.join("?").match(/::timestamp/g)).toHaveLength(2);
   });
 

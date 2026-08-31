@@ -21,6 +21,7 @@ type Mention = {
   guideId: string | null;
   guideLabel: string | null;
   guidePublicationStatus: PublicationStatus | null;
+  guideActive: boolean | null;
 };
 
 type GuideOption = { id: string; label: string; publicationStatus: PublicationStatus };
@@ -93,8 +94,10 @@ export function MeasureReaderGuidesPanel({
           <h3 className="text-sm font-bold">Propositions à examiner</h3>
           <ul className="mt-2 space-y-3">
             {suggested.map((mention) => {
-              const guideId = selected[mention.id] ?? mention.guideId ?? "";
-              const matchedPublished = mention.guidePublicationStatus === "PUBLISHED";
+              const matchedPublished =
+                mention.guidePublicationStatus === "PUBLISHED" && mention.guideActive === true;
+              const guideId =
+                selected[mention.id] ?? (matchedPublished ? (mention.guideId ?? "") : "");
               return (
                 <li key={mention.id} className="rounded border border-border p-3">
                   <p className="font-bold">{mention.term}</p>
@@ -129,6 +132,12 @@ export function MeasureReaderGuidesPanel({
                       Le repère correspondant doit d’abord être publié.
                     </p>
                   )}
+                  {mention.guidePublicationStatus === "PUBLISHED" &&
+                    mention.guideActive === false && (
+                      <p className="mt-2 text-sm text-amber-700">
+                        Le repère correspondant a été désactivé. Choisissez un repère actif.
+                      </p>
+                    )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       disabled={pending || !guideId || (!matchedPublished && !selected[mention.id])}
