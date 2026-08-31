@@ -72,7 +72,7 @@ function readAuditOutcome(changes: unknown): string | null {
   return typeof outcome === "string" ? outcome : null;
 }
 
-function isInvalidResultForCurrentPrompt(changes: unknown): boolean {
+function isAttemptForCurrentPrompt(changes: unknown): boolean {
   if (!changes || typeof changes !== "object" || Array.isArray(changes)) return true;
   const promptVersion = (changes as Record<string, unknown>).promptVersion;
   return typeof promptVersion !== "string" || promptVersion === PROMPT_VERSION;
@@ -86,10 +86,16 @@ function getContextAttemptState(
   let hasActiveReservation = false;
   for (const attempt of attempts) {
     if (attempt.action === GENERATED_CONTEXT_DRAFT_ACTION) {
-      if (getGeneratedContextSourceRevisionId(attempt.changes) === revisionId) return "TERMINAL";
+      if (
+        isAttemptForCurrentPrompt(attempt.changes) &&
+        getGeneratedContextSourceRevisionId(attempt.changes) === revisionId
+      ) {
+        return "TERMINAL";
+      }
       continue;
     }
     if (attempt.entityId !== revisionId) continue;
+    if (!isAttemptForCurrentPrompt(attempt.changes)) continue;
     if (attempt.action === RESERVED_CONTEXT_GENERATION_ACTION) {
       const changes =
         attempt.changes && typeof attempt.changes === "object" && !Array.isArray(attempt.changes)
@@ -100,12 +106,12 @@ function getContextAttemptState(
       continue;
     }
     if (attempt.action === INVALID_CONTEXT_RESULT_ACTION) {
-      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
+      invalidResults += 1;
       continue;
     }
     const outcome = readAuditOutcome(attempt.changes);
     if (outcome === "INVALID_GENERATED_CONTEXT") {
-      if (isInvalidResultForCurrentPrompt(attempt.changes)) invalidResults += 1;
+      invalidResults += 1;
       continue;
     }
     // Old terminal rows without an outcome and explicit NO_USEFUL_CONTEXT results stay terminal.

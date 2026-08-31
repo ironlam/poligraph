@@ -393,6 +393,49 @@ describe("génération de contexte sourcé", () => {
     );
   });
 
+  it.each([
+    {
+      action: "GENERATE_CONTEXT_TERMINAL_RESULT",
+      changes: {
+        outcome: "NO_USEFUL_CONTEXT",
+        promptVersion: "measure-context-v8",
+      },
+      entityId: "revision-old-attempt",
+    },
+    {
+      action: "GENERATE_CONTEXT_DRAFT",
+      changes: {
+        previousRevisionId: "revision-old-attempt",
+        promptVersion: "measure-context-v8",
+      },
+      entityId: "revision-generated-v8",
+    },
+  ])("ignore une tentative terminale d'une ancienne version du prompt", async (attempt) => {
+    mocks.findMeasures.mockResolvedValue([
+      {
+        id: "measure-old-attempt",
+        latestRevisionId: "revision-old-attempt",
+        publishedRevisionId: "revision-old-attempt",
+        latestRevision: {
+          evidenceSnapshot: validEvidenceSnapshot(),
+          reviewedAt: new Date("2026-08-20T00:00:00Z"),
+          publishedAt: new Date("2026-08-21T00:00:00Z"),
+        },
+      },
+    ]);
+    mocks.findAuditLogs.mockResolvedValue([attempt]);
+    const { findMeasureContextRegenerationCandidateIds } = await import("../context-generation");
+
+    await expect(
+      findMeasureContextRegenerationCandidateIds({
+        electionSlug: "presidentielle-2027",
+        fromPromptVersion: "measure-context-v8",
+        limit: 1,
+        scope: "published",
+      })
+    ).resolves.toEqual(["measure-old-attempt"]);
+  });
+
   it("transmet au modèle le locuteur et le rôle discursif de chaque preuve", async () => {
     const snapshot = validEvidenceSnapshot();
     const supportingUnit = snapshot.units.find((unit) => unit.unitId === "pdf-13-1-u001");
