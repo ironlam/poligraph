@@ -252,7 +252,7 @@ export default async function PresidentialSearchPage({
                                       <Link
                                         href={measure.url}
                                         prefetch={false}
-                                        className="text-lg font-bold leading-relaxed hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                        className="inline-flex min-h-11 items-center text-lg font-bold leading-relaxed hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                                       >
                                         {measure.text}
                                       </Link>

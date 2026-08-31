@@ -183,6 +183,7 @@ Après construction des embeddings, le même jeu éditorial mesure la fusion hyb
 npm run search:evaluate -- \
   --election=presidentielle-2027 \
   --strategy=hybrid \
+  --no-cache \
   --top-k=5 \
   --limit=12
 ```
@@ -193,18 +194,19 @@ La contribution vectorielle seule se mesure séparément, sans résultat lexical
 npm run search:evaluate -- \
   --election=presidentielle-2027 \
   --strategy=semantic \
+  --no-cache \
   --top-k=5 \
   --limit=12
 ```
 
-Calibration du 31 août 2026 sur les 50 requêtes éditoriales, après exclusion des cartes de thème du
-calcul :
+Calibration à froid du 31 août 2026 sur les 50 requêtes éditoriales, avec `--no-cache` et après
+exclusion des cartes de thème du calcul :
 
 | Stratégie  | Rappel@5 | Précision@5 | Faux positifs négatifs | Latence p95 |
 | ---------- | -------: | ----------: | ---------------------: | ----------: |
 | Lexicale   |    0,783 |       0,609 |                    0 % |      199 ms |
-| Sémantique |    0,957 |       0,826 |                    0 % |      450 ms |
-| Hybride    |    1,000 |       0,830 |                    0 % |      842 ms |
+| Sémantique |    0,957 |       0,826 |                    0 % |      396 ms |
+| Hybride    |    1,000 |       0,835 |                    0 % |      695 ms |
 
 La fusion atteint un rappel complet et conserve une précision légèrement supérieure au vectoriel
 seul, tout en protégeant les recherches exactes. Ces résultats ne justifient pas un second appel de

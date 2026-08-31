@@ -78,6 +78,7 @@ export type PresidentialCorpusSearchOptions = {
   subtopicSlug?: string;
   page?: number;
   strategy?: PresidentialSearchStrategy;
+  bypassEmbeddingCache?: boolean;
 };
 
 function clampLimit(limit: number): number {
@@ -228,6 +229,7 @@ export async function searchPresidentialCorpus(
     electionId: election.id,
     limit: clampLimit(limit),
     strategy: options.strategy ?? "lexical",
+    ...(options.bypassEmbeddingCache ? { bypassEmbeddingCache: true } : {}),
   });
   // A sentence may still contain a verb absent from every formulation. If it names one known
   // theme, fall back to that controlled label. This broadens only within the public taxonomy and

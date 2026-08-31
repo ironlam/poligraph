@@ -30,6 +30,7 @@ export type PresidentialSearchEvaluationReport = {
   generatedAt: string;
   electionSlug: string;
   strategy: PresidentialSearchStrategy;
+  embeddingCache: "enabled" | "bypassed";
   topK: number;
   queryCount: number;
   metrics: {
@@ -145,6 +146,7 @@ export function buildPresidentialSearchEvaluationReport(input: {
   cases: PresidentialSearchCaseEvaluation[];
   generatedAt?: Date;
   strategy?: PresidentialSearchStrategy;
+  embeddingCache?: "enabled" | "bypassed";
 }): PresidentialSearchEvaluationReport {
   const negatives = input.cases.filter((item) => item.category === "negative");
   const positiveRecall = input.cases.flatMap((item) =>
@@ -157,6 +159,7 @@ export function buildPresidentialSearchEvaluationReport(input: {
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     electionSlug: input.electionSlug,
     strategy: input.strategy ?? "lexical",
+    embeddingCache: input.embeddingCache ?? "enabled",
     topK: input.topK,
     queryCount: input.cases.length,
     metrics: {

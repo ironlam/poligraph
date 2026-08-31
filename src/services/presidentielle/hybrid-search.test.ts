@@ -103,6 +103,21 @@ describe("recherche hybride présidentielle", () => {
     expect(result.hits.map((item) => item.entityId)).toEqual(["lexical", "semantic"]);
   });
 
+  it("peut contourner le cache pour mesurer la latence fournisseur à froid", async () => {
+    const input = {
+      electionId: "election-1",
+      query: "requête de benchmark sans cache",
+      limit: 8,
+      strategy: "semantic" as const,
+    };
+
+    await searchPresidentialPage(input);
+    await searchPresidentialPage(input);
+    await searchPresidentialPage({ ...input, bypassEmbeddingCache: true });
+
+    expect(callMistralEmbeddings).toHaveBeenCalledTimes(2);
+  });
+
   it("revient aux résultats lexicaux si Mistral est indisponible", async () => {
     callMistralEmbeddings.mockRejectedValue(new Error("quota"));
     const result = await searchPresidentialPage({

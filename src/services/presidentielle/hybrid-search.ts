@@ -86,8 +86,9 @@ async function searchSemantic(input: {
   electionId: string;
   query: string;
   limit: number;
+  bypassEmbeddingCache?: boolean;
 }): Promise<SemanticSearchHit[]> {
-  const vector = await getOrCreatePresidentialQueryEmbedding(input.query, async () => {
+  const createEmbedding = async () => {
     const budget = await reservePresidentialSemanticSearchBudget();
     if (!budget.allowed) {
       throw new Error(`budget sémantique indisponible (${budget.reason})`);
@@ -105,7 +106,10 @@ async function searchSemantic(input: {
       totalTokens: response.usage?.total_tokens ?? null,
     });
     return validateMistralEmbeddingBatch(response.data, 1)[0]!;
-  });
+  };
+  const vector = input.bypassEmbeddingCache
+    ? await createEmbedding()
+    : await getOrCreatePresidentialQueryEmbedding(input.query, createEmbedding);
   const vectorLiteral = `[${vector.join(",")}]`;
 
   return db.$queryRaw<SemanticSearchHit[]>(Prisma.sql`
@@ -134,6 +138,7 @@ export async function searchPresidentialPage(input: {
   lexicalQuery?: string;
   limit: number;
   strategy: PresidentialSearchStrategy;
+  bypassEmbeddingCache?: boolean;
 }): Promise<PresidentialSearchPage> {
   if (input.strategy === "lexical") {
     return {

@@ -196,6 +196,7 @@ describe("évaluation de la recherche présidentielle", () => {
       cases: [passing, negative],
       generatedAt: new Date("2026-08-30T12:00:00Z"),
       strategy: "hybrid",
+      embeddingCache: "bypassed",
     });
 
     expect(report.metrics).toEqual({
@@ -208,5 +209,6 @@ describe("évaluation de la recherche présidentielle", () => {
     });
     expect(report.cases).toHaveLength(2);
     expect(report.strategy).toBe("hybrid");
+    expect(report.embeddingCache).toBe("bypassed");
   });
 });

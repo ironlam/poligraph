@@ -18,12 +18,14 @@ function parseOptions(args: string[]): {
   topK: number;
   limit: number;
   strategy: PresidentialSearchStrategy;
+  bypassEmbeddingCache: boolean;
 } {
   const parsed = parseCLIOptions(args, [
     { name: "--election", type: "string" },
     { name: "--top-k", type: "number" },
     { name: "--limit", type: "number" },
     { name: "--strategy", type: "string" },
+    { name: "--no-cache", type: "boolean" },
   ]);
   const electionSlug =
     typeof parsed.election === "string" ? parsed.election : "presidentielle-2027";
@@ -45,7 +47,7 @@ function parseOptions(args: string[]): {
   if (!Number.isInteger(limit) || limit < topK || limit > 50) {
     throw new Error("--limit doit être un entier compris entre --top-k et 50");
   }
-  return { electionSlug, topK, limit, strategy };
+  return { electionSlug, topK, limit, strategy, bypassEmbeddingCache: parsed.noCache === true };
 }
 
 async function main(): Promise<void> {
@@ -58,7 +60,10 @@ async function main(): Promise<void> {
       options.electionSlug,
       testCase.query,
       options.limit,
-      { strategy: options.strategy }
+      {
+        strategy: options.strategy,
+        bypassEmbeddingCache: options.bypassEmbeddingCache,
+      }
     );
     if (result === null) throw new Error(`Élection introuvable : ${options.electionSlug}`);
     const evaluation = evaluatePresidentialSearchCase({
@@ -79,6 +84,7 @@ async function main(): Promise<void> {
     topK: options.topK,
     cases: evaluations,
     strategy: options.strategy,
+    embeddingCache: options.bypassEmbeddingCache ? "bypassed" : "enabled",
   });
   await mkdir(REPORT_DIR, { recursive: true });
   const timestamp = report.generatedAt.replace(/[:.]/g, "-");
