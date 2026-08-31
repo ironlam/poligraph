@@ -45,6 +45,7 @@ describe("page complète de recherche présidentielle", () => {
     expect(search).toHaveBeenCalledWith("presidentielle-2027", "logement", 50, {
       subtopicSlug: undefined,
       page: 1,
+      strategy: "hybrid",
     });
   });
 
@@ -80,6 +81,7 @@ describe("page complète de recherche présidentielle", () => {
     expect(search).toHaveBeenCalledWith("presidentielle-2027", "", 50, {
       subtopicSlug: "acces-aux-soins",
       page: 1,
+      strategy: "lexical",
     });
     expect(screen.getByRole("link", { name: "Suivant" })).toHaveAttribute(
       "href",

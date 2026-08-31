@@ -43,6 +43,7 @@ export default async function PresidentialSearchPage({
   const result = await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50, {
     subtopicSlug,
     page,
+    strategy: subtopicSlug ? "lexical" : "hybrid",
   });
   const hasResults = result !== null && result.total > 0;
   const hasSearch = query.length >= 2 || subtopicSlug !== undefined;

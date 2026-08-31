@@ -9,26 +9,41 @@ import {
   evaluatePresidentialSearchCase,
 } from "@/lib/presidentielle/search-evaluation";
 import { searchPresidentialCorpus } from "@/services/presidentielle/corpus-search";
+import type { PresidentialSearchStrategy } from "@/services/presidentielle/hybrid-search";
 
 const REPORT_DIR = path.resolve(".tmp/presidential-search-evaluation");
 
-function parseOptions(args: string[]): { electionSlug: string; topK: number; limit: number } {
+function parseOptions(args: string[]): {
+  electionSlug: string;
+  topK: number;
+  limit: number;
+  strategy: PresidentialSearchStrategy;
+} {
   const parsed = parseCLIOptions(args, [
     { name: "--election", type: "string" },
     { name: "--top-k", type: "number" },
     { name: "--limit", type: "number" },
+    { name: "--strategy", type: "string" },
   ]);
   const electionSlug =
     typeof parsed.election === "string" ? parsed.election : "presidentielle-2027";
   const topK = typeof parsed.topK === "number" ? parsed.topK : 5;
   const limit = typeof parsed.limit === "number" ? parsed.limit : 12;
+  const strategy = parsed.strategy === "hybrid" ? "hybrid" : "lexical";
+  if (
+    parsed.strategy !== undefined &&
+    parsed.strategy !== "lexical" &&
+    parsed.strategy !== "hybrid"
+  ) {
+    throw new Error("--strategy doit valoir lexical ou hybrid");
+  }
   if (!Number.isInteger(topK) || topK < 1 || topK > 20) {
     throw new Error("--top-k doit être un entier compris entre 1 et 20");
   }
   if (!Number.isInteger(limit) || limit < topK || limit > 50) {
     throw new Error("--limit doit être un entier compris entre --top-k et 50");
   }
-  return { electionSlug, topK, limit };
+  return { electionSlug, topK, limit, strategy };
 }
 
 async function main(): Promise<void> {
@@ -40,7 +55,8 @@ async function main(): Promise<void> {
     const result = await searchPresidentialCorpus(
       options.electionSlug,
       testCase.query,
-      options.limit
+      options.limit,
+      { strategy: options.strategy }
     );
     if (result === null) throw new Error(`Élection introuvable : ${options.electionSlug}`);
     const evaluation = evaluatePresidentialSearchCase({
@@ -60,6 +76,7 @@ async function main(): Promise<void> {
     electionSlug: options.electionSlug,
     topK: options.topK,
     cases: evaluations,
+    strategy: options.strategy,
   });
   await mkdir(REPORT_DIR, { recursive: true });
   const timestamp = report.generatedAt.replace(/[:.]/g, "-");

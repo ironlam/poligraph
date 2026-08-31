@@ -86,6 +86,30 @@ describeIfDisposableDb("SearchEmbedding pgvector", () => {
           vectorDimensions: PRESIDENTIAL_SEARCH_EMBEDDING_DIMENSIONS,
         },
       ]);
+
+      const { searchPresidentialPage } = await import("@/services/presidentielle/hybrid-search");
+      const hybrid = await searchPresidentialPage({
+        electionId: election.id,
+        query: "réduire le coût du logement",
+        lexicalQuery: "termes absents du document",
+        limit: 10,
+        strategy: "hybrid",
+      });
+      expect(hybrid.strategy).toBe("hybrid");
+      expect(hybrid.hits.map((hit) => hit.entityId)).toContain(entityId);
+
+      await db.searchDocument.update({
+        where: { entityType_entityId: { entityType: "MEASURE", entityId } },
+        data: { visibility: "ADMIN_ONLY" },
+      });
+      const afterDepublication = await searchPresidentialPage({
+        electionId: election.id,
+        query: "réduire le coût du logement",
+        lexicalQuery: "termes absents du document",
+        limit: 10,
+        strategy: "hybrid",
+      });
+      expect(afterDepublication.hits.map((hit) => hit.entityId)).not.toContain(entityId);
     } finally {
       await db.searchDocument.deleteMany({ where: { entityType: "MEASURE", entityId } });
       await db.election.delete({ where: { id: election.id } });

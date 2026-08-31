@@ -39,7 +39,7 @@ export interface MistralEmbeddingResponse {
 
 export async function callMistralEmbeddings(
   inputs: string[],
-  options: { model: string }
+  options: { model: string; signal?: AbortSignal }
 ): Promise<MistralEmbeddingResponse> {
   if (inputs.length === 0) throw new Error("Mistral embeddings requires at least one input");
 
@@ -49,6 +49,7 @@ export async function callMistralEmbeddings(
       "Content-Type": "application/json",
       Authorization: `Bearer ${getApiKey()}`,
     },
+    signal: options.signal,
     body: JSON.stringify({ model: options.model, input: inputs, encoding_format: "float" }),
   });
 

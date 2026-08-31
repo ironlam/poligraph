@@ -43,7 +43,9 @@ describe("GET recherche présidentielle", () => {
       context
     );
     const body = await response.json();
-    expect(search).toHaveBeenCalledWith("presidentielle-2027", "logement", 8);
+    expect(search).toHaveBeenCalledWith("presidentielle-2027", "logement", 8, {
+      strategy: "lexical",
+    });
     expect(Object.keys(body.groups)).toEqual(["subjects", "candidacies", "measures"]);
     expect(body.groups.subjects).toHaveLength(1);
     expect(body.state).toBe("results");

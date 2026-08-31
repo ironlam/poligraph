@@ -171,6 +171,24 @@ Le benchmark lexical de référence se lance en lecture seule avec :
 npm run search:evaluate -- --election=presidentielle-2027 --top-k=5 --limit=12
 ```
 
+Après construction des embeddings, le même jeu éditorial mesure la fusion hybride :
+
+```bash
+npm run search:evaluate -- \
+  --election=presidentielle-2027 \
+  --strategy=hybrid \
+  --top-k=5 \
+  --limit=12
+```
+
+L'autocomplétion reste explicitement lexicale. Seule la soumission de la page complète utilise la
+recherche hybride. Si Mistral dépasse le délai maximal de 2,5 secondes, atteint son quota ou renvoie
+une erreur, le serveur restitue les résultats lexicaux.
+
+L'embedding d'une requête est mis en cache pendant vingt-quatre heures sous une clé SHA-256 qui ne
+contient pas la phrase en clair. Le cache partagé utilise l'Upstash déjà configuré pour le projet.
+Sans Upstash, un cache mémoire borné évite au moins les appels répétés sur une même instance.
+
 Il exécute les 50 cas éditoriaux de `src/config/presidential-search-evaluation.ts` et écrit un
 rapport JSON dans `.tmp/presidential-search-evaluation/`. Ce rapport doit être conservé hors Git
 avec les données d'analyse privées, puis comparé aux rapports vectoriel et hybride du même corpus.

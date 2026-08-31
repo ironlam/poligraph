@@ -6,6 +6,7 @@ const findMeasures = vi.fn();
 const findSubtopic = vi.fn();
 const listMeasures = vi.fn();
 const searchPublicPage = vi.fn();
+const searchPresidentialPage = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
     election: { findUnique: (...args: unknown[]) => findElection(...args) },
@@ -20,6 +21,9 @@ vi.mock("@/lib/data/measures", () => ({
 vi.mock("@/lib/search/query", () => ({
   searchPublicPage: (...args: unknown[]) => searchPublicPage(...args),
 }));
+vi.mock("@/services/presidentielle/hybrid-search", () => ({
+  searchPresidentialPage: (...args: unknown[]) => searchPresidentialPage(...args),
+}));
 
 import { searchPresidentialCorpus } from "../corpus-search";
 
@@ -28,6 +32,15 @@ describe("searchPresidentialCorpus", () => {
     vi.clearAllMocks();
     findElection.mockResolvedValue({ id: "election-1", slug: "presidentielle-test" });
     searchPublicPage.mockResolvedValue({
+      total: 3,
+      hits: [
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "MEASURE", entityId: "measure-stale", title: "Fermée", url: "/old" },
+      ],
+    });
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "lexical",
       total: 3,
       hits: [
         { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
@@ -67,9 +80,12 @@ describe("searchPresidentialCorpus", () => {
   it("scope l'index et réhydrate en deux requêtes publiques bornées", async () => {
     const result = await searchPresidentialCorpus("presidentielle-test", "logement", 8);
 
-    expect(searchPublicPage).toHaveBeenCalledWith("logement", {
+    expect(searchPresidentialPage).toHaveBeenCalledWith({
+      query: "logement",
+      lexicalQuery: "logement",
       electionId: "election-1",
       limit: 8,
+      strategy: "lexical",
     });
     expect(findCandidacies.mock.calls[0]?.[0]).toMatchObject({
       where: { electionId: "election-1" },
@@ -105,7 +121,7 @@ describe("searchPresidentialCorpus", () => {
   it("ne consulte pas l'index pour une requête trop courte", async () => {
     const result = await searchPresidentialCorpus("presidentielle-test", "a", 8);
     expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
-    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(searchPresidentialPage).not.toHaveBeenCalled();
   });
 
   it("filtre un sous-thème sur son rattachement validé et conserve la pagination", async () => {
@@ -141,7 +157,7 @@ describe("searchPresidentialCorpus", () => {
       page: 2,
       limit: 50,
     });
-    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(searchPresidentialPage).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       query: "Accès aux soins",
       total: 74,
@@ -152,6 +168,7 @@ describe("searchPresidentialCorpus", () => {
   });
 
   it("retire la formulation d’une question avant la recherche lexicale", async () => {
+    searchPresidentialPage.mockResolvedValue({ strategy: "lexical", total: 0, hits: [] });
     searchPublicPage.mockResolvedValue({ total: 0, hits: [] });
 
     await searchPresidentialCorpus(
@@ -160,11 +177,14 @@ describe("searchPresidentialCorpus", () => {
       8
     );
 
-    expect(searchPublicPage).toHaveBeenNthCalledWith(1, "réduire coût logement", {
+    expect(searchPresidentialPage).toHaveBeenCalledWith({
+      query: "Que proposent les candidats pour réduire le coût du logement ?",
+      lexicalQuery: "réduire coût logement",
       electionId: "election-1",
       limit: 8,
+      strategy: "lexical",
     });
-    expect(searchPublicPage).toHaveBeenNthCalledWith(2, "Logement et urbanisme", {
+    expect(searchPublicPage).toHaveBeenCalledWith("Logement et urbanisme", {
       electionId: "election-1",
       limit: 8,
     });

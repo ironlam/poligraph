@@ -3,6 +3,7 @@ import type {
   PresidentialSearchExpectation,
 } from "@/config/presidential-search-evaluation";
 import type { PresidentialCorpusSearchResult } from "@/services/presidentielle/corpus-search";
+import type { PresidentialSearchStrategy } from "@/services/presidentielle/hybrid-search";
 
 type RankedResult =
   | { kind: "theme"; theme: string; label: string }
@@ -22,12 +23,13 @@ export type PresidentialSearchCaseEvaluation = {
   passed: boolean;
   expectations: PresidentialSearchExpectation[];
   topResults: RankedResult[];
+  semanticMaxSimilarity: number | null;
 };
 
 export type PresidentialSearchEvaluationReport = {
   generatedAt: string;
   electionSlug: string;
-  strategy: "lexical";
+  strategy: PresidentialSearchStrategy;
   topK: number;
   queryCount: number;
   metrics: {
@@ -128,6 +130,7 @@ export function evaluatePresidentialSearchCase(input: {
     passed: expectsNone ? ranked.length === 0 : matchedExpectations === positiveExpectations.length,
     expectations: input.testCase.expectations,
     topResults,
+    semanticMaxSimilarity: input.result.semanticMaxSimilarity ?? null,
   };
 }
 
@@ -147,6 +150,7 @@ export function buildPresidentialSearchEvaluationReport(input: {
   topK: number;
   cases: PresidentialSearchCaseEvaluation[];
   generatedAt?: Date;
+  strategy?: PresidentialSearchStrategy;
 }): PresidentialSearchEvaluationReport {
   const negatives = input.cases.filter((item) => item.category === "negative");
   const positiveRecall = input.cases.flatMap((item) =>
@@ -158,7 +162,7 @@ export function buildPresidentialSearchEvaluationReport(input: {
   return {
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     electionSlug: input.electionSlug,
-    strategy: "lexical",
+    strategy: input.strategy ?? "lexical",
     topK: input.topK,
     queryCount: input.cases.length,
     metrics: {

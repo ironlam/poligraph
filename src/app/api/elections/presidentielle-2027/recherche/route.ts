@@ -31,7 +31,8 @@ export const GET = withPublicRoute(async (request) => {
   const result = await searchPresidentialCorpus(
     PRESIDENTIELLE_2027_SLUG,
     query,
-    parseLimit(request.nextUrl.searchParams.get("limit"))
+    parseLimit(request.nextUrl.searchParams.get("limit")),
+    { strategy: "lexical" }
   );
   if (result === null) {
     return withCache(NextResponse.json({ error: "Élection introuvable" }, { status: 404 }), "none");

@@ -17,6 +17,10 @@ import {
   findThemesMentionedInQuery,
   themeToSlug,
 } from "@/lib/presidentielle/themes";
+import {
+  searchPresidentialPage,
+  type PresidentialSearchStrategy,
+} from "@/services/presidentielle/hybrid-search";
 
 const MAX_RESULTS = 50;
 
@@ -61,11 +65,14 @@ export type PresidentialCorpusSearchResult = {
   filter?: { type: "subtopic"; slug: string; label: string };
   page?: number;
   totalPages?: number;
+  searchStrategy?: "lexical" | "hybrid" | "lexical-fallback";
+  semanticMaxSimilarity?: number | null;
 };
 
 export type PresidentialCorpusSearchOptions = {
   subtopicSlug?: string;
   page?: number;
+  strategy?: PresidentialSearchStrategy;
 };
 
 function clampLimit(limit: number): number {
@@ -162,19 +169,23 @@ export async function searchPresidentialCorpus(
   }));
 
   const lexicalQuery = toPresidentialLexicalQuery(query);
-  let page = await searchPublicPage(lexicalQuery, {
+  let page = await searchPresidentialPage({
+    query,
+    lexicalQuery,
     electionId: election.id,
     limit: clampLimit(limit),
+    strategy: options.strategy ?? "lexical",
   });
   // A sentence may still contain a verb absent from every formulation. If it names one known
   // theme, fall back to that controlled label. This broadens only within the public taxonomy and
   // keeps the lexical engine available while the semantic index is being built.
   const [singleMatchingTheme] = matchingThemes;
   if (page.total === 0 && matchingThemes.length === 1 && singleMatchingTheme !== undefined) {
-    page = await searchPublicPage(THEME_CATEGORY_LABELS[singleMatchingTheme], {
+    const fallback = await searchPublicPage(THEME_CATEGORY_LABELS[singleMatchingTheme], {
       electionId: election.id,
       limit: clampLimit(limit),
     });
+    page = { ...fallback, strategy: page.strategy };
   }
   const candidacyIds = page.hits
     .filter((hit) => hit.entityType === "CANDIDACY")
@@ -286,5 +297,7 @@ export async function searchPresidentialCorpus(
     subjects,
     candidacies,
     measures,
+    searchStrategy: page.strategy,
+    semanticMaxSimilarity: page.semanticMaxSimilarity,
   };
 }

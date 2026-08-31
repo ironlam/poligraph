@@ -132,6 +132,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
       cases: [passing, negative],
       generatedAt: new Date("2026-08-30T12:00:00Z"),
+      strategy: "hybrid",
     });
 
     expect(report.metrics).toEqual({
@@ -143,5 +144,6 @@ describe("évaluation de la recherche présidentielle", () => {
       latencyP95Ms: 80,
     });
     expect(report.cases).toHaveLength(2);
+    expect(report.strategy).toBe("hybrid");
   });
 });
