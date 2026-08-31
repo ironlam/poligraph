@@ -51,6 +51,7 @@ const detail = {
       description: "Construction, attribution et financement du logement social.",
     },
   ],
+  readerGuides: [],
   sources: [
     {
       id: "source-1",
@@ -159,6 +160,35 @@ describe("page publique d'une mesure présidentielle", () => {
       "href",
       "/elections/presidentielle-2027/recherche?sous-theme=encadrement-loyers"
     );
+  });
+
+  it("affiche un repère sourcé dans le contenu plutôt que dans une infobulle", async () => {
+    getDetail.mockResolvedValue({
+      ...detail,
+      readerGuides: [
+        {
+          slug: "zones-faibles-emissions",
+          label: "Zone à faibles émissions (ZFE)",
+          definition:
+            "Un périmètre routier où la circulation des véhicules les plus polluants est restreinte.",
+          sourceUrl: "https://www.ecologie.gouv.fr/zfe",
+          sourceLabel: "Zones à faibles émissions",
+          sourcePublisher: "Ministère de la Transition écologique",
+          reviewedAt: new Date("2026-08-31T00:00:00Z"),
+        },
+      ],
+    });
+    const { default: Page } = await import("./page");
+    render(
+      <TooltipProvider>
+        {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
+      </TooltipProvider>
+    );
+    expect(screen.getByRole("heading", { name: "Repères pour comprendre" })).toBeInTheDocument();
+    expect(screen.getByText(/Un périmètre routier/)).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: /Consulter la source Zones à faibles émissions/ })
+    ).toHaveAttribute("href", "https://www.ecologie.gouv.fr/zfe");
   });
 
   it("n'invente aucun vote quand aucun lien public n'existe", async () => {

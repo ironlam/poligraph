@@ -54,6 +54,15 @@ export type PublicPresidentialMeasureDetail = {
     label: string;
     description: string;
   }>;
+  readerGuides: Array<{
+    slug: string;
+    label: string;
+    definition: string;
+    sourceUrl: string;
+    sourceLabel: string;
+    sourcePublisher: string;
+    reviewedAt: Date;
+  }>;
   sources: Array<{
     id: string;
     sourceKind: MeasureSourceKind;
@@ -133,6 +142,32 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
               subtopic: { select: { slug: true, label: true, description: true, sortOrder: true } },
             },
             orderBy: { subtopic: { sortOrder: "asc" } },
+          },
+          readerGuideMentions: {
+            where: {
+              status: "APPROVED",
+              guide: {
+                is: {
+                  active: true,
+                  publicationStatus: "PUBLISHED",
+                  reviewedAt: { not: null },
+                },
+              },
+            },
+            select: {
+              guide: {
+                select: {
+                  slug: true,
+                  label: true,
+                  definition: true,
+                  sourceUrl: true,
+                  sourceLabel: true,
+                  sourcePublisher: true,
+                  reviewedAt: true,
+                },
+              },
+            },
+            orderBy: { guide: { label: "asc" } },
           },
         },
       },
@@ -327,6 +362,9 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
       label,
       description,
     })),
+    readerGuides: revision.readerGuideMentions.flatMap(({ guide }) =>
+      guide?.reviewedAt ? [{ ...guide, reviewedAt: guide.reviewedAt }] : []
+    ),
     sources: revision.sources,
     votes: row.voteLinks.map((link) => ({
       id: link.id,

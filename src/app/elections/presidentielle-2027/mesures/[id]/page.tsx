@@ -182,6 +182,36 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
           </section>
         )}
 
+        {measure.readerGuides.length > 0 && (
+          <section aria-labelledby="reader-guides-title" className="border-b border-border py-8">
+            <h2 id="reader-guides-title" className="font-display text-2xl font-extrabold">
+              Repères pour comprendre
+            </h2>
+            <p className="mt-2 max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
+              Des définitions factuelles pour comprendre les dispositifs cités, sans évaluer la
+              mesure.
+            </p>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              {measure.readerGuides.map((guide) => (
+                <article key={guide.slug} className="rounded-2xl border border-border bg-card p-5">
+                  <h3 className="font-display text-lg font-bold">{guide.label}</h3>
+                  <p className="mt-2 leading-relaxed text-foreground">{guide.definition}</p>
+                  <a
+                    href={guide.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Consulter la source ${guide.sourceLabel} publiée par ${guide.sourcePublisher}, lien externe`}
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    Source : {guide.sourcePublisher}, vérifiée le {formatDate(guide.reviewedAt)}
+                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                  </a>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         {measure.subtopics.length > 0 && (
           <section aria-labelledby="concepts-title" className="border-b border-border py-8">
             <h2 id="concepts-title" className="font-display text-2xl font-extrabold">
