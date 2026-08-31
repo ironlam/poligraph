@@ -101,6 +101,7 @@ const batchPublicationInputSchema = z
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
             expectedUpdatedAt: z.string().min(1),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
           })
           .strict()
       )
@@ -117,6 +118,7 @@ const batchReviewInputSchema = z
           .object({
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
           })
           .strict()
       )
@@ -494,6 +496,7 @@ export async function reviewDraftBatchAction(input: unknown): Promise<BatchRevie
         {
           measureId: "batch",
           revisionId: "batch",
+          batchKind: "FIRST_PUBLICATION",
           message: failure.message,
         },
       ],
@@ -554,6 +557,7 @@ export async function publishReviewedBatchAction(input: unknown): Promise<BatchA
       measureId: item.measureId,
       revisionId: item.revisionId,
       expectedUpdatedAt: parseDate(item.expectedUpdatedAt, "La version attendue"),
+      batchKind: item.batchKind,
     }));
     const result = await publishMeasureRevisionBatch(items, ACTOR);
 

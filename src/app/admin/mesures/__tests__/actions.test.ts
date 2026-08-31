@@ -453,11 +453,13 @@ describe("publication par lot", () => {
         measureId: "m-1",
         revisionId: "rev-1",
         expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        batchKind: "FIRST_PUBLICATION",
       },
       {
         measureId: "m-2",
         revisionId: "rev-2",
         expectedUpdatedAt: "2027-01-17T10:00:00.000Z",
+        batchKind: "FIRST_PUBLICATION",
       },
     ],
   };
@@ -481,12 +483,14 @@ describe("publication par lot", () => {
       measureId: "m-1",
       revisionId: "rev-1",
       expectedUpdatedAt: new Date("2027-01-16T10:00:00.000Z"),
+      batchKind: "FIRST_PUBLICATION",
       publishedBy: "admin",
     });
     expect(transitionsMock.publishMeasureRevision).toHaveBeenNthCalledWith(2, {
       measureId: "m-2",
       revisionId: "rev-2",
       expectedUpdatedAt: new Date("2027-01-17T10:00:00.000Z"),
+      batchKind: "FIRST_PUBLICATION",
       publishedBy: "admin",
     });
   });
@@ -509,8 +513,8 @@ describe("relecture par lot", () => {
 
   const input = {
     items: [
-      { measureId: "m-1", revisionId: "rev-1" },
-      { measureId: "m-2", revisionId: "rev-2" },
+      { measureId: "m-1", revisionId: "rev-1", batchKind: "FIRST_PUBLICATION" },
+      { measureId: "m-2", revisionId: "rev-2", batchKind: "FIRST_PUBLICATION" },
     ],
   };
 
@@ -532,11 +536,13 @@ describe("relecture par lot", () => {
     expect(transitionsMock.reviewMeasureRevision).toHaveBeenNthCalledWith(1, {
       measureId: "m-1",
       revisionId: "rev-1",
+      batchKind: "FIRST_PUBLICATION",
       reviewedBy: "admin",
     });
     expect(transitionsMock.reviewMeasureRevision).toHaveBeenNthCalledWith(2, {
       measureId: "m-2",
       revisionId: "rev-2",
+      batchKind: "FIRST_PUBLICATION",
       reviewedBy: "admin",
     });
   });

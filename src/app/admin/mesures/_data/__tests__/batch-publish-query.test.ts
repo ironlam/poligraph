@@ -26,7 +26,13 @@ describe("queryBatchPublishGroups", () => {
           {
             id: "measure-1",
             updatedAt: new Date("2027-01-16T10:00:00.000Z"),
-            latestRevision: { id: "revision-1", text: "Créer un service public du logement." },
+            publicationStatus: "DRAFT",
+            publishedRevision: null,
+            latestRevision: {
+              id: "revision-1",
+              text: "Créer un service public du logement.",
+              details: null,
+            },
           },
         ],
       },
@@ -34,17 +40,21 @@ describe("queryBatchPublishGroups", () => {
 
     await expect(queryBatchPublishGroups()).resolves.toEqual([
       {
+        batchKind: "FIRST_PUBLICATION",
         programEditionId: "edition-1",
+        groupKey: "edition-1:FIRST_PUBLICATION",
         editionLabel: "Cahier 1",
         editionVersion: 1,
         ownerLabel: "Candidate Exemple",
         electionTitle: "Élection présidentielle de 2027",
         items: [
           {
+            batchKind: "FIRST_PUBLICATION",
             measureId: "measure-1",
             revisionId: "revision-1",
             expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
             text: "Créer un service public du logement.",
+            details: null,
           },
         ],
         hasMore: false,
@@ -52,29 +62,64 @@ describe("queryBatchPublishGroups", () => {
     ]);
   });
 
-  it("demande uniquement les premières publications relues et sourcées", async () => {
+  it("demande les premières publications et les contextes v9 relus", async () => {
     findManyMock.mockResolvedValue([]);
 
     await queryBatchPublishGroups();
 
-    expect(findManyMock).toHaveBeenCalledWith(
+    expect(findManyMock).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           measures: {
             some: expect.objectContaining({
-              publicationStatus: "DRAFT",
-              publishedRevisionId: null,
+              publicationStatus: "PUBLISHED",
               latestRevision: {
                 is: expect.objectContaining({
+                  extractorVersion: { endsWith: ":measure-context-v9" },
                   reviewedAt: { not: null },
-                  sources: { some: {} },
                 }),
               },
             }),
           },
-        },
+        }),
       })
     );
+  });
+
+  it("inclut une correction de contexte relue sans changement de formulation", async () => {
+    findManyMock.mockResolvedValue([
+      {
+        id: "edition-1",
+        label: "Cahier 1",
+        version: 1,
+        candidacy: { candidateName: "Candidate Exemple" },
+        party: null,
+        election: { title: "Élection présidentielle de 2027" },
+        measures: [
+          {
+            id: "measure-1",
+            updatedAt: new Date("2027-01-16T10:00:00.000Z"),
+            publicationStatus: "PUBLISHED",
+            publishedRevision: { text: "Créer un service public du logement." },
+            latestRevision: {
+              id: "revision-context",
+              text: "Créer un service public du logement.",
+              details: "La mesure prévoit une gestion publique des logements concernés.",
+            },
+          },
+        ],
+      },
+    ]);
+
+    const [group] = await queryBatchPublishGroups();
+
+    expect(group?.items).toEqual([
+      expect.objectContaining({
+        revisionId: "revision-context",
+        details: "La mesure prévoit une gestion publique des logements concernés.",
+      }),
+    ]);
   });
 
   it("borne le lot à la candidature sélectionnée", async () => {

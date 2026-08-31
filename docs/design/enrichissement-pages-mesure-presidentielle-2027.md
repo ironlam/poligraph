@@ -167,6 +167,19 @@ ne permet honnêtement aucun enrichissement.
 
 ### Commandes de génération
 
+Mesurer l'entonnoir complet avant une génération ou une campagne de relecture :
+
+```bash
+npm run measures:audit-contexts -- --election presidentielle-2027
+```
+
+Le rapport distingue les contextes publics, les brouillons en attente, les mesures sans preuve
+structurée, les sources qui ne contiennent aucun contexte distinct de la formulation et les
+tentatives déjà terminées. Les résultats terminaux sont séparés entre absence de contexte utile et
+échec répété de validation. Les réservations actives, les erreurs encore réessayables et les
+exclusions inexpliquées possèdent aussi leur propre compteur. Un faible taux public ne signifie donc
+pas automatiquement que toutes les autres mesures peuvent recevoir un résumé utile.
+
 Prévisualiser le nombre de mesures éligibles sans appeler Mistral ni écrire en base :
 
 ```bash
@@ -189,19 +202,35 @@ reprenable : une nouvelle exécution écarte les révisions déjà traitées, le
 utile et les erreurs de validation déjà auditées. `--all` et `--limit` sont volontairement
 incompatibles afin que le périmètre de l'opération soit explicite.
 
-La régénération depuis une ancienne version de prompt accepte le même mode :
+La régénération depuis une ancienne version de prompt accepte le même mode. Commencer par une
+simulation ciblée sur les brouillons :
 
 ```bash
 npm run measures:regenerate-contexts -- \
   --election presidentielle-2027 \
-  --from-prompt measure-context-v8 \
-  --scope all \
+  --from-prompt measure-context-v6 \
+  --scope drafts \
+  --all \
+  --dry-run
+```
+
+Après vérification du nombre et du périmètre, remplacer `--dry-run` par `--apply`. Répéter la
+commande pour chaque ancienne version réellement présente dans le rapport d'audit. Ne pas lancer
+une régénération de contexte déjà publié sans décision éditoriale explicite.
+
+```bash
+npm run measures:regenerate-contexts -- \
+  --election presidentielle-2027 \
+  --from-prompt measure-context-v6 \
+  --scope drafts \
   --all \
   --apply
 ```
 
 Ces commandes créent uniquement des brouillons. La relecture et la publication restent des décisions
-éditoriales distinctes dans l'administration.
+éditoriales distinctes dans l'administration. Les lots « Corrections de contexte » sont séparés des
+premières publications. Chaque ligne mène à la fiche d'administration qui expose les extraits de
+preuve avant confirmation.
 
 ## Ordre de livraison
 

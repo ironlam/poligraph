@@ -8,6 +8,7 @@
     "build": "prisma generate && next build --webpack",
     "build:net-check": "tsx scripts/check-build-network.mts",
     "measures:audit": "tsx scripts/audit-measures.ts",
+    "measures:audit-contexts": "tsx --env-file=.env scripts/audit-measure-contexts.ts",
     "search:audit": "tsx scripts/search-audit.ts",
     "search:evaluate": "tsx --env-file=.env scripts/evaluate-presidential-search.ts",
     "search:reindex": "tsx --env-file=.env scripts/search-reindex.ts",

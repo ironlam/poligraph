@@ -17,6 +17,11 @@ const METRICS: Array<{
     help: "La fiche explique ce que prévoit la mesure à partir de sa source.",
   },
   {
+    key: "withPendingContextDrafts",
+    label: "Contextes en attente",
+    help: "Un brouillon sourcé doit encore être relu puis publié.",
+  },
+  {
     key: "withApprovedSubtopics",
     label: "Sous-thèmes validés",
     help: "Au moins un rattachement éditorial validé.",

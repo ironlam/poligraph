@@ -10,6 +10,7 @@ const PRESIDENTIAL_ELECTION_SLUG = "presidentielle-2027";
 export type MeasureEnrichmentCoverage = {
   total: number;
   withDetails: number;
+  withPendingContextDrafts: number;
   withApprovedSubtopics: number;
   withQualifications: number;
   withVoteLinks: number;
@@ -47,6 +48,7 @@ export async function queryMeasureEnrichmentCoverage(): Promise<MeasureEnrichmen
   const [
     total,
     withDetails,
+    withPendingContextDrafts,
     withApprovedSubtopics,
     withQualifications,
     withVoteLinks,
@@ -55,6 +57,21 @@ export async function queryMeasureEnrichmentCoverage(): Promise<MeasureEnrichmen
   ] = await Promise.all([
     db.measure.count({ where: base }),
     db.measure.count({ where: withPublishedRevision({ details: { not: null } }) }),
+    db.measure.count({
+      where: {
+        ...withPublishedRevision({ details: null }),
+        latestRevision: {
+          is: {
+            details: { not: null },
+            extractionMethod: "AI_ASSISTED",
+            extractorVersion: { contains: ":measure-context-" },
+            publishedAt: null,
+            discardedAt: null,
+            rejectedAt: null,
+          },
+        },
+      },
+    }),
     db.measure.count({
       where: withPublishedRevision({
         subtopics: {
@@ -85,6 +102,7 @@ export async function queryMeasureEnrichmentCoverage(): Promise<MeasureEnrichmen
   return {
     total,
     withDetails,
+    withPendingContextDrafts,
     withApprovedSubtopics,
     withQualifications,
     withVoteLinks,

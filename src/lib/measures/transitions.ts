@@ -14,6 +14,7 @@ import {
   GENERATED_CONTEXT_DRAFT_ACTION,
   type GeneratedContextClaim,
 } from "@/lib/measures/context-provenance";
+import { assertMeasureBatchKind, type MeasureBatchKind } from "@/lib/measures/batch-kind";
 import { invalidateMeasureTags } from "./cache";
 import {
   createV6CorrectionFingerprint,
@@ -440,6 +441,7 @@ export async function reviewMeasureRevision(input: {
   measureId: string;
   revisionId: string;
   reviewedBy: string;
+  batchKind?: MeasureBatchKind;
 }): Promise<void> {
   if (input.reviewedBy.trim() === "") {
     throw new MeasureValidationError("Le relecteur doit être identifié");
@@ -450,7 +452,12 @@ export async function reviewMeasureRevision(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true },
+      select: {
+        latestRevisionId: true,
+        publicationStatus: true,
+        publishedRevisionId: true,
+        publishedRevision: { select: { text: true } },
+      },
     });
 
     const revision = await tx.measureRevision.findUnique({
@@ -461,6 +468,10 @@ export async function reviewMeasureRevision(input: {
         supersededAt: true,
         rejectedAt: true,
         reviewedAt: true,
+        text: true,
+        details: true,
+        extractionMethod: true,
+        extractorVersion: true,
         _count: { select: { sources: true } },
       },
     });
@@ -493,6 +504,7 @@ export async function reviewMeasureRevision(input: {
     if (revision.reviewedAt) {
       throw new MeasureValidationError("Cette révision a déjà été relue");
     }
+    assertMeasureBatchKind(input.batchKind, measure, revision);
 
     await tx.measureRevision.update({
       where: { id: input.revisionId },
@@ -656,6 +668,7 @@ export async function publishMeasureRevision(input: {
    * version from them would be a check with nothing to check.
    */
   expectedUpdatedAt?: Date;
+  batchKind?: MeasureBatchKind;
 }): Promise<void> {
   const { electionId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
@@ -668,6 +681,8 @@ export async function publishMeasureRevision(input: {
         publishedRevisionId: true,
         latestRevisionId: true,
         updatedAt: true,
+        publicationStatus: true,
+        publishedRevision: { select: { text: true } },
       },
     });
 
@@ -687,6 +702,9 @@ export async function publishMeasureRevision(input: {
       select: {
         measureId: true,
         text: true,
+        details: true,
+        extractionMethod: true,
+        extractorVersion: true,
         reviewedAt: true,
         discardedAt: true,
         supersededAt: true,
@@ -712,6 +730,7 @@ export async function publishMeasureRevision(input: {
     if (revision._count.sources === 0) {
       throw new MeasureValidationError("Une révision publiée doit porter au moins une source");
     }
+    assertMeasureBatchKind(input.batchKind, measure, revision);
     if (revision.reviewReadiness !== null) {
       const evidence = validateRevisionEvidence({
         importEngine: "V6",

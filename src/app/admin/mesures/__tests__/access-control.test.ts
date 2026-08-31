@@ -35,6 +35,7 @@ const filterMeasureContextCandidateIdsMock = vi.fn(async (_ids?: string[]) => []
 const queryMeasureEnrichmentCoverageMock = vi.fn(async () => ({
   total: 0,
   withDetails: 0,
+  withPendingContextDrafts: 0,
   withApprovedSubtopics: 0,
   withQualifications: 0,
   withVoteLinks: 0,

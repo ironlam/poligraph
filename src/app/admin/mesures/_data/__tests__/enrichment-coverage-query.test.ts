@@ -19,10 +19,11 @@ describe("queryMeasureEnrichmentCoverage", () => {
     vi.clearAllMocks();
   });
 
-  it("retourne les sept compteurs exacts du corpus public", async () => {
+  it("retourne les huit compteurs exacts du corpus public", async () => {
     measureCountMock
       .mockResolvedValueOnce(2200)
       .mockResolvedValueOnce(98)
+      .mockResolvedValueOnce(374)
       .mockResolvedValueOnce(982)
       .mockResolvedValueOnce(12)
       .mockResolvedValueOnce(1277)
@@ -32,6 +33,7 @@ describe("queryMeasureEnrichmentCoverage", () => {
     await expect(queryMeasureEnrichmentCoverage()).resolves.toEqual({
       total: 2200,
       withDetails: 98,
+      withPendingContextDrafts: 374,
       withApprovedSubtopics: 982,
       withQualifications: 12,
       withVoteLinks: 8,
@@ -39,7 +41,7 @@ describe("queryMeasureEnrichmentCoverage", () => {
       withHistory: 4,
     });
 
-    expect(measureCountMock).toHaveBeenCalledTimes(6);
+    expect(measureCountMock).toHaveBeenCalledTimes(7);
     expect(revisionCountMock).toHaveBeenCalledOnce();
     for (const [request] of measureCountMock.mock.calls) {
       expect(request.where).toEqual(
@@ -59,7 +61,7 @@ describe("queryMeasureEnrichmentCoverage", () => {
     await queryMeasureEnrichmentCoverage();
 
     expect(measureCountMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({
         where: expect.objectContaining({
           publishedRevision: {
@@ -91,5 +93,23 @@ describe("queryMeasureEnrichmentCoverage", () => {
         applicableVoteLinks: { some: {} },
       },
     });
+  });
+
+  it("conserve les contextes relus dans la file tant qu'ils ne sont pas publiés", async () => {
+    measureCountMock.mockResolvedValue(0);
+    revisionCountMock.mockResolvedValue(0);
+
+    await queryMeasureEnrichmentCoverage();
+
+    expect(measureCountMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          latestRevision: {
+            is: expect.not.objectContaining({ reviewedAt: expect.anything() }),
+          },
+        }),
+      })
+    );
   });
 });

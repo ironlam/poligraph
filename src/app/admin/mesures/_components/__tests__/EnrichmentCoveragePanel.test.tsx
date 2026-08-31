@@ -9,6 +9,7 @@ describe("EnrichmentCoveragePanel", () => {
         coverage={{
           total: 2200,
           withDetails: 98,
+          withPendingContextDrafts: 374,
           withApprovedSubtopics: 982,
           withQualifications: 0,
           withVoteLinks: 0,
@@ -22,6 +23,7 @@ describe("EnrichmentCoveragePanel", () => {
       screen.getByRole("heading", { name: "Couverture des fiches publiques 2027" })
     ).toBeInTheDocument();
     expect(screen.getByText("4 %")).toBeInTheDocument();
+    expect(screen.getByText("17 %")).toBeInTheDocument();
     expect(screen.getByText("45 %")).toBeInTheDocument();
     expect(screen.getByText("58 %")).toBeInTheDocument();
     expect(
@@ -38,6 +40,7 @@ describe("EnrichmentCoveragePanel", () => {
         coverage={{
           total: 2,
           withDetails: 2,
+          withPendingContextDrafts: 0,
           withApprovedSubtopics: 2,
           withQualifications: 0,
           withVoteLinks: 0,

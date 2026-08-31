@@ -15,10 +15,11 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
     startTransition(async () => {
       setResult(
         await publishReviewedBatchAction({
-          items: group.items.map(({ measureId, revisionId, expectedUpdatedAt }) => ({
+          items: group.items.map(({ measureId, revisionId, expectedUpdatedAt, batchKind }) => ({
             measureId,
             revisionId,
             expectedUpdatedAt,
+            batchKind,
           })),
         })
       );
@@ -33,7 +34,10 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.electionTitle}, {count} révision{count > 1 ? "s" : ""} relue
+            {group.batchKind === "CONTEXT_CORRECTION"
+              ? "Corrections de contexte"
+              : "Premières publications"}
+            , {group.electionTitle}, {count} révision{count > 1 ? "s" : ""} relue
             {count > 1 ? "s" : ""} et sourcée{count > 1 ? "s" : ""}
           </p>
         </div>
@@ -41,9 +45,25 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
           <summary className="min-h-11 cursor-pointer py-2 text-primary underline">
             Vérifier le contenu du lot
           </summary>
-          <ol className="mt-2 max-h-72 max-w-2xl list-decimal space-y-2 overflow-y-auto pl-5">
+          <ol className="mt-2 max-h-96 max-w-3xl list-decimal space-y-4 overflow-y-auto pl-5">
             {group.items.map((item) => (
-              <li key={item.revisionId}>{item.text}</li>
+              <li key={item.revisionId}>
+                <span className="font-medium">{item.text}</span>
+                {item.details ? (
+                  <span className="mt-1 block text-muted-foreground">
+                    Contexte relu : {item.details}
+                  </span>
+                ) : null}
+                <a
+                  href={`/admin/mesures/${item.measureId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Vérifier la mesure et ses preuves dans un nouvel onglet : ${item.text}`}
+                  className="mt-2 inline-flex min-h-11 items-center text-primary underline"
+                >
+                  Vérifier la mesure et ses preuves
+                </a>
+              </li>
             ))}
           </ol>
         </details>
@@ -120,12 +140,13 @@ export function BatchPublishPanel({ groups }: { groups: BatchPublishGroup[] }) {
         Publication par lot
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Seules les premières publications déjà relues et sourcées sont proposées. Une transition
-        complète contrôle encore chaque révision au moment de la publication.
+        Les premières publications et les corrections de contexte déjà relues sont proposées. Une
+        correction de contexte ne peut entrer dans un lot que si elle conserve exactement la
+        formulation publique. Une transition complète contrôle encore chaque révision.
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
-          <BatchPublishCard key={group.programEditionId} group={group} />
+          <BatchPublishCard key={group.groupKey} group={group} />
         ))}
       </div>
     </section>
