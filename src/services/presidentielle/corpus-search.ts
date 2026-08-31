@@ -231,7 +231,12 @@ export async function searchPresidentialCorpus(
   // theme, fall back to that controlled label. This broadens only within the public taxonomy and
   // keeps the lexical engine available while the semantic index is being built.
   const [singleMatchingTheme] = matchingThemes;
-  if (page.total === 0 && matchingThemes.length === 1 && singleMatchingTheme !== undefined) {
+  if (
+    options.strategy !== "semantic" &&
+    page.total === 0 &&
+    matchingThemes.length === 1 &&
+    singleMatchingTheme !== undefined
+  ) {
     const fallback = await searchPublicPage(THEME_CATEGORY_LABELS[singleMatchingTheme], {
       electionId: election.id,
       limit: clampLimit(limit),

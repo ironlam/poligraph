@@ -132,8 +132,9 @@ export default async function PresidentialSearchPage({
         </p>
         <p id="full-corpus-ai-notice" className="mt-2 text-sm text-muted-foreground">
           Lors d’une recherche complète, le texte saisi peut être transmis à Mistral AI pour
-          retrouver des formulations proches. L’IA ne rédige pas la réponse et ne classe pas les
-          candidats. <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
+          retrouver et ordonner des résultats par proximité textuelle. Ce classement mesure la
+          pertinence pour la recherche, pas les candidats ni leurs propositions. L’IA ne rédige pas
+          la réponse. <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
         </p>
 
         {!hasSearch ? (

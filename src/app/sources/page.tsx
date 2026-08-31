@@ -369,7 +369,8 @@ export default function SourcesPage() {
               <li>
                 <strong>Recherche sémantique</strong> : transforme une recherche soumise dans le
                 corpus présidentiel en vecteur avec Mistral AI afin de retrouver des formulations
-                proches. Le modèle ne rédige pas de réponse et ne classe pas les candidats.
+                proches. Le modèle ordonne les résultats par pertinence textuelle, sans évaluer les
+                candidats ni leurs propositions, et ne rédige pas de réponse.
               </li>
             </ul>
             <p className="text-sm text-muted-foreground">

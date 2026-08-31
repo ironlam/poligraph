@@ -204,4 +204,14 @@ describe("searchPresidentialCorpus", () => {
       limit: 8,
     });
   });
+
+  it("ne mélange aucun repli lexical au benchmark sémantique seul", async () => {
+    searchPresidentialPage.mockResolvedValue({ strategy: "semantic", total: 0, hits: [] });
+
+    await searchPresidentialCorpus("presidentielle-test", "Comment se loger ?", 8, {
+      strategy: "semantic",
+    });
+
+    expect(searchPublicPage).not.toHaveBeenCalled();
+  });
 });

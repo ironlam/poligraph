@@ -203,7 +203,7 @@ calcul :
 | Stratégie  | Rappel@5 | Précision@5 | Faux positifs négatifs | Latence p95 |
 | ---------- | -------: | ----------: | ---------------------: | ----------: |
 | Lexicale   |    0,783 |       0,609 |                    0 % |      201 ms |
-| Sémantique |    0,978 |       0,843 |                    0 % |      925 ms |
+| Sémantique |    0,957 |       0,822 |                    0 % |    1 204 ms |
 | Hybride    |    1,000 |       0,835 |                    0 % |      703 ms |
 
 Le léger recul de précision de la fusion face au vectoriel seul est compensé par un rappel complet
