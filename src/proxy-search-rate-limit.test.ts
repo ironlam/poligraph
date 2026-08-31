@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { getRateLimitTier } from "@/proxy";
 
 describe("quota de la recherche présidentielle", () => {
-  it("applique le quota recherche à la page hybride et à son autocomplétion", () => {
-    expect(getRateLimitTier("/elections/presidentielle-2027/recherche")).toBe("search");
+  it("laisse la page HTML accessible et limite son autocomplétion", () => {
+    expect(getRateLimitTier("/elections/presidentielle-2027/recherche")).toBeNull();
     expect(getRateLimitTier("/api/elections/presidentielle-2027/recherche")).toBe("search");
   });
 

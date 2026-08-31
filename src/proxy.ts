@@ -162,10 +162,7 @@ export function getRateLimitTier(pathname: string): RateLimitTier | null {
     return "subscribe";
   }
   if (pathname.startsWith("/api/export")) return "export";
-  if (
-    pathname === "/elections/presidentielle-2027/recherche" ||
-    pathname.startsWith("/api/elections/presidentielle-2027/recherche")
-  ) {
+  if (pathname.startsWith("/api/elections/presidentielle-2027/recherche")) {
     return "search";
   }
   if (pathname.startsWith("/api/search")) return "search";
