@@ -263,7 +263,7 @@ export default async function PresidentialSearchPage({
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             aria-label={`${source}, ouvrir dans un nouvel onglet`}
-                                            className="font-bold text-primary underline underline-offset-2"
+                                            className="inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-2"
                                           >
                                             {source}
                                           </a>
