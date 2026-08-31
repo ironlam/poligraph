@@ -393,6 +393,20 @@ describe("génération de contexte sourcé", () => {
     );
   });
 
+  it("accepte une limite non bornée pour parcourir toute la file de régénération", async () => {
+    mocks.findMeasures.mockResolvedValue([]);
+    const { findMeasureContextRegenerationCandidateIds } = await import("../context-generation");
+
+    await expect(
+      findMeasureContextRegenerationCandidateIds({
+        electionSlug: "presidentielle-2027",
+        fromPromptVersion: "measure-context-v8",
+        limit: Number.MAX_SAFE_INTEGER,
+        scope: "all",
+      })
+    ).resolves.toEqual([]);
+  });
+
   it.each([
     {
       action: "GENERATE_CONTEXT_TERMINAL_RESULT",

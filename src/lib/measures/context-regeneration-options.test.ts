@@ -14,6 +14,7 @@ describe("arguments de régénération des contextes", () => {
         "--dry-run",
       ])
     ).toEqual({
+      all: false,
       apply: false,
       dryRun: true,
       electionSlug: "presidentielle-2027",
@@ -21,6 +22,24 @@ describe("arguments de régénération des contextes", () => {
       limit: 100,
       scope: "all",
     });
+  });
+
+  it("accepte un traitement complet et refuse de le combiner à une limite", () => {
+    expect(
+      parseMeasureContextRegenerationOptions([
+        "--from-prompt=measure-context-v8",
+        "--scope=all",
+        "--all",
+        "--apply",
+      ])
+    ).toMatchObject({ all: true, apply: true, limit: 30 });
+    expect(() =>
+      parseMeasureContextRegenerationOptions([
+        "--from-prompt=measure-context-v8",
+        "--all",
+        "--limit=100",
+      ])
+    ).toThrow("simultanément");
   });
 
   it("exige une ancienne version et refuse les modes ambigus", () => {

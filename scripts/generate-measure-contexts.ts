@@ -4,31 +4,20 @@ import {
   findMeasureContextCandidateIds,
   generateMeasureContextDraft,
 } from "../src/lib/measures/context-generation";
+import { parseMeasureContextGenerationOptions } from "../src/lib/measures/context-generation-options";
 
-type Options = { apply: boolean; electionSlug: string; limit: number };
-
-function valueAfter(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  return index === -1 ? undefined : args[index + 1];
-}
-
-function parseOptions(args: string[]): Options {
-  const limit = Number(valueAfter(args, "--limit") ?? "30");
-  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
-    throw new Error("--limit doit être un entier compris entre 1 et 100");
-  }
-  return {
-    apply: args.includes("--apply"),
-    electionSlug: valueAfter(args, "--election") ?? "presidentielle-2027",
-    limit,
-  };
-}
+const ALL_ELIGIBLE_CONTEXTS = Number.MAX_SAFE_INTEGER;
 
 async function main(): Promise<void> {
-  const options = parseOptions(process.argv.slice(2));
-  const eligibleIds = await findMeasureContextCandidateIds(options.electionSlug, options.limit);
+  const options = parseMeasureContextGenerationOptions(process.argv.slice(2));
+  const eligibleIds = await findMeasureContextCandidateIds(
+    options.electionSlug,
+    options.all ? ALL_ELIGIBLE_CONTEXTS : options.limit
+  );
 
-  console.log(`${eligibleIds.length} mesure(s) éligible(s) dans ce lot.`);
+  console.log(
+    `${eligibleIds.length} mesure(s) éligible(s) ${options.all ? "dans la file complète" : "dans ce lot"}.`
+  );
   if (!options.apply) {
     console.log("Simulation uniquement. Ajouter --apply pour créer les brouillons.");
     return;
