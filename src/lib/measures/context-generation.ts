@@ -263,8 +263,8 @@ export async function findMeasureContextRegenerationCandidateIds(
   },
   pageSize = 250
 ): Promise<string[]> {
-  if (input.limit < 1 || input.limit > 100) {
-    throw new MeasureValidationError("La limite de régénération doit être comprise entre 1 et 100");
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1) {
+    throw new MeasureValidationError("La limite de régénération doit être un entier positif");
   }
   if (input.fromPromptVersion === PROMPT_VERSION) {
     throw new MeasureValidationError(

@@ -6,17 +6,19 @@ import {
 } from "../src/lib/measures/context-generation";
 import { parseMeasureContextRegenerationOptions } from "../src/lib/measures/context-regeneration-options";
 
+const ALL_ELIGIBLE_CONTEXTS = Number.MAX_SAFE_INTEGER;
+
 async function main(): Promise<void> {
   const options = parseMeasureContextRegenerationOptions(process.argv.slice(2));
   const candidateIds = await findMeasureContextRegenerationCandidateIds({
     electionSlug: options.electionSlug,
     fromPromptVersion: options.fromPromptVersion,
-    limit: options.limit,
+    limit: options.all ? ALL_ELIGIBLE_CONTEXTS : options.limit,
     scope: options.scope,
   });
 
   console.log(
-    `${candidateIds.length} contexte(s) ${options.fromPromptVersion} éligible(s) à une régénération (${options.scope}).`
+    `${candidateIds.length} contexte(s) ${options.fromPromptVersion} éligible(s) à une régénération (${options.scope}${options.all ? ", file complète" : ""}).`
   );
   if (options.dryRun) {
     console.log("Simulation uniquement. Ajouter --apply pour créer les nouveaux brouillons.");

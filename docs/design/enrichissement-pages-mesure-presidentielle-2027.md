@@ -165,6 +165,44 @@ Ajouter à l'administration d'une révision publiée :
 Le contrôle de complétude signale les champs manquants, mais ne bloque pas une mesure dont la source
 ne permet honnêtement aucun enrichissement.
 
+### Commandes de génération
+
+Prévisualiser le nombre de mesures éligibles sans appeler Mistral ni écrire en base :
+
+```bash
+npm run measures:generate-contexts -- \
+  --election presidentielle-2027 \
+  --all
+```
+
+Créer tous les brouillons manquants en une seule exécution :
+
+```bash
+npm run measures:generate-contexts -- \
+  --election presidentielle-2027 \
+  --all \
+  --apply
+```
+
+Le traitement reste séquentiel pour maîtriser la charge sur Mistral et sur la base. Il est
+reprenable : une nouvelle exécution écarte les révisions déjà traitées, les résultats sans contexte
+utile et les erreurs de validation déjà auditées. `--all` et `--limit` sont volontairement
+incompatibles afin que le périmètre de l'opération soit explicite.
+
+La régénération depuis une ancienne version de prompt accepte le même mode :
+
+```bash
+npm run measures:regenerate-contexts -- \
+  --election presidentielle-2027 \
+  --from-prompt measure-context-v8 \
+  --scope all \
+  --all \
+  --apply
+```
+
+Ces commandes créent uniquement des brouillons. La relecture et la publication restent des décisions
+éditoriales distinctes dans l'administration.
+
 ## Ordre de livraison
 
 1. Mesurer la couverture réelle des signaux et définir le tableau de bord d'enrichissement.
