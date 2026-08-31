@@ -94,4 +94,22 @@ describe("queryMeasureEnrichmentCoverage", () => {
       },
     });
   });
+
+  it("conserve les contextes relus dans la file tant qu'ils ne sont pas publiés", async () => {
+    measureCountMock.mockResolvedValue(0);
+    revisionCountMock.mockResolvedValue(0);
+
+    await queryMeasureEnrichmentCoverage();
+
+    expect(measureCountMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          latestRevision: {
+            is: expect.not.objectContaining({ reviewedAt: expect.anything() }),
+          },
+        }),
+      })
+    );
+  });
 });

@@ -30,6 +30,7 @@ async function main() {
     terminalNoUsefulContext: 0,
     terminalInvalidContext: 0,
     terminalHistoricalContext: 0,
+    terminalGeneratedContextDraft: 0,
     retryableInvalidContext: 0,
     generationInProgress: 0,
     unexplainedEligibleExclusions: 0,
@@ -95,14 +96,22 @@ async function main() {
         : await db.auditLog.findMany({
             where: {
               entityType: "MeasureRevision",
-              entityId: { in: eligibleRevisionIds },
-              action: {
-                in: [
-                  "GENERATE_CONTEXT_TERMINAL_RESULT",
-                  "GENERATE_CONTEXT_INVALID_RESULT",
-                  "RESERVE_CONTEXT_GENERATION",
-                ],
-              },
+              OR: [
+                {
+                  entityId: { in: eligibleRevisionIds },
+                  action: {
+                    in: [
+                      "GENERATE_CONTEXT_TERMINAL_RESULT",
+                      "GENERATE_CONTEXT_INVALID_RESULT",
+                      "RESERVE_CONTEXT_GENERATION",
+                    ],
+                  },
+                },
+                ...eligibleRevisionIds.map((revisionId) => ({
+                  action: "GENERATE_CONTEXT_DRAFT",
+                  changes: { path: ["previousRevisionId"], equals: revisionId },
+                })),
+              ],
             },
             select: { action: true, entityId: true, changes: true },
           });
@@ -121,12 +130,20 @@ async function main() {
       ) {
         continue;
       }
-      const state = states.get(attempt.entityId) ?? {
+      const sourceRevisionId =
+        attempt.action === "GENERATE_CONTEXT_DRAFT" &&
+        typeof changes.previousRevisionId === "string"
+          ? changes.previousRevisionId
+          : attempt.entityId;
+      if (!eligibleRevisionIds.includes(sourceRevisionId)) continue;
+      const state = states.get(sourceRevisionId) ?? {
         activeReservation: false,
         invalidCount: 0,
         terminal: null,
       };
-      if (attempt.action === "GENERATE_CONTEXT_TERMINAL_RESULT") {
+      if (attempt.action === "GENERATE_CONTEXT_DRAFT") {
+        state.terminal = "GENERATED_CONTEXT_DRAFT";
+      } else if (attempt.action === "GENERATE_CONTEXT_TERMINAL_RESULT") {
         state.terminal = typeof changes.outcome === "string" ? changes.outcome : "TERMINAL";
       } else if (attempt.action === "GENERATE_CONTEXT_INVALID_RESULT") {
         state.invalidCount += 1;
@@ -134,12 +151,14 @@ async function main() {
         const expiresAt = typeof changes.expiresAt === "string" ? Date.parse(changes.expiresAt) : 0;
         if (Number.isFinite(expiresAt) && expiresAt > Date.now()) state.activeReservation = true;
       }
-      states.set(attempt.entityId, state);
+      states.set(sourceRevisionId, state);
     }
     for (const state of states.values()) {
       if (state.terminal === "NO_USEFUL_CONTEXT") report.terminalNoUsefulContext += 1;
       else if (state.terminal === "INVALID_GENERATED_CONTEXT" || state.invalidCount >= 2) {
         report.terminalInvalidContext += 1;
+      } else if (state.terminal === "GENERATED_CONTEXT_DRAFT") {
+        report.terminalGeneratedContextDraft += 1;
       } else if (state.terminal !== null) report.terminalHistoricalContext += 1;
       else if (state.activeReservation) report.generationInProgress += 1;
       else if (state.invalidCount === 1) report.retryableInvalidContext += 1;
@@ -156,6 +175,7 @@ async function main() {
       report.terminalNoUsefulContext -
       report.terminalInvalidContext -
       report.terminalHistoricalContext -
+      report.terminalGeneratedContextDraft -
       report.retryableInvalidContext -
       report.generationInProgress
   );

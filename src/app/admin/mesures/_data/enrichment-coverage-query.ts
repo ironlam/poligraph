@@ -65,7 +65,6 @@ export async function queryMeasureEnrichmentCoverage(): Promise<MeasureEnrichmen
             details: { not: null },
             extractionMethod: "AI_ASSISTED",
             extractorVersion: { contains: ":measure-context-" },
-            reviewedAt: null,
             publishedAt: null,
             discardedAt: null,
             rejectedAt: null,
