@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn(),
     },
     measureReaderGuide: { findUnique: vi.fn() },
+    measureReaderGuideDetectionRun: { upsert: vi.fn() },
     auditLog: { create: vi.fn() },
   };
   return {
@@ -87,6 +88,31 @@ describe("workflow des repères citoyens", () => {
       skipDuplicates: true,
     });
     expect(mocks.syncSearch).not.toHaveBeenCalled();
+    expect(mocks.tx.measureReaderGuideDetectionRun.upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("mémorise aussi une analyse sans suggestion", async () => {
+    mocks.detect.mockResolvedValue([]);
+    const { proposeReaderGuidesForRevision } = await import("./reader-guides");
+
+    const result = await proposeReaderGuidesForRevision("revision-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+
+    expect(result).toEqual({ created: 0, proposals: [] });
+    expect(mocks.tx.measureReaderGuideDetectionRun.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ resultCount: 0 }),
+        update: expect.objectContaining({ resultCount: 0 }),
+      })
+    );
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ipAddress: "203.0.113.8",
+        userAgent: "vitest-agent",
+      }),
+    });
   });
 
   it("refuse d'approuver un rattachement vers un repère non publié", async () => {

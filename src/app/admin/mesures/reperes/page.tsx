@@ -19,9 +19,11 @@ export default async function ReaderGuidesAdminPage() {
       label: true,
       definition: true,
       aliases: true,
+      sourceKind: true,
       sourceUrl: true,
       sourceLabel: true,
       sourcePublisher: true,
+      sourceRevisionId: true,
       publicationStatus: true,
     },
   });

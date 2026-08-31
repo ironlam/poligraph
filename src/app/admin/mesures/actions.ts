@@ -172,9 +172,11 @@ const readerGuideDraftInputSchema = z
     label: z.string().min(3).max(160),
     definition: z.string().min(40).max(2_000),
     aliases: z.array(z.string().max(160)).max(30),
+    sourceKind: z.enum(["OFFICIAL_INSTITUTION", "PROGRAM_SOURCE"]),
     sourceUrl: z.string().url().max(2_000),
     sourceLabel: z.string().min(3).max(300),
     sourcePublisher: z.string().min(3).max(200),
+    sourceRevisionId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -432,7 +434,8 @@ export async function proposeReaderGuidesAction(input: unknown): Promise<ActionR
   try {
     const parsed = readerGuideProposalInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Révision à analyser invalide");
-    await proposeReaderGuidesForRevision(parsed.data.revisionId, ACTOR);
+    const requestMetadata = await getAuditRequestMetadata();
+    await proposeReaderGuidesForRevision(parsed.data.revisionId, ACTOR, requestMetadata);
     revalidate(parsed.data.measureId);
     return { ok: true };
   } catch (error) {
@@ -446,11 +449,13 @@ export async function reviewReaderGuideMentionAction(input: unknown): Promise<Ac
   try {
     const parsed = readerGuideReviewInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Proposition de repère invalide");
+    const requestMetadata = await getAuditRequestMetadata();
     await reviewReaderGuideMention({
       mentionId: parsed.data.mentionId,
       guideId: parsed.data.guideId,
       status: parsed.data.status,
       reviewedBy: ACTOR,
+      ...requestMetadata,
     });
     revalidate(parsed.data.measureId);
     return { ok: true };
@@ -464,10 +469,8 @@ export async function saveReaderGuideDraftAction(input: unknown): Promise<Action
   try {
     const parsed = readerGuideDraftInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Le brouillon de repère est invalide");
-    const id = await saveReaderGuideDraft(
-      { ...parsed.data, sourceKind: "OFFICIAL_INSTITUTION" },
-      ACTOR
-    );
+    const requestMetadata = await getAuditRequestMetadata();
+    const id = await saveReaderGuideDraft(parsed.data, ACTOR, requestMetadata);
     revalidatePath("/admin/mesures/reperes");
     return { ok: true, measureId: id };
   } catch (error) {
@@ -483,7 +486,8 @@ export async function publishReaderGuideAction(input: unknown): Promise<ActionRe
       .strict()
       .safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Repère invalide");
-    await publishReaderGuide(parsed.data.guideId, ACTOR);
+    const requestMetadata = await getAuditRequestMetadata();
+    await publishReaderGuide(parsed.data.guideId, ACTOR, requestMetadata);
     revalidatePath("/admin/mesures/reperes");
     return { ok: true };
   } catch (error) {

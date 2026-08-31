@@ -11,6 +11,7 @@ import {
   type ReaderGuideDetection,
 } from "@/lib/measures/reader-guide-detection";
 import { isOfficialInstitutionUrl } from "@/lib/measures/reader-guide-source";
+import { Prisma } from "@/generated/prisma";
 
 type GuideMatch = {
   id: string;
@@ -25,6 +26,11 @@ export type ReaderGuideProposal = ReaderGuideDetection & {
   guideId: string | null;
   guideSlug: string | null;
   guideLabel: string | null;
+};
+
+export type ReaderGuideAuditMetadata = {
+  ipAddress?: string;
+  userAgent?: string;
 };
 
 function findGuide(term: string, canonicalLabel: string, guides: GuideMatch[]): GuideMatch | null {
@@ -152,7 +158,8 @@ export async function detectReaderGuidesForRevision(revisionId: string): Promise
 
 export async function proposeReaderGuidesForRevision(
   revisionId: string,
-  actor = "system"
+  actor = "system",
+  auditMetadata: ReaderGuideAuditMetadata = {}
 ): Promise<{ created: number; proposals: ReaderGuideProposal[] }> {
   const detection = await detectReaderGuidesForRevision(revisionId);
   const created = await db.$transaction(async (tx) => {
@@ -177,6 +184,23 @@ export async function proposeReaderGuidesForRevision(
       });
       count += result.count;
     }
+    await tx.measureReaderGuideDetectionRun.upsert({
+      where: {
+        revisionId_detectorVersion: {
+          revisionId,
+          detectorVersion: READER_GUIDE_DETECTOR_VERSION,
+        },
+      },
+      create: {
+        revisionId,
+        detectorVersion: READER_GUIDE_DETECTOR_VERSION,
+        resultCount: detection.proposals.length,
+      },
+      update: {
+        resultCount: detection.proposals.length,
+        completedAt: new Date(),
+      },
+    });
     await tx.auditLog.create({
       data: {
         action: "PROPOSE_READER_GUIDES",
@@ -194,6 +218,7 @@ export async function proposeReaderGuidesForRevision(
           })),
         },
         userId: actor,
+        ...auditMetadata,
       },
     });
     return count;
@@ -206,64 +231,77 @@ export async function reviewReaderGuideMention(input: {
   guideId?: string;
   status: "APPROVED" | "REJECTED";
   reviewedBy: string;
+  ipAddress?: string;
+  userAgent?: string;
 }): Promise<void> {
-  const measure = await db.$transaction(async (tx) => {
-    const mention = await tx.measureRevisionReaderGuide.findUnique({
-      where: { id: input.mentionId },
-      select: {
-        status: true,
-        guideId: true,
-        revisionId: true,
-        revision: { select: { measure: { select: { id: true, electionId: true } } } },
-      },
-    });
-    if (!mention || mention.status !== "SUGGESTED") {
-      throw new MeasureValidationError("Cette proposition a déjà été traitée");
-    }
-    const guideId = input.guideId ?? mention.guideId;
-    if (input.status === "APPROVED") {
-      if (!guideId) throw new MeasureValidationError("Choisissez un repère avant de valider");
-      const guide = await tx.measureReaderGuide.findUnique({
-        where: { id: guideId },
-        select: { publicationStatus: true, active: true },
-      });
-      if (!guide || !guide.active || guide.publicationStatus !== "PUBLISHED") {
-        throw new MeasureValidationError("Le repère doit être publié avant son rattachement");
-      }
-      const duplicate = await tx.measureRevisionReaderGuide.findFirst({
-        where: {
-          id: { not: input.mentionId },
-          revisionId: mention.revisionId,
-          guideId,
-          status: "APPROVED",
+  let measure: { id: string; electionId: string };
+  try {
+    measure = await db.$transaction(async (tx) => {
+      const mention = await tx.measureRevisionReaderGuide.findUnique({
+        where: { id: input.mentionId },
+        select: {
+          status: true,
+          guideId: true,
+          revisionId: true,
+          revision: { select: { measure: { select: { id: true, electionId: true } } } },
         },
-        select: { id: true },
       });
-      if (duplicate) throw new MeasureValidationError("Ce repère est déjà validé pour la révision");
+      if (!mention || mention.status !== "SUGGESTED") {
+        throw new MeasureValidationError("Cette proposition a déjà été traitée");
+      }
+      const guideId = input.guideId ?? mention.guideId;
+      if (input.status === "APPROVED") {
+        if (!guideId) throw new MeasureValidationError("Choisissez un repère avant de valider");
+        const guide = await tx.measureReaderGuide.findUnique({
+          where: { id: guideId },
+          select: { publicationStatus: true, active: true },
+        });
+        if (!guide || !guide.active || guide.publicationStatus !== "PUBLISHED") {
+          throw new MeasureValidationError("Le repère doit être publié avant son rattachement");
+        }
+        const duplicate = await tx.measureRevisionReaderGuide.findFirst({
+          where: {
+            id: { not: input.mentionId },
+            revisionId: mention.revisionId,
+            guideId,
+            status: "APPROVED",
+          },
+          select: { id: true },
+        });
+        if (duplicate)
+          throw new MeasureValidationError("Ce repère est déjà validé pour la révision");
+      }
+      const updated = await tx.measureRevisionReaderGuide.updateMany({
+        where: { id: input.mentionId, status: "SUGGESTED" },
+        data: {
+          guideId: guideId ?? null,
+          status: input.status,
+          reviewedAt: new Date(),
+          reviewedBy: input.reviewedBy,
+        },
+      });
+      if (updated.count !== 1)
+        throw new MeasureValidationError("Cette proposition a déjà été traitée");
+      await tx.auditLog.create({
+        data: {
+          action: "REVIEW_READER_GUIDE_MENTION",
+          entityType: "MeasureRevisionReaderGuide",
+          entityId: input.mentionId,
+          changes: { status: input.status, guideId: guideId ?? null },
+          userId: input.reviewedBy,
+          ipAddress: input.ipAddress,
+          userAgent: input.userAgent,
+        },
+      });
+      await syncSearchDocument(tx, mention.revision.measure.id);
+      return mention.revision.measure;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new MeasureValidationError("Ce repère est déjà validé pour la révision");
     }
-    const updated = await tx.measureRevisionReaderGuide.updateMany({
-      where: { id: input.mentionId, status: "SUGGESTED" },
-      data: {
-        guideId: guideId ?? null,
-        status: input.status,
-        reviewedAt: new Date(),
-        reviewedBy: input.reviewedBy,
-      },
-    });
-    if (updated.count !== 1)
-      throw new MeasureValidationError("Cette proposition a déjà été traitée");
-    await tx.auditLog.create({
-      data: {
-        action: "REVIEW_READER_GUIDE_MENTION",
-        entityType: "MeasureRevisionReaderGuide",
-        entityId: input.mentionId,
-        changes: { status: input.status, guideId: guideId ?? null },
-        userId: input.reviewedBy,
-      },
-    });
-    await syncSearchDocument(tx, mention.revision.measure.id);
-    return mention.revision.measure;
-  });
+    throw error;
+  }
   invalidateMeasureTags(measure.id, measure.electionId);
 }
 
@@ -306,7 +344,8 @@ async function validateReaderGuideDraft(input: ReaderGuideDraftInput): Promise<v
 
 export async function saveReaderGuideDraft(
   input: ReaderGuideDraftInput,
-  actor: string
+  actor: string,
+  auditMetadata: ReaderGuideAuditMetadata = {}
 ): Promise<string> {
   await validateReaderGuideDraft(input);
   const data = {
@@ -337,6 +376,7 @@ export async function saveReaderGuideDraft(
           entityId: input.id,
           changes: data,
           userId: actor,
+          ...auditMetadata,
         },
       });
       return input.id;
@@ -352,13 +392,18 @@ export async function saveReaderGuideDraft(
         entityId: created.id,
         changes: data,
         userId: actor,
+        ...auditMetadata,
       },
     });
     return created.id;
   });
 }
 
-export async function publishReaderGuide(guideId: string, actor: string): Promise<void> {
+export async function publishReaderGuide(
+  guideId: string,
+  actor: string,
+  auditMetadata: ReaderGuideAuditMetadata = {}
+): Promise<void> {
   await db.$transaction(async (tx) => {
     const guide = await tx.measureReaderGuide.findUnique({ where: { id: guideId } });
     if (!guide || guide.publicationStatus !== "DRAFT") {
@@ -391,6 +436,7 @@ export async function publishReaderGuide(guideId: string, actor: string): Promis
         entityId: guideId,
         changes: { publicationStatus: "PUBLISHED" },
         userId: actor,
+        ...auditMetadata,
       },
     });
   });
@@ -408,7 +454,7 @@ export async function listReaderGuideDetectionCandidates(input: {
         {
           publishedRevision: {
             is: {
-              readerGuideMentions: {
+              readerGuideDetectionRuns: {
                 none: { detectorVersion: READER_GUIDE_DETECTOR_VERSION },
               },
             },

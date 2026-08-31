@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import type { PublicationStatus } from "@/generated/prisma";
+import type { MeasureReaderGuideSourceKind, PublicationStatus } from "@/generated/prisma";
 import {
   publishReaderGuideAction,
   saveReaderGuideDraftAction,
@@ -16,9 +16,11 @@ type Guide = {
   label: string;
   definition: string;
   aliases: string[];
+  sourceKind: MeasureReaderGuideSourceKind;
   sourceUrl: string;
   sourceLabel: string;
   sourcePublisher: string;
+  sourceRevisionId: string | null;
   publicationStatus: PublicationStatus;
 };
 
@@ -27,9 +29,11 @@ const EMPTY = {
   label: "",
   definition: "",
   aliases: "",
+  sourceKind: "OFFICIAL_INSTITUTION" as MeasureReaderGuideSourceKind,
   sourceUrl: "",
   sourceLabel: "",
   sourcePublisher: "",
+  sourceRevisionId: "",
 };
 
 export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
@@ -58,9 +62,11 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
       label: guide.label,
       definition: guide.definition,
       aliases: guide.aliases.join("\n"),
+      sourceKind: guide.sourceKind,
       sourceUrl: guide.sourceUrl,
       sourceLabel: guide.sourceLabel,
       sourcePublisher: guide.sourcePublisher,
+      sourceRevisionId: guide.sourceRevisionId ?? "",
     });
     document.getElementById("reader-guide-form")?.scrollIntoView({ behavior: "smooth" });
   }
@@ -140,8 +146,8 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
           {editingId ? "Modifier le brouillon" : "Nouveau repère"}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          La source doit être une page institutionnelle officielle. La publication reste une action
-          distincte.
+          La source doit être une page institutionnelle officielle ou une source déjà rattachée à
+          une révision de mesure. La publication reste une action distincte.
         </p>
         <form
           className="mt-4 grid gap-4 sm:grid-cols-2"
@@ -152,6 +158,8 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
                 saveReaderGuideDraftAction({
                   ...(editingId ? { id: editingId } : {}),
                   ...form,
+                  sourceRevisionId:
+                    form.sourceKind === "PROGRAM_SOURCE" ? form.sourceRevisionId : null,
                   aliases: form.aliases
                     .split("\n")
                     .map((alias) => alias.trim())
@@ -161,6 +169,46 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
             );
           }}
         >
+          <label>
+            <span className="text-sm font-medium">Nature de la source</span>
+            <select
+              value={form.sourceKind}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  sourceKind: event.target.value as MeasureReaderGuideSourceKind,
+                }))
+              }
+              className="mt-1 min-h-11 w-full rounded border border-border bg-background px-3"
+            >
+              <option value="OFFICIAL_INSTITUTION">Institution officielle</option>
+              <option value="PROGRAM_SOURCE">Source du programme</option>
+            </select>
+          </label>
+          {form.sourceKind === "PROGRAM_SOURCE" && (
+            <label>
+              <span className="text-sm font-medium">Identifiant de la révision source</span>
+              <input
+                required
+                value={form.sourceRevisionId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    sourceRevisionId: event.target.value,
+                  }))
+                }
+                className="mt-1 min-h-11 w-full rounded border border-border bg-background px-3"
+                type="text"
+                aria-describedby="reader-guide-source-revision-help"
+              />
+              <span
+                id="reader-guide-source-revision-help"
+                className="mt-1 block text-xs text-muted-foreground"
+              >
+                Identifiant visible dans l’URL de la révision depuis la fiche d’administration.
+              </span>
+            </label>
+          )}
           {(["slug", "label", "sourcePublisher", "sourceLabel", "sourceUrl"] as const).map(
             (name) => (
               <label key={name} className={name === "sourceUrl" ? "sm:col-span-2" : ""}>
@@ -169,7 +217,7 @@ export function ReaderGuideAdmin({ guides }: { guides: Guide[] }) {
                     {
                       slug: "Slug",
                       label: "Libellé",
-                      sourcePublisher: "Institution",
+                      sourcePublisher: "Éditeur de la source",
                       sourceLabel: "Titre de la source",
                       sourceUrl: "URL de la source",
                     }[name]

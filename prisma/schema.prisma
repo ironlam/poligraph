@@ -3085,14 +3085,15 @@ model MeasureRevision {
   rejectionReason MeasureRejectionReason?
   rejectionDetail String?                 @db.Text
 
-  sources             MeasureSource[]
-  qualifications      MeasureQualification[]
-  assessments         MeasureSimilarityAssessment[]
-  equivalentOf        MeasureSimilarityMatch[]      @relation("EquivalentRevision")
-  applicableVoteLinks MeasureVoteLink[]             @relation("ApplicableRevisionVoteLinks")
-  subtopics           MeasureRevisionSubtopic[]
-  readerGuideMentions MeasureRevisionReaderGuide[]  @relation("MeasureRevisionReaderGuides")
-  sourcedReaderGuides MeasureReaderGuide[]          @relation("MeasureReaderGuideProgramSource")
+  sources                  MeasureSource[]
+  qualifications           MeasureQualification[]
+  assessments              MeasureSimilarityAssessment[]
+  equivalentOf             MeasureSimilarityMatch[]         @relation("EquivalentRevision")
+  applicableVoteLinks      MeasureVoteLink[]                @relation("ApplicableRevisionVoteLinks")
+  subtopics                MeasureRevisionSubtopic[]
+  readerGuideMentions      MeasureRevisionReaderGuide[]     @relation("MeasureRevisionReaderGuides")
+  readerGuideDetectionRuns MeasureReaderGuideDetectionRun[]
+  sourcedReaderGuides      MeasureReaderGuide[]             @relation("MeasureReaderGuideProgramSource")
 
   latestOf    Measure? @relation("MeasureLatest")
   publishedOf Measure? @relation("MeasurePublished")
@@ -3160,6 +3161,22 @@ model MeasureRevisionReaderGuide {
   @@unique([revisionId, normalizedTerm])
   @@index([revisionId, status])
   @@index([guideId, status])
+}
+
+// Records a completed detector pass independently from its result count. Without this marker,
+// revisions with no technical term would be sent to the model again on every corpus run.
+model MeasureReaderGuideDetectionRun {
+  id String @id @default(cuid())
+
+  revision   MeasureRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  detectorVersion String
+  resultCount     Int
+  completedAt     DateTime @default(now())
+
+  @@unique([revisionId, detectorVersion])
+  @@index([detectorVersion, completedAt])
 }
 
 enum MeasureVoteLinkKind {

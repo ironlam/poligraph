@@ -175,6 +175,7 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
           definition:
             "Un périmètre routier où la circulation des véhicules polluants est restreinte.",
           aliases: ["ZFE"],
+          sourceKind: "OFFICIAL_INSTITUTION",
           sourceUrl: "https://www.ecologie.gouv.fr/zfe",
           sourceLabel: "Zones à faibles émissions",
           sourcePublisher: "Ministère de la Transition écologique",
@@ -282,6 +283,22 @@ describe("actions éditoriales : la session", () => {
     expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledTimes(1);
     expect(contextGenerationMock.generateMeasureContextDraft).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledWith("rev-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+    expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledWith(
+      expect.objectContaining({ ipAddress: "203.0.113.8", userAgent: "vitest-agent" })
+    );
+    expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceKind: "OFFICIAL_INSTITUTION" }),
+      "admin",
+      { ipAddress: "203.0.113.8", userAgent: "vitest-agent" }
+    );
+    expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledWith("guide-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
   });
 });
 
