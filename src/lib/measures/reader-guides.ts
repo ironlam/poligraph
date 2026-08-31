@@ -236,6 +236,7 @@ export async function proposeReaderGuidesForRevision(
 export async function reviewReaderGuideMention(input: {
   mentionId: string;
   guideId?: string;
+  expectedPublicRevisionId?: string;
   status: "APPROVED" | "REJECTED";
   reviewedBy: string;
   ipAddress?: string;
@@ -263,6 +264,21 @@ export async function reviewReaderGuideMention(input: {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${mention.revision.measure.id}, 0))`;
       const guideId = input.guideId ?? mention.guideId;
       if (input.status === "APPROVED") {
+        if (input.expectedPublicRevisionId) {
+          const reviewedMeasure = await tx.measure.findFirst({
+            where: {
+              ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+              id: mention.revision.measure.id,
+              publishedRevisionId: input.expectedPublicRevisionId,
+            },
+            select: { id: true },
+          });
+          if (mention.revisionId !== input.expectedPublicRevisionId || reviewedMeasure === null) {
+            throw new MeasureValidationError(
+              "La mesure ou sa révision publique a changé depuis la relecture du lot"
+            );
+          }
+        }
         if (!guideId) throw new MeasureValidationError("Choisissez un repère avant de valider");
         const guide = await tx.measureReaderGuide.findUnique({
           where: { id: guideId },

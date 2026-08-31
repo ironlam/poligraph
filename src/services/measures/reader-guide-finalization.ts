@@ -448,6 +448,7 @@ export async function applyReaderGuideFinalization(
             await reviewReaderGuideMention({
               mentionId: item.mentionId,
               guideId: item.guideId!,
+              expectedPublicRevisionId: item.revisionId,
               status: "APPROVED",
               reviewedBy: actor,
             });

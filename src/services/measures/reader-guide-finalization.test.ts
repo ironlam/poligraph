@@ -224,6 +224,7 @@ describe("finalisation en lot des repères", () => {
     expect(serviceMocks.review).toHaveBeenCalledWith({
       mentionId: "1",
       guideId: "guide-zfe",
+      expectedPublicRevisionId: "revision-1",
       status: "APPROVED",
       reviewedBy: "cli:reader-guides:run-1",
     });

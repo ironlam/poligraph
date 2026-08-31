@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    measure: { findFirst: vi.fn() },
     measureReaderGuideDetectionRun: { upsert: vi.fn() },
     measureSource: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -81,6 +82,7 @@ describe("workflow des repères citoyens", () => {
       .mockResolvedValue({ count: 0 });
     mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
     mocks.tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
+    mocks.tx.measure.findFirst.mockResolvedValue({ id: "measure-1" });
   });
 
   it("crée uniquement une suggestion et reste idempotent", async () => {
@@ -179,6 +181,36 @@ describe("workflow des repères citoyens", () => {
       mocks.syncSearch.mock.invocationCallOrder[0]!
     );
     expect(mocks.invalidate).toHaveBeenCalledWith("measure-1", "election-1");
+  });
+
+  it("refuse un lot si la révision relue n'est plus la révision publique", async () => {
+    mocks.tx.measureRevisionReaderGuide.findUnique.mockResolvedValue({
+      status: "SUGGESTED",
+      guideId: "guide-1",
+      revisionId: "revision-1",
+      revision: { measure: { id: "measure-1", electionId: "election-1" } },
+    });
+    mocks.tx.measure.findFirst.mockResolvedValue(null);
+    const { reviewReaderGuideMention } = await import("./reader-guides");
+
+    await expect(
+      reviewReaderGuideMention({
+        mentionId: "mention-1",
+        expectedPublicRevisionId: "revision-1",
+        status: "APPROVED",
+        reviewedBy: "admin",
+      })
+    ).rejects.toThrow(/révision publique a changé/);
+
+    expect(mocks.tx.measure.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: "measure-1",
+        publishedRevisionId: "revision-1",
+      }),
+      select: { id: true },
+    });
+    expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();
+    expect(mocks.syncSearch).not.toHaveBeenCalled();
   });
 
   it("limite une source de programme aux documents programmatiques primaires", async () => {
