@@ -61,6 +61,22 @@ L'application crée uniquement des suggestions. Leur validation se fait sur la f
 mesure. Une validation resynchronise le document de recherche concerné et invalide uniquement les
 caches de cette mesure et de son élection.
 
+## Publication et maillage public
+
+Le site construit le glossaire public à partir des mesures publiques, jamais directement à partir
+du catalogue. Un repère apparaît seulement si son statut est `PUBLISHED`, s'il a été relu et si au
+moins une mention `APPROVED` existe sur la révision publiée d'une mesure encore défendue par une
+candidature publique.
+
+Chaque page de repère relie la définition à sa source, aux mesures qui emploient le terme, aux
+candidats concernés et aux pages thématiques. Les fiches de mesure et les pages thématiques font le
+lien inverse. Le hub ne montre qu'une sélection bornée de repères afin de ne pas devenir un nuage de
+mots sans hiérarchie.
+
+Une définition trop courte ou un repère sans mesure publique reste en `noindex,follow` et n'entre
+pas dans le sitemap. La page d'ensemble suit la même règle tant qu'aucun repère ne produit une page
+substantielle. Cette porte est centralisée dans `src/lib/seo/reader-guide-robots.ts`.
+
 ## Limites
 
 La détection ne consulte pas le Web et ne produit pas de définition. Un terme nouveau demande donc
