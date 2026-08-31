@@ -303,9 +303,14 @@ export async function searchPresidentialCorpus(
     })
   );
   const candidateNames = candidacyRows.map((candidate) => candidate.candidateName);
-  const explicitCandidacyIds = candidacyRows
-    .filter((row) => candidateNameIsMentioned(query, row.candidateName, candidateNames))
-    .map((row) => row.id);
+  // The semantic-only strategy is an evaluation instrument: it must expose only vector results.
+  // The public lexical and hybrid paths keep this deterministic protection for exact names.
+  const explicitCandidacyIds =
+    options.strategy === "semantic"
+      ? []
+      : candidacyRows
+          .filter((row) => candidateNameIsMentioned(query, row.candidateName, candidateNames))
+          .map((row) => row.id);
   const measuresById = new Map(
     measureRows.flatMap((row) => {
       if (row.publishedRevision === null || row.candidacy === null) return [];

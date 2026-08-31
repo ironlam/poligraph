@@ -208,10 +208,11 @@ describe("searchPresidentialCorpus", () => {
   it("ne mélange aucun repli lexical au benchmark sémantique seul", async () => {
     searchPresidentialPage.mockResolvedValue({ strategy: "semantic", total: 0, hits: [] });
 
-    await searchPresidentialCorpus("presidentielle-test", "Comment se loger ?", 8, {
+    const result = await searchPresidentialCorpus("presidentielle-test", "Alice Martin", 8, {
       strategy: "semantic",
     });
 
     expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
   });
 });
