@@ -30,6 +30,7 @@ async function main() {
     findMeasureContextCandidateIds(electionSlug, ALL_CANDIDATES),
   ]);
 
+  const eligibleRevisionIds: string[] = [];
   const report = {
     election: electionSlug,
     promptVersion: MEASURE_CONTEXT_PROMPT_VERSION,
@@ -43,7 +44,11 @@ async function main() {
     sourceWithoutDistinctContext: 0,
     evidenceEligible: 0,
     queuedForGeneration: queuedIds.length,
-    previousAttemptOrTerminalResult: 0,
+    terminalNoUsefulContext: 0,
+    terminalInvalidContext: 0,
+    retryableInvalidContext: 0,
+    generationInProgress: 0,
+    unexplainedEligibleExclusions: 0,
   };
 
   for (const measure of measures) {
@@ -66,11 +71,70 @@ async function main() {
     else if (evidence.status === "INVALID") report.invalidEvidenceSnapshot += 1;
     else if (evidence.snapshot.supportingIds.length === 0) {
       report.sourceWithoutDistinctContext += 1;
-    } else report.evidenceEligible += 1;
+    } else {
+      report.evidenceEligible += 1;
+      if (measure.publishedRevisionId) eligibleRevisionIds.push(measure.publishedRevisionId);
+    }
   }
-  report.previousAttemptOrTerminalResult = Math.max(
+
+  const attempts =
+    eligibleRevisionIds.length === 0
+      ? []
+      : await db.auditLog.findMany({
+          where: {
+            entityType: "MeasureRevision",
+            entityId: { in: eligibleRevisionIds },
+            action: {
+              in: [
+                "GENERATE_CONTEXT_TERMINAL_RESULT",
+                "GENERATE_CONTEXT_INVALID_RESULT",
+                "RESERVE_CONTEXT_GENERATION",
+              ],
+            },
+          },
+          select: { action: true, entityId: true, changes: true },
+        });
+  const states = new Map<
+    string,
+    { activeReservation: boolean; invalidCount: number; terminal: string | null }
+  >();
+  for (const attempt of attempts) {
+    const changes =
+      attempt.changes && typeof attempt.changes === "object" && !Array.isArray(attempt.changes)
+        ? (attempt.changes as Record<string, unknown>)
+        : {};
+    if (changes.promptVersion !== MEASURE_CONTEXT_PROMPT_VERSION) continue;
+    const state = states.get(attempt.entityId) ?? {
+      activeReservation: false,
+      invalidCount: 0,
+      terminal: null,
+    };
+    if (attempt.action === "GENERATE_CONTEXT_TERMINAL_RESULT") {
+      state.terminal = typeof changes.outcome === "string" ? changes.outcome : "TERMINAL";
+    } else if (attempt.action === "GENERATE_CONTEXT_INVALID_RESULT") {
+      state.invalidCount += 1;
+    } else if (attempt.action === "RESERVE_CONTEXT_GENERATION") {
+      const expiresAt = typeof changes.expiresAt === "string" ? Date.parse(changes.expiresAt) : 0;
+      if (Number.isFinite(expiresAt) && expiresAt > Date.now()) state.activeReservation = true;
+    }
+    states.set(attempt.entityId, state);
+  }
+
+  for (const state of states.values()) {
+    if (state.terminal === "NO_USEFUL_CONTEXT") report.terminalNoUsefulContext += 1;
+    else if (state.terminal === "INVALID_GENERATED_CONTEXT" || state.invalidCount >= 2) {
+      report.terminalInvalidContext += 1;
+    } else if (state.activeReservation) report.generationInProgress += 1;
+    else if (state.invalidCount === 1) report.retryableInvalidContext += 1;
+  }
+  report.unexplainedEligibleExclusions = Math.max(
     0,
-    report.evidenceEligible - report.queuedForGeneration
+    report.evidenceEligible -
+      report.queuedForGeneration -
+      report.terminalNoUsefulContext -
+      report.terminalInvalidContext -
+      report.retryableInvalidContext -
+      report.generationInProgress
   );
 
   console.log(JSON.stringify(report, null, 2));
