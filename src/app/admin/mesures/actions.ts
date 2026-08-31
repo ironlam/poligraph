@@ -40,6 +40,12 @@ import {
   reviewMeasureRevisionSubtopic,
 } from "@/lib/measures/subtopics";
 import {
+  proposeReaderGuidesForRevision,
+  publishReaderGuide,
+  reviewReaderGuideMention,
+  saveReaderGuideDraft,
+} from "@/lib/measures/reader-guides";
+import {
   createMeasure,
   depublishMeasure,
   discardMeasureRevision,
@@ -144,6 +150,32 @@ const contextGenerationInputSchema = z
 
 const contextGenerationBatchInputSchema = z
   .object({ measureIds: z.array(z.string().min(1)).min(1).max(10) })
+  .strict();
+
+const readerGuideProposalInputSchema = z
+  .object({ measureId: z.string().min(1), revisionId: z.string().min(1) })
+  .strict();
+
+const readerGuideReviewInputSchema = z
+  .object({
+    measureId: z.string().min(1),
+    mentionId: z.string().min(1),
+    guideId: z.string().min(1).optional(),
+    status: z.enum(["APPROVED", "REJECTED"]),
+  })
+  .strict();
+
+const readerGuideDraftInputSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    slug: z.string().min(1).max(120),
+    label: z.string().min(3).max(160),
+    definition: z.string().min(40).max(2_000),
+    aliases: z.array(z.string().max(160)).max(30),
+    sourceUrl: z.string().url().max(2_000),
+    sourceLabel: z.string().min(3).max(300),
+    sourcePublisher: z.string().min(3).max(200),
+  })
   .strict();
 
 async function assertAuthenticated(): Promise<void> {
@@ -389,6 +421,70 @@ export async function reviewSubtopicAction(input: {
       reviewedBy: ACTOR,
     });
     revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function proposeReaderGuidesAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideProposalInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Révision à analyser invalide");
+    await proposeReaderGuidesForRevision(parsed.data.revisionId, ACTOR);
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MeasureValidationError) return toFailure(error);
+    return { ok: false, message: "L’analyse automatique a échoué. Réessayez plus tard." };
+  }
+}
+
+export async function reviewReaderGuideMentionAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideReviewInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Proposition de repère invalide");
+    await reviewReaderGuideMention({
+      mentionId: parsed.data.mentionId,
+      guideId: parsed.data.guideId,
+      status: parsed.data.status,
+      reviewedBy: ACTOR,
+    });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function saveReaderGuideDraftAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideDraftInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Le brouillon de repère est invalide");
+    const id = await saveReaderGuideDraft(
+      { ...parsed.data, sourceKind: "OFFICIAL_INSTITUTION" },
+      ACTOR
+    );
+    revalidatePath("/admin/mesures/reperes");
+    return { ok: true, measureId: id };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function publishReaderGuideAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ guideId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Repère invalide");
+    await publishReaderGuide(parsed.data.guideId, ACTOR);
+    revalidatePath("/admin/mesures/reperes");
     return { ok: true };
   } catch (error) {
     return toFailure(error);

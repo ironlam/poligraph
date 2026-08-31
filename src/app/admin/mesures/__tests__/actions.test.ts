@@ -67,6 +67,14 @@ const subtopicsMock = {
 };
 vi.mock("@/lib/measures/subtopics", () => subtopicsMock);
 
+const readerGuidesMock = {
+  proposeReaderGuidesForRevision: vi.fn(async () => ({ created: 0, proposals: [] })),
+  reviewReaderGuideMention: vi.fn(async () => undefined),
+  saveReaderGuideDraft: vi.fn(async () => "guide-1"),
+  publishReaderGuide: vi.fn(async () => undefined),
+};
+vi.mock("@/lib/measures/reader-guides", () => readerGuidesMock);
+
 const contextGenerationMock = {
   generateMeasureContextDraft: vi.fn(async () => ({
     status: "CREATED" as const,
@@ -145,6 +153,38 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
         }),
     },
     {
+      name: "proposeReaderGuidesAction",
+      call: () => a.proposeReaderGuidesAction({ measureId: "m-1", revisionId: "rev-1" }),
+    },
+    {
+      name: "reviewReaderGuideMentionAction",
+      call: () =>
+        a.reviewReaderGuideMentionAction({
+          measureId: "m-1",
+          mentionId: "mention-1",
+          guideId: "guide-1",
+          status: "APPROVED",
+        }),
+    },
+    {
+      name: "saveReaderGuideDraftAction",
+      call: () =>
+        a.saveReaderGuideDraftAction({
+          slug: "zones-faibles-emissions",
+          label: "Zone à faibles émissions",
+          definition:
+            "Un périmètre routier où la circulation des véhicules polluants est restreinte.",
+          aliases: ["ZFE"],
+          sourceUrl: "https://www.ecologie.gouv.fr/zfe",
+          sourceLabel: "Zones à faibles émissions",
+          sourcePublisher: "Ministère de la Transition écologique",
+        }),
+    },
+    {
+      name: "publishReaderGuideAction",
+      call: () => a.publishReaderGuideAction({ guideId: "guide-1" }),
+    },
+    {
       name: "generateContextDraftAction",
       call: () =>
         a.generateContextDraftAction({
@@ -215,6 +255,10 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).not.toHaveBeenCalled();
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).not.toHaveBeenCalled();
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).not.toHaveBeenCalled();
+    expect(readerGuidesMock.reviewReaderGuideMention).not.toHaveBeenCalled();
+    expect(readerGuidesMock.saveReaderGuideDraft).not.toHaveBeenCalled();
+    expect(readerGuidesMock.publishReaderGuide).not.toHaveBeenCalled();
     expect(contextGenerationMock.generateMeasureContextDraft).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
@@ -233,6 +277,10 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledTimes(1);
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledTimes(1);
     expect(contextGenerationMock.generateMeasureContextDraft).toHaveBeenCalledTimes(1);
   });
 });

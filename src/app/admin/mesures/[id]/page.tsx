@@ -17,12 +17,13 @@ import { AnomalyList } from "../_components/AnomalyList";
 import { MeasureActionPanel } from "../_components/MeasureActionPanel";
 import { MeasureMetadataPanel } from "../_components/MeasureMetadataPanel";
 import { MeasureSubtopicsPanel } from "../_components/MeasureSubtopicsPanel";
+import { MeasureReaderGuidesPanel } from "../_components/MeasureReaderGuidesPanel";
 import { ModerationStateBadge } from "../_components/ModerationStateBadge";
 import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
 import { VoteLinkForm } from "../_components/VoteLinkForm";
 import { availableActions, hasAmbiguousPointers } from "../_data/available-actions";
-import { getMeasureContext } from "../_data/detail-query";
+import { getMeasureContext, listReaderGuidesForModeration } from "../_data/detail-query";
 import { getMeasureVoteLinksForModeration } from "../_data/vote-links-query";
 
 export const metadata = {
@@ -74,11 +75,12 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
 
   // Three reads, three different questions: the moderation read applies no filter, the public
   // read applies both, and the context read carries who and which election.
-  const [measure, context, publicMeasure, voteLinks] = await Promise.all([
+  const [measure, context, publicMeasure, voteLinks, readerGuides] = await Promise.all([
     getMeasureForModeration(id),
     getMeasureContext(id),
     getPublicMeasure(id),
     getMeasureVoteLinksForModeration(id),
+    listReaderGuidesForModeration(),
   ]);
 
   if (measure === null || context === null) notFound();
@@ -221,6 +223,36 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
               status: assignment.status,
               confidence: assignment.confidence,
             }))}
+          />
+        </div>
+      </section>
+
+      <section aria-labelledby="reader-guides-heading">
+        <h2 id="reader-guides-heading" className="text-base font-semibold">
+          Repères pour comprendre
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            termes techniques proposés par l’IA, définitions rédigées et validées séparément
+          </span>
+        </h2>
+        <div className="mt-3">
+          <MeasureReaderGuidesPanel
+            measureId={id}
+            revisionId={referenceRevisionId}
+            mentions={(
+              measure.revisions.find((revision) => revision.id === referenceRevisionId)
+                ?.readerGuideMentions ?? []
+            ).map((mention) => ({
+              id: mention.id,
+              term: mention.term,
+              evidenceSpan: mention.evidenceSpan,
+              reason: mention.reason,
+              confidence: mention.confidence,
+              status: mention.status,
+              guideId: mention.guideId,
+              guideLabel: mention.guide?.label ?? null,
+              guidePublicationStatus: mention.guide?.publicationStatus ?? null,
+            }))}
+            guides={readerGuides}
           />
         </div>
       </section>
