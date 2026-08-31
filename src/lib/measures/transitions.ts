@@ -311,6 +311,10 @@ export async function draftMeasureRevision(
         select: {
           measureId: true,
           evidenceSnapshot: true,
+          reviewedAt: true,
+          publishedAt: true,
+          discardedAt: true,
+          rejectedAt: true,
           reviewReadiness: true,
           reviewWarnings: true,
           sources: {
@@ -326,6 +330,18 @@ export async function draftMeasureRevision(
       });
       if (!previous || previous.measureId !== input.measureId) {
         throw new MeasureValidationError("La révision source de la preuve est introuvable");
+      }
+      if (
+        input.generatedContext &&
+        measure.latestRevisionId !== measure.publishedRevisionId &&
+        (previous.reviewedAt !== null ||
+          previous.publishedAt !== null ||
+          previous.discardedAt !== null ||
+          previous.rejectedAt !== null)
+      ) {
+        throw new MeasureValidationError(
+          "Un brouillon relu ou modéré ne peut pas être remplacé automatiquement"
+        );
       }
       revisionInput = {
         ...input.revision,

@@ -107,6 +107,12 @@ describe("génération de contexte sourcé", () => {
       latestRevisionId: "revision-1",
       publishedRevisionId: "revision-1",
       updatedAt: new Date("2026-08-30T00:00:00Z"),
+      latestRevision: {
+        reviewedAt: new Date("2026-08-20T00:00:00Z"),
+        publishedAt: new Date("2026-08-21T00:00:00Z"),
+        discardedAt: null,
+        rejectedAt: null,
+      },
     });
     mocks.findAuditLogs.mockResolvedValue([]);
     mocks.createAuditLog.mockResolvedValue({ id: "audit-1" });
@@ -223,6 +229,12 @@ describe("génération de contexte sourcé", () => {
       latestRevisionId: activeDraft.id,
       publishedRevisionId: "revision-1",
       updatedAt: new Date("2026-08-30T00:00:00Z"),
+      latestRevision: {
+        reviewedAt: null,
+        publishedAt: null,
+        discardedAt: null,
+        rejectedAt: null,
+      },
     });
     const { generateMeasureContextDraft } = await import("../context-generation");
 
@@ -234,6 +246,40 @@ describe("génération de contexte sourcé", () => {
     expect(mocks.draftMeasureRevision).toHaveBeenCalledWith(
       expect.objectContaining({ preserveEvidenceFromRevisionId: activeDraft.id })
     );
+  });
+
+  it("protège un brouillon relu pendant la réservation de sa régénération", async () => {
+    const activeDraft = {
+      ...measure().publishedRevision,
+      id: "revision-v8-draft",
+      details: "Ancien contexte généré en attente de relecture.",
+      reviewedAt: null,
+      publishedAt: null,
+      extractorVersion: "mistral-small-2506:measure-context-v8",
+    };
+    mocks.findMeasure.mockResolvedValue(
+      measure({ latestRevisionId: activeDraft.id, latestRevision: activeDraft })
+    );
+    mocks.findMeasureForUpdate.mockResolvedValue({
+      latestRevisionId: activeDraft.id,
+      publishedRevisionId: "revision-1",
+      updatedAt: new Date("2026-08-30T00:00:00Z"),
+      latestRevision: {
+        reviewedAt: new Date("2026-08-30T00:01:00Z"),
+        publishedAt: null,
+        discardedAt: null,
+        rejectedAt: null,
+      },
+    });
+    const { generateMeasureContextDraft } = await import("../context-generation");
+
+    await expect(
+      generateMeasureContextDraft("measure-1", {
+        regenerateFromPromptVersion: "measure-context-v8",
+      })
+    ).rejects.toThrow("Le brouillon a été relu");
+    expect(mocks.callMistral).not.toHaveBeenCalled();
+    expect(mocks.draftMeasureRevision).not.toHaveBeenCalled();
   });
 
   it("refuse de remplacer un brouillon humain ou une version différente", async () => {

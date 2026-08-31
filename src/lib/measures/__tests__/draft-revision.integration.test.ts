@@ -43,6 +43,42 @@ describeIfDisposableDb("draftMeasureRevision", () => {
     expect(abandoned.reviewedBy).toBeNull();
   });
 
+  it("ne remplace pas automatiquement un brouillon relu pendant une génération", async () => {
+    const { measureId, revisionId } = await seedMeasureWithDraft();
+    await db.measureRevision.update({
+      where: { id: revisionId },
+      data: { reviewedAt: new Date(), reviewedBy: "relecteur" },
+    });
+    const input = draftInput(measureId, "Contexte régénéré qui ne doit pas survivre.");
+
+    await expect(
+      draftMeasureRevision({
+        ...input,
+        preserveEvidenceFromRevisionId: revisionId,
+        revision: {
+          ...input.revision,
+          details: "Contexte régénéré qui ne doit pas remplacer la revue humaine.",
+          extractionMethod: "AI_ASSISTED",
+          extractorVersion: "mistral-small-latest:measure-context-v9",
+        },
+        generatedContext: {
+          claims: [],
+          evidenceUnitIds: [],
+          generatedBy: "system",
+          ipAddress: "unknown",
+          model: "mistral-small-latest",
+          promptVersion: "measure-context-v9",
+          userAgent: "vitest",
+        },
+      })
+    ).rejects.toThrow("Un brouillon relu ou modéré");
+
+    const revisions = await db.measureRevision.findMany({ where: { measureId } });
+    expect(revisions.map(({ id }) => id)).toEqual([revisionId]);
+    expect(revisions[0]?.discardedAt).toBeNull();
+    expect(revisions[0]?.reviewedAt).not.toBeNull();
+  });
+
   it("does not discard the published revision when drafting a correction", async () => {
     const { measureId, revisionId: publishedId } = await seedMeasureWithDraft();
 

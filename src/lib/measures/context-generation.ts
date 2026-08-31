@@ -561,7 +561,19 @@ async function reserveContextGeneration(input: {
     await lockMeasure(tx, input.measureId);
     const currentMeasure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true, updatedAt: true },
+      select: {
+        latestRevisionId: true,
+        publishedRevisionId: true,
+        updatedAt: true,
+        latestRevision: {
+          select: {
+            reviewedAt: true,
+            publishedAt: true,
+            discardedAt: true,
+            rejectedAt: true,
+          },
+        },
+      },
     });
     if (currentMeasure.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
       throw new MeasureConcurrencyError(
@@ -575,6 +587,16 @@ async function reserveContextGeneration(input: {
       (!input.allowUnpublishedDraft && currentMeasure.publishedRevisionId !== input.revisionId)
     ) {
       throw new MeasureValidationError("La révision publiée a changé avant la génération");
+    }
+    if (
+      input.allowUnpublishedDraft &&
+      (!currentMeasure.latestRevision ||
+        currentMeasure.latestRevision.reviewedAt !== null ||
+        currentMeasure.latestRevision.publishedAt !== null ||
+        currentMeasure.latestRevision.discardedAt !== null ||
+        currentMeasure.latestRevision.rejectedAt !== null)
+    ) {
+      throw new MeasureValidationError("Le brouillon a été relu ou a changé avant la régénération");
     }
     const attempts = await tx.auditLog.findMany({
       where: {
