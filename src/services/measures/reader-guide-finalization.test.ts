@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyReaderGuideFinalization,
+  hashReaderGuideFinalizationPlan,
   planReaderGuideFinalization,
 } from "./reader-guide-finalization";
 
@@ -79,8 +80,38 @@ describe("finalisation en lot des repères", () => {
 
     expect(plan.ready).toBe(2);
     expect(plan.guidesToPublish).toEqual([
-      { id: "guide-zfe", slug: "zones-faibles-emissions", label: publishedGuide.label },
+      expect.objectContaining({
+        id: "guide-zfe",
+        slug: "zones-faibles-emissions",
+        label: publishedGuide.label,
+        definition: publishedGuide.definition,
+        sourceUrl: publishedGuide.sourceUrl,
+      }),
     ]);
+  });
+
+  it("invalide l'empreinte si la définition ou sa source change après relecture", () => {
+    const mentions = [mention({ id: "1", term: "ZFE", normalizedTerm: "zfe" })];
+    const first = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [{ ...publishedGuide, publicationStatus: "DRAFT" }],
+      mentions,
+    });
+    const changed = planReaderGuideFinalization({
+      electionSlug: "presidentielle-2027",
+      guides: [
+        {
+          ...publishedGuide,
+          publicationStatus: "DRAFT",
+          definition: `${publishedGuide.definition} Texte modifié après le dry-run.`,
+        },
+      ],
+      mentions,
+    });
+
+    expect(hashReaderGuideFinalizationPlan(changed)).not.toBe(
+      hashReaderGuideFinalizationPlan(first)
+    );
   });
 
   it("laisse les termes inconnus et les brouillons incomplets hors du lot", () => {

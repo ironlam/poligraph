@@ -62,7 +62,18 @@ export type ReaderGuideFinalizationPlan = {
   unresolved: number;
   invalidGuides: number;
   duplicates: number;
-  guidesToPublish: Array<{ id: string; slug: string; label: string }>;
+  guidesToPublish: Array<{
+    id: string;
+    slug: string;
+    label: string;
+    definition: string;
+    aliases: string[];
+    sourceKind: string;
+    sourceUrl: string;
+    sourceLabel: string;
+    sourcePublisher: string;
+    sourceRevisionId: string | null;
+  }>;
   unresolvedTerms: Array<{ normalizedTerm: string; example: string; occurrences: number }>;
   nextAfter: string | null;
   items: ReaderGuideFinalizationItem[];
@@ -179,10 +190,24 @@ export function planReaderGuideFinalization(input: {
     ...new Map(
       items
         .filter((item) => item.outcome === "READY" && item.publishesGuide && item.guideId)
-        .map((item) => [
-          item.guideId!,
-          { id: item.guideId!, slug: item.guideSlug!, label: item.guideLabel! },
-        ])
+        .map((item) => {
+          const guide = byId.get(item.guideId!)!;
+          return [
+            guide.id,
+            {
+              id: guide.id,
+              slug: guide.slug,
+              label: guide.label,
+              definition: guide.definition,
+              aliases: guide.aliases,
+              sourceKind: guide.sourceKind,
+              sourceUrl: guide.sourceUrl,
+              sourceLabel: guide.sourceLabel,
+              sourcePublisher: guide.sourcePublisher,
+              sourceRevisionId: guide.sourceRevisionId,
+            },
+          ] as const;
+        })
     ).values(),
   ];
   const unresolvedTerms = [
