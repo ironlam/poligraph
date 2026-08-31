@@ -494,7 +494,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       : [];
 
   const presidentialReaderGuidePages: MetadataRoute.Sitemap =
-    presidentielleHubPublishable && indexablePresidentialReaderGuides.length > 0
+    indexablePresidentialReaderGuides.length > 0
       ? [
           {
             url: `${SITE_URL}${presidentialReaderGuidesPath()}`,

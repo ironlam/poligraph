@@ -381,6 +381,9 @@ describe("doctrine — presidentielle-2027 hub stays out of the sitemap while un
     expect(electionShard).toContain("presidentialReaderGuidesPath()");
     expect(electionShard).toContain("presidentialReaderGuidePath(guide.slug)");
     expect(electionShard).toContain("...presidentialReaderGuidePages");
+    expect(electionShard).toMatch(
+      /const presidentialReaderGuidePages:[\s\S]*=\s*indexablePresidentialReaderGuides\.length > 0/
+    );
   });
 });
 
