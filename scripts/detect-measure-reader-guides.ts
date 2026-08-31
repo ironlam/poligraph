@@ -14,6 +14,8 @@ async function main(): Promise<void> {
   const runId = randomUUID();
   const rows = await listReaderGuideDetectionCandidates(options);
   const results: Array<Record<string, unknown>> = [];
+  let lastCompletedId = options.after ?? null;
+  let failed = false;
   for (const row of rows) {
     if (!row.publishedRevisionId) continue;
     try {
@@ -28,10 +30,13 @@ async function main(): Promise<void> {
         ...result,
       });
       console.log(`${row.id}: ${result.proposals.length} proposition(s)`);
+      lastCompletedId = row.id;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       results.push({ measureId: row.id, revisionId: row.publishedRevisionId, error: message });
       console.error(`${row.id}: ${message}`);
+      failed = true;
+      break;
     }
   }
   const reportDir = join(process.cwd(), "scripts", ".local");
@@ -46,7 +51,7 @@ async function main(): Promise<void> {
         mode: options.apply ? "apply" : "dry-run",
         parameters: options,
         processed: results.length,
-        nextAfter: rows.at(-1)?.id ?? null,
+        nextAfter: lastCompletedId,
         mistralTokens: getMistralTokensUsed(),
         results,
       },
@@ -55,8 +60,14 @@ async function main(): Promise<void> {
     )
   );
   console.log(`Rapport : ${reportPath}`);
-  if (rows.length === options.limit && rows.at(-1)) {
-    console.log(`Lot suivant : --after ${rows.at(-1)!.id}`);
+  if (failed) {
+    console.log(
+      lastCompletedId
+        ? `Reprendre après correction : --after ${lastCompletedId}`
+        : "Reprendre après correction sans modifier le curseur"
+    );
+  } else if (rows.length === options.limit && lastCompletedId) {
+    console.log(`Lot suivant : --after ${lastCompletedId}`);
   }
 }
 

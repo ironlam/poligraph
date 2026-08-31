@@ -5,11 +5,11 @@ import { syncSearchDocument, syncSearchDocuments } from "@/lib/measures/search-s
 import { invalidateMeasureTags } from "@/lib/measures/cache";
 import { MeasureValidationError } from "@/lib/measures/errors";
 import {
-  detectReaderGuideTerms,
   normalizeReaderGuideTerm,
   READER_GUIDE_DETECTOR_VERSION,
   type ReaderGuideDetection,
 } from "@/lib/measures/reader-guide-detection";
+import { detectReaderGuideTerms } from "@/services/measures/reader-guide-detection";
 import { isOfficialInstitutionUrl } from "@/lib/measures/reader-guide-source";
 import { Prisma } from "@/generated/prisma";
 
@@ -490,18 +490,17 @@ export async function deactivateReaderGuide(
         revision: { select: { measure: { select: { id: true, electionId: true } } } },
       },
     });
-    return [
+    const measures = [
       ...new Map(
         mentions.map(({ revision }) => [revision.measure.id, revision.measure] as const)
       ).values(),
     ];
-  });
-  for (let index = 0; index < measures.length; index += 25) {
     await syncSearchDocuments(
-      db,
-      measures.slice(index, index + 25).map(({ id }) => id)
+      tx,
+      measures.map(({ id }) => id)
     );
-  }
+    return measures;
+  });
   for (const measure of measures) invalidateMeasureTags(measure.id, measure.electionId);
   return measures.length;
 }

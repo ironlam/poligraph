@@ -34,10 +34,9 @@ vi.mock("@/lib/db", () => ({
     $transaction: (callback: (tx: typeof mocks.tx) => unknown) => callback(mocks.tx),
   },
 }));
-vi.mock("@/lib/measures/reader-guide-detection", async (importActual) => {
-  const actual = await importActual<typeof import("./reader-guide-detection")>();
-  return { ...actual, detectReaderGuideTerms: mocks.detect };
-});
+vi.mock("@/services/measures/reader-guide-detection", () => ({
+  detectReaderGuideTerms: mocks.detect,
+}));
 vi.mock("@/lib/measures/search-sync", () => ({
   syncSearchDocument: mocks.syncSearch,
   syncSearchDocuments: mocks.syncSearchMany,
@@ -208,5 +207,21 @@ describe("workflow des repères citoyens", () => {
       "measure-2",
     ]);
     expect(mocks.invalidate).toHaveBeenCalledTimes(2);
+  });
+
+  it("annule la désactivation si la resynchronisation de recherche échoue", async () => {
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue({
+      active: true,
+      publicationStatus: "PUBLISHED",
+    });
+    mocks.tx.measureRevisionReaderGuide.findMany.mockResolvedValue([
+      { revision: { measure: { id: "measure-1", electionId: "election-1" } } },
+    ]);
+    mocks.syncSearchMany.mockRejectedValueOnce(new Error("search unavailable"));
+    const { deactivateReaderGuide } = await import("./reader-guides");
+
+    await expect(deactivateReaderGuide("guide-1", "admin")).rejects.toThrow("search unavailable");
+    expect(mocks.syncSearchMany).toHaveBeenCalledWith(expect.anything(), ["measure-1"]);
+    expect(mocks.invalidate).not.toHaveBeenCalled();
   });
 });
