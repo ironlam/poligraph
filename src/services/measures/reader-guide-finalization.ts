@@ -18,7 +18,7 @@ type FinalizationGuide = {
   aliases: string[];
   definition: string;
   publicationStatus: string;
-  sourceKind: string;
+  sourceKind: "OFFICIAL_INSTITUTION" | "PROGRAM_SOURCE";
   sourceUrl: string;
   sourceLabel: string;
   sourcePublisher: string;
@@ -61,7 +61,7 @@ export type ReaderGuideFinalizationGuideSnapshot = {
   label: string;
   definition: string;
   aliases: string[];
-  sourceKind: string;
+  sourceKind: "OFFICIAL_INSTITUTION" | "PROGRAM_SOURCE";
   sourceUrl: string;
   sourceLabel: string;
   sourcePublisher: string;
@@ -382,7 +382,7 @@ export async function applyReaderGuideFinalization(
 
   for (const guide of plan.guidesToPublish) {
     try {
-      await publishReaderGuide(guide.id, actor);
+      await publishReaderGuide(guide.id, actor, {}, guide);
       publishedGuides += 1;
     } catch (error) {
       failedGuideIds.add(guide.id);

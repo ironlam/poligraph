@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => {
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
-    measureReaderGuide: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    measureReaderGuide: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
     measureReaderGuideDetectionRun: { upsert: vi.fn() },
     measureSource: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -73,6 +78,7 @@ describe("workflow des repères citoyens", () => {
     mocks.tx.measureRevisionReaderGuide.createMany
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValue({ count: 0 });
+    mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("crée uniquement une suggestion et reste idempotent", async () => {
@@ -177,6 +183,60 @@ describe("workflow des repères citoyens", () => {
       },
       select: { id: true },
     });
+  });
+
+  it("publie seulement le brouillon dont le contenu a été relu", async () => {
+    const guide = {
+      id: "guide-1",
+      slug: "zones-faibles-emissions",
+      label: "Zone à faibles émissions (ZFE)",
+      definition: "Une définition institutionnelle suffisamment complète pour être publiée.",
+      aliases: ["ZFE"],
+      publicationStatus: "DRAFT",
+      sourceKind: "OFFICIAL_INSTITUTION" as const,
+      sourceUrl: "https://www.ecologie.gouv.fr/politiques-publiques/zones-faibles-emissions-zfe",
+      sourceLabel: "Zones à faibles émissions",
+      sourcePublisher: "Ministère de la Transition écologique",
+      sourceRevisionId: null,
+    };
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue(guide);
+    const { publishReaderGuide } = await import("./reader-guides");
+
+    await publishReaderGuide("guide-1", "admin", {}, guide);
+
+    expect(mocks.tx.measureReaderGuide.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: "guide-1",
+        definition: guide.definition,
+        aliases: { equals: ["ZFE"] },
+        sourceUrl: guide.sourceUrl,
+      }),
+      data: expect.objectContaining({ publicationStatus: "PUBLISHED", reviewedBy: "admin" }),
+    });
+  });
+
+  it("refuse la publication si le brouillon change après la relecture", async () => {
+    const guide = {
+      id: "guide-1",
+      slug: "zones-faibles-emissions",
+      label: "Zone à faibles émissions (ZFE)",
+      definition: "Une définition institutionnelle suffisamment complète pour être publiée.",
+      aliases: ["ZFE"],
+      publicationStatus: "DRAFT",
+      sourceKind: "OFFICIAL_INSTITUTION" as const,
+      sourceUrl: "https://www.ecologie.gouv.fr/politiques-publiques/zones-faibles-emissions-zfe",
+      sourceLabel: "Zones à faibles émissions",
+      sourcePublisher: "Ministère de la Transition écologique",
+      sourceRevisionId: null,
+    };
+    mocks.tx.measureReaderGuide.findUnique.mockResolvedValue(guide);
+    mocks.tx.measureReaderGuide.updateMany.mockResolvedValueOnce({ count: 0 });
+    const { publishReaderGuide } = await import("./reader-guides");
+
+    await expect(publishReaderGuide("guide-1", "admin", {}, guide)).rejects.toThrow(
+      /changé depuis la relecture/
+    );
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it("désactive un repère publié et resynchronise chaque mesure concernée une fois", async () => {

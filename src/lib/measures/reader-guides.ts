@@ -88,8 +88,8 @@ export async function syncReaderGuideCatalog(actor = "system"): Promise<{
         return "created" as const;
       }
       if (existing.publicationStatus !== "DRAFT") return "preserved" as const;
-      await tx.measureReaderGuide.update({
-        where: { id: existing.id },
+      const changed = await tx.measureReaderGuide.updateMany({
+        where: { id: existing.id, publicationStatus: "DRAFT" },
         data: {
           label: definition.label,
           definition: definition.definition,
@@ -100,6 +100,7 @@ export async function syncReaderGuideCatalog(actor = "system"): Promise<{
           sourceKind: "OFFICIAL_INSTITUTION",
         },
       });
+      if (changed.count !== 1) return "preserved" as const;
       await tx.auditLog.create({
         data: {
           action: "SYNC_READER_GUIDE_DRAFT",
@@ -379,7 +380,13 @@ export async function saveReaderGuideDraft(
       if (!existing || existing.publicationStatus !== "DRAFT") {
         throw new MeasureValidationError("Seul un brouillon peut être modifié");
       }
-      await tx.measureReaderGuide.update({ where: { id: input.id }, data });
+      const changed = await tx.measureReaderGuide.updateMany({
+        where: { id: input.id, publicationStatus: "DRAFT" },
+        data,
+      });
+      if (changed.count !== 1) {
+        throw new MeasureValidationError("Ce brouillon a été publié pendant sa modification");
+      }
       await tx.auditLog.create({
         data: {
           action: "UPDATE_READER_GUIDE_DRAFT",
@@ -410,10 +417,23 @@ export async function saveReaderGuideDraft(
   });
 }
 
+export type ReaderGuidePublishSnapshot = {
+  slug: string;
+  label: string;
+  definition: string;
+  aliases: string[];
+  sourceKind: "OFFICIAL_INSTITUTION" | "PROGRAM_SOURCE";
+  sourceUrl: string;
+  sourceLabel: string;
+  sourcePublisher: string;
+  sourceRevisionId: string | null;
+};
+
 export async function publishReaderGuide(
   guideId: string,
   actor: string,
-  auditMetadata: ReaderGuideAuditMetadata = {}
+  auditMetadata: ReaderGuideAuditMetadata = {},
+  expectedDraft?: ReaderGuidePublishSnapshot
 ): Promise<void> {
   await db.$transaction(async (tx) => {
     const guide = await tx.measureReaderGuide.findUnique({ where: { id: guideId } });
@@ -441,10 +461,34 @@ export async function publishReaderGuide(
       });
       if (!source) throw new MeasureValidationError("La source de programme n'est plus valide");
     }
-    await tx.measureReaderGuide.update({
-      where: { id: guideId },
-      data: { publicationStatus: "PUBLISHED", reviewedAt: new Date(), reviewedBy: actor },
-    });
+    const publicationData = {
+      publicationStatus: "PUBLISHED" as const,
+      reviewedAt: new Date(),
+      reviewedBy: actor,
+    };
+    if (expectedDraft) {
+      const published = await tx.measureReaderGuide.updateMany({
+        where: {
+          id: guideId,
+          publicationStatus: "DRAFT",
+          slug: expectedDraft.slug,
+          label: expectedDraft.label,
+          definition: expectedDraft.definition,
+          aliases: { equals: expectedDraft.aliases },
+          sourceKind: expectedDraft.sourceKind,
+          sourceUrl: expectedDraft.sourceUrl,
+          sourceLabel: expectedDraft.sourceLabel,
+          sourcePublisher: expectedDraft.sourcePublisher,
+          sourceRevisionId: expectedDraft.sourceRevisionId,
+        },
+        data: publicationData,
+      });
+      if (published.count !== 1) {
+        throw new MeasureValidationError("Le repère a changé depuis la relecture du lot");
+      }
+    } else {
+      await tx.measureReaderGuide.update({ where: { id: guideId }, data: publicationData });
+    }
     await tx.auditLog.create({
       data: {
         action: "PUBLISH_READER_GUIDE",

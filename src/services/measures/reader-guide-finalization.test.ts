@@ -203,7 +203,15 @@ describe("finalisation en lot des repères", () => {
     const result = await applyReaderGuideFinalization(plan, "cli:reader-guides:run-1");
 
     expect(result).toEqual({ publishedGuides: 1, approvedMentions: 1, errors: [] });
-    expect(serviceMocks.publish).toHaveBeenCalledWith("guide-zfe", "cli:reader-guides:run-1");
+    expect(serviceMocks.publish).toHaveBeenCalledWith(
+      "guide-zfe",
+      "cli:reader-guides:run-1",
+      {},
+      expect.objectContaining({
+        definition: publishedGuide.definition,
+        sourceUrl: publishedGuide.sourceUrl,
+      })
+    );
     expect(serviceMocks.review).toHaveBeenCalledWith({
       mentionId: "1",
       guideId: "guide-zfe",
