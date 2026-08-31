@@ -6,6 +6,7 @@ const findMeasures = vi.fn();
 const findSubtopic = vi.fn();
 const listMeasures = vi.fn();
 const searchPublicPage = vi.fn();
+const searchPresidentialPage = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
     election: { findUnique: (...args: unknown[]) => findElection(...args) },
@@ -20,14 +21,29 @@ vi.mock("@/lib/data/measures", () => ({
 vi.mock("@/lib/search/query", () => ({
   searchPublicPage: (...args: unknown[]) => searchPublicPage(...args),
 }));
+vi.mock("@/services/presidentielle/hybrid-search", () => ({
+  searchPresidentialPage: (...args: unknown[]) => searchPresidentialPage(...args),
+}));
 
-import { searchPresidentialCorpus } from "../corpus-search";
+import {
+  candidateNameIsMentioned,
+  searchPresidentialCorpus,
+} from "@/services/presidentielle/corpus-search";
 
 describe("searchPresidentialCorpus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     findElection.mockResolvedValue({ id: "election-1", slug: "presidentielle-test" });
     searchPublicPage.mockResolvedValue({
+      total: 3,
+      hits: [
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "MEASURE", entityId: "measure-stale", title: "Fermée", url: "/old" },
+      ],
+    });
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "lexical",
       total: 3,
       hits: [
         { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
@@ -57,19 +73,45 @@ describe("searchPresidentialCorpus", () => {
         publishedRevision: {
           text: "Construire des logements publics",
           precision: null,
-          sources: [{ sourceKind: "PROGRAMME_CANDIDAT" }],
+          sources: [
+            {
+              sourceKind: "INTERVIEW_PRESSE",
+              tier: "SECONDARY",
+              url: "https://example.org/interview",
+            },
+            {
+              sourceKind: "PROGRAMME_CANDIDAT",
+              tier: "PRIMARY",
+              url: "https://example.org/programme",
+            },
+          ],
         },
-        candidacy: { candidateName: "Alice Martin" },
+        candidacy: { candidateName: "Alice Martin", politician: { slug: "alice-martin" } },
       },
     ]);
+  });
+
+  it("détecte localement un nom complet ou un nom de famille dans une question", () => {
+    expect(candidateNameIsMentioned("Que propose Marine Le Pen ?", "Marine Le Pen")).toBe(true);
+    expect(candidateNameIsMentioned("Le programme de Mélenchon", "Jean-Luc Mélenchon")).toBe(true);
+    expect(
+      candidateNameIsMentioned("Que propose Philippe Poutou ?", "Édouard Philippe", [
+        "Édouard Philippe",
+        "Philippe Poutou",
+      ])
+    ).toBe(false);
+    expect(candidateNameIsMentioned("Que proposent les candidats ?", "Marine Le Pen")).toBe(false);
   });
 
   it("scope l'index et réhydrate en deux requêtes publiques bornées", async () => {
     const result = await searchPresidentialCorpus("presidentielle-test", "logement", 8);
 
-    expect(searchPublicPage).toHaveBeenCalledWith("logement", {
+    expect(searchPresidentialPage).toHaveBeenCalledWith({
+      query: "logement",
+      lexicalQuery: "logement",
       electionId: "election-1",
       limit: 8,
+      strategy: "lexical",
     });
     expect(findCandidacies.mock.calls[0]?.[0]).toMatchObject({
       where: { electionId: "election-1" },
@@ -85,6 +127,8 @@ describe("searchPresidentialCorpus", () => {
     expect(result?.measures[0]).toMatchObject({
       text: "Construire des logements publics",
       url: "/elections/presidentielle-test/mesures/alice-martin-construire-des-logements-publics",
+      sourceLabel: "PROGRAMME_CANDIDAT",
+      sourceUrl: "https://example.org/programme",
     });
     expect(result?.subjects).toEqual([
       {
@@ -105,7 +149,7 @@ describe("searchPresidentialCorpus", () => {
   it("ne consulte pas l'index pour une requête trop courte", async () => {
     const result = await searchPresidentialCorpus("presidentielle-test", "a", 8);
     expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
-    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(searchPresidentialPage).not.toHaveBeenCalled();
   });
 
   it("filtre un sous-thème sur son rattachement validé et conserve la pagination", async () => {
@@ -121,10 +165,10 @@ describe("searchPresidentialCorpus", () => {
           measureId: "measure-subtopic",
           text: "Ouvrir des centres de santé",
           publicUrl: "/elections/presidentielle-test/mesures/ouvrir-des-centres-de-sante",
-          candidacy: { candidateName: "Alice Martin" },
+          candidacy: { candidateName: "Alice Martin", politicianSlug: "alice-martin" },
           theme: { code: "SANTE" },
           precision: { code: null },
-          sources: [{ sourceKind: "PROGRAMME_CANDIDAT" }],
+          sources: [{ sourceKind: "PROGRAMME_CANDIDAT", url: "https://example.org/programme" }],
         },
       ],
     });
@@ -141,7 +185,7 @@ describe("searchPresidentialCorpus", () => {
       page: 2,
       limit: 50,
     });
-    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(searchPresidentialPage).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       query: "Accès aux soins",
       total: 74,
@@ -152,6 +196,7 @@ describe("searchPresidentialCorpus", () => {
   });
 
   it("retire la formulation d’une question avant la recherche lexicale", async () => {
+    searchPresidentialPage.mockResolvedValue({ strategy: "lexical", total: 0, hits: [] });
     searchPublicPage.mockResolvedValue({ total: 0, hits: [] });
 
     await searchPresidentialCorpus(
@@ -160,13 +205,61 @@ describe("searchPresidentialCorpus", () => {
       8
     );
 
-    expect(searchPublicPage).toHaveBeenNthCalledWith(1, "réduire coût logement", {
+    expect(searchPresidentialPage).toHaveBeenCalledWith({
+      query: "Que proposent les candidats pour réduire le coût du logement ?",
+      lexicalQuery: "réduire coût logement",
+      electionId: "election-1",
+      limit: 8,
+      strategy: "lexical",
+    });
+    expect(searchPublicPage).toHaveBeenCalledWith("Logement et urbanisme", {
       electionId: "election-1",
       limit: 8,
     });
-    expect(searchPublicPage).toHaveBeenNthCalledWith(2, "Logement et urbanisme", {
-      electionId: "election-1",
-      limit: 8,
+  });
+
+  it("ne mélange aucun repli lexical au benchmark sémantique seul", async () => {
+    searchPresidentialPage.mockResolvedValue({ strategy: "semantic", total: 0, hits: [] });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "Alice Martin", 8, {
+      strategy: "semantic",
     });
+
+    expect(searchPublicPage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ total: 0, subjects: [], candidacies: [], measures: [] });
+  });
+
+  it("conserve le rang vectoriel entre mesures et candidatures", async () => {
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "semantic",
+      total: 2,
+      hits: [
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+      ],
+    });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "Alice logement", 8, {
+      strategy: "semantic",
+    });
+
+    expect(result?.rankedResults?.map((item) => item.type)).toEqual(["measure", "candidacy"]);
+  });
+
+  it("conserve aussi le rang hybride entre mesures et candidatures", async () => {
+    searchPresidentialPage.mockResolvedValue({
+      strategy: "hybrid",
+      total: 2,
+      hits: [
+        { entityType: "MEASURE", entityId: "measure-public", title: "Logement", url: "/old" },
+        { entityType: "CANDIDACY", entityId: "cand-public", title: "Alice", url: "/old" },
+      ],
+    });
+
+    const result = await searchPresidentialCorpus("presidentielle-test", "habitat", 8, {
+      strategy: "hybrid",
+    });
+
+    expect(result?.rankedResults?.map((item) => item.type)).toEqual(["measure", "candidacy"]);
   });
 });

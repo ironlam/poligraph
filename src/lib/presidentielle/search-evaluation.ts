@@ -3,6 +3,7 @@ import type {
   PresidentialSearchExpectation,
 } from "@/config/presidential-search-evaluation";
 import type { PresidentialCorpusSearchResult } from "@/services/presidentielle/corpus-search";
+import type { PresidentialSearchStrategy } from "@/services/presidentielle/hybrid-search";
 
 type RankedResult =
   | { kind: "theme"; theme: string; label: string }
@@ -22,12 +23,14 @@ export type PresidentialSearchCaseEvaluation = {
   passed: boolean;
   expectations: PresidentialSearchExpectation[];
   topResults: RankedResult[];
+  semanticMaxSimilarity: number | null;
 };
 
 export type PresidentialSearchEvaluationReport = {
   generatedAt: string;
   electionSlug: string;
-  strategy: "lexical";
+  strategy: PresidentialSearchStrategy;
+  embeddingCache: "enabled" | "bypassed";
   topK: number;
   queryCount: number;
   metrics: {
@@ -50,23 +53,17 @@ function normalize(value: string): string {
 }
 
 function flatten(result: PresidentialCorpusSearchResult): RankedResult[] {
-  return [
-    ...result.subjects.map((subject) => ({
-      kind: "theme" as const,
-      theme: subject.theme,
-      label: subject.label,
-    })),
-    ...result.candidacies.map((candidate) => ({
-      kind: "candidacy" as const,
-      name: candidate.name,
-    })),
-    ...result.measures.map((measure) => ({
-      kind: "measure" as const,
-      text: measure.text,
-      candidateName: measure.candidateName,
-      theme: measure.theme,
-    })),
-  ];
+  const rankedResults = result.rankedResults ?? [...result.candidacies, ...result.measures];
+  return rankedResults.map((item) =>
+    item.type === "candidacy"
+      ? { kind: "candidacy" as const, name: item.name }
+      : {
+          kind: "measure" as const,
+          text: item.text,
+          candidateName: item.candidateName,
+          theme: item.theme,
+        }
+  );
 }
 
 function matches(expectation: PresidentialSearchExpectation, result: RankedResult): boolean {
@@ -128,6 +125,7 @@ export function evaluatePresidentialSearchCase(input: {
     passed: expectsNone ? ranked.length === 0 : matchedExpectations === positiveExpectations.length,
     expectations: input.testCase.expectations,
     topResults,
+    semanticMaxSimilarity: input.result.semanticMaxSimilarity ?? null,
   };
 }
 
@@ -147,6 +145,8 @@ export function buildPresidentialSearchEvaluationReport(input: {
   topK: number;
   cases: PresidentialSearchCaseEvaluation[];
   generatedAt?: Date;
+  strategy?: PresidentialSearchStrategy;
+  embeddingCache?: "enabled" | "bypassed";
 }): PresidentialSearchEvaluationReport {
   const negatives = input.cases.filter((item) => item.category === "negative");
   const positiveRecall = input.cases.flatMap((item) =>
@@ -158,7 +158,8 @@ export function buildPresidentialSearchEvaluationReport(input: {
   return {
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     electionSlug: input.electionSlug,
-    strategy: "lexical",
+    strategy: input.strategy ?? "lexical",
+    embeddingCache: input.embeddingCache ?? "enabled",
     topK: input.topK,
     queryCount: input.cases.length,
     metrics: {

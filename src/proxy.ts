@@ -144,7 +144,7 @@ function degradedResponse(
 
 // ─── Route → tier mapping ────────────────────────────────────────
 
-function getTier(pathname: string): RateLimitTier | null {
+export function getRateLimitTier(pathname: string): RateLimitTier | null {
   // Excluded routes — handled by their own rate limiting or internal
   if (pathname.startsWith("/api/chat")) return null;
   if (pathname.startsWith("/api/cron")) return null;
@@ -162,6 +162,12 @@ function getTier(pathname: string): RateLimitTier | null {
     return "subscribe";
   }
   if (pathname.startsWith("/api/export")) return "export";
+  if (
+    pathname === "/elections/presidentielle-2027/recherche" ||
+    pathname.startsWith("/api/elections/presidentielle-2027/recherche")
+  ) {
+    return "search";
+  }
   if (pathname.startsWith("/api/search")) return "search";
   if (pathname.startsWith("/api/")) return "general";
 
@@ -240,7 +246,7 @@ async function applyApiRateLimit(
     return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  const tier = getTier(pathname);
+  const tier = getRateLimitTier(pathname);
   if (!tier) return null;
 
   const limiter = getLimiter(tier);

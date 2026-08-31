@@ -348,7 +348,7 @@ export default function SourcesPage() {
       </section>
 
       {/* Intelligence artificielle */}
-      <section className="mb-12">
+      <section id="intelligence-artificielle" className="mb-12 scroll-mt-24">
         <h2 className="text-2xl font-bold mb-6">Intelligence Artificielle</h2>
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -366,12 +366,17 @@ export default function SourcesPage() {
               <li>
                 <strong>Modération</strong> : aide à la vérification des données judiciaires
               </li>
+              <li>
+                <strong>Recherche sémantique</strong> : transforme une recherche soumise dans le
+                corpus présidentiel en vecteur avec Mistral AI afin de retrouver des formulations
+                proches. Le modèle ordonne les résultats par pertinence textuelle, sans évaluer les
+                candidats ni leurs propositions, et ne rédige pas de réponse.
+              </li>
             </ul>
             <p className="text-sm text-muted-foreground">
-              L&apos;IA n&apos;est pas utilisée pour rédiger des contenus éditoriaux. Certains
-              champs descriptifs (biographies, résumés) ont été générés à partir des données
-              structurées Wikidata présentes en base, puis validés manuellement. Toutes les sources
-              de données sont réelles et vérifiables.
+              Les productions de l&apos;IA ne sont jamais publiées comme des faits sans sources ni
+              validation humaine. Certains champs descriptifs sont préparés à partir de documents
+              publics vérifiables, puis relus avant publication.
             </p>
           </CardContent>
         </Card>

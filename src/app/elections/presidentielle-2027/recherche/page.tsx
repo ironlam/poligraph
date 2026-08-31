@@ -10,7 +10,7 @@ import {
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import { searchPresidentialCorpus } from "@/lib/presidentielle/corpus-search";
-import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 
 const PAGE_PATH = "/elections/presidentielle-2027/recherche";
 
@@ -43,10 +43,45 @@ export default async function PresidentialSearchPage({
   const result = await searchPresidentialCorpus(PRESIDENTIELLE_2027_SLUG, query, 50, {
     subtopicSlug,
     page,
+    strategy: subtopicSlug ? "lexical" : "hybrid",
   });
   const hasResults = result !== null && result.total > 0;
   const hasSearch = query.length >= 2 || subtopicSlug !== undefined;
   const resultLabel = result?.query || query;
+  const measuresByThemeAndCandidate = new Map<
+    NonNullable<typeof result>["measures"][number]["theme"],
+    Map<string, NonNullable<typeof result>["measures"]>
+  >();
+  for (const measure of result?.measures ?? []) {
+    const candidates = measuresByThemeAndCandidate.get(measure.theme) ?? new Map();
+    const measures = candidates.get(measure.candidateName) ?? [];
+    measures.push(measure);
+    candidates.set(measure.candidateName, measures);
+    measuresByThemeAndCandidate.set(measure.theme, candidates);
+  }
+  const comparisonCandidates = [
+    ...new Map(
+      [
+        ...(result?.candidacies ?? []).map((candidacy) => ({
+          candidateSlug: candidacy.slug,
+          candidateName: candidacy.name,
+        })),
+        ...(result?.measures ?? []).flatMap((measure) =>
+          measure.candidateSlug
+            ? [{ candidateSlug: measure.candidateSlug, candidateName: measure.candidateName }]
+            : []
+        ),
+      ].map((candidate) => [candidate.candidateSlug, candidate] as const)
+    ).values(),
+  ].slice(0, 2);
+  const comparisonParams = new URLSearchParams();
+  for (const measure of comparisonCandidates) {
+    comparisonParams.append("candidat", measure.candidateSlug);
+  }
+  if (measuresByThemeAndCandidate.size === 1) {
+    const [theme] = new Set((result?.measures ?? []).map((measure) => measure.theme));
+    if (theme) comparisonParams.set("theme", themeToSlug(theme));
+  }
 
   return (
     <main className="container mx-auto px-4 pb-12 pt-4">
@@ -69,25 +104,38 @@ export default async function PresidentialSearchPage({
           Résultats dans le corpus 2027
         </h1>
 
-        <form role="search" className="mt-6 flex gap-2" action={PAGE_PATH}>
-          <label htmlFor="full-corpus-query" className="sr-only">
+        <form role="search" className="mt-6" action={PAGE_PATH}>
+          <label htmlFor="full-corpus-query" className="block font-bold">
             Rechercher une mesure ou une personnalité suivie
           </label>
-          <input
-            id="full-corpus-query"
-            name="q"
-            type="search"
-            defaultValue={query}
-            placeholder="logement, retraites, une personnalité…"
-            className="min-h-12 min-w-0 flex-1 rounded-xl border border-border bg-card px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          />
-          <button
-            type="submit"
-            className="inline-flex min-h-12 items-center rounded-xl bg-primary px-5 font-bold text-primary-foreground hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            Rechercher
-          </button>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              id="full-corpus-query"
+              name="q"
+              type="search"
+              defaultValue={query}
+              placeholder="logement, retraites, une personnalité…"
+              aria-describedby="full-corpus-examples full-corpus-ai-notice"
+              className="min-h-12 min-w-0 flex-1 rounded-xl border border-border bg-card px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            />
+            <button
+              type="submit"
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-5 font-bold text-primary-foreground hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Rechercher
+            </button>
+          </div>
         </form>
+        <p id="full-corpus-examples" className="mt-3 text-sm text-muted-foreground">
+          Exemples : « Comment réduire les déserts médicaux ? », « Que propose Marine Le Pen sur les
+          transports ? »
+        </p>
+        <p id="full-corpus-ai-notice" className="mt-2 text-sm text-muted-foreground">
+          Lors d’une recherche complète, le texte saisi peut être transmis à Mistral AI pour
+          retrouver et ordonner des résultats par proximité textuelle. Ce classement mesure la
+          pertinence pour la recherche, pas les candidats ni leurs propositions. L’IA ne rédige pas
+          la réponse. <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
+        </p>
 
         {!hasSearch ? (
           <p className="mt-10 text-muted-foreground">
@@ -108,7 +156,7 @@ export default async function PresidentialSearchPage({
           </section>
         ) : (
           <div className="mt-10 space-y-10">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
               {result.total} résultat{result.total > 1 ? "s" : ""} dans le corpus public
             </p>
             {result.subjects.length > 0 && (
@@ -183,29 +231,73 @@ export default async function PresidentialSearchPage({
                 >
                   Mesures
                 </h2>
-                <ul className="mt-4 space-y-4">
-                  {result.measures.map((measure) => {
-                    const source = measure.sourceLabel
-                      ? MEASURE_SOURCE_KIND_LABELS[measure.sourceLabel]
-                      : null;
-                    return (
-                      <li key={measure.id}>
-                        <Link
-                          href={measure.url}
-                          prefetch={false}
-                          className="block rounded-2xl border border-border bg-card p-5 hover:border-primary/50 hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                        >
-                          <p className="text-lg font-bold leading-relaxed">{measure.text}</p>
-                          <p className="mt-3 text-sm text-muted-foreground">
-                            {measure.candidateName} · {THEME_CATEGORY_LABELS[measure.theme]}
-                            {source ? " · " + source : ""}
-                          </p>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="mt-5 space-y-8">
+                  {[...measuresByThemeAndCandidate].map(([theme, candidates]) => (
+                    <section key={theme} aria-labelledby={`theme-${theme}`}>
+                      <h3 id={`theme-${theme}`} className="text-xl font-bold">
+                        {THEME_CATEGORY_LABELS[theme]}
+                      </h3>
+                      <div className="mt-4 space-y-6">
+                        {[...candidates].map(([candidate, measures]) => (
+                          <div key={candidate}>
+                            <h4 className="font-bold text-muted-foreground">{candidate}</h4>
+                            <ul className="mt-2 space-y-3">
+                              {measures.map((measure) => {
+                                const source = measure.sourceLabel
+                                  ? MEASURE_SOURCE_KIND_LABELS[measure.sourceLabel]
+                                  : "Source de la mesure";
+                                return (
+                                  <li key={measure.id}>
+                                    <article className="rounded-2xl border border-border bg-card p-5">
+                                      <Link
+                                        href={measure.url}
+                                        prefetch={false}
+                                        className="inline-flex min-h-11 items-center text-lg font-bold leading-relaxed hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                      >
+                                        {measure.text}
+                                      </Link>
+                                      {measure.sourceUrl && (
+                                        <p className="mt-3 text-sm">
+                                          <a
+                                            href={measure.sourceUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            aria-label={`${source}, ouvrir dans un nouvel onglet`}
+                                            className="inline-flex min-h-11 items-center font-bold text-primary underline underline-offset-2"
+                                          >
+                                            {source}
+                                          </a>
+                                        </p>
+                                      )}
+                                    </article>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
               </section>
+            )}
+            {comparisonCandidates.length === 2 && (
+              <aside className="rounded-2xl border border-border bg-card p-6">
+                <h2 className="font-display text-2xl font-extrabold">Poursuivre la comparaison</h2>
+                <p className="mt-2 text-muted-foreground">
+                  Placez côte à côte les mesures de {comparisonCandidates[0]!.candidateName} et de{" "}
+                  {comparisonCandidates[1]!.candidateName}
+                  {measuresByThemeAndCandidate.size === 1 ? " sur ce thème" : ""}.
+                </p>
+                <Link
+                  href={`/elections/presidentielle-2027/comparer?${comparisonParams.toString()}`}
+                  className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-5 font-bold text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Comparer ces candidats
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                </Link>
+              </aside>
             )}
             {result.filter?.type === "subtopic" && result.page && result.totalPages && (
               <SimplePagination

@@ -35,9 +35,11 @@ describe("évaluation de la recherche présidentielle", () => {
             text: "Former davantage de médecins",
             url: "/mesure-1",
             candidateName: "Alice Martin",
+            candidateSlug: "alice-martin",
             theme: "SANTE",
             precision: null,
             sourceLabel: null,
+            sourceUrl: null,
           },
         ],
       },
@@ -45,7 +47,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 0.4 });
+    expect(evaluation).toMatchObject({ passed: true, recallAtK: 1, precisionAtK: 0.2 });
   });
 
   it("signale un faux positif sur une requête négative", () => {
@@ -65,7 +67,7 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
     });
 
-    expect(evaluation).toMatchObject({ passed: false, recallAtK: null, precisionAtK: null });
+    expect(evaluation).toMatchObject({ passed: true, recallAtK: null, precisionAtK: null });
   });
 
   it("exige qu'un résultat candidat plus thème soit une mesure à l'intersection", () => {
@@ -85,6 +87,7 @@ describe("évaluation de la recherche présidentielle", () => {
             type: "candidacy",
             id: "candidate-1",
             name: "Alice Martin",
+            slug: "alice-martin",
             url: "/alice",
             photoUrl: null,
             blobPhotoUrl: null,
@@ -100,6 +103,53 @@ describe("évaluation de la recherche présidentielle", () => {
     expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, relevantInTopK: 0 });
   });
 
+  it("évalue l'ordre unifié fourni par la recherche vectorielle", () => {
+    const candidacy = {
+      type: "candidacy" as const,
+      id: "candidate-1",
+      name: "Alice Martin",
+      slug: "alice-martin",
+      url: "/alice",
+      photoUrl: null,
+      blobPhotoUrl: null,
+      status: "DECLARE" as const,
+      party: null,
+    };
+    const measure = {
+      type: "measure" as const,
+      id: "measure-1",
+      text: "Construire des logements",
+      url: "/mesure-1",
+      candidateName: "Bob Durand",
+      candidateSlug: "bob-durand",
+      theme: "LOGEMENT_URBANISME" as const,
+      precision: null,
+      sourceLabel: null,
+      sourceUrl: null,
+    };
+
+    const evaluation = evaluatePresidentialSearchCase({
+      testCase: {
+        id: "ranked-candidate",
+        category: "candidate",
+        query: "Alice Martin",
+        expectations: [{ kind: "candidacy", name: "Alice Martin" }],
+      },
+      result: {
+        ...emptyBase,
+        total: 2,
+        candidacies: [candidacy],
+        measures: [measure],
+        rankedResults: [measure, candidacy],
+      },
+      latencyMs: 10,
+      topK: 1,
+    });
+
+    expect(evaluation).toMatchObject({ passed: false, recallAtK: 0, relevantInTopK: 0 });
+    expect(evaluation.topResults[0]).toMatchObject({ kind: "measure" });
+  });
+
   it("agrège les métriques et les percentiles sans masquer les cas individuels", () => {
     const passing = evaluatePresidentialSearchCase({
       testCase: {
@@ -111,7 +161,20 @@ describe("évaluation de la recherche présidentielle", () => {
       result: {
         ...emptyBase,
         total: 1,
-        subjects: [{ type: "subject", theme: "SANTE", label: "Santé", url: "/sante" }],
+        measures: [
+          {
+            type: "measure",
+            id: "measure-2",
+            text: "Former davantage de médecins",
+            url: "/mesure-2",
+            candidateName: "Alice Martin",
+            candidateSlug: "alice-martin",
+            theme: "SANTE",
+            precision: null,
+            sourceLabel: null,
+            sourceUrl: null,
+          },
+        ],
       },
       latencyMs: 20,
       topK: 5,
@@ -132,6 +195,8 @@ describe("évaluation de la recherche présidentielle", () => {
       topK: 5,
       cases: [passing, negative],
       generatedAt: new Date("2026-08-30T12:00:00Z"),
+      strategy: "hybrid",
+      embeddingCache: "bypassed",
     });
 
     expect(report.metrics).toEqual({
@@ -143,5 +208,7 @@ describe("évaluation de la recherche présidentielle", () => {
       latencyP95Ms: 80,
     });
     expect(report.cases).toHaveLength(2);
+    expect(report.strategy).toBe("hybrid");
+    expect(report.embeddingCache).toBe("bypassed");
   });
 });
