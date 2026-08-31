@@ -83,6 +83,12 @@ describe("searchPresidentialCorpus", () => {
   it("détecte localement un nom complet ou un nom de famille dans une question", () => {
     expect(candidateNameIsMentioned("Que propose Marine Le Pen ?", "Marine Le Pen")).toBe(true);
     expect(candidateNameIsMentioned("Le programme de Mélenchon", "Jean-Luc Mélenchon")).toBe(true);
+    expect(
+      candidateNameIsMentioned("Que propose Philippe Poutou ?", "Édouard Philippe", [
+        "Édouard Philippe",
+        "Philippe Poutou",
+      ])
+    ).toBe(false);
     expect(candidateNameIsMentioned("Que proposent les candidats ?", "Marine Le Pen")).toBe(false);
   });
 

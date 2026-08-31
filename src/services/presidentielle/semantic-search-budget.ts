@@ -52,11 +52,10 @@ export class PresidentialSemanticSearchBudget {
     }
 
     try {
-      const [daily, monthly] = await withTimeout(
-        Promise.all([this.daily.limit("global"), this.monthly.limit("global")])
-      );
-      if (!monthly.success) return { allowed: false, reason: "monthly-limit" };
+      const daily = await withTimeout(this.daily.limit("global"));
       if (!daily.success) return { allowed: false, reason: "daily-limit" };
+      const monthly = await withTimeout(this.monthly.limit("global"));
+      if (!monthly.success) return { allowed: false, reason: "monthly-limit" };
       return { allowed: true, reason: "available" };
     } catch {
       return { allowed: false, reason: "unavailable" };

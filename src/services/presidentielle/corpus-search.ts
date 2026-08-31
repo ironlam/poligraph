@@ -94,11 +94,24 @@ function normalizeCandidateText(value: string): string {
 }
 
 /** Pins an explicitly named candidacy without asking the semantic model to recognize a person. */
-export function candidateNameIsMentioned(query: string, candidateName: string): boolean {
+export function candidateNameIsMentioned(
+  query: string,
+  candidateName: string,
+  allCandidateNames: string[] = [candidateName]
+): boolean {
   const normalizedQuery = ` ${normalizeCandidateText(query)} `;
-  const words = normalizeCandidateText(candidateName).split(" ").filter(Boolean);
-  const aliases = [words.join(" "), words.slice(1).join(" "), words.at(-1) ?? ""];
-  return aliases.some((alias) => alias.length >= 4 && normalizedQuery.includes(` ${alias} `));
+  const fullName = normalizeCandidateText(candidateName);
+  if (normalizedQuery.includes(` ${fullName} `)) return true;
+
+  const nameParts = candidateName.trim().split(/\s+/).filter(Boolean);
+  const surname = normalizeCandidateText(nameParts.slice(1).join(" "));
+  if (surname.length < 4 || !normalizedQuery.includes(` ${surname} `)) return false;
+
+  return !allCandidateNames.some(
+    (otherName) =>
+      otherName !== candidateName &&
+      ` ${normalizeCandidateText(otherName)} `.includes(` ${surname} `)
+  );
 }
 
 /**
@@ -284,8 +297,9 @@ export async function searchPresidentialCorpus(
       return [[row.id, result] as const];
     })
   );
+  const candidateNames = candidacyRows.map((candidate) => candidate.candidateName);
   const explicitCandidacyIds = candidacyRows
-    .filter((row) => candidateNameIsMentioned(query, row.candidateName))
+    .filter((row) => candidateNameIsMentioned(query, row.candidateName, candidateNames))
     .map((row) => row.id);
   const measuresById = new Map(
     measureRows.flatMap((row) => {

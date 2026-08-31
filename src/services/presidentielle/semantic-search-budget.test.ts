@@ -20,6 +20,7 @@ describe("budget global de la recherche sémantique", () => {
     const budget = new PresidentialSemanticSearchBudget(daily, monthly, false);
 
     await expect(budget.reserve()).resolves.toEqual({ allowed: false, reason: "daily-limit" });
+    expect(monthly.limit).not.toHaveBeenCalled();
   });
 
   it("échoue fermé en production si le compteur partagé est absent ou indisponible", async () => {
