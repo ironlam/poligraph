@@ -123,6 +123,27 @@ export default function PresidentialMeasuresMethodologyPage() {
           </div>
         </section>
 
+        <section aria-labelledby="reader-guides-title">
+          <h2 id="reader-guides-title" className="font-display text-2xl font-bold">
+            Repères pour comprendre
+          </h2>
+          <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
+            <p>
+              Certains programmes utilisent des sigles, des mécanismes juridiques ou des dispositifs
+              administratifs sans les expliquer. Poligraph peut alors afficher une courte définition
+              factuelle dans un bloc distinct du contenu de la mesure.
+            </p>
+            <p>
+              L&apos;intelligence artificielle repère seulement les termes susceptibles de demander
+              une explication. Elle ne rédige ni ne publie la définition. Chaque repère appartient à
+              un référentiel réutilisable, cite la source du programme ou une source
+              institutionnelle officielle, puis fait l&apos;objet d&apos;une validation humaine. Son
+              rattachement à une mesure est validé séparément et conservé dans le journal
+              d&apos;audit.
+            </p>
+          </div>
+        </section>
+
         <section aria-labelledby="history-title">
           <h2 id="history-title" className="font-display text-2xl font-bold">
             Corrections, évolutions et retraits

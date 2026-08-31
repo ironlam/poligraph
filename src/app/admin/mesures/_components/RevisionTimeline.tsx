@@ -71,6 +71,9 @@ function RevisionCard({
           </span>
         )}
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Identifiant de révision : <code className="select-all font-mono">{revision.id}</code>
+      </p>
 
       {revision.reviewReadiness !== null && (
         <div className="mt-3">

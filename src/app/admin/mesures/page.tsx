@@ -160,13 +160,22 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
             . Ordre : de la plus anciennement saisie à la plus récente.
           </p>
         </div>
-        <Link
-          href="/admin/mesures/nouvelle"
-          prefetch={false}
-          className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-        >
-          Nouvelle mesure
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/mesures/reperes"
+            prefetch={false}
+            className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Repères pour comprendre
+          </Link>
+          <Link
+            href="/admin/mesures/nouvelle"
+            prefetch={false}
+            className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Nouvelle mesure
+          </Link>
+        </div>
       </header>
 
       {result.scanCapped && (

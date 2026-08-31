@@ -31,6 +31,7 @@ const measure = {
     text: "Construire des logements publics.",
     details: "Dans les zones tendues.",
     subtopics: [{ subtopic: { label: "Logement social", aliases: ["HLM", "habitat social"] } }],
+    readerGuideMentions: [],
     updatedAt: new Date("2026-08-27T12:00:00Z"),
   },
   latestRevision: {
@@ -38,6 +39,7 @@ const measure = {
     text: "Construire des logements publics.",
     details: "Dans les zones tendues.",
     subtopics: [{ subtopic: { label: "Logement social", aliases: ["HLM", "habitat social"] } }],
+    readerGuideMentions: [],
     updatedAt: new Date("2026-08-27T12:00:00Z"),
   },
 };
@@ -101,5 +103,39 @@ describe("synchronisation recherche des mesures", () => {
     expect(upsertSearchDocumentsMock).toHaveBeenCalledWith(tx, [
       expect.objectContaining({ entityId: "measure-1", visibility: "PUBLIC" }),
     ]);
+  });
+
+  it("indexe les repères validés avec leurs alias et leur définition", async () => {
+    const { syncSearchDocument } = await import("../search-sync");
+    const withGuide = {
+      ...measure,
+      publishedRevision: {
+        ...measure.publishedRevision,
+        readerGuideMentions: [
+          {
+            guide: {
+              label: "Zone à faibles émissions (ZFE)",
+              aliases: ["ZFE"],
+              definition: "Périmètre où les véhicules les plus polluants sont restreints.",
+            },
+          },
+        ],
+      },
+    };
+    const tx = {
+      measure: {
+        findUniqueOrThrow: vi.fn(async () => withGuide),
+        findFirst: vi.fn(async () => ({ id: "measure-1" })),
+      },
+    };
+
+    await syncSearchDocument(tx as never, "measure-1");
+
+    expect(upsertSearchDocumentMock).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        body: expect.stringContaining("Périmètre où les véhicules les plus polluants"),
+      })
+    );
   });
 });

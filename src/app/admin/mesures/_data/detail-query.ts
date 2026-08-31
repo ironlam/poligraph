@@ -25,3 +25,16 @@ export async function getMeasureContext(measureId: string) {
 }
 
 export type MeasureContext = NonNullable<Awaited<ReturnType<typeof getMeasureContext>>>;
+
+export async function listReaderGuidesForModeration() {
+  return db.measureReaderGuide.findMany({
+    where: { active: true },
+    orderBy: [{ publicationStatus: "asc" }, { label: "asc" }],
+    select: {
+      id: true,
+      slug: true,
+      label: true,
+      publicationStatus: true,
+    },
+  });
+}

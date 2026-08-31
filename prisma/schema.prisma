@@ -2935,6 +2935,17 @@ enum MeasureSubtopicAssignmentStatus {
   REJECTED
 }
 
+enum MeasureReaderGuideSourceKind {
+  OFFICIAL_INSTITUTION
+  PROGRAM_SOURCE
+}
+
+enum MeasureReaderGuideMentionStatus {
+  SUGGESTED
+  APPROVED
+  REJECTED
+}
+
 // Closed, versioned navigation vocabulary. A subtopic belongs to one broad theme; it is not a
 // free-form tag and therefore cannot silently split into synonyms over successive imports.
 model MeasureSubtopic {
@@ -3074,12 +3085,15 @@ model MeasureRevision {
   rejectionReason MeasureRejectionReason?
   rejectionDetail String?                 @db.Text
 
-  sources             MeasureSource[]
-  qualifications      MeasureQualification[]
-  assessments         MeasureSimilarityAssessment[]
-  equivalentOf        MeasureSimilarityMatch[]      @relation("EquivalentRevision")
-  applicableVoteLinks MeasureVoteLink[]             @relation("ApplicableRevisionVoteLinks")
-  subtopics           MeasureRevisionSubtopic[]
+  sources                  MeasureSource[]
+  qualifications           MeasureQualification[]
+  assessments              MeasureSimilarityAssessment[]
+  equivalentOf             MeasureSimilarityMatch[]         @relation("EquivalentRevision")
+  applicableVoteLinks      MeasureVoteLink[]                @relation("ApplicableRevisionVoteLinks")
+  subtopics                MeasureRevisionSubtopic[]
+  readerGuideMentions      MeasureRevisionReaderGuide[]     @relation("MeasureRevisionReaderGuides")
+  readerGuideDetectionRuns MeasureReaderGuideDetectionRun[]
+  sourcedReaderGuides      MeasureReaderGuide[]             @relation("MeasureReaderGuideProgramSource")
 
   latestOf    Measure? @relation("MeasureLatest")
   publishedOf Measure? @relation("MeasurePublished")
@@ -3090,6 +3104,79 @@ model MeasureRevision {
   @@index([measureId, validFrom])
   @@index([measureId, supersededAt])
   @@index([measureId, discardedAt])
+}
+
+// Reusable, sourced explanation of a technical term found in political programmes. The AI never
+// writes or publishes this text: it only proposes mentions. Publication is a separate human action.
+model MeasureReaderGuide {
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  label      String
+  definition String   @db.Text
+  aliases    String[] @default([])
+  active     Boolean  @default(true)
+
+  sourceKind       MeasureReaderGuideSourceKind
+  sourceUrl        String
+  sourceLabel      String
+  sourcePublisher  String
+  sourceRevision   MeasureRevision?             @relation("MeasureReaderGuideProgramSource", fields: [sourceRevisionId], references: [id], onDelete: SetNull)
+  sourceRevisionId String?
+
+  publicationStatus PublicationStatus @default(DRAFT)
+  reviewedAt        DateTime?
+  reviewedBy        String?
+
+  mentions MeasureRevisionReaderGuide[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publicationStatus, active])
+}
+
+// Attached to a revision because a rewritten measure may no longer contain the term. The optional
+// guide relation lets detection retain novel terms for editorial triage without inventing a public
+// definition. Only APPROVED rows linked to a PUBLISHED guide are visible publicly.
+model MeasureRevisionReaderGuide {
+  id String @id @default(cuid())
+
+  revision   MeasureRevision     @relation("MeasureRevisionReaderGuides", fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+  guide      MeasureReaderGuide? @relation(fields: [guideId], references: [id], onDelete: SetNull)
+  guideId    String?
+
+  term            String
+  normalizedTerm  String
+  evidenceSpan    String
+  reason          String                          @db.Text
+  confidence      Float
+  status          MeasureReaderGuideMentionStatus @default(SUGGESTED)
+  method          String
+  detectorVersion String
+  proposedAt      DateTime                        @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+
+  @@unique([revisionId, normalizedTerm])
+  @@index([revisionId, status])
+  @@index([guideId, status])
+}
+
+// Records a completed detector pass independently from its result count. Without this marker,
+// revisions with no technical term would be sent to the model again on every corpus run.
+model MeasureReaderGuideDetectionRun {
+  id String @id @default(cuid())
+
+  revision   MeasureRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  detectorVersion String
+  resultCount     Int
+  completedAt     DateTime @default(now())
+
+  @@unique([revisionId, detectorVersion])
+  @@index([detectorVersion, completedAt])
 }
 
 enum MeasureVoteLinkKind {

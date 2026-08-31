@@ -32,6 +32,20 @@ const PUBLIC_MEASURE_INCLUDE = {
         include: { subtopic: true },
         orderBy: { subtopic: { sortOrder: "asc" } },
       },
+      readerGuideMentions: {
+        where: {
+          status: "APPROVED",
+          guide: {
+            is: {
+              active: true,
+              publicationStatus: "PUBLISHED",
+              reviewedAt: { not: null },
+            },
+          },
+        },
+        include: { guide: true },
+        orderBy: { guide: { label: "asc" } },
+      },
     },
   },
 } satisfies Prisma.MeasureInclude;
@@ -79,6 +93,7 @@ export type PublicMeasure = {
   sources: PublishedRevision["sources"];
   qualifications: PublishedRevision["qualifications"];
   subtopics: Array<{ slug: string; label: string }>;
+  readerGuides: Array<{ slug: string; label: string; definition: string }>;
 };
 
 function toPublicMeasure(row: MeasureRow): PublicMeasure | null {
@@ -113,6 +128,9 @@ function toPublicMeasure(row: MeasureRow): PublicMeasure | null {
       slug: subtopic.slug,
       label: subtopic.label,
     })),
+    readerGuides: revision.readerGuideMentions.flatMap(({ guide }) =>
+      guide ? [{ slug: guide.slug, label: guide.label, definition: guide.definition }] : []
+    ),
   };
 }
 
@@ -455,6 +473,10 @@ export async function getMeasureForModeration(measureId: string) {
           subtopics: {
             include: { subtopic: true },
             orderBy: [{ status: "asc" }, { subtopic: { sortOrder: "asc" } }],
+          },
+          readerGuideMentions: {
+            include: { guide: true },
+            orderBy: [{ status: "asc" }, { proposedAt: "asc" }],
           },
         },
         orderBy: { validFrom: "desc" },

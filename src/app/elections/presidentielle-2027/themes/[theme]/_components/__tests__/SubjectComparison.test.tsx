@@ -24,6 +24,7 @@ function measure(over: Partial<PublicMeasure> = {}): PublicMeasure {
     sources: [],
     qualifications: [],
     subtopics: [],
+    readerGuides: [],
     ...over,
   };
 }

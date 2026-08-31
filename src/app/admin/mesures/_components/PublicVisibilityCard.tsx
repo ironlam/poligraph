@@ -62,6 +62,20 @@ export function PublicVisibilityCard({
             </div>
           )}
 
+          {publicMeasure.readerGuides.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium">Repères publiés</h3>
+              <ul className="mt-2 space-y-2">
+                {publicMeasure.readerGuides.map((guide) => (
+                  <li key={guide.slug} className="rounded border border-border p-3 text-sm">
+                    <p className="font-bold">{guide.label}</p>
+                    <p className="mt-1 leading-relaxed">{guide.definition}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {publicMeasure.withdrawal !== null && (
             <div className="rounded border border-border bg-muted/40 p-3 text-sm">
               <p className="font-medium">
