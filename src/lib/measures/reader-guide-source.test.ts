@@ -11,6 +11,9 @@ describe("sources institutionnelles des repères", () => {
     expect(isOfficialInstitutionUrl("https://www.service-public.fr/particuliers/vosdroits")).toBe(
       true
     );
+    expect(isOfficialInstitutionUrl("https://www.hatvp.fr/la-haute-autorite/")).toBe(true);
+    expect(isOfficialInstitutionUrl("https://www.ameli.fr/assure")).toBe(true);
+    expect(isOfficialInstitutionUrl("https://www.urssaf.fr/accueil.html")).toBe(true);
   });
 
   it("refuse HTTP, les domaines ressemblants et les identifiants intégrés", () => {

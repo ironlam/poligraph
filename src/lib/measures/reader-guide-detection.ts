@@ -1,4 +1,4 @@
-export const READER_GUIDE_DETECTOR_VERSION = "mistral-small-latest:reader-guides-v1";
+export const READER_GUIDE_DETECTOR_VERSION = "mistral-small-latest:reader-guides-v2";
 
 export type ReaderGuideDetection = {
   term: string;
@@ -24,6 +24,29 @@ export function normalizeReaderGuideTerm(value: string): string {
     .toLocaleLowerCase("fr")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+/**
+ * Expressions observées lors de la première revue du corpus qui restent compréhensibles sans
+ * définition autonome. La liste reste volontairement étroite : un terme juridique ou administratif
+ * ambigu reste éligible tant qu’une revue éditoriale ne l’a pas qualifié et sourcé.
+ */
+const NON_GUIDE_TERMS = new Set(
+  [
+    "abroger",
+    "abroger une loi",
+    "abrogation",
+    "élus",
+    "exécutif",
+    "résultats mesurables",
+    "programme de prévention",
+  ].map(normalizeReaderGuideTerm)
+);
+
+export function isReaderGuideDetectionExcluded(term: string, canonicalLabel: string): boolean {
+  return [term, canonicalLabel].some((value) =>
+    NON_GUIDE_TERMS.has(normalizeReaderGuideTerm(value))
+  );
 }
 
 function parseDetection(value: unknown): ReaderGuideDetection | null {
@@ -57,6 +80,7 @@ export function parseReaderGuideDetections(
   return values.flatMap((value) => {
     const detection = parseDetection(value);
     if (!detection || !evidenceCorpus.includes(detection.evidenceSpan.toLowerCase())) return [];
+    if (isReaderGuideDetectionExcluded(detection.term, detection.canonicalLabel)) return [];
     const normalized = normalizeReaderGuideTerm(detection.term);
     if (!normalized || seen.has(normalized)) return [];
     seen.add(normalized);
