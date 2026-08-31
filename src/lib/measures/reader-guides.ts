@@ -11,6 +11,7 @@ import {
 } from "@/lib/measures/reader-guide-detection";
 import { detectReaderGuideTerms } from "@/services/measures/reader-guide-detection";
 import { isOfficialInstitutionUrl } from "@/lib/measures/reader-guide-source";
+import { lockMeasure } from "@/lib/measures/lock";
 import { Prisma } from "@/generated/prisma";
 
 type GuideMatch = {
@@ -245,6 +246,16 @@ export async function reviewReaderGuideMention(input: {
   let measure: { id: string; electionId: string };
   try {
     measure = await db.$transaction(async (tx) => {
+      const locatedMention = await tx.measureRevisionReaderGuide.findUnique({
+        where: { id: input.mentionId },
+        select: { revision: { select: { measure: { select: { id: true } } } } },
+      });
+      if (!locatedMention) {
+        throw new MeasureValidationError("Cette proposition a déjà été traitée");
+      }
+      // Publication, withdrawal and editorial review share the Measure row lock. Once acquired,
+      // the public revision cannot change until this approval and its search sync have committed.
+      await lockMeasure(tx, locatedMention.revision.measure.id);
       const mention = await tx.measureRevisionReaderGuide.findUnique({
         where: { id: input.mentionId },
         select: {
@@ -257,11 +268,6 @@ export async function reviewReaderGuideMention(input: {
       if (!mention || mention.status !== "SUGGESTED") {
         throw new MeasureValidationError("Cette proposition a déjà été traitée");
       }
-      // SearchDocument is rebuilt inside this transaction. A database-level lock is required:
-      // separate admin or CLI processes can review two guides for the same measure concurrently,
-      // and an in-process queue cannot coordinate them. The second transaction resumes only after
-      // the first committed, so its search sync observes every approved guide.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${mention.revision.measure.id}, 0))`;
       const guideId = input.guideId ?? mention.guideId;
       if (input.status === "APPROVED") {
         if (input.expectedPublicRevisionId) {

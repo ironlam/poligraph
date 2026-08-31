@@ -81,7 +81,7 @@ describe("workflow des repères citoyens", () => {
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValue({ count: 0 });
     mocks.tx.measureReaderGuide.updateMany.mockResolvedValue({ count: 1 });
-    mocks.tx.$queryRaw.mockResolvedValue([{ pg_advisory_xact_lock: null }]);
+    mocks.tx.$queryRaw.mockResolvedValue([{ id: "measure-1" }]);
     mocks.tx.measure.findFirst.mockResolvedValue({ id: "measure-1" });
   });
 
@@ -209,6 +209,9 @@ describe("workflow des repères citoyens", () => {
       }),
       select: { id: true },
     });
+    expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.tx.measure.findFirst.mock.invocationCallOrder[0]!
+    );
     expect(mocks.tx.measureRevisionReaderGuide.updateMany).not.toHaveBeenCalled();
     expect(mocks.syncSearch).not.toHaveBeenCalled();
   });
