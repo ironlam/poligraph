@@ -10,6 +10,7 @@ import {
   synthesisTargetRange,
   LARGE_PROGRAMME_MEASURES,
   LARGE_SYNTHESIS_MAX_WORDS,
+  SYNTHESIS_HARD_MAX_WORDS,
   SYNTHESIS_MAX_WORDS,
   type CandidateSynthesisInput,
   type SynthesisMaterial,
@@ -313,7 +314,7 @@ describe("screenCandidateSynthesis", () => {
 
   it("charges an optional second source from the same theme against the maximum", () => {
     const longOptional = Array.from(
-      { length: SYNTHESIS_MAX_WORDS + 20 },
+      { length: SYNTHESIS_HARD_MAX_WORDS + 20 },
       (_, i) => `option${i}`
     ).join(" ");
     const input: CandidateSynthesisInput = {
@@ -462,20 +463,23 @@ describe("screenSynthesis", () => {
   });
 
   it("rejects a text above the ceiling", () => {
-    expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1))).toMatchObject({
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1))).toMatchObject({
       ok: false,
       reason: "trop_long",
     });
   });
 
-  it("accepts le plafond étendu uniquement pour un corpus volumineux", () => {
+  it("accepte un dépassement borné de la cible éditoriale", () => {
+    // Cas observé dans l'admin pour Dominique de Villepin : le fournisseur produit 306 mots
+    // recevables alors que 200 est une cible de concision, pas une frontière de sécurité.
+    expect(screenSynthesis(words(306), FULL)).toMatchObject({ ok: true });
+  });
+
+  it("garde une cible étendue pour un corpus volumineux sans en faire un seuil de rejet", () => {
     const large = { ...FULL, measureCount: LARGE_PROGRAMME_MEASURES };
     expect(screenSynthesis(words(LARGE_SYNTHESIS_MAX_WORDS), large).ok).toBe(true);
-    expect(screenSynthesis(words(LARGE_SYNTHESIS_MAX_WORDS + 1), large)).toMatchObject({
-      ok: false,
-      reason: "trop_long",
-    });
-    expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), FULL)).toMatchObject({
+    expect(screenSynthesis(words(LARGE_SYNTHESIS_MAX_WORDS + 1), large).ok).toBe(true);
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1), large)).toMatchObject({
       ok: false,
       reason: "trop_long",
     });
@@ -483,7 +487,7 @@ describe("screenSynthesis", () => {
 
   it("accepts exactly at both bounds", () => {
     expect(screenSynthesis(words(FULL_FLOOR)).ok).toBe(true);
-    expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS)).ok).toBe(true);
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS)).ok).toBe(true);
   });
 
   it("names the floor that applied, not a fixed one", () => {
@@ -531,7 +535,7 @@ describe("screenSynthesis", () => {
     });
 
     it("applique le plafond et les autres règles quelle que soit la matière", () => {
-      expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), BARE)).toMatchObject({
+      expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1), BARE)).toMatchObject({
         ok: false,
         reason: "trop_long",
       });

@@ -19,7 +19,7 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 const FIELD_LIMIT = 240;
 
 /**
- * Word bounds. Two numbers, and the whole point is that they are two.
+ * Word bounds. Three roles, none of which can safely share a number.
  *
  * A single number played both roles and could not: the prompt asked for "entre 90 et 200 mots",
  * and the screen refused anything under 90. So the length we WANT was also the length below which
@@ -36,6 +36,8 @@ const FIELD_LIMIT = 240;
  * - {@link synthesisFloor} is what the screen refuses. It catches an answer that is not an answer:
  *   an empty reply, one line, a truncation. It sits far below the target on purpose, because every
  *   attempt to make it double as a quality bar has rejected honest work.
+ * - {@link SYNTHESIS_HARD_MAX_WORDS} catches the opposite failure, a runaway response. It sits
+ *   above the target because a modest provider overrun is not an editorial defect by itself.
  *
  * A normally documented candidacy still targets 90 words. Only a programme large enough to make
  * that format structurally selective gets more room. Checked against the twenty declared
@@ -45,6 +47,16 @@ const FIELD_LIMIT = 240;
 export const SYNTHESIS_MAX_WORDS = 200;
 /** Five programme themes plus a career paragraph fit without turning into a catalogue. */
 export const LARGE_SYNTHESIS_MAX_WORDS = 250;
+/**
+ * Safety ceiling, deliberately distinct from the editorial target.
+ *
+ * The provider is asked for at most 200 or 250 words, which keeps the normal result concise. A
+ * response that modestly exceeds that target can still be complete, factual and structurally
+ * valid. Rejecting it after two generation attempts loses useful work for no editorial gain, as
+ * observed with Dominique de Villepin at 306 words. The screen therefore tolerates that overrun
+ * while still refusing a genuinely runaway response.
+ */
+export const SYNTHESIS_HARD_MAX_WORDS = 350;
 /** Below one hundred measures, the existing 200-word format already carries the material. */
 export const LARGE_PROGRAMME_MEASURES = 100;
 
@@ -556,7 +568,6 @@ export function screenSynthesis({
       detail: `${words} mots, minimum ${minWords}`,
     };
   }
-  const maxWords = synthesisTargetRange(material).max;
   const absentSource = exemptSourceTexts.find((sourceText) => !text.includes(sourceText));
   if (absentSource) {
     return {
@@ -570,11 +581,11 @@ export function screenSynthesis({
     0
   );
   const cappedWords = Math.max(0, words - sourceWords);
-  if (cappedWords > maxWords) {
+  if (cappedWords > SYNTHESIS_HARD_MAX_WORDS) {
     return {
       ok: false,
       reason: "trop_long",
-      detail: `${cappedWords} mots non sourcés, maximum ${maxWords}`,
+      detail: `${cappedWords} mots non sourcés, maximum ${SYNTHESIS_HARD_MAX_WORDS}`,
     };
   }
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SYNTHESIS_HARD_MAX_WORDS } from "@/lib/presidentielle/candidate-synthesis";
 
 /**
  * The generation shared by the script and the admin button.
@@ -83,6 +84,18 @@ describe("generateCandidateSynthesis", () => {
     expect(write.data.synthesis).toBe(STORED);
     expect(write.data.synthesisGeneratedAt).toBeInstanceOf(Date);
     expect(dbMock.auditLog.create).toHaveBeenCalled();
+  });
+
+  it("persiste une synthèse valide de 306 mots malgré la cible éditoriale de 200", async () => {
+    const career = Array.from({ length: 306 }, (_, index) => `parcours${index}`).join(" ");
+    callAnthropicMock.mockResolvedValue(anthropicText(providerOutput(["M1"], career)));
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
+
+    expect(result).toMatchObject({ ok: true, persisted: true });
+    expect(callAnthropicMock).toHaveBeenCalledTimes(1);
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
   });
 
   it("n'écrit rien en dry run", async () => {
@@ -340,7 +353,10 @@ describe("generateCandidateSynthesis", () => {
   });
 
   it("ne persiste pas une seconde formulation optionnelle qui dépasse le plafond", async () => {
-    const longOptional = Array.from({ length: 220 }, (_, i) => `option${i}`).join(" ");
+    const longOptional = Array.from(
+      { length: SYNTHESIS_HARD_MAX_WORDS + 20 },
+      (_, i) => `option${i}`
+    ).join(" ");
     dbMock.measure.findMany.mockResolvedValue([
       { theme: "SANTE", publishedRevision: { text: "Rouvrir des maternités de proximité." } },
       { theme: "SANTE", publishedRevision: { text: `${longOptional}.` } },
