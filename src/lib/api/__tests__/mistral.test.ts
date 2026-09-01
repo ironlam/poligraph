@@ -108,4 +108,14 @@ describe("parseMistralJSON", () => {
     const result = parseMistralJSON<{ b: string }>('{"b": "hello"}');
     expect(result).toEqual({ b: "hello" });
   });
+
+  it("extrait un unique objet JSON entouré d'un commentaire du fournisseur", () => {
+    const result = parseMistralJSON<{ a: number }>('Voici la réponse :\n{"a": 1}\nFin.');
+    expect(result).toEqual({ a: 1 });
+  });
+
+  it("décode une réponse JSON sérialisée une seconde fois", () => {
+    const result = parseMistralJSON<{ a: number }>('"{\\"a\\":1}"');
+    expect(result).toEqual({ a: 1 });
+  });
 });

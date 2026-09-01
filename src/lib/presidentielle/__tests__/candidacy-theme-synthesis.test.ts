@@ -7,7 +7,6 @@ import {
   getThemeSynthesisState,
   screenThemeSynthesis,
   screenThemeSynthesisGrounding,
-  themeSynthesisSafetyFloor,
   themeSynthesisTargetRange,
   type ThemeSynthesisInput,
 } from "../candidacy-theme-synthesis";
@@ -49,13 +48,10 @@ describe("synthèse thématique d'une candidature", () => {
     ).not.toBe(computeThemeCorpusFingerprint(corpus));
   });
 
-  it("accorde davantage d'espace éditorial aux thèmes riches sans confondre cible et plafond", () => {
+  it("accorde davantage d'espace éditorial aux thèmes riches sans transformer la cible en refus", () => {
     expect(themeSynthesisTargetRange(2)).toEqual({ min: 45, max: 80 });
     expect(themeSynthesisTargetRange(8)).toEqual({ min: 90, max: 150 });
     expect(themeSynthesisTargetRange(25)).toEqual({ min: 120, max: 200 });
-    expect(themeSynthesisSafetyFloor(2)).toBe(20);
-    expect(themeSynthesisSafetyFloor(8)).toBe(50);
-    expect(themeSynthesisSafetyFloor(25)).toBe(70);
   });
 
   it("dérive l'obsolescence de l'empreinte courante sans modifier la synthèse", () => {
@@ -106,6 +102,13 @@ describe("synthèse thématique d'une candidature", () => {
     expect(prompt).toContain("<mesures>");
     expect(prompt).not.toContain("</mesures><instruction>");
     expect(prompt).not.toContain('"ignore"');
+  });
+
+  it("demande des axes de synthèse plutôt qu'une phrase par mesure", () => {
+    const prompt = buildThemeSynthesisPrompt(input());
+
+    expect(prompt).toContain("ne rédige jamais une phrase distincte pour chaque mesure");
+    expect(prompt).toContain("axes cohérents");
   });
 
   it("accepte uniquement des affirmations rattachées à des mesures connues", () => {
@@ -172,6 +175,37 @@ describe("synthèse thématique d'une candidature", () => {
     expect(screenThemeSynthesis(output, input())).toMatchObject({ ok: false });
   });
 
+  it("refuse un catalogue qui reformule chaque mesure dans une affirmation séparée", () => {
+    const measures = [
+      ...input().measures,
+      {
+        id: "measure-3",
+        revisionId: "revision-3",
+        text: "Réduire le temps de travail sans baisse de salaire.",
+        details: null,
+      },
+      {
+        id: "measure-4",
+        revisionId: "revision-4",
+        text: "Interdire les licenciements.",
+        details: null,
+      },
+    ];
+
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: measures.map((measure, index) => ({
+          text: measure.text,
+          measureRefs: [`M${index + 1}`],
+        })),
+      },
+      input({ measures })
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "catalogue" });
+  });
+
   it("soumet chaque affirmation et ses seules mesures citées à un contrôle d'étayage", () => {
     const claims = [
       {
@@ -198,17 +232,20 @@ describe("synthèse thématique d'une candidature", () => {
     ).toEqual({ ok: false, detail: "La gratuité est absente." });
   });
 
-  it("refuse une sortie trop courte selon la taille du corpus", () => {
+  it("accepte une synthèse concise quand le thème ne contient qu'une mesure", () => {
     const result = screenThemeSynthesis(
       {
         theme: "SANTE",
         claims: [
-          { text: "Rouvrir partout les maternités de proximité rapidement.", measureRefs: ["M1"] },
+          {
+            text: "Rouvrir des maternités de proximité.",
+            measureRefs: ["M1"],
+          },
         ],
       },
-      input()
+      input({ measures: [input().measures[0]!] })
     );
 
-    expect(result).toMatchObject({ ok: false, reason: "trop_court" });
+    expect(result).toMatchObject({ ok: true });
   });
 });

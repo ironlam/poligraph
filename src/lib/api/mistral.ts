@@ -125,5 +125,21 @@ export function parseMistralJSON<T = unknown>(text: string): T {
   let cleaned = text.trim();
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) cleaned = fenceMatch[1]!.trim();
-  return safeJsonParseOrThrow<T>(cleaned);
+
+  try {
+    const parsed = safeJsonParseOrThrow<unknown>(cleaned);
+    // Some model responses serialize the requested object as a JSON string. Decode this one known
+    // transport layer, then leave structural validation to the caller's domain schema.
+    return (typeof parsed === "string" ? safeJsonParseOrThrow(parsed) : parsed) as T;
+  } catch {
+    // `json_object` normally returns a bare object, but providers occasionally add one sentence
+    // before or after it. Only recover a single bounded object. The caller still validates every
+    // key and value with Zod, so surrounding prose can never become accepted domain content.
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return safeJsonParseOrThrow<T>(cleaned.slice(start, end + 1));
+    }
+    throw new SyntaxError("Invalid JSON");
+  }
 }

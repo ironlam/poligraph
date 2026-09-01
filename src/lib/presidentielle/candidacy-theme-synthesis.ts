@@ -5,7 +5,7 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 
 const PROMPT_FIELD_LIMIT = 2_000;
 export const THEME_SYNTHESIS_HARD_MAX_WORDS = 260;
-export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v1";
+export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v2";
 
 export type ThemeSynthesisMeasure = {
   id: string;
@@ -138,16 +138,16 @@ export function themeSynthesisTargetRange(measureCount: number): { min: number; 
   return { min: 120, max: 200 };
 }
 
-/** Refusal floor, intentionally below the editorial target while still following corpus size. */
-export function themeSynthesisSafetyFloor(measureCount: number): number {
-  if (measureCount <= 2) return 20;
-  if (measureCount <= 6) return 35;
-  if (measureCount <= 15) return 50;
-  return 70;
+function themeSynthesisMaxClaims(measureCount: number): number {
+  if (measureCount <= 2) return 1;
+  if (measureCount <= 6) return 2;
+  return 3;
 }
 
 export function buildThemeSynthesisPrompt(input: ThemeSynthesisInput): string {
   const target = themeSynthesisTargetRange(input.measures.length);
+  const maxClaims = themeSynthesisMaxClaims(input.measures.length);
+  const exampleReferences = input.measures.length > 1 ? '["M1","M2"]' : '["M1"]';
   const measures = sortedMeasures(input.measures)
     .map((measure, index) => {
       const details = measure.details
@@ -162,13 +162,14 @@ export function buildThemeSynthesisPrompt(input: ThemeSynthesisInput): string {
 Règles absolues :
 - utilise uniquement les mesures délimitées ci-dessous ;
 - n'ajoute aucun fait, chiffre, engagement, conséquence, intention ou appréciation absent des mesures citées ;
-- regroupe les principaux axes sans énumérer toutes les mesures ;
+- organise les mesures liées en ${maxClaims} axes cohérents au maximum, sans chercher à toutes les citer ;
+- ne rédige jamais une phrase distincte pour chaque mesure : une suite de reformulations n'est pas une synthèse ;
 - conserve les conditions, limites et nuances importantes ;
 - ne compare jamais cette candidature à une autre ;
 - ne déduis jamais une absence de position ;
 - rédige entre ${target.min} et ${target.max} mots, sans dépasser ${THEME_SYNTHESIS_HARD_MAX_WORDS} mots ;
 - écris en français clair, sans titre, sans liste, sans tiret cadratin ni demi-cadratin ;
-- découpe la synthèse en affirmations et rattache chacune aux seules mesures qui l'étayent.
+- chaque axe forme une affirmation cohérente et cite ensemble les mesures qui l'étayent.
 
 <candidature>${sanitizePromptValue(input.candidateName)}</candidature>
 <theme code="${input.theme}">${sanitizePromptValue(THEME_CATEGORY_LABELS[input.theme])}</theme>
@@ -177,7 +178,7 @@ ${measures}
 </mesures>
 
 Réponds uniquement en JSON :
-{"theme":"${input.theme}","claims":[{"text":"affirmation étayée","measureRefs":["M1"]}]}`;
+{"theme":"${input.theme}","claims":[{"text":"axe de synthèse étayé","measureRefs":${exampleReferences}}]}`;
 }
 
 const groundingResponseSchema = z
@@ -306,20 +307,27 @@ export function screenThemeSynthesis(
     }
   }
 
+  const maxClaims = themeSynthesisMaxClaims(measures.length);
+  const groupsSeveralMeasures = parsed.data.claims.some((claim) => claim.measureRefs.length > 1);
+  if (parsed.data.claims.length > maxClaims || (measures.length >= 3 && !groupsSeveralMeasures)) {
+    return {
+      ok: false,
+      reason: "catalogue",
+      detail:
+        "La réponse reformule les mesures l'une après l'autre au lieu de les regrouper en axes cohérents.",
+    };
+  }
+
   const claims = parsed.data.claims.map((claim) => ({
     text: normalizeText(claim.text),
     measureRefs: claim.measureRefs,
   }));
   const text = claims.map((claim) => claim.text).join(" ");
   const wordCount = text.split(/\s+/u).filter(Boolean).length;
-  const safetyFloor = themeSynthesisSafetyFloor(input.measures.length);
-  if (wordCount < safetyFloor) {
-    return {
-      ok: false,
-      reason: "trop_court",
-      detail: `La réponse contient ${wordCount} mots, sous le minimum de sécurité de ${safetyFloor} mots pour ce corpus.`,
-    };
-  }
+  // A minimum word count is not a safety property. For a theme backed by one short measure, an
+  // accurate sentence may legitimately stay below the editorial target. The schema already
+  // requires a non-empty claim tied to a known measure, and the second model pass verifies that
+  // claim against its evidence. Only the runaway ceiling belongs in this rejection gate.
   if (wordCount > THEME_SYNTHESIS_HARD_MAX_WORDS) {
     return {
       ok: false,

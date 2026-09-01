@@ -377,8 +377,20 @@ export function screenCandidateSynthesis(
   raw: string,
   input: CandidateSynthesisInput
 ): SynthesisScreen {
+  // Mistral entoure parfois un XML pourtant conforme d'un bloc de code Markdown, y compris après un
+  // second rappel du format. Cette enveloppe est un artefact de transport, pas du contenu libre.
+  // Nous ne la retirons que lorsqu'elle contient toute la réponse, afin de ne jamais accepter un
+  // commentaire ajouté avant ou après la structure contrôlée.
+  const trimmed = raw.trim();
+  const markdownFence = /^```(?:xml)?\s*\n?([\s\S]*?)\n?```$/iu.exec(trimmed);
+  const unfenced = (markdownFence?.[1] ?? trimmed).trim();
+  // L'enveloppe extérieure ne porte aucune preuve. Si le modèle l'omet mais rend exactement les
+  // deux sections attendues, la reconstruire ne détend aucun contrôle sur leur contenu.
+  const structured = /^<parcours>[\s\S]*(?:<\/programme>|<programme-vide\s*\/>)$/u.test(unfenced)
+    ? `<synthese>${unfenced}</synthese>`
+    : unfenced;
   const wrapper =
-    /^<synthese>\s*<parcours>([\s\S]*?)<\/parcours>\s*([\s\S]*?)\s*<\/synthese>$/u.exec(raw.trim());
+    /^<synthese>\s*<parcours>([\s\S]*?)<\/parcours>\s*([\s\S]*?)\s*<\/synthese>$/u.exec(structured);
   if (!wrapper) {
     return {
       ok: false,

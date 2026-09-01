@@ -180,6 +180,39 @@ describe("generateCandidacyThemeSynthesis", () => {
     expect(mocks.callMistral.mock.calls[1]![0][0].content).toContain("réponse précédente");
   });
 
+  it("régénère une suite de mesures qui ne constitue pas une synthèse", async () => {
+    mocks.findMeasures.mockResolvedValue(
+      Array.from({ length: 4 }, (_, index) => ({
+        id: `measure-${index + 1}`,
+        publishedRevisionId: `revision-${index + 1}`,
+        publishedRevision: {
+          text: `Mesure de démonstration numéro ${index + 1}.`,
+          details: null,
+        },
+      }))
+    );
+    const catalogue = JSON.stringify({
+      theme: "SANTE",
+      claims: Array.from({ length: 4 }, (_, index) => ({
+        text: `Mesure de démonstration numéro ${index + 1}.`,
+        measureRefs: [`M${index + 1}`],
+      })),
+    });
+    mocks.callMistral
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: catalogue })
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validVerification });
+    const { generateCandidacyThemeSynthesis } = await import("../generation");
+
+    const result = await generateCandidacyThemeSynthesis("cand-1", "SANTE", {
+      persist: false,
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.callMistral.mock.calls[1]![0][0].content).toContain("regrouper en axes cohérents");
+  });
+
   it("régénère une sortie que le second passage Mistral juge non étayée", async () => {
     mocks.callMistral
       .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })

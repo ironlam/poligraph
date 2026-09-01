@@ -173,6 +173,20 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).not.toMatch(/<engagement|<synthese>/);
   });
 
+  it("accepte une réponse structurée entourée d'un unique bloc de code Markdown", () => {
+    const result = screenCandidateSynthesis(`\`\`\`xml\n${structured(["M1", "M3"])}\n\`\`\``, BASE);
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("accepte la structure complète quand seule l'enveloppe synthèse est omise", () => {
+    const inner = structured(["M1", "M3"])
+      .replace(/^<synthese>/u, "")
+      .replace(/<\/synthese>$/u, "");
+
+    expect(screenCandidateSynthesis(inner, BASE)).toMatchObject({ ok: true });
+  });
+
   it("preserves question and exclamation marks from published measures", () => {
     const input: CandidateSynthesisInput = {
       ...BASE,
