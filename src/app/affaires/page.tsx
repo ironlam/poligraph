@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { SimplePagination } from "@/components/ui/SimplePagination";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -115,6 +116,14 @@ export default async function AffairesPage({ searchParams }: PageProps) {
   const mode = (params.mode === "victime" ? "victime" : "mise-en-cause") as
     | "mise-en-cause"
     | "victime";
+
+  // An unknown ?parti= slug is a 404, not an empty listing: a real party with
+  // zero affairs and a slug that does not exist must not render alike. Checked
+  // before the listing queries, so an arbitrary slug costs one indexed lookup
+  // instead of a full page render.
+  if (partiFilter && !(await getPublicPartyMetadataBySlug(partiFilter))) {
+    notFound();
+  }
 
   const activeInvolvements =
     mode === "victime"
