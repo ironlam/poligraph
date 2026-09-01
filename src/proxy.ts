@@ -325,8 +325,25 @@ export function hasValidAdminSession(request: NextRequest): boolean {
 
 // ─── Proxy (Next 16 convention; the active middleware-like layer) ──
 
+/**
+ * A percent-encoded backslash in the path makes the Next standalone launcher
+ * build a require() from the raw pathname and die with MODULE_NOT_FOUND, so the
+ * request answers 500 instead of 404 (15 such paths in the production log of
+ * 2026-09-01, all from one scanner). Only the encoded form can get here: the
+ * WHATWG URL parser normalises a raw backslash to a slash before routing.
+ */
+export function hasEncodedBackslash(pathname: string): boolean {
+  return /%5c/i.test(pathname);
+}
+
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
+
+  // Bare 404 rather than a rewrite to the 404 page: no route matches a path the
+  // router cannot even resolve, and this costs no page render.
+  if (hasEncodedBackslash(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   // Canonicalize the legacy /parlement?<filters> listing to /parlement/votes (HTTP 308).
   if (pathname === "/parlement") {
