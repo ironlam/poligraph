@@ -121,7 +121,10 @@ export default async function AffairesPage({ searchParams }: PageProps) {
   // zero affairs and a slug that does not exist must not render alike. Checked
   // before the listing queries, so an arbitrary slug costs one indexed lookup
   // instead of a full page render.
-  if (partiFilter && !(await getPublicPartyMetadataBySlug(partiFilter))) {
+  // The name is kept, not just the existence: the empty state names the party
+  // rather than claiming the whole base holds nothing.
+  const partyMeta = partiFilter ? await getPublicPartyMetadataBySlug(partiFilter) : null;
+  if (partiFilter && !partyMeta) {
     notFound();
   }
 
@@ -319,7 +322,15 @@ export default async function AffairesPage({ searchParams }: PageProps) {
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground mb-2">
                 Aucune affaire documentée
-                {searchFilter || certaintyFilter || superCatFilter ? " avec ces filtres" : ""}
+                {partyMeta
+                  ? ` pour ${partyMeta.name}`
+                  : searchFilter ||
+                      certaintyFilter ||
+                      superCatFilter ||
+                      statusFilter ||
+                      categoryFilter
+                    ? " avec ces filtres"
+                    : ""}
               </p>
               <p className="text-sm text-muted-foreground">
                 Les affaires sont ajoutées avec des sources vérifiables. Notre base est enrichie
