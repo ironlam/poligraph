@@ -18,7 +18,70 @@ const STATE_LABELS = {
   OBSOLETE: "Obsolète",
 } as const;
 
-type Preview = { text: string; model: string; measureCount: number };
+type Preview = {
+  text: string;
+  model: string;
+  measureCount: number;
+  claims: Array<{ text: string; measureRefs: string[] }>;
+};
+
+function readPreviewClaims(value: unknown): Preview["claims"] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((claim) => {
+    if (
+      typeof claim !== "object" ||
+      claim === null ||
+      typeof (claim as { text?: unknown }).text !== "string" ||
+      !Array.isArray((claim as { measureRefs?: unknown }).measureRefs)
+    ) {
+      return [];
+    }
+    const measureRefs = (claim as { measureRefs: unknown[] }).measureRefs.filter(
+      (reference): reference is string => typeof reference === "string"
+    );
+    return [{ text: (claim as { text: string }).text, measureRefs }];
+  });
+}
+
+function ThemeSynthesisEvidence({
+  claims,
+  row,
+}: {
+  claims: Preview["claims"];
+  row: AdminThemeSynthesisRow;
+}) {
+  if (claims.length === 0) return null;
+  return (
+    <details className="max-w-[90ch] rounded-lg border bg-muted/20 p-3 text-sm">
+      <summary className="min-h-11 cursor-pointer py-3 font-semibold">
+        Vérifier les affirmations dans les mesures
+      </summary>
+      <ol className="mt-2 space-y-4">
+        {claims.map((claim, index) => (
+          <li key={`${row.theme}-claim-${index}`}>
+            <p className="leading-relaxed">{claim.text}</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {claim.measureRefs.map((reference) => {
+                const measure = row.measures.find((candidate) => candidate.ref === reference);
+                if (!measure) return null;
+                return (
+                  <li key={`${index}-${reference}`}>
+                    <Link
+                      href={`/admin/mesures/${measure.id}`}
+                      className="inline-flex min-h-11 items-center rounded-md border px-3 font-semibold underline underline-offset-2"
+                    >
+                      {reference} : {measure.text}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
 
 async function postJson(url: string, body: unknown): Promise<Record<string, unknown>> {
   const response = await fetch(url, {
@@ -55,6 +118,7 @@ export function ThemeSynthesesClient({ data }: { data: AdminCandidacyThemeSynthe
             text: String(result.text ?? ""),
             model: String(result.model ?? "Mistral"),
             measureCount: Number(result.measureCount ?? row.measureCount),
+            claims: readPreviewClaims(result.claims),
           },
         }));
       }
@@ -73,6 +137,7 @@ export function ThemeSynthesesClient({ data }: { data: AdminCandidacyThemeSynthe
       await postJson(`/api/admin/candidats/${data.candidacyId}/theme-syntheses/publish`, {
         synthesisId: row.synthesis.id,
         corpusFingerprint: row.currentCorpusFingerprint,
+        contentFingerprint: row.synthesis.contentFingerprint,
       });
       setMessage(`${THEME_CATEGORY_LABELS[row.theme]} : synthèse publiée.`);
       router.refresh();
@@ -162,36 +227,7 @@ export function ThemeSynthesesClient({ data }: { data: AdminCandidacyThemeSynthe
                       ? `, relue le ${formatDate(row.synthesis.validatedAt)}`
                       : ""}
                   </p>
-                  <details className="max-w-[90ch] rounded-lg border bg-muted/20 p-3 text-sm">
-                    <summary className="min-h-11 cursor-pointer py-3 font-semibold">
-                      Vérifier les affirmations dans les mesures
-                    </summary>
-                    <ol className="mt-2 space-y-4">
-                      {row.synthesis.claims.map((claim, index) => (
-                        <li key={`${row.theme}-claim-${index}`}>
-                          <p className="leading-relaxed">{claim.text}</p>
-                          <ul className="mt-2 flex flex-wrap gap-2">
-                            {claim.measureRefs.map((reference) => {
-                              const measure = row.measures.find(
-                                (candidate) => candidate.ref === reference
-                              );
-                              if (!measure) return null;
-                              return (
-                                <li key={`${index}-${reference}`}>
-                                  <Link
-                                    href={`/admin/mesures/${measure.id}`}
-                                    className="inline-flex min-h-11 items-center rounded-md border px-3 font-semibold underline underline-offset-2"
-                                  >
-                                    {reference} : {measure.text}
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
+                  <ThemeSynthesisEvidence claims={row.synthesis.claims} row={row} />
                 </div>
               )}
 
@@ -204,6 +240,9 @@ export function ThemeSynthesesClient({ data }: { data: AdminCandidacyThemeSynthe
                     Prévisualisation, non enregistrée
                   </p>
                   <p className="mt-2 max-w-[80ch] text-sm leading-relaxed">{preview.text}</p>
+                  <div className="mt-3">
+                    <ThemeSynthesisEvidence claims={preview.claims} row={row} />
+                  </div>
                 </aside>
               )}
 

@@ -24,7 +24,7 @@ export default async function AdminThemeSynthesesPage({
       <header className="space-y-2">
         <Link
           href="/admin/candidats"
-          className="text-sm font-semibold text-primary hover:underline"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
         >
           Retour aux candidatures
         </Link>

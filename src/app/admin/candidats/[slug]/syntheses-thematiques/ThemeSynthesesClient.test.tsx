@@ -27,6 +27,7 @@ const data = (state: "MISSING" | "PENDING_REVIEW" = "MISSING") =>
                 id: "synthesis-1",
                 text: "Les mesures portent sur les soins de proximité.",
                 corpusFingerprint: "a".repeat(64),
+                contentFingerprint: "c".repeat(64),
                 model: "mistral-large-2508",
                 generatedAt: new Date("2026-09-01T00:00:00Z"),
                 validatedAt: null,
@@ -50,6 +51,12 @@ describe("ThemeSynthesesClient", () => {
           text: "Les mesures portent sur les soins de proximité.",
           model: "mistral-large-2508",
           measureCount: 2,
+          claims: [
+            {
+              text: "Les mesures portent sur les soins de proximité.",
+              measureRefs: ["M1"],
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
@@ -59,6 +66,10 @@ describe("ThemeSynthesesClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prévisualiser" }));
 
     await screen.findByText("Prévisualisation, non enregistrée");
+    expect(screen.getByRole("link", { name: /M1 : Créer un centre de santé/ })).toHaveAttribute(
+      "href",
+      "/admin/mesures/measure-1"
+    );
     expect(fetch).toHaveBeenCalledWith(
       "/api/admin/candidats/cand-1/theme-syntheses/generate",
       expect.objectContaining({ body: JSON.stringify({ theme: "SANTE", persist: false }) })
@@ -84,6 +95,7 @@ describe("ThemeSynthesesClient", () => {
         body: JSON.stringify({
           synthesisId: "synthesis-1",
           corpusFingerprint: "a".repeat(64),
+          contentFingerprint: "c".repeat(64),
         }),
       })
     );

@@ -3,7 +3,9 @@ import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import {
   computeThemeCorpusFingerprint,
+  computeThemeSynthesisContentFingerprint,
   getThemeSynthesisState,
+  indexThemeSynthesisMeasures,
   readThemeSynthesisClaims,
   type ThemeSynthesisEditorialState,
   type ThemeSynthesisInput,
@@ -25,6 +27,7 @@ export type AdminThemeSynthesisRow = {
     id: string;
     text: string;
     corpusFingerprint: string;
+    contentFingerprint: string;
     model: string;
     generatedAt: Date;
     validatedAt: Date | null;
@@ -62,6 +65,7 @@ export async function getAdminCandidacyThemeSyntheses(
               evidence: true,
               corpusFingerprint: true,
               model: true,
+              promptVersion: true,
               status: true,
               generatedAt: true,
               validatedAt: true,
@@ -106,8 +110,8 @@ export async function getAdminCandidacyThemeSyntheses(
     themes: THEMES_IN_ORDER.flatMap((theme) => {
       const themeMeasures = byTheme.get(theme);
       if (!themeMeasures?.length) return [];
+      const indexedMeasures = indexThemeSynthesisMeasures(themeMeasures);
       const currentCorpusFingerprint = computeThemeCorpusFingerprint({
-        candidateName: candidacy.candidateName,
         theme,
         measures: themeMeasures,
       });
@@ -116,23 +120,32 @@ export async function getAdminCandidacyThemeSyntheses(
         {
           theme,
           measureCount: themeMeasures.length,
-          measures: themeMeasures.map((measure, index) => ({
+          measures: indexedMeasures.map((measure) => ({
             id: measure.id,
-            ref: `M${index + 1}`,
+            ref: measure.ref,
             text: measure.text,
           })),
           currentCorpusFingerprint,
           state: getThemeSynthesisState(synthesis, currentCorpusFingerprint),
           synthesis: synthesis
-            ? {
-                id: synthesis.id,
-                text: synthesis.text,
-                corpusFingerprint: synthesis.corpusFingerprint,
-                model: synthesis.model,
-                generatedAt: synthesis.generatedAt,
-                validatedAt: synthesis.validatedAt,
-                claims: readThemeSynthesisClaims(synthesis.evidence),
-              }
+            ? (() => {
+                const claims = readThemeSynthesisClaims(synthesis.evidence);
+                return {
+                  id: synthesis.id,
+                  text: synthesis.text,
+                  corpusFingerprint: synthesis.corpusFingerprint,
+                  contentFingerprint: computeThemeSynthesisContentFingerprint({
+                    text: synthesis.text,
+                    claims,
+                    model: synthesis.model,
+                    promptVersion: synthesis.promptVersion,
+                  }),
+                  model: synthesis.model,
+                  generatedAt: synthesis.generatedAt,
+                  validatedAt: synthesis.validatedAt,
+                  claims,
+                };
+              })()
             : null,
         },
       ];
