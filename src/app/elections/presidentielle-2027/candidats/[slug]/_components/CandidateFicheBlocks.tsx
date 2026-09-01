@@ -25,8 +25,10 @@ import { cn, formatDate } from "@/lib/utils";
  * their page during a campaign is only defensible if the reader can immediately see
  * what it was built from, and the blocks below this one are exactly that.
  *
- * `whitespace-pre-line` because the model is asked for two paragraphs and the blank
- * line between them is the only thing separating the career from the programme.
+ * The model separates the career and programme with a blank line. Render those blocks
+ * as real paragraphs so the synthesis remains readable and keeps a meaningful HTML
+ * structure. The card follows the page grid, while its text column stays at a comfortable
+ * reading width on large screens.
  */
 export function CandidateSynthesis({
   synthesis,
@@ -39,21 +41,33 @@ export function CandidateSynthesis({
 }) {
   if (synthesis === null) return null;
 
+  const paragraphs = synthesis
+    .trim()
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
+
   return (
     <section
       aria-labelledby="synthese-titre"
       className="rounded-xl border border-border bg-muted/40 px-5 py-4"
     >
-      <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
-        En résumé
-      </h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Texte généré à partir des mandats, des votes et des{" "}
-        {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
-        {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
-        information qui ne figure sur cette page.
-      </p>
-      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{synthesis}</p>
+      <div className="max-w-[78ch]">
+        <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
+          En résumé
+        </h2>
+        <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
+          Texte généré à partir des mandats, des votes et des{" "}
+          {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
+          {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
+          information qui ne figure sur cette page.
+        </p>
+        <div className="mt-4 space-y-4 text-base leading-7">
+          {paragraphs.map((paragraph, index) => (
+            <p key={`${index}-${paragraph.slice(0, 32)}`}>{paragraph}</p>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

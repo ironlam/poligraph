@@ -1,7 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
-import { CandidateThemes, CandidateTransparency } from "../_components/CandidateFicheBlocks";
+import {
+  CandidateSynthesis,
+  CandidateThemes,
+  CandidateTransparency,
+} from "../_components/CandidateFicheBlocks";
 
 type Theme = CandidateFicheDetail["themes"][number];
 
@@ -23,6 +27,24 @@ function theme(over: Partial<Theme> = {}): Theme {
     ...over,
   };
 }
+
+describe("CandidateSynthesis", () => {
+  it("rend une colonne de lecture bornée et de vrais paragraphes", () => {
+    const { container } = render(
+      <CandidateSynthesis
+        synthesis={"Parcours documenté.\n\nPrincipaux thèmes du programme."}
+        generatedAt={new Date("2026-09-01T00:00:00.000Z")}
+        measureCount={70}
+      />
+    );
+
+    const section = screen.getByRole("region", { name: "En résumé" });
+    expect(section.firstElementChild).toHaveClass("max-w-[78ch]");
+    expect(screen.getByText("Parcours documenté.").tagName).toBe("P");
+    expect(screen.getByText("Principaux thèmes du programme.").tagName).toBe("P");
+    expect(container.querySelector("[class*='whitespace-pre-line']")).not.toBeInTheDocument();
+  });
+});
 
 describe("CandidateThemes", () => {
   it("rend TOUTES les mesures d'un sujet, jamais un échantillon", () => {
