@@ -39,6 +39,7 @@ export type ThemeSynthesisGenerationResult =
         | "candidature_non_declaree"
         | "extension_absente"
         | "theme_non_couvert"
+        | "corpus_modifie"
         | "generation"
         | "refuse";
       message: string;
@@ -175,10 +176,24 @@ export async function generateCandidacyThemeSynthesis(
   if (!options.persist) return { ...base, persisted: false };
 
   const generatedAt = new Date();
-  await db.$transaction(async (tx) => {
+  const persisted = await db.$transaction(async (tx) => {
     // Serializes regeneration with the human publication gate. Without the shared lock, a new
     // draft could replace the text between a moderator's preview and the publication update.
     await lockMeasureCandidacy(tx, candidacyId);
+    const current = await loadCandidacyThemeSynthesisCorpus(
+      tx as unknown as Prisma.TransactionClient,
+      candidacyId,
+      theme
+    );
+    if (!current.ok) return false;
+    const currentFingerprint = computeThemeCorpusFingerprint({
+      theme: current.corpus.input.theme,
+      measures: current.corpus.input.measures,
+    });
+    // Mistral runs outside the transaction. Refuse the write when the published corpus changed
+    // in the meantime, so the admin never receives a newly created but already obsolete draft.
+    if (currentFingerprint !== corpusFingerprint) return false;
+
     const synthesis = await tx.candidacyThemeSynthesis.upsert({
       where: {
         candidacyPresidentialId_theme: {
@@ -232,7 +247,17 @@ export async function generateCandidacyThemeSynthesis(
         userAgent: options.actor.userAgent,
       },
     });
+    return true;
   });
+
+  if (!persisted) {
+    return {
+      ok: false,
+      reason: "corpus_modifie",
+      message:
+        "Les mesures publiées de ce thème ont changé pendant la génération. Relancez la synthèse.",
+    };
+  }
 
   return { ...base, persisted: true };
 }

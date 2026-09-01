@@ -129,6 +129,40 @@ describe("generateCandidacyThemeSynthesis", () => {
     expect(mocks.lockCandidacy).toHaveBeenCalledWith(expect.anything(), "cand-1");
   });
 
+  it("refuse d'enregistrer une synthèse si le corpus change pendant l'appel Mistral", async () => {
+    mocks.findMeasures
+      .mockResolvedValueOnce([
+        {
+          id: "measure-1",
+          publishedRevisionId: "revision-1",
+          publishedRevision: { text: "Rouvrir des maternités.", details: null },
+        },
+        {
+          id: "measure-2",
+          publishedRevisionId: "revision-2",
+          publishedRevision: { text: "Développer les soins de proximité.", details: null },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "measure-1",
+          publishedRevisionId: "revision-3",
+          publishedRevision: { text: "Rouvrir des maternités de proximité.", details: null },
+        },
+      ]);
+    const { generateCandidacyThemeSynthesis } = await import("../generation");
+
+    const result = await generateCandidacyThemeSynthesis("cand-1", "SANTE", {
+      persist: true,
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "corpus_modifie" });
+    expect(mocks.lockCandidacy).toHaveBeenCalledWith(expect.anything(), "cand-1");
+    expect(mocks.upsertSynthesis).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
   it("ne sollicite que Mistral et réessaie une seule sortie récupérable", async () => {
     mocks.callMistral
       .mockResolvedValueOnce({ model: "mistral-large-2508", text: "{}" })
