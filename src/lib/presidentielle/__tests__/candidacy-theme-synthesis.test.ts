@@ -206,6 +206,30 @@ describe("synthèse thématique d'une candidature", () => {
     expect(result).toMatchObject({ ok: false, reason: "catalogue" });
   });
 
+  it("refuse une synthèse qui ne représente presque rien d'un corpus riche", () => {
+    const measures = Array.from({ length: 25 }, (_, index) => ({
+      id: `measure-${index + 1}`,
+      revisionId: `revision-${index + 1}`,
+      text: `Mesure publiée numéro ${index + 1}.`,
+      details: null,
+    }));
+
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Deux mesures portent sur les services publics.",
+            measureRefs: ["M1", "M2"],
+          },
+        ],
+      },
+      input({ measures })
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "couverture" });
+  });
+
   it("soumet chaque affirmation et ses seules mesures citées à un contrôle d'étayage", () => {
     const claims = [
       {
