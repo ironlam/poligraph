@@ -1,7 +1,11 @@
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
-import { computeThemeCorpusFingerprint } from "./candidacy-theme-synthesis";
+import {
+  computeThemeCorpusFingerprint,
+  computeThemeSynthesisContentFingerprint,
+  readThemeSynthesisClaims,
+} from "./candidacy-theme-synthesis";
 import { loadCandidacyThemeSynthesisCorpus } from "./candidacy-theme-synthesis-corpus";
 
 type ReviewActor = {
@@ -30,6 +34,7 @@ export async function publishCandidacyThemeSynthesis(input: {
   candidacyId: string;
   synthesisId: string;
   expectedCorpusFingerprint: string;
+  expectedContentFingerprint: string;
   actor: ReviewActor;
 }): Promise<PublishThemeSynthesisResult> {
   return db.$transaction(async (extendedTx) => {
@@ -44,6 +49,10 @@ export async function publishCandidacyThemeSynthesis(input: {
         theme: true,
         status: true,
         corpusFingerprint: true,
+        text: true,
+        evidence: true,
+        model: true,
+        promptVersion: true,
         candidacyPresidential: { select: { candidacyId: true } },
       },
     });
@@ -61,6 +70,20 @@ export async function publishCandidacyThemeSynthesis(input: {
         message: "Cette synthèse n'est pas en attente de relecture.",
       };
     }
+    const contentFingerprint = computeThemeSynthesisContentFingerprint({
+      text: synthesis.text,
+      claims: readThemeSynthesisClaims(synthesis.evidence),
+      model: synthesis.model,
+      promptVersion: synthesis.promptVersion,
+    });
+    if (contentFingerprint !== input.expectedContentFingerprint) {
+      return {
+        ok: false,
+        reason: "OBSOLETE",
+        message:
+          "Le brouillon a été régénéré depuis sa prévisualisation. Relisez-le avant validation.",
+      };
+    }
     const loaded = await loadCandidacyThemeSynthesisCorpus(tx, candidacyId, synthesis.theme);
     if (!loaded.ok) {
       return {
@@ -69,7 +92,10 @@ export async function publishCandidacyThemeSynthesis(input: {
         message: "Le corpus de ce thème n'est plus publiable. Régénérez la synthèse.",
       };
     }
-    const currentFingerprint = computeThemeCorpusFingerprint(loaded.corpus.input);
+    const currentFingerprint = computeThemeCorpusFingerprint({
+      theme: loaded.corpus.input.theme,
+      measures: loaded.corpus.input.measures,
+    });
     if (
       currentFingerprint !== synthesis.corpusFingerprint ||
       currentFingerprint !== input.expectedCorpusFingerprint
@@ -100,6 +126,7 @@ export async function publishCandidacyThemeSynthesis(input: {
           candidacyId,
           theme: synthesis.theme,
           corpusFingerprint: currentFingerprint,
+          contentFingerprint,
         },
         userId: input.actor.id,
         ipAddress: input.actor.ipAddress,

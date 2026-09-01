@@ -1,4 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { computeThemeSynthesisContentFingerprint } from "../candidacy-theme-synthesis";
+
+const draft = {
+  text: "Les mesures portent sur les maternités.",
+  evidence: {
+    claims: [{ text: "Les mesures portent sur les maternités.", measureRefs: ["M1"] }],
+  },
+  model: "mistral-large-latest",
+  promptVersion: "v1",
+};
+const draftFingerprint = computeThemeSynthesisContentFingerprint({
+  text: draft.text,
+  claims: draft.evidence.claims,
+  model: draft.model,
+  promptVersion: draft.promptVersion,
+});
 
 const mocks = vi.hoisted(() => ({
   findSynthesis: vi.fn(),
@@ -34,6 +50,7 @@ beforeEach(() => {
     theme: "SANTE",
     status: "PENDING_REVIEW",
     corpusFingerprint: "ignored-in-fixture",
+    ...draft,
     candidacyPresidential: { candidacyId: "cand-1" },
   });
   mocks.findCandidacy.mockResolvedValue({
@@ -58,7 +75,6 @@ describe("publishCandidacyThemeSynthesis", () => {
   it("publie une synthèse relue seulement si son corpus est encore identique", async () => {
     const { computeThemeCorpusFingerprint } = await import("../candidacy-theme-synthesis");
     const fingerprint = computeThemeCorpusFingerprint({
-      candidateName: "Camille Démonstration",
       theme: "SANTE",
       measures: [
         {
@@ -74,6 +90,7 @@ describe("publishCandidacyThemeSynthesis", () => {
       theme: "SANTE",
       status: "PENDING_REVIEW",
       corpusFingerprint: fingerprint,
+      ...draft,
       candidacyPresidential: { candidacyId: "cand-1" },
     });
     const { publishCandidacyThemeSynthesis } = await import("../candidacy-theme-synthesis-review");
@@ -82,6 +99,7 @@ describe("publishCandidacyThemeSynthesis", () => {
       candidacyId: "cand-1",
       synthesisId: "synthesis-1",
       expectedCorpusFingerprint: fingerprint,
+      expectedContentFingerprint: draftFingerprint,
       actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
     });
 
@@ -110,11 +128,28 @@ describe("publishCandidacyThemeSynthesis", () => {
       candidacyId: "cand-1",
       synthesisId: "synthesis-1",
       expectedCorpusFingerprint: "old",
+      expectedContentFingerprint: draftFingerprint,
       actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
     });
 
     expect(result).toMatchObject({ ok: false, reason: "OBSOLETE" });
     expect(mocks.updateSynthesis).not.toHaveBeenCalled();
     expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuse un brouillon régénéré depuis la prévisualisation", async () => {
+    const { publishCandidacyThemeSynthesis } = await import("../candidacy-theme-synthesis-review");
+
+    const result = await publishCandidacyThemeSynthesis({
+      candidacyId: "cand-1",
+      synthesisId: "synthesis-1",
+      expectedCorpusFingerprint: "ignored-in-fixture",
+      expectedContentFingerprint: "a".repeat(64),
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "OBSOLETE" });
+    expect(mocks.findMeasures).not.toHaveBeenCalled();
+    expect(mocks.updateSynthesis).not.toHaveBeenCalled();
   });
 });

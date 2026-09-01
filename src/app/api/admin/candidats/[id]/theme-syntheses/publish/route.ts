@@ -10,6 +10,7 @@ const publishSchema = z
   .object({
     synthesisId: z.string().min(1),
     corpusFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    contentFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
 
@@ -21,6 +22,7 @@ export const POST = withAdminAuth(
       candidacyId: id!,
       synthesisId: body.synthesisId,
       expectedCorpusFingerprint: body.corpusFingerprint,
+      expectedContentFingerprint: body.contentFingerprint,
       actor: { id: "admin", ipAddress: ip, userAgent },
     });
     if (!result.ok) {

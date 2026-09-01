@@ -110,6 +110,7 @@ describe("routes admin des synthèses thématiques", () => {
       request("/api/admin/candidats/candidacy-1/theme-syntheses/publish", {
         synthesisId: "synthesis-1",
         corpusFingerprint: "b".repeat(64),
+        contentFingerprint: "c".repeat(64),
       }),
       context
     );
@@ -120,6 +121,7 @@ describe("routes admin des synthèses thématiques", () => {
         candidacyId: "candidacy-1",
         synthesisId: "synthesis-1",
         expectedCorpusFingerprint: "b".repeat(64),
+        expectedContentFingerprint: "c".repeat(64),
       })
     );
     expect(h.invalidate).toHaveBeenCalledWith("election-1");
@@ -130,6 +132,7 @@ describe("routes admin des synthèses thématiques", () => {
       request("/api/admin/candidats/candidacy-1/theme-syntheses/publish", {
         synthesisId: "synthesis-1",
         corpusFingerprint: "invalide",
+        contentFingerprint: "c".repeat(64),
       }),
       context
     );
