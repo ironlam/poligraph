@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCandidateSynthesisPrompt,
+  buildCandidateSynthesisGroundingPrompt,
+  buildCanonicalCareer,
   buildSynthesisSystemPrompt,
   isSynthesisContradictedByMeasures,
   screenCandidateSynthesis,
@@ -11,7 +13,6 @@ import {
   LARGE_PROGRAMME_MEASURES,
   LARGE_SYNTHESIS_MAX_WORDS,
   SYNTHESIS_HARD_MAX_WORDS,
-  SYNTHESIS_MAX_WORDS,
   type CandidateSynthesisInput,
   type SynthesisMaterial,
 } from "../candidate-synthesis";
@@ -58,6 +59,12 @@ function screenSynthesis(raw: string, material?: SynthesisMaterial) {
 }
 
 describe("buildCandidateSynthesisPrompt", () => {
+  it("construit le parcours uniquement avec les mandats enregistrés", () => {
+    expect(buildCanonicalCareer(BASE)).toBe(
+      "Jeanne Martin a exercé les fonctions suivantes : Députée (Assemblée nationale) depuis 2017 et Maire (Villeneuve) de 2008 à 2017."
+    );
+  });
+
   it("groups measures by theme under their French label", () => {
     const prompt = buildCandidateSynthesisPrompt(BASE);
     expect(prompt).toContain("Santé");
@@ -100,7 +107,7 @@ describe("buildCandidateSynthesisPrompt", () => {
     expect(coverage).not.toContain("Transports");
   });
 
-  it("keeps a very large programme bounded while preserving its full theme count", () => {
+  it("presents every measure of a very large programme to the model", () => {
     const measures = Array.from({ length: 1177 }, (_, index) => ({
       theme: "SANTE" as const,
       text: `Mesure de santé ${index}.`,
@@ -109,8 +116,8 @@ describe("buildCandidateSynthesisPrompt", () => {
     const prompt = buildCandidateSynthesisPrompt({ ...BASE, measures });
 
     expect(prompt).toContain("Santé : 1177 mesures");
-    expect(prompt.match(/  - \[M[0-9]+\]/g)).toHaveLength(8);
-    expect(prompt.length).toBeLessThan(10_000);
+    expect(prompt.match(/  - \[M[0-9]+\]/g)).toHaveLength(1177);
+    expect(prompt).toContain("[M1177] Mesure de santé 1176.");
   });
 
   it("states an empty record rather than omitting the section", () => {
@@ -122,13 +129,12 @@ describe("buildCandidateSynthesisPrompt", () => {
       voteCount: 0,
       measures: [],
     });
-    expect(prompt).toContain("Aucun mandat enregistré");
-    expect(prompt).toContain("Aucun vote enregistré");
+    expect(prompt).toContain("aucun mandat enregistré");
     expect(prompt).toContain("Aucune mesure publiée");
   });
 
   it("marks an ongoing mandate as ongoing rather than open-ended", () => {
-    expect(buildCandidateSynthesisPrompt(BASE)).toContain("2017 à en cours");
+    expect(buildCandidateSynthesisPrompt(BASE)).toContain("depuis 2017");
   });
 
   it("strips quotes and newlines from stored values", () => {
@@ -159,129 +165,99 @@ describe("buildCandidateSynthesisPrompt", () => {
     expect(prompt).toContain("Les Écologistes - Europe Écologie Les Verts");
   });
 
-  it("caps a very long stored value", () => {
+  it("keeps the complete measure text in the synthesis corpus", () => {
     const prompt = buildCandidateSynthesisPrompt({
       ...BASE,
       measures: [{ theme: "SANTE", text: "a".repeat(1000) }],
     });
-    expect(prompt).not.toContain("a".repeat(300));
+    expect(prompt).toContain("a".repeat(1000));
   });
 });
 
 describe("screenCandidateSynthesis", () => {
   const career = words(30);
-  const structured = (refs: string[]) =>
-    `<synthese><parcours>${career}.</parcours><programme>${refs
-      .map((ref) => `<engagement ref="${ref}" />`)
-      .join("")}</programme></synthese>`;
+  const healthAxis =
+    "En santé, les engagements rapprochent l’accès aux maternités de proximité et la prise en charge intégrale des soins prescrits.";
+  const transportAxis =
+    "Pour les déplacements, le programme prévoit aussi de rétablir plusieurs dessertes ferroviaires nocturnes sur le territoire.";
+  const output = (
+    programmeClaims: Array<{ text: string; measureRefs: string[] }>,
+    outputCareer = `${career}.`
+  ) => ({ career: outputCareer, programmeClaims });
 
-  it("derives a concise programme overview from the covered themes", () => {
-    const result = screenCandidateSynthesis(structured(["M1", "M3"]), BASE);
-
-    expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).toContain(
-      "Les mesures publiées couvrent notamment les thèmes suivants : Santé et Transports. Elles sont présentées thème par thème ci-dessous."
-    );
-    expect(result.ok && result.text).not.toContain("Rouvrir des maternités");
-    expect(result.ok && result.text).not.toMatch(/<engagement|<synthese>/);
-  });
-
-  it("accepts one structured synthesis wrapped in provider transport text", () => {
-    const raw = `Voici la synthèse demandée :\n\n\`\`\`xml\n${structured(["M1", "M3"])}\n\`\`\``;
+  it("publie une vraie synthèse en axes étayés plutôt qu'une liste de thèmes", () => {
+    const raw = output([
+      { text: healthAxis, measureRefs: ["M1", "M2"] },
+      { text: transportAxis, measureRefs: ["M3"] },
+    ]);
 
     const result = screenCandidateSynthesis(raw, BASE);
 
     expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).not.toContain("Voici la synthèse");
+    expect(result.ok && result.text).toContain("les engagements rapprochent");
+    expect(result.ok && result.text).toContain("dessertes ferroviaires");
+    expect(result.ok && result.text).not.toContain("thèmes suivants");
   });
 
-  it("accepts the two required sections when only the redundant outer wrapper is missing", () => {
-    const raw = `<parcours>${career}.</parcours><programme><engagement ref="M1" /><engagement ref="M3" /></programme>`;
-
-    expect(screenCandidateSynthesis(raw, BASE)).toMatchObject({ ok: true });
+  it("refuse l'ancien sommaire de thèmes", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          {
+            text: "Les mesures publiées couvrent notamment les thèmes suivants : Santé et Transports.",
+            measureRefs: ["M1", "M3"],
+          },
+        ]),
+        BASE
+      )
+    ).toMatchObject({ ok: false });
   });
 
-  it("does not duplicate a published measure ending with a question mark", () => {
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [{ theme: "SANTE", text: "Créer un droit opposable à la santé ?" }],
-    };
-    const result = screenCandidateSynthesis(structured(["M1"]), input);
-
-    expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).toContain("thèmes suivants : Santé");
-    expect(result.ok && result.text).not.toContain("Créer un droit opposable");
-  });
-
-  it("does not duplicate a published measure ending with ellipses", () => {
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [{ theme: "SANTE", text: "Créer des centres de santé..." }],
-    };
-    const result = screenCandidateSynthesis(structured(["M1"]), input);
-
-    expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).toContain("thèmes suivants : Santé");
-    expect(result.ok && result.text).not.toContain("Créer des centres de santé");
-  });
-
-  it("refuses valid-length prose that omits an expected theme", () => {
-    expect(screenCandidateSynthesis(structured(["M1"]), BASE)).toMatchObject({
+  it("refuse une synthèse qui omet un thème attendu", () => {
+    expect(
+      screenCandidateSynthesis(output([{ text: healthAxis, measureRefs: ["M1", "M2"] }]), BASE)
+    ).toMatchObject({
       ok: false,
       reason: "couverture_theme",
     });
   });
 
-  it("refuses more than two evidenced engagements from one theme", () => {
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [...BASE.measures, { theme: "SANTE", text: "Créer des centres de santé publics." }],
-    };
-
-    expect(screenCandidateSynthesis(structured(["M1", "M2", "M4", "M3"]), input)).toMatchObject({
-      ok: false,
-      reason: "concentration_theme",
-    });
-  });
-
-  it("cannot persist an action reversed by generated prose", () => {
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [{ theme: "ECONOMIE_BUDGET", text: "Augmenter les impôts des entreprises." }],
-    };
-    const reversed = `<synthese><parcours>${career}.</parcours><programme><engagement ref="M1">Supprimer les impôts des entreprises.</engagement></programme></synthese>`;
-
-    expect(screenCandidateSynthesis(reversed, input)).toMatchObject({
-      ok: false,
-      reason: "format_structure",
-    });
-    const accepted = screenCandidateSynthesis(structured(["M1"]), input);
-    expect(accepted.ok && accepted.text).toContain("thèmes suivants : Économie et budget");
-    expect(accepted.ok && accepted.text).not.toContain("Supprimer");
-  });
-
-  it("refuses a theme declaration that is not tied to a known measure", () => {
-    expect(screenCandidateSynthesis(structured(["M99", "M3"]), BASE)).toMatchObject({
+  it("refuse une référence inconnue", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: healthAxis, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M99"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({
       ok: false,
       reason: "preuve_inconnue",
     });
   });
 
-  it("refuses any free programme prose alongside references", () => {
-    const raw = `<synthese><parcours>${career}.</parcours><programme><engagement ref="M1" /><engagement ref="M3" />Il baisse aussi les impôts.</programme></synthese>`;
-
-    expect(screenCandidateSynthesis(raw, BASE)).toMatchObject({
+  it("refuse une quantité absente des mesures citées", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: `${healthAxis} Le remboursement atteindrait 90 %.`, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M3"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({
       ok: false,
-      reason: "format_structure",
+      reason: "quantite",
     });
   });
 
-  it("handles an empty programme with one bounded canonical sentence", () => {
+  it("rend une phrase canonique quand le programme est vide", () => {
     const empty: CandidateSynthesisInput = {
       ...BASE,
       measures: [],
     };
-    const raw = `<synthese><parcours>${career}.</parcours><programme-vide /></synthese>`;
+    const raw = output([]);
     const result = screenCandidateSynthesis(raw, empty);
 
     expect(result).toMatchObject({ ok: true });
@@ -290,79 +266,90 @@ describe("screenCandidateSynthesis", () => {
     );
   });
 
-  it("does not relax the empty marker for a non-empty programme", () => {
-    const raw = `<synthese><parcours>${career}.</parcours><programme-vide /></synthese>`;
-
-    expect(screenCandidateSynthesis(raw, BASE)).toMatchObject({
+  it("refuse un tableau vide quand des mesures existent", () => {
+    expect(screenCandidateSynthesis(output([]), BASE)).toMatchObject({
       ok: false,
-      reason: "format_programme",
+      reason: "synthese_insuffisante",
     });
   });
 
-  it("accepts a judicial measure without copying it, but rejects judicial career prose", () => {
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [{ theme: "SECURITE_JUSTICE", text: "Créer un tribunal spécialisé." }],
-    };
-    const sourced = screenCandidateSynthesis(structured(["M1"]), input);
-    const generated = `<synthese><parcours>${career}. Il a comparu devant un tribunal.</parcours><programme><engagement ref="M1" /></programme></synthese>`;
-
-    expect(sourced).toMatchObject({ ok: true });
-    expect(sourced.ok && sourced.text).not.toContain("Créer un tribunal spécialisé");
-    expect(screenCandidateSynthesis(generated, input)).toMatchObject({
+  it("refuse une mention judiciaire ajoutée au parcours", () => {
+    expect(
+      screenCandidateSynthesis(
+        output(
+          [
+            { text: healthAxis, measureRefs: ["M1", "M2"] },
+            { text: transportAxis, measureRefs: ["M3"] },
+          ],
+          `${career}. Il a comparu devant un tribunal.`
+        ),
+        BASE
+      )
+    ).toMatchObject({
       ok: false,
       reason: "judiciaire",
     });
   });
 
-  it("rejects an empty career even when canonical measures satisfy the overall floor", () => {
-    const raw = `<synthese><parcours></parcours><programme><engagement ref="M1" /><engagement ref="M3" /></programme></synthese>`;
+  it("refuse une mention judiciaire ajoutée à un axe de programme", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: `${healthAxis} Cette proposition évite un tribunal.`, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M3"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({ ok: false, reason: "judiciaire" });
+  });
 
-    expect(screenCandidateSynthesis(raw, BASE)).toMatchObject({
+  it("transmet au contrôle d'étayage la fin d'une longue affirmation", () => {
+    const tail = "affirmation finale à contrôler";
+    const prompt = buildCandidateSynthesisGroundingPrompt(
+      [{ text: `${"mot ".repeat(80)}${tail}`, measureRefs: ["M1"] }],
+      BASE
+    );
+    expect(prompt).toContain(tail);
+  });
+
+  it("refuse une structure JSON incomplète", () => {
+    expect(screenCandidateSynthesis({ career: `${career}.` }, BASE)).toMatchObject({
       ok: false,
-      reason: "parcours_vide",
+      reason: "format_structure",
     });
   });
 
-  it("does not copy a long canonical measure into the general overview", () => {
-    const longMeasure = Array.from(
-      { length: SYNTHESIS_MAX_WORDS + 20 },
-      (_, i) => `source${i}`
-    ).join(" ");
-    const input: CandidateSynthesisInput = {
+  it("exige au moins un axe qui regroupe plusieurs mesures pour un programme riche", () => {
+    const rich = {
       ...BASE,
-      measures: [{ theme: "SANTE", text: `${longMeasure}.` }],
+      measures: Array.from({ length: 6 }, (_, index) => ({
+        theme: "SANTE" as const,
+        text: `Mesure de santé numéro ${index + 1}.`,
+      })),
     };
-
-    const result = screenCandidateSynthesis(structured(["M1"]), input);
-
-    expect(result).toMatchObject({ ok: true });
-    expect(result.ok && result.text).not.toContain("source219");
-  });
-
-  it("does not charge an unrendered optional source against the maximum", () => {
-    const longOptional = Array.from(
-      { length: SYNTHESIS_HARD_MAX_WORDS + 20 },
-      (_, i) => `option${i}`
-    ).join(" ");
-    const input: CandidateSynthesisInput = {
-      ...BASE,
-      measures: [
-        { theme: "SANTE", text: "Rouvrir des maternités de proximité." },
-        { theme: "SANTE", text: `${longOptional}.` },
-      ],
-    };
-
-    expect(screenCandidateSynthesis(structured(["M2", "M1"]), input)).toMatchObject({ ok: true });
+    expect(
+      screenCandidateSynthesis(
+        output([
+          {
+            text: `${healthAxis} Cette orientation concerne les soins de proximité.`,
+            measureRefs: ["M1"],
+          },
+          {
+            text: `${healthAxis} Elle concerne également leur remboursement.`,
+            measureRefs: ["M2"],
+          },
+        ]),
+        rich
+      )
+    ).toMatchObject({ ok: false, reason: "catalogue" });
   });
 });
 
 describe("buildSynthesisSystemPrompt", () => {
-  it("annonce uniquement la longueur du parcours que le fournisseur doit rédiger", () => {
+  it("demande de recopier le parcours canonique", () => {
     for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
-      const range = synthesisTargetRange(material);
       expect(buildSynthesisSystemPrompt(material)).toContain(
-        `Entre ${range.min} et ${range.max} mots dans <parcours>`
+        "Recopie sans la modifier la phrase de parcours"
       );
     }
   });
@@ -378,13 +365,16 @@ describe("buildSynthesisSystemPrompt", () => {
       measureCount: LARGE_PROGRAMME_MEASURES,
     };
     expect(synthesisTargetRange(large)).toEqual(synthesisTargetRange(FULL));
-    expect(buildSynthesisSystemPrompt(large)).toContain("Entre 30 et 100 mots dans <parcours>");
+    expect(buildSynthesisSystemPrompt(large)).toContain(
+      "Recopie sans la modifier la phrase de parcours"
+    );
   });
 
-  it("limite à deux engagements par thème et exige la couverture attendue", () => {
+  it("demande des axes étayés sans juxtaposer les mesures", () => {
     const prompt = buildSynthesisSystemPrompt(FULL);
-    expect(prompt).toContain("Représente chacun des thèmes demandés");
-    expect(prompt).toContain("pas plus de deux engagements d'un même thème");
+    expect(prompt).toContain("Dégage les idées directrices");
+    expect(prompt).toContain("Ne juxtapose pas les mesures");
+    expect(prompt).toContain("doit citer les références exactes");
   });
 
   it("demande moins à une candidature dont un pan est vide", () => {

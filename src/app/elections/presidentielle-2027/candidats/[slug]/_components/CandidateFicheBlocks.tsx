@@ -67,6 +67,14 @@ export function CandidateSynthesis({
             <p key={`${index}-${paragraph.slice(0, 32)}`}>{paragraph}</p>
           ))}
         </div>
+        {measureCount > 0 && (
+          <a
+            href="#mesures"
+            className="mt-3 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+          >
+            Vérifier dans les mesures et leurs sources
+          </a>
+        )}
       </div>
     </section>
   );
