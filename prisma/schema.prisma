@@ -1920,12 +1920,49 @@ model CandidacyPresidential {
   synthesis            String?   @db.Text
   synthesisGeneratedAt DateTime?
 
+  themeSyntheses CandidacyThemeSynthesis[]
+
   publicationStatus PublicationStatus @default(DRAFT)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([publicationStatus])
+}
+
+enum CandidacyThemeSynthesisStatus {
+  PENDING_REVIEW
+  PUBLISHED
+}
+
+// One independently reviewed summary per documented programme theme. Obsolescence is deliberately
+// computed by comparing corpusFingerprint with the current published revisions: publishing a
+// measure must never trigger generation or silently mutate editorial content.
+model CandidacyThemeSynthesis {
+  id String @id @default(cuid())
+
+  candidacyPresidential   CandidacyPresidential @relation(fields: [candidacyPresidentialId], references: [id], onDelete: Cascade)
+  candidacyPresidentialId String
+  theme                   ThemeCategory
+
+  text               String                        @db.Text
+  evidence           Json
+  corpusFingerprint  String
+  sourceMeasureCount Int
+  model              String
+  promptVersion      String
+  status             CandidacyThemeSynthesisStatus @default(PENDING_REVIEW)
+
+  generatedAt DateTime  @default(now())
+  validatedAt DateTime?
+  validatedBy String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([candidacyPresidentialId, theme])
+  @@index([candidacyPresidentialId, status])
+  @@index([status, updatedAt])
 }
 
 model ElectoralList {

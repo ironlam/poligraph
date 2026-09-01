@@ -200,6 +200,41 @@ export function CandidateThemes({
                 </span>
               </div>
 
+              {t.synthesis !== null && (
+                <div className="mt-3 max-w-[75ch] space-y-1.5">
+                  <div className="space-y-3">
+                    {t.synthesis.claims.map((claim, index) => (
+                      <div key={`${t.theme}-synthesis-${index}`}>
+                        <p className="text-[0.9375rem] leading-relaxed text-foreground">
+                          {claim.text}
+                        </p>
+                        <ul
+                          aria-label={`Mesures qui étayent l’affirmation ${index + 1}`}
+                          className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+                        >
+                          {claim.measures.map((measure) => (
+                            <li key={measure.id}>
+                              <Link
+                                href={`/elections/${electionSlug}/mesures/${measure.slug}`}
+                                prefetch={false}
+                                className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+                                aria-label={`Voir la mesure et sa source : ${measure.text}`}
+                              >
+                                Voir la mesure et sa source
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Synthèse générée à partir des mesures documentées de cette candidature, puis
+                    relue par Poligraph.
+                  </p>
+                </div>
+              )}
+
               {showAllMeasures ? (
                 <ul className="mt-3 divide-y divide-border/70 sm:pl-4">
                   {t.measures.map((measure) => (

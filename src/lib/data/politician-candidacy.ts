@@ -6,6 +6,12 @@ import { db } from "@/lib/db";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidate-synthesis";
 import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
+import {
+  computeThemeCorpusFingerprint,
+  getThemeSynthesisState,
+  indexThemeSynthesisMeasures,
+  readThemeSynthesisClaims,
+} from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
@@ -170,6 +176,13 @@ export type CandidateThemeBreakdown = {
   theme: ThemeCategory;
   slug: string;
   measureCount: number;
+  /** Human-published and current for this exact set of published revisions, otherwise absent. */
+  synthesis: {
+    claims: Array<{
+      text: string;
+      measures: CandidateThemeMeasure[];
+    }>;
+  } | null;
   /**
    * Every measure of the theme, not a sample.
    *
@@ -214,28 +227,47 @@ export async function loadCandidateFicheDetail(
   candidacyId: string,
   politicianId: string
 ): Promise<CandidateFicheDetail> {
-  const [measures, mandates, probityConvictionCount, probityNonDefinitiveConvictionCount] =
-    await Promise.all([
-      getPublicMeasuresByCandidacy(candidacyId),
-      db.mandate.findMany({ where: { politicianId }, select: { type: true } }),
-      db.affair.count({
-        where: {
-          politicianId,
-          ...getConvictionOnlyWhere(),
-          category: { in: getCategoriesForSuper("PROBITE") },
+  const [
+    measures,
+    mandates,
+    probityConvictionCount,
+    probityNonDefinitiveConvictionCount,
+    themeSyntheses,
+  ] = await Promise.all([
+    getPublicMeasuresByCandidacy(candidacyId),
+    db.mandate.findMany({ where: { politicianId }, select: { type: true } }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
+      },
+    }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
+        status: {
+          in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
         },
-      }),
-      db.affair.count({
-        where: {
-          politicianId,
-          ...getConvictionOnlyWhere(),
-          category: { in: getCategoriesForSuper("PROBITE") },
-          status: {
-            in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
-          },
-        },
-      }),
-    ]);
+      },
+    }),
+    db.candidacyThemeSynthesis.findMany({
+      where: {
+        candidacyPresidential: { candidacyId },
+        status: "PUBLISHED",
+      },
+      select: {
+        theme: true,
+        evidence: true,
+        status: true,
+        corpusFingerprint: true,
+      },
+    }),
+  ]);
+
+  const synthesesByTheme = new Map(themeSyntheses.map((synthesis) => [synthesis.theme, synthesis]));
 
   const hasDeputyMandate = mandates.some((mandate) => mandate.type === "DEPUTE");
   // Votes on the presidential fiche describe work at the Assemblée nationale. A person who has
@@ -277,6 +309,49 @@ export async function loadCandidateFicheDetail(
         theme,
         slug: themeToSlug(theme),
         measureCount: list.length,
+        synthesis: (() => {
+          const stored = synthesesByTheme.get(theme) ?? null;
+          const corpusMeasures = list.map((measure) => ({
+            id: measure.id,
+            revisionId: measure.publishedRevisionId,
+            text: measure.text,
+            details: measure.details,
+          }));
+          const currentFingerprint = computeThemeCorpusFingerprint({
+            theme,
+            measures: corpusMeasures,
+          });
+          if (getThemeSynthesisState(stored, currentFingerprint) !== "PUBLISHED" || !stored) {
+            return null;
+          }
+          const publicMeasureById = new Map(
+            list.map((measure) => [
+              measure.id,
+              {
+                id: measure.id,
+                slug: measure.slug,
+                text: measure.text,
+                sourceUrl: pickMeasureSourceUrl(measure.sources),
+              },
+            ])
+          );
+          const measureByRef = new Map(
+            indexThemeSynthesisMeasures(corpusMeasures).map((measure) => [
+              measure.ref,
+              publicMeasureById.get(measure.id),
+            ])
+          );
+          const claims = readThemeSynthesisClaims(stored.evidence).flatMap((claim) => {
+            const cited = claim.measureRefs.flatMap((reference) => {
+              const measure = measureByRef.get(reference);
+              return measure ? [measure] : [];
+            });
+            return cited.length === claim.measureRefs.length
+              ? [{ text: claim.text, measures: cited }]
+              : [];
+          });
+          return claims.length > 0 ? { claims } : null;
+        })(),
         measures: list.map((measure) => ({
           id: measure.id,
           slug: measure.slug,

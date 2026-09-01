@@ -438,6 +438,14 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                           {formatDate(row.synthesisGeneratedAt)}
                         </span>
                       )}
+                      {row.politicianSlug && (
+                        <Link
+                          href={`/admin/candidats/${row.politicianSlug}/syntheses-thematiques`}
+                          className="inline-flex min-h-11 items-center text-xs font-semibold text-primary hover:underline md:min-h-[36px]"
+                        >
+                          Gérer les synthèses par thème
+                        </Link>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2 max-w-md">
