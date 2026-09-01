@@ -35,6 +35,5 @@ ALTER TABLE "CandidacyThemeSynthesis"
 
 ALTER TABLE "CandidacyThemeSynthesis" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "anon_read_published_candidacy_theme_syntheses"
-    ON "CandidacyThemeSynthesis" FOR SELECT TO anon
-    USING ("status" = 'PUBLISHED');
+-- No anon policy by design. Public reads go through the server because visibility depends on a
+-- live corpus fingerprint, which a status-only RLS policy cannot reproduce safely.
