@@ -6,6 +6,10 @@ import { db } from "@/lib/db";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidate-synthesis";
 import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
+import {
+  computeThemeCorpusFingerprint,
+  getThemeSynthesisState,
+} from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
@@ -170,6 +174,8 @@ export type CandidateThemeBreakdown = {
   theme: ThemeCategory;
   slug: string;
   measureCount: number;
+  /** Human-published and current for this exact set of published revisions, otherwise absent. */
+  synthesis: string | null;
   /**
    * Every measure of the theme, not a sample.
    *
@@ -214,28 +220,42 @@ export async function loadCandidateFicheDetail(
   candidacyId: string,
   politicianId: string
 ): Promise<CandidateFicheDetail> {
-  const [measures, mandates, probityConvictionCount, probityNonDefinitiveConvictionCount] =
-    await Promise.all([
-      getPublicMeasuresByCandidacy(candidacyId),
-      db.mandate.findMany({ where: { politicianId }, select: { type: true } }),
-      db.affair.count({
-        where: {
-          politicianId,
-          ...getConvictionOnlyWhere(),
-          category: { in: getCategoriesForSuper("PROBITE") },
+  const [
+    measures,
+    mandates,
+    probityConvictionCount,
+    probityNonDefinitiveConvictionCount,
+    themeSyntheses,
+  ] = await Promise.all([
+    getPublicMeasuresByCandidacy(candidacyId),
+    db.mandate.findMany({ where: { politicianId }, select: { type: true } }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
+      },
+    }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
+        status: {
+          in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
         },
-      }),
-      db.affair.count({
-        where: {
-          politicianId,
-          ...getConvictionOnlyWhere(),
-          category: { in: getCategoriesForSuper("PROBITE") },
-          status: {
-            in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
-          },
-        },
-      }),
-    ]);
+      },
+    }),
+    db.candidacyThemeSynthesis.findMany({
+      where: {
+        candidacyPresidential: { candidacyId },
+        status: "PUBLISHED",
+      },
+      select: { theme: true, text: true, status: true, corpusFingerprint: true },
+    }),
+  ]);
+
+  const synthesesByTheme = new Map(themeSyntheses.map((synthesis) => [synthesis.theme, synthesis]));
 
   const hasDeputyMandate = mandates.some((mandate) => mandate.type === "DEPUTE");
   // Votes on the presidential fiche describe work at the Assemblée nationale. A person who has
@@ -277,6 +297,22 @@ export async function loadCandidateFicheDetail(
         theme,
         slug: themeToSlug(theme),
         measureCount: list.length,
+        synthesis: (() => {
+          const stored = synthesesByTheme.get(theme) ?? null;
+          const currentFingerprint = computeThemeCorpusFingerprint({
+            candidateName: "",
+            theme,
+            measures: list.map((measure) => ({
+              id: measure.id,
+              revisionId: measure.publishedRevisionId,
+              text: measure.text,
+              details: measure.details,
+            })),
+          });
+          return getThemeSynthesisState(stored, currentFingerprint) === "PUBLISHED"
+            ? stored!.text
+            : null;
+        })(),
         measures: list.map((measure) => ({
           id: measure.id,
           slug: measure.slug,

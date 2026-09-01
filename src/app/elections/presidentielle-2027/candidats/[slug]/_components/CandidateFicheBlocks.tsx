@@ -200,6 +200,16 @@ export function CandidateThemes({
                 </span>
               </div>
 
+              {t.synthesis !== null && (
+                <div className="mt-3 max-w-[75ch] space-y-1.5">
+                  <p className="text-[0.9375rem] leading-relaxed text-foreground">{t.synthesis}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Synthèse générée à partir des mesures documentées de cette candidature, puis
+                    relue par Poligraph.
+                  </p>
+                </div>
+              )}
+
               {showAllMeasures ? (
                 <ul className="mt-3 divide-y divide-border/70 sm:pl-4">
                   {t.measures.map((measure) => (

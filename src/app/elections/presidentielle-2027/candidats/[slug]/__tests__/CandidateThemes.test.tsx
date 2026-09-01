@@ -10,6 +10,7 @@ function theme(over: Partial<Theme> = {}): Theme {
     theme: "SANTE",
     slug: "sante",
     measureCount: 1,
+    synthesis: null,
     measures: [
       {
         id: "m1",
@@ -82,6 +83,33 @@ describe("CandidateThemes", () => {
       "href",
       "/elections/presidentielle-2027/mesures/rouvrir-des-maternites"
     );
+  });
+
+  it("rend une synthèse thématique publiée dans le HTML avant les mesures", () => {
+    render(
+      <CandidateThemes
+        themes={[
+          theme({
+            synthesis: "Les mesures portent sur les maternités et l’accès aux soins de proximité.",
+          }),
+        ]}
+        electionSlug="presidentielle-2027"
+        candidateSlug="camille-riviere"
+        measureCount={1}
+        lastReviewedAt={null}
+      />
+    );
+
+    const heading = screen.getByRole("heading", { level: 3, name: "Santé" });
+    const synthesis = screen.getByText(/Les mesures portent sur les maternités/);
+    const measure = screen.getByText("Rouvrir des maternités de proximité.");
+    expect(
+      heading.compareDocumentPosition(synthesis) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      synthesis.compareDocumentPosition(measure) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByText(/puis relue par Poligraph/)).toBeInTheDocument();
   });
 
   it("n'affiche aucun extrait arbitraire pour un grand programme", () => {
