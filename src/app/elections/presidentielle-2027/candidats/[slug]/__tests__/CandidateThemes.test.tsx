@@ -90,7 +90,21 @@ describe("CandidateThemes", () => {
       <CandidateThemes
         themes={[
           theme({
-            synthesis: "Les mesures portent sur les maternités et l’accès aux soins de proximité.",
+            synthesis: {
+              claims: [
+                {
+                  text: "Les mesures portent sur les maternités et l’accès aux soins de proximité.",
+                  measures: [
+                    {
+                      id: "m1",
+                      slug: "rouvrir-des-maternites",
+                      text: "Rouvrir des maternités de proximité.",
+                      sourceUrl: "https://example.org/programme.pdf",
+                    },
+                  ],
+                },
+              ],
+            },
           }),
         ]}
         electionSlug="presidentielle-2027"
@@ -110,6 +124,9 @@ describe("CandidateThemes", () => {
       synthesis.compareDocumentPosition(measure) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(screen.getByText(/puis relue par Poligraph/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Voir la mesure et sa source : Rouvrir/ })
+    ).toHaveAttribute("href", "/elections/presidentielle-2027/mesures/rouvrir-des-maternites");
   });
 
   it("n'affiche aucun extrait arbitraire pour un grand programme", () => {

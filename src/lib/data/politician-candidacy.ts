@@ -9,6 +9,8 @@ import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import {
   computeThemeCorpusFingerprint,
   getThemeSynthesisState,
+  indexThemeSynthesisMeasures,
+  readThemeSynthesisClaims,
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
@@ -175,7 +177,12 @@ export type CandidateThemeBreakdown = {
   slug: string;
   measureCount: number;
   /** Human-published and current for this exact set of published revisions, otherwise absent. */
-  synthesis: string | null;
+  synthesis: {
+    claims: Array<{
+      text: string;
+      measures: CandidateThemeMeasure[];
+    }>;
+  } | null;
   /**
    * Every measure of the theme, not a sample.
    *
@@ -251,7 +258,12 @@ export async function loadCandidateFicheDetail(
         candidacyPresidential: { candidacyId },
         status: "PUBLISHED",
       },
-      select: { theme: true, text: true, status: true, corpusFingerprint: true },
+      select: {
+        theme: true,
+        evidence: true,
+        status: true,
+        corpusFingerprint: true,
+      },
     }),
   ]);
 
@@ -299,19 +311,46 @@ export async function loadCandidateFicheDetail(
         measureCount: list.length,
         synthesis: (() => {
           const stored = synthesesByTheme.get(theme) ?? null;
+          const corpusMeasures = list.map((measure) => ({
+            id: measure.id,
+            revisionId: measure.publishedRevisionId,
+            text: measure.text,
+            details: measure.details,
+          }));
           const currentFingerprint = computeThemeCorpusFingerprint({
-            candidateName: "",
             theme,
-            measures: list.map((measure) => ({
-              id: measure.id,
-              revisionId: measure.publishedRevisionId,
-              text: measure.text,
-              details: measure.details,
-            })),
+            measures: corpusMeasures,
           });
-          return getThemeSynthesisState(stored, currentFingerprint) === "PUBLISHED"
-            ? stored!.text
-            : null;
+          if (getThemeSynthesisState(stored, currentFingerprint) !== "PUBLISHED" || !stored) {
+            return null;
+          }
+          const publicMeasureById = new Map(
+            list.map((measure) => [
+              measure.id,
+              {
+                id: measure.id,
+                slug: measure.slug,
+                text: measure.text,
+                sourceUrl: pickMeasureSourceUrl(measure.sources),
+              },
+            ])
+          );
+          const measureByRef = new Map(
+            indexThemeSynthesisMeasures(corpusMeasures).map((measure) => [
+              measure.ref,
+              publicMeasureById.get(measure.id),
+            ])
+          );
+          const claims = readThemeSynthesisClaims(stored.evidence).flatMap((claim) => {
+            const cited = claim.measureRefs.flatMap((reference) => {
+              const measure = measureByRef.get(reference);
+              return measure ? [measure] : [];
+            });
+            return cited.length === claim.measureRefs.length
+              ? [{ text: claim.text, measures: cited }]
+              : [];
+          });
+          return claims.length > 0 ? { claims } : null;
         })(),
         measures: list.map((measure) => ({
           id: measure.id,
