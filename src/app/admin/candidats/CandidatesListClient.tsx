@@ -264,7 +264,7 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                     {row.politicianId && row.politicianPublicationStatus !== "PUBLISHED" && (
                       <Link
                         href={`/admin/politiques/${row.politicianId}`}
-                        className="mt-2 block text-xs font-semibold text-primary underline underline-offset-2"
+                        className="mt-1 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary underline underline-offset-2"
                       >
                         Publier la personnalité
                       </Link>
