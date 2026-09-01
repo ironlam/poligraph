@@ -98,5 +98,7 @@ export const GET = withPublicRoute(async (request) => {
     mandate: p.mandates[0]?.type || null,
   }));
 
-  return withCache(NextResponse.json(results), "daily");
+  // This endpoint backs autocompletion in editorial and public flows. Free-text responses cannot
+  // be invalidated by entity tag, so caching them would hide a newly published person.
+  return withCache(NextResponse.json(results), "none");
 });

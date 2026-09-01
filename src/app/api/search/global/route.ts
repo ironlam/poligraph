@@ -237,6 +237,8 @@ export const GET = withPublicRoute(async (request) => {
         population: c.population,
       })),
     }),
-    "daily"
+    // Free-text results must reflect editorial publication changes immediately. A cached empty
+    // response otherwise keeps a newly published person invisible until the CDN entry expires.
+    "none"
   );
 });
