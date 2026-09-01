@@ -51,7 +51,9 @@ const SYNTHESIS_STYLES: Record<SynthesisState, string> = {
 export type CandidateRowView = {
   candidacyId: string;
   candidateName: string;
+  politicianId: string | null;
   politicianSlug: string | null;
+  politicianPublicationStatus: PublicationStatus | null;
   partyLabel: string | null;
   status: CandidacyStatus | null;
   sourceUrl: string | null;
@@ -95,6 +97,10 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
   const held = rows.filter(isHoldingBackMeasures);
   const heldMeasureCount = held.reduce((total, row) => total + row.readiness.measureCount, 0);
   const contradicted = rows.filter((row) => row.synthesisState === "CONTRADICTED");
+  const identityBlocked = rows.filter(
+    (row) =>
+      row.publicationStatus === "PUBLISHED" && row.politicianPublicationStatus !== "PUBLISHED"
+  );
 
   async function patchPresidential(id: string, body: Record<string, unknown>) {
     setBusy(id);
@@ -143,6 +149,24 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
             {heldMeasureCount} mesures relues, publiées et sourcées ne sortent sur aucune surface
             publique tant que la fiche candidature reste en brouillon :{" "}
             {held.map((row) => row.candidateName).join(", ")}.
+          </p>
+        </div>
+      )}
+
+      {identityBlocked.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-950 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+        >
+          <p className="font-semibold">
+            {identityBlocked.length === 1
+              ? "1 candidature publiée reste invisible"
+              : `${identityBlocked.length} candidatures publiées restent invisibles`}
+          </p>
+          <p className="mt-1">
+            La personnalité liée doit aussi être publiée. Le moteur de recherche et les pages
+            publiques la masquent actuellement :{" "}
+            {identityBlocked.map((row) => row.candidateName).join(", ")}.
           </p>
         </div>
       )}
@@ -236,6 +260,14 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                       </Link>
                     ) : (
                       <span>{row.candidateName}</span>
+                    )}
+                    {row.politicianId && row.politicianPublicationStatus !== "PUBLISHED" && (
+                      <Link
+                        href={`/admin/politiques/${row.politicianId}`}
+                        className="mt-2 block text-xs font-semibold text-primary underline underline-offset-2"
+                      >
+                        Publier la personnalité
+                      </Link>
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{row.partyLabel ?? "Sans parti"}</td>

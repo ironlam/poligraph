@@ -36,7 +36,9 @@ export default async function AdminCandidatsPage() {
     return {
       candidacyId: candidacy.id,
       candidateName: candidacy.candidateName,
+      politicianId: candidacy.politician?.id ?? null,
       politicianSlug: candidacy.politician?.slug ?? null,
+      politicianPublicationStatus: candidacy.politician?.publicationStatus ?? null,
       partyLabel: candidacy.party?.shortName ?? candidacy.partyLabel ?? null,
       status: candidacy.status,
       sourceUrl: candidacy.sourceUrl,

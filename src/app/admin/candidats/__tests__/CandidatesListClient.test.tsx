@@ -30,7 +30,9 @@ function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
   return {
     candidacyId: "cand-1",
     candidateName: "Alix Démonstration",
+    politicianId: "pol-1",
     politicianSlug: "alix-demonstration",
+    politicianPublicationStatus: "PUBLISHED",
     partyLabel: "PD",
     status: "DECLARE",
     sourceUrl: "https://example.org/annonce",
@@ -76,6 +78,25 @@ describe("CandidatesListClient", () => {
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dépublier" })).toBeInTheDocument();
+  });
+
+  it("signale une candidature publiée dont la personnalité reste masquée", () => {
+    render(
+      <CandidatesListClient
+        rows={[
+          row({
+            publicationStatus: "PUBLISHED",
+            politicianPublicationStatus: "ARCHIVED",
+          }),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("1 candidature publiée reste invisible");
+    expect(screen.getByRole("link", { name: "Publier la personnalité" })).toHaveAttribute(
+      "href",
+      "/admin/politiques/pol-1"
+    );
   });
 
   it("publie la fiche depuis la liste", async () => {

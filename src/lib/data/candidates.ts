@@ -8,6 +8,7 @@ const PRESIDENTIAL_INCLUDE = {
       slug: true,
       fullName: true,
       photoUrl: true,
+      publicationStatus: true,
       currentParty: { select: { id: true, slug: true, name: true, shortName: true, color: true } },
     },
   },
