@@ -37,10 +37,13 @@ const validOutput = JSON.stringify({
   theme: "SANTE",
   claims: [
     {
-      text: "Les mesures portent sur les maternités et l'accès aux soins de proximité.",
+      text: "Les mesures prévoient de rouvrir des maternités et de développer les soins de proximité. Elles mentionnent les maternités, les soins et leur proximité.",
       measureRefs: ["M1", "M2"],
     },
   ],
+});
+const validVerification = JSON.stringify({
+  claims: [{ index: 0, supported: true, reason: "Les deux mesures citées l'étayent." }],
 });
 
 beforeEach(() => {
@@ -64,7 +67,10 @@ beforeEach(() => {
       publishedRevision: { text: "Développer les soins de proximité.", details: null },
     },
   ]);
-  mocks.callMistral.mockResolvedValue({ model: "mistral-large-2508", text: validOutput });
+  mocks.callMistral.mockImplementation(async (messages: Array<{ content: string }>) => ({
+    model: "mistral-large-2508",
+    text: messages[0]?.content.includes("<affirmations>") ? validVerification : validOutput,
+  }));
   mocks.upsertSynthesis.mockResolvedValue({ id: "synthesis-1" });
   mocks.createAudit.mockResolvedValue({ id: "audit-1" });
 });
@@ -126,7 +132,8 @@ describe("generateCandidacyThemeSynthesis", () => {
   it("ne sollicite que Mistral et réessaie une seule sortie récupérable", async () => {
     mocks.callMistral
       .mockResolvedValueOnce({ model: "mistral-large-2508", text: "{}" })
-      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput });
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validVerification });
     const { generateCandidacyThemeSynthesis } = await import("../generation");
 
     const result = await generateCandidacyThemeSynthesis("cand-1", "SANTE", {
@@ -135,8 +142,49 @@ describe("generateCandidacyThemeSynthesis", () => {
     });
 
     expect(result).toMatchObject({ ok: true });
-    expect(mocks.callMistral).toHaveBeenCalledTimes(2);
+    expect(mocks.callMistral).toHaveBeenCalledTimes(3);
     expect(mocks.callMistral.mock.calls[1]![0][0].content).toContain("réponse précédente");
+  });
+
+  it("régénère une sortie que le second passage Mistral juge non étayée", async () => {
+    mocks.callMistral
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })
+      .mockResolvedValueOnce({
+        model: "mistral-large-2508",
+        text: JSON.stringify({
+          claims: [{ index: 0, supported: false, reason: "Un effet est ajouté." }],
+        }),
+      })
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })
+      .mockResolvedValueOnce({ model: "mistral-large-2508", text: validVerification });
+    const { generateCandidacyThemeSynthesis } = await import("../generation");
+
+    const result = await generateCandidacyThemeSynthesis("cand-1", "SANTE", {
+      persist: false,
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.callMistral).toHaveBeenCalledTimes(4);
+    expect(mocks.callMistral.mock.calls[2]![0][0].content).toContain("effet est ajouté");
+  });
+
+  it("accepte le corpus public d'une candidature retirée", async () => {
+    mocks.findCandidacy.mockResolvedValue({
+      id: "cand-1",
+      candidateName: "Camille Démonstration",
+      electionId: "election-1",
+      status: "RETIRE",
+      presidentialData: { id: "pres-1" },
+    });
+    const { generateCandidacyThemeSynthesis } = await import("../generation");
+
+    const result = await generateCandidacyThemeSynthesis("cand-1", "SANTE", {
+      persist: false,
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("refuse un thème sans mesure publiée sans appeler le fournisseur", async () => {

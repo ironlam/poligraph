@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildThemeSynthesisPrompt,
+  buildThemeSynthesisGroundingPrompt,
   computeThemeCorpusFingerprint,
+  computeThemeSynthesisContentFingerprint,
   getThemeSynthesisState,
   screenThemeSynthesis,
+  screenThemeSynthesisGrounding,
+  themeSynthesisSafetyFloor,
   themeSynthesisTargetRange,
   type ThemeSynthesisInput,
 } from "../candidacy-theme-synthesis";
@@ -49,6 +53,9 @@ describe("synthèse thématique d'une candidature", () => {
     expect(themeSynthesisTargetRange(2)).toEqual({ min: 45, max: 80 });
     expect(themeSynthesisTargetRange(8)).toEqual({ min: 90, max: 150 });
     expect(themeSynthesisTargetRange(25)).toEqual({ min: 120, max: 200 });
+    expect(themeSynthesisSafetyFloor(2)).toBe(20);
+    expect(themeSynthesisSafetyFloor(8)).toBe(50);
+    expect(themeSynthesisSafetyFloor(25)).toBe(70);
   });
 
   it("dérive l'obsolescence de l'empreinte courante sans modifier la synthèse", () => {
@@ -62,6 +69,22 @@ describe("synthèse thématique d'une candidature", () => {
     expect(
       getThemeSynthesisState({ status: "PUBLISHED", corpusFingerprint: "current" }, "current")
     ).toBe("PUBLISHED");
+  });
+
+  it("lie la validation au texte et aux preuves exacts du brouillon", () => {
+    const base = {
+      text: "Les mesures portent sur les maternités.",
+      claims: [{ text: "Les mesures portent sur les maternités.", measureRefs: ["M1"] }],
+      model: "mistral-large-latest",
+      promptVersion: "v1",
+    };
+
+    expect(computeThemeSynthesisContentFingerprint(base)).not.toBe(
+      computeThemeSynthesisContentFingerprint({
+        ...base,
+        text: "Les mesures portent sur les centres de santé.",
+      })
+    );
   });
 
   it("délimite et désinfecte toutes les données du corpus dans le prompt", () => {
@@ -91,7 +114,7 @@ describe("synthèse thématique d'une candidature", () => {
         theme: "SANTE",
         claims: [
           {
-            text: "Les mesures portent sur l'accès aux soins de proximité.",
+            text: "Les mesures portent sur la réouverture de maternités et la création de centres de santé publics, avec un accueil sans avance de frais.",
             measureRefs: ["M1", "M2"],
           },
         ],
@@ -101,10 +124,10 @@ describe("synthèse thématique d'une candidature", () => {
 
     expect(result).toEqual({
       ok: true,
-      text: "Les mesures portent sur l'accès aux soins de proximité.",
+      text: "Les mesures portent sur la réouverture de maternités et la création de centres de santé publics, avec un accueil sans avance de frais.",
       claims: [
         {
-          text: "Les mesures portent sur l'accès aux soins de proximité.",
+          text: "Les mesures portent sur la réouverture de maternités et la création de centres de santé publics, avec un accueil sans avance de frais.",
           measureRefs: ["M1", "M2"],
         },
       ],
@@ -147,5 +170,45 @@ describe("synthèse thématique d'une candidature", () => {
     ],
   ])("refuse %s", (_label, output) => {
     expect(screenThemeSynthesis(output, input())).toMatchObject({ ok: false });
+  });
+
+  it("soumet chaque affirmation et ses seules mesures citées à un contrôle d'étayage", () => {
+    const claims = [
+      {
+        text: "Les mesures portent sur les maternités et les centres de santé publics.",
+        measureRefs: ["M1", "M2"],
+      },
+    ];
+    const prompt = buildThemeSynthesisGroundingPrompt(claims, input());
+
+    expect(prompt).toContain('<affirmation index="0">');
+    expect(prompt).toContain('<preuve ref="M1">');
+    expect(prompt).toContain('<preuve ref="M2">');
+    expect(
+      screenThemeSynthesisGrounding(
+        { claims: [{ index: 0, supported: true, reason: "Les preuves le disent." }] },
+        1
+      )
+    ).toEqual({ ok: true });
+    expect(
+      screenThemeSynthesisGrounding(
+        { claims: [{ index: 0, supported: false, reason: "La gratuité est absente." }] },
+        1
+      )
+    ).toEqual({ ok: false, detail: "La gratuité est absente." });
+  });
+
+  it("refuse une sortie trop courte selon la taille du corpus", () => {
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          { text: "Rouvrir partout les maternités de proximité rapidement.", measureRefs: ["M1"] },
+        ],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "trop_court" });
   });
 });

@@ -4,8 +4,10 @@ import { db } from "@/lib/db";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import {
   buildThemeSynthesisPrompt,
+  buildThemeSynthesisGroundingPrompt,
   computeThemeCorpusFingerprint,
   screenThemeSynthesis,
+  screenThemeSynthesisGrounding,
   THEME_SYNTHESIS_PROMPT_VERSION,
   type ThemeSynthesisClaim,
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
@@ -70,7 +72,7 @@ export async function generateCandidacyThemeSynthesis(
       CANDIDACY_NOT_DECLARED: {
         ok: false,
         reason: "candidature_non_declaree",
-        message: "Seule une candidature déclarée peut porter des synthèses thématiques.",
+        message: "Seule une candidature annoncée ou retirée peut porter des synthèses thématiques.",
       },
       PRESIDENTIAL_EXTENSION_MISSING: {
         ok: false,
@@ -106,6 +108,28 @@ export async function generateCandidacyThemeSynthesis(
       const parsed = parseMistralJSON<unknown>(extractMistralText(response));
       const screened = screenThemeSynthesis(parsed, corpus.input);
       if (screened.ok) {
+        const verificationResponse = await callMistral(
+          [
+            {
+              role: "user",
+              content: buildThemeSynthesisGroundingPrompt(screened.claims, corpus.input),
+            },
+          ],
+          {
+            model: MODEL,
+            maxTokens: 700,
+            temperature: 0,
+            responseFormat: { type: "json_object" },
+          }
+        );
+        const verification = screenThemeSynthesisGrounding(
+          parseMistralJSON<unknown>(extractMistralText(verificationResponse)),
+          screened.claims.length
+        );
+        if (!verification.ok) {
+          validationDetail = `Contrôle d'étayage refusé : ${verification.detail}`;
+          continue;
+        }
         accepted = {
           text: screened.text,
           claims: screened.claims,
@@ -135,7 +159,10 @@ export async function generateCandidacyThemeSynthesis(
     };
   }
 
-  const corpusFingerprint = computeThemeCorpusFingerprint(corpus.input);
+  const corpusFingerprint = computeThemeCorpusFingerprint({
+    theme: corpus.input.theme,
+    measures: corpus.input.measures,
+  });
   const base = {
     ok: true as const,
     text: accepted.text,
