@@ -56,6 +56,8 @@ describe("page présidentielle d'une personne", () => {
       id: "p1",
       slug: "camille-riviere",
       fullName: "Camille Rivière",
+      firstName: "Camille",
+      lastName: "Rivière",
       civility: "Mme",
       photoUrl: null,
       blobPhotoUrl: null,
@@ -168,6 +170,21 @@ describe("page présidentielle d'une personne", () => {
       params: Promise.resolve({ slug: "camille-riviere" }),
     });
     expect(metadata.robots).toBeUndefined();
+  });
+
+  it("rend des données structurées Person et Breadcrumb seulement sur une fiche publiable", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+    const { default: Page } = await import("../page");
+    const { container } = render(
+      await Page({ params: Promise.resolve({ slug: "camille-riviere" }) })
+    );
+    const jsonLd = [...container.querySelectorAll('script[type="application/ld+json"]')].map(
+      (node) => JSON.parse(node.textContent ?? "{}") as { "@type"?: string }
+    );
+
+    expect(jsonLd.map((entry) => entry["@type"])).toEqual(
+      expect.arrayContaining(["Person", "BreadcrumbList"])
+    );
   });
 
   it("décrit la fiche pour les aperçus de partage", async () => {

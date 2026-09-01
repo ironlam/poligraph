@@ -123,6 +123,27 @@ export default function PresidentialMeasuresMethodologyPage() {
           </div>
         </section>
 
+        <section aria-labelledby="theme-syntheses-title">
+          <h2 id="theme-syntheses-title" className="font-display text-2xl font-bold">
+            Synthèses du programme par thème
+          </h2>
+          <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
+            <p>
+              Une synthèse thématique utilise uniquement les mesures publiées d&apos;une même
+              candidature dans le thème concerné. Chaque affirmation proposée automatiquement est
+              rattachée aux mesures qui la soutiennent. Le texte cherche à présenter les principaux
+              axes sans recopier le catalogue des propositions et sans comparer les candidatures.
+            </p>
+            <p>
+              La génération produit un brouillon invisible sur le site. Une personne doit le relire
+              avant de le publier. Poligraph conserve une empreinte des formulations utilisées : si
+              une mesure du thème est ajoutée, retirée ou remplacée par une nouvelle révision, la
+              synthèse devient obsolète et cesse d&apos;être affichée jusqu&apos;à sa régénération
+              et sa nouvelle validation.
+            </p>
+          </div>
+        </section>
+
         <section aria-labelledby="reader-guides-title">
           <h2 id="reader-guides-title" className="font-display text-2xl font-bold">
             Repères pour comprendre

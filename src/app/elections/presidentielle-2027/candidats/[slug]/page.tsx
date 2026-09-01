@@ -5,6 +5,7 @@ import { ChevronDown, ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { BreadcrumbJsonLd, PersonJsonLd } from "@/components/seo/JsonLd";
 import { candidacyRoleLabel } from "@/config/labels";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 import { SITE_URL } from "@/config/site";
@@ -125,6 +126,28 @@ export default async function CandidateFichePage({ params }: PageProps) {
 
   return (
     <>
+      {publishable && (
+        <>
+          <PersonJsonLd
+            name={politician.fullName}
+            givenName={politician.firstName}
+            familyName={politician.lastName}
+            affiliation={candidacy.partyLabel ?? undefined}
+            image={politician.blobPhotoUrl ?? politician.photoUrl ?? undefined}
+            url={`${SITE_URL}${fichePath(slug)}`}
+          />
+          <BreadcrumbJsonLd
+            items={[
+              { name: "Élections", url: `${SITE_URL}/elections` },
+              {
+                name: "Présidentielle 2027",
+                url: `${SITE_URL}/elections/${candidacy.electionSlug}`,
+              },
+              { name: politician.fullName, url: `${SITE_URL}${fichePath(slug)}` },
+            ]}
+          />
+        </>
+      )}
       {/* Sharing a fiche is the same gesture as sharing any other Poligraph page, so it is the same
           bar, with the same platforms and the same copy control. It only appears above the
           publication gate: below it the page carries a sourced status and nothing else, stays
