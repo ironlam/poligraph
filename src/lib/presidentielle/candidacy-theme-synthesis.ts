@@ -88,9 +88,10 @@ function normalizeText(value: string): string {
 export function indexThemeSynthesisMeasures(
   measures: ThemeSynthesisMeasure[]
 ): Array<ThemeSynthesisMeasure & { ref: string }> {
-  return [...measures]
-    .sort((a, b) => a.id.localeCompare(b.id) || a.revisionId.localeCompare(b.revisionId))
-    .map((measure, index) => ({ ...measure, ref: `M${index + 1}` }));
+  return sortedMeasures(measures).map((measure, index) => ({
+    ...measure,
+    ref: `M${index + 1}`,
+  }));
 }
 
 function sortedMeasures(measures: ThemeSynthesisMeasure[]): ThemeSynthesisMeasure[] {
