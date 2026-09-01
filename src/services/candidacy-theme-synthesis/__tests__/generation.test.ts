@@ -177,7 +177,15 @@ describe("generateCandidacyThemeSynthesis", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(mocks.callMistral).toHaveBeenCalledTimes(3);
-    expect(mocks.callMistral.mock.calls[1]![0][0].content).toContain("réponse précédente");
+    expect(mocks.callMistral.mock.calls[1]![0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "assistant", content: "{}" }),
+        expect.objectContaining({
+          role: "user",
+          content: expect.stringContaining("a été refusée"),
+        }),
+      ])
+    );
   });
 
   it("régénère une sortie que le second passage Mistral juge non étayée", async () => {
@@ -200,7 +208,15 @@ describe("generateCandidacyThemeSynthesis", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(mocks.callMistral).toHaveBeenCalledTimes(4);
-    expect(mocks.callMistral.mock.calls[2]![0][0].content).toContain("effet est ajouté");
+    expect(mocks.callMistral.mock.calls[2]![0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "assistant", content: validOutput }),
+        expect.objectContaining({
+          role: "user",
+          content: expect.stringContaining("effet est ajouté"),
+        }),
+      ])
+    );
   });
 
   it("accepte le corpus public d'une candidature retirée", async () => {

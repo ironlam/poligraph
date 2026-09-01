@@ -108,6 +108,14 @@ describe("synthèse thématique d'une candidature", () => {
     expect(prompt).not.toContain('"ignore"');
   });
 
+  it("interdit de transférer une modalité entre deux mesures proches", () => {
+    const prompt = buildThemeSynthesisPrompt(input());
+
+    expect(prompt).toContain(
+      "ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre mesure"
+    );
+  });
+
   it("accepte uniquement des affirmations rattachées à des mesures connues", () => {
     const result = screenThemeSynthesis(
       {

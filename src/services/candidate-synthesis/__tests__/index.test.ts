@@ -38,7 +38,7 @@ const providerOutput = (refs: string[], career = CAREER) =>
     .join("")}</programme></synthese>`;
 /** Internal provider output and the reader-facing text obtained after evidence screening. */
 const ACCEPTED = providerOutput(["M1"]);
-const STORED = `${CAREER}.\n\nParmi les mesures publiées figurent « Rouvrir des maternités de proximité ».`;
+const STORED = `${CAREER}.\n\nLes mesures publiées concernent principalement les thèmes suivants : Santé. Elles sont présentées thème par thème ci-dessous.`;
 
 function anthropicText(text: string) {
   return { content: [{ type: "text", text }] };
@@ -149,11 +149,11 @@ describe("generateCandidateSynthesis", () => {
 
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
-    // 25 de base + 0 de parcours + 35 de programme : 81 mots passent, là où le plancher fixe de 90
-    // les refusait deux fois de suite et laissait la fiche sans résumé.
+    // Le fournisseur ne rédige plus le paragraphe du programme. Une candidature sans mandat ne
+    // doit donc pas recevoir une consigne artificiellement gonflée par ses mesures.
     expect(result).toMatchObject({ ok: true });
     const system = callAnthropicMock.mock.calls[0]![1].system as string;
-    expect(system).toContain("Entre 60 et 200 mots");
+    expect(system).toContain("Entre 8 et 30 mots dans <parcours>");
     expect(callAnthropicMock).toHaveBeenCalledTimes(1);
   });
 
@@ -251,7 +251,7 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
-  it("réessaie une action inversée puis persiste uniquement la formulation source", async () => {
+  it("réessaie une action inversée puis persiste uniquement la vue par thème", async () => {
     dbMock.measure.findMany.mockResolvedValue([
       {
         theme: "ECONOMIE_BUDGET",
@@ -269,7 +269,7 @@ describe("generateCandidateSynthesis", () => {
     expect(result).toMatchObject({ ok: true });
     expect(callAnthropicMock).toHaveBeenCalledTimes(2);
     const stored = dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis as string;
-    expect(stored).toContain("« Augmenter les impôts des entreprises »");
+    expect(stored).toContain("thèmes suivants : Économie et budget");
     expect(stored).not.toContain("Supprimer");
   });
 
@@ -297,7 +297,7 @@ describe("generateCandidateSynthesis", () => {
     );
   });
 
-  it("réessaie un tribunal généré dans le parcours puis stocke le tribunal sourcé", async () => {
+  it("réessaie un tribunal généré dans le parcours sans recopier la mesure", async () => {
     dbMock.measure.findMany.mockResolvedValue([
       {
         theme: "SECURITE_JUSTICE",
@@ -316,8 +316,8 @@ describe("generateCandidateSynthesis", () => {
     expect(callAnthropicMock).toHaveBeenCalledTimes(2);
     const retryPrompt = callAnthropicMock.mock.calls[1]![0][0].content as string;
     expect(retryPrompt).toContain("mention « tribunal »");
-    expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
-      "« Créer un tribunal spécialisé »"
+    expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).not.toContain(
+      "Créer un tribunal spécialisé"
     );
   });
 
@@ -335,7 +335,7 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
   });
 
-  it("persiste une mesure canonique qui dépasse à elle seule le plafond fixe", async () => {
+  it("ne recopie pas une mesure canonique qui dépasse à elle seule le plafond fixe", async () => {
     const longMeasure = Array.from({ length: 220 }, (_, i) => `source${i}`).join(" ");
     dbMock.measure.findMany.mockResolvedValue([
       { theme: "SANTE", publishedRevision: { text: `${longMeasure}.` } },
@@ -347,12 +347,12 @@ describe("generateCandidateSynthesis", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(callAnthropicMock).toHaveBeenCalledTimes(1);
-    expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
-      "source219 »"
+    expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).not.toContain(
+      "source219"
     );
   });
 
-  it("ne persiste pas une seconde formulation optionnelle qui dépasse le plafond", async () => {
+  it("ignore la longueur d'une seconde formulation qui n'est pas rendue", async () => {
     const longOptional = Array.from(
       { length: SYNTHESIS_HARD_MAX_WORDS + 20 },
       (_, i) => `option${i}`
@@ -366,8 +366,8 @@ describe("generateCandidateSynthesis", () => {
 
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
-    expect(result).toMatchObject({ ok: false, reason: "refuse" });
-    expect(callAnthropicMock).toHaveBeenCalledTimes(2);
-    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true });
+    expect(callAnthropicMock).toHaveBeenCalledTimes(1);
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
   });
 });

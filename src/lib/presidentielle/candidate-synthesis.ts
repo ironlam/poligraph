@@ -59,14 +59,16 @@ export const LARGE_SYNTHESIS_MAX_WORDS = 250;
 export const SYNTHESIS_HARD_MAX_WORDS = 350;
 /** Below one hundred measures, the existing 200-word format already carries the material. */
 export const LARGE_PROGRAMME_MEASURES = 100;
+/** Enough alternatives for the model to choose without sending an entire manifesto. */
+export const MAX_PROMPT_REFERENCES_PER_THEME = 8;
 
-/** Target terms: the identity sentence, then a paragraph per section, in two steps each. */
-export const TARGET_BASE = 25;
-export const TARGET_THIN_CAREER = 15;
-export const TARGET_CAREER = 30;
-export const TARGET_FEW_MEASURES = 15;
-export const TARGET_MEASURES = 35;
-export const TARGET_LARGE_PROGRAMME = 125;
+/** The provider writes only the career; the programme overview is composed by the server. */
+export const TARGET_EMPTY_CAREER_MIN = 8;
+export const TARGET_EMPTY_CAREER_MAX = 30;
+export const TARGET_THIN_CAREER_MIN = 15;
+export const TARGET_THIN_CAREER_MAX = 60;
+export const TARGET_CAREER_MIN = 30;
+export const TARGET_CAREER_MAX = 100;
 
 /**
  * Where a section stops being a sentence and becomes a paragraph.
@@ -98,26 +100,15 @@ function hasCareer(material: SynthesisMaterial): boolean {
   return material.mandateCount > 0 || material.voteCount > 0;
 }
 
-/** The length the prompt asks for. Stated to the model, never enforced against it. */
+/** The career length the prompt asks for. Stated to the model, never enforced against it. */
 export function synthesisTargetRange(material: SynthesisMaterial): { min: number; max: number } {
-  const career = !hasCareer(material)
-    ? 0
-    : material.mandateCount >= SUBSTANTIAL_MANDATES || material.voteCount >= SUBSTANTIAL_VOTES
-      ? TARGET_CAREER
-      : TARGET_THIN_CAREER;
-  const programme =
-    material.measureCount === 0
-      ? 0
-      : material.measureCount >= LARGE_PROGRAMME_MEASURES
-        ? TARGET_LARGE_PROGRAMME
-        : material.measureCount >= SUBSTANTIAL_MEASURES
-          ? TARGET_MEASURES
-          : TARGET_FEW_MEASURES;
-  const max =
-    material.measureCount >= LARGE_PROGRAMME_MEASURES
-      ? LARGE_SYNTHESIS_MAX_WORDS
-      : SYNTHESIS_MAX_WORDS;
-  return { min: TARGET_BASE + career + programme, max };
+  if (!hasCareer(material)) {
+    return { min: TARGET_EMPTY_CAREER_MIN, max: TARGET_EMPTY_CAREER_MAX };
+  }
+  if (material.mandateCount >= SUBSTANTIAL_MANDATES || material.voteCount >= SUBSTANTIAL_VOTES) {
+    return { min: TARGET_CAREER_MIN, max: TARGET_CAREER_MAX };
+  }
+  return { min: TARGET_THIN_CAREER_MIN, max: TARGET_THIN_CAREER_MAX };
 }
 
 /** The length below which there is no answer to keep. Enforced; deliberately far under the target. */
@@ -160,6 +151,7 @@ type ProgrammeReference = {
 type ProgrammePlan = {
   references: ProgrammeReference[];
   expectedThemes: ThemeCategory[];
+  themeCounts: Map<ThemeCategory, number>;
 };
 
 /**
@@ -224,8 +216,8 @@ Règles absolues :
 
 Forme :
 - Français, avec tous les accents.
-- Deux paragraphes : le parcours d'abord, le programme ensuite.
-- Entre ${synthesisTargetRange(material).min} et ${synthesisTargetRange(material).max} mots au total.
+- Le seul texte que tu rédiges est le parcours ; le serveur compose ensuite la vue d'ensemble du programme.
+- Entre ${synthesisTargetRange(material).min} et ${synthesisTargetRange(material).max} mots dans <parcours>.
 - Aucun tiret cadratin ni demi-cadratin. Utilise virgules, parenthèses ou deux-points.
 - Pas de phrase de conclusion générale du type « une candidature qui entend peser ». Termine sur un fait.
 - Si le parcours est vide, dis-le en une phrase simple plutôt que de meubler. Le programme vide suit le marqueur imposé ci-dessous et sa phrase est ajoutée par le serveur.
@@ -239,13 +231,13 @@ Format interne obligatoire :
 }
 
 function buildProgrammePlan(input: CandidateSynthesisInput): ProgrammePlan {
-  const references = input.measures.map((measure, index) => ({
+  const allReferences = input.measures.map((measure, index) => ({
     ref: `M${index + 1}`,
     theme: measure.theme,
     text: canonicalMeasureText(measure.text),
   }));
   const counts = new Map<ThemeCategory, number>();
-  for (const reference of references) {
+  for (const reference of allReferences) {
     counts.set(reference.theme, (counts.get(reference.theme) ?? 0) + 1);
   }
   const themes = [...counts.entries()].sort(
@@ -258,9 +250,30 @@ function buildProgrammePlan(input: CandidateSynthesisInput): ProgrammePlan {
   // paragraph. Five examples fit the large 250-word format; three fit the standard one. A longer
   // selection reads like an extraction dump rather than a summary, especially on mobile.
   const coverageLimit = input.measures.length >= LARGE_PROGRAMME_MEASURES ? 5 : 3;
+  const expectedThemes = themes.slice(0, coverageLimit).map(([theme]) => theme);
+  const references = expectedThemes.flatMap((theme) => {
+    const candidates = allReferences
+      .filter((reference) => reference.theme === theme)
+      .sort(
+        (a, b) =>
+          a.text.localeCompare(b.text, "fr") || a.ref.localeCompare(b.ref, "fr", { numeric: true })
+      );
+    if (candidates.length <= MAX_PROMPT_REFERENCES_PER_THEME) return candidates;
+
+    // Even positions in a deterministic lexical ordering avoid always handing the model only the
+    // first verbs of a 1,000-measure programme. The full counts still drive theme selection; this
+    // bounded sample only limits what the provider has to read and choose between.
+    return Array.from({ length: MAX_PROMPT_REFERENCES_PER_THEME }, (_, index) => {
+      const position = Math.round(
+        (index * (candidates.length - 1)) / (MAX_PROMPT_REFERENCES_PER_THEME - 1)
+      );
+      return candidates[position]!;
+    });
+  });
   return {
     references,
-    expectedThemes: themes.slice(0, coverageLimit).map(([theme]) => theme),
+    expectedThemes,
+    themeCounts: counts,
   };
 }
 
@@ -277,30 +290,32 @@ export function buildCandidateSynthesisPrompt(input: CandidateSynthesisInput): s
     byTheme.get(reference.theme)!.push(reference);
   }
   const themes = [...byTheme.entries()].sort(
-    ([themeA, referencesA], [themeB, referencesB]) =>
-      referencesB.length - referencesA.length ||
+    ([themeA], [themeB]) =>
+      (programmePlan.themeCounts.get(themeB) ?? 0) - (programmePlan.themeCounts.get(themeA) ?? 0) ||
       THEME_CATEGORY_LABELS[themeA].localeCompare(THEME_CATEGORY_LABELS[themeB], "fr")
   );
   const expectedThemes = programmePlan.expectedThemes.map((theme) => THEME_CATEGORY_LABELS[theme]);
   const measures =
     themes.length > 0
       ? themes
-          .map(
-            ([theme, references]) =>
-              `${THEME_CATEGORY_LABELS[theme]} (${references.length} mesure${references.length > 1 ? "s" : ""}) :\n${references
-                .sort((a, b) => a.text.localeCompare(b.text, "fr"))
-                .map((reference) => `  - [${reference.ref}] ${safe(reference.text)}`)
-                .join("\n")}`
-          )
+          .map(([theme, references]) => {
+            const total = programmePlan.themeCounts.get(theme) ?? references.length;
+            const sampleNote =
+              total > references.length ? `, ${references.length} présentées au modèle` : "";
+            return `${THEME_CATEGORY_LABELS[theme]} (${total} mesure${total > 1 ? "s" : ""}${sampleNote}) :\n${references
+              .sort((a, b) => a.text.localeCompare(b.text, "fr"))
+              .map((reference) => `  - [${reference.ref}] ${safe(reference.text)}`)
+              .join("\n")}`;
+          })
           .join("\n")
       : "Aucune mesure publiée pour cette candidature.";
   const distribution =
     themes.length > 0
       ? themes
-          .map(
-            ([theme, references]) =>
-              `- ${THEME_CATEGORY_LABELS[theme]} : ${references.length} mesure${references.length > 1 ? "s" : ""}`
-          )
+          .map(([theme]) => {
+            const count = programmePlan.themeCounts.get(theme) ?? 0;
+            return `- ${THEME_CATEGORY_LABELS[theme]} : ${count} mesure${count > 1 ? "s" : ""}`;
+          })
           .join("\n")
       : "Aucun thème représenté.";
   const coverage =
@@ -351,18 +366,45 @@ function formatFrenchList(values: string[]): string {
   return `${values.slice(0, -1).join(", ")} et ${values.at(-1)}`;
 }
 
-function sourceTextForQuote(value: string): string {
-  return value.replace(/(?<!\.)\.$/u, "");
-}
-
-function formatProgrammeText(references: ProgrammeReference[]): string {
-  const quotedMeasures = references.map((reference) => `« ${sourceTextForQuote(reference.text)} »`);
-  const terminalPunctuation = /(?:[!?…]|\.\.\.) »$/u.test(quotedMeasures.at(-1) ?? "") ? "" : ".";
-  return `Parmi les mesures publiées figurent ${formatFrenchList(quotedMeasures)}${terminalPunctuation}`;
+function formatProgrammeText(themes: ThemeCategory[]): string {
+  const labels = themes.map((theme) => THEME_CATEGORY_LABELS[theme]);
+  return `Les mesures publiées concernent principalement les thèmes suivants : ${formatFrenchList(labels)}. Elles sont présentées thème par thème ci-dessous.`;
 }
 
 function wordCount(value: string): number {
   return value.trim() === "" ? 0 : value.trim().split(/\s+/).length;
+}
+
+/**
+ * Removes provider transport without relaxing the evidence format itself.
+ *
+ * Chat providers sometimes wrap an otherwise exact XML answer in a Markdown fence or a short
+ * introduction. The former parser anchored `<synthese>` to the first and last byte, so those
+ * harmless additions made two valid attempts fail before the evidence checks even ran. The outer
+ * tag is transport too: when the two required sections are present exactly once, adding that
+ * redundant wrapper locally is deterministic and does not invent any editorial content.
+ *
+ * Multiple or partial wrappers remain invalid. We extract at most one complete candidate, then the
+ * strict parser below still validates every allowed child and rejects all free text inside it.
+ */
+function normaliseSynthesisEnvelope(raw: string): string | null {
+  const trimmed = raw.trim();
+  const wrapperOpenCount = trimmed.match(/<synthese>/gu)?.length ?? 0;
+  const wrapperCloseCount = trimmed.match(/<\/synthese>/gu)?.length ?? 0;
+
+  if (wrapperOpenCount > 0 || wrapperCloseCount > 0) {
+    if (wrapperOpenCount !== 1 || wrapperCloseCount !== 1) return null;
+    const start = trimmed.indexOf("<synthese>");
+    const end = trimmed.indexOf("</synthese>", start) + "</synthese>".length;
+    if (start < 0 || end < "</synthese>".length) return null;
+    return trimmed.slice(start, end);
+  }
+
+  const sectionCandidates = trimmed.match(
+    /<parcours>[\s\S]*?<\/parcours>\s*(?:<programme>[\s\S]*?<\/programme>|<programme-vide\s*\/>)/gu
+  );
+  if (sectionCandidates?.length !== 1) return null;
+  return `<synthese>${sectionCandidates[0]}</synthese>`;
 }
 
 /**
@@ -377,8 +419,16 @@ export function screenCandidateSynthesis(
   raw: string,
   input: CandidateSynthesisInput
 ): SynthesisScreen {
+  const normalised = normaliseSynthesisEnvelope(raw);
+  if (!normalised) {
+    return {
+      ok: false,
+      reason: "format_structure",
+      detail: "la réponse doit contenir un parcours structuré dans une unique balise <synthese>",
+    };
+  }
   const wrapper =
-    /^<synthese>\s*<parcours>([\s\S]*?)<\/parcours>\s*([\s\S]*?)\s*<\/synthese>$/u.exec(raw.trim());
+    /^<synthese>\s*<parcours>([\s\S]*?)<\/parcours>\s*([\s\S]*?)\s*<\/synthese>$/u.exec(normalised);
   if (!wrapper) {
     return {
       ok: false,
@@ -432,7 +482,6 @@ export function screenCandidateSynthesis(
   const references = new Map(plan.references.map((reference) => [reference.ref, reference]));
   const themeCounts = new Map<ThemeCategory, number>();
   const usedReferences = new Set<string>();
-  const selectedReferences: ProgrammeReference[] = [];
   const engagementPattern = /<engagement ref="(M[1-9][0-9]*)"\s*\/>/gu;
   let failure: Extract<SynthesisScreen, { ok: false }> | null = null;
   const remainder = programme[1]!.replace(engagementPattern, (_match, ref: string) => {
@@ -454,7 +503,6 @@ export function screenCandidateSynthesis(
       return "";
     }
     usedReferences.add(ref);
-    selectedReferences.push(source);
     themeCounts.set(source.theme, (themeCounts.get(source.theme) ?? 0) + 1);
     return "";
   });
@@ -486,21 +534,14 @@ export function screenCandidateSynthesis(
     }
   }
 
-  const programmeText = formatProgrammeText(selectedReferences);
-  // Coverage needs one measure per expected theme, never every measure the provider selected. When
-  // it chose two, exempt the shorter one: the second is optional and remains inside the cap. Text
-  // from a non-required theme is optional too and is never deducted.
-  const exemptSourceTexts = plan.expectedThemes.map(
-    (theme) =>
-      selectedReferences
-        .filter((reference) => reference.theme === theme)
-        .map((reference) => sourceTextForQuote(reference.text))
-        .sort((a, b) => wordCount(a) - wordCount(b))[0]!
-  );
+  // The general block is orientation, not a catalogue. Detailed programme prose belongs to the
+  // separately reviewed syntheses shown under each theme. Deriving this sentence from the counted
+  // themes removes the former wall of verbatim measures without asking a model to paraphrase them.
+  const programmeText = formatProgrammeText(plan.expectedThemes);
   return screenSynthesis({
     text: `${career}\n\n${programmeText}`,
     generatedText: career,
-    exemptSourceTexts,
+    exemptSourceTexts: [],
     material: synthesisMaterial(input),
   });
 }
