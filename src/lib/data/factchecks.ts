@@ -4,6 +4,8 @@ import { factcheckStatsService } from "@/services/factcheckStats";
 import { decodeHtmlEntities } from "@/lib/parsing/html-utils";
 import { getPublicFactCheckWhere } from "@/lib/api/public-contract";
 import type { FactCheckRating } from "@/types";
+import { FactCheckRating as FactCheckRatingEnum } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 
 /** Generic claimant patterns — must match GENERIC_CLAIMANT_PATTERNS in labels.ts */
 const GENERIC_CLAIMANT_PATTERNS = [
@@ -39,7 +41,10 @@ function buildVerdictFilter(verdict: string) {
   if (group) {
     return { verdictRating: { in: group } };
   }
-  return { verdictRating: verdict as FactCheckRating };
+  // Whitelist guard: `verdict` arrives raw from the query string. Neither a
+  // known group nor a FactCheckRating means no filter, not a Prisma throw.
+  const rating = pickEnumValue(verdict, FactCheckRatingEnum);
+  return rating ? { verdictRating: rating } : undefined;
 }
 
 function buildDirectClaimFilter() {
