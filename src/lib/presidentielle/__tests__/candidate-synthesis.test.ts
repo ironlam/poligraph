@@ -180,7 +180,7 @@ describe("screenCandidateSynthesis", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(result.ok && result.text).toContain(
-      "Les mesures publiées concernent principalement les thèmes suivants : Santé et Transports. Elles sont présentées thème par thème ci-dessous."
+      "Les mesures publiées couvrent notamment les thèmes suivants : Santé et Transports. Elles sont présentées thème par thème ci-dessous."
     );
     expect(result.ok && result.text).not.toContain("Rouvrir des maternités");
     expect(result.ok && result.text).not.toMatch(/<engagement|<synthese>/);
@@ -391,6 +391,13 @@ describe("buildSynthesisSystemPrompt", () => {
     expect(synthesisTargetRange(MEASURES_ONLY)).toEqual(synthesisTargetRange(BARE));
     expect(synthesisTargetRange(THIN_CAREER).min).toBeLessThan(synthesisTargetRange(FULL).min);
     expect(synthesisTargetRange(BARE).min).toBeLessThan(synthesisTargetRange(THIN_CAREER).min);
+  });
+
+  it("garde le parcours court au-dessus du plancher de la synthèse composée", () => {
+    const shortestProgrammeOverviewWords = 16;
+    expect(
+      synthesisTargetRange(THIN_CAREER).min + shortestProgrammeOverviewWords
+    ).toBeGreaterThanOrEqual(synthesisFloor(THIN_CAREER));
   });
 
   it("compte un millier de votes comme un parcours à décrire, sur trois mandats", () => {

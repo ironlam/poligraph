@@ -65,7 +65,7 @@ export const MAX_PROMPT_REFERENCES_PER_THEME = 8;
 /** The provider writes only the career; the programme overview is composed by the server. */
 export const TARGET_EMPTY_CAREER_MIN = 8;
 export const TARGET_EMPTY_CAREER_MAX = 30;
-export const TARGET_THIN_CAREER_MIN = 15;
+export const TARGET_THIN_CAREER_MIN = 20;
 export const TARGET_THIN_CAREER_MAX = 60;
 export const TARGET_CAREER_MIN = 30;
 export const TARGET_CAREER_MAX = 100;
@@ -368,7 +368,7 @@ function formatFrenchList(values: string[]): string {
 
 function formatProgrammeText(themes: ThemeCategory[]): string {
   const labels = themes.map((theme) => THEME_CATEGORY_LABELS[theme]);
-  return `Les mesures publiées concernent principalement les thèmes suivants : ${formatFrenchList(labels)}. Elles sont présentées thème par thème ci-dessous.`;
+  return `Les mesures publiées couvrent notamment les thèmes suivants : ${formatFrenchList(labels)}. Elles sont présentées thème par thème ci-dessous.`;
 }
 
 function wordCount(value: string): number {

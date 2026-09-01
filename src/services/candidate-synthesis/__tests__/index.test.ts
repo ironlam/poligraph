@@ -38,7 +38,7 @@ const providerOutput = (refs: string[], career = CAREER) =>
     .join("")}</programme></synthese>`;
 /** Internal provider output and the reader-facing text obtained after evidence screening. */
 const ACCEPTED = providerOutput(["M1"]);
-const STORED = `${CAREER}.\n\nLes mesures publiées concernent principalement les thèmes suivants : Santé. Elles sont présentées thème par thème ci-dessous.`;
+const STORED = `${CAREER}.\n\nLes mesures publiées couvrent notamment les thèmes suivants : Santé. Elles sont présentées thème par thème ci-dessous.`;
 
 function anthropicText(text: string) {
   return { content: [{ type: "text", text }] };
