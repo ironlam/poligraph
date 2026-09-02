@@ -5,7 +5,7 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 
 const PROMPT_FIELD_LIMIT = 2_000;
 export const THEME_SYNTHESIS_HARD_MAX_WORDS = 260;
-export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v1";
+export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v2";
 
 export type ThemeSynthesisMeasure = {
   id: string;
@@ -162,6 +162,7 @@ export function buildThemeSynthesisPrompt(input: ThemeSynthesisInput): string {
 Règles absolues :
 - utilise uniquement les mesures délimitées ci-dessous ;
 - n'ajoute aucun fait, chiffre, engagement, conséquence, intention ou appréciation absent des mesures citées ;
+- ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre mesure, même lorsqu'elles portent sur un axe proche ;
 - regroupe les principaux axes sans énumérer toutes les mesures ;
 - conserve les conditions, limites et nuances importantes ;
 - ne compare jamais cette candidature à une autre ;

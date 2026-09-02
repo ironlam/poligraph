@@ -93,20 +93,28 @@ export async function generateCandidacyThemeSynthesis(
   const prompt = buildThemeSynthesisPrompt(corpus.input);
   let validationDetail = "La réponse ne respecte pas le format attendu.";
   let accepted: { text: string; claims: ThemeSynthesisClaim[]; model: string } | undefined;
+  let previousResponseText: string | undefined;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const repair =
-      attempt === 0
-        ? ""
-        : `\n\nLa réponse précédente a été refusée : ${validationDetail.replace(/[<>"\n\r]/g, " ").slice(0, 240)} Recommence en corrigeant uniquement ce problème.`;
+    const messages = previousResponseText
+      ? [
+          { role: "user" as const, content: prompt },
+          { role: "assistant" as const, content: previousResponseText.slice(0, 8_000) },
+          {
+            role: "user" as const,
+            content: `Cette réponse a été refusée : ${validationDetail.replace(/[<>"\n\r]/g, " ").slice(0, 500)} Corrige ce brouillon sans transférer la cible, la condition ou la modalité d'une mesure vers une autre. Réponds à nouveau uniquement avec l'objet JSON complet.`,
+          },
+        ]
+      : [{ role: "user" as const, content: prompt }];
     try {
-      const response = await callMistral([{ role: "user", content: `${prompt}${repair}` }], {
+      const response = await callMistral(messages, {
         model: MODEL,
         maxTokens: 900,
         temperature: 0,
         responseFormat: { type: "json_object" },
       });
-      const parsed = parseMistralJSON<unknown>(extractMistralText(response));
+      previousResponseText = extractMistralText(response);
+      const parsed = parseMistralJSON<unknown>(previousResponseText);
       const screened = screenThemeSynthesis(parsed, corpus.input);
       if (screened.ok) {
         const verificationResponse = await callMistral(
