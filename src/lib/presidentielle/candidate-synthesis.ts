@@ -268,7 +268,7 @@ export function buildSynthesisSystemPrompt(_material: SynthesisMaterial): string
 
 Règles absolues :
 - N'écris RIEN qui ne figure pas dans les données fournies. Aucune connaissance extérieure, aucune inférence sur les intentions, aucune prévision.
-- Ne mentionne AUCUNE affaire judiciaire, enquête, mise en examen ou condamnation, même si tu en connais. Ce n'est pas le sujet de ce texte et c'est traité ailleurs sur le site.
+- Ne mentionne AUCUNE affaire judiciaire concernant la personne, même si tu en connais. Tu peux employer le vocabulaire de la justice lorsqu'il décrit explicitement une mesure du programme fourni.
 - Aucun jugement de valeur, aucun qualificatif d'appréciation. Ni « ambitieux », ni « radical », ni « crédible », ni « clivant ». Décris, ne commente pas.
 - Aucune comparaison avec un autre candidat.
 - Ne compte pas les mesures et ne dis pas combien il y en a : le chiffre est affiché à côté et il bougera.
@@ -378,6 +378,38 @@ function wordCount(value: string): number {
 
 function numericTokens(value: string): string[] {
   return value.match(/\b[0-9]+(?:[.,][0-9]+)?(?:\s*%)?/gu) ?? [];
+}
+
+const JUDICIAL_TERMS = [
+  { family: "mise_en_examen", pattern: /(?<!\p{L})mises? en examen(?!\p{L})/iu },
+  {
+    family: "condamnation",
+    pattern: /(?<!\p{L})condamn(?:é|ée|és|ées|ation|ations)(?!\p{L})/iu,
+  },
+  { family: "proces", pattern: /(?<!\p{L})procès(?!\p{L})/iu },
+  { family: "enquete", pattern: /(?<!\p{L})enquête judiciaire(?!\p{L})/iu },
+  { family: "garde_a_vue", pattern: /(?<!\p{L})garde à vue(?!\p{L})/iu },
+  {
+    family: "instruction",
+    pattern: /(?<!\p{L})instruction judiciaire(?!\p{L})/iu,
+  },
+  { family: "tribunal", pattern: /(?<!\p{L})(?:tribunal|tribunaux)(?!\p{L})/iu },
+  { family: "cour_appel", pattern: /(?<!\p{L})cour d['’]appel(?!\p{L})/iu },
+  { family: "parquet", pattern: /(?<!\p{L})parquets?(?!\p{L})/iu },
+  { family: "ineligibilite", pattern: /(?<!\p{L})inéligibilité(?!\p{L})/iu },
+] as const;
+
+function findJudicialTerm(text: string) {
+  for (const term of JUDICIAL_TERMS) {
+    const match = term.pattern.exec(text);
+    if (match) return { family: term.family, match: match[0] };
+  }
+  return null;
+}
+
+function sourceCarriesJudicialFamily(sourceTexts: readonly string[], family: string): boolean {
+  const term = JUDICIAL_TERMS.find((candidate) => candidate.family === family);
+  return Boolean(term && sourceTexts.some((source) => term.pattern.test(source)));
 }
 
 function programmeSafetyFloor(measureCount: number): number {
@@ -563,6 +595,10 @@ export function screenCandidateSynthesis(
     text: `${career}\n\n${programmeText}`,
     generatedText: `${career}\n\n${programmeText}`,
     exemptSourceTexts: [],
+    allowedJudicialSourceTexts: [
+      ...input.measures.map((measure) => measure.text),
+      ...input.mandates.flatMap((mandate) => [mandate.role, mandate.institution ?? ""]),
+    ],
     material: synthesisMaterial(input),
   });
   return screened.ok ? { ...screened, programmeClaims: normalizedClaims } : screened;
@@ -672,6 +708,7 @@ export function screenSynthesis({
   text: raw,
   generatedText,
   exemptSourceTexts,
+  allowedJudicialSourceTexts = [],
   material = {
     mandateCount: SUBSTANTIAL_MANDATES,
     voteCount: SUBSTANTIAL_VOTES,
@@ -684,6 +721,8 @@ export function screenSynthesis({
   generatedText: string;
   /** One canonical source formulation per mandatory theme, excluded from the flexible maximum. */
   exemptSourceTexts: string[];
+  /** Prompt sources allowed to supply institutional judicial vocabulary. */
+  allowedJudicialSourceTexts?: readonly string[];
   /** Omitted, the strictest ordinary floor applies. */
   material?: SynthesisMaterial;
 }): SynthesisScreen {
@@ -707,12 +746,9 @@ export function screenSynthesis({
   // non-word character. `\binéligibilité\b` therefore fails to match the very word it
   // names, which is how this pattern first shipped. Every term here is accented or
   // followed by one, so the whole family was affected.
-  const judicial =
-    /(?<!\p{L})(mises? en examen|condamn(?:é|ée|és|ées|ation|ations)|procès|enquête judiciaire|garde à vue|instruction judiciaire|tribunal|cour d'appel|parquet|inéligibilité)(?!\p{L})/iu.exec(
-      generatedText
-    );
-  if (judicial) {
-    return { ok: false, reason: "judiciaire", detail: `mention « ${judicial[0]} »` };
+  const judicial = findJudicialTerm(generatedText);
+  if (judicial && !sourceCarriesJudicialFamily(allowedJudicialSourceTexts, judicial.family)) {
+    return { ok: false, reason: "judiciaire", detail: `mention « ${judicial.match} »` };
   }
 
   const words = wordCount(text);

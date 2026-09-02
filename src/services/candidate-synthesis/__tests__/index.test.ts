@@ -135,6 +135,38 @@ describe("generateCandidateSynthesis", () => {
     });
   });
 
+  it("accepte le vocabulaire judiciaire lorsqu'il provient d'une mesure publiée", async () => {
+    const judicialAxis =
+      "Sur la justice, le programme propose de créer un parquet financier européen aux compétences élargies pour traiter les dossiers concernés.";
+    dbMock.measure.findMany.mockResolvedValue([
+      {
+        theme: "SECURITE_JUSTICE",
+        publishedRevision: {
+          text: "Créer des parquets financiers européens aux compétences élargies.",
+        },
+      },
+    ]);
+    callMistralMock.mockImplementation((messages: Array<{ content: string }>) => {
+      const grounding = messages.some((message) =>
+        message.content.includes("Vérifie si chaque affirmation")
+      );
+      return Promise.resolve({
+        text: grounding
+          ? groundingOutput()
+          : providerOutput({
+              programmeClaims: [{ text: judicialAxis, measureRefs: ["M1"] }],
+            }),
+        model: "mistral-large-latest",
+      });
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
+  });
+
   it("refuse une candidature qui n'est pas déclarée", async () => {
     dbMock.candidacy.findUnique.mockResolvedValue({ ...CANDIDACY, status: "PRESSENTI" });
     const { generateCandidateSynthesis } = await service();

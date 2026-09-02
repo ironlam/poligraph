@@ -195,6 +195,29 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).not.toContain("thèmes suivants");
   });
 
+  it("accepte le vocabulaire judiciaire lorsqu'il provient d'une mesure citée", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [
+        {
+          theme: "SECURITE_JUSTICE",
+          text: "Créer des parquets financiers européens aux compétences élargies.",
+        },
+      ],
+    };
+    const result = screenCandidateSynthesis(
+      output([
+        {
+          text: "Sur la justice, le programme propose de créer un parquet financier européen aux compétences élargies pour traiter les dossiers concernés.",
+          measureRefs: ["M1"],
+        },
+      ]),
+      input
+    );
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
   it("refuse l'ancien sommaire de thèmes", () => {
     expect(
       screenCandidateSynthesis(
@@ -428,7 +451,8 @@ describe("buildSynthesisSystemPrompt", () => {
 
   it("garde les règles absolues quelle que soit la matière", () => {
     const prompt = buildSynthesisSystemPrompt(BARE);
-    expect(prompt).toContain("Ne mentionne AUCUNE affaire judiciaire");
+    expect(prompt).toContain("Ne mentionne AUCUNE affaire judiciaire concernant la personne");
+    expect(prompt).toContain("vocabulaire de la justice");
     expect(prompt).toContain("Aucun tiret cadratin");
   });
 });
