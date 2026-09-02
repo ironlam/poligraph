@@ -30,9 +30,16 @@ function providerOutput(over: Record<string, unknown> = {}): string {
   });
 }
 
-function groundingOutput(supported = true): string {
+function groundingOutput(supported = true, correctedText = ""): string {
   return JSON.stringify({
-    claims: [{ index: 0, supported, reason: supported ? "Étayer par M1 et M2." : "Ajout absent." }],
+    claims: [
+      {
+        index: 0,
+        supported,
+        reason: supported ? "Étayer par M1 et M2." : "Ajout absent.",
+        correctedText,
+      },
+    ],
   });
 }
 
@@ -116,7 +123,15 @@ describe("generateCandidateSynthesis", () => {
     expect(callMistralMock.mock.calls[0]![1]).toMatchObject({
       model: "mistral-large-latest",
       temperature: 0,
-      responseFormat: { type: "json_object" },
+      responseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: "candidate_synthesis",
+          schema: {
+            required: ["career", "programmeClaims"],
+          },
+        },
+      },
     });
   });
 
@@ -183,6 +198,58 @@ describe("generateCandidateSynthesis", () => {
     expect(callMistralMock).toHaveBeenCalledTimes(4);
     const retryMessages = callMistralMock.mock.calls[2]![0] as Array<{ content: string }>;
     expect(retryMessages.at(-1)?.content).toContain("contrôle d'étayage refusé");
+  });
+
+  it("recontrôle une correction proposée à partir des mêmes preuves", async () => {
+    const corrected =
+      "Les mesures associent la réouverture de maternités de proximité au rétablissement de trains de nuit sur six lignes.";
+    callMistralMock
+      .mockResolvedValueOnce({ text: providerOutput(), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({
+        text: groundingOutput(false, corrected),
+        model: "mistral-large-latest",
+      })
+      .mockResolvedValueOnce({ text: groundingOutput(true), model: "mistral-large-latest" });
+    const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: false });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain(corrected);
+    expect(callMistralMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("conserve en dernier recours les axes effectivement étayés", async () => {
+    const supported =
+      "La réouverture de maternités vise à rapprocher les soins des habitants dans les territoires concernés par leur fermeture.";
+    const unsupported =
+      "Les trains de nuit seraient rétablis afin de supprimer toutes les difficultés de déplacement sur le territoire.";
+    const generated = JSON.stringify({
+      career: `${CAREER}.`,
+      programmeClaims: [
+        { text: supported, measureRefs: ["M1"] },
+        { text: unsupported, measureRefs: ["M2"] },
+      ],
+    });
+    const checked = JSON.stringify({
+      claims: [
+        { index: 0, supported: true, reason: "Étayer par M1.", correctedText: "" },
+        { index: 1, supported: false, reason: "Effet absent.", correctedText: "" },
+      ],
+    });
+    callMistralMock
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" });
+
+    const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: false });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain(supported);
+    expect(result.ok && result.text).not.toContain(unsupported);
   });
 
   it("ne stocke rien quand deux réponses sont refusées", async () => {

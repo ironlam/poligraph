@@ -13,7 +13,12 @@
  * No `server-only`: the script imports it under tsx.
  */
 
-import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import {
+  callMistral,
+  extractMistralText,
+  parseMistralJSON,
+  type MistralOptions,
+} from "@/lib/api/mistral";
 import { db } from "@/lib/db";
 import {
   buildCandidateSynthesisPrompt,
@@ -29,6 +34,69 @@ import {
 
 /** Mandates kept in the prompt, most recent first. Enough for a career, short of a list. */
 const MANDATE_LIMIT = 8;
+
+const SYNTHESIS_RESPONSE_FORMAT = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "candidate_synthesis",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["career", "programmeClaims"],
+      properties: {
+        career: { type: "string", maxLength: 1_000 },
+        programmeClaims: {
+          type: "array",
+          maxItems: 5,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text", "measureRefs"],
+            properties: {
+              text: { type: "string", maxLength: 700 },
+              measureRefs: {
+                type: "array",
+                minItems: 1,
+                maxItems: 12,
+                items: { type: "string", pattern: "^M[1-9][0-9]*$" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const GROUNDING_RESPONSE_FORMAT = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "candidate_synthesis_grounding",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["claims"],
+      properties: {
+        claims: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["index", "supported", "reason"],
+            properties: {
+              index: { type: "integer", minimum: 0 },
+              supported: { type: "boolean" },
+              reason: { type: "string", maxLength: 500 },
+              correctedText: { type: "string", maxLength: 700 },
+            },
+          },
+        },
+      },
+    },
+  },
+};
 
 /**
  * Why a refusal is a RETURNED value and never a throw.
@@ -65,13 +133,14 @@ export type SynthesisGenerationResult =
 async function generate(
   system: string,
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  maxTokens = 1_200
+  maxTokens = 2_400,
+  responseFormat: NonNullable<MistralOptions["responseFormat"]> = SYNTHESIS_RESPONSE_FORMAT
 ): Promise<{ text: string; provider: string }> {
   const response = await callMistral([{ role: "system", content: system }, ...messages], {
     model: "mistral-large-latest",
     maxTokens,
     temperature: 0,
-    responseFormat: { type: "json_object" },
+    responseFormat,
   });
   return { text: extractMistralText(response), provider: response.model?.trim() || "mistral" };
 }
@@ -192,6 +261,10 @@ export async function generateCandidateSynthesis(
   let expectedClaimCount: number | undefined;
   const preservedClaims = new Map<number, CandidateProgrammeClaim>();
   let lastGenerationError: string | undefined;
+  let pendingCorrectedOutput:
+    | { career: string; programmeClaims: CandidateProgrammeClaim[] }
+    | undefined;
+  let lastProvider = "mistral-large-latest";
   let accepted:
     | { text: string; provider: string; programmeClaims: CandidateProgrammeClaim[] }
     | undefined;
@@ -209,7 +282,11 @@ export async function generateCandidateSynthesis(
       : [{ role: "user" as const, content: prompt }];
 
     try {
-      const attempt = await generate(system, messages);
+      const attempt = pendingCorrectedOutput
+        ? { text: JSON.stringify(pendingCorrectedOutput), provider: lastProvider }
+        : await generate(system, messages);
+      pendingCorrectedOutput = undefined;
+      lastProvider = attempt.provider;
       previousResponseText = attempt.text;
       const parsed = parseMistralJSON<unknown>(attempt.text);
       const candidateOutput =
@@ -252,7 +329,8 @@ export async function generateCandidateSynthesis(
         const verification = await generate(
           "Tu contrôles strictement l'étayage d'une synthèse politique. N'utilise aucune connaissance extérieure.",
           [{ role: "user", content: buildCandidateSynthesisGroundingPrompt(claims, input) }],
-          700
+          1_800,
+          GROUNDING_RESPONSE_FORMAT
         );
         const grounding = screenCandidateSynthesisGrounding(
           parseMistralJSON<unknown>(verification.text),
@@ -264,6 +342,36 @@ export async function generateCandidateSynthesis(
             if (claim) preservedClaims.set(index, claim);
           }
           validationDetail = `contrôle d'étayage refusé : ${grounding.detail}`;
+          if (grounding.corrections.size > 0) {
+            const correctedClaims = claims.map((claim, index) => ({
+              ...claim,
+              text: grounding.corrections.get(index) ?? claim.text,
+            }));
+            const corrected = {
+              career: buildCanonicalCareer(input),
+              programmeClaims: correctedClaims,
+            };
+            const correctedScreen = screenCandidateSynthesis(corrected, input);
+            if (correctedScreen.ok) pendingCorrectedOutput = corrected;
+          }
+          if (attemptIndex === 2 && grounding.supportedIndexes.length > 0) {
+            const supportedOnly = {
+              career: buildCanonicalCareer(input),
+              programmeClaims: grounding.supportedIndexes.flatMap((index) => {
+                const claim = claims[index];
+                return claim ? [claim] : [];
+              }),
+            };
+            const supportedScreen = screenCandidateSynthesis(supportedOnly, input);
+            if (supportedScreen.ok) {
+              accepted = {
+                text: supportedScreen.text,
+                provider: attempt.provider,
+                programmeClaims: supportedScreen.programmeClaims ?? [],
+              };
+              break;
+            }
+          }
           continue;
         }
       }
