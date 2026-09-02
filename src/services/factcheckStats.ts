@@ -77,7 +77,7 @@ export interface RankedParty {
 }
 
 /**
- * Shape returned by getStatisticsData() — consumed by statistiques/page.tsx.
+ * Shape returned by getStatisticsData(), consumed by statistiques/page.tsx.
  *
  * Doctrine éditoriale (issue #727) : ces classements décrivent la
  * répartition des verdicts sur un corpus d'affirmations attribuées, pas la
