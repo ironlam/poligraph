@@ -372,13 +372,15 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     };
   };
 
+  // Chaque classement est calculé indépendamment sur l'ensemble éligible complet :
+  // un même responsable peut apparaître dans les deux s'il a un score élevé sur
+  // les deux métriques (score = part de vrai/faux pondérée, pas un pourcentage
+  // brut), notamment quand "trompeur" représente une large part de son corpus.
   const rankedPoliticians = allPols.map(scorePolitician);
   const topVraiSharePoliticians = [...rankedPoliticians]
     .sort((a, b) => b.scoreVrai - a.scoreVrai)
     .slice(0, 5);
-  const topVraiSlugs = new Set(topVraiSharePoliticians.map((p) => p.slug));
   const topFauxSharePoliticians = [...rankedPoliticians]
-    .filter((p) => !topVraiSlugs.has(p.slug))
     .sort((a, b) => b.scoreFaux - a.scoreFaux)
     .slice(0, 5);
 
@@ -412,9 +414,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
   const topVraiShareParties = [...rankedParties]
     .sort((a, b) => b.scoreVrai - a.scoreVrai)
     .slice(0, 5);
-  const topVraiPartyNames = new Set(topVraiShareParties.map((p) => p.name));
   const topFauxShareParties = [...rankedParties]
-    .filter((p) => !topVraiPartyNames.has(p.name))
     .sort((a, b) => b.scoreFaux - a.scoreFaux)
     .slice(0, 5);
 
