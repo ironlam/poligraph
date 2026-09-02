@@ -98,10 +98,10 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
               total={factCheckData.total}
               groups={factCheckData.groups}
               bySource={factCheckData.bySource}
-              mostReliablePoliticians={factCheckData.mostReliablePoliticians}
-              leastReliablePoliticians={factCheckData.leastReliablePoliticians}
-              mostReliableParties={factCheckData.mostReliableParties}
-              leastReliableParties={factCheckData.leastReliableParties}
+              topVraiSharePoliticians={factCheckData.topVraiSharePoliticians}
+              topFauxSharePoliticians={factCheckData.topFauxSharePoliticians}
+              topVraiShareParties={factCheckData.topVraiShareParties}
+              topFauxShareParties={factCheckData.topFauxShareParties}
             />
           }
           legislativeContent={
