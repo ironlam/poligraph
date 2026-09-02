@@ -53,6 +53,9 @@ describe("page complète de recherche présidentielle", () => {
 
   it("affiche le texte complet et le lien canonique de la mesure", async () => {
     render(await PresidentialSearchPage({ searchParams: Promise.resolve({ q: "logement" }) }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Résultats pour « logement »" })
+    ).toBeInTheDocument();
     const link = screen.getByRole("link", {
       name: /Construire davantage de logements accessibles sur tout le territoire/,
     });

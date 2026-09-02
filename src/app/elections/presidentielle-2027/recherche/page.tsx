@@ -169,7 +169,9 @@ export default async function PresidentialSearchPage({
               ? subtopicFilter
                 ? `Mesures sur « ${subtopicFilter.label} »`
                 : "Sous-thème introuvable"
-              : "Résultats dans le corpus 2027"}
+              : query.length >= 2
+                ? `Résultats pour « ${resultLabel} »`
+                : "Rechercher dans les programmes 2027"}
           </h1>
           {isSubtopicBrowse && subtopicFilter && (
             <p className="mt-3 text-base text-muted-foreground" role="status" aria-live="polite">

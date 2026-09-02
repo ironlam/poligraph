@@ -8,7 +8,7 @@ import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
-import { HubCandidacyOverview } from "./_components/HubCandidacyOverview";
+import { HubPrimaryPaths } from "./_components/HubPrimaryPaths";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
@@ -88,11 +88,11 @@ export default async function PresidentialHubPage() {
             Présidentielle 2027
           </p>
           <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
-            Présidentielle 2027 : comparer les programmes et les mesures
+            Présidentielle 2027 : programmes et mesures
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-lg">
-            Pour chaque thème : les mesures publiées par les personnalités suivies et,
-            lorsqu&apos;ils existent, les votes parlementaires documentés sur le même objet.
+            Explorez les mesures publiées par candidat et par thème, avec leurs sources et les votes
+            parlementaires disponibles.
           </p>
           {context.round1Date && (
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground-strong">
@@ -109,9 +109,9 @@ export default async function PresidentialHubPage() {
           )}
         </header>
 
-        <HubCandidacyOverview candidacies={field} />
-
         <PresidentialCorpusSearch />
+
+        <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
 
         {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}
         {!context.hubPublishable && (
