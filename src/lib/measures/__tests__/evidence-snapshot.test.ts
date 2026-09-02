@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createV6CorrectionFingerprint,
   EvidenceSnapshotV3Schema,
   readEvidenceSnapshot,
   validateRevisionEvidence,
@@ -101,7 +102,37 @@ describe("EvidenceSnapshotV3 persistant", () => {
     expect(unit.rawExactText).not.toBe(unit.canonicalText);
     expect(unit.numbers).toEqual([
       { raw: "2", normalized: "2", role: "STRUCTURAL" },
-      { raw: "67 millions", normalized: "67000000", role: "CONTENT" },
+      { raw: "67", normalized: "67", role: "CONTENT" },
     ]);
+  });
+});
+
+describe("createV6CorrectionFingerprint", () => {
+  it("produit une clé stable propre au texte corrigé et à sa révision source", () => {
+    const first = createV6CorrectionFingerprint({
+      previousRevisionId: "revision-source",
+      text: "  Encadrer les loyers.  ",
+    });
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+    expect(
+      createV6CorrectionFingerprint({
+        previousRevisionId: "revision-source",
+        text: "Encadrer les loyers.",
+      })
+    ).toBe(first);
+    expect(
+      createV6CorrectionFingerprint({
+        previousRevisionId: "revision-source",
+        text: "Plafonner les loyers.",
+      })
+    ).not.toBe(first);
+    expect(
+      createV6CorrectionFingerprint({
+        previousRevisionId: "revision-source",
+        text: "Encadrer les loyers.",
+        details: "Le document précise le périmètre de la mesure.",
+      })
+    ).not.toBe(first);
   });
 });

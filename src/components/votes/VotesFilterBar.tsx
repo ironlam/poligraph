@@ -22,11 +22,12 @@ import {
 } from "@/config/labels";
 import type { Chamber, ThemeCategory, VotingResult, ScrutinType } from "@/types";
 import type { ScrutinSort } from "@/lib/data/scrutins";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 import { cn } from "@/lib/utils";
 
 // Fixed, stable order (declaration order of THEME_CATEGORY_LABELS): all 13
 // always rendered, no "+9" truncation.
-const THEME_CODES = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+const THEME_CODES: readonly ThemeCategory[] = LEGACY_THEME_CATEGORIES;
 
 const RESULT_OPTIONS: ToggleGroupOption[] = [
   { value: "", label: "Tous" },

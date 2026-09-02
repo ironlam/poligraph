@@ -11,6 +11,7 @@ import { VoteComparisonFilters } from "@/components/compare/VoteComparisonFilter
 import { COMPARE_CATEGORIES, COMPARE_CATEGORY_LABELS, type CompareCategory } from "@/types/compare";
 import { buildComparerVotesCanonical } from "@/lib/seo/comparer-votes-metadata";
 import type { VotePosition } from "@/types";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{
@@ -283,7 +284,7 @@ export default async function VotesComparisonPage({ searchParams }: PageProps) {
   const slugA = params.a;
   const slugB = params.b;
   const { search, filter } = params;
-  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const page = parsePageParam(params.page);
 
   if (!slugA || !slugB) {
     notFound();

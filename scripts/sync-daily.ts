@@ -162,14 +162,17 @@ const steps: SyncStep[] = [
         {
           // Scoped tags only — never use { all: true }. See Phase 4 of
           // docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md.
-          // The three tags below match the remaining data domains touched by
+          // The four tags below match the remaining data domains touched by
           // the daily sync. Votes are invalidated immediately after both vote
           // syncs, before the longer steps below can time out the workflow.
-          // Adding "elections" or "factchecks" here would purge
-          // caches that the daily sync did NOT update.
+          // Adding "elections" here would purge caches that the daily sync did
+          // NOT update. "factchecks" is not one of those: the Google API step
+          // above imports fact-checks on every run, and the listing that shows
+          // them holds its cache for 24h, so leaving the tag out kept a new
+          // fact-check off the site for a day after it was stored.
           name: "Cache revalidation",
-          command: "POST /api/cron/revalidate (dossiers, stats, politicians)",
-          run: () => revalidateRemoteCache(["dossiers", "stats", "politicians"]),
+          command: "POST /api/cron/revalidate (dossiers, stats, politicians, factchecks)",
+          run: () => revalidateRemoteCache(["dossiers", "stats", "politicians", "factchecks"]),
         },
       ]
     : []),

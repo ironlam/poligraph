@@ -1,4 +1,5 @@
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { isHistoricalStatement } from "./policy";
 import { extractionSchema, type DocumentSegment, type ExtractedProposal } from "./types";
 
@@ -55,7 +56,7 @@ N'omets pas une valeur, un diagnostic ou une intention politiquement significati
 
 const OUTPUT_FORMAT = `Réponds uniquement avec un objet JSON de cette forme :
 {"proposals":[{"sourceText":"citation exacte","normalizedText":"formulation fidèle ou null","classification":"MEASURE|OBJECTIVE|VALUE|DIAGNOSIS|GENERAL_INTENT|AMBIGUOUS","theme":"une valeur ThemeCategory ou null","confidence":0.0,"rationale":"raison courte"}]}
-Les seules valeurs de thème sont ECONOMIE_BUDGET, SOCIAL_TRAVAIL, SECURITE_JUSTICE, ENVIRONNEMENT_ENERGIE, SANTE, EDUCATION_CULTURE, INSTITUTIONS, AFFAIRES_ETRANGERES_DEFENSE, NUMERIQUE_TECH, IMMIGRATION, AGRICULTURE_ALIMENTATION, LOGEMENT_URBANISME et TRANSPORTS.`;
+Les seules valeurs de thème sont ${THEMES_IN_ORDER.join(", ")}.`;
 
 function sanitizePromptContext(value: string, maxLength: number): string {
   return value.replace(/["\n\r]/g, " ").slice(0, maxLength);

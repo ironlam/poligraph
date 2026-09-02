@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma";
 import {
   evidenceSnapshotV3Schema,
@@ -24,6 +25,24 @@ export type EvidenceSnapshotReadResult =
   | { status: "ABSENT" }
   | { status: "VALID"; snapshot: EvidenceSnapshot }
   | { status: "INVALID"; reason: string };
+
+/** Gives an editorial correction of a V6 import its own stable idempotency key. */
+export function createV6CorrectionFingerprint(input: {
+  previousRevisionId: string;
+  text: string;
+  details?: string | null;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        kind: "V6_CORRECTION",
+        previousRevisionId: input.previousRevisionId,
+        text: input.text.trim(),
+        details: input.details?.trim() || null,
+      })
+    )
+    .digest("hex");
+}
 
 function toPrismaJson(snapshot: EvidenceSnapshot): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(snapshot)) as Prisma.InputJsonValue;

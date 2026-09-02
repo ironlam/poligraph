@@ -11,6 +11,11 @@ import {
   type CertaintyLevel,
 } from "@/config/certainty";
 import type { AffairStatus, AffairCategory, AffairSeverity, Involvement } from "@/types";
+import {
+  AffairStatus as AffairStatusEnum,
+  AffairCategory as AffairCategoryEnum,
+} from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 
@@ -72,9 +77,11 @@ function buildAffairWhere(opts: AffairFilterOpts) {
     opts;
 
   // Build category filter based on super-category or specific category
+  // Whitelist guard: `category` and `status` arrive raw from the query string.
+  const safeCategory = pickEnumValue(category, AffairCategoryEnum);
   let categoryFilter: AffairCategory[] | undefined;
-  if (category) {
-    categoryFilter = [category as AffairCategory];
+  if (safeCategory) {
+    categoryFilter = [safeCategory];
   } else if (superCategory) {
     categoryFilter = getCategoriesForSuper(superCategory);
   }
@@ -90,8 +97,9 @@ function buildAffairWhere(opts: AffairFilterOpts) {
   let statusFilter: { status: AffairStatus } | { status: { in: AffairStatus[] } } | undefined;
   if (certainty) {
     statusFilter = { status: { in: getStatusesForCertainty(certainty) } };
-  } else if (status) {
-    statusFilter = { status: status as AffairStatus };
+  } else {
+    const safeStatus = pickEnumValue(status, AffairStatusEnum);
+    if (safeStatus) statusFilter = { status: safeStatus };
   }
 
   return {

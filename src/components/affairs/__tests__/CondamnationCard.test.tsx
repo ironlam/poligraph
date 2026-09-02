@@ -24,6 +24,7 @@ const baseAffair = {
     lastName: "Test",
     fullName: "Jean Test",
     photoUrl: null,
+    blobPhotoUrl: null,
     currentParty: null,
   },
   sources: [{ id: "s1" }, { id: "s2" }],

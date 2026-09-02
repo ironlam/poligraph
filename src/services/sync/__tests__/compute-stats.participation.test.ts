@@ -79,7 +79,11 @@ describe("producteur persistant de participation", () => {
     const result = await computePoliticianParticipation();
 
     expect(
-      result.map(({ politicianId, participationRate }) => [politicianId, participationRate])
-    ).toEqual(cases.map(([id, , , expected]) => [id, expected]));
+      result.map(({ politicianId, participationRate, computationVersion }) => [
+        politicianId,
+        participationRate,
+        computationVersion,
+      ])
+    ).toEqual(cases.map(([id, , , expected]) => [id, expected, "public-scrutins-v2"]));
   });
 });

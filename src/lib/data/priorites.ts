@@ -14,6 +14,7 @@ import {
 } from "./measures";
 import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
 import { loadThemesIndex } from "./themes-index";
+import { isPresidentialTheme } from "@/lib/presidentielle/themes";
 
 /**
  * The read authority for `/priorites`, the most sensitive surface of the hub: a distribution in
@@ -82,7 +83,7 @@ function summarize(
   ).length;
   const metrics = {
     verifiedMeasureCount: measures.length,
-    themesCoveredCount: new Set(measures.map((m) => m.theme)).size,
+    themesCoveredCount: new Set(measures.map((m) => m.theme).filter(isPresidentialTheme)).size,
     primarySourceShare: measures.length === 0 ? null : primarySourceMeasureCount / measures.length,
   };
 

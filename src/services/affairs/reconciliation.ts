@@ -581,9 +581,13 @@ export async function mergeAffairsInTransaction(
         description: true,
         sourceUrl: true,
         sourceTitle: true,
+        identityKey: true,
       },
     });
     const existingEventKeys = new Set(existingEvents.map(eventKey));
+    const existingEventIdentities = new Set(
+      existingEvents.flatMap((event) => (event.identityKey ? [event.identityKey] : []))
+    );
 
     const eventsToTransfer = await tx.affairEvent.findMany({
       where: { affairId: removeId },
@@ -595,14 +599,21 @@ export async function mergeAffairsInTransaction(
         description: true,
         sourceUrl: true,
         sourceTitle: true,
+        identityKey: true,
       },
     });
     let eventsMoved = 0;
     for (const event of eventsToTransfer) {
       const key = eventKey(event);
-      if (existingEventKeys.has(key)) continue;
+      if (
+        existingEventKeys.has(key) ||
+        (event.identityKey !== null && existingEventIdentities.has(event.identityKey))
+      ) {
+        continue;
+      }
       await tx.affairEvent.update({ where: { id: event.id }, data: { affairId: keepId } });
       existingEventKeys.add(key);
+      if (event.identityKey) existingEventIdentities.add(event.identityKey);
       eventsMoved++;
     }
 

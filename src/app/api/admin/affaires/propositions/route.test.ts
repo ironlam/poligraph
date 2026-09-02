@@ -17,6 +17,8 @@ vi.mock("@/lib/api/with-admin-auth", () => ({
 }));
 
 import { GET } from "./route";
+import { computeAffairEventIdentity } from "@/services/affairs/proposals";
+import { AFFAIR_EVOLUTION_REVELATION_TITLE } from "@/lib/security/schemas/affair-proposal";
 
 const PRESS_URL = "https://press.example.test/politique/article-test.html";
 
@@ -107,5 +109,100 @@ describe("GET admin affair proposals source links", () => {
       sourceLink: { safeUrl: null },
       officialEvidence: { required: true, canonicalUrl: null },
     });
+  });
+
+  it("valide toute la provenance événement et expose l’éditeur", async () => {
+    const sourceUrl = "https://www.lemonde.fr/politique/article-test.html";
+    const date = "2026-08-27T08:00:00.000Z";
+    const identityKey = computeAffairEventIdentity({
+      affairId: "affair-1",
+      sourceUrl,
+      publishedAt: new Date(date),
+      pressArticleId: "article-1",
+    });
+    h.db.affairUpdateProposal.findMany.mockResolvedValue([
+      proposalRow({
+        sourceUrl,
+        sourceExcerpt: "Extrait exact de l’article.",
+        affair: { id: "affair-1", publicationStatus: "PUBLISHED" },
+        proposedPatch: {
+          addEvent: {
+            date,
+            type: "REVELATION",
+            title: AFFAIR_EVOLUTION_REVELATION_TITLE,
+            description: null,
+            sourceUrl,
+            sourceTitle: "Titre original",
+          },
+        },
+        observedValues: {
+          addEvent: {
+            identityVersion: "press-revelation-v2",
+            identityKey,
+            existingEventId: null,
+          },
+        },
+        metadata: {
+          eventProposal: {
+            version: 1,
+            identityVersion: "press-revelation-v2",
+            identityKey,
+            publisher: "Le Monde",
+            publishedAt: date,
+            pressArticleId: "article-1",
+            resolverDecisionId: null,
+          },
+        },
+      }),
+    ]);
+
+    const response = await GET(
+      new NextRequest("https://poligraph.fr/api/admin/affaires/propositions?status=PENDING"),
+      { params: Promise.resolve({}) }
+    );
+    const body = (await response.json()) as {
+      rows: Array<{
+        acceptanceEligible: boolean;
+        validationIssues: string[];
+        eventPreview: { publisher: string };
+      }>;
+    };
+
+    expect(body.rows[0]).toMatchObject({
+      acceptanceEligible: true,
+      validationIssues: [],
+      eventPreview: { publisher: "Le Monde" },
+    });
+  });
+
+  it("bloque la présentation événement lorsque les métadonnées sont absentes", async () => {
+    h.db.affairUpdateProposal.findMany.mockResolvedValue([
+      proposalRow({
+        affair: { id: "affair-1", publicationStatus: "PUBLISHED" },
+        proposedPatch: {
+          addEvent: {
+            date: "2026-08-27T08:00:00.000Z",
+            type: "REVELATION",
+            title: AFFAIR_EVOLUTION_REVELATION_TITLE,
+            sourceUrl: "https://www.lemonde.fr/politique/article-test.html",
+            sourceTitle: "Titre original",
+          },
+        },
+        observedValues: {},
+        metadata: null,
+      }),
+    ]);
+
+    const response = await GET(
+      new NextRequest("https://poligraph.fr/api/admin/affaires/propositions?status=PENDING"),
+      { params: Promise.resolve({}) }
+    );
+    const body = (await response.json()) as {
+      rows: Array<{ payloadKind: string; acceptanceEligible: boolean; validationIssues: string[] }>;
+    };
+
+    expect(body.rows[0]?.payloadKind).toBe("INVALID");
+    expect(body.rows[0]?.acceptanceEligible).toBe(false);
+    expect(body.rows[0]?.validationIssues.length).toBeGreaterThan(0);
   });
 });

@@ -11,15 +11,19 @@ import {
 import { isAuthenticated } from "@/lib/auth";
 import { getMeasureForModeration, getPublicMeasure } from "@/lib/data/measures";
 import { deriveModerationState, type ModerationMeasureRow } from "@/lib/measures/moderation-state";
+import { readEvidenceSnapshot } from "@/lib/measures/evidence-snapshot";
+import { hasContextAttemptForRevision } from "@/lib/measures/context-generation";
 import { AnomalyList } from "../_components/AnomalyList";
 import { MeasureActionPanel } from "../_components/MeasureActionPanel";
 import { MeasureMetadataPanel } from "../_components/MeasureMetadataPanel";
+import { MeasureSubtopicsPanel } from "../_components/MeasureSubtopicsPanel";
+import { MeasureReaderGuidesPanel } from "../_components/MeasureReaderGuidesPanel";
 import { ModerationStateBadge } from "../_components/ModerationStateBadge";
 import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
 import { VoteLinkForm } from "../_components/VoteLinkForm";
 import { availableActions, hasAmbiguousPointers } from "../_data/available-actions";
-import { getMeasureContext } from "../_data/detail-query";
+import { getMeasureContext, listReaderGuidesForModeration } from "../_data/detail-query";
 import { getMeasureVoteLinksForModeration } from "../_data/vote-links-query";
 
 export const metadata = {
@@ -71,11 +75,12 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
 
   // Three reads, three different questions: the moderation read applies no filter, the public
   // read applies both, and the context read carries who and which election.
-  const [measure, context, publicMeasure, voteLinks] = await Promise.all([
+  const [measure, context, publicMeasure, voteLinks, readerGuides] = await Promise.all([
     getMeasureForModeration(id),
     getMeasureContext(id),
     getPublicMeasure(id),
     getMeasureVoteLinksForModeration(id),
+    listReaderGuidesForModeration(),
   ]);
 
   if (measure === null || context === null) notFound();
@@ -99,6 +104,21 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
   const revisionTexts = Object.fromEntries(
     measure.revisions.map((revision) => [revision.id, revision.text])
   );
+  const revisionDetails = Object.fromEntries(
+    measure.revisions.map((revision) => [revision.id, revision.details])
+  );
+  const publishedRevision = measure.revisions.find(
+    (revision) => revision.id === measure.publishedRevisionId
+  );
+  const publishedEvidence = readEvidenceSnapshot(publishedRevision?.evidenceSnapshot);
+  const hasContextAttempt = await hasContextAttemptForRevision(measure.publishedRevisionId);
+  const canGenerateContext =
+    publishedRevision !== undefined &&
+    !publishedRevision.details?.trim() &&
+    measure.latestRevisionId === measure.publishedRevisionId &&
+    !hasContextAttempt &&
+    publishedEvidence.status === "VALID" &&
+    publishedEvidence.snapshot.supportingIds.length > 0;
 
   return (
     <div className="space-y-6">
@@ -130,7 +150,7 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
             <dd className="text-muted-foreground">{context.election.title}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="font-medium">Sujet</dt>
+            <dt className="font-medium">Thème</dt>
             <dd className="text-muted-foreground">{THEME_CATEGORY_LABELS[context.theme]}</dd>
           </div>
           <div className="flex gap-2">
@@ -182,6 +202,61 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
       </section>
 
       <PublicVisibilityCard state={state} publicMeasure={publicMeasure} />
+
+      <section aria-labelledby="subtopics-heading">
+        <h2 id="subtopics-heading" className="text-base font-semibold">
+          Sous-thèmes
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            proposés automatiquement, publiés après validation
+          </span>
+        </h2>
+        <div className="mt-3">
+          <MeasureSubtopicsPanel
+            measureId={id}
+            revisionId={referenceRevisionId}
+            assignments={(
+              measure.revisions.find((revision) => revision.id === referenceRevisionId)
+                ?.subtopics ?? []
+            ).map((assignment) => ({
+              subtopicId: assignment.subtopicId,
+              label: assignment.subtopic.label,
+              status: assignment.status,
+              confidence: assignment.confidence,
+            }))}
+          />
+        </div>
+      </section>
+
+      <section aria-labelledby="reader-guides-heading">
+        <h2 id="reader-guides-heading" className="text-base font-semibold">
+          Repères pour comprendre
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            termes techniques proposés par l’IA, définitions rédigées et validées séparément
+          </span>
+        </h2>
+        <div className="mt-3">
+          <MeasureReaderGuidesPanel
+            measureId={id}
+            revisionId={referenceRevisionId}
+            mentions={(
+              measure.revisions.find((revision) => revision.id === referenceRevisionId)
+                ?.readerGuideMentions ?? []
+            ).map((mention) => ({
+              id: mention.id,
+              term: mention.term,
+              evidenceSpan: mention.evidenceSpan,
+              reason: mention.reason,
+              confidence: mention.confidence,
+              status: mention.status,
+              guideId: mention.guideId,
+              guideLabel: mention.guide?.label ?? null,
+              guidePublicationStatus: mention.guide?.publicationStatus ?? null,
+              guideActive: mention.guide?.active ?? null,
+            }))}
+            guides={readerGuides}
+          />
+        </div>
+      </section>
 
       <section aria-labelledby="anomalies-heading">
         <h2 id="anomalies-heading" className="text-base font-semibold">
@@ -327,6 +402,8 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
             expectedUpdatedAt={expectedUpdatedAt}
             actions={actions}
             revisionTexts={revisionTexts}
+            revisionDetails={revisionDetails}
+            canGenerateContext={canGenerateContext}
             isWithdrawn={state.withdrawal !== null}
             pointersAmbiguous={hasAmbiguousPointers(state)}
           />

@@ -5,17 +5,17 @@ import { CandidacyStatusBadge, candidacyBadgeLabel } from "../CandidacyStatusBad
 
 describe("CandidacyStatusBadge", () => {
   it.each([
-    ["DECLARE", "Candidature annoncée"],
-    ["PRESSENTI", "Personnalité pressentie"],
-    ["ENVISAGE", "Personnalité évoquée"],
-    ["RETIRE", "Candidature retirée"],
+    ["DECLARE", "Annoncée"],
+    ["PRESSENTI", "Pressentie"],
+    ["ENVISAGE", "Évoquée"],
+    ["RETIRE", "Retirée"],
   ] as const)("mappe %s vers son libellé public", (status, label) => {
     expect(candidacyBadgeLabel(status)).toBe(label);
   });
 
   it("reste une information sans lien", () => {
     render(<CandidacyStatusBadge status="DECLARE" />);
-    expect(screen.getByText("Candidature annoncée")).toBeInTheDocument();
+    expect(screen.getByText("Annoncée")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 

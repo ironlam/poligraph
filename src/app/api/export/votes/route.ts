@@ -1,8 +1,10 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { toCSV, formatDateForCSV, createCSVResponse } from "@/lib/csv";
 import { VOTING_RESULT_LABELS, CHAMBER_LABELS } from "@/config/labels";
 import { parsePagination } from "@/lib/api/pagination";
-import type { VotingResult, Chamber } from "@/types";
+import { Chamber as ChamberEnum, VotingResult as VotingResultEnum } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 
@@ -11,10 +13,26 @@ export const dynamic = "force-dynamic";
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
-  // Optional filters
-  const chamber = searchParams.get("chamber") as Chamber | null;
-  const result = searchParams.get("result") as VotingResult | null;
-  const legislature = searchParams.get("legislature");
+  // Optional filters. An API client gets an explicit 400 rather than a
+  // silently-ignored filter: a bad value used to reach Prisma and 500.
+  const chamberParam = searchParams.get("chamber");
+  const chamber = pickEnumValue(chamberParam, ChamberEnum);
+  if (chamberParam && !chamber) {
+    return NextResponse.json({ error: "Chambre invalide" }, { status: 400 });
+  }
+
+  const resultParam = searchParams.get("result");
+  const result = pickEnumValue(resultParam, VotingResultEnum);
+  if (resultParam && !result) {
+    return NextResponse.json({ error: "Résultat de vote invalide" }, { status: 400 });
+  }
+
+  const legislatureParam = searchParams.get("legislature");
+  const legislature = legislatureParam ? Number(legislatureParam) : undefined;
+  if (legislatureParam && !Number.isInteger(legislature)) {
+    return NextResponse.json({ error: "Législature invalide" }, { status: 400 });
+  }
+
   const { limit } = parsePagination(searchParams, { defaultLimit: 10000, maxLimit: 50000 });
 
   // Build where clause
@@ -28,8 +46,8 @@ export const GET = withPublicRoute(async (request) => {
     where.result = result;
   }
 
-  if (legislature) {
-    where.legislature = parseInt(legislature, 10);
+  if (legislature !== undefined) {
+    where.legislature = legislature;
   }
 
   // Fetch scrutins

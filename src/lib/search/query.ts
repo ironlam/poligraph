@@ -8,6 +8,18 @@ export type SearchHit = {
   url: string;
 };
 
+export type SearchPublicOptions = {
+  /** Strict structured scope. Omit it for the historical global search. */
+  electionId?: string;
+};
+
+export type SearchPublicPageOptions = SearchPublicOptions & { limit?: number };
+
+export type SearchPublicPage = {
+  hits: SearchHit[];
+  total: number;
+};
+
 const MAX_QUERY_LENGTH = 200;
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
@@ -72,15 +84,24 @@ function key(hit: SearchHit): string {
 }
 
 /** Exact words through the tsvector index. No stemming, so no loyer/loi false positive. */
-async function searchExact(query: string, limit: number): Promise<SearchHit[]> {
-  return db.$queryRaw<SearchHit[]>`
+function electionScope(electionId: string | undefined): Prisma.Sql {
+  return electionId === undefined ? Prisma.empty : Prisma.sql`AND "electionId" = ${electionId}`;
+}
+
+async function searchExact(
+  query: string,
+  limit: number,
+  electionId: string | undefined
+): Promise<SearchHit[]> {
+  return db.$queryRaw<SearchHit[]>(Prisma.sql`
     SELECT "entityType", "entityId", title, url
     FROM "SearchDocument"
     WHERE visibility = 'PUBLIC'::"SearchVisibility"
+      ${electionScope(electionId)}
       AND "searchVector" @@ plainto_tsquery('simple', unaccent(${query}))
     ORDER BY ts_rank("searchVector", plainto_tsquery('simple', unaccent(${query}))) DESC, title ASC
     LIMIT ${limit}
-  `;
+  `);
 }
 
 /**
@@ -93,11 +114,11 @@ async function searchExact(query: string, limit: number): Promise<SearchHit[]> {
  * operator syntax and raises on input it does not like, which is not something a public
  * search box may do. The `||` operator ORs the resulting queries.
  */
-async function searchVariants(query: string, limit: number): Promise<SearchHit[]> {
+function variantConditions(query: string): Prisma.Sql | null {
   const terms = query.split(" ").filter((term) => term.length > 0);
-  if (terms.length === 0) return [];
+  if (terms.length === 0) return null;
 
-  const conditions = Prisma.join(
+  return Prisma.join(
     terms.map((term) => {
       const alternatives = Prisma.join(
         variantsOf(term).map(
@@ -109,15 +130,44 @@ async function searchVariants(query: string, limit: number): Promise<SearchHit[]
     }),
     " AND "
   );
+}
 
-  return db.$queryRaw<SearchHit[]>`
+async function searchVariants(
+  query: string,
+  limit: number,
+  electionId: string | undefined
+): Promise<SearchHit[]> {
+  const conditions = variantConditions(query);
+  if (conditions === null) return [];
+
+  return db.$queryRaw<SearchHit[]>(Prisma.sql`
     SELECT "entityType", "entityId", title, url
     FROM "SearchDocument"
     WHERE visibility = 'PUBLIC'::"SearchVisibility"
+      ${electionScope(electionId)}
       AND ${conditions}
     ORDER BY title ASC
     LIMIT ${limit}
-  `;
+  `);
+}
+
+async function countVariants(query: string, electionId: string | undefined): Promise<number> {
+  const conditions = variantConditions(query);
+  if (conditions === null) return 0;
+
+  const rows = await db.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+    SELECT COUNT(*)::bigint AS count
+    FROM "SearchDocument"
+    WHERE visibility = 'PUBLIC'::"SearchVisibility"
+      ${electionScope(electionId)}
+      AND ${conditions}
+  `);
+  return Number(rows[0]?.count ?? 0);
+}
+
+function mergeHits(exact: SearchHit[], variants: SearchHit[], limit: number): SearchHit[] {
+  const seen = new Set(exact.map(key));
+  return [...exact, ...variants.filter((hit) => !seen.has(key(hit)))].slice(0, limit);
 }
 
 /**
@@ -129,19 +179,37 @@ async function searchVariants(query: string, limit: number): Promise<SearchHit[]
  */
 export async function searchPublic(
   rawQuery: string,
-  limit: number = DEFAULT_LIMIT
+  limit: number = DEFAULT_LIMIT,
+  options: SearchPublicOptions = {}
 ): Promise<SearchHit[]> {
   const query = normalize(rawQuery);
   if (query === "") return [];
 
   const bounded = clampLimit(limit);
   const [exact, variants] = await Promise.all([
-    searchExact(query, bounded),
-    searchVariants(query, bounded),
+    searchExact(query, bounded, options.electionId),
+    searchVariants(query, bounded, options.electionId),
   ]);
 
-  const seen = new Set(exact.map(key));
-  const merged = [...exact, ...variants.filter((hit) => !seen.has(key(hit)))];
+  return mergeHits(exact, variants, bounded);
+}
 
-  return merged.slice(0, bounded);
+/** Same public search with the full matching count for bounded result panels. */
+export async function searchPublicPage(
+  rawQuery: string,
+  options: SearchPublicPageOptions = {}
+): Promise<SearchPublicPage> {
+  const query = normalize(rawQuery);
+  if (query === "") return { hits: [], total: 0 };
+
+  const bounded = clampLimit(options.limit ?? DEFAULT_LIMIT);
+  const [exact, variants, total] = await Promise.all([
+    searchExact(query, bounded, options.electionId),
+    searchVariants(query, bounded, options.electionId),
+    // The variants predicate contains every exact term as one of its alternatives, so it is the
+    // union count. Counting both passes and adding them would count exact matches twice.
+    countVariants(query, options.electionId),
+  ]);
+
+  return { hits: mergeHits(exact, variants, bounded), total };
 }

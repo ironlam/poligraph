@@ -50,6 +50,13 @@ describeIfDisposableDb("queryMeasureQueue", () => {
     expect(result.withdrawnCount).toBe(2);
   });
 
+  it("isole les fiches dont le contexte éditorial reste à compléter", async () => {
+    const result = await scoped({ enrichment: "DETAILS_MISSING" });
+
+    expect(result.total).toBe(result.enrichmentCounts.DETAILS_MISSING);
+    expect(result.rows.every((row) => !row.hasDetails)).toBe(true);
+  });
+
   it("borne la page sans jamais produire un LIMIT invalide", async () => {
     // take: 0 and take: -5 must not reach the database as such. A negative LIMIT fails with
     // P2010, and a zero one silently returns an empty page that reads like "no measures".

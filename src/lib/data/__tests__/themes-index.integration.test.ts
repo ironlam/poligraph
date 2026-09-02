@@ -46,6 +46,8 @@ describeIfDisposableDb("loadThemesIndex", () => {
     // because its candidacy is not in the public population.
     expect(logement?.documentedMeasureCount).toBe(3);
     expect(logement?.currentlyDefendedMeasureCount).toBe(2);
+    expect(logement?.documentedCandidacyCount).toBe(2);
+    expect(logement?.lastReviewedAt).toBeInstanceOf(Date);
   });
 
   it("est en parité avec loadSubjectPageData sur chaque thème", async () => {

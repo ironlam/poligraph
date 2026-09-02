@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@/generated/prisma";
 import { VERDICT_GROUPS } from "@/config/labels";
 import { bayesianScore } from "@/lib/bayesianScore";
 import { getPublicFactCheckSqlWhere, getPublicFactCheckWhere } from "@/lib/api/public-contract";
@@ -144,7 +145,7 @@ async function getPageStats(): Promise<FactCheckPageStats> {
       _count: true,
       orderBy: { _count: { source: "desc" } },
     }),
-    db.$queryRaw<Array<{ fullName: string; slug: string; count: bigint }>>`
+    db.$queryRaw<Array<{ fullName: string; slug: string; count: bigint }>>(Prisma.sql`
       SELECT p."fullName", p.slug, COUNT(*) as count
       FROM "FactCheckMention" m
       JOIN "FactCheck" fc ON m."factCheckId" = fc.id
@@ -154,7 +155,7 @@ async function getPageStats(): Promise<FactCheckPageStats> {
       GROUP BY p.id, p."fullName", p.slug
       ORDER BY count DESC
       LIMIT 10
-    `,
+    `),
   ]);
 
   const byRating = byRatingRaw.reduce(
@@ -218,7 +219,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
         verdictRating: string;
         mentionCount: bigint;
       }>
-    >`
+    >(Prisma.sql`
       SELECT
         p.id AS "politicianId",
         p."fullName",
@@ -240,7 +241,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
       GROUP BY p.id, p."fullName", p.slug, p."photoUrl",
                party.name, party."shortName", party.color, party.slug,
                fc."verdictRating"
-    `,
+    `),
   ]);
 
   const ratingMap: Record<string, number> = {};
@@ -408,12 +409,12 @@ interface GlobalVerdictRow {
 }
 
 async function getGlobalByVerdict(): Promise<GlobalVerdictRow[]> {
-  return db.$queryRaw<GlobalVerdictRow[]>`
+  return db.$queryRaw<GlobalVerdictRow[]>(Prisma.sql`
     SELECT fc."verdictRating", COUNT(*) as count
     FROM "FactCheck" fc
     WHERE ${getPublicFactCheckSqlWhere()}
     GROUP BY fc."verdictRating"
-  `;
+  `);
 }
 
 interface PartyVerdictRow {
@@ -427,7 +428,7 @@ interface PartyVerdictRow {
 }
 
 async function getByParty(): Promise<PartyVerdictRow[]> {
-  return db.$queryRaw<PartyVerdictRow[]>`
+  return db.$queryRaw<PartyVerdictRow[]>(Prisma.sql`
     SELECT
       p.id as "partyId",
       p.name as "partyName",
@@ -444,7 +445,7 @@ async function getByParty(): Promise<PartyVerdictRow[]> {
       AND pol."publicationStatus" = 'PUBLISHED'
     GROUP BY p.id, p.name, p."shortName", p.color, p.slug, fc."verdictRating"
     ORDER BY COUNT(*) DESC
-  `;
+  `);
 }
 
 interface PoliticianVerdictRow {
@@ -457,7 +458,7 @@ interface PoliticianVerdictRow {
 }
 
 async function getByPolitician(limit: number): Promise<PoliticianVerdictRow[]> {
-  return db.$queryRaw<PoliticianVerdictRow[]>`
+  return db.$queryRaw<PoliticianVerdictRow[]>(Prisma.sql`
     SELECT
       sub."politicianId",
       sub."fullName",
@@ -487,7 +488,7 @@ async function getByPolitician(limit: number): Promise<PoliticianVerdictRow[]> {
         LIMIT ${limit}
       )
     GROUP BY sub."politicianId", sub."fullName", sub.slug, sub."partyShortName", fc."verdictRating"
-  `;
+  `);
 }
 
 interface SourceVerdictRow {
@@ -497,13 +498,13 @@ interface SourceVerdictRow {
 }
 
 async function getBySource(): Promise<SourceVerdictRow[]> {
-  return db.$queryRaw<SourceVerdictRow[]>`
+  return db.$queryRaw<SourceVerdictRow[]>(Prisma.sql`
     SELECT fc.source, fc."verdictRating", COUNT(*) as count
     FROM "FactCheck" fc
     WHERE ${getPublicFactCheckSqlWhere()}
     GROUP BY fc.source, fc."verdictRating"
     ORDER BY COUNT(*) DESC
-  `;
+  `);
 }
 
 // ============================================

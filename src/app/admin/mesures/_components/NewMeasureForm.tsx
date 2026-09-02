@@ -4,16 +4,19 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   MEASURE_ATTRIBUTION_LABELS,
+  MEASURE_PRECISION_LABELS,
   MEASURE_SOURCE_KIND_LABELS,
   SOURCE_TIER_LABELS,
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import type {
   MeasureAttribution,
+  MeasurePrecision,
   MeasureSourceKind,
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { createMeasureAction } from "../actions";
 import type { CandidacyOption } from "../_data/candidacies-query";
 
@@ -33,10 +36,11 @@ const BUTTON =
 const FIELD = "mt-1 min-h-11 w-full rounded border border-border bg-background px-3 py-2 text-sm";
 const LABEL = "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
 
-const THEMES = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+const THEMES: readonly ThemeCategory[] = THEMES_IN_ORDER;
 const ATTRIBUTIONS = Object.keys(MEASURE_ATTRIBUTION_LABELS) as MeasureAttribution[];
 const SOURCE_KINDS = Object.keys(MEASURE_SOURCE_KIND_LABELS) as MeasureSourceKind[];
 const TIERS = Object.keys(SOURCE_TIER_LABELS) as SourceTier[];
+const PRECISIONS = Object.keys(MEASURE_PRECISION_LABELS) as MeasurePrecision[];
 
 export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[] }) {
   const router = useRouter();
@@ -76,6 +80,7 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
             attribution: String(data.get("attribution")) as MeasureAttribution,
             revision: {
               text: String(data.get("text") ?? ""),
+              details: String(data.get("details") ?? "").trim() || null,
               precision:
                 String(data.get("precision") ?? "") === ""
                   ? null
@@ -131,7 +136,7 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="new-theme" className={LABEL}>
-            Sujet
+            Thème
           </label>
           <select id="new-theme" name="theme" required className={FIELD}>
             {THEMES.map((theme) => (
@@ -162,6 +167,17 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
         <textarea id="new-text" name="text" required rows={3} className={FIELD} />
       </div>
 
+      <div>
+        <label htmlFor="new-details" className={LABEL}>
+          Détails documentés (facultatif)
+        </label>
+        <textarea id="new-details" name="details" rows={6} className={FIELD} />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Ajoutez uniquement du contexte factuel présent dans les sources. Le Markdown simple est
+          accepté. Ce contenu sera relu et publié avec cette révision.
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="new-validfrom" className={LABEL}>
@@ -175,8 +191,11 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
           </label>
           <select id="new-precision" name="precision" className={FIELD}>
             <option value="">Non qualifiée</option>
-            <option value="CHIFFREE">Chiffrée</option>
-            <option value="OBJECTIF_SANS_CHIFFRE">Objectif sans chiffre</option>
+            {PRECISIONS.map((precision) => (
+              <option key={precision} value={precision}>
+                {MEASURE_PRECISION_LABELS[precision]}
+              </option>
+            ))}
           </select>
         </div>
       </div>

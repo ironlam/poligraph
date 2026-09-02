@@ -202,7 +202,7 @@ describe("frontière de préparation éditoriale V6", () => {
     const candidate = prepare(
       [source],
       extraction([source.id], "Créer une caisse publique de formation.", {
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
       })
     );
 
@@ -213,6 +213,31 @@ describe("frontière de préparation éditoriale V6", () => {
       evidenceSnapshot: { schemaVersion: "evidence-snapshot/v3" },
     });
     expect(candidate.importFingerprint).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("prépare un programme de parti actuel avec une attribution explicite", () => {
+    const source = unit("p1-b01-party", 0, "Nous créerons une caisse publique de formation.");
+    const evaluated = evaluate(
+      [source],
+      extraction([source.id], "Créer une caisse publique de formation.", {
+        theme: "EMPLOI_TRAVAIL",
+      }),
+      { ...CONTEXT, documentType: "PARTY_PLATFORM_CURRENT" }
+    );
+
+    const candidate = prepareMeasureCandidate(evaluated, "a".repeat(64), {
+      candidacyId: "candidacy-party",
+      documentType: "PARTY_PLATFORM_CURRENT",
+      publishedAt: new Date("2025-09-07T00:00:00.000Z"),
+      attribution: "PARTY_PROGRAM",
+    });
+
+    expect(candidate).toMatchObject({
+      reviewReadiness: "READY_FOR_REVIEW",
+      blockers: [],
+      draftContext: { attribution: "PARTY_PROGRAM" },
+      source: { sourceKind: "PROGRAMME_PARTI", tier: "PRIMARY" },
+    });
   });
 
   it("prépare WARNING quand l'attribution ressemble à un diagnostic", () => {
@@ -368,7 +393,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
       extraction(
         ["p12-b01", "p13-b01", "p13-b02"],
         "Protéger le temps libéré des travailleuses et des travailleurs et assurer une stabilité du temps de travail.",
-        { classification: "OBJECTIVE", theme: "SOCIAL_TRAVAIL" }
+        { classification: "OBJECTIVE", theme: "EMPLOI_TRAVAIL" }
       ),
       CONTEXT
     );
@@ -392,7 +417,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
       extraction(
         ["p21-b01", "p21-b02"],
         "Contrôler et menacer de pénalités les entreprises qui renouvellent les contrats d’intérim de 3x6 mois.",
-        { theme: "SOCIAL_TRAVAIL" }
+        { theme: "EMPLOI_TRAVAIL" }
       ),
       CONTEXT
     );
@@ -414,7 +439,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
     const result = evaluate(
       blocks,
       extraction(["p11-b01"], thirdParty.sourceText, {
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
         attributionBasis: "THIRD_PARTY",
       }),
       CONTEXT
@@ -432,7 +457,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
     const result = evaluate(
       blocks,
       extraction(["p12-b01"], historical.sourceText, {
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
         attributionBasis: "HISTORICAL",
       }),
       CONTEXT
@@ -537,7 +562,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
       numbers: [{ raw: "2", normalized: "2", role: "STRUCTURAL" }],
     });
     const proposal = extraction([heading.id], "Rémunérer les coupures de plus de 2 heures.", {
-      theme: "SOCIAL_TRAVAIL",
+      theme: "EMPLOI_TRAVAIL",
     });
 
     expect(evaluate([heading], proposal, CONTEXT)).toMatchObject({
@@ -874,7 +899,7 @@ describe("vertical slice V6 fondé sur les blocs de preuve", () => {
           commitmentAnchorIds: [ids.at(-1)!],
           supportingIds: ids.slice(0, -1),
           attributionBasis: "CANDIDATE_COMMITMENT",
-          theme: "SOCIAL_TRAVAIL",
+          theme: "EMPLOI_TRAVAIL",
         }),
         CONTEXT
       );

@@ -7,17 +7,20 @@ import Link from "next/link";
  */
 export function DataProvenance() {
   return (
-    <section aria-labelledby="provenance-heading" className="rounded-lg border border-border p-4">
-      <h2 id="provenance-heading" className="text-base font-semibold">
+    <section aria-labelledby="provenance-heading" className="rounded-2xl border border-border p-4">
+      <h3 id="provenance-heading" className="text-base font-semibold">
         D&apos;où viennent les données
-      </h2>
+      </h3>
       <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
         <li>Programmes officiels publiés par les candidatures.</li>
         <li>Scrutins publics à l&apos;Assemblée nationale et au Sénat.</li>
         <li>Rapports publics et déclarations sourcées.</li>
       </ul>
       <p className="mt-3 text-sm">
-        <Link href="/methodologie" className="underline hover:text-primary">
+        <Link
+          href="/methodologie/mesures-presidentielle-2027"
+          className="inline-flex min-h-11 items-center underline hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           Méthode et sources
         </Link>
       </p>

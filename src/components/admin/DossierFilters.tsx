@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { DOSSIER_STATUS_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
 import type { DossierStatus, ThemeCategory } from "@/generated/prisma";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 
 const SORT_OPTIONS: Record<string, string> = {
   "": "Date de dépôt",
@@ -112,7 +113,7 @@ export function DossierFilters({ categories }: DossierFiltersProps) {
           aria-label="Filtrer par thème"
         >
           <option value="">Tous les thèmes</option>
-          {(Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[]).map((theme) => (
+          {(LEGACY_THEME_CATEGORIES as readonly ThemeCategory[]).map((theme) => (
             <option key={theme} value={theme}>
               {THEME_CATEGORY_LABELS[theme]}
             </option>

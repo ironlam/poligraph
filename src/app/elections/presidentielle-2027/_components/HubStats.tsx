@@ -23,7 +23,10 @@ export function HubStats({ verifiedMeasureCount, lastReviewedAt }: HubStatsProps
         aria-label="Mesures publiées sur Poligraph"
         className="text-sm text-muted-foreground"
       >
-        Aucune mesure publiée pour l&apos;instant.
+        <p className="font-display text-3xl font-extrabold tabular-nums tracking-tight text-primary">
+          0
+        </p>
+        <p className="mt-0.5 text-xs">Aucune mesure publiée pour l&apos;instant.</p>
       </section>
     );
   }
@@ -32,9 +35,12 @@ export function HubStats({ verifiedMeasureCount, lastReviewedAt }: HubStatsProps
 
   return (
     <section aria-label="Mesures publiées sur Poligraph" className="text-sm">
-      <p className="font-medium">{countLabel}</p>
+      <p className="font-display text-3xl font-extrabold tabular-nums tracking-tight text-primary">
+        {verifiedMeasureCount}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground-strong">{countLabel}</p>
       {lastReviewedAt !== null && (
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           Dernière revue éditoriale le {formatDate(lastReviewedAt)}
         </p>
       )}

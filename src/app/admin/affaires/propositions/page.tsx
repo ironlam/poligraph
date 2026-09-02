@@ -30,6 +30,19 @@ interface ProposalRow {
   importer: string;
   extractorVersion: string;
   proposedPatch: Record<string, unknown>;
+  payloadKind: "PATCH" | "ADD_EVENT" | "INVALID";
+  acceptanceEligible: boolean;
+  validationIssues: string[];
+  eventPreview: {
+    date: string;
+    type: string;
+    title: string;
+    description: string | null;
+    sourceUrl: string;
+    sourceTitle: string;
+    identityKey: string;
+    publisher: string;
+  } | null;
   observedValues: Record<string, unknown>;
   affairSnapshot: AffairSnapshot;
   source: string;
@@ -355,6 +368,9 @@ export default function PropositionsPage() {
                       <Badge variant="outline">
                         {row.importer}@{row.extractorVersion}
                       </Badge>
+                      {row.payloadKind === "ADD_EVENT" && (
+                        <Badge variant="destructive">Nouvel événement</Badge>
+                      )}
                       {evidence.required && (
                         <Badge variant={evidence.acceptable ? "outline" : "destructive"}>
                           {evidence.status
@@ -365,41 +381,69 @@ export default function PropositionsPage() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <caption className="sr-only">
-                        Valeurs actuelles et valeurs proposées pour {row.affairSnapshot.title}
-                      </caption>
-                      <thead>
-                        <tr className="text-muted-foreground text-left text-xs uppercase">
-                          <th scope="col" className="py-2 pr-4 font-medium">
-                            Champ
-                          </th>
-                          <th scope="col" className="py-2 pr-4 font-medium">
-                            Actuel
-                          </th>
-                          <th scope="col" className="py-2 font-medium">
-                            Proposé
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fields.map((field) => (
-                          <tr key={field} className="border-border/60 border-t">
-                            <th scope="row" className="py-2 pr-4 text-left font-normal">
-                              {FIELD_LABELS[field] ?? field}
+                  {row.payloadKind === "INVALID" ? (
+                    <p className="text-muted-foreground text-sm">
+                      Le contenu imbriqué ne peut pas être présenté de façon sûre.
+                    </p>
+                  ) : row.payloadKind === "ADD_EVENT" && row.eventPreview ? (
+                    <div className="border-border bg-muted/30 rounded-md border p-4 text-sm">
+                      <p className="font-semibold">Ajout proposé à la chronologie</p>
+                      <dl className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr]">
+                        <dt className="text-muted-foreground">Date</dt>
+                        <dd>{formatValue(row.eventPreview.date)}</dd>
+                        <dt className="text-muted-foreground">Type</dt>
+                        <dd>{row.eventPreview.type}</dd>
+                        <dt className="text-muted-foreground">Titre public</dt>
+                        <dd>{row.eventPreview.title}</dd>
+                        <dt className="text-muted-foreground">Source</dt>
+                        <dd>{row.eventPreview.sourceTitle}</dd>
+                        <dt className="text-muted-foreground">Éditeur</dt>
+                        <dd>{row.eventPreview.publisher}</dd>
+                        <dt className="text-muted-foreground">URL</dt>
+                        <dd className="break-all">{row.eventPreview.sourceUrl}</dd>
+                        <dt className="text-muted-foreground">Identité technique</dt>
+                        <dd className="font-mono text-xs break-all">
+                          {row.eventPreview.identityKey}
+                        </dd>
+                      </dl>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <caption className="sr-only">
+                          Valeurs actuelles et valeurs proposées pour {row.affairSnapshot.title}
+                        </caption>
+                        <thead>
+                          <tr className="text-muted-foreground text-left text-xs uppercase">
+                            <th scope="col" className="py-2 pr-4 font-medium">
+                              Champ
                             </th>
-                            <td className="text-muted-foreground py-2 pr-4">
-                              {formatValue(row.observedValues[field])}
-                            </td>
-                            <td className="py-2 font-medium">
-                              {formatValue(row.proposedPatch[field])}
-                            </td>
+                            <th scope="col" className="py-2 pr-4 font-medium">
+                              Actuel
+                            </th>
+                            <th scope="col" className="py-2 font-medium">
+                              Proposé
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {fields.map((field) => (
+                            <tr key={field} className="border-border/60 border-t">
+                              <th scope="row" className="py-2 pr-4 text-left font-normal">
+                                {FIELD_LABELS[field] ?? field}
+                              </th>
+                              <td className="text-muted-foreground py-2 pr-4">
+                                {formatValue(row.observedValues[field])}
+                              </td>
+                              <td className="py-2 font-medium">
+                                {formatValue(row.proposedPatch[field])}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   {row.conflictDetail && (
                     <div className="border-destructive/40 bg-destructive/10 flex gap-2 rounded-md border px-3 py-2 text-sm">
@@ -416,6 +460,26 @@ export default function PropositionsPage() {
                               {formatConflictValue(detail.expected)}&nbsp;», trouvé «&nbsp;
                               {formatConflictValue(detail.actual)}&nbsp;»
                             </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {row.validationIssues.length > 0 && (
+                    <div
+                      id={`validation-${row.id}`}
+                      className="border-destructive/40 bg-destructive/10 flex gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <ShieldAlert
+                        className="text-destructive mt-0.5 h-4 w-4 shrink-0"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium">Proposition non applicable</p>
+                        <ul className="mt-1 list-disc pl-4">
+                          {row.validationIssues.map((issue) => (
+                            <li key={issue}>{issue}</li>
                           ))}
                         </ul>
                       </div>
@@ -526,13 +590,23 @@ export default function PropositionsPage() {
                           className="min-h-11"
                           onClick={() => void review(row.id, "accept")}
                           disabled={
-                            busyId === row.id || (evidence.required && !evidence.acceptable)
+                            busyId === row.id ||
+                            !row.acceptanceEligible ||
+                            (evidence.required && !evidence.acceptable)
                           }
-                          aria-describedby={evidence.required ? evidenceDescriptionId : undefined}
+                          aria-describedby={
+                            !row.acceptanceEligible
+                              ? `validation-${row.id}`
+                              : evidence.required
+                                ? evidenceDescriptionId
+                                : undefined
+                          }
                           title={
-                            evidence.required && !evidence.acceptable
-                              ? "Acceptation bloquée tant que la décision officielle n'est pas vérifiée"
-                              : undefined
+                            !row.acceptanceEligible
+                              ? "Acceptation bloquée car la proposition ou sa provenance est invalide"
+                              : evidence.required && !evidence.acceptable
+                                ? "Acceptation bloquée tant que la décision officielle n'est pas vérifiée"
+                                : undefined
                           }
                         >
                           Accepter et appliquer

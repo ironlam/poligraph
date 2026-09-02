@@ -37,6 +37,7 @@ type Affair = {
     lastName: string;
     fullName: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     currentParty: {
       id: string;
       slug: string | null;
@@ -72,6 +73,7 @@ export function CondamnationCard({ affair, definitif }: { affair: Affair; defini
             firstName={affair.politician.firstName}
             lastName={affair.politician.lastName}
             photoUrl={affair.politician.photoUrl}
+            blobPhotoUrl={affair.politician.blobPhotoUrl}
             size="sm"
           />
           <div className="flex-1 min-w-0">

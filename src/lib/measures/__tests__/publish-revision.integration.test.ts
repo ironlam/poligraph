@@ -30,6 +30,7 @@ it("keeps the publication input free of any review field", () => {
     revisionId: string;
     publishedBy?: string;
     expectedUpdatedAt?: Date;
+    batchKind?: "FIRST_PUBLICATION" | "CONTEXT_CORRECTION";
   }>();
 });
 

@@ -10,13 +10,16 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/measures/transitions", () => ({ createMeasure: vi.fn() }));
 vi.mock("@/services/promises/extractor", () => ({ extractPromisesFromText: vi.fn() }));
-vi.mock("@/services/promises/theme-classifier", () => ({ classifyTheme: vi.fn() }));
+vi.mock("@/services/promises/theme-classifier", () => ({
+  classifyPresidentialTheme: vi.fn(),
+  classifyTheme: vi.fn(),
+}));
 
 import { db } from "@/lib/db";
 import { createMeasure } from "@/lib/measures/transitions";
 import { ingestMeasuresFromPress } from "@/services/measures/press-ingest";
 import { extractPromisesFromText } from "@/services/promises/extractor";
-import { classifyTheme } from "@/services/promises/theme-classifier";
+import { classifyPresidentialTheme, classifyTheme } from "@/services/promises/theme-classifier";
 
 const ARTICLE = {
   id: "art-1",
@@ -29,7 +32,10 @@ const ARTICLE = {
 };
 
 function arrange(over: { candidacies?: unknown[]; articles?: unknown[] } = {}) {
-  vi.mocked(db.election.findUnique).mockResolvedValue({ id: "elec-1" } as never);
+  vi.mocked(db.election.findUnique).mockResolvedValue({
+    id: "elec-1",
+    slug: "presidentielle-2027",
+  } as never);
   vi.mocked(db.candidacy.findMany).mockResolvedValue(
     (over.candidacies ?? [{ id: "cand-1", politicianId: "pol-1" }]) as never
   );
@@ -37,7 +43,7 @@ function arrange(over: { candidacies?: unknown[]; articles?: unknown[] } = {}) {
   vi.mocked(extractPromisesFromText).mockResolvedValue([
     { text: "Encadrer les loyers dans les zones tendues.", context: null, confidence: 0.7 },
   ] as never);
-  vi.mocked(classifyTheme).mockResolvedValue({
+  vi.mocked(classifyPresidentialTheme).mockResolvedValue({
     theme: "LOGEMENT_URBANISME",
     confidence: 0.8,
     method: "haiku",
@@ -54,6 +60,10 @@ describe("ingestMeasuresFromPress", () => {
     const result = await ingestMeasuresFromPress({ electionId: "elec-1" });
 
     expect(result.created).toBe(1);
+    expect(classifyPresidentialTheme).toHaveBeenCalledWith(
+      "Encadrer les loyers dans les zones tendues."
+    );
+    expect(classifyTheme).not.toHaveBeenCalled();
     expect(createMeasure).toHaveBeenCalledWith(
       expect.objectContaining({
         politicianId: "pol-1",
@@ -119,6 +129,43 @@ describe("ingestMeasuresFromPress", () => {
     const result = await ingestMeasuresFromPress({ electionId: "elec-1" });
 
     expect(result.created).toBe(0);
+    expect(db.pressArticle.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ promiseScanStatus: "error" }) })
+    );
+  });
+
+  it("n'écrit pas quand la taxonomie présidentielle ne peut pas être déterminée", async () => {
+    arrange();
+    vi.mocked(classifyPresidentialTheme).mockResolvedValueOnce(null);
+
+    const result = await ingestMeasuresFromPress({ electionId: "elec-1" });
+
+    expect(result.created).toBe(0);
+    expect(createMeasure).not.toHaveBeenCalled();
+    expect(db.pressArticle.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ promiseScanStatus: "error" }) })
+    );
+  });
+
+  it("termine toutes les classifications avant de créer la première mesure", async () => {
+    arrange();
+    vi.mocked(extractPromisesFromText).mockResolvedValueOnce([
+      { text: "Augmenter le SMIC.", context: null, confidence: 0.8 },
+      { text: "Réformer les retraites.", context: null, confidence: 0.8 },
+    ] as never);
+    vi.mocked(classifyPresidentialTheme)
+      .mockResolvedValueOnce({
+        theme: "EMPLOI_TRAVAIL",
+        confidence: 0.9,
+        method: "haiku",
+      })
+      .mockResolvedValueOnce(null);
+
+    const result = await ingestMeasuresFromPress({ electionId: "elec-1" });
+
+    expect(result.extracted).toBe(2);
+    expect(result.created).toBe(0);
+    expect(createMeasure).not.toHaveBeenCalled();
     expect(db.pressArticle.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ promiseScanStatus: "error" }) })
     );

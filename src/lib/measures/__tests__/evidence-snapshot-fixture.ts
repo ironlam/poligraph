@@ -39,7 +39,7 @@ export function validEvidenceSnapshot(): EvidenceSnapshot {
         discourseReason: "Objectif formulé par le document.",
         numbers: [
           { raw: "2", normalized: "2", role: "STRUCTURAL" },
-          { raw: "67 millions", normalized: "67000000", role: "CONTENT" },
+          { raw: "67", normalized: "67", role: "CONTENT" },
         ],
       },
       {

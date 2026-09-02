@@ -5,11 +5,16 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import {
+  EVOLUTION_MIN_OVERLAP_RATIO,
+  classifyAffairMatches,
+  evolutionMatch,
+  isPreDecisionStatus,
   pairingRestsOnWildcard,
   pickConfidentMatch,
   sameCategoryFamily,
   significantTitleWords,
   titleContainmentMatch,
+  titleVocabularyOverlap,
   titlesShareVocabulary,
   verdictDatesConflict,
 } from "./matching";
@@ -89,6 +94,54 @@ describe("normalizeAffairTitle", () => {
 
   it("works without politician name", () => {
     expect(normalizeAffairTitle("Fraude fiscale")).toBe("fraude fiscale");
+  });
+});
+
+describe("classifyAffairMatches", () => {
+  it("propose une évolution seulement quand la cible plausible est unique", () => {
+    expect(
+      classifyAffairMatches([
+        {
+          affairId: "aff_1",
+          confidence: "POSSIBLE",
+          score: 0.55,
+          matchedBy: "evolution-title-overlap",
+        },
+      ])
+    ).toMatchObject({ kind: "UNIQUE_EVOLUTION", match: { affairId: "aff_1" } });
+  });
+
+  it("reste ambigu si un autre signal POSSIBLE vise une autre affaire", () => {
+    expect(
+      classifyAffairMatches([
+        {
+          affairId: "aff_1",
+          confidence: "POSSIBLE",
+          score: 0.55,
+          matchedBy: "evolution-title-overlap",
+        },
+        {
+          affairId: "aff_2",
+          confidence: "POSSIBLE",
+          score: 0.5,
+          matchedBy: "title-partial",
+        },
+      ])
+    ).toMatchObject({ kind: "POSSIBLE_AMBIGUOUS" });
+  });
+
+  it("préserve les rapprochements confiants et ne choisit pas entre deux HIGH", () => {
+    expect(
+      classifyAffairMatches([
+        { affairId: "aff_1", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+      ])
+    ).toMatchObject({ kind: "CONFIDENT_MATCH" });
+    expect(
+      classifyAffairMatches([
+        { affairId: "aff_1", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+        { affairId: "aff_2", confidence: "HIGH", score: 0.9, matchedBy: "title-exact" },
+      ])
+    ).toMatchObject({ kind: "CONFIDENT_AMBIGUOUS" });
   });
 });
 
@@ -356,5 +409,170 @@ describe("titlesShareVocabulary — issue #521", () => {
     expect(
       titlesShareVocabulary("Ordonnance de référé", "Décision rendue en refere sur le fond")
     ).toBe(true);
+  });
+});
+
+// Issue #763 — avant toute décision, une affaire n'a ni ECLI, ni numéro de pourvoi,
+// ni date de verdict : les priorités 1, 2 et 5 ne peuvent pas se déclencher. Il ne
+// reste que le titre, et la containment échoue dès qu'un article de suivi reformule
+// le titre au lieu de l'allonger. Trois brouillons Bagayoko ont ainsi été créés à
+// deux minutes d'intervalle pour une seule enquête.
+describe("isPreDecisionStatus — issue #763", () => {
+  it("reconnaît les étapes où l'affaire bouge encore", () => {
+    for (const status of [
+      "ENQUETE_PRELIMINAIRE",
+      "INSTRUCTION",
+      "MISE_EN_EXAMEN",
+      "RENVOI_TRIBUNAL",
+      "PROCES_EN_COURS",
+    ]) {
+      expect(isPreDecisionStatus(status)).toBe(true);
+    }
+  });
+
+  it("exclut les étapes postérieures à une décision, que la date de verdict discrimine", () => {
+    for (const status of [
+      "CONDAMNATION_PREMIERE_INSTANCE",
+      "APPEL_EN_COURS",
+      "POURVOI_EN_CASSATION",
+      "CONDAMNATION_DEFINITIVE",
+      "RELAXE",
+      "NON_LIEU",
+      "CLASSEMENT_SANS_SUITE",
+    ]) {
+      expect(isPreDecisionStatus(status)).toBe(false);
+    }
+  });
+
+  it("un statut absent ne permet aucune conclusion", () => {
+    expect(isPreDecisionStatus(null)).toBe(false);
+    expect(isPreDecisionStatus(undefined)).toBe(false);
+  });
+});
+
+describe("titleVocabularyOverlap — issue #763", () => {
+  it("compte les mots partagés et le ratio de Jaccard", () => {
+    // {detournement, fonds, publics, ratp} contre
+    // {detournement, fonds, publics, emploi, ratp} : 4 partagés sur 5 unis.
+    const { shared, ratio } = titleVocabularyOverlap(
+      "detournement de fonds publics a la ratp",
+      "detournement de fonds publics lie a l'emploi a la ratp"
+    );
+    expect(shared).toBe(4);
+    expect(ratio).toBeCloseTo(0.8, 2);
+  });
+
+  it("reste bas quand un libellé court est noyé dans un titre descriptif (#520)", () => {
+    // Le coefficient de recouvrement donnerait 1.0 ici : c'est exactement le faux
+    // positif que #520 a corrigé, et la raison du choix de Jaccard.
+    const { ratio } = titleVocabularyOverlap(
+      "diffamation",
+      "condamnation definitive pour diffamation envers patrick klugman"
+    );
+    expect(ratio).toBeLessThan(EVOLUTION_MIN_OVERLAP_RATIO);
+  });
+
+  it("vaut zéro sans vocabulaire commun", () => {
+    expect(titleVocabularyOverlap("fraude fiscale", "emploi fictif").shared).toBe(0);
+    expect(titleVocabularyOverlap("fraude fiscale", "emploi fictif").ratio).toBe(0);
+  });
+
+  it("ne divise pas par zéro sur des titres sans mot significatif", () => {
+    expect(titleVocabularyOverlap("vol de la clé", "")).toEqual({ shared: 0, ratio: 0 });
+  });
+});
+
+// Fixtures relevées en production sur les 189 affaires pré-décision : au-dessus du
+// seuil, chaque paire est une seule histoire éclatée entre plusieurs imports ;
+// en dessous, deux dossiers distincts ne partagent que le vocabulaire générique de
+// leur catégorie.
+describe("evolutionMatch — issue #763", () => {
+  it("rapproche deux formulations d'une même enquête (Bagayoko, 0.80)", () => {
+    const result = evolutionMatch(
+      "enquete pour detournement de fonds publics a la ratp",
+      "enquete pour detournement de fonds publics lie a l'emploi a la ratp",
+      true
+    );
+    expect(result?.matchedBy).toBe("evolution-title-overlap");
+    expect(result?.confidence).toBe("POSSIBLE");
+  });
+
+  it("rapproche la paire qui a motivé le signal, que la containment rate (Bagayoko, 0.43)", () => {
+    // Ni l'un ni l'autre n'est sous-chaîne : « et cumul d'emplois » contre
+    // « lié à l'emploi à la RATP ». C'est le cas que le matcher laissait passer.
+    const a = "enquete pour detournement de fonds publics et cumul d'emplois";
+    const b = "enquete pour detournement de fonds publics lie a l'emploi a la ratp";
+    expect(titleContainmentMatch(a, b, true)).toBeNull();
+    expect(evolutionMatch(a, b, true)).not.toBeNull();
+  });
+
+  it("rapproche malgré une catégorie repliée sur AUTRE (Mbappé, 0.83)", () => {
+    // AUTRE contre INCITATION_HAINE : le wildcard est accepté ici parce que le
+    // vocabulaire fournit le second signal réclamé par #521.
+    expect(
+      evolutionMatch(
+        "propos racistes et menaces envers kylian mbappe",
+        "enquete pour propos racistes envers kylian mbappe",
+        true
+      )
+    ).not.toBeNull();
+  });
+
+  it("rapproche deux signalements du même fait (Vinted, 0.40 — au seuil)", () => {
+    expect(
+      evolutionMatch(
+        "signalement de trafics d'enfants presumes sur vinted",
+        "soupcons de trafic d'enfants sur vinted",
+        true
+      )
+    ).not.toBeNull();
+  });
+
+  it("écarte deux détournements distincts du même élu (Ciotti, 0.30)", () => {
+    expect(
+      evolutionMatch(
+        "detournement de fonds publics visant ciotti et ses collaborateurs (mai 2024)",
+        "detournement de fonds publics lors de la campagne legislative de 2022",
+        true
+      )
+    ).toBeNull();
+  });
+
+  it("écarte deux dossiers européens distincts (Bardella, 0.25)", () => {
+    expect(
+      evolutionMatch(
+        "soupcons d'emploi fictif de jordan bardella au parlement europeen",
+        "depenses irregulieres du groupe patriots au parlement europeen",
+        true
+      )
+    ).toBeNull();
+  });
+
+  it("exige un vocabulaire commun, pas seulement une famille partagée", () => {
+    expect(evolutionMatch("fraude fiscale aggravee", "emploi fictif au senat", true)).toBeNull();
+  });
+
+  it("exige deux mots partagés : un seul ne nomme rien", () => {
+    // Ratio 1/2 = 0.50, au-dessus du seuil, mais un seul mot partagé.
+    expect(evolutionMatch("favoritisme", "favoritisme avere", true)).toBeNull();
+  });
+
+  it("ne rapproche rien hors d'une famille commune", () => {
+    expect(
+      evolutionMatch(
+        "menaces de mort contre le maire d'agen",
+        "menaces de mort contre le maire d'agen",
+        false
+      )
+    ).toBeNull();
+  });
+
+  it("reste sous le seuil de pickConfidentMatch : jamais d'enrichissement silencieux", () => {
+    const result = evolutionMatch(
+      "enquete pour detournement de fonds publics a la ratp",
+      "enquete pour detournement de fonds publics lie a l'emploi a la ratp",
+      true
+    )!;
+    expect(pickConfidentMatch([{ affairId: "a", ...result }]).kind).toBe("none");
   });
 });

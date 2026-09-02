@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   AFFAIR_SUPER_CATEGORY_LABELS,
   AFFAIR_STATUS_LABELS,
@@ -93,22 +96,33 @@ export function JudicialSection({
 
   return (
     <section aria-labelledby="judicial-heading" className="py-8 overflow-x-hidden">
-      <div className="flex flex-wrap gap-3 mb-6 text-sm">
+      <nav
+        aria-label="Approfondir les statistiques judiciaires"
+        className="mb-6 grid gap-3 sm:grid-cols-2"
+      >
         <Link
           href="/affaires/condamnations?view=stats"
-          className="inline-flex items-center gap-1 text-primary hover:underline"
+          className={cn(
+            buttonVariants({ variant: "default" }),
+            "min-h-12 justify-between whitespace-normal px-4 text-left"
+          )}
           prefetch={false}
         >
-          Voir le taux de condamnation par parti →
+          Taux de condamnation par parti
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
         </Link>
         <Link
           href="/affaires/condamnations?certainty=etabli"
-          className="inline-flex items-center gap-1 text-primary hover:underline"
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            "min-h-12 justify-between whitespace-normal px-4 text-left"
+          )}
           prefetch={false}
         >
-          Liste complète des condamnés définitifs →
+          Condamnations définitives documentées
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
         </Link>
-      </div>
+      </nav>
 
       {/* Hemicycle visualization */}
       {hemicycleGroups.length > 0 && (

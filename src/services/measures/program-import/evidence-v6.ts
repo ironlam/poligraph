@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ThemeCategory } from "@/generated/prisma";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import type { DiscourseAnnotation, DiscourseRole } from "./discourse";
 import { getDiscourseAnnotationIndex } from "./discourse";
 import type { ExtractorRetryEvent } from "./extractor";
@@ -79,7 +80,7 @@ const blockIdSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/);
 const blockIdsSchema = z.array(blockIdSchema);
 const normalizedTextSchema = z.string().min(1).nullable();
-const themeSchema = z.enum(ThemeCategory).nullable();
+const themeSchema = z.enum(THEMES_IN_ORDER).nullable();
 const confidenceSchema = z.number().min(0).max(1);
 const rationaleSchema = z.string().min(1).max(500);
 
@@ -305,14 +306,14 @@ type PreparedMeasureCandidateBase = {
   draftContext: {
     candidacyId: string;
     programEditionId: string;
-    attribution: "PERSONAL";
+    attribution: "PERSONAL" | "PARTY_PROGRAM";
     validFrom: string;
     precision: "OBJECTIF_SANS_CHIFFRE" | null;
     extractionMethod: "AI_ASSISTED";
     extractorVersion: string;
   };
   source: {
-    sourceKind: "PROGRAMME_CANDIDAT" | "PROPOSITIONS_CANDIDAT";
+    sourceKind: "PROGRAMME_CANDIDAT" | "PROPOSITIONS_CANDIDAT" | "PROGRAMME_PARTI";
     tier: "PRIMARY";
     url: string;
     pages: number[];
@@ -381,7 +382,7 @@ Ne renvoie jamais sourceText. Sélectionne entre 1 et 8 IDs par proposition. Ne 
 export const EVIDENCE_OUTPUT_FORMAT = `Réponds uniquement avec un objet JSON de cette forme :
 {"proposals":[{"evidenceUnitIds":["p41-b03-u001","p41-b04-u001"],"commitmentAnchorIds":["p41-b04-u001"],"supportingIds":["p41-b03-u001"],"attributionBasis":"CANDIDATE_COMMITMENT|CANDIDATE_OBJECTIVE|EXPLICIT_ENDORSEMENT|THIRD_PARTY|HISTORICAL|EXISTING_POLICY|DIAGNOSIS|UNCLEAR","normalizedText":"formulation fidèle ou null","classification":"MEASURE|OBJECTIVE|VALUE|DIAGNOSIS|GENERAL_INTENT|AMBIGUOUS","theme":"une valeur ThemeCategory ou null","confidence":0.0,"rationale":"raison courte"}]}
 evidenceUnitIds contient obligatoirement entre 1 et 8 IDs.
-Les seules valeurs de thème sont ECONOMIE_BUDGET, SOCIAL_TRAVAIL, SECURITE_JUSTICE, ENVIRONNEMENT_ENERGIE, SANTE, EDUCATION_CULTURE, INSTITUTIONS, AFFAIRES_ETRANGERES_DEFENSE, NUMERIQUE_TECH, IMMIGRATION, AGRICULTURE_ALIMENTATION, LOGEMENT_URBANISME et TRANSPORTS.`;
+Les seules valeurs de thème sont ${THEMES_IN_ORDER.join(", ")}.`;
 
 function escapePromptText(value: string, maxLength: number): string {
   return value
@@ -792,6 +793,7 @@ export function prepareMeasureCandidate(
     candidacyId: string;
     documentType: ProgramDocumentType;
     publishedAt: Date;
+    attribution?: "PERSONAL" | "PARTY_PROGRAM";
     possibleDuplicate?: boolean;
   }
 ): PreparedMeasureCandidate {
@@ -805,10 +807,13 @@ export function prepareMeasureCandidate(
   const blockers: TechnicalBlocker[] = [];
   const reviewableInvalidAnchor = invalidAnchorCanReachReview(proposal);
   if (context.candidacyId.trim() === "") blockers.push("DOCUMENT_NOT_ATTRIBUTABLE");
-  if (
-    context.documentType !== "CANDIDATE_PROGRAM_2027" &&
-    context.documentType !== "CANDIDATE_PROPOSALS_2027"
-  ) {
+  const attribution = context.attribution ?? "PERSONAL";
+  const admissibleDocument =
+    (attribution === "PERSONAL" &&
+      (context.documentType === "CANDIDATE_PROGRAM_2027" ||
+        context.documentType === "CANDIDATE_PROPOSALS_2027")) ||
+    (attribution === "PARTY_PROGRAM" && context.documentType === "PARTY_PLATFORM_CURRENT");
+  if (!admissibleDocument) {
     blockers.push("DOCUMENT_TYPE_NOT_ADMISSIBLE");
   }
   if (!proposal.evidence) blockers.push("MISSING_EVIDENCE");
@@ -860,7 +865,7 @@ export function prepareMeasureCandidate(
     draftContext: {
       candidacyId: context.candidacyId,
       programEditionId: proposal.evidence?.programEditionId ?? "",
-      attribution: "PERSONAL" as const,
+      attribution,
       validFrom: context.publishedAt.toISOString(),
       precision: classification === "OBJECTIVE" ? ("OBJECTIF_SANS_CHIFFRE" as const) : null,
       extractionMethod: "AI_ASSISTED" as const,
@@ -868,9 +873,11 @@ export function prepareMeasureCandidate(
     },
     source: {
       sourceKind:
-        context.documentType === "CANDIDATE_PROGRAM_2027"
-          ? ("PROGRAMME_CANDIDAT" as const)
-          : ("PROPOSITIONS_CANDIDAT" as const),
+        attribution === "PARTY_PROGRAM"
+          ? ("PROGRAMME_PARTI" as const)
+          : context.documentType === "CANDIDATE_PROGRAM_2027"
+            ? ("PROGRAMME_CANDIDAT" as const)
+            : ("PROPOSITIONS_CANDIDAT" as const),
       tier: "PRIMARY" as const,
       url: proposal.evidence?.documentUrl ?? "",
       pages: proposal.evidence ? [...proposal.evidence.pages] : [],

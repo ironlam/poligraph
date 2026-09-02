@@ -12,14 +12,18 @@ import {
 import { getUpstashCredentials } from "@/lib/ratelimit/upstash-credentials";
 import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
+import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
-type RateLimitTier = "general" | "search" | "export" | "admin" | "subscribe";
+type RateLimitTier = "general" | "search" | "autocomplete" | "export" | "admin" | "subscribe";
+
+const PRESIDENTIAL_SEARCH_PAGE_PATH = "/elections/presidentielle-2027/recherche";
 
 const TIER_CONFIG: Record<RateLimitTier, { tokens: number; window: string }> = {
   general: { tokens: 60, window: "1m" },
   search: { tokens: 30, window: "1m" },
+  autocomplete: { tokens: 60, window: "1m" },
   export: { tokens: 5, window: "1m" },
   admin: { tokens: 30, window: "1m" },
   subscribe: { tokens: 8, window: "1m" },
@@ -143,7 +147,7 @@ function degradedResponse(
 
 // ─── Route → tier mapping ────────────────────────────────────────
 
-function getTier(pathname: string): RateLimitTier | null {
+export function getRateLimitTier(pathname: string): RateLimitTier | null {
   // Excluded routes — handled by their own rate limiting or internal
   if (pathname.startsWith("/api/chat")) return null;
   if (pathname.startsWith("/api/cron")) return null;
@@ -161,6 +165,10 @@ function getTier(pathname: string): RateLimitTier | null {
     return "subscribe";
   }
   if (pathname.startsWith("/api/export")) return "export";
+  if (pathname === PRESIDENTIAL_SEARCH_PAGE_PATH) return "search";
+  if (pathname.startsWith("/api/elections/presidentielle-2027/recherche")) {
+    return "autocomplete";
+  }
   if (pathname.startsWith("/api/search")) return "search";
   if (pathname.startsWith("/api/")) return "general";
 
@@ -239,7 +247,7 @@ async function applyApiRateLimit(
     return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  const tier = getTier(pathname);
+  const tier = getRateLimitTier(pathname);
   if (!tier) return null;
 
   const limiter = getLimiter(tier);
@@ -262,20 +270,7 @@ async function applyApiRateLimit(
   }
 
   if (!success) {
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000);
-    const headers: Record<string, string> = {
-      "Retry-After": String(retryAfter),
-      "X-RateLimit-Limit": String(limit),
-      "X-RateLimit-Remaining": "0",
-      "X-RateLimit-Reset": String(reset),
-      ...(isV1Route(pathname) ? CORS_HEADERS : {}),
-    };
-    const limited = NextResponse.json(
-      { error: "Trop de requêtes. Réessayez plus tard." },
-      { status: 429, headers }
-    );
-    applySubscribeCors(request, limited);
-    return limited;
+    return buildRateLimitExceededResponse(request, limit, reset);
   }
 
   const response = NextResponse.next();
@@ -287,6 +282,34 @@ async function applyApiRateLimit(
   }
   applySubscribeCors(request, response);
   return response;
+}
+
+export function buildRateLimitExceededResponse(
+  request: NextRequest,
+  limit: number,
+  reset: number
+): NextResponse {
+  const pathname = request.nextUrl.pathname;
+  const headers: Record<string, string> = {
+    "Retry-After": String(Math.max(0, Math.ceil((reset - Date.now()) / 1000))),
+    "X-RateLimit-Limit": String(limit),
+    "X-RateLimit-Remaining": "0",
+    "X-RateLimit-Reset": String(reset),
+    ...(isV1Route(pathname) ? CORS_HEADERS : {}),
+  };
+
+  if (pathname === PRESIDENTIAL_SEARCH_PAGE_PATH) {
+    const target = request.nextUrl.clone();
+    target.searchParams.set("limite", "1");
+    return NextResponse.rewrite(target, { status: 429, headers });
+  }
+
+  const limited = NextResponse.json(
+    { error: "Trop de requêtes. Réessayez plus tard." },
+    { status: 429, headers }
+  );
+  applySubscribeCors(request, limited);
+  return limited;
 }
 
 /**
@@ -302,8 +325,25 @@ export function hasValidAdminSession(request: NextRequest): boolean {
 
 // ─── Proxy (Next 16 convention; the active middleware-like layer) ──
 
+/**
+ * A percent-encoded backslash in the path makes the Next standalone launcher
+ * build a require() from the raw pathname and die with MODULE_NOT_FOUND, so the
+ * request answers 500 instead of 404 (15 such paths in the production log of
+ * 2026-09-01, all from one scanner). Only the encoded form can get here: the
+ * WHATWG URL parser normalises a raw backslash to a slash before routing.
+ */
+export function hasEncodedBackslash(pathname: string): boolean {
+  return /%5c/i.test(pathname);
+}
+
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
+
+  // Bare 404 rather than a rewrite to the 404 page: no route matches a path the
+  // router cannot even resolve, and this costs no page render.
+  if (hasEncodedBackslash(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   // Canonicalize the legacy /parlement?<filters> listing to /parlement/votes (HTTP 308).
   if (pathname === "/parlement") {
@@ -341,6 +381,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
         });
       }
     }
+  }
+
+  // Resolve legacy CUID measure URLs in a Node route handler after preview authentication. The
+  // rewrite stays internal; that handler performs the lookup and returns a visible HTTP 308.
+  const legacyMeasureId = getLegacyMeasureId(pathname);
+  if (legacyMeasureId !== null) {
+    const target = request.nextUrl.clone();
+    target.pathname = `/elections/presidentielle-2027/mesures/par-id/${legacyMeasureId}`;
+    return NextResponse.rewrite(target);
   }
 
   // Protect admin API routes (except auth endpoint).

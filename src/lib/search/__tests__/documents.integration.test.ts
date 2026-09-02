@@ -27,6 +27,7 @@ describeIfDisposableDb("upsertSearchDocument", () => {
         await upsertSearchDocument(tx, {
           entityType: "MEASURE",
           entityId,
+          electionId: null,
           title: "Encadrer les loyers",
           body: "Plafonner les loyers dans les zones tendues.",
           url: `/elections/presidentielle-2027/mesures/${entityId}`,
@@ -53,6 +54,7 @@ describeIfDisposableDb("upsertSearchDocument", () => {
       await upsertSearchDocument(tx, {
         entityType: "MEASURE",
         entityId,
+        electionId: null,
         title: "Encadrer les loyers",
         body: "Plafonner les loyers dans les zones tendues.",
         url: `/elections/presidentielle-2027/mesures/${entityId}`,
@@ -78,11 +80,39 @@ describeIfDisposableDb("upsertSearchDocument", () => {
     expect(rows[0]?.lexemes).toContain("tendues");
   });
 
+  it("writes and updates the structured election scope", async () => {
+    const entityId = uniqueEntityId("election-scope");
+    const base = {
+      entityType: "MEASURE" as const,
+      entityId,
+      title: "Encadrer les loyers",
+      body: "Zones tendues.",
+      url: `/mesures/${entityId}`,
+      visibility: "PUBLIC" as const,
+      sourceRevisionId: null,
+      sourceUpdatedAt: new Date("2026-08-04T10:00:00Z"),
+    };
+
+    await db.$transaction((tx) =>
+      upsertSearchDocument(tx, { ...base, electionId: "election-premiere" })
+    );
+    await db.$transaction((tx) =>
+      upsertSearchDocument(tx, { ...base, electionId: "election-seconde" })
+    );
+
+    const row = await db.searchDocument.findUniqueOrThrow({
+      where: { entityType_entityId: { entityType: "MEASURE", entityId } },
+      select: { electionId: true },
+    });
+    expect(row.electionId).toBe("election-seconde");
+  });
+
   it("recomputes the search vector when the text changes", async () => {
     const entityId = uniqueEntityId("update");
     const base = {
       entityType: "MEASURE" as const,
       entityId,
+      electionId: null,
       url: `/elections/presidentielle-2027/mesures/${entityId}`,
       visibility: "PUBLIC" as const,
       sourceRevisionId: "rev-1",
@@ -125,6 +155,7 @@ describeIfDisposableDb("upsertSearchDocument", () => {
     const base = {
       entityType: "MEASURE" as const,
       entityId,
+      electionId: null,
       title: "Encadrer les loyers",
       body: "Plafonner les loyers.",
       url: `/elections/presidentielle-2027/mesures/${entityId}`,
@@ -163,6 +194,7 @@ describeIfDisposableDb("upsertSearchDocument", () => {
       await upsertSearchDocument(tx, {
         entityType: "MEASURE",
         entityId,
+        electionId: null,
         title: "Mesure supprimée",
         body: "Corps du document.",
         url: `/elections/presidentielle-2027/mesures/${entityId}`,

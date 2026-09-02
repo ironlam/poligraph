@@ -25,6 +25,10 @@ describe("security headers", () => {
     expect(buildContentSecurityPolicy(true)).toContain("'unsafe-eval'");
     expect(buildContentSecurityPolicy(false)).not.toContain("'unsafe-eval'");
   });
+  it("limite les workers aux ressources du site", () => {
+    expect(buildContentSecurityPolicy(false)).toMatch(/worker-src 'self'(;|$)/);
+    expect(buildContentSecurityPolicy(false)).not.toMatch(/worker-src[^;]*blob:/);
+  });
   it("Permissions-Policy délègue payment à HelloAsso", () => {
     const pp = buildSecurityHeaders(false).find((h) => h.key === "Permissions-Policy");
     expect(pp!.value).toContain('payment=(self "https://www.helloasso.com")');

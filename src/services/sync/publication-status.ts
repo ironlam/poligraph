@@ -56,6 +56,20 @@ export async function assignPublicationStatus(
         select: { id: true },
         take: 1,
       },
+      // A published presidential fiche is an explicit editorial decision, just like a
+      // published direct affair. Require the identity fields enforced by the admin
+      // publication action so an incomplete legacy row cannot publish a profile.
+      candidacies: {
+        where: {
+          election: { type: "PRESIDENTIELLE" },
+          status: { not: null },
+          sourceUrl: { not: null },
+          sourceLabel: { not: null },
+          presidentialData: { is: { publicationStatus: PublicationStatus.PUBLISHED } },
+        },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
 
@@ -75,6 +89,7 @@ export async function assignPublicationStatus(
       prominenceScore: p.prominenceScore,
       hasCurrentMandate: p.mandates.length > 0,
       hasPublishedDirectAffair: p.affairs.length > 0,
+      hasPublishedPresidentialCandidacy: p.candidacies.length > 0,
     };
 
     const targetStatus = determineStatus(row);

@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
-import type { MeasureQueueRow } from "../_data/queue-query";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { EnrichmentState, MeasureQueueRow } from "../_data/queue-query";
 import { ModerationStateBadge } from "./ModerationStateBadge";
+
+const ENRICHMENT_ACTIONS: Record<EnrichmentState, { label: string; hash: string }> = {
+  SUBTOPICS_PENDING: { label: "Valider les sous-thèmes", hash: "#subtopics-heading" },
+  SUBTOPICS_APPROVED: { label: "Consulter les sous-thèmes", hash: "#subtopics-heading" },
+  DETAILS_MISSING: { label: "Compléter le contexte", hash: "#actions-heading" },
+};
 
 /**
  * The queue itself.
@@ -10,8 +18,15 @@ import { ModerationStateBadge } from "./ModerationStateBadge";
  * table destroys the tabular semantics screen readers rely on. Wide content scrolls inside its
  * own container so the page never scrolls horizontally.
  */
-export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
+export function QueueTable({
+  rows,
+  activeEnrichment,
+}: {
+  rows: MeasureQueueRow[];
+  activeEnrichment?: EnrichmentState;
+}) {
   const formatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
+  const activeAction = activeEnrichment ? ENRICHMENT_ACTIONS[activeEnrichment] : null;
 
   if (rows.length === 0) {
     return (
@@ -47,7 +62,7 @@ export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
               </span>
             </th>
             <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
-              Sujet
+              Thème
             </th>
             <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
               État
@@ -56,7 +71,7 @@ export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
               Saisie
             </th>
             <th scope="col" className="px-3 py-2 text-left font-medium text-muted-foreground">
-              <span className="sr-only">Ouvrir la fiche de modération</span>
+              Action
             </th>
           </tr>
         </thead>
@@ -77,17 +92,29 @@ export function QueueTable({ rows }: { rows: MeasureQueueRow[] }) {
               </td>
               <td className="px-3 py-3 align-top">
                 <ModerationStateBadge state={row.state} />
+                <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+                  {row.suggestedSubtopicCount > 0 && (
+                    <span>{row.suggestedSubtopicCount} sous-thème(s) à valider</span>
+                  )}
+                  {row.approvedSubtopicCount > 0 && (
+                    <span>{row.approvedSubtopicCount} sous-thème(s) validé(s)</span>
+                  )}
+                  {!row.hasDetails && <span>Contexte à compléter</span>}
+                </div>
               </td>
               <td className="px-3 py-3 align-top whitespace-nowrap text-muted-foreground">
                 {formatter.format(row.createdAt)}
               </td>
               <td className="px-3 py-3 align-top">
                 <Link
-                  href={`/admin/mesures/${row.id}`}
+                  href={`/admin/mesures/${row.id}${activeAction?.hash ?? ""}`}
                   prefetch={false}
-                  className="inline-flex min-h-11 items-center text-primary underline"
+                  className={cn(
+                    buttonVariants({ variant: activeAction ? "default" : "outline" }),
+                    "min-h-11 whitespace-normal text-center"
+                  )}
                 >
-                  Examiner
+                  {activeAction?.label ?? "Examiner"}
                 </Link>
               </td>
             </tr>

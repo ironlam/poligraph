@@ -71,6 +71,9 @@ function RevisionCard({
           </span>
         )}
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Identifiant de révision : <code className="select-all font-mono">{revision.id}</code>
+      </p>
 
       {revision.reviewReadiness !== null && (
         <div className="mt-3">
@@ -100,6 +103,15 @@ function RevisionCard({
         snapshotValue={revision.evidenceSnapshot}
         documentLabel={documentLabel}
       />
+
+      {revision.details !== null && (
+        <div className="mt-3 rounded border border-border bg-muted/30 p-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Détails documentés
+          </h4>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{revision.details}</p>
+        </div>
+      )}
 
       <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
         <div className="flex gap-1">

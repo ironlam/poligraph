@@ -13,7 +13,7 @@ export const FACTCHECK_RATE_LIMIT_MS = 200; // Google Fact Check Tools API
 
 // --- Sources publiques additionnelles ---
 export const DATA_GOUV_RATE_LIMIT_MS = 200; // data.gouv.fr — politesse
-export const ASSEMBLEE_DOCPARL_RATE_LIMIT_MS = 300; // docparl.assemblee-nationale.fr
+export const ASSEMBLEE_OPENDATA_RATE_LIMIT_MS = 300; // www.assemblee-nationale.fr/dyn/opendata
 export const EUROPARL_RATE_LIMIT_MS = 200; // data.europarl.europa.eu
 export const HATVP_RATE_LIMIT_MS = 200; // hatvp.fr — politesse
 

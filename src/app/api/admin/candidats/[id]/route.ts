@@ -6,19 +6,12 @@ import { updateCandidatePresidentialSchema } from "@/lib/security/schemas";
 import { getRequestMeta } from "@/lib/security/audit";
 import { invalidateEntity } from "@/lib/cache";
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
+import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentielle/search-sync";
+import { lockMeasureCandidacy } from "@/lib/measures/lock";
 
 export const PATCH = withAdminAuth(
   withValidation(updateCandidatePresidentialSchema, async (request, context, body) => {
     const { id } = await context.params;
-    const existing = await db.candidacyPresidential.findUnique({
-      where: { id },
-      // electionId comes along on the existence check rather than in a second query: the hub
-      // reads are tagged per election and need it to be invalidated.
-      select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
-    });
-    if (!existing) {
-      return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
-    }
     if (Object.keys(body).length === 0) {
       return NextResponse.json({ error: "Aucun champ à mettre à jour" }, { status: 400 });
     }
@@ -29,58 +22,113 @@ export const PATCH = withAdminAuth(
       declaredAt: body.declaredAt ? new Date(body.declaredAt) : body.declaredAt,
       withdrewAt: body.withdrewAt ? new Date(body.withdrewAt) : body.withdrewAt,
     };
-    const updated = await db.candidacyPresidential.update({
-      where: { id },
-      data: updateData,
-    });
     const { ip, userAgent } = getRequestMeta(request);
-    await db.auditLog.create({
-      data: {
-        action: "UPDATE",
-        entityType: "CandidacyPresidential",
-        entityId: id!,
-        changes: body,
-        ipAddress: ip,
-        userAgent: userAgent,
-      },
+    const outcome = await db.$transaction(async (tx) => {
+      const target = await tx.candidacyPresidential.findUnique({
+        where: { id },
+        select: { candidacyId: true },
+      });
+      if (!target) return null;
+      await lockMeasureCandidacy(tx, target.candidacyId);
+
+      const existing = await tx.candidacyPresidential.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          candidacyId: true,
+          candidacy: {
+            select: {
+              electionId: true,
+              status: true,
+              sourceUrl: true,
+              sourceLabel: true,
+            },
+          },
+        },
+      });
+      if (!existing) return null;
+      if (
+        body.publicationStatus === "PUBLISHED" &&
+        (!existing.candidacy.status ||
+          !existing.candidacy.sourceUrl ||
+          !existing.candidacy.sourceLabel)
+      ) {
+        return { kind: "unsourced" as const };
+      }
+
+      const updated = await tx.candidacyPresidential.update({ where: { id }, data: updateData });
+      await tx.auditLog.create({
+        data: {
+          action: "UPDATE",
+          entityType: "CandidacyPresidential",
+          entityId: id!,
+          changes: body,
+          ipAddress: ip,
+          userAgent: userAgent,
+        },
+      });
+      await syncPresidentialSearchDocumentsForCandidacy(tx, existing.candidacyId);
+      return {
+        kind: "ok" as const,
+        updated,
+        electionId: existing.candidacy.electionId,
+      };
     });
+
+    if (!outcome) {
+      return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
+    }
+    if (outcome.kind === "unsourced") {
+      return NextResponse.json(
+        { error: "Une candidature publiée doit porter un statut, une URL et un libellé de source" },
+        { status: 400 }
+      );
+    }
     invalidateEntity("election");
     // A PATCH can flip publicationStatus, which is exactly what opens or closes the four hub
     // surfaces. `invalidateEntity("election")` purges the `elections` tag and never reaches them.
-    invalidatePresidentialCandidacyTags(existing.candidacy.electionId);
-    return NextResponse.json(updated);
+    invalidatePresidentialCandidacyTags(outcome.electionId);
+    return NextResponse.json(outcome.updated);
   })
 );
 
 export const DELETE = withAdminAuth(async (request, context) => {
   const { id } = await context.params;
-  const existing = await db.candidacyPresidential.findUnique({
-    where: { id },
-    // Read before the delete, because the row is gone afterwards and the election id would need
-    // a second query through the candidacy.
-    select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
+  const { ip, userAgent } = getRequestMeta(request);
+  const outcome = await db.$transaction(async (tx) => {
+    const target = await tx.candidacyPresidential.findUnique({
+      where: { id },
+      select: { candidacyId: true },
+    });
+    if (!target) return null;
+    await lockMeasureCandidacy(tx, target.candidacyId);
+
+    const existing = await tx.candidacyPresidential.findUnique({
+      where: { id },
+      select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
+    });
+    if (!existing) return null;
+    await tx.candidacyPresidential.delete({ where: { id } });
+    // The Candidacy remains: the hub field authority is independent of its editorial extension.
+    await tx.auditLog.create({
+      data: {
+        action: "DELETE",
+        entityType: "CandidacyPresidential",
+        entityId: id!,
+        changes: {},
+        ipAddress: ip,
+        userAgent: userAgent,
+      },
+    });
+    await syncPresidentialSearchDocumentsForCandidacy(tx, existing.candidacyId);
+    return { electionId: existing.candidacy.electionId };
   });
-  if (!existing) {
+  if (!outcome) {
     return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
   }
-  await db.candidacyPresidential.delete({ where: { id } });
-  // NB: on ne supprime PAS la Candidacy associée. Si l'admin veut retirer
-  // entièrement le candidat de l'élection, il passe par /admin/candidats UI
-  // qui supprime la Candidacy elle-même (Task 4).
-  const { ip, userAgent } = getRequestMeta(request);
-  await db.auditLog.create({
-    data: {
-      action: "DELETE",
-      entityType: "CandidacyPresidential",
-      entityId: id!,
-      changes: {},
-      ipAddress: ip,
-      userAgent: userAgent,
-    },
-  });
   invalidateEntity("election");
   // Deleting a PUBLISHED extension removes a candidacy from the subject pages, which can close a
   // subject that was open. Same tag as publication, same reason.
-  invalidatePresidentialCandidacyTags(existing.candidacy.electionId);
+  invalidatePresidentialCandidacyTags(outcome.electionId);
   return NextResponse.json({ success: true });
 });

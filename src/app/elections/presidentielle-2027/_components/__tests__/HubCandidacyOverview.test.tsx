@@ -32,14 +32,16 @@ const field = [
 ];
 
 describe("HubCandidacyOverview", () => {
-  it("compte chaque statut comme les filtres de la liste, pressenties et envisagées ensemble", () => {
+  it("montre seulement les personnalités ayant des propositions et compte tous les filtres", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
-    expect(screen.getByRole("link", { name: /2 Candidatures annoncées/ })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: /Alix Dupont/ })).toHaveLength(1);
+    expect(screen.getByText(/1 personnalité a déjà des propositions publiées/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Candidatures annoncées · 2/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats?statut=annoncees"
     );
-    expect(screen.getByRole("link", { name: /2 Personnalités pressenties/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Personnalités pressenties · 2/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats?statut=pressenties"
     );
@@ -48,33 +50,41 @@ describe("HubCandidacyOverview", () => {
   it("ouvre la liste sur les personnes ayant des propositions publiées", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
-    expect(screen.getByRole("link", { name: /1 Avec des propositions publiées/ })).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/candidats?propositions=publiees"
-    );
+    expect(
+      screen.getByRole("link", { name: /Avec des propositions publiées · 1/ })
+    ).toHaveAttribute("href", "/elections/presidentielle-2027/candidats?propositions=publiees");
   });
 
-  it("ne lie pas un filtre vide, qui n'aurait rien à montrer", () => {
+  it("ne rend pas un filtre vide, qui n'aurait rien à montrer", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
     // Aucune candidature retirée dans ce champ : le compteur reste du texte.
-    expect(screen.getByText("Candidatures retirées")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Candidatures retirées/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Candidatures retirées")).not.toBeInTheDocument();
   });
 
   it("mène au champ complet, avec son effectif dans le libellé du lien", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
-    expect(screen.getByRole("link", { name: /Voir les 4 personnes suivies/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Explorer les 4 personnalités/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats"
     );
   });
 
+  it("qualifie les propositions publiées sans inventer de thème", () => {
+    render(
+      <HubCandidacyOverview
+        candidacies={[candidacy({ id: "c2", measureCount: 1, programmeAbsence: null })]}
+      />
+    );
+
+    expect(screen.getByText("1 mesure · 0 thèmes")).toBeInTheDocument();
+  });
+
   it("reste lisible sur un champ vide, sans compteurs à zéro", () => {
     render(<HubCandidacyOverview candidacies={[]} />);
 
-    expect(screen.getByText("Aucune candidature sourcée à ce jour.")).toBeInTheDocument();
+    expect(screen.getByText("Aucune proposition publiée à ce jour.")).toBeInTheDocument();
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 });

@@ -22,8 +22,12 @@ function state(over: Partial<ModerationState> = {}): ModerationState {
 function publicMeasure(over: Partial<PublicMeasure> = {}): PublicMeasure {
   return {
     id: "m-1",
+    slug: "camille-riviere-encadrer-les-loyers",
     publishedRevisionId: "rev-1",
     text: "Encadrer les loyers dans les zones tendues.",
+    details:
+      "Selon la source citée, cette mesure cible les communes où la demande de logements dépasse l'offre disponible.",
+    reviewedAt: new Date("2027-01-16T00:00:00Z"),
     precision: "OBJECTIF_SANS_CHIFFRE",
     theme: "LOGEMENT_URBANISME",
     attribution: "PERSONAL",
@@ -44,6 +48,8 @@ function publicMeasure(over: Partial<PublicMeasure> = {}): PublicMeasure {
       },
     ],
     qualifications: [],
+    subtopics: [],
+    readerGuides: [],
     ...over,
   };
 }
@@ -53,6 +59,8 @@ describe("PublicVisibilityCard", () => {
     render(<PublicVisibilityCard state={state()} publicMeasure={publicMeasure()} />);
 
     expect(screen.getByText("Encadrer les loyers dans les zones tendues.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Contexte publié" })).toBeInTheDocument();
+    expect(screen.getByText(/cette mesure cible les communes/)).toBeInTheDocument();
     expect(screen.getByText("1 source citée")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Programme de parti" })).toHaveAttribute(
       "href",

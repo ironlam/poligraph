@@ -23,6 +23,7 @@ const EMPTY_RESULT: MeasureQueueResult = {
   counts: { EMPTY: 0, DRAFT: 0, REVIEWED: 0, PUBLISHED: 0, DEPUBLISHED: 0 },
   anomalyCount: 0,
   withdrawnCount: 0,
+  enrichmentCounts: { SUBTOPICS_PENDING: 0, SUBTOPICS_APPROVED: 0, DETAILS_MISSING: 0 },
   scanCapped: false,
 };
 
@@ -30,6 +31,17 @@ const queryMeasureQueueMock = vi.fn(async (_filters?: unknown) => EMPTY_RESULT);
 const listMeasureQueueCandidatesMock = vi.fn(async () => []);
 const queryBatchReviewGroupsMock = vi.fn(async (_filters?: unknown) => []);
 const queryBatchPublishGroupsMock = vi.fn(async (_filters?: unknown) => []);
+const filterMeasureContextCandidateIdsMock = vi.fn(async (_ids?: string[]) => []);
+const queryMeasureEnrichmentCoverageMock = vi.fn(async () => ({
+  total: 0,
+  withDetails: 0,
+  withPendingContextDrafts: 0,
+  withApprovedSubtopics: 0,
+  withQualifications: 0,
+  withVoteLinks: 0,
+  withSourceLocation: 0,
+  withHistory: 0,
+}));
 
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => redirectMock(path),
@@ -40,6 +52,11 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth", () => ({
   isAuthenticated: () => isAuthenticatedMock(),
+}));
+
+vi.mock("@/lib/measures/context-generation", () => ({
+  filterMeasureContextCandidateIds: (ids: string[]) => filterMeasureContextCandidateIdsMock(ids),
+  hasContextAttemptForRevision: vi.fn(async () => false),
 }));
 
 // Mocked so the pages load without DATABASE_URL, and so a page that queried before checking
@@ -55,6 +72,10 @@ vi.mock("../_data/batch-publish-query", () => ({
 
 vi.mock("../_data/batch-review-query", () => ({
   queryBatchReviewGroups: (filters: unknown) => queryBatchReviewGroupsMock(filters),
+}));
+
+vi.mock("../_data/enrichment-coverage-query", () => ({
+  queryMeasureEnrichmentCoverage: () => queryMeasureEnrichmentCoverageMock(),
 }));
 
 vi.mock("../_data/detail-query", () => ({
@@ -106,6 +127,8 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(listMeasureQueueCandidatesMock).not.toHaveBeenCalled();
     expect(queryBatchReviewGroupsMock).not.toHaveBeenCalled();
     expect(queryBatchPublishGroupsMock).not.toHaveBeenCalled();
+    expect(filterMeasureContextCandidateIdsMock).not.toHaveBeenCalled();
+    expect(queryMeasureEnrichmentCoverageMock).not.toHaveBeenCalled();
   });
 
   it("redirige le détail vers la connexion en l'absence de session", async () => {
@@ -138,6 +161,7 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(listMeasureQueueCandidatesMock).toHaveBeenCalledTimes(1);
     expect(queryBatchReviewGroupsMock).toHaveBeenCalledTimes(1);
     expect(queryBatchPublishGroupsMock).toHaveBeenCalledTimes(1);
+    expect(queryMeasureEnrichmentCoverageMock).toHaveBeenCalledTimes(1);
   });
 
   it("transmet le filtre de candidature à toute la file et aux deux actions par lot", async () => {
@@ -155,6 +179,25 @@ describe("accès aux écrans de modération des mesures", () => {
     expect(queryBatchPublishGroupsMock).toHaveBeenCalledWith({
       candidacyId: "candidature-1",
     });
+  });
+
+  it("transmet le périmètre public présidentiel à la file", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { default: QueuePage } = await import("../page");
+
+    await QueuePage({
+      searchParams: Promise.resolve({
+        corpus: "presidentielle-2027",
+        enrichissement: "DETAILS_MISSING",
+      }),
+    });
+
+    expect(queryMeasureQueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrichment: "DETAILS_MISSING",
+        publicCorpus: "PRESIDENTIELLE_2027",
+      })
+    );
   });
 
   it("garde les trois écrans hors des index", async () => {

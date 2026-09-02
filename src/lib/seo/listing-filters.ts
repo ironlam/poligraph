@@ -32,3 +32,5 @@ export const VOTES_LISTING_FILTER_KEYS = [
 ] as const;
 
 export const DOSSIERS_LISTING_FILTER_KEYS = ["status", "theme", "sort"] as const;
+
+export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions"] as const;

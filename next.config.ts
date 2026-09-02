@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    // Next 16.3 enables its TypeScript CLI subprocess by default. Its output capture is empty on
+    // Node 24, which makes `next build` fail while the compiler itself is healthy. The installed
+    // TypeScript 5 compiler API supports the same checks without that subprocess.
+    useTypeScriptCli: false,
     useCache: true,
     webpackMemoryOptimizations: true,
     webpackBuildWorker: true,
@@ -48,6 +52,8 @@ const nextConfig: NextConfig = {
       // NosDéputés / NosSénateurs
       { protocol: "https", hostname: "www.nosdeputes.fr" },
       { protocol: "https", hostname: "www.nossenateurs.fr" },
+      // The senators photo sync uses the archived API host as its official fallback.
+      { protocol: "https", hostname: "archive.nossenateurs.fr" },
       // data.gouv.fr (election photos)
       { protocol: "https", hostname: "www.data.gouv.fr" },
       { protocol: "https", hostname: "static.data.gouv.fr" },
@@ -106,6 +112,11 @@ const nextConfig: NextConfig = {
       {
         source: "/parti/:slug",
         destination: "/partis/:slug",
+        permanent: true,
+      },
+      {
+        source: "/elections/presidentielle-2027/sujets/:path*",
+        destination: "/elections/presidentielle-2027/themes/:path*",
         permanent: true,
       },
       {

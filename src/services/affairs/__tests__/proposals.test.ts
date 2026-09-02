@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   db: {
     affair: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    affairEvent: { findUnique: vi.fn(), findMany: vi.fn() },
     affairUpdateProposal: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -16,13 +17,20 @@ vi.mock("@/lib/db", () => ({ db: h.db }));
 
 import { Prisma } from "@/generated/prisma";
 import {
+  AFFAIR_EVOLUTION_REVELATION_TITLE,
+  parseAffairProposalPayload,
+} from "@/lib/security/schemas/affair-proposal";
+import {
+  computeAffairEventIdentity,
   computePayloadHash,
   deriveRiskLevel,
   detectDrift,
   EMPTY_VALUE,
   hashSourceContent,
   normalizeForCompare,
+  previewAffairEventProposal,
   proposeAffairUpdate,
+  proposeAffairEvent,
   ProposalValidationError,
   validatePatch,
 } from "@/services/affairs/proposals";
@@ -36,6 +44,7 @@ const EMPTY_AFFAIR = {
   title: "Affaire de test",
   politician: { slug: "jean-testeur", fullName: "Jean Testeur" },
   status: "INSTRUCTION",
+  publicationStatus: "PUBLISHED",
   verdictDate: null,
   court: null,
   sentence: null,
@@ -67,6 +76,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.affair.findUnique.mockResolvedValue(EMPTY_AFFAIR);
   db.affair.findFirst.mockResolvedValue(null);
+  db.affairEvent.findUnique.mockResolvedValue(null);
+  db.affairEvent.findMany.mockResolvedValue([]);
   db.affairUpdateProposal.findFirst.mockResolvedValue(null);
   db.affairUpdateProposal.create.mockImplementation(async () => ({ id: "prop_new" }));
   db.affairUpdateProposal.update.mockResolvedValue({});
@@ -293,6 +304,51 @@ describe("validatePatch", () => {
   });
 });
 
+describe("parseAffairProposalPayload", () => {
+  const validEvent = {
+    addEvent: {
+      date: "2026-08-27T08:00:00.000Z",
+      type: "REVELATION",
+      title: AFFAIR_EVOLUTION_REVELATION_TITLE,
+      description: null,
+      sourceUrl: "https://example.test/article",
+      sourceTitle: "Article source",
+    },
+  };
+
+  it("préserve les patchs historiques et discrimine un ajout d’événement", () => {
+    expect(parseAffairProposalPayload({ court: "TJ de Paris" }).kind).toBe("PATCH");
+    expect(parseAffairProposalPayload(validEvent).kind).toBe("ADD_EVENT");
+  });
+
+  it("refuse un payload mixte, une date impossible et une URL dangereuse", () => {
+    expect(() => parseAffairProposalPayload({ ...validEvent, court: "TJ de Paris" })).toThrow();
+    expect(() =>
+      parseAffairProposalPayload({
+        addEvent: { ...validEvent.addEvent, date: "2026-02-30T08:00:00.000Z" },
+      })
+    ).toThrow();
+    expect(() =>
+      parseAffairProposalPayload({
+        addEvent: { ...validEvent.addEvent, sourceUrl: "javascript:alert(1)" },
+      })
+    ).toThrow();
+  });
+
+  it("refuse le texte IA et les événements procéduraux dans ce lot", () => {
+    expect(() =>
+      parseAffairProposalPayload({
+        addEvent: { ...validEvent.addEvent, title: "Titre produit par le modèle" },
+      })
+    ).toThrow();
+    expect(() =>
+      parseAffairProposalPayload({
+        addEvent: { ...validEvent.addEvent, type: "MISE_EN_EXAMEN" },
+      })
+    ).toThrow();
+  });
+});
+
 describe("proposeAffairUpdate", () => {
   it("enregistre un affairSnapshot pour survivre à la suppression de l'affaire", async () => {
     await proposeAffairUpdate({ ...BASE_INPUT, patch: { verdictDate: "2026-05-13" } });
@@ -361,5 +417,192 @@ describe("proposeAffairUpdate", () => {
     expect(db.affair.findUnique).not.toHaveBeenCalled();
     expect(db.affair.update).not.toHaveBeenCalled();
     expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("proposeAffairEvent", () => {
+  const EVENT_INPUT = {
+    affairId: "aff_1",
+    importer: "press-analysis",
+    importRunId: "run_press",
+    sourceUrl: "https://www.lemonde.fr/politique/article-test.html#section",
+    sourceTitle: "Un nouvel article documente l’affaire",
+    publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+    publisher: "AFP",
+    pressArticleId: "article_1",
+    resolverDecisionId: "decision_1",
+    sourceContentHash: "content-hash",
+    sourceExcerpt: "Extrait vérifié dans le contenu.",
+    confidence: 55,
+    rationale: "Candidat d’évolution unique.",
+    extractorVersion: "press-evolution-v1",
+  };
+
+  it("utilise uniquement PressArticle.id quand il est disponible", () => {
+    const tracked = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html?utm_source=rss#titre",
+      publishedAt: EVENT_INPUT.publishedAt,
+      pressArticleId: "article_1",
+    });
+    const canonical = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html",
+      publishedAt: EVENT_INPUT.publishedAt,
+      pressArticleId: "article_1",
+    });
+
+    expect(tracked).toBe(canonical);
+  });
+
+  it("canonise les paramètres de tracking quand aucun PressArticle.id n’existe", () => {
+    const tracked = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html?utm_source=rss&b=2&a=1#titre",
+      publishedAt: EVENT_INPUT.publishedAt,
+    });
+    const canonical = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html?a=1&b=2",
+      publishedAt: EVENT_INPUT.publishedAt,
+    });
+
+    expect(tracked).toBe(canonical);
+  });
+
+  it("distingue l’affaire cible et la date réelle de publication", () => {
+    const base = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html",
+      publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+    });
+    const otherAffair = computeAffairEventIdentity({
+      affairId: "aff_2",
+      sourceUrl: "https://www.lemonde.fr/article.html",
+      publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+    });
+    const otherPublication = computeAffairEventIdentity({
+      affairId: "aff_1",
+      sourceUrl: "https://www.lemonde.fr/article.html",
+      publishedAt: new Date("2026-08-28T08:00:00.000Z"),
+    });
+
+    expect(otherAffair).not.toBe(base);
+    expect(otherPublication).not.toBe(base);
+  });
+
+  it("ignore le titre et le hash de contenu dans l’identité de l’événement", async () => {
+    await proposeAffairEvent(EVENT_INPUT);
+    await proposeAffairEvent({
+      ...EVENT_INPUT,
+      sourceTitle: "Un titre éditorial modifié",
+      sourceContentHash: "un-autre-hash-de-contenu",
+    });
+
+    const identityKeys = db.affairEvent.findUnique.mock.calls.map(
+      ([query]) => query.where.affairId_identityKey.identityKey
+    );
+    expect(identityKeys).toHaveLength(2);
+    expect(identityKeys[1]).toBe(identityKeys[0]);
+  });
+
+  it("dépose un événement médiatique HIGH sans écrire sur l’affaire", async () => {
+    const result = await proposeAffairEvent(EVENT_INPUT);
+
+    expect(result).toMatchObject({ outcome: "CREATED", pendingProposalId: "prop_new" });
+    expect(db.affair.update).not.toHaveBeenCalled();
+    expect(db.affairEvent.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          affairId_identityKey: {
+            affairId: "aff_1",
+            identityKey: expect.stringMatching(/^[a-f0-9]{64}$/),
+          },
+        },
+      })
+    );
+    const created = db.affairUpdateProposal.create.mock.calls[0]![0].data;
+    expect(created.riskLevel).toBe("HIGH");
+    expect(created.proposedPatch).toEqual({
+      addEvent: {
+        date: "2026-08-27T08:00:00.000Z",
+        type: "REVELATION",
+        title: "Publication d’une nouvelle source sur l’évolution de l’affaire",
+        description: null,
+        sourceUrl: "https://www.lemonde.fr/politique/article-test.html",
+        sourceTitle: "Un nouvel article documente l’affaire",
+      },
+    });
+  });
+
+  it("ne dépose rien lorsqu’un événement identique existe déjà", async () => {
+    db.affairEvent.findUnique.mockResolvedValue({ id: "event_1" });
+
+    const result = await proposeAffairEvent(EVENT_INPUT);
+
+    expect(result).toEqual({
+      outcome: "ALREADY_APPLIED",
+      pendingProposalId: null,
+      deduped: true,
+    });
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+
+  it("refuse une cible archivée", async () => {
+    db.affair.findUnique.mockResolvedValue({ ...EMPTY_AFFAIR, publicationStatus: "ARCHIVED" });
+
+    const result = await proposeAffairEvent(EVENT_INPUT);
+
+    expect(result.outcome).toBe("TARGET_INELIGIBLE");
+    expect(db.affairEvent.findUnique).not.toHaveBeenCalled();
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+
+  it("refuse une source de presse hors de la liste vérifiée", async () => {
+    await expect(
+      proposeAffairEvent({
+        ...EVENT_INPUT,
+        sourceUrl: "https://blog.example/article-test",
+      })
+    ).rejects.toThrow(ProposalValidationError);
+
+    expect(db.affair.findUnique).not.toHaveBeenCalled();
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+
+  it("refuse une proposition sans extrait vérifié", async () => {
+    await expect(proposeAffairEvent({ ...EVENT_INPUT, sourceExcerpt: "   " })).rejects.toThrow(
+      ProposalValidationError
+    );
+
+    expect(db.affair.findUnique).not.toHaveBeenCalled();
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+
+  it("ne ressuscite pas une proposition événement rejetée", async () => {
+    db.affairUpdateProposal.findFirst.mockResolvedValue({ id: "prop_old", status: "REJECTED" });
+
+    const result = await proposeAffairEvent(EVENT_INPUT);
+
+    expect(result).toMatchObject({
+      outcome: "DEDUPED_TERMINAL",
+      pendingProposalId: "prop_old",
+      existingStatus: "REJECTED",
+    });
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+  });
+
+  it("prévisualise une proposition terminale sans écriture", async () => {
+    db.affairUpdateProposal.findFirst.mockResolvedValue({ id: "prop_old", status: "REJECTED" });
+
+    const result = await previewAffairEventProposal(EVENT_INPUT);
+
+    expect(result).toMatchObject({
+      outcome: "DEDUPED_TERMINAL",
+      pendingProposalId: "prop_old",
+      existingStatus: "REJECTED",
+    });
+    expect(db.affairUpdateProposal.create).not.toHaveBeenCalled();
+    expect(db.affairUpdateProposal.update).not.toHaveBeenCalled();
   });
 });

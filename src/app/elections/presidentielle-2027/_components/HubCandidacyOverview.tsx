@@ -7,22 +7,19 @@ import {
   matchesCandidacyFilter,
   matchesPublishedProposals,
 } from "@/lib/presidentielle/candidacy-filters";
+import { CandidacyDirectoryLink } from "./CandidacyDirectoryLink";
 
 /**
- * The state of the field on the hub home, now that the field itself lives on `/candidats`.
- *
- * The home kept a single card carrying one summary sentence, which said how many people are
- * followed without letting the reader act on any part of it. The same numbers become the entry
- * points here: each one opens the list already filtered, on the very chips that list renders.
- *
- * The counts are computed with `matchesCandidacyFilter` and `matchesPublishedProposals`, the same
- * predicates the browser uses, so the hub can never announce a number the filtered page then
- * contradicts. A count of zero is rendered as plain text rather than a link: a filter with no
- * result is a dead end, and offering it as a destination promises something to read.
+ * The people followed by Poligraph, directly on the hub rather than reduced to four counters.
+ * The same public field powers the directory, so names, statuses and filters cannot drift.
  */
 export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidacy[] }) {
   const total = candidacies.length;
-  const tiles = [
+  const candidaciesWithPublishedProposals = candidacies.filter((candidacy) =>
+    matchesPublishedProposals(candidacy, true)
+  );
+  const publishedTotal = candidaciesWithPublishedProposals.length;
+  const filters = [
     ...CANDIDACY_FILTERS.filter((key) => key !== "toutes").map((key) => ({
       key,
       label: CANDIDACY_FILTER_LABELS[key],
@@ -38,64 +35,65 @@ export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidac
   ];
 
   return (
-    <section aria-labelledby="hub-candidatures" className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2
-          id="hub-candidatures"
-          className="font-display text-xl font-bold tracking-tight md:text-2xl"
-        >
-          Le champ des candidatures
-        </h2>
-        <Link
-          href="/elections/presidentielle-2027/candidats"
-          prefetch={false}
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline"
-        >
-          {total === 1 ? "Voir la personne suivie" : `Voir les ${total} personnes suivies`}
-          <ArrowRight aria-hidden="true" className="h-4 w-4" />
-        </Link>
+    <section id="candidatures" aria-labelledby="hub-candidatures" className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+        <div className="space-y-1.5">
+          <h2
+            id="hub-candidatures"
+            className="font-display text-xl font-bold tracking-tight md:text-2xl"
+          >
+            {publishedTotal} {publishedTotal === 1 ? "personnalité a" : "personnalités ont"} déjà
+            des propositions publiées
+          </h2>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            L&apos;accueil montre les personnalités pour lesquelles des mesures sont déjà
+            documentées. L&apos;annuaire rassemble les {total} personnalités suivies, y compris
+            celles dont les propositions restent à documenter.
+          </p>
+        </div>
+        {total > 0 && (
+          <Link
+            href="/elections/presidentielle-2027/candidats"
+            prefetch={false}
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Explorer {total === 1 ? "la personnalité suivie" : `les ${total} personnalités`}
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
+        )}
       </div>
 
-      {total === 0 ? (
+      {publishedTotal === 0 ? (
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Aucune candidature sourcée à ce jour.
+          Aucune proposition publiée à ce jour.
         </p>
       ) : (
         <>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Chaque personne suivie porte son statut public et la source qui l&apos;établit.
-            L&apos;ordre est alphabétique, sans classement.
-          </p>
-          <ul className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {tiles.map((tile) => {
-              const content = (
-                <>
-                  <span className="font-display text-2xl font-extrabold tracking-tight text-primary">
-                    {tile.count}
-                  </span>
-                  <span className="text-sm text-muted-foreground-strong">{tile.label}</span>
-                </>
-              );
-
-              return (
-                <li key={tile.key}>
-                  {tile.count === 0 ? (
-                    <p className="flex h-full min-h-11 flex-col gap-1 rounded-xl border border-dashed border-border px-3 py-3">
-                      {content}
-                    </p>
-                  ) : (
-                    <Link
-                      href={tile.href}
-                      prefetch={false}
-                      className="flex h-full min-h-11 flex-col gap-1 rounded-xl border border-border bg-card px-3 py-3 transition-colors hover:border-primary hover:bg-muted/40"
-                    >
-                      {content}
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {candidaciesWithPublishedProposals.map((candidacy) => (
+              <li key={candidacy.id}>
+                <CandidacyDirectoryLink candidacy={candidacy} />
+              </li>
+            ))}
           </ul>
+
+          <nav aria-label="Explorer l'annuaire des personnalités" className="flex flex-wrap gap-2">
+            <span className="self-center text-xs text-muted-foreground-strong">
+              Explorer l&apos;annuaire :
+            </span>
+            {filters
+              .filter((filter) => filter.count > 0)
+              .map((filter) => (
+                <Link
+                  key={filter.key}
+                  href={filter.href}
+                  prefetch={false}
+                  className="inline-flex min-h-11 items-center rounded-full border border-border px-3.5 text-xs font-medium hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {filter.label} · {filter.count}
+                </Link>
+              ))}
+          </nav>
         </>
       )}
     </section>

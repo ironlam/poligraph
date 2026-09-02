@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { SimplePagination } from "@/components/ui/SimplePagination";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -29,6 +30,7 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/affaires-metadata";
 import { AFFAIRES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { buildRetourParam } from "@/lib/affairs/listing-return";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -111,10 +113,21 @@ export default async function AffairesPage({ searchParams }: PageProps) {
   const categoryFilter = params.category || "";
   const certaintyFilter = (params.certainty || "") as CertaintyLevel | "";
   const partiFilter = params.parti || "";
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
   const mode = (params.mode === "victime" ? "victime" : "mise-en-cause") as
     | "mise-en-cause"
     | "victime";
+
+  // An unknown ?parti= slug is a 404, not an empty listing: a real party with
+  // zero affairs and a slug that does not exist must not render alike. Checked
+  // before the listing queries, so an arbitrary slug costs one indexed lookup
+  // instead of a full page render.
+  // The name is kept, not just the existence: the empty state names the party
+  // rather than claiming the whole base holds nothing.
+  const partyMeta = partiFilter ? await getPublicPartyMetadataBySlug(partiFilter) : null;
+  if (partiFilter && !partyMeta) {
+    notFound();
+  }
 
   const activeInvolvements =
     mode === "victime"
@@ -310,7 +323,15 @@ export default async function AffairesPage({ searchParams }: PageProps) {
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground mb-2">
                 Aucune affaire documentée
-                {searchFilter || certaintyFilter || superCatFilter ? " avec ces filtres" : ""}
+                {partyMeta
+                  ? ` pour ${partyMeta.name}`
+                  : searchFilter ||
+                      certaintyFilter ||
+                      superCatFilter ||
+                      statusFilter ||
+                      categoryFilter
+                    ? " avec ces filtres"
+                    : ""}
               </p>
               <p className="text-sm text-muted-foreground">
                 Les affaires sont ajoutées avec des sources vérifiables. Notre base est enrichie

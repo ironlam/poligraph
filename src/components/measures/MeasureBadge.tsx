@@ -5,10 +5,9 @@ import type { ReactNode } from "react";
  *
  * The tier encodes IMPORTANCE, not category. A reader scanning the page has to meet the verdicts
  * first and the housekeeping last, and before this component every badge on the surface set its own
- * classes by hand: the precision pill was a dark solid fill, heavier than the vote position pills
- * that carry the strongest fact on the page, and the verification state was bare grey text with no
- * form at all, so two qualifications of the same sentence appeared in two visual languages and the
- * one without a shape read as leftover rather than as information.
+ * classes by hand: the verification state was bare grey text with no form at all, while vote
+ * positions used pills. Two qualifications of the same sentence appeared in two visual languages
+ * and the one without a shape read as leftover rather than as information.
  *
  * - `verdict`: the candidacy voted on the same object. Rare, strong, the only tier allowed a colour,
  *   which the caller passes (the AA-verified values of spec §9.2).

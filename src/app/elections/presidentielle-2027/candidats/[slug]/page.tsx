@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ExternalLink, UserRound } from "lucide-react";
+import { ChevronDown, ExternalLink, UserRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { BreadcrumbJsonLd, PersonJsonLd } from "@/components/seo/JsonLd";
 import { candidacyRoleLabel } from "@/config/labels";
 import { isFicheCandidatPublishable } from "@/config/publication-gates";
 import { SITE_URL } from "@/config/site";
@@ -17,9 +18,10 @@ import {
   getPoliticianPresidentialCandidacy,
 } from "@/lib/data/politician-candidacy";
 import { CandidacyStatusBadge } from "../../_components/CandidacyStatusBadge";
+import { PartyLogo } from "../../_components/PartyLogo";
 import { CandidacyBackBar } from "./_components/CandidacyBackBar";
 import {
-  CandidateIntegrity,
+  CandidateTransparency,
   CandidateRecentVotes,
   CandidateStats,
   CandidateSynthesis,
@@ -78,7 +80,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     });
 
   const title = `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`;
-  const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par sujet, avec leurs sources.`;
+  const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par thème, avec leurs sources.`;
 
   return {
     title,
@@ -124,6 +126,28 @@ export default async function CandidateFichePage({ params }: PageProps) {
 
   return (
     <>
+      {publishable && (
+        <>
+          <PersonJsonLd
+            name={politician.fullName}
+            givenName={politician.firstName}
+            familyName={politician.lastName}
+            affiliation={candidacy.partyLabel ?? undefined}
+            image={politician.blobPhotoUrl ?? politician.photoUrl ?? undefined}
+            url={`${SITE_URL}${fichePath(slug)}`}
+          />
+          <BreadcrumbJsonLd
+            items={[
+              { name: "Élections", url: `${SITE_URL}/elections` },
+              {
+                name: "Présidentielle 2027",
+                url: `${SITE_URL}/elections/${candidacy.electionSlug}`,
+              },
+              { name: politician.fullName, url: `${SITE_URL}${fichePath(slug)}` },
+            ]}
+          />
+        </>
+      )}
       {/* Sharing a fiche is the same gesture as sharing any other Poligraph page, so it is the same
           bar, with the same platforms and the same copy control. It only appears above the
           publication gate: below it the page carries a sourced status and nothing else, stays
@@ -160,7 +184,7 @@ export default async function CandidateFichePage({ params }: PageProps) {
           ]}
         />
 
-        <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
+        <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-5 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_6rem]">
           <div aria-hidden="true">
             <PoliticianAvatar
               photoUrl={politician.photoUrl ?? null}
@@ -184,33 +208,27 @@ export default async function CandidateFichePage({ params }: PageProps) {
               <CandidacyStatusBadge status={candidacy.status} />
             </p>
             {candidacy.partyLabel && (
-              <p className="text-sm text-muted-foreground-strong">{candidacy.partyLabel}</p>
+              <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
             )}
           </div>
+          {candidacy.partyLabel && (
+            <PartyLogo
+              logoUrl={candidacy.partyLogoUrl}
+              label={candidacy.partyLabel}
+              color={candidacy.partyColor}
+              size="lg"
+              className="col-start-2 justify-self-start sm:col-start-3 sm:row-start-1 sm:justify-self-end"
+            />
+          )}
         </header>
-
-        <section className="space-y-2 rounded-xl border bg-card p-4 md:p-6">
-          <h2 className="font-display text-base font-bold">Source du statut de candidature</h2>
-          <p className="text-sm text-muted-foreground">{candidacy.sourceLabel}</p>
-          <a
-            href={candidacy.sourceUrl}
-            target="_blank"
-            rel="nofollow noopener noreferrer"
-            aria-label="Consulter l’annonce ou la source originale, lien externe"
-            className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary underline hover:no-underline"
-          >
-            Consulter l&apos;annonce ou la source originale
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
-        </section>
 
         {!publishable && (
           <section className="rounded-xl border border-dashed bg-muted/30 p-5 md:p-7">
             <h2 className="font-display text-xl font-bold">Contenu disponible sur Poligraph</h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground-strong">
               {candidacy.programmeIdentified
-                ? "Programme identifié, aucune proposition encore publiée sur Poligraph."
-                : "Poligraph n’a identifié aucun programme publié à ce jour."}
+                ? "Poligraph a repéré un programme. Son traitement éditorial est en cours."
+                : "Poligraph n’a pas encore trouvé ou traité de programme pour cette candidature."}
             </p>
           </section>
         )}
@@ -232,6 +250,8 @@ export default async function CandidateFichePage({ params }: PageProps) {
             <CandidateThemes
               themes={detail.themes}
               electionSlug={candidacy.electionSlug}
+              candidateSlug={slug}
+              measureCount={candidacy.publishedMeasureCount}
               lastReviewedAt={candidacy.lastReviewedAt}
             />
 
@@ -245,33 +265,42 @@ export default async function CandidateFichePage({ params }: PageProps) {
 
             <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
 
-            <CandidateIntegrity
+            <CandidateTransparency
               declarationCount={politician.declarations.length}
-              affairCount={politician.affairs.length}
+              probityConvictionCount={detail.probityConvictionCount}
+              probityNonDefinitiveConvictionCount={detail.probityNonDefinitiveConvictionCount}
               politicianSlug={slug}
             />
           </>
         )}
 
-        <section className="space-y-2 rounded-xl border bg-card p-4 text-sm text-muted-foreground md:p-6">
-          <h2 className="font-display text-base font-bold tracking-tight text-foreground">
-            D&apos;où viennent ces données
-          </h2>
-          <p>
-            Chaque mesure est extraite d&apos;un document daté, relue, et publiée avec sa source. Le
-            statut de la candidature vient de la source citée ci-dessus, à sa date. Aucun
-            classement, aucun score de proximité : l&apos;ordre des candidatures est alphabétique
-            partout sur le site.
-          </p>
-          {/* Named rather than hidden: a reader who sees the gap stated can tell "not built yet"
-              from "nothing to say". Neither block has a date, and promising one would be worse. */}
-          <p>
-            Deux volets manquent encore. Le rapprochement entre chaque mesure et les scrutins
-            portant sur le même objet, qui demande un rattachement que la base ne porte pas encore.
-            Et le bilan des fonctions exercées, objectifs annoncés face aux chiffres constatés, qui
-            demande un suivi post-électoral à construire.
-          </p>
-        </section>
+        <details className="group rounded-xl border bg-card">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden md:px-6">
+            <span className="font-display text-sm font-bold">
+              Vérifier le statut de candidature
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+              {candidacy.sourceLabel}
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            />
+          </summary>
+          <div className="border-t border-border px-4 pb-4 pt-3 md:px-6 md:pb-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">{candidacy.sourceLabel}</p>
+            <a
+              href={candidacy.sourceUrl}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              aria-label="Consulter l’annonce ou la source originale, lien externe"
+              className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary underline hover:no-underline"
+            >
+              Consulter l&apos;annonce ou la source originale
+              <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
+        </details>
 
         {/* The one filled-weight control of the page, and it is an outline: the fiche is about the
             candidacy, so what lies outside it gets a single named exit rather than a navy block

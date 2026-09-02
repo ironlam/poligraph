@@ -2,6 +2,11 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import {
+  DossierStatus as DossierStatusEnum,
+  ThemeCategory as ThemeCategoryEnum,
+} from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -22,6 +27,7 @@ import { SeoIntro } from "@/components/seo/SeoIntro";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import { DOSSIERS_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
@@ -51,12 +57,16 @@ const ITEMS_PER_PAGE = 15;
 async function getDossiers(status?: string, theme?: string, sort?: string, page = 1) {
   const skip = (page - 1) * ITEMS_PER_PAGE;
 
+  // Whitelist guard: `status` and `theme` arrive raw from the query string, and
+  // an out-of-enum value makes Prisma throw mid-stream (200 + empty listing).
   const where: Record<string, unknown> = {};
-  if (status) {
-    where.status = status as DossierStatus;
+  const safeStatus = pickEnumValue(status, DossierStatusEnum);
+  if (safeStatus) {
+    where.status = safeStatus;
   }
-  if (theme) {
-    where.theme = theme as ThemeCategory;
+  const safeTheme = pickEnumValue(theme, ThemeCategoryEnum);
+  if (safeTheme) {
+    where.theme = safeTheme;
   }
 
   const orderBy =
@@ -123,7 +133,7 @@ export default async function AssembleePage({ searchParams }: PageProps) {
   const statusFilter = params.status || "";
   const themeFilter = params.theme || "";
   const sortFilter = params.sort || "";
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
 
   const [{ dossiers, total, totalPages }, statusCounts, themeCounts, pplStats] = await Promise.all([
     getDossiers(statusFilter, themeFilter, sortFilter, page),

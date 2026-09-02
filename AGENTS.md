@@ -167,6 +167,21 @@ Pages import and render. Data modules query and cache. Business logic sits in se
 - Convention: `queryX()` private uncached, `getXFiltered()` cached with bounded params, `searchX()` uncached for free-text, `getX()` router choosing between them.
 - **Prisma Decimal fields** (e.g. `Affair.fineAmount`) cannot cross the RSC/Client boundary. Convert with `Number()` in the data function, not in the component.
 
+### Where does my code go?
+
+The sentence above leaves one box unnamed, and the codebase filled it in three different ways. Four homes, one question each. Enforced by `src/__tests__/architecture/layering-guards.test.ts`.
+
+| Ask                                     | Home                       | Rule                                                |
+| --------------------------------------- | -------------------------- | --------------------------------------------------- |
+| Reading for a page?                     | `src/lib/data/<domain>.ts` | Queries and caches. **Never writes.**               |
+| A rule the domain is always true under? | `src/lib/<domain>/`        | Reads and writes the DB. **Never opens a socket.**  |
+| Talking to something outside?           | `src/lib/api/`             | The only outbound network clients under `src/lib/`. |
+| A pipeline, a sync, a bulk write?       | `src/services/<domain>/`   | Orchestration. External I/O belongs here.           |
+
+Read it as a decision, not a taxonomy: `publish-guard.ts` writes to the DB and is an invariant, so it is `src/lib/affairs/`. `discover-affairs.ts` calls the press, resolves, and writes in bulk, so it is `src/services/sync/`. `getPolitician()` renders a page, so it is `src/lib/data/`.
+
+Two ratchets carry the debt that predates the rule, both frozen lists in the guard file: `NETWORK_EXCEPTIONS` (four `src/lib/` modules that fetch) and `PAGE_DB_DEBT` (nineteen public pages importing `@/lib/db` instead of reading through `src/lib/data/`). Entries come off the lists as code migrates. Adding one fails review.
+
 ### API route patterns
 
 - **Public routes**: `withPublicRoute()` from `@/lib/api/with-public-route` (try-catch, 500 handler).

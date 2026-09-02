@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePagination } from "../pagination";
+import { parsePagination, parseStrictPagination } from "../pagination";
 
 describe("parsePagination", () => {
   it("uses defaults when no params", () => {
@@ -40,5 +40,44 @@ describe("parsePagination", () => {
   it("handles NaN gracefully", () => {
     const params = new URLSearchParams({ page: "abc", limit: "xyz" });
     expect(parsePagination(params)).toEqual({ page: 1, limit: 50, skip: 0 });
+  });
+});
+
+describe("parseStrictPagination", () => {
+  it("applique les valeurs par défaut et calcule le décalage", () => {
+    expect(parseStrictPagination(new URLSearchParams(), { defaultLimit: 20 })).toEqual({
+      page: 1,
+      limit: 20,
+      skip: 0,
+    });
+    expect(
+      parseStrictPagination(new URLSearchParams({ page: "3", limit: "20" }), {
+        defaultLimit: 20,
+      })
+    ).toEqual({ page: 3, limit: 20, skip: 40 });
+  });
+
+  it.each([
+    "page=0",
+    "page=1.5",
+    "page=abc",
+    "page=9007199254740992",
+    "limit=0",
+    "limit=1.5",
+    "limit=101",
+  ])("refuse une pagination malformée ou hors bornes : %s", (query) => {
+    expect(
+      parseStrictPagination(new URLSearchParams(query), { defaultLimit: 20, maxLimit: 100 })
+    ).toBeNull();
+  });
+
+  it("respecte une borne explicite sur le numéro de page", () => {
+    expect(
+      parseStrictPagination(new URLSearchParams({ page: "10001" }), {
+        defaultLimit: 20,
+        maxLimit: 20,
+        maxPage: 10_000,
+      })
+    ).toBeNull();
   });
 });

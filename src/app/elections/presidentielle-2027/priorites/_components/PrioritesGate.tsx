@@ -168,7 +168,7 @@ export function PrioritesGate({ data, evaluatedAt }: { data: PrioritesData; eval
       label: "Doctrine de segmentation publiée",
       met: data.segmentationDoctrinePublished,
       detail:
-        "Travail éditorial en cours. Sans elle, le pourcentage par sujet dépend autant de notre découpage des textes que de l'importance donnée au sujet par la candidature.",
+        "Travail éditorial en cours. Sans elle, le pourcentage par thème dépend autant de notre découpage des textes que de l'importance donnée au thème par la candidature.",
     },
   ];
 
@@ -185,7 +185,7 @@ export function PrioritesGate({ data, evaluatedAt }: { data: PrioritesData; eval
           Corpus encore insuffisant pour comparer
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-          Cette page montre la part du programme de chaque candidature consacrée à chaque sujet.
+          Cette page montre la part du programme de chaque candidature consacrée à chaque thème.
           Elle demande trois conditions par candidature incluse, au moins{" "}
           {GATE.minEligibleCandidacies} candidatures éligibles, et des conditions qui ne dépendent
           d&apos;aucune candidature. Aujourd&apos;hui : {verdict}.
@@ -220,7 +220,7 @@ export function PrioritesGate({ data, evaluatedAt }: { data: PrioritesData; eval
                   </span>
                 </th>
                 <th scope="col" className="py-2 pr-4 font-semibold">
-                  Sujets couverts
+                  Thématiques couvertes
                   <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
                     Seuil : {GATE.minThemesCovered} sur {GATE.totalThemes}
                   </span>
@@ -328,7 +328,7 @@ export function PrioritesGate({ data, evaluatedAt }: { data: PrioritesData; eval
                         ...cells.measures,
                       },
                       {
-                        term: `Sujets couverts (seuil : ${GATE.minThemesCovered} sur ${GATE.totalThemes})`,
+                        term: `Thématiques couvertes (seuil : ${GATE.minThemesCovered} sur ${GATE.totalThemes})`,
                         ...cells.themes,
                       },
                       {
@@ -442,24 +442,24 @@ export function PrioritesGate({ data, evaluatedAt }: { data: PrioritesData; eval
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">
           {data.publishableThemes.length > 0
-            ? `Les mesures vérifiées, sujet par sujet, avec leur source et leur date de relecture. ${data.publishableThemes.length} ${plural(data.publishableThemes.length, "sujet franchit son seuil", "sujets franchissent leur seuil")} aujourd'hui.`
-            : "Aucun sujet n'est encore comparable. L'index des sujets montre, pour chacun, le nombre de mesures vérifiées et ce qui manque pour ouvrir la comparaison."}
+            ? `Les mesures vérifiées, thématique par thématique, avec leur source et leur date de relecture. ${data.publishableThemes.length} ${plural(data.publishableThemes.length, "thématique franchit son seuil", "thématiques franchissent leur seuil")} aujourd'hui.`
+            : "Aucune thématique n'est encore comparable. L'index des thématiques montre, pour chacune, le nombre de mesures vérifiées et ce qui manque pour ouvrir la comparaison."}
         </p>
         <div className="flex flex-wrap gap-2">
           {data.publishableThemes.map((theme) => (
             <Link
               key={theme.slug}
-              href={`/elections/presidentielle-2027/sujets/${theme.slug}`}
+              href={`/elections/presidentielle-2027/themes/${theme.slug}`}
               className="inline-flex min-h-11 items-center rounded-full border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
             >
               {theme.label}
             </Link>
           ))}
           <Link
-            href="/elections/presidentielle-2027/sujets"
+            href="/elections/presidentielle-2027/themes"
             className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-semibold transition-colors hover:bg-muted"
           >
-            Les {GATE.totalThemes} sujets
+            Les {GATE.totalThemes} thématiques
           </Link>
         </div>
       </section>

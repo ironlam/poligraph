@@ -9,23 +9,7 @@ import { ProgrammeCTA, ProgrammeCTAEmpty } from "@/components/programmes/Program
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import {
-  PARTY_ROLE_LABELS,
-  feminizePartyRole,
-  AFFAIR_STATUS_LABELS,
-  AFFAIR_STATUS_COLORS,
-  POLITICAL_POSITION_LABELS,
-} from "@/config/labels";
-import {
-  getCertaintyLevel,
-  CERTAINTY_LABELS,
-  CERTAINTY_COLORS,
-  CERTAINTY_SORT_ORDER,
-  isAccusedInvolvement,
-  type CertaintyLevel,
-} from "@/config/certainty";
-import { getJudicialMaturity } from "@/config/judicial-maturity";
-import type { AffairStatus } from "@/types";
+import { PARTY_ROLE_LABELS, feminizePartyRole, POLITICAL_POSITION_LABELS } from "@/config/labels";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { PoliticalPositionBadge } from "@/components/partis/PoliticalPositionBadge";
 import { CollapsibleCard } from "@/components/ui/CollapsibleCard";
@@ -37,6 +21,8 @@ import { db } from "@/lib/db";
 import { FollowButton } from "@/components/politicians/FollowButton";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
+import { PartyAffairsCard } from "./_components/PartyAffairsCard";
+import { PartySidebar } from "./_components/PartySidebar";
 
 export async function generateStaticParams() {
   const parties = await db.party.findMany({
@@ -459,184 +445,11 @@ export default async function PartyPage({ params }: PageProps) {
             )}
 
             {/* Affairs */}
-            {party.affairsAtTime.length > 0 &&
-              (() => {
-                // Certainty badges only describe affairs where the member is the
-                // accused; victim/plaintiff/mentioned affairs must not be counted
-                // as the party's condamnations (#383).
-                const directAffairs = party.affairsAtTime.filter((a) =>
-                  isAccusedInvolvement(a.involvement)
-                );
-                const affairsWithCertainty = directAffairs.map((a) => ({
-                  ...a,
-                  certainty: getCertaintyLevel(a.status as AffairStatus),
-                }));
-                const condamnations = directAffairs.filter(
-                  (a) => getJudicialMaturity(a.status as AffairStatus) === "CONDAMNATION"
-                ).length;
-                const enCours = directAffairs.filter((a) => {
-                  const m = getJudicialMaturity(a.status as AffairStatus);
-                  return m === "PROCEDURE_VALIDEE" || m === "ENQUETE";
-                }).length;
-                const closesSansCondamnation = directAffairs.filter(
-                  (a) => getJudicialMaturity(a.status as AffairStatus) === "CLOSE_SANS_CONDAMNATION"
-                ).length;
-                return (
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <CardTitle>
-                          {condamnations > 0
-                            ? `${condamnations} condamnation${condamnations > 1 ? "s" : ""}`
-                            : "Aucune condamnation"}
-                        </CardTitle>
-                        <Link
-                          href="/methodologie#comment-nous-comptons"
-                          className="text-muted-foreground hover:text-foreground"
-                          title="Comment nous comptons"
-                          aria-label="Comment nous comptons les affaires judiciaires"
-                        >
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          </svg>
-                        </Link>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-4">
-                        {enCours > 0 && (
-                          <span>
-                            {enCours} procédure{enCours > 1 ? "s" : ""} en cours (présomption d{"'"}
-                            innocence)
-                          </span>
-                        )}
-                        {closesSansCondamnation > 0 && (
-                          <span>
-                            {closesSansCondamnation} close{closesSansCondamnation > 1 ? "s" : ""}{" "}
-                            sans condamnation
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Certainty level breakdown badges */}
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {(Object.keys(CERTAINTY_LABELS) as CertaintyLevel[]).map((level) => {
-                          const count = affairsWithCertainty.filter(
-                            (a) => a.certainty === level
-                          ).length;
-                          if (count === 0) return null;
-                          return (
-                            <Badge
-                              key={level}
-                              variant="outline"
-                              className={CERTAINTY_COLORS[level]}
-                            >
-                              {CERTAINTY_LABELS[level]} ({count})
-                            </Badge>
-                          );
-                        })}
-                      </div>
-
-                      {/* Top 5 affairs sorted by certainty */}
-                      <div className="space-y-3">
-                        {[...affairsWithCertainty]
-                          .sort(
-                            (a, b) =>
-                              CERTAINTY_SORT_ORDER[a.certainty] - CERTAINTY_SORT_ORDER[b.certainty]
-                          )
-                          .slice(0, 5)
-                          .map((affair) => (
-                            <Link
-                              key={affair.id}
-                              href={`/affaires/${affair.slug}`}
-                              className={`block p-3 rounded-lg border hover:bg-muted transition-colors ${
-                                affair.certainty === "ETABLI"
-                                  ? "border-red-200 dark:border-red-900/50"
-                                  : ""
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <Badge className={CERTAINTY_COLORS[affair.certainty]}>
-                                      {CERTAINTY_LABELS[affair.certainty]}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className={
-                                        AFFAIR_STATUS_COLORS[affair.status as AffairStatus]
-                                      }
-                                    >
-                                      {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
-                                    </Badge>
-                                    <span className="text-sm font-medium">
-                                      {affair.politician.fullName}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-muted-foreground line-clamp-1">
-                                    {affair.title}
-                                  </p>
-                                </div>
-                                {affair.verdictDate && (
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {formatDate(affair.verdictDate)}
-                                  </span>
-                                )}
-                              </div>
-                            </Link>
-                          ))}
-                      </div>
-
-                      {/* CTA to satellite page */}
-                      {party.slug && (
-                        <Link
-                          href={`/affaires/parti/${party.slug}`}
-                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-4"
-                        >
-                          Voir toutes les affaires ({party.affairsAtTime.length})
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </Link>
-                      )}
-
-                      {nCondamnesDef > 0 && party.slug && (
-                        <p className="text-sm mt-2">
-                          <Link
-                            href={`/affaires/condamnations?parti=${party.slug}&certainty=etabli`}
-                            className="text-primary hover:underline"
-                            prefetch={false}
-                          >
-                            {nCondamnesDef} condamnation
-                            {nCondamnesDef !== 1 ? "s" : ""} définitive
-                            {nCondamnesDef !== 1 ? "s" : ""} →
-                          </Link>
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })()}
+            <PartyAffairsCard
+              affairs={party.affairsAtTime}
+              partySlug={party.slug}
+              definitiveConvictions={nCondamnesDef}
+            />
 
             {/* Press mentions */}
             {pressEnabled && party.pressMentions.length > 0 && (
@@ -696,167 +509,12 @@ export default async function PartyPage({ params }: PageProps) {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick info */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Informations</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {party.foundedDate && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Fondé</span>
-                    <span className="font-semibold">{formatDate(party.foundedDate)}</span>
-                  </div>
-                )}
-                {party.dissolvedDate && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dissous</span>
-                    <span className="font-semibold">{formatDate(party.dissolvedDate)}</span>
-                  </div>
-                )}
-                {party.ideology && (
-                  <div>
-                    <span className="text-muted-foreground block mb-1">Idéologie</span>
-                    <span className="text-sm">{party.ideology}</span>
-                  </div>
-                )}
-                {party.politicalPosition && party.politicalPositionSource && (
-                  <div>
-                    <span className="text-muted-foreground block mb-1">Position politique</span>
-                    <div className="flex items-center gap-2">
-                      <PoliticalPositionBadge position={party.politicalPosition} />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Source : {party.politicalPositionSource}
-                    </p>
-                    {party.politicalPositionSourceUrl && (
-                      <a
-                        href={party.politicalPositionSourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Voir la source
-                      </a>
-                    )}
-                  </div>
-                )}
-                {party.headquarters && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Siège</span>
-                    <span className="text-sm">{party.headquarters}</span>
-                  </div>
-                )}
-                {party.website && (
-                  <div>
-                    <a
-                      href={party.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Site officiel
-                    </a>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Party evolution */}
-            {(party.predecessor || party.successors.length > 0) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Évolution</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {party.predecessor && (
-                    <div>
-                      <span className="text-sm text-muted-foreground block mb-1">Succède à</span>
-                      <Link
-                        href={
-                          party.predecessor.slug ? `/partis/${party.predecessor.slug}` : "/partis"
-                        }
-                        className="inline-flex items-center gap-2 text-primary hover:underline"
-                      >
-                        <span
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: party.predecessor.color || "#888" }}
-                        />
-                        {party.predecessor.name}
-                      </Link>
-                    </div>
-                  )}
-                  {party.successors.length > 0 && (
-                    <div>
-                      <span className="text-sm text-muted-foreground block mb-1">Précède</span>
-                      <div className="space-y-1">
-                        {party.successors.map((successor) => (
-                          <Link
-                            key={successor.id}
-                            href={successor.slug ? `/partis/${successor.slug}` : "/partis"}
-                            className="flex items-center gap-2 text-primary hover:underline"
-                          >
-                            <span
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: successor.color || "#888" }}
-                            />
-                            {successor.name}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">En bref</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Membres actuels</span>
-                  <span className="font-semibold">{party.politicians.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Anciens membres</span>
-                  <span className="font-semibold">{historicalMembers.length}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Affaires</span>
-                  <span className="font-semibold">{party.affairsAtTime.length}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* External links */}
-            {party.externalIds.length > 0 && (
-              <Card className="bg-muted">
-                <CardContent className="pt-6">
-                  <p className="text-xs text-muted-foreground mb-2">Liens externes</p>
-                  <div className="flex flex-wrap gap-2">
-                    {party.externalIds.map(
-                      (ext) =>
-                        ext.url && (
-                          <a
-                            key={ext.id}
-                            href={ext.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline"
-                          >
-                            {ext.source.replace("_", " ")}
-                          </a>
-                        )
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          <PartySidebar
+            party={party}
+            currentMemberCount={party.politicians.length}
+            historicalMemberCount={historicalMembers.length}
+            affairCount={party.affairsAtTime.length}
+          />
         </div>
       </div>
     </>

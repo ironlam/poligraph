@@ -675,8 +675,8 @@ export const VOTE_RELATION_POSITION_LABELS: Record<VoteRelation, string | null> 
 // Each basis names its own subject, parliamentary votes, and says where the verification stands in
 // words a reader meets nowhere else on the page. The previous wording was written from the inside:
 // "périmètre non examiné" and "périmètre examiné sans résultat" name an editorial workflow, not a
-// fact about the measure, and sitting next to a precision pill they read as a second qualification
-// of the sentence rather than as the state of our work. "Périmètre" also carried the whole
+// fact about the measure, and they read as a qualification of the sentence rather than as the
+// state of our work. "Périmètre" also carried the whole
 // distinction between the two while being the one word in the pair a reader cannot resolve from the
 // page. The two search states now share a prefix and differ only in their tail, "à vérifier" against
 // "vérifié", which is also the verb the sourced detail already uses ("vérifié le ..."). What that
@@ -944,18 +944,22 @@ export const TIMELINE_CHAMBER_LABELS: Record<string, string> = {
 // ============================================
 
 export const THEME_CATEGORY_LABELS: Record<ThemeCategory, string> = {
-  ECONOMIE_BUDGET: "Économie & Budget",
-  SOCIAL_TRAVAIL: "Social & Travail",
-  SECURITE_JUSTICE: "Sécurité & Justice",
-  ENVIRONNEMENT_ENERGIE: "Environnement & Énergie",
+  ECONOMIE_BUDGET: "Économie et budget",
+  SOCIAL_TRAVAIL: "Questions sociales et travail",
+  EMPLOI_TRAVAIL: "Emploi et travail",
+  RETRAITES: "Retraites",
+  SOLIDARITES_PROTECTION_SOCIALE: "Solidarités et protection sociale",
+  SOCIETE_DROITS_LIBERTES: "Société, droits et libertés",
+  SECURITE_JUSTICE: "Sécurité et justice",
+  ENVIRONNEMENT_ENERGIE: "Environnement et énergie",
   SANTE: "Santé",
-  EDUCATION_CULTURE: "Éducation & Culture",
+  EDUCATION_CULTURE: "Éducation et culture",
   INSTITUTIONS: "Institutions",
-  AFFAIRES_ETRANGERES_DEFENSE: "Affaires étrangères & Défense",
-  NUMERIQUE_TECH: "Numérique & Tech",
+  AFFAIRES_ETRANGERES_DEFENSE: "Affaires étrangères et défense",
+  NUMERIQUE_TECH: "Numérique et technologies",
   IMMIGRATION: "Immigration",
-  AGRICULTURE_ALIMENTATION: "Agriculture & Alimentation",
-  LOGEMENT_URBANISME: "Logement & Urbanisme",
+  AGRICULTURE_ALIMENTATION: "Agriculture et alimentation",
+  LOGEMENT_URBANISME: "Logement et urbanisme",
   TRANSPORTS: "Transports",
 };
 
@@ -964,6 +968,14 @@ export const THEME_CATEGORY_COLORS: Record<ThemeCategory, string> = {
     "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700",
   SOCIAL_TRAVAIL:
     "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+  EMPLOI_TRAVAIL:
+    "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+  RETRAITES:
+    "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 dark:bg-fuchsia-900/40 dark:text-fuchsia-300 dark:border-fuchsia-700",
+  SOLIDARITES_PROTECTION_SOCIALE:
+    "bg-pink-100 text-pink-800 border-pink-300 dark:bg-pink-900/40 dark:text-pink-300 dark:border-pink-700",
+  SOCIETE_DROITS_LIBERTES:
+    "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
   SECURITE_JUSTICE:
     "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700",
   ENVIRONNEMENT_ENERGIE:
@@ -989,7 +1001,7 @@ export const THEME_CATEGORY_COLORS: Record<ThemeCategory, string> = {
 };
 
 /**
- * The same thirteen hues as THEME_CATEGORY_COLORS, solid rather than tinted, for the accent bar the
+ * The same hues as THEME_CATEGORY_COLORS, solid rather than tinted, for the accent bar the
  * subject page puts before a theme in its navigation and before a candidate in its table.
  *
  * A separate map and not a derivation: the badge palette pairs a 100-level background with an
@@ -1004,6 +1016,10 @@ export const THEME_ACCENT_BAR: Record<ThemeCategory, string> = {
   LOGEMENT_URBANISME: "bg-amber-500",
   SANTE: "bg-rose-600",
   SOCIAL_TRAVAIL: "bg-violet-600",
+  EMPLOI_TRAVAIL: "bg-violet-600",
+  RETRAITES: "bg-fuchsia-600",
+  SOLIDARITES_PROTECTION_SOCIALE: "bg-pink-600",
+  SOCIETE_DROITS_LIBERTES: "bg-blue-600",
   ECONOMIE_BUDGET: "bg-emerald-600",
   ENVIRONNEMENT_ENERGIE: "bg-green-600",
   SECURITE_JUSTICE: "bg-red-600",
@@ -1019,6 +1035,10 @@ export const THEME_ACCENT_BAR: Record<ThemeCategory, string> = {
 export const THEME_CATEGORY_ICONS: Record<ThemeCategory, string> = {
   ECONOMIE_BUDGET: "💰",
   SOCIAL_TRAVAIL: "👥",
+  EMPLOI_TRAVAIL: "💼",
+  RETRAITES: "🕰️",
+  SOLIDARITES_PROTECTION_SOCIALE: "🤝",
+  SOCIETE_DROITS_LIBERTES: "⚖️",
   SECURITE_JUSTICE: "🔒",
   ENVIRONNEMENT_ENERGIE: "🌿",
   SANTE: "🏥",
@@ -1256,7 +1276,10 @@ export const FACTCHECK_RATING_DESCRIPTIONS: Record<FactCheckRating, string> = {
  * Whitelist of francophone fact-checking sources.
  * Non-francophone sources (Snopes, PolitiFact, Full Fact, Indian outlets, etc.)
  * are kept in DB but excluded from display queries.
- * Includes known name variants from the Google Fact Check API.
+ *
+ * One canonical label per outlet: the spelling variants the Google Fact Check
+ * API returns are folded onto these labels by canonicalizeFactCheckSource()
+ * before anything is stored or compared.
  */
 export const FACTCHECK_ALLOWED_SOURCES = [
   "TF1 Info",
@@ -1272,6 +1295,53 @@ export const FACTCHECK_ALLOWED_SOURCES = [
   "RTBF",
   "Fasocheck",
 ];
+
+/**
+ * Google returns a publisher's name as that publisher spells it in its own
+ * ClaimReview markup, and the spelling drifts over time: the same outlet
+ * arrives as "Franceinfo" then "franceinfo", "DE FACTO" then "De Facto",
+ * "AFP Factuel" then "Factuel AFP". Comparing the raw string against
+ * FACTCHECK_ALLOWED_SOURCES sent those reviews to DRAFT and kept them out of
+ * every public listing, which is what froze the public fact-check feed on its
+ * April 2026 entry while the sync kept importing.
+ *
+ * Case and accents are folded, so only spellings that differ by more than that
+ * need an entry here.
+ */
+const FACTCHECK_SOURCE_ALIASES: Record<string, string> = {
+  // AFP's French desk (factuel.afp.com), whose two words Google returns in
+  // either order. Its English desk publishes under "AFP Fact Check" and is
+  // deliberately absent: those reviews are in English, and the one moderation
+  // decision recorded on a fact-check unpublished exactly such a review.
+  "Factuel AFP": "AFP Factuel",
+};
+
+/** Case-, accent- and punctuation-insensitive key for one publisher name. */
+function factCheckSourceKey(source: string): string {
+  return source
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const CANONICAL_FACTCHECK_SOURCES = new Map<string, string>([
+  ...FACTCHECK_ALLOWED_SOURCES.map((label) => [factCheckSourceKey(label), label] as const),
+  ...Object.entries(FACTCHECK_SOURCE_ALIASES).map(
+    ([variant, label]) => [factCheckSourceKey(variant), label] as const
+  ),
+]);
+
+/**
+ * Fold a publisher name onto its canonical label. Unknown publishers are
+ * returned as they came (whitespace-tidied only): the allow-list, not this
+ * function, decides what is publishable.
+ */
+export function canonicalizeFactCheckSource(source: string): string {
+  const tidied = source.trim().replace(/\s+/g, " ");
+  return CANONICAL_FACTCHECK_SOURCES.get(factCheckSourceKey(tidied)) ?? tidied;
+}
 
 /**
  * Detect if a fact-check claimant is a specific person (politician)
@@ -1503,13 +1573,13 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
 /**
  * The same four levels, without the noun, for the merged status + programme badge.
  *
- * The badge reads "Déclarée · 19 mesures" in a 230px column: repeating "Candidature" in a list
+ * The badge reads "Annoncée · 19 mesures" in a 230px column: repeating "Candidature" in a list
  * whose column is titled "Candidature" would cost a third of the width to say nothing. The
  * adjectives agree with "candidature", so the short form states no gender for the person, which
  * is the same reason `candidacyRoleLabel` has a neutral branch.
  */
 export const CANDIDACY_STATUS_SHORT_LABELS: Record<CandidacyStatus, string> = {
-  DECLARE: "Déclarée",
+  DECLARE: "Annoncée",
   PRESSENTI: "Pressentie",
   ENVISAGE: "Évoquée",
   RETIRE: "Retirée",
@@ -1557,8 +1627,8 @@ export const MEASURE_ATTRIBUTION_LABELS: Record<MeasureAttribution, string> = {
 };
 
 export const MEASURE_PRECISION_LABELS: Record<MeasurePrecision, string> = {
-  CHIFFREE: "Chiffrée",
-  OBJECTIF_SANS_CHIFFRE: "Objectif sans chiffre",
+  CHIFFREE: "Objectif quantifié",
+  OBJECTIF_SANS_CHIFFRE: "Objectif non quantifié",
 };
 
 // Deliberately NOT a green/amber pair. A traffic light reads as a verdict, and a measure carrying a

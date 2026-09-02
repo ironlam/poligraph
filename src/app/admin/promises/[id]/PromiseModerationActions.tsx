@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
 
 interface Props {
@@ -88,13 +89,14 @@ export function PromiseModerationActions({ promiseId, currentTheme, currentStatu
             className="border rounded px-2 py-1 bg-background"
             disabled={busy}
           >
-            {(Object.entries(THEME_CATEGORY_LABELS) as Array<[ThemeCategory, string]>).map(
-              ([k, l]) => (
+            {LEGACY_THEME_CATEGORIES.map((k) => {
+              const l = THEME_CATEGORY_LABELS[k];
+              return (
                 <option key={k} value={k}>
                   {l}
                 </option>
-              )
-            )}
+              );
+            })}
           </select>
         </label>
         <Button onClick={saveTheme} disabled={busy || theme === currentTheme}>

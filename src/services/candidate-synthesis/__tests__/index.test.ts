@@ -1,15 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * The generation shared by the script and the admin button.
- *
- * What is worth pinning here is not the prompt (tested pure in
- * `@/lib/presidentielle/candidate-synthesis`) but the decisions this module owns: which candidacies
- * may carry a synthesis at all, what a dry run must NOT write, when the second provider is tried,
- * and that a screened-out text is never stored.
- */
-
-const callAnthropicMock = vi.fn();
 const callMistralMock = vi.fn();
 
 const dbMock = {
@@ -22,19 +12,35 @@ const dbMock = {
 };
 
 vi.mock("@/lib/db", () => ({ db: dbMock }));
-vi.mock("@/lib/api/anthropic", () => ({
-  callAnthropic: (...args: unknown[]) => callAnthropicMock(...args),
-}));
 vi.mock("@/lib/api/mistral", () => ({
   callMistral: (...args: unknown[]) => callMistralMock(...args),
   extractMistralText: (response: { text: string }) => response.text,
+  parseMistralJSON: (text: string) => JSON.parse(text),
 }));
 
-/** A text that clears every rule of `screenSynthesis`: no long dash, no judicial term, 90+ words. */
-const ACCEPTED = `${Array.from({ length: 120 }, (_, i) => `mot${i}`).join(" ")}.`;
+const CAREER = Array.from({ length: 35 }, (_, index) => `parcours${index}`).join(" ");
+const PROGRAMME_AXIS =
+  "Le programme relie la réouverture de maternités de proximité au rétablissement de dessertes ferroviaires nocturnes pour rapprocher plusieurs services essentiels.";
 
-function anthropicText(text: string) {
-  return { content: [{ type: "text", text }] };
+function providerOutput(over: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    career: `${CAREER}.`,
+    programmeClaims: [{ text: PROGRAMME_AXIS, measureRefs: ["M1", "M2"] }],
+    ...over,
+  });
+}
+
+function groundingOutput(supported = true, correctedText = ""): string {
+  return JSON.stringify({
+    claims: [
+      {
+        index: 0,
+        supported,
+        reason: supported ? "Étayer par M1 et M2." : "Ajout absent.",
+        correctedText,
+      },
+    ],
+  });
 }
 
 const CANDIDACY = {
@@ -59,30 +65,50 @@ beforeEach(() => {
   dbMock.vote.count.mockResolvedValue(0);
   dbMock.measure.findMany.mockResolvedValue([
     { theme: "SANTE", publishedRevision: { text: "Rouvrir des maternités de proximité." } },
+    {
+      theme: "TRANSPORTS",
+      publishedRevision: { text: "Rétablir des trains de nuit sur six lignes." },
+    },
   ]);
   dbMock.candidacyPresidential.update.mockResolvedValue({ id: "pres-1" });
   dbMock.auditLog.create.mockResolvedValue({ id: "audit-1" });
-  callAnthropicMock.mockResolvedValue(anthropicText(ACCEPTED));
+  callMistralMock.mockImplementation((messages: Array<{ content: string }>) => {
+    const grounding = messages.some((message) =>
+      message.content.includes("Vérifie si chaque affirmation")
+    );
+    return Promise.resolve({
+      text: grounding ? groundingOutput() : providerOutput(),
+      model: "mistral-large-latest",
+    });
+  });
 });
 
 describe("generateCandidateSynthesis", () => {
-  it("écrit le texte et sa date sur l'extension présidentielle", async () => {
+  it("écrit une synthèse du programme et sa date sur l'extension présidentielle", async () => {
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
-    expect(result).toMatchObject({ ok: true, provider: "anthropic", measureCount: 1 });
+    expect(result).toMatchObject({
+      ok: true,
+      provider: "mistral-large-latest",
+      measureCount: 2,
+    });
     const write = dbMock.candidacyPresidential.update.mock.calls[0]![0];
     expect(write.where).toEqual({ id: "pres-1" });
-    expect(write.data.synthesis).toBe(ACCEPTED);
+    expect(write.data.synthesis).toContain("Le programme relie");
+    expect(write.data.synthesis).not.toContain("thèmes suivants");
     expect(write.data.synthesisGeneratedAt).toBeInstanceOf(Date);
-    expect(dbMock.auditLog.create).toHaveBeenCalled();
+    expect(dbMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ programmeClaimCount: 1 }),
+        }),
+      })
+    );
   });
 
   it("n'écrit rien en dry run", async () => {
-    // Le mode par défaut du script : imprimer ce qui SERAIT stocké.
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: false });
 
     expect(result).toMatchObject({ ok: true, persisted: false });
@@ -90,98 +116,168 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.auditLog.create).not.toHaveBeenCalled();
   });
 
+  it("utilise Mistral avec une sortie JSON déterministe", async () => {
+    const { generateCandidateSynthesis } = await service();
+    await generateCandidateSynthesis("cand-1", { persist: false });
+
+    expect(callMistralMock.mock.calls[0]![1]).toMatchObject({
+      model: "mistral-large-latest",
+      temperature: 0,
+      responseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: "candidate_synthesis",
+          schema: {
+            required: ["career", "programmeClaims"],
+          },
+        },
+      },
+    });
+  });
+
   it("refuse une candidature qui n'est pas déclarée", async () => {
-    // Une candidature pressentie n'a demandé à personne de lire un résumé de son programme. La
-    // règle vit ici et pas dans la requête du script, sinon le bouton la contournerait.
     dbMock.candidacy.findUnique.mockResolvedValue({ ...CANDIDACY, status: "PRESSENTI" });
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
     expect(result).toMatchObject({ ok: false, reason: "non_declaree" });
-    expect(callAnthropicMock).not.toHaveBeenCalled();
+    expect(callMistralMock).not.toHaveBeenCalled();
   });
 
   it("refuse d'inventer l'extension présidentielle manquante", async () => {
     dbMock.candidacy.findUnique.mockResolvedValue({ ...CANDIDACY, presidentialData: null });
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
     expect(result).toMatchObject({ ok: false, reason: "sans_extension" });
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
-  // Le cas Arthaud, bout en bout : aucun mandat, aucun vote, cinq mesures. Le service doit demander
-  // au modèle la longueur que cette matière porte, et juger sur la même.
-  it("annonce au modèle le plancher que la matière porte, et juge sur le même", async () => {
-    dbMock.measure.findMany.mockResolvedValue(
-      Array.from({ length: 5 }, (_, i) => ({
-        theme: "SANTE",
-        publishedRevision: { text: `Mesure ${i}.` },
-      }))
-    );
-    callAnthropicMock.mockResolvedValue(
-      anthropicText(`${Array.from({ length: 81 }, (_, i) => `mot${i}`).join(" ")}.`)
-    );
-    const { generateCandidateSynthesis } = await service();
-
-    const result = await generateCandidateSynthesis("cand-1", { persist: true });
-
-    // 25 de base + 0 de parcours + 35 de programme : 81 mots passent, là où le plancher fixe de 90
-    // les refusait deux fois de suite et laissait la fiche sans résumé.
-    expect(result).toMatchObject({ ok: true });
-    const system = callAnthropicMock.mock.calls[0]![1].system as string;
-    expect(system).toContain("Entre 60 et 200 mots");
-    expect(callAnthropicMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("bascule sur Mistral quand Anthropic échoue", async () => {
-    // Le repli couvre la panne récurrente du projet : un solde Anthropic à zéro, qui rend un 400.
-    callAnthropicMock.mockRejectedValue(new Error("credit balance is too low"));
-    callMistralMock.mockResolvedValue({ text: ACCEPTED });
-    const { generateCandidateSynthesis } = await service();
-
-    const result = await generateCandidateSynthesis("cand-1", { persist: true });
-
-    expect(result).toMatchObject({ ok: true, provider: "mistral" });
-  });
-
-  it("porte les deux erreurs quand les deux fournisseurs tombent", async () => {
-    callAnthropicMock.mockRejectedValue(new Error("solde à zéro"));
+  it("retourne une erreur de génération quand Mistral échoue", async () => {
     callMistralMock.mockRejectedValue(new Error("429"));
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
-    expect(result).toMatchObject({ ok: false, reason: "generation" });
-    // Ne garder que la seconde cacherait pourquoi le premier fournisseur a été sauté.
-    expect(result.ok === false && result.message).toContain("solde à zéro");
-    expect(result.ok === false && result.message).toContain("429");
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "generation",
+      message: "Mistral reste indisponible après trois essais : 429",
+    });
+    expect(callMistralMock).toHaveBeenCalledTimes(3);
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
-  it("réessaie une fois en nommant la règle enfreinte, puis stocke", async () => {
-    callAnthropicMock
-      .mockResolvedValueOnce(anthropicText(`Un tiret cadratin — interdit. ${ACCEPTED}`))
-      .mockResolvedValueOnce(anthropicText(ACCEPTED));
+  it("réessaie une réponse JSON invalide en fournissant le brouillon au modèle", async () => {
+    callMistralMock
+      .mockResolvedValueOnce({ text: "pas du json", model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: providerOutput(), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: groundingOutput(), model: "mistral-large-latest" });
     const { generateCandidateSynthesis } = await service();
-
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
     expect(result).toMatchObject({ ok: true });
-    expect(callAnthropicMock).toHaveBeenCalledTimes(2);
-    const retryPrompt = callAnthropicMock.mock.calls[1]![0][0].content as string;
-    expect(retryPrompt).toContain("Ta réponse précédente a été refusée");
+    expect(callMistralMock).toHaveBeenCalledTimes(3);
+    const retryMessages = callMistralMock.mock.calls[1]![0] as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(retryMessages).toContainEqual({ role: "assistant", content: "pas du json" });
+    expect(retryMessages.at(-1)?.content).toContain("réponse JSON est invalide");
   });
 
-  it("ne stocke rien quand le texte est refusé deux fois", async () => {
-    callAnthropicMock.mockResolvedValue(anthropicText("Trop court."));
+  it("réessaie une synthèse que le contrôle d'étayage refuse", async () => {
+    callMistralMock
+      .mockResolvedValueOnce({ text: providerOutput(), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: groundingOutput(false), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: providerOutput(), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: groundingOutput(true), model: "mistral-large-latest" });
     const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
+    expect(result).toMatchObject({ ok: true });
+    expect(callMistralMock).toHaveBeenCalledTimes(4);
+    const retryMessages = callMistralMock.mock.calls[2]![0] as Array<{ content: string }>;
+    expect(retryMessages.at(-1)?.content).toContain("contrôle d'étayage refusé");
+  });
+
+  it("recontrôle une correction proposée à partir des mêmes preuves", async () => {
+    const corrected =
+      "Les mesures associent la réouverture de maternités de proximité au rétablissement de trains de nuit sur six lignes.";
+    callMistralMock
+      .mockResolvedValueOnce({ text: providerOutput(), model: "mistral-large-latest" })
+      .mockResolvedValueOnce({
+        text: groundingOutput(false, corrected),
+        model: "mistral-large-latest",
+      })
+      .mockResolvedValueOnce({ text: groundingOutput(true), model: "mistral-large-latest" });
+    const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: false });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain(corrected);
+    expect(callMistralMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("conserve en dernier recours les axes effectivement étayés", async () => {
+    const supported =
+      "La réouverture de maternités vise à rapprocher les soins des habitants dans les territoires concernés par leur fermeture.";
+    const unsupported =
+      "Les trains de nuit seraient rétablis afin de supprimer toutes les difficultés de déplacement sur le territoire.";
+    const generated = JSON.stringify({
+      career: `${CAREER}.`,
+      programmeClaims: [
+        { text: supported, measureRefs: ["M1"] },
+        { text: unsupported, measureRefs: ["M2"] },
+      ],
+    });
+    const checked = JSON.stringify({
+      claims: [
+        { index: 0, supported: true, reason: "Étayer par M1.", correctedText: "" },
+        { index: 1, supported: false, reason: "Effet absent.", correctedText: "" },
+      ],
+    });
+    callMistralMock
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: generated, model: "mistral-large-latest" })
+      .mockResolvedValueOnce({ text: checked, model: "mistral-large-latest" });
+
+    const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: false });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain(supported);
+    expect(result.ok && result.text).not.toContain(unsupported);
+  });
+
+  it("ne stocke rien quand deux réponses sont refusées", async () => {
+    callMistralMock.mockResolvedValue({
+      text: JSON.stringify({ career: `${CAREER}.`, programmeClaims: [] }),
+      model: "mistral-large-latest",
+    });
+    const { generateCandidateSynthesis } = await service();
     const result = await generateCandidateSynthesis("cand-1", { persist: true });
 
     expect(result).toMatchObject({ ok: false, reason: "refuse" });
+    expect(callMistralMock).toHaveBeenCalledTimes(3);
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+  });
+
+  it("gère un programme vide sans lancer de contrôle d'étayage", async () => {
+    dbMock.measure.findMany.mockResolvedValue([]);
+    callMistralMock.mockResolvedValue({
+      text: JSON.stringify({ career: `${CAREER}.`, programmeClaims: [] }),
+      model: "mistral-large-latest",
+    });
+    const { generateCandidateSynthesis } = await service();
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
+
+    expect(result).toMatchObject({ ok: true, measureCount: 0 });
+    expect(callMistralMock).toHaveBeenCalledTimes(1);
+    expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
+      "Aucune mesure n'est publiée"
+    );
   });
 });

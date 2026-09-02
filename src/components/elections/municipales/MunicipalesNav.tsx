@@ -1,20 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { Home, Users, Scale, BarChart3, Map, Search } from "lucide-react";
-import { useState } from "react";
-import { CommuneSearch } from "./CommuneSearch";
+import { BarChart3, Home, Map, Scale, Users } from "lucide-react";
+import { MunicipalesYearNav, type MunicipalesTab } from "./MunicipalesYearNav";
 
-interface Tab {
-  href: string;
-  label: string;
-  icon: typeof Home;
-  exact?: boolean;
-}
-
-const TABS: Tab[] = [
+const TABS: MunicipalesTab[] = [
   { href: "/elections/municipales-2026", label: "Vue d'ensemble", icon: Home, exact: true },
   { href: "/elections/municipales-2026/maires", label: "Maires", icon: Users },
   { href: "/elections/municipales-2026/cumul", label: "Cumul", icon: Scale },
@@ -23,53 +12,6 @@ const TABS: Tab[] = [
 ];
 
 export function MunicipalesNav() {
-  const pathname = usePathname();
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  return (
-    <div className="border-b bg-background/80 backdrop-blur-sm sticky top-16 z-40">
-      <div className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide -mb-px">
-          {TABS.map((tab) => {
-            const isActive = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
-            const Icon = tab.icon;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                prefetch={false}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
-                  isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </Link>
-            );
-          })}
-          <button
-            onClick={() => setSearchOpen(!searchOpen)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ml-auto",
-              searchOpen
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-            )}
-            aria-label="Rechercher une commune"
-          >
-            <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">Chercher une commune</span>
-          </button>
-        </div>
-        {searchOpen && (
-          <div className="py-3 border-t">
-            <CommuneSearch placeholder="Rechercher une commune..." className="max-w-md" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // No basePath: 2026 is the default election of the CommuneSearch component.
+  return <MunicipalesYearNav tabs={TABS} search={{}} />;
 }

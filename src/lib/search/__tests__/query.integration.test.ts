@@ -11,16 +11,19 @@ import { uniqueEntityId, uniqueToken } from "./helpers";
 // cannot undo an import.
 let db: typeof import("@/lib/db").db;
 let searchPublic: typeof import("../query").searchPublic;
+let searchPublicPage: typeof import("../query").searchPublicPage;
 
 async function index(
   entityId: string,
   title: string,
-  visibility: "PUBLIC" | "ADMIN_ONLY"
+  visibility: "PUBLIC" | "ADMIN_ONLY",
+  electionId: string | null = null
 ): Promise<void> {
   await db.$transaction(async (tx) => {
     await upsertSearchDocument(tx, {
       entityType: "MEASURE",
       entityId,
+      electionId,
       title,
       body: "Corps du document.",
       url: `/elections/presidentielle-2027/mesures/${entityId}`,
@@ -35,7 +38,7 @@ describeIfDisposableDb("searchPublic", () => {
   beforeAll(async () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
-    ({ searchPublic } = await import("../query"));
+    ({ searchPublic, searchPublicPage } = await import("../query"));
   });
 
   afterAll(async () => {
@@ -67,6 +70,41 @@ describeIfDisposableDb("searchPublic", () => {
 
     expect(hits).toHaveLength(1);
     expect(hits[0]?.entityId).toBe(shown);
+  });
+
+  it("scopes both lexical passes and the total to one election", async () => {
+    const token = uniqueToken();
+    const electionA = uniqueEntityId("election-a");
+    const electionB = uniqueEntityId("election-b");
+    const exactA = uniqueEntityId("exact-a");
+    const variantA = uniqueEntityId("variant-a");
+    const otherElection = uniqueEntityId("other-election");
+
+    await index(exactA, `Plafonner le loyer ${token}`, "PUBLIC", electionA);
+    await index(variantA, `Encadrer les loyers ${token}`, "PUBLIC", electionA);
+    await index(otherElection, `Encadrer les loyers ${token}`, "PUBLIC", electionB);
+
+    const page = await searchPublicPage(`loyer ${token}`, { electionId: electionA, limit: 10 });
+
+    expect(page.hits.map((hit) => hit.entityId)).toEqual(
+      expect.arrayContaining([exactA, variantA])
+    );
+    expect(page.hits.map((hit) => hit.entityId)).not.toContain(otherElection);
+    expect(page.total).toBe(2);
+  });
+
+  it("keeps the historical unscoped call compatible", async () => {
+    const token = uniqueToken();
+    const electionA = uniqueEntityId("election-a");
+    const electionB = uniqueEntityId("election-b");
+    const first = uniqueEntityId("first");
+    const second = uniqueEntityId("second");
+    await index(first, `Mesure ${token}`, "PUBLIC", electionA);
+    await index(second, `Mesure ${token}`, "PUBLIC", electionB);
+
+    const hits = await searchPublic(token);
+
+    expect(hits.map((hit) => hit.entityId)).toEqual(expect.arrayContaining([first, second]));
   });
 
   it("returns both the exact match and the morphological variant, exact first", async () => {

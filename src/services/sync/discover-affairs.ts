@@ -24,17 +24,25 @@ export type { ExtractedPenaltyData };
 import { wikipediaService } from "@/lib/api/wikipedia";
 import type { WikidataClaim } from "@/lib/api/wikidata";
 import { extractAffairsFromWikipedia } from "@/services/wikipedia-affair-extraction";
-import { findMatchingAffairs, pickConfidentMatch } from "@/services/affairs/matching";
+import { classifyAffairMatches, findMatchingAffairs } from "@/services/affairs/matching";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
-import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
 import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
 import { loadCandidatePool, loadSurnameVocabulary } from "@/lib/affair-matching/persistence";
 import type { SurnameVocabulary } from "@/lib/affair-matching/surname-ambiguity";
 import type { AffairCandidateRecord } from "@/lib/affair-matching";
-import { hashSourceContent, proposeAffairUpdate } from "@/services/affairs/proposals";
+import {
+  hashSourceContent,
+  previewAffairEventProposal,
+  proposeAffairEvent,
+  proposeAffairUpdate,
+  type PreviewAffairEventProposalOutcome,
+  type ProposeAffairEventOutcome,
+} from "@/services/affairs/proposals";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { IMPORTER_DISCOVER_AFFAIRS, withImportRun } from "@/services/affairs/import-run";
+import { previewAffairPolitician } from "@/lib/affair-matching/resolver";
+import { findVerifiedAffairPressEventSource } from "@/config/affair-sources";
 
 export const DISCOVER_AFFAIRS_CURSOR_KEY = "discover-affairs:cursor:lastName";
 
@@ -90,8 +98,13 @@ export interface DiscoverAffairsResult {
   /** Affaires v2, lot 1: enrichment of existing affairs is now proposal-based. */
   proposalsPending: number;
   proposalsDeduped: number;
+  proposalsWouldCreate: number;
+  proposalsDedupedPending: number;
+  proposalsDedupedTerminal: number;
+  eventsAlreadyApplied: number;
   /** Several affairs tied at HIGH: no enrichment, a draft is created instead. */
   ambiguousMatches: number;
+  insufficientSourceProvenance: number;
   errors: string[];
 }
 
@@ -107,14 +120,20 @@ export function extractPenaltyData(claim: WikidataClaim): ExtractedPenaltyData {
   const timeClaims = claim.qualifiers[WD_PROPS.POINT_IN_TIME];
   if (timeClaims?.[0]?.datavalue?.value) {
     const tv = timeClaims[0].datavalue.value;
-    if (typeof tv === "object" && "time" in tv) {
+    if (typeof tv === "object" && "time" in tv && "precision" in tv && tv.precision >= 11) {
       const match = tv.time.match(/^\+?(\d{4})-(\d{2})-(\d{2})/);
-      if (match) {
-        // Wikidata uses 00 for unknown month/day (year-only or month-only precision)
-        const safeMonth = match[2] === "00" ? "01" : match[2];
-        const safeDay = match[3] === "00" ? "01" : match[3];
-        const date = new Date(`${match[1]}-${safeMonth}-${safeDay}`);
-        if (!isNaN(date.getTime())) result.verdictDate = date;
+      if (match && match[2] !== "00" && match[3] !== "00") {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        if (
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month - 1 &&
+          date.getUTCDate() === day
+        ) {
+          result.verdictDate = date;
+        }
       }
     }
   }
@@ -214,6 +233,7 @@ export async function discoverAffairs(options?: {
   wikidataOnly?: boolean;
   wikipediaOnly?: boolean;
   useCursor?: boolean;
+  dryRun?: boolean;
 }): Promise<DiscoverAffairsResult> {
   const {
     limit,
@@ -221,6 +241,7 @@ export async function discoverAffairs(options?: {
     wikidataOnly = false,
     wikipediaOnly = false,
     useCursor = true,
+    dryRun = false,
   } = options ?? {};
 
   const stats: DiscoverAffairsResult = {
@@ -231,7 +252,12 @@ export async function discoverAffairs(options?: {
     affairsCreated: 0,
     proposalsPending: 0,
     proposalsDeduped: 0,
+    proposalsWouldCreate: 0,
+    proposalsDedupedPending: 0,
+    proposalsDedupedTerminal: 0,
+    eventsAlreadyApplied: 0,
     ambiguousMatches: 0,
+    insufficientSourceProvenance: 0,
     errors: [],
   };
 
@@ -274,7 +300,7 @@ export async function discoverAffairs(options?: {
   stats.politiciansProcessed = politicians.length;
   console.log(`${politicians.length} politician(s) found`);
 
-  if (cursorActive) {
+  if (cursorActive && !dryRun) {
     if (politicians.length === 0 || (typeof limit === "number" && politicians.length < limit)) {
       console.log(
         `[discover-affairs] cursor: ${cursor ?? "(start)"} -> (end), processed ${politicians.length}; alphabet exhausted, cursor reset`
@@ -296,7 +322,7 @@ export async function discoverAffairs(options?: {
   // Phase 1: Wikidata
   let phase1Affairs: DiscoveredAffair[] = [];
   if (!wikipediaOnly) {
-    phase1Affairs = await runPhase1Wikidata(politicians, stats);
+    phase1Affairs = await runPhase1Wikidata(politicians, stats, dryRun);
   }
 
   // Phase 2: Wikipedia
@@ -321,18 +347,25 @@ export async function discoverAffairs(options?: {
   // Phase 3: Reconciliation
   const allAffairs = [...phase1Affairs, ...phase2Affairs];
 
-  if (allAffairs.length > 0) {
+  if (allAffairs.length > 0 && dryRun) {
+    await runPhase3Reconciliation(allAffairs, stats, null, true);
+  } else if (allAffairs.length > 0) {
     // Reconciliation is the only phase that touches existing affairs, so it is
     // the only one that needs an ImportRun to anchor its proposals.
     // withImportRun guarantees the run leaves RUNNING whatever happens.
     await withImportRun(IMPORTER_DISCOVER_AFFAIRS, async ({ importRunId, setStats }) => {
-      await runPhase3Reconciliation(allAffairs, stats, importRunId);
+      await runPhase3Reconciliation(allAffairs, stats, importRunId, false);
       setStats({
         duplicatesSkipped: stats.duplicatesSkipped,
         affairsCreated: stats.affairsCreated,
         proposalsPending: stats.proposalsPending,
         proposalsDeduped: stats.proposalsDeduped,
+        proposalsWouldCreate: stats.proposalsWouldCreate,
+        proposalsDedupedPending: stats.proposalsDedupedPending,
+        proposalsDedupedTerminal: stats.proposalsDedupedTerminal,
+        eventsAlreadyApplied: stats.eventsAlreadyApplied,
         ambiguousMatches: stats.ambiguousMatches,
+        insufficientSourceProvenance: stats.insufficientSourceProvenance,
       });
     });
   }
@@ -346,7 +379,8 @@ async function runPhase1Wikidata(
     fullName: string;
     externalIds: Array<{ externalId: string }>;
   }>,
-  stats: DiscoverAffairsResult
+  stats: DiscoverAffairsResult,
+  dryRun: boolean
 ): Promise<DiscoveredAffair[]> {
   const discovered: DiscoveredAffair[] = [];
   const wikidataService = new WikidataService();
@@ -388,7 +422,7 @@ async function runPhase1Wikidata(
           // future liaison d\u00e9cision\u2192affaire, jamais pour publier.
           let decisionId: string | null = null;
           try {
-            const resolveResult = await resolveAffairPolitician({
+            const resolverInput = {
               text: `${politician.fullName}: ${label}`,
               metadata: {
                 source: "WIKIDATA" as SourceType,
@@ -396,7 +430,10 @@ async function runPhase1Wikidata(
                 factsDate: penaltyData.verdictDate ?? null,
                 externalIds: { wikidataQId: qid },
               },
-            });
+            };
+            const resolveResult = dryRun
+              ? await previewAffairPolitician(resolverInput)
+              : await resolveAffairPolitician(resolverInput);
             decisionId = resolveResult.decisionId;
           } catch (resolveErr) {
             console.warn(
@@ -536,7 +573,9 @@ async function runPhase2Wikipedia(
               title: extracted.title,
               publisher: extractPublisherFromUrl(sourceUrl),
               sourceType: "PRESSE",
-              publishedAt: extractDateFromUrl(sourceUrl),
+              // The URL may contain a date, but that does not prove the article's
+              // publication date. Keep it unknown until a verified source supplies it.
+              publishedAt: null,
             });
           }
 
@@ -703,7 +742,8 @@ function extractQidFromUrl(url: string | undefined): string | null {
 async function runPhase3Reconciliation(
   allAffairs: DiscoveredAffair[],
   stats: DiscoverAffairsResult,
-  importRunId: string
+  importRunId: string | null,
+  dryRun: boolean
 ): Promise<void> {
   console.log(`Phase 3: Reconciliation - ${allAffairs.length} affairs`);
 
@@ -713,36 +753,89 @@ async function runPhase3Reconciliation(
         politicianId: affair.politicianId,
         title: affair.title,
         category: affair.category,
+        status: affair.status,
         // Without it, two convictions for the same offense are indistinguishable:
         // the Wikidata title is the bare offense label (issue #520).
         verdictDate: affair.verdictDate,
       });
 
-      const picked = pickConfidentMatch(matches);
-      if (picked.kind === "ambiguous") {
-        // Several affairs tie: enriching one of them would be a coin flip. Fall
-        // through to creation and let the merge tooling decide (issue #520).
+      const routing = classifyAffairMatches(matches);
+      let insufficientEvolutionProvenance = false;
+      if (routing.kind === "CONFIDENT_AMBIGUOUS" || routing.kind === "POSSIBLE_AMBIGUOUS") {
         stats.ambiguousMatches++;
       }
-      const highMatch = picked.kind === "match" ? picked.match : null;
 
-      if (highMatch) {
+      if (routing.kind === "CONFIDENT_MATCH") {
         // Affaires v2, lot 1: an importer never writes to an existing affair.
         // Penalty data, dates and jurisdiction go through the proposal queue.
-        if (affair.phase === "wikidata") {
-          await proposePenaltyEnrichment(affair, highMatch.affairId, stats, importRunId);
+        if (!dryRun && affair.phase === "wikidata") {
+          if (!importRunId) throw new Error("ImportRun discover-affairs absent");
+          await proposePenaltyEnrichment(affair, routing.match.affairId, stats, importRunId);
         }
 
         // Même en cas de doublon enrichi, la décision resolver est rattachée
         // à l'affaire existante pour la piste d'audit du rattachement.
-        if (affair.decisionId) {
+        if (!dryRun && affair.decisionId) {
           await db.affairPoliticianDecision.update({
             where: { id: affair.decisionId },
-            data: { affairId: highMatch.affairId },
+            data: { affairId: routing.match.affairId },
           });
         }
 
         stats.duplicatesSkipped++;
+        continue;
+      }
+
+      if (routing.kind === "UNIQUE_EVOLUTION") {
+        const pressSource = findVerifiedAffairPressEventSource(
+          affair.sources.filter((source) => source.sourceType === "PRESSE")
+        );
+        if (pressSource?.publishedAt) {
+          const eventInput = {
+            affairId: routing.match.affairId,
+            importer: IMPORTER_DISCOVER_AFFAIRS,
+            sourceUrl: pressSource.url,
+            sourceTitle: pressSource.title,
+            publishedAt: pressSource.publishedAt,
+            publisher: pressSource.publisher,
+            sourceExcerpt: pressSource.excerpt!,
+            resolverDecisionId: affair.decisionId,
+            sourceContentHash: hashSourceContent({
+              sourceUrl: pressSource.url,
+              publishedAt: pressSource.publishedAt,
+              title: affair.title,
+              status: affair.status,
+            }),
+            confidence: Math.round(routing.match.score * 100),
+            rationale:
+              `Candidat d’évolution unique (${routing.match.matchedBy}) avec une source de presse ` +
+              `datée. La publication est proposée comme événement médiatique, sans déduire la ` +
+              `date d’un acte judiciaire.`,
+            extractorVersion: "discover-evolution-v1",
+          };
+          let proposal;
+          if (dryRun) {
+            proposal = await previewAffairEventProposal(eventInput);
+          } else {
+            if (!importRunId) throw new Error("ImportRun discover-affairs absent");
+            proposal = await proposeAffairEvent({ ...eventInput, importRunId });
+          }
+          recordEventProposalOutcome(stats, proposal.outcome);
+          if (proposal.outcome !== "TARGET_INELIGIBLE") continue;
+        } else {
+          insufficientEvolutionProvenance = true;
+        }
+      }
+
+      if (insufficientEvolutionProvenance) stats.insufficientSourceProvenance++;
+
+      const datedSources = affair.sources.filter((source) => source.publishedAt !== null);
+      if (datedSources.length === 0) {
+        if (!insufficientEvolutionProvenance) stats.insufficientSourceProvenance++;
+        continue;
+      }
+      if (dryRun) {
+        stats.affairsCreated++;
         continue;
       }
 
@@ -768,11 +861,11 @@ async function runPhase3Reconciliation(
         communityService: affair.communityService,
         otherSentence: affair.otherSentence,
         sentence: buildSentenceSummary(affair),
-        sources: affair.sources.map((s) => ({
+        sources: datedSources.map((s) => ({
           url: s.url,
           title: s.title,
           publisher: s.publisher,
-          publishedAt: s.publishedAt ?? affair.factsDate ?? affair.verdictDate ?? new Date(),
+          publishedAt: s.publishedAt!,
           sourceType: s.sourceType,
         })),
       });
@@ -793,4 +886,21 @@ async function runPhase3Reconciliation(
       );
     }
   }
+}
+
+function recordEventProposalOutcome(
+  stats: DiscoverAffairsResult,
+  outcome: ProposeAffairEventOutcome | PreviewAffairEventProposalOutcome
+): void {
+  if (outcome === "CREATED") stats.proposalsPending++;
+  if (outcome === "WOULD_CREATE") stats.proposalsWouldCreate++;
+  if (outcome === "DEDUPED_PENDING") {
+    stats.proposalsDeduped++;
+    stats.proposalsDedupedPending++;
+  }
+  if (outcome === "DEDUPED_TERMINAL") {
+    stats.proposalsDeduped++;
+    stats.proposalsDedupedTerminal++;
+  }
+  if (outcome === "ALREADY_APPLIED") stats.eventsAlreadyApplied++;
 }

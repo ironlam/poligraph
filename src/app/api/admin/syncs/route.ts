@@ -45,7 +45,7 @@ export const GET = withAdminAuth(async (request) => {
 });
 
 export const POST = withAdminAuth(
-  withValidation(createSyncSchema, async (_request, _context, { script }) => {
+  withValidation(createSyncSchema, async (request, _context, { script }) => {
     // Check if this script is already running
     const existing = await db.syncJob.findFirst({
       where: { script, status: { in: ["PENDING", "RUNNING"] } },
@@ -57,8 +57,24 @@ export const POST = withAdminAuth(
       );
     }
 
-    const job = await db.syncJob.create({
-      data: { script, status: "PENDING" },
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ipAddress = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+    const userAgent = request.headers.get("user-agent");
+    const job = await db.$transaction(async (tx) => {
+      const created = await tx.syncJob.create({
+        data: { script, status: "PENDING" },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "CREATE",
+          entityType: "SyncJob",
+          entityId: created.id,
+          changes: { script, status: "PENDING" },
+          ipAddress,
+          userAgent,
+        },
+      });
+      return created;
     });
 
     // Trigger via Inngest

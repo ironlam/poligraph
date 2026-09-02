@@ -14,6 +14,13 @@ import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/
 
 const isAuthenticatedMock = vi.fn<() => Promise<boolean>>();
 const revalidatePathMock = vi.fn();
+const headersMock = vi.fn(
+  async () =>
+    new Headers({
+      "user-agent": "vitest-agent",
+      "x-forwarded-for": "203.0.113.8, 10.0.0.1",
+    })
+);
 
 const transitionsMock = {
   createMeasure: vi.fn(async () => ({ measureId: "m-1", revisionId: "rev-1" })),
@@ -28,6 +35,7 @@ const transitionsMock = {
 
 vi.mock("@/lib/auth", () => ({ isAuthenticated: () => isAuthenticatedMock() }));
 vi.mock("next/cache", () => ({ revalidatePath: (path: string) => revalidatePathMock(path) }));
+vi.mock("next/headers", () => ({ headers: () => headersMock() }));
 vi.mock("@/lib/measures/transitions", () => transitionsMock);
 
 const assessmentsMock = {
@@ -48,6 +56,36 @@ const voteLinksMock = {
   createMeasureVoteLink: vi.fn(async () => ({ id: "vl-1" })),
 };
 vi.mock("@/lib/measures/vote-links", () => voteLinksMock);
+
+const subtopicsMock = {
+  proposeMeasureRevisionSubtopics: vi.fn(async () => ({
+    revisionId: "rev-1",
+    suggestions: [],
+    skipped: false,
+  })),
+  reviewMeasureRevisionSubtopic: vi.fn(async () => undefined),
+};
+vi.mock("@/lib/measures/subtopics", () => subtopicsMock);
+
+const readerGuidesMock = {
+  proposeReaderGuidesForRevision: vi.fn(async () => ({ created: 0, proposals: [] })),
+  reviewReaderGuideMention: vi.fn(async () => undefined),
+  saveReaderGuideDraft: vi.fn(async () => "guide-1"),
+  publishReaderGuide: vi.fn(async () => undefined),
+  deactivateReaderGuide: vi.fn(async () => 1),
+};
+vi.mock("@/lib/measures/reader-guides", () => readerGuidesMock);
+
+const contextGenerationMock = {
+  generateMeasureContextDraft: vi.fn(async () => ({
+    status: "CREATED" as const,
+    revisionId: "rev-context",
+    details: "Contexte documenté.",
+    model: "mistral-small-2506",
+    evidenceUnitIds: ["unit-1"],
+  })),
+};
+vi.mock("@/lib/measures/context-generation", () => contextGenerationMock);
 
 const REVISION = {
   text: "Encadrer les loyers dans les zones tendues.",
@@ -100,6 +138,65 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
     {
       name: "reviewRevisionAction",
       call: () => a.reviewRevisionAction({ measureId: "m-1", revisionId: "rev-1" }),
+    },
+    {
+      name: "proposeSubtopicsAction",
+      call: () => a.proposeSubtopicsAction({ measureId: "m-1", revisionId: "rev-1" }),
+    },
+    {
+      name: "reviewSubtopicAction",
+      call: () =>
+        a.reviewSubtopicAction({
+          measureId: "m-1",
+          revisionId: "rev-1",
+          subtopicId: "subtopic-1",
+          status: "APPROVED",
+        }),
+    },
+    {
+      name: "proposeReaderGuidesAction",
+      call: () => a.proposeReaderGuidesAction({ measureId: "m-1", revisionId: "rev-1" }),
+    },
+    {
+      name: "reviewReaderGuideMentionAction",
+      call: () =>
+        a.reviewReaderGuideMentionAction({
+          measureId: "m-1",
+          mentionId: "mention-1",
+          guideId: "guide-1",
+          status: "APPROVED",
+        }),
+    },
+    {
+      name: "saveReaderGuideDraftAction",
+      call: () =>
+        a.saveReaderGuideDraftAction({
+          slug: "zones-faibles-emissions",
+          label: "Zone à faibles émissions",
+          definition:
+            "Un périmètre routier où la circulation des véhicules polluants est restreinte.",
+          aliases: ["ZFE"],
+          sourceKind: "OFFICIAL_INSTITUTION",
+          sourceUrl: "https://www.ecologie.gouv.fr/zfe",
+          sourceLabel: "Zones à faibles émissions",
+          sourcePublisher: "Ministère de la Transition écologique",
+        }),
+    },
+    {
+      name: "publishReaderGuideAction",
+      call: () => a.publishReaderGuideAction({ guideId: "guide-1" }),
+    },
+    {
+      name: "deactivateReaderGuideAction",
+      call: () => a.deactivateReaderGuideAction({ guideId: "guide-1" }),
+    },
+    {
+      name: "generateContextDraftAction",
+      call: () =>
+        a.generateContextDraftAction({
+          measureId: "m-1",
+          expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        }),
     },
     {
       name: "discardRevisionAction",
@@ -162,6 +259,14 @@ describe("actions éditoriales : la session", () => {
     for (const [name, mock] of Object.entries(transitionsMock)) {
       expect(mock, name).not.toHaveBeenCalled();
     }
+    expect(subtopicsMock.proposeMeasureRevisionSubtopics).not.toHaveBeenCalled();
+    expect(subtopicsMock.reviewMeasureRevisionSubtopic).not.toHaveBeenCalled();
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).not.toHaveBeenCalled();
+    expect(readerGuidesMock.reviewReaderGuideMention).not.toHaveBeenCalled();
+    expect(readerGuidesMock.saveReaderGuideDraft).not.toHaveBeenCalled();
+    expect(readerGuidesMock.publishReaderGuide).not.toHaveBeenCalled();
+    expect(readerGuidesMock.deactivateReaderGuide).not.toHaveBeenCalled();
+    expect(contextGenerationMock.generateMeasureContextDraft).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
@@ -177,6 +282,75 @@ describe("actions éditoriales : la session", () => {
     for (const [name, mock] of Object.entries(transitionsMock)) {
       expect(mock, name).toHaveBeenCalledTimes(1);
     }
+    expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledTimes(1);
+    expect(subtopicsMock.reviewMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.deactivateReaderGuide).toHaveBeenCalledTimes(1);
+    expect(contextGenerationMock.generateMeasureContextDraft).toHaveBeenCalledTimes(1);
+    expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledWith("rev-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+    expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledWith(
+      expect.objectContaining({ ipAddress: "203.0.113.8", userAgent: "vitest-agent" })
+    );
+    expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceKind: "OFFICIAL_INSTITUTION" }),
+      "admin",
+      { ipAddress: "203.0.113.8", userAgent: "vitest-agent" }
+    );
+    expect(readerGuidesMock.publishReaderGuide).toHaveBeenCalledWith("guide-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+    expect(readerGuidesMock.deactivateReaderGuide).toHaveBeenCalledWith("guide-1", "admin", {
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+  });
+});
+
+describe("génération assistée du contexte", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+    contextGenerationMock.generateMeasureContextDraft.mockResolvedValue({
+      status: "CREATED",
+      revisionId: "rev-context",
+      details: "Contexte documenté.",
+      model: "mistral-small-2506",
+      evidenceUnitIds: ["unit-1"],
+    });
+  });
+
+  it("transmet la version affichée et attribue le brouillon à l'admin", async () => {
+    const result = await (
+      await actions()
+    ).generateContextDraftAction({
+      measureId: "m-1",
+      expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+    });
+
+    expect(result).toEqual({ ok: true, measureId: "m-1" });
+    expect(contextGenerationMock.generateMeasureContextDraft).toHaveBeenCalledWith("m-1", {
+      expectedUpdatedAt: new Date("2027-01-16T10:00:00.000Z"),
+      generatedBy: "admin",
+      ipAddress: "203.0.113.8",
+      userAgent: "vitest-agent",
+    });
+  });
+
+  it("limite strictement un lot à dix mesures", async () => {
+    const action = await actions();
+    await expect(
+      action.generateContextDraftBatchAction({
+        measureIds: Array.from({ length: 11 }, (_, index) => `m-${index}`),
+      })
+    ).rejects.toThrow("1 à 10 mesures");
+    expect(contextGenerationMock.generateMeasureContextDraft).not.toHaveBeenCalled();
   });
 });
 
@@ -355,11 +529,13 @@ describe("publication par lot", () => {
         measureId: "m-1",
         revisionId: "rev-1",
         expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        batchKind: "FIRST_PUBLICATION",
       },
       {
         measureId: "m-2",
         revisionId: "rev-2",
         expectedUpdatedAt: "2027-01-17T10:00:00.000Z",
+        batchKind: "FIRST_PUBLICATION",
       },
     ],
   };
@@ -383,12 +559,14 @@ describe("publication par lot", () => {
       measureId: "m-1",
       revisionId: "rev-1",
       expectedUpdatedAt: new Date("2027-01-16T10:00:00.000Z"),
+      batchKind: "FIRST_PUBLICATION",
       publishedBy: "admin",
     });
     expect(transitionsMock.publishMeasureRevision).toHaveBeenNthCalledWith(2, {
       measureId: "m-2",
       revisionId: "rev-2",
       expectedUpdatedAt: new Date("2027-01-17T10:00:00.000Z"),
+      batchKind: "FIRST_PUBLICATION",
       publishedBy: "admin",
     });
   });
@@ -411,8 +589,8 @@ describe("relecture par lot", () => {
 
   const input = {
     items: [
-      { measureId: "m-1", revisionId: "rev-1" },
-      { measureId: "m-2", revisionId: "rev-2" },
+      { measureId: "m-1", revisionId: "rev-1", batchKind: "FIRST_PUBLICATION" },
+      { measureId: "m-2", revisionId: "rev-2", batchKind: "FIRST_PUBLICATION" },
     ],
   };
 
@@ -434,11 +612,13 @@ describe("relecture par lot", () => {
     expect(transitionsMock.reviewMeasureRevision).toHaveBeenNthCalledWith(1, {
       measureId: "m-1",
       revisionId: "rev-1",
+      batchKind: "FIRST_PUBLICATION",
       reviewedBy: "admin",
     });
     expect(transitionsMock.reviewMeasureRevision).toHaveBeenNthCalledWith(2, {
       measureId: "m-2",
       revisionId: "rev-2",
+      batchKind: "FIRST_PUBLICATION",
       reviewedBy: "admin",
     });
   });

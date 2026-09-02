@@ -1,9 +1,17 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/prisma";
+import { getCategoriesForSuper } from "@/config/labels";
 import { db } from "@/lib/db";
+import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidate-synthesis";
 import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
+import {
+  computeThemeCorpusFingerprint,
+  getThemeSynthesisState,
+  indexThemeSynthesisMeasures,
+  readThemeSynthesisClaims,
+} from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
@@ -41,6 +49,7 @@ export type PoliticianCandidacy = {
   sourceLabel: string;
   partyLabel: string | null;
   partyLogoUrl: string | null;
+  partyColor: string | null;
   programmeIdentified: boolean;
   declaredAt: Date | null;
   withdrewAt: Date | null;
@@ -84,7 +93,7 @@ export async function loadPoliticianPresidentialCandidacy(
       sourceUrl: true,
       sourceLabel: true,
       partyLabel: true,
-      party: { select: { name: true, shortName: true, logoUrl: true } },
+      party: { select: { name: true, shortName: true, logoUrl: true, color: true } },
       round1Pct: true,
       round2Pct: true,
       isElected: true,
@@ -138,6 +147,7 @@ export async function loadPoliticianPresidentialCandidacy(
     sourceLabel: row.sourceLabel,
     partyLabel: row.partyLabel ?? row.party?.shortName ?? row.party?.name ?? null,
     partyLogoUrl: row.party?.logoUrl ?? null,
+    partyColor: row.party?.color ?? null,
     programmeIdentified: programme !== null,
     declaredAt: row.presidentialData?.declaredAt ?? null,
     withdrewAt: row.presidentialData?.withdrewAt ?? null,
@@ -157,6 +167,7 @@ export async function loadPoliticianPresidentialCandidacy(
 
 export type CandidateThemeMeasure = {
   id: string;
+  slug: string;
   text: string;
   sourceUrl: string | null;
 };
@@ -165,6 +176,13 @@ export type CandidateThemeBreakdown = {
   theme: ThemeCategory;
   slug: string;
   measureCount: number;
+  /** Human-published and current for this exact set of published revisions, otherwise absent. */
+  synthesis: {
+    claims: Array<{
+      text: string;
+      measures: CandidateThemeMeasure[];
+    }>;
+  } | null;
   /**
    * Every measure of the theme, not a sample.
    *
@@ -174,6 +192,7 @@ export type CandidateThemeBreakdown = {
    * their own count made the page describe work instead of showing it.
    */
   measures: CandidateThemeMeasure[];
+  subtopics: Array<{ slug: string; label: string; count: number }>;
 };
 
 export type CandidateRecentVote = {
@@ -190,6 +209,10 @@ export type CandidateFicheDetail = {
   recentVotes: CandidateRecentVote[];
   /** Every mandate ever held, for the header count. */
   mandateCount: number;
+  /** Convictions for probity offences, pronounced at least at first instance. */
+  probityConvictionCount: number;
+  /** Probity convictions that can still be challenged on appeal or cassation. */
+  probityNonDefinitiveConvictionCount: number;
 };
 
 /**
@@ -204,23 +227,64 @@ export async function loadCandidateFicheDetail(
   candidacyId: string,
   politicianId: string
 ): Promise<CandidateFicheDetail> {
-  const [measures, votes, mandateCount] = await Promise.all([
+  const [
+    measures,
+    mandates,
+    probityConvictionCount,
+    probityNonDefinitiveConvictionCount,
+    themeSyntheses,
+  ] = await Promise.all([
     getPublicMeasuresByCandidacy(candidacyId),
-    // Cheap and index-backed: `votingDate` is denormalized onto Vote precisely so a
-    // "votes for politician" sort needs no join.
-    db.vote.findMany({
-      where: { politicianId },
-      orderBy: { votingDate: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        position: true,
-        votingDate: true,
-        scrutin: { select: { id: true, title: true } },
+    db.mandate.findMany({ where: { politicianId }, select: { type: true } }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
       },
     }),
-    db.mandate.count({ where: { politicianId } }),
+    db.affair.count({
+      where: {
+        politicianId,
+        ...getConvictionOnlyWhere(),
+        category: { in: getCategoriesForSuper("PROBITE") },
+        status: {
+          in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS", "POURVOI_EN_CASSATION"],
+        },
+      },
+    }),
+    db.candidacyThemeSynthesis.findMany({
+      where: {
+        candidacyPresidential: { candidacyId },
+        status: "PUBLISHED",
+      },
+      select: {
+        theme: true,
+        evidence: true,
+        status: true,
+        corpusFingerprint: true,
+      },
+    }),
   ]);
+
+  const synthesesByTheme = new Map(themeSyntheses.map((synthesis) => [synthesis.theme, synthesis]));
+
+  const hasDeputyMandate = mandates.some((mandate) => mandate.type === "DEPUTE");
+  // Votes on the presidential fiche describe work at the Assemblée nationale. A person who has
+  // never been a député does not get a generic "votes" block assembled from another institution.
+  const votes = hasDeputyMandate
+    ? await db.vote.findMany({
+        where: { politicianId, scrutin: { chamber: "AN" } },
+        orderBy: { votingDate: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          position: true,
+          votingDate: true,
+          scrutin: { select: { id: true, title: true } },
+        },
+      })
+    : [];
 
   const byTheme = new Map<ThemeCategory, PublicMeasure[]>();
   for (const measure of measures) {
@@ -230,16 +294,75 @@ export async function loadCandidateFicheDetail(
   }
 
   const themes: CandidateThemeBreakdown[] = [...byTheme.entries()]
-    .map(([theme, list]) => ({
-      theme,
-      slug: themeToSlug(theme),
-      measureCount: list.length,
-      measures: list.map((measure) => ({
-        id: measure.id,
-        text: measure.text,
-        sourceUrl: pickMeasureSourceUrl(measure.sources),
-      })),
-    }))
+    .map(([theme, list]) => {
+      const subtopicCounts = new Map<string, { label: string; count: number }>();
+      for (const measure of list) {
+        for (const subtopic of measure.subtopics) {
+          const current = subtopicCounts.get(subtopic.slug);
+          subtopicCounts.set(subtopic.slug, {
+            label: subtopic.label,
+            count: (current?.count ?? 0) + 1,
+          });
+        }
+      }
+      return {
+        theme,
+        slug: themeToSlug(theme),
+        measureCount: list.length,
+        synthesis: (() => {
+          const stored = synthesesByTheme.get(theme) ?? null;
+          const corpusMeasures = list.map((measure) => ({
+            id: measure.id,
+            revisionId: measure.publishedRevisionId,
+            text: measure.text,
+            details: measure.details,
+          }));
+          const currentFingerprint = computeThemeCorpusFingerprint({
+            theme,
+            measures: corpusMeasures,
+          });
+          if (getThemeSynthesisState(stored, currentFingerprint) !== "PUBLISHED" || !stored) {
+            return null;
+          }
+          const publicMeasureById = new Map(
+            list.map((measure) => [
+              measure.id,
+              {
+                id: measure.id,
+                slug: measure.slug,
+                text: measure.text,
+                sourceUrl: pickMeasureSourceUrl(measure.sources),
+              },
+            ])
+          );
+          const measureByRef = new Map(
+            indexThemeSynthesisMeasures(corpusMeasures).map((measure) => [
+              measure.ref,
+              publicMeasureById.get(measure.id),
+            ])
+          );
+          const claims = readThemeSynthesisClaims(stored.evidence).flatMap((claim) => {
+            const cited = claim.measureRefs.flatMap((reference) => {
+              const measure = measureByRef.get(reference);
+              return measure ? [measure] : [];
+            });
+            return cited.length === claim.measureRefs.length
+              ? [{ text: claim.text, measures: cited }]
+              : [];
+          });
+          return claims.length > 0 ? { claims } : null;
+        })(),
+        measures: list.map((measure) => ({
+          id: measure.id,
+          slug: measure.slug,
+          text: measure.text,
+          sourceUrl: pickMeasureSourceUrl(measure.sources),
+        })),
+        subtopics: [...subtopicCounts.entries()]
+          .map(([slug, value]) => ({ slug, ...value }))
+          .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fr")),
+      };
+    })
     // Most documented first: this block answers "where does this candidacy put the accent", and
     // alphabetical order would bury the answer. It is a count of OUR extraction, not a ranking of
     // candidacies against each other, which is why it is allowed here and not on the field.
@@ -254,7 +377,9 @@ export async function loadCandidateFicheDetail(
       scrutinTitle: v.scrutin.title,
       scrutinId: v.scrutin.id,
     })),
-    mandateCount,
+    mandateCount: mandates.length,
+    probityConvictionCount,
+    probityNonDefinitiveConvictionCount,
   };
 }
 
@@ -296,7 +421,8 @@ async function getPoliticianPresidentialCandidacyCached(
 /**
  * Cached companion of the read above, same tags for the same reason: the themes and their quotes
  * move on a measure publication, and the candidacy's visibility on an extension transition. The
- * `votes` tag as well, since the last-votes block is invalidated by a scrutin import.
+ * `votes` tag as well, since the last-votes block is invalidated by a scrutin import. The probity
+ * counters make `affairs` another direct dependency of this read.
  */
 export async function getCandidateFicheDetail(
   candidacyId: string,
@@ -306,7 +432,15 @@ export async function getCandidateFicheDetail(
     where: { slug: PRESIDENTIELLE_2027_SLUG },
     select: { id: true },
   });
-  if (election === null) return { themes: [], recentVotes: [], mandateCount: 0 };
+  if (election === null) {
+    return {
+      themes: [],
+      recentVotes: [],
+      mandateCount: 0,
+      probityConvictionCount: 0,
+      probityNonDefinitiveConvictionCount: 0,
+    };
+  }
   return getCandidateFicheDetailCached(candidacyId, politicianId, election.id);
 }
 
@@ -319,6 +453,7 @@ async function getCandidateFicheDetailCached(
   cacheTag(`election-measures:${electionId}`);
   cacheTag(`election-candidacies:${electionId}`);
   cacheTag("votes");
+  cacheTag("affairs");
   cacheLife("synced");
   return loadCandidateFicheDetail(candidacyId, politicianId);
 }

@@ -246,6 +246,16 @@ describeIfDisposableDb("auditMeasures", () => {
     expect(await violationsFor(measureId)).toContain("search_document_stale");
   });
 
+  it("detects a search document outside its measure's election scope", async () => {
+    const { measureId } = await publishSeededMeasure();
+    await db.searchDocument.update({
+      where: { entityType_entityId: { entityType: "MEASURE", entityId: measureId } },
+      data: { electionId: null },
+    });
+
+    expect(await violationsFor(measureId)).toContain("search_document_election_mismatch");
+  });
+
   // The last three rules carry no measureId, so they are checked on the whole result.
 
   it("detects an EQUIVALENT_FOUND assessment with no match", async () => {

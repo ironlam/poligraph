@@ -72,6 +72,7 @@ describeIfDisposableDb("domain lexical corpus", () => {
       await upsertSearchDocument(tx, {
         entityType: "MEASURE",
         entityId,
+        electionId: null,
         title,
         body,
         url: `/elections/presidentielle-2027/mesures/${entityId}`,

@@ -35,6 +35,17 @@ describe("architecture de publication de la participation", () => {
     expect(producer).toContain("HAVING COUNT(*) = 1");
     expect(producer).toContain("COUNT(*) FILTER (WHERE m.type = 'DEPUTE'::\"MandateType\") = 1");
     expect(producer).not.toMatch(/ROUND\([^)]*participationRate/);
+    expect(producer).toContain("computationVersion: PARTICIPATION_METHOD_VERSION");
+  });
+
+  it("valide la source nominative Sénat avant toute réécriture locale", () => {
+    const source = withoutComments(readFileSync("src/services/sync/scrutins-senat.ts", "utf8"));
+
+    expect(source).toContain("assessSenateVoteSource(votes, officialTotals)");
+    expect(source).toContain('sourceAssessment.status !== "COMPLETE"');
+    expect(source).toContain("mapSenateVotePosition(vote.vote)");
+    expect(source).toContain('status: "COMPLETE"');
+    expect(source).not.toMatch(/default:\s*return\s+["']ABSENT["']/);
   });
 
   it("la frontière API réutilise le service fail-closed sans recalcul local", () => {
@@ -93,6 +104,11 @@ describe("architecture de publication de la participation", () => {
       .filter(([, source]) => /(?:party|group)-participation/.test(source));
 
     expect(consumers).toEqual([]);
+
+    const producer = withoutComments(readFileSync("src/services/sync/compute-stats.ts", "utf8"));
+    expect(producer).toContain('key: { in: ["party-participation-SENAT"');
+    expect(producer).not.toContain('upsertStatsSnapshot("party-participation-SENAT"');
+    expect(producer).not.toContain('upsertStatsSnapshot("group-participation-SENAT"');
   });
 
   it("utilise des comptages Prisma explicites pour les résultats par chambre", () => {

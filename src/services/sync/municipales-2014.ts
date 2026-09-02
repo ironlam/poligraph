@@ -14,7 +14,7 @@ import { Prisma } from "@/generated/prisma";
 import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
 import { parseWideResultRow2014 } from "./parse-wide-results-2014";
 import { type ListResult, type CommuneResult } from "./parse-wide-results";
-import { USER_AGENT } from "@/config/site";
+import { decodeAndSplit, downloadBuffer } from "./csv-download";
 
 const URLS = {
   t1: "https://www.data.gouv.fr/api/1/datasets/r/936f6d38-5969-46e5-8b9d-c7646d6390ec",
@@ -42,24 +42,13 @@ type ListWithRound2 = ListResult & {
   round2SeatsWon?: number | null;
 };
 
-function decodeAndSplit(buf: Buffer, delimiter: string): string[][] {
-  const text = buf.toString("latin1");
-  const lines = text.split(/\r?\n/);
-  const dataLines = lines.slice(1);
-  return dataLines.filter((line) => line.trim().length > 0).map((line) => line.split(delimiter));
-}
-
-async function downloadBuffer(url: string): Promise<Buffer> {
-  const response = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT },
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
-
+/**
+ * Deliberately NOT the `normalizeListName` exported by `./resultats-t1`.
+ *
+ * That one also strips punctuation and collapses runs of whitespace. The 2014 source file keeps
+ * hyphens and apostrophes inside list labels, and folding them here would merge lists that the
+ * import must keep apart. Same name, different contract: leave them separate.
+ */
 function normalizeListName(name: string): string {
   return name
     .normalize("NFD")

@@ -154,6 +154,8 @@ Environment:
       duration: 0,
       stats: {
         politiciansSearched: stats.politiciansSearched,
+        searchPoolSize: stats.searchPoolSize,
+        rotationOffset: stats.rotationOffset,
         claimsFound: stats.claimsFound,
         factChecksCreated: stats.factChecksCreated,
         factChecksSkipped: stats.factChecksSkipped,

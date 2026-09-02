@@ -294,7 +294,7 @@ describe("rapport d'import", () => {
           published: 0,
           primaryShare: null,
           primaryShareReason: PRIMARY_SHARE_UNAVAILABLE_REASON,
-          themes: ["SOCIAL_TRAVAIL"],
+          themes: ["EMPLOI_TRAVAIL"],
           proposals: [
             {
               programEditionId: "edition-1",
@@ -308,7 +308,7 @@ describe("rapport d'import", () => {
               normalizedText: "Indexer les salaires sur l'inflation.",
               modelClassification: "MEASURE",
               classification: "MEASURE",
-              theme: "SOCIAL_TRAVAIL",
+              theme: "EMPLOI_TRAVAIL",
               confidence: 0.95,
               page: 15,
               rationale: "Action explicite.",

@@ -66,7 +66,7 @@ done
 
 echo "[test:db:search] engine + extensions"
 "${COMPOSE[@]}" exec -T db-search psql -U poligraph_test -d poligraph_test -c \
-  "SELECT current_setting('server_version') AS version, string_agg(extname, ',' ORDER BY extname) AS extensions FROM pg_extension WHERE extname = 'unaccent';"
+  "SELECT current_setting('server_version') AS version, string_agg(extname, ',' ORDER BY extname) AS extensions FROM pg_extension WHERE extname IN ('unaccent', 'vector');"
 
 echo "[test:db:search] prisma generate"
 npx prisma generate
@@ -91,6 +91,7 @@ else
     src/lib/data/__tests__/latest-review-date.integration.test.ts \
     src/lib/data/__tests__/measures.integration.test.ts \
     src/lib/data/__tests__/pending-review-and-review-date.integration.test.ts \
+    src/lib/data/__tests__/presidential-public-api.integration.test.ts \
     src/lib/data/__tests__/presidential-candidates-public.integration.test.ts \
     src/lib/data/__tests__/priorites.integration.test.ts \
     src/lib/data/__tests__/subject-page.integration.test.ts \

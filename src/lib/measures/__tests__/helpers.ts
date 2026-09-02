@@ -64,7 +64,13 @@ export async function seedPolitician(): Promise<string> {
   const db = await client();
   const slug = uniqueSlug("politicien");
   const row = await db.politician.create({
-    data: { slug, firstName: "Prénom", lastName: slug, fullName: `Prénom ${slug}` },
+    data: {
+      slug,
+      firstName: "Prénom",
+      lastName: slug,
+      fullName: `Prénom ${slug}`,
+      publicationStatus: "PUBLISHED",
+    },
   });
   return row.id;
 }
@@ -96,7 +102,15 @@ export async function seedElection(): Promise<string> {
 export async function seedCandidacy(politicianId: string, electionId: string): Promise<string> {
   const db = await client();
   const row = await db.candidacy.create({
-    data: { electionId, politicianId, candidateName: `Candidat ${uniqueSlug("c")}` },
+    data: {
+      electionId,
+      politicianId,
+      candidateName: `Candidat ${uniqueSlug("c")}`,
+      status: "DECLARE",
+      sourceUrl: "https://example.org/candidature",
+      sourceLabel: "Annonce publique",
+      presidentialData: { create: { publicationStatus: "PUBLISHED" } },
+    },
   });
   return row.id;
 }
@@ -110,10 +124,11 @@ export async function seedMeasureWithDraft(): Promise<{ measureId: string; revis
   const { createMeasure } = await transitions();
   const politicianId = await seedPolitician();
   const electionId = await seedElection();
+  const candidacyId = await seedCandidacy(politicianId, electionId);
   return createMeasure({
     politicianId,
     electionId,
-    candidacyId: null,
+    candidacyId,
     programEditionId: null,
     attribution: "PERSONAL",
     theme: "LOGEMENT_URBANISME",

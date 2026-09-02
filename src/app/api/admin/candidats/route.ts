@@ -7,6 +7,7 @@ import { getRequestMeta } from "@/lib/security/audit";
 import { getCandidates2027ForModeration } from "@/lib/data/candidates";
 import { invalidateEntity } from "@/lib/cache";
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
+import { syncCandidacySearchDocument } from "@/lib/presidentielle/search-sync";
 
 export const GET = withAdminAuth(async () => {
   const items = await getCandidates2027ForModeration();
@@ -72,6 +73,7 @@ export const POST = withAdminAuth(
           notes: data.notes,
         },
       });
+      await syncCandidacySearchDocument(tx, candidacy.id);
       return { kind: "ok", candidacy, presidential };
     });
 

@@ -23,3 +23,5 @@ export {
   extractAttribute,
   containsHtml,
 } from "./html-utils";
+
+export { extractBlockText } from "./html-block-text";

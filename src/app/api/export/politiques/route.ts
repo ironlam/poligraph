@@ -1,7 +1,9 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { toCSV, formatDateForCSV, formatDateTimeForCSV, createCSVResponse } from "@/lib/csv";
 import { MANDATE_TYPE_LABELS, POLITICAL_POSITION_LABELS } from "@/config/labels";
-import type { MandateType } from "@/types";
+import { MandateType as MandateTypeEnum } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import {
@@ -53,7 +55,11 @@ export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
   const partyId = searchParams.get("partyId");
-  const mandateType = searchParams.get("mandateType") as MandateType | null;
+  const mandateTypeParam = searchParams.get("mandateType");
+  const mandateType = pickEnumValue(mandateTypeParam, MandateTypeEnum);
+  if (mandateTypeParam && !mandateType) {
+    return NextResponse.json({ error: "Type de mandat invalide" }, { status: 400 });
+  }
   const hasAffairs = searchParams.get("hasAffairs") === "true";
   const activeOnly = searchParams.get("activeOnly") !== "false";
 

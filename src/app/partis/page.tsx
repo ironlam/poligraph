@@ -11,7 +11,8 @@ import { SITE_URL } from "@/config/site";
 import { getParties, getPartiesStats } from "@/lib/data/partis";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import type { SortOption, StatusFilter } from "@/lib/data/partis";
-import type { PoliticalPosition } from "@/types";
+import { PoliticalPosition } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export const revalidate = 300; // 5 minutes, cohérent avec l'API
@@ -41,7 +42,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 export default async function PartiesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const search = params.search || "";
-  const position = (params.position || "") as PoliticalPosition | "";
+  const position = pickEnumValue(params.position, PoliticalPosition);
   const statusFilter = (params.status || "actifs") as StatusFilter;
   const sort = (params.sort || "members") as SortOption;
 

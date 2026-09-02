@@ -2,6 +2,12 @@ import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import type { Chamber, VotingResult, ThemeCategory, ScrutinType, Prisma } from "@/generated/prisma";
 import {
+  Chamber as ChamberEnum,
+  VotingResult as VotingResultEnum,
+  ThemeCategory as ThemeCategoryEnum,
+} from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
+import {
   KEY_VOTES_WINDOWS_DAYS,
   KEY_VOTES_GRID_COUNT,
   KEY_VOTES_POOL_SIZE,
@@ -421,8 +427,17 @@ export async function getScrutins(params: {
   explainedOnly?: boolean;
   sort?: ScrutinSort;
 }) {
-  const normalized =
-    params.sort === undefined ? params : { ...params, sort: normalizeSort(params.sort) };
+  // Whitelist guard: `chamber`, `result` and `theme` arrive raw from the query
+  // string (see ScrutinsListing), and an out-of-enum value makes Prisma throw
+  // on all three downstream queries (findMany, count, groupBy). Dropping the
+  // filter here keeps the listing rendering instead of dying mid-stream.
+  const normalized = {
+    ...params,
+    ...(params.sort === undefined ? {} : { sort: normalizeSort(params.sort) }),
+    chamber: pickEnumValue(params.chamber, ChamberEnum),
+    result: pickEnumValue(params.result, VotingResultEnum),
+    theme: pickEnumValue(params.theme, ThemeCategoryEnum),
+  };
   if (normalized.search) {
     return queryScrutins(normalized);
   }

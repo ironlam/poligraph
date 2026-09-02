@@ -14,19 +14,31 @@ const invalidateEntityMock = vi.fn();
 const invalidateCandidacyTagsMock = vi.fn();
 
 const dbMock = {
-  candidacy: { findUnique: vi.fn() },
-  candidacyPresidential: { upsert: vi.fn() },
+  $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
+  candidacy: { findUnique: vi.fn(), update: vi.fn() },
+  candidacyPresidential: { upsert: vi.fn(), updateMany: vi.fn() },
   programEdition: { findUnique: vi.fn(), update: vi.fn() },
   auditLog: { create: vi.fn() },
 };
 
 vi.mock("@/lib/auth", () => ({ isAuthenticated: () => isAuthenticatedMock() }));
 vi.mock("next/cache", () => ({ revalidatePath: (path: string) => revalidatePathMock(path) }));
+vi.mock("next/headers", () => ({
+  headers: async () =>
+    new Headers({
+      "x-forwarded-for": "203.0.113.10, 10.0.0.1",
+      "user-agent": "Poligraph test",
+    }),
+}));
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: (...args: unknown[]) => invalidateEntityMock(...args),
 }));
 vi.mock("@/lib/presidentielle/candidacy-cache", () => ({
   invalidatePresidentialCandidacyTags: (id: string) => invalidateCandidacyTagsMock(id),
+}));
+vi.mock("@/lib/presidentielle/search-sync", () => ({
+  syncPresidentialSearchDocumentsForCandidacy: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/db", () => ({ db: dbMock }));
 
@@ -50,9 +62,13 @@ async function actions() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  dbMock.$transaction.mockImplementation(async (callback) => callback(dbMock));
+  dbMock.$queryRaw.mockResolvedValue([{ id: "cand-1" }]);
   isAuthenticatedMock.mockResolvedValue(true);
   dbMock.candidacy.findUnique.mockResolvedValue(SOURCED_CANDIDACY);
   dbMock.candidacyPresidential.upsert.mockResolvedValue({ id: "pres-1" });
+  dbMock.candidacyPresidential.updateMany.mockResolvedValue({ count: 1 });
+  dbMock.candidacy.update.mockResolvedValue({ id: "cand-1" });
   dbMock.programEdition.findUnique.mockResolvedValue({
     id: "ed-1",
     electionId: "elec-1",
@@ -96,6 +112,10 @@ describe("actions de publication des candidatures", () => {
     });
 
     expect(result).toEqual({ ok: true });
+    expect(dbMock.$queryRaw).toHaveBeenCalledOnce();
+    expect(dbMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      dbMock.candidacy.findUnique.mock.invocationCallOrder[0]!
+    );
     expect(dbMock.candidacyPresidential.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { candidacyId: "cand-1" },
@@ -212,6 +232,93 @@ describe("actions de publication des candidatures", () => {
 
     expect(result).toEqual({ ok: false, message: "Requête invalide." });
     expect(dbMock.programEdition.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("statut politique d'une candidature", () => {
+  it("efface la synthèse en quittant le statut déclaré", async () => {
+    dbMock.candidacy.findUnique.mockResolvedValue({
+      ...SOURCED_CANDIDACY,
+      presidentialData: { ...SOURCED_CANDIDACY.presidentialData, synthesis: "Synthèse existante" },
+    });
+    const a = await actions();
+
+    expect(
+      await a.setCandidacyStatusAction({
+        candidacyId: "cand-1",
+        status: "PRESSENTI",
+        sourceUrl: "https://example.org/nouveau-statut",
+        sourceLabel: "Annonce officielle",
+      })
+    ).toEqual({ ok: true });
+    expect(dbMock.candidacyPresidential.updateMany).toHaveBeenCalledWith({
+      where: { candidacyId: "cand-1" },
+      data: { synthesis: null, synthesisGeneratedAt: null },
+    });
+    expect(dbMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ synthesisCleared: true }),
+        }),
+      })
+    );
+  });
+
+  it.each([
+    "not a url",
+    "mailto:redaction@example.org",
+    "ftp://example.org/source",
+    "data:text/plain,test",
+  ])("refuse une source non HTTP(S): %s", async (sourceUrl) => {
+    const a = await actions();
+
+    expect(
+      await a.setCandidacyStatusAction({
+        candidacyId: "cand-1",
+        status: "DECLARE",
+        sourceUrl,
+        sourceLabel: "Déclaration officielle",
+      })
+    ).toEqual({ ok: false, message: "Requête invalide." });
+    expect(dbMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("met à jour le statut sourcé et écrit l'audit", async () => {
+    dbMock.candidacy.findUnique.mockResolvedValue({ ...SOURCED_CANDIDACY, status: "PRESSENTI" });
+    const a = await actions();
+
+    expect(
+      await a.setCandidacyStatusAction({
+        candidacyId: "cand-1",
+        status: "DECLARE",
+        sourceUrl: "https://example.org/declaration",
+        sourceLabel: "Déclaration officielle",
+      })
+    ).toEqual({ ok: true });
+    expect(dbMock.candidacy.update).toHaveBeenCalledWith({
+      where: { id: "cand-1" },
+      data: {
+        status: "DECLARE",
+        sourceUrl: "https://example.org/declaration",
+        sourceLabel: "Déclaration officielle",
+      },
+    });
+    expect(dbMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          entityType: "Candidacy",
+          entityId: "cand-1",
+          changes: expect.objectContaining({
+            status: "DECLARE",
+            sourceUrl: "https://example.org/declaration",
+            sourceLabel: "Déclaration officielle",
+            previousStatus: "PRESSENTI",
+          }),
+          ipAddress: "203.0.113.10",
+          userAgent: "Poligraph test",
+        }),
+      })
+    );
   });
 });
 

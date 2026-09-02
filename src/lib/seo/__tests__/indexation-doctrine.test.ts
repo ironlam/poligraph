@@ -18,6 +18,7 @@ import {
   POLITIQUES_LISTING_FILTER_KEYS,
   VOTES_LISTING_FILTER_KEYS,
   DOSSIERS_LISTING_FILTER_KEYS,
+  PRESIDENTIAL_CANDIDATES_FILTER_KEYS,
 } from "../listing-filters";
 
 // votes/page.tsx renders <ScrutinsListing>, whose data-layer import chain
@@ -28,6 +29,8 @@ import {
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
+import { metadata as presidentialComparisonMetadata } from "@/app/elections/presidentielle-2027/comparer/page";
+import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/methodologie/mesures-presidentielle-2027/page";
 
 // Living map of the index-bloat doctrine. If any representative surface flips, this
 // file fails: a strong page must never become noindex, a thin one must never become
@@ -133,6 +136,22 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   it("filtered /parlement/dossiers (?status)", () => {
     expect(listingRobots({ status: "ADOPTED" }, DOSSIERS_LISTING_FILTER_KEYS)).toEqual(
       NOINDEX_FOLLOW
+    );
+  });
+  it("filtered presidential candidates directory (?statut)", () => {
+    expect(listingRobots({ statut: "annoncees" }, PRESIDENTIAL_CANDIDATES_FILTER_KEYS)).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
+  it("searched presidential candidates directory (?q)", () => {
+    expect(listingRobots({ q: "dupont" }, PRESIDENTIAL_CANDIDATES_FILTER_KEYS)).toEqual(
+      NOINDEX_FOLLOW
+    );
+  });
+  it("presidential comparison combinations stay noindex,follow", () => {
+    expect(presidentialComparisonMetadata.robots).toEqual({ index: false, follow: true });
+    expect(presidentialComparisonMetadata.alternates?.canonical).toBe(
+      "/elections/presidentielle-2027/comparer"
     );
   });
   it("paginated listing (page=2)", () => {
@@ -279,6 +298,21 @@ describe("doctrine — sitemap shares the indexability thresholds (no drift)", (
   });
 });
 
+describe("doctrine — presidential measure methodology stays indexable and discoverable", () => {
+  const sitemapSource = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
+
+  it("keeps a self-canonical indexable page", () => {
+    expect(presidentialMeasuresMethodologyMetadata.alternates?.canonical).toBe(
+      "/methodologie/mesures-presidentielle-2027"
+    );
+    expect(presidentialMeasuresMethodologyMetadata.robots).not.toMatchObject({ index: false });
+  });
+
+  it("keeps the page in the static sitemap", () => {
+    expect(sitemapSource).toContain("url: `${SITE_URL}/methodologie/mesures-presidentielle-2027`");
+  });
+});
+
 describe("doctrine — presidentielle-2027 hub stays out of the sitemap while unpublishable", () => {
   const src = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8");
 
@@ -322,6 +356,46 @@ describe("doctrine — presidentielle-2027 hub stays out of the sitemap while un
       /const presidentialDirectoryPages:[\s\S]*=\s*presidentielleHubPublishable[\s\S]*\?/
     );
     expect(electionShard).toContain("...presidentialDirectoryPages");
+  });
+
+  it("annonce la couverture et les thèmes uniquement sous la porte du hub", () => {
+    expect(electionShard).toContain("const presidentialSubjectPages");
+    expect(electionShard).toContain("${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/themes");
+    expect(electionShard).toContain("theme.publishable");
+    expect(electionShard).toContain("...presidentialSubjectPages");
+  });
+
+  it("réutilise l'autorité publique des mesures pour leurs URLs canoniques", () => {
+    expect(electionShard).toContain("PUBLIC_PRESIDENTIAL_MEASURE_WHERE");
+    expect(electionShard).toContain("const presidentialMeasurePages");
+    expect(electionShard).toContain(
+      "${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/mesures/${measure.slug}"
+    );
+    expect(electionShard).toContain("...presidentialMeasurePages");
+  });
+
+  it("annonce uniquement les repères substantiels reliés au corpus public", () => {
+    expect(electionShard).toContain("loadPresidentialReaderGuideIndex");
+    expect(electionShard).toContain("guide.indexable");
+    expect(electionShard).toContain("const presidentialReaderGuidePages");
+    expect(electionShard).toContain("presidentialReaderGuidesPath()");
+    expect(electionShard).toContain("presidentialReaderGuidePath(guide.slug)");
+    expect(electionShard).toContain("...presidentialReaderGuidePages");
+    expect(electionShard).toMatch(
+      /const presidentialReaderGuidePages:[\s\S]*=\s*indexablePresidentialReaderGuides\.length > 0/
+    );
+  });
+});
+
+describe("doctrine — la recherche présidentielle reste une surface utilitaire", () => {
+  const src = readFileSync(
+    join(process.cwd(), "src/app/elections/presidentielle-2027/recherche/page.tsx"),
+    "utf8"
+  );
+
+  it("est noindex,follow avec un canonical sans requête", () => {
+    expect(src).toContain("robots: { index: false, follow: true }");
+    expect(src).toContain("alternates: { canonical: PAGE_PATH }");
   });
 });
 

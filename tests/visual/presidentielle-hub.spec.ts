@@ -90,3 +90,76 @@ test("la recherche conserve une séquence clavier complète et la synchronise da
   await expect(page.getByRole("heading", { name: "Candidat·e C" })).toBeVisible();
   await expect(search).toHaveValue("Candidat C");
 });
+
+test("la recherche du hub ouvre une personnalité puis une mesure au clavier", async ({
+  page,
+}, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  await page.goto("/elections/presidentielle-2027");
+  const search = page.getByRole("combobox", {
+    name: "Rechercher une mesure ou une personnalité suivie",
+  });
+
+  await search.fill("Candidat C");
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personnalités suivies" })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("hub-recherche-personnalite.png"),
+    fullPage: true,
+  });
+  await search.focus();
+  await page.keyboard.press("ArrowDown");
+  await search.press("Enter");
+  await expect(page).toHaveURL(/\/candidats\/presidentielle-hub-demo-c$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Candidat·e C" })).toBeVisible();
+
+  await page.goto("/elections/presidentielle-2027");
+  const measureSearch = page.getByRole("combobox", {
+    name: "Rechercher une mesure ou une personnalité suivie",
+  });
+  const searchResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/elections/presidentielle-2027/recherche") &&
+      response.request().method() === "GET"
+  );
+  await measureSearch.fill("Encadrer");
+  const response = await searchResponse;
+  expect(Number(response.headers()["content-length"] ?? 0)).toBeLessThan(64_000);
+  await expect(page.getByRole("heading", { name: "Mesures" })).toBeVisible();
+  await measureSearch.focus();
+  await page.keyboard.press("ArrowDown");
+  await measureSearch.press("Enter");
+  await expect(page).toHaveURL(/\/elections\/presidentielle-2027\/mesures\//);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Encadrer les loyers dans les zones tendues.",
+    })
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("page-mesure.png"), fullPage: true });
+
+  expect(consoleErrors).toEqual([]);
+});
+
+test("la recherche du hub gère l'état vide, Échap et la page partageable", async ({ page }) => {
+  await page.goto("/elections/presidentielle-2027");
+  const search = page.getByRole("combobox", {
+    name: "Rechercher une mesure ou une personnalité suivie",
+  });
+
+  await search.fill("introuvable-poligraph");
+  await expect(page.getByText(/Aucun résultat dans le corpus public/)).toBeVisible();
+  await search.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+
+  await search.fill("logement");
+  await expect(page.getByRole("button", { name: "Voir tous les résultats" })).toBeVisible();
+  await page.getByRole("button", { name: "Voir tous les résultats" }).click();
+  await expect(page).toHaveURL(/\/elections\/presidentielle-2027\/recherche\?q=logement$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Résultats dans le corpus 2027");
+  await expect(page.getByRole("link", { name: /Comparer le sujet Logement/ })).toBeVisible();
+});

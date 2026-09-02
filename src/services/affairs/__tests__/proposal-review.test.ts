@@ -7,9 +7,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   db: {
     affair: { findUnique: vi.fn(), update: vi.fn() },
+    affairEvent: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    source: { upsert: vi.fn() },
+    pressArticleAffair: { upsert: vi.fn(), update: vi.fn() },
+    affairPoliticianDecision: { findUnique: vi.fn(), updateMany: vi.fn() },
     affairUpdateProposal: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     moderationReview: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
   trackStatusChange: vi.fn(),
@@ -27,6 +32,8 @@ vi.mock("@/lib/affairs/official-decision-verification", async (importOriginal) =
 });
 
 import { acceptProposal, rejectProposal } from "@/services/affairs/proposal-review";
+import { computeAffairEventIdentity } from "@/services/affairs/proposals";
+import { AFFAIR_EVOLUTION_REVELATION_TITLE } from "@/lib/security/schemas/affair-proposal";
 
 const db = h.db;
 
@@ -37,6 +44,7 @@ const LIVE_AFFAIR = {
   title: "Affaire de test",
   politician: { slug: "jean-testeur", fullName: "Jean Testeur" },
   status: "APPEL_EN_COURS",
+  publicationStatus: "PUBLISHED",
   verdictDate: null,
   court: null,
   sentence: null,
@@ -86,15 +94,71 @@ function pendingProposal(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function pendingEventProposal(overrides: Record<string, unknown> = {}) {
+  const date = new Date("2026-08-27T08:00:00.000Z");
+  const sourceUrl = "https://www.lemonde.fr/politique/article-test.html";
+  const identityKey = computeAffairEventIdentity({
+    affairId: "aff_1",
+    sourceUrl,
+    publishedAt: date,
+    pressArticleId: "article_1",
+  });
+  return pendingProposal({
+    importer: "press-analysis",
+    extractorVersion: "press-evolution-v1",
+    source: "PRESSE",
+    sourceUrl,
+    sourceExcerpt: "Extrait exact.",
+    proposedPatch: {
+      addEvent: {
+        date: date.toISOString(),
+        type: "REVELATION",
+        title: AFFAIR_EVOLUTION_REVELATION_TITLE,
+        description: null,
+        sourceUrl,
+        sourceTitle: "Titre original de l’article",
+      },
+    },
+    observedValues: {
+      addEvent: {
+        identityVersion: "press-revelation-v2",
+        identityKey,
+        existingEventId: null,
+      },
+    },
+    metadata: {
+      eventProposal: {
+        version: 1,
+        identityVersion: "press-revelation-v2",
+        identityKey,
+        publisher: "AFP",
+        publishedAt: date.toISOString(),
+        pressArticleId: "article_1",
+        resolverDecisionId: "decision_1",
+      },
+    },
+    ...overrides,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   db.affair.findUnique.mockResolvedValue(LIVE_AFFAIR);
   db.affair.update.mockResolvedValue({});
+  db.affairEvent.findUnique.mockResolvedValue(null);
+  db.affairEvent.findMany.mockResolvedValue([]);
+  db.affairEvent.create.mockResolvedValue({ id: "event_1" });
+  db.source.upsert.mockResolvedValue({ id: "source_1" });
+  db.pressArticleAffair.upsert.mockResolvedValue({ id: "link_1", role: "UPDATE" });
+  db.pressArticleAffair.update.mockResolvedValue({});
+  db.affairPoliticianDecision.findUnique.mockResolvedValue({ affairId: null });
+  db.affairPoliticianDecision.updateMany.mockResolvedValue({ count: 1 });
   db.affairUpdateProposal.update.mockResolvedValue({});
   // Default: the claim succeeds (nobody else took the row).
   db.affairUpdateProposal.updateMany.mockResolvedValue({ count: 1 });
   db.moderationReview.create.mockResolvedValue({});
   db.auditLog.create.mockResolvedValue({});
+  db.$queryRaw.mockResolvedValue([{ id: "aff_1" }]);
   db.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(db));
   h.trackStatusChange.mockResolvedValue(undefined);
   h.verifyProposalOfficialEvidence.mockResolvedValue(null);
@@ -289,7 +353,13 @@ describe("acceptProposal", () => {
     expect(result).toMatchObject({ ok: false, reason: "conflict" });
     expect(db.affair.update).not.toHaveBeenCalled();
     expect(db.moderationReview.create).not.toHaveBeenCalled();
-    expect(db.auditLog.create).not.toHaveBeenCalled();
+    expect(db.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ action: "PROPOSAL_CONFLICT" }),
+        }),
+      })
+    );
 
     const conflictWrite = db.affairUpdateProposal.update.mock.calls[0]![0].data;
     expect(conflictWrite.status).toBe("CONFLICT");
@@ -370,6 +440,112 @@ describe("acceptProposal", () => {
     const result = await acceptProposal({ proposalId: "nope", reviewedBy: "admin" });
 
     expect(result).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("applique un événement et ses relations atomiquement sans modifier Affair", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result).toMatchObject({ ok: true, appliedFields: ["event"] });
+    expect(db.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(db.affair.update).not.toHaveBeenCalled();
+    expect(db.affairEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          affairId: "aff_1",
+          identityKey: expect.stringMatching(/^[a-f0-9]{64}$/),
+          type: "REVELATION",
+          title: AFFAIR_EVOLUTION_REVELATION_TITLE,
+          description: null,
+        }),
+      })
+    );
+    expect(db.source.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          publisher: "AFP",
+          publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+        }),
+      })
+    );
+    expect(db.pressArticleAffair.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { articleId: "article_1", affairId: "aff_1", role: "UPDATE" },
+      })
+    );
+    expect(db.affairPoliticianDecision.updateMany).toHaveBeenCalledWith({
+      where: { id: "decision_1", affairId: null },
+      data: { affairId: "aff_1" },
+    });
+    expect(h.trackStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("passe en conflit si le même événement est apparu après le dépôt", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+    db.affairEvent.findUnique.mockResolvedValue({ id: "event_existing" });
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "conflict",
+      conflictDetail: { event: { expected: "absent", actual: "event_existing" } },
+    });
+    expect(db.affairEvent.create).not.toHaveBeenCalled();
+    expect(db.source.upsert).not.toHaveBeenCalled();
+    expect(db.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ action: "PROPOSAL_CONFLICT" }),
+        }),
+      })
+    );
+  });
+
+  it("annule l’événement si la décision resolver vise déjà une autre affaire", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+    db.affairPoliticianDecision.findUnique.mockResolvedValue({ affairId: "aff_other" });
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result).toMatchObject({ ok: false, reason: "conflict" });
+    expect(db.affairEvent.create).not.toHaveBeenCalled();
+    expect(db.source.upsert).not.toHaveBeenCalled();
+  });
+
+  it("détecte une course lors du rattachement de la décision resolver", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+    db.affairPoliticianDecision.findUnique
+      .mockResolvedValueOnce({ affairId: null })
+      .mockResolvedValueOnce({ affairId: "aff_other" });
+    db.affairPoliticianDecision.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result).toMatchObject({ ok: false, reason: "conflict" });
+    expect(db.affairEvent.create).not.toHaveBeenCalled();
+    expect(db.source.upsert).not.toHaveBeenCalled();
+  });
+
+  it("passe en conflit si la cible est devenue archivée", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+    db.affair.findUnique.mockResolvedValue({ ...LIVE_AFFAIR, publicationStatus: "ARCHIVED" });
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result).toMatchObject({ ok: false, reason: "conflict" });
+    expect(db.affairEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("ne dégrade pas un lien REVELATION existant", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingEventProposal());
+    db.pressArticleAffair.upsert.mockResolvedValue({ id: "link_1", role: "REVELATION" });
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    expect(result.ok).toBe(true);
+    expect(db.pressArticleAffair.update).not.toHaveBeenCalled();
   });
 });
 

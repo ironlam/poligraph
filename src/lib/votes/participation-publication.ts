@@ -1,5 +1,7 @@
 import type { Chamber, MandateType } from "@/generated/prisma";
 
+export const PARTICIPATION_METHOD_VERSION = "public-scrutins-v2";
+
 export const PARTICIPATION_SOURCE_INSUFFICIENT = "SOURCE_INSUFFICIENT" as const;
 export const PARTICIPATION_AVAILABLE = "AVAILABLE" as const;
 export const PARTICIPATION_COMPUTATION_INCOMPLETE = "COMPUTATION_INCOMPLETE" as const;

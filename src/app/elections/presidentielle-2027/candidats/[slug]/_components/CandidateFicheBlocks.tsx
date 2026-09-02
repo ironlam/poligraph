@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { THEME_ACCENT_BAR, THEME_CATEGORY_LABELS, VOTE_POSITION_LABELS } from "@/config/labels";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
-import { formatDate } from "@/lib/utils";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
+import { cn, formatDate } from "@/lib/utils";
 
 /**
  * The blocks of the candidate fiche, below its header.
@@ -23,8 +25,10 @@ import { formatDate } from "@/lib/utils";
  * their page during a campaign is only defensible if the reader can immediately see
  * what it was built from, and the blocks below this one are exactly that.
  *
- * `whitespace-pre-line` because the model is asked for two paragraphs and the blank
- * line between them is the only thing separating the career from the programme.
+ * The model separates the career and programme with a blank line. Render those blocks
+ * as real paragraphs so the synthesis remains readable and keeps a meaningful HTML
+ * structure. The card follows the page grid, while its text column stays at a comfortable
+ * reading width on large screens.
  */
 export function CandidateSynthesis({
   synthesis,
@@ -37,21 +41,41 @@ export function CandidateSynthesis({
 }) {
   if (synthesis === null) return null;
 
+  const paragraphs = synthesis
+    .trim()
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
+
   return (
     <section
       aria-labelledby="synthese-titre"
       className="rounded-xl border border-border bg-muted/40 px-5 py-4"
     >
-      <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
-        En résumé
-      </h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Texte généré à partir des mandats, des votes et des{" "}
-        {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
-        {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
-        information qui ne figure sur cette page.
-      </p>
-      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{synthesis}</p>
+      <div className="max-w-[78ch]">
+        <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
+          En résumé
+        </h2>
+        <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
+          Texte généré à partir des mandats, des votes et des{" "}
+          {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
+          {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
+          information qui ne figure sur cette page.
+        </p>
+        <div className="mt-4 space-y-4 text-base leading-7">
+          {paragraphs.map((paragraph, index) => (
+            <p key={`${index}-${paragraph.slice(0, 32)}`}>{paragraph}</p>
+          ))}
+        </div>
+        {measureCount > 0 && (
+          <a
+            href="#mesures"
+            className="mt-3 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+          >
+            Vérifier dans les mesures et leurs sources
+          </a>
+        )}
+      </div>
     </section>
   );
 }
@@ -70,7 +94,10 @@ export function CandidateStats({
       value: measureCount,
       label: measureCount === 1 ? "proposition publiée" : "propositions publiées",
     },
-    { value: themesCoveredCount, label: "sujets couverts sur 13" },
+    {
+      value: themesCoveredCount,
+      label: `thématiques couvertes sur ${THEMES_IN_ORDER.length}`,
+    },
     { value: mandateCount, label: mandateCount === 1 ? "mandat exercé" : "mandats exercés" },
   ];
 
@@ -87,108 +114,228 @@ export function CandidateStats({
 }
 
 /**
- * Every documented measure, grouped under its subject.
+ * Every documented measure for a short programme, or a navigable overview for a large one.
+ * We never quote an arbitrary "first" measure: import order has no editorial meaning.
  *
- * All of them, expanded, and that is a decision rather than an oversight. A collapsed
- * subject is a subject most readers never open, and these measures are what the page is
- * for. Nineteen of them is a long section; it is also the entire substance of a
- * candidacy fiche, so length here is the content doing its job.
- *
- * The closing link acts on what was just read, so it belongs to this section rather than
- * floating between two others. Its wording names where it goes: `/sujets` is the index of
- * the thirteen subjects, and the comparison happens one level down, per subject. Promising
- * "comparer ces mesures à celles des autres candidatures" and landing on a list of subjects
- * is a promise the click does not keep.
+ * The closing link acts on what was just read, so it belongs to this section rather than floating
+ * between two others. Every candidacy gets the same stable measures URL, including short
+ * programmes whose complete contents also remain visible on the fiche.
  */
+export const INLINE_PROGRAMME_MEASURE_LIMIT = 15;
+const MEASURE_ACTION_CLASS_NAME = cn(
+  buttonVariants({ variant: "link" }),
+  "h-auto min-h-11 justify-start whitespace-normal px-0 py-2 text-left font-bold"
+);
+
+function CandidateMeasure({
+  measure,
+  electionSlug,
+}: {
+  measure: CandidateFicheDetail["themes"][number]["measures"][number];
+  electionSlug: string;
+}) {
+  const detailUrl = `/elections/${electionSlug}/mesures/${measure.slug}`;
+
+  return (
+    <li className="py-3.5 first:pt-0 last:pb-0">
+      <p className="max-w-[70ch] text-[0.9375rem] leading-relaxed text-foreground">
+        {measure.text}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-0">
+        <Link
+          href={detailUrl}
+          prefetch={false}
+          className={MEASURE_ACTION_CLASS_NAME}
+          aria-label={`Voir la mesure : ${measure.text}`}
+        >
+          Voir la mesure
+          <ArrowRight aria-hidden="true" />
+        </Link>
+        {measure.sourceUrl !== null && (
+          <a
+            href={measure.sourceUrl}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            className={MEASURE_ACTION_CLASS_NAME}
+            aria-label={`Consulter la source externe de la mesure : ${measure.text}`}
+          >
+            Source externe
+            <ExternalLink aria-hidden="true" />
+          </a>
+        )}
+      </div>
+    </li>
+  );
+}
+
 export function CandidateThemes({
   themes,
   electionSlug,
+  candidateSlug,
+  measureCount,
   lastReviewedAt,
 }: {
   themes: CandidateFicheDetail["themes"];
   electionSlug: string;
+  candidateSlug: string;
+  measureCount: number;
   lastReviewedAt: Date | null;
 }) {
   if (themes.length === 0) return null;
+
+  const programmeUrl = `/elections/${electionSlug}/candidats/${candidateSlug}/mesures`;
+  const showAllMeasures = measureCount <= INLINE_PROGRAMME_MEASURE_LIMIT;
 
   return (
     <section aria-labelledby="mesures" className="space-y-4 rounded-xl border bg-card p-4 md:p-6">
       <div>
         <h2 id="mesures" className="font-display text-xl font-bold tracking-tight">
-          Ses mesures, sujet par sujet
+          Son programme, thème par thème
         </h2>
-        {/* No total here. The counters block a few centimetres below already states it, from
-            another read: two counts of the same thing on one screen invite the reader to spot a
-            disagreement, and eventually to find one. */}
         {/* "Sa source" and not "le document dont elle est tirée": a measure may come from a
             speech, a debate, an interview or an article, which is why `programEditionId` is
             nullable. Naming a document would be the same over-promise as the filter that
             announced a documented programme on a bare measure count. */}
-        <p className="mt-1 text-xs text-muted-foreground">
-          Chaque mesure est citée avec sa source.
+        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          {showAllMeasures
+            ? `${measureCount} ${measureCount === 1 ? "mesure documentée" : "mesures documentées"}, avec leurs sources.`
+            : `${measureCount} mesures documentées. Choisissez un thème ou explorez l’ensemble du programme avec les filtres.`}
         </p>
       </div>
 
       <ul className="divide-y divide-border">
-        {themes.map((t) => (
-          <li key={t.theme} className="py-4 first:pt-0 last:pb-0">
-            <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden="true"
-                className={`h-5 w-1.5 shrink-0 rounded-full ${THEME_ACCENT_BAR[t.theme]}`}
-              />
-              <Link
-                href={`/elections/${electionSlug}/sujets/${t.slug}`}
-                prefetch={false}
-                className="text-sm font-bold hover:underline"
-              >
-                {THEME_CATEGORY_LABELS[t.theme]}
-              </Link>
-              <span className="text-xs text-muted-foreground">
-                {t.measureCount} {t.measureCount === 1 ? "mesure" : "mesures"}
-              </span>
-            </div>
+        {themes.map((t) => {
+          const singleMeasureUrl =
+            t.measureCount === 1 && t.measures[0]
+              ? `/elections/${electionSlug}/mesures/${t.measures[0].slug}`
+              : null;
+          return (
+            <li key={t.theme} className="py-5 first:pt-0 last:pb-0">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span
+                  aria-hidden="true"
+                  className={`h-5 w-1.5 shrink-0 rounded-full ${THEME_ACCENT_BAR[t.theme]}`}
+                />
+                <h3 className="text-base font-bold">{THEME_CATEGORY_LABELS[t.theme]}</h3>
+                <span className="text-xs text-muted-foreground">
+                  {t.measureCount} {t.measureCount === 1 ? "mesure" : "mesures"}
+                </span>
+              </div>
 
-            <ul className="mt-2 space-y-2 pl-4">
-              {t.measures.map((measure) => (
-                <li key={measure.id} className="text-sm leading-relaxed">
-                  <span className="text-foreground">{measure.text}</span>
-                  {measure.sourceUrl !== null && (
-                    <>
-                      {" "}
-                      <a
-                        href={measure.sourceUrl}
-                        target="_blank"
-                        rel="nofollow noopener"
-                        className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground underline hover:text-foreground hover:no-underline"
-                      >
-                        source
-                        <ExternalLink aria-hidden="true" className="h-3 w-3" />
-                      </a>
-                    </>
+              {t.synthesis !== null && (
+                <div className="mt-3 max-w-[75ch] space-y-1.5">
+                  <div className="space-y-3">
+                    {t.synthesis.claims.map((claim, index) => (
+                      <div key={`${t.theme}-synthesis-${index}`}>
+                        <p className="text-[0.9375rem] leading-relaxed text-foreground">
+                          {claim.text}
+                        </p>
+                        <ul
+                          aria-label={`Mesures qui étayent l’affirmation ${index + 1}`}
+                          className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+                        >
+                          {claim.measures.map((measure) => (
+                            <li key={measure.id}>
+                              <Link
+                                href={`/elections/${electionSlug}/mesures/${measure.slug}`}
+                                prefetch={false}
+                                className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+                                aria-label={`Voir la mesure et sa source : ${measure.text}`}
+                              >
+                                Voir la mesure et sa source
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Synthèse générée à partir des mesures documentées de cette candidature, puis
+                    relue par Poligraph.
+                  </p>
+                </div>
+              )}
+
+              {showAllMeasures ? (
+                <ul className="mt-3 divide-y divide-border/70 sm:pl-4">
+                  {t.measures.map((measure) => (
+                    <CandidateMeasure
+                      key={measure.id}
+                      measure={measure}
+                      electionSlug={electionSlug}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-3">
+                  {t.subtopics.length > 0 && (
+                    <ul
+                      aria-label={`Sous-thèmes de ${THEME_CATEGORY_LABELS[t.theme]}`}
+                      className="mb-3 flex flex-wrap gap-2"
+                    >
+                      {t.subtopics.map((subtopic) => (
+                        <li key={subtopic.slug}>
+                          <Link
+                            href={`${programmeUrl}?theme=${t.slug}&sous-theme=${subtopic.slug}`}
+                            prefetch={false}
+                            className="inline-flex min-h-11 items-center rounded-full border border-border bg-muted/40 px-3 text-sm hover:border-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {subtopic.label}
+                            <span className="ml-1 text-muted-foreground">{subtopic.count}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
+                  <Link
+                    href={singleMeasureUrl ?? `${programmeUrl}?theme=${t.slug}`}
+                    prefetch={false}
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "min-h-11 w-full justify-between whitespace-normal px-4 text-left sm:w-auto"
+                    )}
+                  >
+                    Voir {t.measureCount === 1 ? "cette mesure" : "ces mesures"}
+                    <ArrowRight aria-hidden="true" />
+                  </Link>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
-      <p className="border-t border-border pt-4 text-sm">
-        <Link
-          href={`/elections/${electionSlug}/sujets`}
-          prefetch={false}
-          className="font-bold text-primary hover:underline"
-        >
-          Explorer les propositions par thème
-        </Link>
+      <div className="border-t border-border pt-4 text-sm">
+        <div className="flex flex-wrap items-center gap-x-5">
+          <Link
+            href={programmeUrl}
+            prefetch={false}
+            className={cn(
+              buttonVariants({ variant: showAllMeasures ? "link" : "default" }),
+              "min-h-11 whitespace-normal px-0 text-left font-bold",
+              !showAllMeasures && "w-full px-4 sm:w-auto"
+            )}
+          >
+            Explorer {measureCount === 1 ? "la mesure" : `les ${measureCount} mesures`}
+            <ArrowRight aria-hidden="true" />
+          </Link>
+          <Link
+            href={`/elections/${electionSlug}/comparer?candidat=${candidateSlug}`}
+            prefetch={false}
+            className={MEASURE_ACTION_CLASS_NAME}
+          >
+            Comparer avec une autre candidature
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
         {lastReviewedAt !== null && (
           <span className="text-muted-foreground">
             {" "}
             · dernière revue le {formatDate(lastReviewedAt)}
           </span>
         )}
-      </p>
+      </div>
     </section>
   );
 }
@@ -210,7 +357,7 @@ export function CandidateThemeSpread({ themes }: { themes: CandidateFicheDetail[
       className="space-y-3 rounded-xl border bg-card p-4 md:p-6"
     >
       <h2 id="repartition" className="font-display text-xl font-bold tracking-tight">
-        Les sujets les plus présents dans son programme
+        Les thématiques les plus présentes dans son programme
       </h2>
       <ul className="space-y-2">
         {top.map((t) => (
@@ -227,7 +374,7 @@ export function CandidateThemeSpread({ themes }: { themes: CandidateFicheDetail[
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Compte le nombre de mesures que nous avons documentées par sujet. Mesure ce dont la
+        Compte le nombre de mesures que nous avons documentées par thème. Mesure ce dont la
         candidature parle, pas ce qui a été réalisé.
       </p>
     </section>
@@ -285,19 +432,24 @@ export function CandidateRecentVotes({
  * The caveat is required, not editorial politeness: an ongoing procedure is not a conviction, and
  * a bare number next to a candidate's name invites exactly that reading.
  */
-export function CandidateIntegrity({
+export function CandidateTransparency({
   declarationCount,
-  affairCount,
+  probityConvictionCount,
+  probityNonDefinitiveConvictionCount,
   politicianSlug,
 }: {
   declarationCount: number;
-  affairCount: number;
+  probityConvictionCount: number;
+  probityNonDefinitiveConvictionCount: number;
   politicianSlug: string;
 }) {
   return (
-    <section aria-labelledby="integrite" className="space-y-3 rounded-xl border bg-card p-4 md:p-6">
-      <h2 id="integrite" className="font-display text-xl font-bold tracking-tight">
-        Intégrité
+    <section
+      aria-labelledby="transparence-probite"
+      className="space-y-3 rounded-xl border bg-card p-4 md:p-6"
+    >
+      <h2 id="transparence-probite" className="font-display text-xl font-bold tracking-tight">
+        Transparence et probité
       </h2>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border px-4 py-3">
@@ -309,18 +461,27 @@ export function CandidateIntegrity({
           </dd>
         </div>
         <div className="rounded-lg border border-border px-4 py-3">
-          <dt className="text-xs text-muted-foreground">Procédures judiciaires</dt>
+          <dt className="text-xs text-muted-foreground">Atteintes à la probité</dt>
           <dd className="text-sm font-bold">
-            {affairCount === 0
-              ? "Aucune procédure documentée"
-              : `${affairCount} ${affairCount === 1 ? "procédure documentée" : "procédures documentées"}`}
+            {probityConvictionCount === 0
+              ? "Aucune condamnation documentée"
+              : `${probityConvictionCount} ${probityConvictionCount === 1 ? "condamnation documentée" : "condamnations documentées"}`}
           </dd>
         </div>
       </dl>
       <p className="text-xs text-muted-foreground">
-        Quand une procédure existe, son statut exact figure sur sa fiche. Une mise en cause ne vaut
-        pas condamnation.
+        Ce compteur ne retient que les condamnations prononcées au moins en première instance pour
+        atteinte à la probité. Les autres procédures et leur statut exact figurent sur la fiche.
       </p>
+      {probityNonDefinitiveConvictionCount > 0 && (
+        <p className="text-xs text-muted-foreground-strong">
+          Présomption d{"'"}innocence :{" "}
+          {probityNonDefinitiveConvictionCount === 1
+            ? "une condamnation comptée n'est pas définitive"
+            : `${probityNonDefinitiveConvictionCount} condamnations comptées ne sont pas définitives`}
+          .
+        </p>
+      )}
       <Link
         href={`/politiques/${politicianSlug}`}
         prefetch={false}

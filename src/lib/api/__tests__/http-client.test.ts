@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { USER_AGENT } from "@/config/site";
-import { describeError, HTTPClient, HTTPError } from "../http-client";
+import { describeError, HTTPClient, HTTPError, isUnresolvableHostError } from "../http-client";
 
 describe("describeError", () => {
   it("returns the message of a plain error", () => {
@@ -86,6 +86,88 @@ describe("describeError", () => {
     expect(describeError(new HTTPError("HTTP 404: Not Found", 404, "https://example.fr"))).toBe(
       "HTTP 404: Not Found"
     );
+  });
+});
+
+describe("isUnresolvableHostError", () => {
+  it("detects a DNS miss hidden behind an opaque fetch failure", () => {
+    const cause = Object.assign(new Error("getaddrinfo ENOTFOUND example.fr"), {
+      code: "ENOTFOUND",
+    });
+
+    expect(isUnresolvableHostError(new Error("fetch failed", { cause }))).toBe(true);
+  });
+
+  it("detects a DNS miss aggregated across several attempts", () => {
+    const cause = new AggregateError(
+      [Object.assign(new Error("getaddrinfo ENOTFOUND example.fr"), { code: "ENOTFOUND" })],
+      "all attempts failed"
+    );
+
+    expect(isUnresolvableHostError(new Error("fetch failed", { cause }))).toBe(true);
+  });
+
+  it("does not treat a resolver timeout as unresolvable", () => {
+    const cause = Object.assign(new Error("getaddrinfo EAI_AGAIN example.fr"), {
+      code: "EAI_AGAIN",
+    });
+
+    expect(isUnresolvableHostError(new Error("fetch failed", { cause }))).toBe(false);
+  });
+
+  it("does not treat a refused connection or an HTTP error as unresolvable", () => {
+    const refused = Object.assign(new Error("connect ECONNREFUSED 1.2.3.4:443"), {
+      code: "ECONNREFUSED",
+    });
+
+    expect(isUnresolvableHostError(refused)).toBe(false);
+    expect(isUnresolvableHostError(new HTTPError("HTTP 404: Not Found", 404, "https://x.fr"))).toBe(
+      false
+    );
+    expect(isUnresolvableHostError(undefined)).toBe(false);
+  });
+
+  it("terminates on a cyclic cause chain", () => {
+    const a = new Error("a");
+    const b = new Error("b", { cause: a });
+    a.cause = b;
+
+    expect(isUnresolvableHostError(a)).toBe(false);
+  });
+});
+
+describe("HTTPClient retry policy", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stops retrying a host that does not resolve", async () => {
+    const cause = Object.assign(new Error("getaddrinfo ENOTFOUND gone.example.fr"), {
+      code: "ENOTFOUND",
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("fetch failed", { cause }));
+
+    const error = await new HTTPClient({ retries: 3, retryDelay: 0 })
+      .get("https://gone.example.fr/data")
+      .catch((caught: unknown) => caught);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((error as Error).message).toBe(
+      "fetch failed <- getaddrinfo ENOTFOUND gone.example.fr [ENOTFOUND] " +
+        "(https://gone.example.fr/data)"
+    );
+  });
+
+  it("still retries a transient network failure", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("socket hang up"));
+
+    await new HTTPClient({ retries: 2, retryDelay: 0 })
+      .get("https://example.fr/data")
+      .catch(() => undefined);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

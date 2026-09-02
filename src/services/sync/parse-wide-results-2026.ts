@@ -14,6 +14,8 @@
  * Source: data.gouv.fr — Résultats des élections municipales 2026 (premier tour)
  */
 
+import { parseIntSafe } from "./csv-download";
+
 const FIXED_COLS = 18;
 const BLOCK_SIZE = 13;
 
@@ -52,12 +54,6 @@ export interface CommuneResult2026 {
 export function parseFrenchPct(s: string): number {
   if (!s || s.trim() === "") return 0;
   return parseFloat(s.replace("%", "").replace(",", ".").trim()) || 0;
-}
-
-/** Parse an integer string. Returns 0 for empty/invalid. */
-function parseIntSafe(s: string): number {
-  if (!s || s.trim() === "") return 0;
-  return parseInt(s.replace(/\s/g, ""), 10) || 0;
 }
 
 /** Strip surrounding quotes from a CSV field. */

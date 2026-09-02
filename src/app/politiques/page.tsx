@@ -14,6 +14,7 @@ import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { getPoliticianDissidenceRanking } from "@/services/voteStats";
+import { parsePageParam } from "@/lib/data/query-params";
 
 // Minimum members to show a party in filters (avoid cluttering with old/small parties)
 const MIN_PARTY_MEMBERS = 2;
@@ -445,7 +446,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
     rawMandate === "president_parti" ? "dirigeants" : rawMandate
   ) as MandateFilter;
   const sortOption = (params.sort || "prominence") as SortOption;
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
 
   const [{ politicians, total, totalPages }, parties, counts] = await Promise.all([
     getPoliticians(search, partyFilter, convictionFilter, mandateFilter, sortOption, page),

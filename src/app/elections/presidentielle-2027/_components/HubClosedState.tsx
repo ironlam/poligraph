@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PUBLICATION_GATES } from "@/config/publication-gates";
 
 /**
@@ -8,9 +7,8 @@ import { PUBLICATION_GATES } from "@/config/publication-gates";
  * cards and the field with nothing saying that no comparison is open yet. The state is now written
  * on the page, not only in a meta tag.
  *
- * It adds a block and hides nothing: the field, the provenance and the route to the themes index
- * all stay. The index is legitimate while closed, since it shows the coverage of each subject and
- * what is missing.
+ * It adds a block and hides nothing. The coverage route remains available from the final corpus
+ * state, where the hub consistently locates it whether comparisons are open or closed.
  */
 export function HubClosedState({
   verifiedMeasureCount,
@@ -33,15 +31,9 @@ export function HubClosedState({
         {verifiedMeasureCount === 0
           ? "Aucune mesure n'est encore publiée."
           : `${verifiedMeasureCount} ${verifiedMeasureCount === 1 ? "mesure publiée" : "mesures publiées"} à ce jour.`}{" "}
-        Un sujet s&apos;ouvre à la comparaison quand au moins {required} candidatures y portent une
-        mesure sourcée et relue, et aucun des {themeCount} sujets n&apos;atteint ce seuil.{" "}
-        <Link
-          href="/elections/presidentielle-2027/sujets"
-          className="underline underline-offset-2 hover:text-foreground"
-        >
-          L&apos;index des sujets
-        </Link>{" "}
-        montre, pour chacun, ce qui manque.
+        Une thématique s&apos;ouvre à la comparaison quand au moins {required} candidatures y
+        portent une mesure sourcée et relue, et aucune des {themeCount} thématiques n&apos;atteint
+        ce seuil.
       </p>
     </section>
   );

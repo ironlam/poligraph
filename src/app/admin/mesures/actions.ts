@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { QUALIFICATION_KIND_LABELS } from "@/config/labels";
 import type {
   Chamber,
@@ -29,7 +30,22 @@ import {
   type MeasurePublicationBatchFailure,
 } from "@/lib/measures/batch-publication";
 import { MeasureConcurrencyError, MeasureValidationError } from "@/lib/measures/errors";
+import {
+  generateMeasureContextDraft,
+  type ContextGenerationSkipReason,
+} from "@/lib/measures/context-generation";
 import { createMeasureVoteLink } from "@/lib/measures/vote-links";
+import {
+  proposeMeasureRevisionSubtopics,
+  reviewMeasureRevisionSubtopic,
+} from "@/lib/measures/subtopics";
+import {
+  deactivateReaderGuide,
+  proposeReaderGuidesForRevision,
+  publishReaderGuide,
+  reviewReaderGuideMention,
+  saveReaderGuideDraft,
+} from "@/lib/measures/reader-guides";
 import {
   createMeasure,
   depublishMeasure,
@@ -92,6 +108,7 @@ const batchPublicationInputSchema = z
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
             expectedUpdatedAt: z.string().min(1),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
           })
           .strict()
       )
@@ -108,6 +125,7 @@ const batchReviewInputSchema = z
           .object({
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
           })
           .strict()
       )
@@ -116,8 +134,67 @@ const batchReviewInputSchema = z
   })
   .strict();
 
+const subtopicProposalInputSchema = z
+  .object({ measureId: z.string().min(1), revisionId: z.string().min(1) })
+  .strict();
+
+const subtopicReviewInputSchema = subtopicProposalInputSchema
+  .extend({
+    subtopicId: z.string().min(1),
+    status: z.enum(["APPROVED", "REJECTED"]),
+  })
+  .strict();
+
+const contextGenerationInputSchema = z
+  .object({ measureId: z.string().min(1), expectedUpdatedAt: z.string().min(1).optional() })
+  .strict();
+
+const contextGenerationBatchInputSchema = z
+  .object({ measureIds: z.array(z.string().min(1)).min(1).max(10) })
+  .strict();
+
+const readerGuideProposalInputSchema = z
+  .object({ measureId: z.string().min(1), revisionId: z.string().min(1) })
+  .strict();
+
+const readerGuideReviewInputSchema = z
+  .object({
+    measureId: z.string().min(1),
+    mentionId: z.string().min(1),
+    guideId: z.string().min(1).optional(),
+    status: z.enum(["APPROVED", "REJECTED"]),
+  })
+  .strict();
+
+const readerGuideDraftInputSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    slug: z.string().min(1).max(120),
+    label: z.string().min(3).max(160),
+    definition: z.string().min(40).max(2_000),
+    aliases: z.array(z.string().max(160)).max(30),
+    sourceKind: z.enum(["OFFICIAL_INSTITUTION", "PROGRAM_SOURCE"]),
+    sourceUrl: z.string().url().max(2_000),
+    sourceLabel: z.string().min(3).max(300),
+    sourcePublisher: z.string().min(3).max(200),
+    sourceRevisionId: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
 async function assertAuthenticated(): Promise<void> {
   if (!(await isAuthenticated())) throw new Error("Non autorisé");
+}
+
+async function getAuditRequestMetadata(): Promise<{
+  ipAddress: string;
+  userAgent: string;
+}> {
+  const requestHeaders = await headers();
+  const forwarded = requestHeaders.get("x-forwarded-for");
+  return {
+    ipAddress: forwarded?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || "unknown",
+    userAgent: requestHeaders.get("user-agent") || "unknown",
+  };
 }
 
 function revalidate(measureId: string): void {
@@ -131,6 +208,27 @@ function parseDate(value: string, label: string): Date {
     throw new MeasureValidationError(`${label} n'est pas une date valide`);
   }
   return parsed;
+}
+
+function contextSkipMessage(reason: ContextGenerationSkipReason): string {
+  switch (reason) {
+    case "ACTIVE_DRAFT":
+      return "Un brouillon est déjà en cours : il n'a pas été remplacé.";
+    case "ALREADY_HAS_DETAILS":
+      return "Cette mesure possède déjà un contexte documenté.";
+    case "NO_PUBLISHED_REVISION":
+      return "La mesure doit être publiée avant de proposer un contexte.";
+    case "NO_VALID_EVIDENCE":
+      return "Cette mesure ne possède pas de preuve V6 valide.";
+    case "NO_SUPPORTING_CONTEXT":
+      return "La preuve ne contient pas de contexte distinct de la formulation.";
+    case "PREVIOUS_CONTEXT_ATTEMPT":
+      return "Une génération a déjà conclu que cette révision ne pouvait pas produire de contexte exploitable.";
+    case "NO_USEFUL_CONTEXT":
+      return "Mistral n'a trouvé aucun contexte utile distinct de la formulation.";
+    case "NOT_REGENERATABLE_CONTEXT":
+      return "Ce contexte ne correspond pas à une ancienne génération remplaçable.";
+  }
 }
 
 /**
@@ -163,6 +261,7 @@ export type SourceInput = {
 
 export type RevisionInput = {
   text: string;
+  details?: string | null;
   precision: MeasurePrecision | null;
   validFrom: string;
   extractionMethod: MeasureExtractionMethod;
@@ -171,6 +270,7 @@ export type RevisionInput = {
 function toRevision(input: RevisionInput) {
   return {
     text: input.text,
+    details: input.details?.trim() || null,
     precision: input.precision,
     validFrom: parseDate(input.validFrom, "La date d'entrée en vigueur"),
     extractionMethod: input.extractionMethod,
@@ -288,6 +388,202 @@ export async function reviewRevisionAction(input: {
   }
 }
 
+export async function proposeSubtopicsAction(input: {
+  measureId: string;
+  revisionId: string;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const parsed = subtopicProposalInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Révision à classer invalide");
+    await proposeMeasureRevisionSubtopics(parsed.data.revisionId, { proposedBy: ACTOR });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MeasureValidationError) return toFailure(error);
+    return { ok: false, message: "La proposition automatique a échoué. Réessayez plus tard." };
+  }
+}
+
+export async function reviewSubtopicAction(input: {
+  measureId: string;
+  revisionId: string;
+  subtopicId: string;
+  status: "APPROVED" | "REJECTED";
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const parsed = subtopicReviewInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Proposition de sous-thème invalide");
+    await reviewMeasureRevisionSubtopic({
+      revisionId: parsed.data.revisionId,
+      subtopicId: parsed.data.subtopicId,
+      status: parsed.data.status,
+      reviewedBy: ACTOR,
+    });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function proposeReaderGuidesAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideProposalInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Révision à analyser invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    await proposeReaderGuidesForRevision(parsed.data.revisionId, ACTOR, requestMetadata);
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MeasureValidationError) return toFailure(error);
+    return { ok: false, message: "L’analyse automatique a échoué. Réessayez plus tard." };
+  }
+}
+
+export async function reviewReaderGuideMentionAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideReviewInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Proposition de repère invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    await reviewReaderGuideMention({
+      mentionId: parsed.data.mentionId,
+      guideId: parsed.data.guideId,
+      status: parsed.data.status,
+      reviewedBy: ACTOR,
+      ...requestMetadata,
+    });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function saveReaderGuideDraftAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = readerGuideDraftInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Le brouillon de repère est invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    const id = await saveReaderGuideDraft(parsed.data, ACTOR, requestMetadata);
+    revalidatePath("/admin/mesures/reperes");
+    return { ok: true, measureId: id };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function publishReaderGuideAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ guideId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Repère invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    await publishReaderGuide(parsed.data.guideId, ACTOR, requestMetadata);
+    revalidatePath("/admin/mesures/reperes");
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function deactivateReaderGuideAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ guideId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Repère invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    await deactivateReaderGuide(parsed.data.guideId, ACTOR, requestMetadata);
+    revalidatePath("/admin/mesures/reperes");
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function generateContextDraftAction(input: {
+  measureId: string;
+  expectedUpdatedAt?: string;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const parsed = contextGenerationInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Mesure à enrichir invalide");
+    const requestMetadata = await getAuditRequestMetadata();
+    const result = await generateMeasureContextDraft(parsed.data.measureId, {
+      expectedUpdatedAt: parsed.data.expectedUpdatedAt
+        ? parseDate(parsed.data.expectedUpdatedAt, "La version attendue")
+        : undefined,
+      generatedBy: ACTOR,
+      ...requestMetadata,
+    });
+    if (result.status === "SKIPPED") {
+      return { ok: false, message: contextSkipMessage(result.reason) };
+    }
+    revalidate(parsed.data.measureId);
+    return { ok: true, measureId: parsed.data.measureId };
+  } catch (error) {
+    if (error instanceof MeasureConcurrencyError || error instanceof MeasureValidationError) {
+      return toFailure(error);
+    }
+    return {
+      ok: false,
+      message: "La génération du contexte a échoué. Réessayez plus tard.",
+    };
+  }
+}
+
+export type ContextGenerationBatchActionResult = {
+  ok: true;
+  created: number;
+  skipped: number;
+  failed: number;
+};
+
+export async function generateContextDraftBatchAction(
+  input: unknown
+): Promise<ContextGenerationBatchActionResult> {
+  await assertAuthenticated();
+
+  const parsed = contextGenerationBatchInputSchema.safeParse(input);
+  if (!parsed.success) throw new MeasureValidationError("Le lot doit contenir de 1 à 10 mesures");
+  const measureIds = [...new Set(parsed.data.measureIds)];
+  const requestMetadata = await getAuditRequestMetadata();
+  let created = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const measureId of measureIds) {
+    try {
+      const result = await generateMeasureContextDraft(measureId, {
+        generatedBy: ACTOR,
+        ...requestMetadata,
+      });
+      if (result.status === "CREATED") {
+        created += 1;
+        revalidate(measureId);
+      } else {
+        skipped += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+  return { ok: true, created, skipped, failed };
+}
+
 export async function reviewDraftBatchAction(input: unknown): Promise<BatchReviewActionResult> {
   await assertAuthenticated();
 
@@ -318,6 +614,7 @@ export async function reviewDraftBatchAction(input: unknown): Promise<BatchRevie
         {
           measureId: "batch",
           revisionId: "batch",
+          batchKind: "FIRST_PUBLICATION",
           message: failure.message,
         },
       ],
@@ -378,6 +675,7 @@ export async function publishReviewedBatchAction(input: unknown): Promise<BatchA
       measureId: item.measureId,
       revisionId: item.revisionId,
       expectedUpdatedAt: parseDate(item.expectedUpdatedAt, "La version attendue"),
+      batchKind: item.batchKind,
     }));
     const result = await publishMeasureRevisionBatch(items, ACTOR);
 
@@ -417,6 +715,7 @@ export async function depublishMeasureAction(input: {
     await depublishMeasure({
       measureId: input.measureId,
       reason: input.reason,
+      depublishedBy: ACTOR,
       expectedUpdatedAt: parseDate(input.expectedUpdatedAt, "La version attendue"),
     });
     revalidate(input.measureId);

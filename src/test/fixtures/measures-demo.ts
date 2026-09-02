@@ -277,7 +277,7 @@ export async function seedMeasuresDemoCorpus(): Promise<DemoCorpus> {
   // 7. Anomaly: withdrawn with no source. Direct write, withdrawMeasure() refuses it.
   const retraitIncomplet = await createDemoMeasure(context, 0, {
     text: "Instaurer un revenu de base pour les 18-25 ans.",
-    theme: "SOCIAL_TRAVAIL",
+    theme: "SOLIDARITES_PROTECTION_SOCIALE",
   });
   await reviewMeasureRevision({ ...retraitIncomplet, reviewedBy: "relecteur de démonstration" });
   await publishMeasureRevision(retraitIncomplet);

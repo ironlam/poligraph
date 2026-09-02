@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
 import type { CandidacyStatus, Prisma } from "@/generated/prisma";
+import { PUBLIC_PRESIDENTIAL_EXTENSION_WHERE } from "./presidential-candidacy-policy";
 
 /**
  * Public read authority for presidential candidacies.
@@ -19,9 +20,8 @@ import type { CandidacyStatus, Prisma } from "@/generated/prisma";
 // A candidacy is publicly visible only when its presidential extension exists and is PUBLISHED. The
 // `is` filter excludes candidacies with no extension row, which is the common case today (11 rows exist
 // with zero published extensions).
-export const PUBLIC_CANDIDACY_WHERE = {
-  presidentialData: { is: { publicationStatus: "PUBLISHED" } },
-} satisfies Prisma.CandidacyWhereInput;
+export const PUBLIC_CANDIDACY_WHERE =
+  PUBLIC_PRESIDENTIAL_EXTENSION_WHERE satisfies Prisma.CandidacyWhereInput;
 
 export type PublicPresidentialCandidate = {
   id: string;

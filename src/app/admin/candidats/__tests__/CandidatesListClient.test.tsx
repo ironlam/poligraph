@@ -14,10 +14,14 @@ const setProgramEditionPublicationMock = vi.fn<(input: unknown) => Promise<Actio
 const regenerateCandidateSynthesisMock = vi.fn<(input: unknown) => Promise<ActionResult>>(
   async () => ({ ok: true })
 );
+const setCandidacyStatusMock = vi.fn<(input: unknown) => Promise<ActionResult>>(async () => ({
+  ok: true,
+}));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../actions", () => ({
   setCandidacyPublicationAction: (input: unknown) => setCandidacyPublicationMock(input),
+  setCandidacyStatusAction: (input: unknown) => setCandidacyStatusMock(input),
   setProgramEditionPublicationAction: (input: unknown) => setProgramEditionPublicationMock(input),
   regenerateCandidateSynthesisAction: (input: unknown) => regenerateCandidateSynthesisMock(input),
 }));
@@ -26,9 +30,13 @@ function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
   return {
     candidacyId: "cand-1",
     candidateName: "Alix Démonstration",
+    politicianId: "pol-1",
     politicianSlug: "alix-demonstration",
+    politicianPublicationStatus: "PUBLISHED",
     partyLabel: "PD",
     status: "DECLARE",
+    sourceUrl: "https://example.org/annonce",
+    sourceLabel: "Annonce officielle",
     sourced: true,
     presidentialId: "pres-1",
     publicationStatus: "DRAFT",
@@ -72,6 +80,25 @@ describe("CandidatesListClient", () => {
     expect(screen.getByRole("button", { name: "Dépublier" })).toBeInTheDocument();
   });
 
+  it("signale une candidature publiée dont la personnalité reste masquée", () => {
+    render(
+      <CandidatesListClient
+        rows={[
+          row({
+            publicationStatus: "PUBLISHED",
+            politicianPublicationStatus: "ARCHIVED",
+          }),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("1 candidature publiée reste invisible");
+    expect(screen.getByRole("link", { name: "Publier la personnalité" })).toHaveAttribute(
+      "href",
+      "/admin/politiques/pol-1"
+    );
+  });
+
   it("publie la fiche depuis la liste", async () => {
     const user = userEvent.setup();
     render(<CandidatesListClient rows={[row()]} />);
@@ -81,6 +108,38 @@ describe("CandidatesListClient", () => {
     expect(setCandidacyPublicationMock).toHaveBeenCalledWith({
       candidacyId: "cand-1",
       status: "PUBLISHED",
+    });
+  });
+
+  it("modifie le statut politique depuis la liste", async () => {
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row({ status: "PRESSENTI" })]} />);
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Statut de Alix Démonstration" }),
+      "DECLARE"
+    );
+    await user.clear(
+      screen.getByRole("textbox", { name: "URL source du statut de Alix Démonstration" })
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "URL source du statut de Alix Démonstration" }),
+      "https://example.org/declaration"
+    );
+    await user.clear(
+      screen.getByRole("textbox", { name: "Libellé source du statut de Alix Démonstration" })
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Libellé source du statut de Alix Démonstration" }),
+      "Déclaration officielle"
+    );
+    await user.click(screen.getByRole("button", { name: "Enregistrer le statut" }));
+
+    expect(setCandidacyStatusMock).toHaveBeenCalledWith({
+      candidacyId: "cand-1",
+      status: "DECLARE",
+      sourceUrl: "https://example.org/declaration",
+      sourceLabel: "Déclaration officielle",
     });
   });
 

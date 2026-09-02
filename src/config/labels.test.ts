@@ -14,6 +14,8 @@ import {
   DOSSIER_STATUS_DESCRIPTIONS,
   DOSSIER_STATUS_SITUATIONS,
   CANDIDACY_STATUS_LABELS,
+  FACTCHECK_ALLOWED_SOURCES,
+  canonicalizeFactCheckSource,
 } from "./labels";
 
 describe("AFFAIR_STATUS_LABELS", () => {
@@ -248,5 +250,38 @@ describe("CANDIDACY_STATUS_LABELS", () => {
   it("should not describe an unannounced candidacy as declared", () => {
     expect(CANDIDACY_STATUS_LABELS.PRESSENTI).not.toMatch(/déclar/i);
     expect(CANDIDACY_STATUS_LABELS.ENVISAGE).not.toMatch(/déclar/i);
+  });
+});
+
+describe("canonicalizeFactCheckSource", () => {
+  it("leaves a canonical label untouched", () => {
+    for (const label of FACTCHECK_ALLOWED_SOURCES) {
+      expect(canonicalizeFactCheckSource(label)).toBe(label);
+    }
+  });
+
+  it("folds the case variants Google returns for allowed outlets", () => {
+    expect(canonicalizeFactCheckSource("franceinfo")).toBe("Franceinfo");
+    expect(canonicalizeFactCheckSource("FRANCEINFO")).toBe("Franceinfo");
+    expect(canonicalizeFactCheckSource("De Facto")).toBe("DE FACTO");
+  });
+
+  it("folds accent and spacing variants", () => {
+    expect(canonicalizeFactCheckSource("Liberation")).toBe("Libération");
+    expect(canonicalizeFactCheckSource("  Le   Monde ")).toBe("Le Monde");
+  });
+
+  it("folds the reversed AFP spelling", () => {
+    expect(canonicalizeFactCheckSource("Factuel AFP")).toBe("AFP Factuel");
+  });
+
+  it("keeps AFP's English desk distinct from its French one", () => {
+    expect(canonicalizeFactCheckSource("AFP Fact Check")).toBe("AFP Fact Check");
+    expect(FACTCHECK_ALLOWED_SOURCES).not.toContain("AFP Fact Check");
+  });
+
+  it("returns an unknown publisher unchanged", () => {
+    expect(canonicalizeFactCheckSource("Snopes")).toBe("Snopes");
+    expect(canonicalizeFactCheckSource("dpa-factchecking")).toBe("dpa-factchecking");
   });
 });

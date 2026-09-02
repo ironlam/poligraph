@@ -93,6 +93,20 @@ const migratedFunctions = [
     const limit = (data.limit as number) || 30;
     return classifyThemes({ limit });
   }),
+  createSyncFunction("reindex-measures-search", async (data) => {
+    const { reindexPresidentialMeasureSearch } =
+      await import("@/services/sync/reindex-measures-search");
+    const result = await reindexPresidentialMeasureSearch();
+    const jobId = typeof data.jobId === "string" ? data.jobId : null;
+    if (jobId) {
+      const { db } = await import("@/lib/db");
+      await db.syncJob.update({
+        where: { id: jobId },
+        data: { total: result.total, processed: result.processed, progress: 90 },
+      });
+    }
+    return result;
+  }),
 ];
 
 // Phase 2a: Migrated — services already exist, just wire them up

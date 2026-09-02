@@ -244,7 +244,7 @@ describe("CommuneLookup : département renouvelable", () => {
     expect(screen.queryByText(/sénatrice depuis|sénateur depuis/i)).toBeNull();
     expect(screen.queryByText(/Participation\s*\d/)).toBeNull();
     expect(
-      screen.getByText(/La participation aux scrutins n'est pas affichée/)
+      screen.getByText(/La participation aux scrutins publics n'est pas affichée/)
     ).toBeInTheDocument();
   });
 });

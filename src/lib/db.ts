@@ -1,4 +1,5 @@
 import { PrismaClient } from "@/generated/prisma";
+import { PRISMA_TRANSACTION_OPTIONS } from "@/config/database";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { createPoligraphIdExtension } from "@/lib/public-ids/prisma-extension";
@@ -45,6 +46,7 @@ function buildExtendedClient() {
   const rawClient = new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    transactionOptions: PRISMA_TRANSACTION_OPTIONS,
   });
 
   return rawClient.$extends(createPoligraphIdExtension(rawClient));

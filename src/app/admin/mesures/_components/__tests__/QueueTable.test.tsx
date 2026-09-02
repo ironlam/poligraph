@@ -12,6 +12,9 @@ function row(over: Partial<MeasureQueueRow> = {}): MeasureQueueRow {
     electionTitle: "Élection de démonstration 2027",
     createdAt: new Date("2027-01-15T00:00:00Z"),
     referenceText: "Encadrer les loyers dans les zones tendues.",
+    hasDetails: true,
+    suggestedSubtopicCount: 0,
+    approvedSubtopicCount: 0,
     state: {
       publication: "PUBLISHED",
       declaredStatus: "PUBLISHED",
@@ -78,5 +81,28 @@ describe("QueueTable", () => {
 
     expect(screen.getByText("Aucune mesure ne correspond à ces filtres.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("propose l’action correspondant au filtre d’enrichissement", () => {
+    render(
+      <QueueTable
+        rows={[row({ suggestedSubtopicCount: 2 })]}
+        activeEnrichment="SUBTOPICS_PENDING"
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Valider les sous-thèmes" })).toHaveAttribute(
+      "href",
+      "/admin/mesures/m-1#subtopics-heading"
+    );
+  });
+
+  it("conduit directement aux actions de révision pour compléter le contexte", () => {
+    render(<QueueTable rows={[row({ hasDetails: false })]} activeEnrichment="DETAILS_MISSING" />);
+
+    expect(screen.getByRole("link", { name: "Compléter le contexte" })).toHaveAttribute(
+      "href",
+      "/admin/mesures/m-1#actions-heading"
+    );
   });
 });

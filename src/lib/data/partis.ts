@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
-import type { Prisma } from "@/generated/prisma";
+import { Prisma, PoliticalPosition as PoliticalPositionEnum } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
 import { CONVICTION_BADGE_WHERE } from "@/config/labels";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
@@ -162,8 +163,11 @@ async function queryParties(
     });
   }
 
-  if (position) {
-    conditions.push({ politicalPosition: position });
+  // An out-of-enum ?position= is dropped rather than filtered on: Prisma
+  // rejects a bad enum with a validation error, which kills the listing.
+  const safePosition = pickEnumValue(position, PoliticalPositionEnum);
+  if (safePosition) {
+    conditions.push({ politicalPosition: safePosition });
   }
 
   if (status === "actifs") {
@@ -285,7 +289,7 @@ export async function getPartiesStats() {
 
   const [counts] = await db.$queryRaw<
     [{ actifs: bigint; gauche: bigint; centre: bigint; droite: bigint; affaires: bigint }]
-  >`
+  >(Prisma.sql`
     SELECT
       COUNT(*) FILTER (
         WHERE p."dissolvedDate" IS NULL
@@ -322,7 +326,7 @@ export async function getPartiesStats() {
     FROM "Party" p
     WHERE p.slug IS NOT NULL
       AND ${getPublicPartySqlWhere()}
-  `;
+  `);
 
   return {
     actifs: Number(counts.actifs),

@@ -10,11 +10,7 @@ import { CandidacyFieldBrowser } from "./CandidacyFieldBrowser";
  */
 export function HubCandidacyField({ candidacies }: { candidacies: HubCandidacy[] }) {
   return (
-    <div className="space-y-3">
-      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        Retrouvez les annonces de candidature et les propositions actuellement publiées sur
-        Poligraph. L&apos;ordre est alphabétique.
-      </p>
+    <div>
       <Suspense
         fallback={<div className="h-96 rounded-xl border border-border bg-card" aria-hidden />}
       >

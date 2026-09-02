@@ -58,6 +58,7 @@ export interface DiscoveredAffair {
     publisher: string;
     sourceType: "WIKIDATA" | "WIKIPEDIA" | "PRESSE";
     publishedAt: Date | null;
+    excerpt?: string | null;
   }>;
   phase: "wikidata" | "wikipedia";
 }

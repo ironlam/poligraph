@@ -57,6 +57,6 @@ describe("ThemeFocusRadar component", () => {
     );
     expect(container.querySelector("svg")).toBeInTheDocument();
     expect(getAllByText(/Institutions/).length).toBeGreaterThan(0);
-    expect(getAllByText(/Économie & Budget/).length).toBeGreaterThan(0);
+    expect(getAllByText(/Économie et budget/).length).toBeGreaterThan(0);
   });
 });

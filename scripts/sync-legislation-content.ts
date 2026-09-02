@@ -1,6 +1,6 @@
 /**
- * CLI script to download .docx documents and extract exposé des motifs
- * from legislative dossiers (Assemblée nationale).
+ * CLI script to download parliamentary documents and extract the exposé des
+ * motifs of legislative dossiers (Assemblée nationale).
  *
  * Usage:
  *   npm run sync:legislation:content              # Sync missing exposés
@@ -9,90 +9,22 @@
  *   npm run sync:legislation:content -- --force   # Re-download all
  *   npm run sync:legislation:content -- --dry-run # Preview without writing
  *
- * Data source: docparl.assemblee-nationale.fr (official documents)
- * Requires: mammoth (npm install mammoth)
+ * Data source: www.assemblee-nationale.fr/dyn/opendata (official documents).
+ * The download and extraction logic lives in
+ * `src/services/sync/legislation-content.ts`, shared with the Inngest job.
  */
 
 import "dotenv/config";
 import { createCLI, type SyncHandler, type SyncResult } from "../src/lib/sync";
 import { db } from "../src/lib/db";
-import mammoth from "mammoth";
-import { ASSEMBLEE_DOCPARL_RATE_LIMIT_MS } from "../src/config/rate-limits";
-import { HTTPClient, HTTPError, describeError } from "../src/lib/api/http-client";
-
-// Configuration
-const DOCPARL_URL_TEMPLATE =
-  "https://docparl.assemblee-nationale.fr/base/{id}?format=application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-const docparlClient = new HTTPClient({
-  rateLimitMs: ASSEMBLEE_DOCPARL_RATE_LIMIT_MS,
-  retries: 3,
-  timeout: 60_000,
-  sourceName: "docparl AN",
-});
-
-// Regex to extract exposé des motifs section from document text
-const EXPOSE_REGEX =
-  /EXPOS[ÉEé]\s+DES\s+MOTIFS\s*([\s\S]*?)(?=TITRE\s+[IVX]|Article\s+(?:1er|premier|unique)|CHAPITRE|$)/i;
-
-// Max length for fallback (when no expose section found)
-const MAX_FALLBACK_LENGTH = 5000;
-
-/**
- * Download a .docx file from docparl and return the buffer
- */
-async function downloadDocx(documentId: string): Promise<Buffer | null> {
-  const url = DOCPARL_URL_TEMPLATE.replace("{id}", documentId);
-
-  try {
-    const { data } = await docparlClient.getBuffer(url, {
-      headers: {
-        Accept: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      },
-    });
-    return data;
-  } catch (err) {
-    if (err instanceof HTTPError && err.status === 404) {
-      return null;
-    }
-    throw err;
-  }
-}
-
-/**
- * Extract text from a .docx buffer using mammoth
- */
-async function extractText(buffer: Buffer): Promise<string> {
-  const result = await mammoth.extractRawText({ buffer });
-  return result.value;
-}
-
-/**
- * Extract the exposé des motifs section from full document text
- */
-function extractExposeDesMotifs(fullText: string): string | null {
-  const match = fullText.match(EXPOSE_REGEX);
-
-  if (match && match[1]) {
-    const expose = match[1].trim();
-    // Ignore if too short (likely a false match)
-    if (expose.length > 50) {
-      return expose;
-    }
-  }
-
-  // Fallback: return first N chars of document if it has meaningful content
-  const trimmed = fullText.trim();
-  if (trimmed.length > 100) {
-    return trimmed.slice(0, MAX_FALLBACK_LENGTH);
-  }
-
-  return null;
-}
+import {
+  syncLegislationContent,
+  LegislationContentBatchError,
+} from "../src/services/sync/legislation-content";
 
 const handler: SyncHandler = {
   name: "Politic Tracker - Legislative Content Sync",
-  description: "Download .docx and extract exposé des motifs from AN documents",
+  description: "Download AN documents and extract their exposé des motifs",
 
   options: [
     {
@@ -106,19 +38,21 @@ const handler: SyncHandler = {
     console.log(`
 Politic Tracker - Legislative Content Sync
 
-Downloads .docx documents from docparl.assemblee-nationale.fr and extracts
-the "exposé des motifs" section to enrich legislative dossier summaries.
+Downloads official documents from www.assemblee-nationale.fr/dyn/opendata and
+extracts the "exposé des motifs" section to enrich legislative dossier summaries.
 
 Prerequisites:
   - Run sync:legislation first to populate documentExternalId
-  - mammoth package must be installed (npm install mammoth)
 
 Features:
-  - Downloads official .docx documents from AN
+  - Downloads the open data HTML text of AN documents
   - Extracts exposé des motifs via regex
   - Falls back to first 5000 chars if no section found
   - Rate-limited (300ms between requests)
   - Skips 404s silently (document not available)
+  - Ignores pages served with HTTP 200 that are not parliamentary texts
+  - Fails the run when the whole batch fails the same way (dead host,
+    every document 404, every page a maintenance screen)
     `);
   },
 
@@ -134,6 +68,13 @@ Features:
       where: {
         documentExternalId: { not: null },
         exposeDesMotifs: null,
+      },
+    });
+    const pendingNeverChecked = await db.legislativeDossier.count({
+      where: {
+        documentExternalId: { not: null },
+        exposeDesMotifs: null,
+        exposeCheckedAt: null,
       },
     });
 
@@ -152,6 +93,9 @@ Features:
       `With exposé des motifs: ${withExpose} (${total > 0 ? ((withExpose / total) * 100).toFixed(1) : 0}%)`
     );
     console.log(`Pending download: ${pendingDownload}`);
+    console.log(
+      `  Never checked: ${pendingNeverChecked} · previously checked (recurring failure): ${pendingDownload - pendingNeverChecked}`
+    );
 
     if (bySource.length > 0) {
       console.log("\nBy source:");
@@ -172,106 +116,33 @@ Features:
       force?: boolean;
     };
 
-    const stats = {
-      processed: 0,
-      downloaded: 0,
-      extracted: 0,
-      notFound: 0,
-      skipped: 0,
-    };
-    const errors: string[] = [];
+    try {
+      const { errors, ...stats } = await syncLegislationContent({
+        limit,
+        force,
+        dryRun,
+        onProgress: (done, total, documentId) => {
+          process.stdout.write(
+            `\r[${done}/${total}] Downloading ${documentId}...                    `
+          );
+        },
+      });
 
-    // Find dossiers to process
-    const whereClause: Record<string, unknown> = {
-      documentExternalId: { not: null },
-    };
+      console.log(""); // New line after progress
 
-    if (!force) {
-      whereClause.exposeDesMotifs = null;
-    }
+      return { success: errors.length === 0, duration: 0, stats, errors };
+    } catch (err) {
+      console.log(""); // New line after progress
 
-    let dossiers = await db.legislativeDossier.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        externalId: true,
-        documentExternalId: true,
-        title: true,
-      },
-      orderBy: { filingDate: "desc" },
-    });
-
-    if (limit) {
-      dossiers = dossiers.slice(0, limit);
-    }
-
-    const total = dossiers.length;
-    console.log(`Found ${total} dossiers to process\n`);
-
-    if (total === 0) {
-      console.log("✓ No dossiers need content download");
-      return { success: true, duration: 0, stats, errors };
-    }
-
-    for (let i = 0; i < dossiers.length; i++) {
-      const dossier = dossiers[i];
-      const docId = dossier!.documentExternalId!;
-
-      const progress = `[${i + 1}/${total}]`;
-      process.stdout.write(`\r${progress} Downloading ${docId}...                    `);
-
-      try {
-        if (dryRun) {
-          stats.downloaded++;
-          stats.extracted++;
-          stats.processed++;
-          continue;
-        }
-
-        // Download .docx
-        const buffer = await downloadDocx(docId);
-
-        if (!buffer) {
-          stats.notFound++;
-          stats.processed++;
-          continue;
-        }
-
-        stats.downloaded++;
-
-        // Extract text
-        const fullText = await extractText(buffer);
-        const expose = extractExposeDesMotifs(fullText);
-
-        if (expose) {
-          await db.legislativeDossier.update({
-            where: { id: dossier!.id },
-            data: {
-              exposeDesMotifs: expose,
-              exposeSource: "docparl",
-            },
-          });
-          stats.extracted++;
-        } else {
-          stats.skipped++;
-        }
-
-        stats.processed++;
-      } catch (err) {
-        const msg = `${dossier!.externalId}: ${describeError(err)}`;
-        errors.push(msg);
-        stats.processed++;
+      // A batch failure carries the counts reached before it aborted; report
+      // them rather than letting the CLI print a bare stack.
+      if (err instanceof LegislationContentBatchError) {
+        const { errors, ...stats } = err.stats;
+        return { success: false, duration: 0, stats, errors: [...errors, err.message] };
       }
+
+      throw err;
     }
-
-    console.log(""); // New line after progress
-
-    return {
-      success: errors.length === 0,
-      duration: 0,
-      stats,
-      errors,
-    };
   },
 };
 

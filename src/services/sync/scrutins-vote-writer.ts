@@ -38,15 +38,17 @@ export async function writeVotesForScrutin(params: WriteVotesParams): Promise<vo
     where: { scrutinId: params.scrutinId },
   });
 
-  await db.vote.createMany({
-    data: params.votes.map((v) => ({
-      scrutinId: params.scrutinId,
-      politicianId: v.politicianId,
-      position: v.position,
-      votingDate: params.votingDate,
-      chamber: params.chamber,
-      scrutinType: params.scrutinType,
-    })),
-    skipDuplicates: true,
-  });
+  if (params.votes.length > 0) {
+    await db.vote.createMany({
+      data: params.votes.map((v) => ({
+        scrutinId: params.scrutinId,
+        politicianId: v.politicianId,
+        position: v.position,
+        votingDate: params.votingDate,
+        chamber: params.chamber,
+        scrutinType: params.scrutinType,
+      })),
+      skipDuplicates: true,
+    });
+  }
 }

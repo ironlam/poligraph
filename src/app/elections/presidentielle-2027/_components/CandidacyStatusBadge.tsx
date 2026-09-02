@@ -1,4 +1,4 @@
-import { CANDIDACY_STATUS_LABELS } from "@/config/labels";
+import { CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
 import type { CandidacyStatus } from "@/generated/prisma";
 
 /**
@@ -44,7 +44,7 @@ function badgeVariant(status: CandidacyStatus | null): BadgeVariant {
  * published nothing, because our own field is null, would be a false claim about a real person.
  */
 export function candidacyBadgeLabel(status: CandidacyStatus | null): string {
-  return status === null ? "Statut non renseigné" : CANDIDACY_STATUS_LABELS[status];
+  return status === null ? "Statut non renseigné" : CANDIDACY_STATUS_SHORT_LABELS[status];
 }
 
 /**

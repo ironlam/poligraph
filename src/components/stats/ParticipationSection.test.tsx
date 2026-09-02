@@ -8,7 +8,8 @@ describe("statistiques de participation", () => {
       <ParticipationSection groupDissidenceAN={[]} groupDissidenceSENAT={[]} chamber="SENAT" />
     );
 
-    expect(screen.getByText(/Le Sénat ne publie pas actuellement/)).toBeInTheDocument();
+    expect(screen.getByText(/reste indisponible pendant la validation/)).toBeInTheDocument();
+    expect(screen.getByText(/Elle ne mesure jamais la présence physique/)).toBeInTheDocument();
     expect(screen.getByText(/Aucun classement, taux moyen ou taux par parti/)).toBeInTheDocument();
     expect(screen.queryByText(/\d+\s*%/)).not.toBeInTheDocument();
   });

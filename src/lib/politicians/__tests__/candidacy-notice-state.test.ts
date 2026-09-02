@@ -16,6 +16,7 @@ const base: PoliticianCandidacy = {
   sourceLabel: "Le Monde, 14 janvier 2026",
   partyLabel: null,
   partyLogoUrl: null,
+  partyColor: null,
   programmeIdentified: false,
   declaredAt: new Date("2026-01-14T00:00:00.000Z"),
   withdrewAt: null,

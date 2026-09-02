@@ -7,6 +7,7 @@ import {
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 
 export const metadata = { title: "Promesses (admin) | Poligraph", robots: { index: false } };
 
@@ -17,7 +18,7 @@ interface PageProps {
 const ITEMS_PER_PAGE = 25;
 
 const STATUS_KEYS = Object.keys(PROMISE_EXTRACTION_STATUS_LABELS) as PromiseExtractionStatus[];
-const THEME_KEYS = Object.keys(THEME_CATEGORY_LABELS) as ThemeCategory[];
+const THEME_KEYS: readonly ThemeCategory[] = LEGACY_THEME_CATEGORIES;
 
 export default async function AdminPromisesPage({ searchParams }: PageProps) {
   const params = await searchParams;

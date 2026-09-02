@@ -155,7 +155,7 @@ jobs:
     # what this job tests.
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -227,7 +227,7 @@ jobs:
     # fixtures; this one was written to hold on `/` with an empty database plus three flags.
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test

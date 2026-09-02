@@ -1,13 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCandidateSynthesisPrompt,
+  buildCandidateSynthesisGroundingPrompt,
+  buildCanonicalCareer,
   buildSynthesisSystemPrompt,
   isSynthesisContradictedByMeasures,
-  screenSynthesis,
+  screenCandidateSynthesis,
+  screenSynthesis as screenSynthesisSegments,
   synthesisFloor,
   synthesisMaterial,
   synthesisTargetRange,
-  SYNTHESIS_MAX_WORDS,
+  LARGE_PROGRAMME_MEASURES,
+  LARGE_SYNTHESIS_MAX_WORDS,
+  SYNTHESIS_HARD_MAX_WORDS,
   type CandidateSynthesisInput,
   type SynthesisMaterial,
 } from "../candidate-synthesis";
@@ -43,13 +48,72 @@ function words(n: number): string {
   return Array.from({ length: n }, (_, i) => `mot${i}`).join(" ");
 }
 
+/** Most pure-screen tests use one generated segment as the complete text. */
+function screenSynthesis(raw: string, material?: SynthesisMaterial) {
+  return screenSynthesisSegments({
+    text: raw,
+    generatedText: raw,
+    exemptSourceTexts: [],
+    material,
+  });
+}
+
 describe("buildCandidateSynthesisPrompt", () => {
+  it("construit le parcours uniquement avec les mandats enregistrés", () => {
+    expect(buildCanonicalCareer(BASE)).toBe(
+      "Jeanne Martin a exercé les fonctions suivantes : Députée (Assemblée nationale) depuis 2017 et Maire (Villeneuve) de 2008 à 2017."
+    );
+  });
+
   it("groups measures by theme under their French label", () => {
     const prompt = buildCandidateSynthesisPrompt(BASE);
     expect(prompt).toContain("Santé");
     expect(prompt).toContain("Transports");
-    // One heading per theme, not one per measure.
-    expect(prompt.match(/Santé/g)).toHaveLength(1);
+    // One measures heading per theme, not one per measure. The label also appears in the
+    // distribution and coverage instructions on purpose.
+    expect(prompt.match(/Santé \(2 mesures\) :/g)).toHaveLength(1);
+  });
+
+  it("provides theme counts without imposing a catalogue", () => {
+    const prompt = buildCandidateSynthesisPrompt(BASE);
+    expect(prompt).toContain("Santé : 2 mesures");
+    expect(prompt).toContain("Transports : 1 mesure");
+    expect(prompt).not.toContain("couverture_attendue");
+    expect(prompt).toContain("[M1] Rouvrir des maternités de proximité.");
+  });
+
+  it("does not turn a large programme into a mandatory list of themes", () => {
+    const themes = [
+      "SANTE",
+      "TRANSPORTS",
+      "ECONOMIE_BUDGET",
+      "EMPLOI_TRAVAIL",
+      "SECURITE_JUSTICE",
+      "ENVIRONNEMENT_ENERGIE",
+      "EDUCATION_CULTURE",
+      "INSTITUTIONS",
+      "NUMERIQUE_TECH",
+    ] as const;
+    const measures = Array.from({ length: LARGE_PROGRAMME_MEASURES }, (_, index) => ({
+      theme: themes[index % themes.length]!,
+      text: `Mesure ${index}.`,
+    }));
+    const prompt = buildCandidateSynthesisPrompt({ ...BASE, measures });
+    expect(prompt).not.toContain("couverture_attendue");
+    expect(prompt).toContain("<repartition_themes>");
+  });
+
+  it("presents every measure of a very large programme to the model", () => {
+    const measures = Array.from({ length: 1177 }, (_, index) => ({
+      theme: "SANTE" as const,
+      text: `Mesure de santé ${index}.`,
+    }));
+
+    const prompt = buildCandidateSynthesisPrompt({ ...BASE, measures });
+
+    expect(prompt).toContain("Santé : 1177 mesures");
+    expect(prompt.match(/  - \[M[0-9]+\]/g)).toHaveLength(1177);
+    expect(prompt).toContain("[M1177] Mesure de santé 1176.");
   });
 
   it("states an empty record rather than omitting the section", () => {
@@ -61,13 +125,12 @@ describe("buildCandidateSynthesisPrompt", () => {
       voteCount: 0,
       measures: [],
     });
-    expect(prompt).toContain("Aucun mandat enregistré");
-    expect(prompt).toContain("Aucun vote enregistré");
+    expect(prompt).toContain("aucun mandat enregistré");
     expect(prompt).toContain("Aucune mesure publiée");
   });
 
   it("marks an ongoing mandate as ongoing rather than open-ended", () => {
-    expect(buildCandidateSynthesisPrompt(BASE)).toContain("2017 à en cours");
+    expect(buildCandidateSynthesisPrompt(BASE)).toContain("depuis 2017");
   });
 
   it("strips quotes and newlines from stored values", () => {
@@ -98,36 +161,262 @@ describe("buildCandidateSynthesisPrompt", () => {
     expect(prompt).toContain("Les Écologistes - Europe Écologie Les Verts");
   });
 
-  it("caps a very long stored value", () => {
+  it("keeps the complete measure text in the synthesis corpus", () => {
     const prompt = buildCandidateSynthesisPrompt({
       ...BASE,
       measures: [{ theme: "SANTE", text: "a".repeat(1000) }],
     });
-    expect(prompt).not.toContain("a".repeat(300));
+    expect(prompt).toContain("a".repeat(1000));
+  });
+});
+
+describe("screenCandidateSynthesis", () => {
+  const career = words(30);
+  const healthAxis =
+    "En santé, les engagements rapprochent l’accès aux maternités de proximité et la prise en charge intégrale des soins prescrits.";
+  const transportAxis =
+    "Pour les déplacements, le programme prévoit aussi de rétablir plusieurs dessertes ferroviaires nocturnes sur le territoire.";
+  const output = (
+    programmeClaims: Array<{ text: string; measureRefs: string[] }>,
+    outputCareer = `${career}.`
+  ) => ({ career: outputCareer, programmeClaims });
+
+  it("publie une vraie synthèse en axes étayés plutôt qu'une liste de thèmes", () => {
+    const raw = output([
+      { text: healthAxis, measureRefs: ["M1", "M2"] },
+      { text: transportAxis, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain("les engagements rapprochent");
+    expect(result.ok && result.text).toContain("dessertes ferroviaires");
+    expect(result.ok && result.text).not.toContain("thèmes suivants");
+  });
+
+  it("refuse l'ancien sommaire de thèmes", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          {
+            text: "Les mesures publiées couvrent notamment les thèmes suivants : Santé et Transports.",
+            measureRefs: ["M1", "M3"],
+          },
+        ]),
+        BASE
+      )
+    ).toMatchObject({ ok: false });
+  });
+
+  it("accepte une sélection éditoriale étayée sans imposer chaque thème", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        {
+          text: `${healthAxis} Elles associent ainsi la réouverture de services de proximité au remboursement intégral des soins prescrits.`,
+          measureRefs: ["M1", "M2"],
+        },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("refuse une référence inconnue", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: healthAxis, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M99"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({
+      ok: false,
+      reason: "preuve_inconnue",
+    });
+  });
+
+  it("retire du texte public les marqueurs de preuve répétés par le modèle", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        { text: `${healthAxis} (M1, M2)`, measureRefs: ["M1", "M2"] },
+        { text: `${transportAxis} M3.`, measureRefs: ["M3"] },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toMatch(/\bM[1-9][0-9]*\b/u);
+  });
+
+  it("refuse une quantité absente des mesures citées", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: `${healthAxis} Le remboursement atteindrait 90 %.`, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M3"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({
+      ok: false,
+      reason: "quantite",
+    });
+  });
+
+  it("écarte un axe invalide quand les axes restants forment encore une synthèse", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        { text: healthAxis, measureRefs: ["M1", "M2"] },
+        { text: transportAxis, measureRefs: ["M3"] },
+        {
+          text: "Une enveloppe supplémentaire de 90 millions financerait également ces politiques publiques.",
+          measureRefs: ["M1"],
+        },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toContain("90 millions");
+    expect(result.ok && result.programmeClaims).toHaveLength(2);
+  });
+
+  it("rend une phrase canonique quand le programme est vide", () => {
+    const empty: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [],
+    };
+    const raw = output([]);
+    const result = screenCandidateSynthesis(raw, empty);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).toContain(
+      "Aucune mesure n'est publiée dans le cadre de son programme."
+    );
+  });
+
+  it("refuse un tableau vide quand des mesures existent", () => {
+    expect(screenCandidateSynthesis(output([]), BASE)).toMatchObject({
+      ok: false,
+      reason: "synthese_insuffisante",
+    });
+  });
+
+  it("refuse une mention judiciaire ajoutée au parcours", () => {
+    expect(
+      screenCandidateSynthesis(
+        output(
+          [
+            { text: healthAxis, measureRefs: ["M1", "M2"] },
+            { text: transportAxis, measureRefs: ["M3"] },
+          ],
+          `${career}. Il a comparu devant un tribunal.`
+        ),
+        BASE
+      )
+    ).toMatchObject({
+      ok: false,
+      reason: "judiciaire",
+    });
+  });
+
+  it("refuse une mention judiciaire ajoutée à un axe de programme", () => {
+    expect(
+      screenCandidateSynthesis(
+        output([
+          { text: `${healthAxis} Cette proposition évite un tribunal.`, measureRefs: ["M1", "M2"] },
+          { text: transportAxis, measureRefs: ["M3"] },
+        ]),
+        BASE
+      )
+    ).toMatchObject({ ok: false, reason: "judiciaire" });
+  });
+
+  it("transmet au contrôle d'étayage la fin d'une longue affirmation", () => {
+    const tail = "affirmation finale à contrôler";
+    const prompt = buildCandidateSynthesisGroundingPrompt(
+      [{ text: `${"mot ".repeat(80)}${tail}`, measureRefs: ["M1"] }],
+      BASE
+    );
+    expect(prompt).toContain(tail);
+  });
+
+  it("refuse une structure JSON incomplète", () => {
+    expect(screenCandidateSynthesis({ career: `${career}.` }, BASE)).toMatchObject({
+      ok: false,
+      reason: "format_structure",
+    });
+  });
+
+  it("exige au moins un axe qui regroupe plusieurs mesures pour un programme riche", () => {
+    const rich = {
+      ...BASE,
+      measures: Array.from({ length: 6 }, (_, index) => ({
+        theme: "SANTE" as const,
+        text: `Mesure de santé numéro ${index + 1}.`,
+      })),
+    };
+    expect(
+      screenCandidateSynthesis(
+        output([
+          {
+            text: `${healthAxis} Cette orientation concerne les soins de proximité.`,
+            measureRefs: ["M1"],
+          },
+          {
+            text: `${healthAxis} Elle concerne également leur remboursement.`,
+            measureRefs: ["M2"],
+          },
+        ]),
+        rich
+      )
+    ).toMatchObject({ ok: false, reason: "catalogue" });
   });
 });
 
 describe("buildSynthesisSystemPrompt", () => {
-  // La seconde moitié du correctif. Le plancher peut suivre la matière ; tant que le modèle lit
-  // « entre 90 et 200 mots » sur une candidature jugée à 60, il meuble ou s'arrête court.
-  it("annonce la longueur que la matière porte, pas une longueur fixe", () => {
+  it("demande de recopier le parcours canonique", () => {
     for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
-      const range = synthesisTargetRange(material);
       expect(buildSynthesisSystemPrompt(material)).toContain(
-        `Entre ${range.min} et ${range.max} mots`
+        "Recopie sans la modifier la phrase de parcours"
       );
     }
   });
 
-  it("garde 90 mots pour une candidature entièrement documentée", () => {
-    // Rien ne change pour les candidatures qui passaient déjà : leurs textes font 124 à 169 mots.
-    expect(synthesisTargetRange(FULL).min).toBe(90);
+  it("accorde cent mots au plus à un parcours entièrement documenté", () => {
+    expect(synthesisTargetRange(FULL)).toEqual({ min: 30, max: 100 });
+  });
+
+  it("ne demande pas de remplir le parcours pour compenser un programme volumineux", () => {
+    const large: SynthesisMaterial = {
+      mandateCount: 10,
+      voteCount: 1767,
+      measureCount: LARGE_PROGRAMME_MEASURES,
+    };
+    expect(synthesisTargetRange(large)).toEqual(synthesisTargetRange(FULL));
+    expect(buildSynthesisSystemPrompt(large)).toContain(
+      "Recopie sans la modifier la phrase de parcours"
+    );
+  });
+
+  it("demande des axes étayés sans juxtaposer les mesures", () => {
+    const prompt = buildSynthesisSystemPrompt(FULL);
+    expect(prompt).toContain("Dégage les idées directrices");
+    expect(prompt).toContain("Ne juxtapose pas les mesures");
+    expect(prompt).toContain("doit citer les références exactes");
   });
 
   it("demande moins à une candidature dont un pan est vide", () => {
-    expect(synthesisTargetRange(MEASURES_ONLY).min).toBeLessThan(synthesisTargetRange(FULL).min);
+    expect(synthesisTargetRange(MEASURES_ONLY)).toEqual(synthesisTargetRange(BARE));
     expect(synthesisTargetRange(THIN_CAREER).min).toBeLessThan(synthesisTargetRange(FULL).min);
     expect(synthesisTargetRange(BARE).min).toBeLessThan(synthesisTargetRange(THIN_CAREER).min);
+  });
+
+  it("garde le parcours court au-dessus du plancher de la synthèse composée", () => {
+    const shortestProgrammeOverviewWords = 16;
+    expect(
+      synthesisTargetRange(THIN_CAREER).min + shortestProgrammeOverviewWords
+    ).toBeGreaterThanOrEqual(synthesisFloor(THIN_CAREER));
   });
 
   it("compte un millier de votes comme un parcours à décrire, sur trois mandats", () => {
@@ -167,6 +456,16 @@ describe("screenSynthesis", () => {
   it("accepts a text of the right length", () => {
     const result = screenSynthesis(good);
     expect(result.ok).toBe(true);
+  });
+
+  it("cannot exclude source words that are absent from the final text", () => {
+    expect(
+      screenSynthesisSegments({
+        text: good,
+        generatedText: good,
+        exemptSourceTexts: ["formulation canonique absente"],
+      })
+    ).toMatchObject({ ok: false, reason: "source_absente" });
   });
 
   it("trims before measuring", () => {
@@ -210,7 +509,23 @@ describe("screenSynthesis", () => {
   });
 
   it("rejects a text above the ceiling", () => {
-    expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1))).toMatchObject({
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1))).toMatchObject({
+      ok: false,
+      reason: "trop_long",
+    });
+  });
+
+  it("accepte un dépassement borné de la cible éditoriale", () => {
+    // Cas observé dans l'admin pour Dominique de Villepin : le fournisseur produit 306 mots
+    // recevables alors que 200 est une cible de concision, pas une frontière de sécurité.
+    expect(screenSynthesis(words(306), FULL)).toMatchObject({ ok: true });
+  });
+
+  it("garde une cible étendue pour un corpus volumineux sans en faire un seuil de rejet", () => {
+    const large = { ...FULL, measureCount: LARGE_PROGRAMME_MEASURES };
+    expect(screenSynthesis(words(LARGE_SYNTHESIS_MAX_WORDS), large).ok).toBe(true);
+    expect(screenSynthesis(words(LARGE_SYNTHESIS_MAX_WORDS + 1), large).ok).toBe(true);
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1), large)).toMatchObject({
       ok: false,
       reason: "trop_long",
     });
@@ -218,7 +533,7 @@ describe("screenSynthesis", () => {
 
   it("accepts exactly at both bounds", () => {
     expect(screenSynthesis(words(FULL_FLOOR)).ok).toBe(true);
-    expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS)).ok).toBe(true);
+    expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS)).ok).toBe(true);
   });
 
   it("names the floor that applied, not a fixed one", () => {
@@ -256,17 +571,14 @@ describe("screenSynthesis", () => {
       }
     });
 
-    it("reste sous la longueur visée, partout", () => {
-      // La propriété qui empêche la régression de revenir : un texte pile à la cible ne peut
-      // jamais être refusé pour sa longueur.
+    it("garde un plancher final distinct de la cible du seul parcours", () => {
       for (const material of [FULL, MEASURES_ONLY, THIN_CAREER, BARE]) {
-        expect(synthesisFloor(material)).toBeLessThan(synthesisTargetRange(material).min);
-        expect(screenSynthesis(words(synthesisTargetRange(material).min), material).ok).toBe(true);
+        expect(synthesisFloor(material)).toBeLessThan(SYNTHESIS_HARD_MAX_WORDS);
       }
     });
 
     it("applique le plafond et les autres règles quelle que soit la matière", () => {
-      expect(screenSynthesis(words(SYNTHESIS_MAX_WORDS + 1), BARE)).toMatchObject({
+      expect(screenSynthesis(words(SYNTHESIS_HARD_MAX_WORDS + 1), BARE)).toMatchObject({
         ok: false,
         reason: "trop_long",
       });

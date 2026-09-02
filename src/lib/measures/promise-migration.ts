@@ -1,5 +1,6 @@
 import type { MeasureSourceKind, PromiseSourceKind } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { isAllowedPresidentialMeasureTheme } from "@/lib/presidentielle/themes";
 import { createMeasure } from "./transitions";
 
 /**
@@ -87,7 +88,7 @@ export async function migratePromisesToMeasures(input: {
 }): Promise<MigrationReport> {
   const election = await db.election.findUnique({
     where: { id: input.electionId },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
   if (election === null) {
     throw new Error(`Élection ${input.electionId} introuvable`);
@@ -160,6 +161,14 @@ export async function migratePromisesToMeasures(input: {
 
     if (await alreadyMigrated(promise.politicianId, input.electionId, promise.text)) {
       report.alreadyMigrated += 1;
+      continue;
+    }
+
+    if (!isAllowedPresidentialMeasureTheme(election.slug, promise.theme)) {
+      report.rejects.push({
+        promiseId: promise.id,
+        reason: "thème historique à requalifier avant migration présidentielle",
+      });
       continue;
     }
 

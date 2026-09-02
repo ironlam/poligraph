@@ -120,6 +120,11 @@ const SCRIPT_CATALOG: ScriptCategory[] = [
     scripts: [
       { id: "classify-themes", label: "Classification", description: "Thèmes des dossiers" },
       { id: "index-embeddings", label: "Embeddings", description: "Index vectoriel RAG" },
+      {
+        id: "reindex-measures-search",
+        label: "Recherche des mesures 2027",
+        description: "Reconstruit l'index lexical des mesures de la présidentielle",
+      },
     ],
   },
   {

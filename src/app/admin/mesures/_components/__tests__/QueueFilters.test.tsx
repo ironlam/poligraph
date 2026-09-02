@@ -9,6 +9,7 @@ const RESULT: MeasureQueueResult = {
   counts: { EMPTY: 0, DRAFT: 0, REVIEWED: 0, PUBLISHED: 0, DEPUBLISHED: 0 },
   anomalyCount: 0,
   withdrawnCount: 0,
+  enrichmentCounts: { SUBTOPICS_PENDING: 12, SUBTOPICS_APPROVED: 3, DETAILS_MISSING: 8 },
   scanCapped: false,
 };
 
@@ -17,8 +18,10 @@ const CURRENT: QueueFilterState = {
   theme: ["SANTE"],
   candidacyId: undefined,
   anomaliesOnly: false,
+  enrichment: "SUBTOPICS_PENDING",
   withdrawn: "exclude",
   q: "hôpital",
+  publicCorpus: undefined,
 };
 
 const CANDIDATES = [
@@ -46,6 +49,7 @@ describe("QueueFilters", () => {
     expect(href).toContain("etat=REVIEWED");
     expect(href).toContain("theme=SANTE");
     expect(href).toContain("retrait=exclude");
+    expect(href).toContain("enrichissement=SUBTOPICS_PENDING");
     expect(href).toContain("q=h%C3%B4pital");
   });
 
@@ -59,9 +63,38 @@ describe("QueueFilters", () => {
     );
 
     expect(container.querySelector('input[name="candidat"]')).toHaveValue("candidature-1");
+    expect(container.querySelector('input[name="enrichissement"]')).toHaveValue(
+      "SUBTOPICS_PENDING"
+    );
     expect(screen.getByRole("link", { name: "Alix Démonstration" })).toHaveAttribute(
       "aria-current",
       "true"
     );
+  });
+
+  it("présente les files d’enrichissement avec leurs compteurs", () => {
+    render(<QueueFilters current={CURRENT} result={RESULT} candidates={CANDIDATES} />);
+
+    expect(screen.getByRole("link", { name: "Sous-thèmes à valider 12" })).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
+    expect(screen.getByRole("link", { name: "Contextes manquants 8" })).toBeInTheDocument();
+  });
+
+  it("conserve le périmètre du corpus public dans les liens et la recherche", () => {
+    const { container } = render(
+      <QueueFilters
+        current={{ ...CURRENT, publicCorpus: "PRESIDENTIELLE_2027" }}
+        result={RESULT}
+        candidates={CANDIDATES}
+      />
+    );
+
+    expect(screen.getByRole("link", { name: "Camille Exemple" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("corpus=presidentielle-2027")
+    );
+    expect(container.querySelector('input[name="corpus"]')).toHaveValue("presidentielle-2027");
   });
 });

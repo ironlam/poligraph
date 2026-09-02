@@ -68,6 +68,23 @@ describe("extractPenaltyData", () => {
     expect(result.verdictDate).toEqual(new Date("2022-02-18"));
   });
 
+  it.each([
+    ["une année", "+2024-00-00T00:00:00Z", 9],
+    ["un mois", "+2024-05-00T00:00:00Z", 10],
+    ["un jour impossible", "+2024-02-30T00:00:00Z", 11],
+  ])("n’invente pas de date exacte à partir de %s", (_label, time, precision) => {
+    const claim: WikidataClaim = {
+      mainsnak: {
+        datavalue: { value: { id: "Q852973" }, type: "wikibase-entityid" },
+      },
+      qualifiers: {
+        P585: [{ datavalue: { value: { time, precision } } }],
+      },
+    };
+
+    expect(extractPenaltyData(claim).verdictDate).toBeUndefined();
+  });
+
   it("extracts court from P4884 qualifier", () => {
     const claim: WikidataClaim = {
       mainsnak: {

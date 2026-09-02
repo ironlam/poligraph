@@ -1,6 +1,7 @@
 /**
  * Shared types for sync scripts
  */
+import type { CLIOptionDefinition as ParsedCLIOptionDefinition } from "@/lib/cli/parse-options";
 
 /**
  * Options passed to sync handlers
@@ -26,10 +27,7 @@ export interface SyncResult {
 /**
  * CLI option definition for help display
  */
-export interface CLIOptionDefinition {
-  name: string; // "--limit"
-  alias?: string; // "-l"
-  type: "boolean" | "number" | "string";
+export interface CLIOptionDefinition extends ParsedCLIOptionDefinition {
   description: string;
   default?: unknown;
 }

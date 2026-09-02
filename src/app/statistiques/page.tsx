@@ -15,9 +15,12 @@ import { LegislativeSection } from "@/components/stats/LegislativeSection";
 import { JudicialSection } from "@/components/stats/JudicialSection";
 import { FactCheckSection } from "@/components/stats/FactCheckSection";
 import { ParticipationSection } from "@/components/stats/ParticipationSection";
+import { PresidentialEntry } from "@/components/stats/PresidentialEntry";
 import { getHemicycleData } from "@/lib/data/hemicycle";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
+import { getPresidentialOverviewStats } from "@/lib/data/presidential-stats";
+import { SITE_URL } from "@/config/site";
 
 export const revalidate = 300;
 
@@ -51,6 +54,7 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
     groupDynamicsData,
     hemicycleData,
     victimStats,
+    presidentialStats,
   ] = await Promise.all([
     getLegislativeData(),
     getJudicialData(),
@@ -59,6 +63,7 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
     getGroupDynamicsData(),
     getHemicycleData(),
     getVictimStats(),
+    getPresidentialOverviewStats("presidentielle-2027"),
   ]);
 
   return (
@@ -66,7 +71,7 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
       <CollectionPageJsonLd
         name="Statistiques politiques de la France"
         description="Statistiques sur la vie politique française : travail législatif, transparence judiciaire, fact-checking."
-        url="https://poligraph.fr/statistiques"
+        url={`${SITE_URL}/statistiques`}
       />
       <div className="container mx-auto px-4 pt-4 pb-8">
         <Breadcrumb items={[{ label: "Statistiques" }]} />
@@ -114,6 +119,7 @@ export default async function StatistiquesPage({ searchParams }: PageProps) {
             />
           }
         />
+        {presidentialStats !== null ? <PresidentialEntry stats={presidentialStats} /> : null}
       </div>
     </>
   );

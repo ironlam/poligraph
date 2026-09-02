@@ -110,7 +110,7 @@ export const GET = withPublicRoute(async (request) => {
       `,
 
       // Parties: accent-insensitive on name/shortName; public member count only.
-      db.$queryRaw<RawParty[]>`
+      db.$queryRaw<RawParty[]>(Prisma.sql`
         SELECT p."slug", p."name", p."shortName", p."color",
                (SELECT COUNT(*) FROM "Politician" pol
                 WHERE pol."currentPartyId" = p."id"
@@ -121,7 +121,7 @@ export const GET = withPublicRoute(async (request) => {
             OR unaccent(p."shortName") ILIKE unaccent(${Prisma.sql`${query}`}))
         ORDER BY p."name" ASC
         LIMIT ${limit}
-      `,
+      `),
 
       // Affairs: public affairs tied to public politicians only.
       db.$queryRaw<RawAffair[]>`
@@ -148,7 +148,7 @@ export const GET = withPublicRoute(async (request) => {
 
       // Fact-checks: preserve accent-insensitive search while composing the
       // canonical public publication + allow-list predicate.
-      db.$queryRaw<RawFactCheck[]>`
+      db.$queryRaw<RawFactCheck[]>(Prisma.sql`
         SELECT fc."slug", fc."title", fc."source", fc."verdictRating", fc."publishedAt",
                (SELECT p."fullName"
                 FROM "FactCheckMention" m
@@ -161,7 +161,7 @@ export const GET = withPublicRoute(async (request) => {
           AND unaccent(fc."title") ILIKE unaccent(${pattern})
         ORDER BY fc."publishedAt" DESC
         LIMIT ${limit}
-      `,
+      `),
 
       // Legislative dossiers: accent-insensitive on title/shortTitle
       db.$queryRaw<RawDossier[]>`
@@ -237,6 +237,8 @@ export const GET = withPublicRoute(async (request) => {
         population: c.population,
       })),
     }),
-    "daily"
+    // Free-text results must reflect editorial publication changes immediately. A cached empty
+    // response otherwise keeps a newly published person invisible until the CDN entry expires.
+    "none"
   );
 });

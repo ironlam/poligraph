@@ -4,9 +4,15 @@ import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
-import { THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
+import {
+  selectFeaturedSubtopics,
+  type FeaturedSubtopic,
+} from "@/lib/presidentielle/featured-subtopics";
+import { getPresidentialThemeIndexOrder, themeToSlug } from "@/lib/presidentielle/themes";
 import { getPublicMeasuresByElection, type PublicMeasure } from "./measures";
 import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
+
+export type { FeaturedSubtopic } from "@/lib/presidentielle/featured-subtopics";
 
 /**
  * The read authority for the themes index / hub gate.
@@ -26,13 +32,17 @@ export type ThemeIndexEntry = {
   slug: string;
   documentedMeasureCount: number;
   currentlyDefendedMeasureCount: number;
+  /** Distinct public candidacies with at least one documented measure, withdrawals included. */
+  documentedCandidacyCount: number;
   candidaciesWithVerifiedMeasure: number;
+  lastReviewedAt: Date | null;
   publishable: boolean;
 };
 
 export type ThemesIndexData = {
   electionSlug: string;
   themes: ThemeIndexEntry[];
+  featuredSubtopics: FeaturedSubtopic[];
   publishableSubjectPageCount: number;
 };
 
@@ -59,17 +69,26 @@ export async function loadThemesIndex(
     byTheme.set(m.theme, list);
   }
 
-  const themes: ThemeIndexEntry[] = THEMES_IN_ORDER.map((theme) => {
+  const indexedThemes = getPresidentialThemeIndexOrder(new Set(byTheme.keys()));
+  const themes: ThemeIndexEntry[] = indexedThemes.map((theme) => {
     const onTheme = byTheme.get(theme) ?? [];
     const defended = onTheme.filter((m) => m.withdrawal === null);
+    const documentedCandidacies = new Set(onTheme.map((m) => m.candidacyId as string));
     const candidacies = new Set(defended.map((m) => m.candidacyId as string));
+    const lastReviewedAt = onTheme.reduce<Date | null>(
+      (latest, measure) =>
+        latest === null || measure.reviewedAt > latest ? measure.reviewedAt : latest,
+      null
+    );
     return {
       theme,
       label: THEME_CATEGORY_LABELS[theme],
       slug: themeToSlug(theme),
       documentedMeasureCount: onTheme.length,
       currentlyDefendedMeasureCount: defended.length,
+      documentedCandidacyCount: documentedCandidacies.size,
       candidaciesWithVerifiedMeasure: candidacies.size,
+      lastReviewedAt,
       publishable: isSubjectPagePublishable(candidacies.size),
     };
   });
@@ -77,6 +96,11 @@ export async function loadThemesIndex(
   return {
     electionSlug,
     themes,
+    featuredSubtopics: selectFeaturedSubtopics(
+      measures.filter(
+        (measure) => measure.candidacyId !== null && publicIds.has(measure.candidacyId)
+      )
+    ),
     publishableSubjectPageCount: themes.filter((t) => t.publishable).length,
   };
 }

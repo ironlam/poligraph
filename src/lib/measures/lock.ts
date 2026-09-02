@@ -24,3 +24,13 @@ export async function lockMeasure(tx: DbTransactionClient, measureId: string): P
   `;
   if (rows.length === 0) throw new MeasureNotFoundError(measureId);
 }
+
+/** Serializes visibility decisions shared by every measure of one candidacy. */
+export async function lockMeasureCandidacy(
+  tx: DbTransactionClient,
+  candidacyId: string
+): Promise<void> {
+  await tx.$queryRaw<{ id: string }[]>`
+    SELECT id FROM "Candidacy" WHERE id = ${candidacyId} FOR UPDATE
+  `;
+}

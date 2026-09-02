@@ -5,6 +5,9 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { updatePoliticianSchema } from "@/lib/security/schemas/politician";
 import { generateSlug } from "@/lib/utils";
 import { invalidateEntity } from "@/lib/cache";
+import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
+import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentielle/search-sync";
+import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import type { DataSource, PublicationStatus } from "@/generated/prisma";
 import type { z } from "zod/v4";
 
@@ -62,24 +65,44 @@ export const PUT = withAdminAuth(
     }
 
     // Update politician
-    const politician = await db.politician.update({
-      where: { id },
-      data: {
-        slug,
-        civility: body.civility || null,
-        firstName: body.firstName.trim(),
-        lastName: body.lastName.trim(),
-        fullName,
-        birthDate: body.birthDate ? new Date(body.birthDate) : null,
-        birthPlace: body.birthPlace || null,
-        photoUrl: body.photoUrl || null,
-        photoSource: body.photoSource || null,
-        currentPartyId: body.currentPartyId || null,
-        deathDate: body.deathDate ? new Date(body.deathDate) : null,
-        biography: body.biography || null,
-        publicationStatus:
-          (body.publicationStatus as PublicationStatus) || existing.publicationStatus,
-      },
+    const { politician, presidentialElectionIds } = await db.$transaction(async (tx) => {
+      const candidacies = await tx.candidacy.findMany({
+        where: { politicianId: id, election: { type: "PRESIDENTIELLE" } },
+        select: { id: true, electionId: true },
+        orderBy: { id: "asc" },
+      });
+      for (const candidacy of candidacies) {
+        await lockMeasureCandidacy(tx, candidacy.id);
+      }
+
+      const politician = await tx.politician.update({
+        where: { id },
+        data: {
+          slug,
+          civility: body.civility || null,
+          firstName: body.firstName.trim(),
+          lastName: body.lastName.trim(),
+          fullName,
+          birthDate: body.birthDate ? new Date(body.birthDate) : null,
+          birthPlace: body.birthPlace || null,
+          photoUrl: body.photoUrl || null,
+          photoSource: body.photoSource || null,
+          currentPartyId: body.currentPartyId || null,
+          deathDate: body.deathDate ? new Date(body.deathDate) : null,
+          biography: body.biography || null,
+          publicationStatus:
+            (body.publicationStatus as PublicationStatus) || existing.publicationStatus,
+        },
+      });
+      for (const candidacy of candidacies) {
+        // Slug/name changes rewrite canonical result URLs; a publication loss closes candidate and
+        // measure documents before the politician update can commit.
+        await syncPresidentialSearchDocumentsForCandidacy(tx, candidacy.id);
+      }
+      return {
+        politician,
+        presidentialElectionIds: [...new Set(candidacies.map((c) => c.electionId))],
+      };
     });
 
     // Handle external IDs
@@ -164,6 +187,9 @@ export const PUT = withAdminAuth(
     });
 
     invalidateEntity("politician", politician.slug);
+    for (const electionId of presidentialElectionIds) {
+      invalidatePresidentialCandidacyTags(electionId);
+    }
 
     return NextResponse.json(politician);
   })

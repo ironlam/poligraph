@@ -60,6 +60,9 @@ export class HTTPError extends Error {
 /** Guard against a cyclic `cause` chain. */
 const MAX_CAUSE_DEPTH = 5;
 
+/** Guard against a cyclic or pathologically wide error graph. */
+const MAX_FLATTENED_ERRORS = 20;
+
 function errorLabel(error: Error): string {
   const code = (error as { code?: unknown }).code;
   return typeof code === "string" ? `${error.message} [${code}]` : error.message;
@@ -119,6 +122,52 @@ export function describeError(error: unknown): string {
   }
 
   return parts.join(" <- ");
+}
+
+/**
+ * errno codes returned when the hostname itself has no DNS answer.
+ *
+ * `EAI_AGAIN` is deliberately absent: it is a resolver timeout, which a retry
+ * does fix, whereas these three mean the name does not exist.
+ */
+const UNRESOLVABLE_HOST_CODES = new Set(["ENOTFOUND", "EAI_NODATA", "EAI_NONAME"]);
+
+/** Flatten an error, its `cause` chain and any aggregated members. */
+function flattenErrors(error: unknown): Error[] {
+  const flattened: Error[] = [];
+  const seen = new Set<unknown>();
+  const queue: unknown[] = [error];
+
+  while (queue.length > 0 && flattened.length < MAX_FLATTENED_ERRORS) {
+    const current = queue.shift();
+    if (!(current instanceof Error) || seen.has(current)) continue;
+    seen.add(current);
+    flattened.push(current);
+
+    if (current instanceof AggregateError && current.errors?.length) {
+      queue.push(...current.errors);
+    }
+    if (current.cause !== undefined) queue.push(current.cause);
+  }
+
+  return flattened;
+}
+
+/**
+ * True when the failure is DNS answering "no such host".
+ *
+ * A decommissioned source answers this way for every request it is sent:
+ * docparl.assemblee-nationale.fr disappeared from DNS in 2026 and turned each
+ * daily sync into twenty identical `ENOTFOUND` lines. Retrying, or walking the
+ * rest of a batch, only multiplies one permanent failure, so callers use this
+ * to stop early and report the host once.
+ */
+export function isUnresolvableHostError(error: unknown): boolean {
+  return flattenErrors(error).some((err) => {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && UNRESOLVABLE_HOST_CODES.has(code)) return true;
+    return /\b(ENOTFOUND|EAI_NODATA|EAI_NONAME)\b/.test(err.message);
+  });
 }
 
 const DEFAULT_OPTIONS: Required<HTTPClientOptions> = {
@@ -338,6 +387,9 @@ export class HTTPClient {
         if (error instanceof HTTPError && error.status >= 400 && error.status < 500) {
           throw error;
         }
+
+        // A host with no DNS answer fails identically on every attempt.
+        if (isUnresolvableHostError(error)) break;
 
         // Retry on network errors and timeouts
         if (attempt < maxRetries) {

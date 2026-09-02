@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ThemeCategory } from "@/generated/prisma";
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 
 export const DOCUMENT_TYPES = [
   "CANDIDATE_PROGRAM_2027",
@@ -22,7 +22,7 @@ const classificationSchema = z.enum([
   "AMBIGUOUS",
 ]);
 
-const themeSchema = z.enum(ThemeCategory).nullable();
+const themeSchema = z.enum(THEMES_IN_ORDER).nullable();
 
 export const normalizationGroundingFailureSchema = z.enum([
   "NUMBER_ADDED",

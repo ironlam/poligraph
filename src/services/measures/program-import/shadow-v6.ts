@@ -39,6 +39,8 @@ const WINDOW_MAX_PROMPT_CHARACTERS = 18_000;
 export type V6ShadowOptions = {
   candidate?: string;
   party?: string;
+  /** Explicit candidacy receiving a matching current party platform. Never inferred. */
+  partyProgramCandidacyId?: string;
   source?: string;
   limit?: number;
   forceRefetch?: boolean;
@@ -458,10 +460,27 @@ function proposalId(editionId: string, index: number): string {
 
 export async function runV6ShadowImport(options: V6ShadowOptions): Promise<V6ShadowReport> {
   const runStartedAt = Date.now();
+  if (options.partyProgramCandidacyId && (!options.party || options.candidate)) {
+    throw new Error(
+      "L'attribution PARTY_PROGRAM exige --party et ne peut pas être combinée à --candidate."
+    );
+  }
   const election = await db.election.findUniqueOrThrow({
     where: { slug: "presidentielle-2027" },
     select: { id: true },
   });
+  const partyProgramCandidacy = options.partyProgramCandidacyId
+    ? await db.candidacy.findUnique({
+        where: { id: options.partyProgramCandidacyId },
+        select: { id: true, candidateName: true, electionId: true, partyId: true },
+      })
+    : null;
+  if (options.partyProgramCandidacyId && !partyProgramCandidacy) {
+    throw new Error(`Candidature ${options.partyProgramCandidacyId} introuvable.`);
+  }
+  if (partyProgramCandidacy && partyProgramCandidacy.electionId !== election.id) {
+    throw new Error("La candidature PARTY_PROGRAM n'appartient pas à la présidentielle 2027.");
+  }
   const editions = await db.programEdition.findMany({
     where: {
       electionId: election.id,
@@ -588,10 +607,22 @@ export async function runV6ShadowImport(options: V6ShadowOptions): Promise<V6Sha
       label: edition.label,
     });
     let documentType = classifyEdition(edition.ownerType, edition.label);
+    const attributedPartyProgram =
+      edition.ownerType === "PARTY" &&
+      partyProgramCandidacy !== null &&
+      partyProgramCandidacy.partyId !== null &&
+      partyProgramCandidacy.partyId === edition.partyId;
+    const effectiveCandidacyId = attributedPartyProgram
+      ? partyProgramCandidacy.id
+      : edition.candidacyId;
     const editionReport: V6ShadowEditionReport = {
       programEditionId: edition.id,
       label: edition.label,
-      candidate: edition.candidacy?.candidateName ?? edition.party?.name ?? "Sans propriétaire",
+      candidate:
+        (attributedPartyProgram ? partyProgramCandidacy.candidateName : null) ??
+        edition.candidacy?.candidateName ??
+        edition.party?.name ??
+        "Sans propriétaire",
       documentUrl: edition.documentUrl,
       documentType,
       documentHash: null,
@@ -606,7 +637,7 @@ export async function runV6ShadowImport(options: V6ShadowOptions): Promise<V6Sha
     };
     report.editions.push(editionReport);
 
-    if (edition.ownerType !== "CANDIDACY" || !edition.candidacyId) {
+    if ((edition.ownerType !== "CANDIDACY" || !edition.candidacyId) && !attributedPartyProgram) {
       editionReport.errors.push(
         "Plateforme de parti non attribuable automatiquement à une candidature 2027."
       );
@@ -793,9 +824,10 @@ export async function runV6ShadowImport(options: V6ShadowOptions): Promise<V6Sha
             if (evidence.pages.length === 2) report.evidence.crossingTwoPages += 1;
           }
           const preparedCandidate = prepareMeasureCandidate(evaluated, acquired.hash, {
-            candidacyId: edition.candidacyId,
+            candidacyId: effectiveCandidacyId!,
             documentType,
             publishedAt: edition.publishedAt,
+            attribution: attributedPartyProgram ? "PARTY_PROGRAM" : "PERSONAL",
             possibleDuplicate,
           });
           if (preparedCandidate.reviewReadiness === "READY_FOR_REVIEW") {

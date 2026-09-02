@@ -10,11 +10,27 @@ import type {
   ThemeCategory,
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
+import {
+  GENERATED_CONTEXT_DRAFT_ACTION,
+  type GeneratedContextClaim,
+} from "@/lib/measures/context-provenance";
+import { assertMeasureBatchKind, type MeasureBatchKind } from "@/lib/measures/batch-kind";
 import { invalidateMeasureTags } from "./cache";
-import { validateRevisionEvidence, type MeasureImportEngine } from "./evidence-snapshot";
+import {
+  createV6CorrectionFingerprint,
+  validateRevisionEvidence,
+  type MeasureImportEngine,
+} from "./evidence-snapshot";
 import { MeasureConcurrencyError, MeasureValidationError } from "./errors";
-import { lockMeasure } from "./lock";
+import { lockMeasure, lockMeasureCandidacy } from "./lock";
 import { syncSearchDocument } from "./search-sync";
+import { PUBLIC_PRESIDENTIAL_FICHE_WHERE } from "@/lib/presidentielle/publication";
+import {
+  syncCandidacySearchDocument,
+  syncPresidentialSearchDocumentsForCandidacy,
+} from "@/lib/presidentielle/search-sync";
+import { isAllowedPresidentialMeasureTheme } from "@/lib/presidentielle/themes";
+import { allocateMeasureSlug } from "./slug";
 
 export type MeasureSourceInput = {
   sourceKind: MeasureSourceKind;
@@ -26,6 +42,7 @@ export type MeasureSourceInput = {
 
 export type MeasureRevisionInput = {
   text: string;
+  details?: string | null;
   precision: MeasurePrecision | null;
   validFrom: Date;
   extractionMethod: MeasureExtractionMethod;
@@ -59,9 +76,22 @@ async function assertContextIsCoherent(
   tx: DbTransactionClient,
   input: Pick<
     CreateMeasureInput,
-    "politicianId" | "electionId" | "candidacyId" | "programEditionId"
+    "politicianId" | "electionId" | "candidacyId" | "programEditionId" | "theme"
   >
 ): Promise<void> {
+  const election = await tx.election.findUnique({
+    where: { id: input.electionId },
+    select: { slug: true },
+  });
+  if (!election) {
+    throw new MeasureValidationError(`Élection ${input.electionId} introuvable`);
+  }
+  if (!isAllowedPresidentialMeasureTheme(election.slug, input.theme)) {
+    throw new MeasureValidationError(
+      "Le thème historique SOCIAL_TRAVAIL n'est pas autorisé pour une mesure présidentielle 2027"
+    );
+  }
+
   if (input.candidacyId) {
     const candidacy = await tx.candidacy.findUnique({
       where: { id: input.candidacyId },
@@ -119,6 +149,9 @@ function assertRevisionIsUsable(
   if (revision.text.trim() === "") {
     throw new MeasureValidationError("Le texte de la révision est vide");
   }
+  if ((revision.details?.length ?? 0) > 20_000) {
+    throw new MeasureValidationError("Les détails de la révision dépassent 20 000 caractères");
+  }
   // A revision with no source can never be published (audit rule of spec 12.1), so
   // accepting one here would create something structurally unpublishable.
   if (sources.length === 0) {
@@ -161,9 +194,11 @@ export async function createMeasure(
 
   return db.$transaction(async (tx) => {
     await assertContextIsCoherent(tx, input);
+    const slug = await allocateMeasureSlug(tx, input.politicianId, input.revision.text);
 
     const measure = await tx.measure.create({
       data: {
+        slug,
         politicianId: input.politicianId,
         electionId: input.electionId,
         candidacyId: input.candidacyId,
@@ -178,6 +213,7 @@ export async function createMeasure(
       data: {
         measureId: measure.id,
         text: input.revision.text,
+        details: input.revision.details?.trim() || null,
         precision: input.revision.precision,
         validFrom: input.revision.validFrom,
         extractionMethod: input.revision.extractionMethod,
@@ -219,6 +255,15 @@ export type DraftMeasureRevisionInput = {
   /** Preserves immutable V6 proof when a human corrects the active imported formulation. */
   preserveEvidenceFromRevisionId?: string;
   correctedBy?: string;
+  generatedContext?: {
+    claims: GeneratedContextClaim[];
+    evidenceUnitIds: string[];
+    generatedBy: string;
+    ipAddress: string;
+    model: string;
+    promptVersion: string;
+    userAgent: string;
+  };
 };
 
 // No `discardedBy` and no `supersedesDraftBy`. A first version of this plan took a
@@ -242,8 +287,15 @@ export async function draftMeasureRevision(
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true, updatedAt: true },
+      select: {
+        latestRevisionId: true,
+        publishedRevisionId: true,
+        candidacyId: true,
+        updatedAt: true,
+      },
     });
+
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
 
     assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
@@ -260,6 +312,10 @@ export async function draftMeasureRevision(
         select: {
           measureId: true,
           evidenceSnapshot: true,
+          reviewedAt: true,
+          publishedAt: true,
+          discardedAt: true,
+          rejectedAt: true,
           reviewReadiness: true,
           reviewWarnings: true,
           sources: {
@@ -276,13 +332,32 @@ export async function draftMeasureRevision(
       if (!previous || previous.measureId !== input.measureId) {
         throw new MeasureValidationError("La révision source de la preuve est introuvable");
       }
+      if (
+        input.generatedContext &&
+        measure.latestRevisionId !== measure.publishedRevisionId &&
+        (previous.reviewedAt !== null ||
+          previous.publishedAt !== null ||
+          previous.discardedAt !== null ||
+          previous.rejectedAt !== null)
+      ) {
+        throw new MeasureValidationError(
+          "Un brouillon relu ou modéré ne peut pas être remplacé automatiquement"
+        );
+      }
       revisionInput = {
         ...input.revision,
         importEngine: previous.evidenceSnapshot === null ? input.revision.importEngine : "V6",
         evidenceSnapshot: previous.evidenceSnapshot,
         reviewReadiness: previous.reviewReadiness,
         reviewWarnings: previous.reviewWarnings,
-        importFingerprint: null,
+        importFingerprint:
+          input.revision.extractionMethod === "AI_ASSISTED"
+            ? createV6CorrectionFingerprint({
+                previousRevisionId: input.preserveEvidenceFromRevisionId,
+                text: input.revision.text,
+                details: input.revision.details,
+              })
+            : null,
       };
       revisionSources = previous.sources;
     }
@@ -301,6 +376,7 @@ export async function draftMeasureRevision(
       data: {
         measureId: input.measureId,
         text: revisionInput.text,
+        details: revisionInput.details?.trim() || null,
         precision: revisionInput.precision,
         validFrom: revisionInput.validFrom,
         extractionMethod: revisionInput.extractionMethod,
@@ -317,14 +393,25 @@ export async function draftMeasureRevision(
     if (input.preserveEvidenceFromRevisionId) {
       await tx.auditLog.create({
         data: {
-          action: "CORRECT_DRAFT",
+          action: input.generatedContext ? GENERATED_CONTEXT_DRAFT_ACTION : "CORRECT_DRAFT",
           entityType: "MeasureRevision",
           entityId: revision.id,
           changes: {
             previousRevisionId: input.preserveEvidenceFromRevisionId,
             evidenceSnapshotPreserved: true,
+            ...(input.generatedContext
+              ? {
+                  claims: input.generatedContext.claims,
+                  evidenceUnitIds: input.generatedContext.evidenceUnitIds,
+                  generatedBy: input.generatedContext.generatedBy,
+                  model: input.generatedContext.model,
+                  promptVersion: input.generatedContext.promptVersion,
+                }
+              : {}),
           },
-          userId: input.correctedBy,
+          userId: input.generatedContext?.generatedBy ?? input.correctedBy,
+          ipAddress: input.generatedContext?.ipAddress,
+          userAgent: input.generatedContext?.userAgent,
         },
       });
     }
@@ -354,6 +441,7 @@ export async function reviewMeasureRevision(input: {
   measureId: string;
   revisionId: string;
   reviewedBy: string;
+  batchKind?: MeasureBatchKind;
 }): Promise<void> {
   if (input.reviewedBy.trim() === "") {
     throw new MeasureValidationError("Le relecteur doit être identifié");
@@ -364,7 +452,12 @@ export async function reviewMeasureRevision(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true },
+      select: {
+        latestRevisionId: true,
+        publicationStatus: true,
+        publishedRevisionId: true,
+        publishedRevision: { select: { text: true } },
+      },
     });
 
     const revision = await tx.measureRevision.findUnique({
@@ -375,6 +468,10 @@ export async function reviewMeasureRevision(input: {
         supersededAt: true,
         rejectedAt: true,
         reviewedAt: true,
+        text: true,
+        details: true,
+        extractionMethod: true,
+        extractorVersion: true,
         _count: { select: { sources: true } },
       },
     });
@@ -407,6 +504,7 @@ export async function reviewMeasureRevision(input: {
     if (revision.reviewedAt) {
       throw new MeasureValidationError("Cette révision a déjà été relue");
     }
+    assertMeasureBatchKind(input.batchKind, measure, revision);
 
     await tx.measureRevision.update({
       where: { id: input.revisionId },
@@ -450,8 +548,9 @@ export async function discardMeasureRevision(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true },
+      select: { latestRevisionId: true, publishedRevisionId: true, candidacyId: true },
     });
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
     if (input.revisionId === measure.publishedRevisionId) {
       throw new MeasureValidationError(
         "Une révision publiée ne s'abandonne pas, elle se dépublie ou se remplace"
@@ -493,8 +592,9 @@ export async function rejectMeasureRevision(input: {
     await lockMeasure(tx, input.measureId);
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { latestRevisionId: true, publishedRevisionId: true },
+      select: { latestRevisionId: true, publishedRevisionId: true, candidacyId: true },
     });
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
     if (input.revisionId === measure.publishedRevisionId) {
       throw new MeasureValidationError("Une révision publiée ne peut pas être rejetée");
     }
@@ -568,6 +668,7 @@ export async function publishMeasureRevision(input: {
    * version from them would be a check with nothing to check.
    */
   expectedUpdatedAt?: Date;
+  batchKind?: MeasureBatchKind;
 }): Promise<void> {
   const { electionId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
@@ -576,19 +677,34 @@ export async function publishMeasureRevision(input: {
       where: { id: input.measureId },
       select: {
         electionId: true,
+        candidacyId: true,
         publishedRevisionId: true,
         latestRevisionId: true,
         updatedAt: true,
+        publicationStatus: true,
+        publishedRevision: { select: { text: true } },
       },
     });
 
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
+
     assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
+
+    const ficheWasPublic = measure.candidacyId
+      ? (await tx.candidacy.findFirst({
+          where: { id: measure.candidacyId, ...PUBLIC_PRESIDENTIAL_FICHE_WHERE },
+          select: { id: true },
+        })) !== null
+      : false;
 
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.revisionId },
       select: {
         measureId: true,
         text: true,
+        details: true,
+        extractionMethod: true,
+        extractorVersion: true,
         reviewedAt: true,
         discardedAt: true,
         supersededAt: true,
@@ -614,6 +730,7 @@ export async function publishMeasureRevision(input: {
     if (revision._count.sources === 0) {
       throw new MeasureValidationError("Une révision publiée doit porter au moins une source");
     }
+    assertMeasureBatchKind(input.batchKind, measure, revision);
     if (revision.reviewReadiness !== null) {
       const evidence = validateRevisionEvidence({
         importEngine: "V6",
@@ -674,10 +791,26 @@ export async function publishMeasureRevision(input: {
       });
     }
 
+    const ficheIsPublic = measure.candidacyId
+      ? (await tx.candidacy.findFirst({
+          where: { id: measure.candidacyId, ...PUBLIC_PRESIDENTIAL_FICHE_WHERE },
+          select: { id: true },
+        })) !== null
+      : false;
+
     // In the same transaction: the database must never expose a new revision while the
     // index still holds the previous text. Called last, so it reads the pointers this
     // transaction has just written.
-    await syncSearchDocument(tx, input.measureId);
+    if (measure.candidacyId && ficheWasPublic !== ficheIsPublic) {
+      // A publication can only keep the fiche stable or open it. When it opens the fiche, no
+      // other qualifying published measure existed before this one, so every other measure keeps
+      // its visibility. Enumerating the whole programme would only lengthen the transaction and
+      // can exhaust Prisma's timeout on large corpora.
+      await syncCandidacySearchDocument(tx, measure.candidacyId);
+      await syncSearchDocument(tx, input.measureId);
+    } else {
+      await syncSearchDocument(tx, input.measureId);
+    }
 
     return { electionId: measure.electionId };
   });
@@ -695,6 +828,8 @@ export async function publishMeasureRevision(input: {
 export async function depublishMeasure(input: {
   measureId: string;
   reason: string;
+  /** Set by authenticated editorial entrypoints so the removal itself is auditable. */
+  depublishedBy?: string;
   /**
    * The `Measure.updatedAt` the caller last saw. Without it, an old page depublishes a correction
    * that was published in the meantime, with a reason written about the previous formulation.
@@ -704,14 +839,19 @@ export async function depublishMeasure(input: {
   if (input.reason.trim() === "") {
     throw new MeasureValidationError("Une dépublication exige un motif");
   }
+  if (input.depublishedBy !== undefined && input.depublishedBy.trim() === "") {
+    throw new MeasureValidationError("Le responsable de la dépublication doit être identifié");
+  }
 
   const { electionId } = await db.$transaction(async (tx) => {
     await lockMeasure(tx, input.measureId);
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { electionId: true, updatedAt: true },
+      select: { electionId: true, candidacyId: true, updatedAt: true },
     });
+
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
 
     assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
@@ -724,12 +864,30 @@ export async function depublishMeasure(input: {
       },
     });
 
+    if (input.depublishedBy) {
+      await tx.auditLog.create({
+        data: {
+          action: "DEPUBLISH_MEASURE",
+          entityType: "Measure",
+          entityId: input.measureId,
+          changes: { reason: input.reason.trim() },
+          userId: input.depublishedBy,
+        },
+      });
+    }
+
     // Re-derives rather than just flipping visibility. With a draft in flight, the
     // reference revision becomes latestRevisionId, so the document must carry the draft
     // text: only changing visibility would leave it aligned on the former published
     // revision, which the staleness rule reports as stale. The row is kept either way, an
     // upsert never deletes.
-    await syncSearchDocument(tx, input.measureId);
+    if (measure.candidacyId) {
+      // Depublishing the last primary-sourced measure closes the fiche and therefore every measure
+      // document it carried. Re-evaluate the set before committing.
+      await syncPresidentialSearchDocumentsForCandidacy(tx, measure.candidacyId);
+    } else {
+      await syncSearchDocument(tx, input.measureId);
+    }
 
     return { electionId: measure.electionId };
   });
@@ -744,9 +902,9 @@ export async function depublishMeasure(input: {
  *
  * The three withdrawal fields are written here and nowhere else, and never separately.
  *
- * No syncSearchDocument call, same as reviewMeasureRevision: neither changes the pointers,
- * the visibility or the indexed text. A withdrawal is displayed by the page, it does not
- * change the searchable content, so syncing here would be a write that changes nothing.
+ * Withdrawal now changes public search eligibility. It can also close the carrier fiche when the
+ * withdrawn proposal was its last primary-sourced current measure, so the full candidacy set is
+ * synchronized in the same transaction.
  */
 export async function withdrawMeasure(input: {
   measureId: string;
@@ -769,8 +927,10 @@ export async function withdrawMeasure(input: {
 
     const measure = await tx.measure.findUniqueOrThrow({
       where: { id: input.measureId },
-      select: { electionId: true, updatedAt: true },
+      select: { electionId: true, candidacyId: true, updatedAt: true },
     });
+
+    if (measure.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
 
     assertVersionMatches(input.measureId, input.expectedUpdatedAt, measure.updatedAt);
 
@@ -782,6 +942,12 @@ export async function withdrawMeasure(input: {
         withdrawnSourceLabel: input.sourceLabel,
       },
     });
+
+    if (measure.candidacyId) {
+      await syncPresidentialSearchDocumentsForCandidacy(tx, measure.candidacyId);
+    } else {
+      await syncSearchDocument(tx, input.measureId);
+    }
 
     return { electionId: measure.electionId };
   });

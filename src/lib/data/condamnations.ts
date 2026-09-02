@@ -187,7 +187,7 @@ export async function getCondamnationsStatsByParty(
       nCondamnesDefinitifs: bigint;
       nCondamnesPrononces: bigint;
     }>
-  >`
+  >(Prisma.sql`
     SELECT
       pt.id AS "partyId",
       pt.slug AS "partySlug",
@@ -211,7 +211,7 @@ export async function getCondamnationsStatsByParty(
     HAVING COUNT(DISTINCT p.id) >= 3
         OR COUNT(DISTINCT CASE WHEN a.status = 'CONDAMNATION_DEFINITIVE' THEN a."politicianId" END) >= 1
     ORDER BY "nCondamnesDefinitifs" DESC, "nSuivis" DESC
-  `;
+  `);
 
   return rows.map((r) => ({
     partyId: r.partyId,

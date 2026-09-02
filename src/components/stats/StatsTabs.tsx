@@ -68,7 +68,7 @@ function StatsTabsInner({
         </TabsTrigger>
         <TabsTrigger value="participation">
           <BarChart3 className="h-4 w-4" />
-          <span className="hidden sm:inline">Participation</span>
+          <span className="hidden sm:inline">Participation aux scrutins publics</span>
           <span className="sm:hidden">Votes</span>
         </TabsTrigger>
       </TabsList>

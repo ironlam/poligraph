@@ -35,6 +35,7 @@ describeIfDisposableDb("hub", () => {
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { slug: SLUG } });
     await db.party.deleteMany({ where: { slug: { startsWith: SLUG } } });
+    await db.measureSubtopic.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.$disconnect();
   });
 
@@ -177,6 +178,19 @@ describeIfDisposableDb("hub", () => {
       expect(context.themes.filter((t) => t.publishable).length).toBe(
         context.publishableSubjectPageCount
       );
+    });
+
+    it("met en avant les sous-thèmes validés selon le nombre de candidatures", async () => {
+      const context = await loadHubMeasureContext(electionId, SLUG);
+
+      expect(context.featuredSubtopics).toContainEqual({
+        slug: `${SLUG}-acces-logement`,
+        label: "Accès au logement",
+        theme: "LOGEMENT_URBANISME",
+        themeLabel: "Logement et urbanisme",
+        measureCount: 2,
+        candidacyCount: 2,
+      });
     });
 
     it("rend null pour une élection inconnue (getHubMeasureContext, avant la frontière cache)", async () => {

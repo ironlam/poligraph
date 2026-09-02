@@ -13,19 +13,90 @@
  * No `server-only`: the script imports it under tsx.
  */
 
-import { callAnthropic } from "@/lib/api/anthropic";
-import { callMistral, extractMistralText } from "@/lib/api/mistral";
+import {
+  callMistral,
+  extractMistralText,
+  parseMistralJSON,
+  type MistralOptions,
+} from "@/lib/api/mistral";
 import { db } from "@/lib/db";
 import {
   buildCandidateSynthesisPrompt,
+  buildCandidateSynthesisGroundingPrompt,
+  buildCanonicalCareer,
   buildSynthesisSystemPrompt,
-  screenSynthesis,
+  screenCandidateSynthesis,
+  screenCandidateSynthesisGrounding,
   synthesisMaterial,
+  type CandidateProgrammeClaim,
   type CandidateSynthesisInput,
 } from "@/lib/presidentielle/candidate-synthesis";
 
 /** Mandates kept in the prompt, most recent first. Enough for a career, short of a list. */
 const MANDATE_LIMIT = 8;
+
+const SYNTHESIS_RESPONSE_FORMAT = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "candidate_synthesis",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["career", "programmeClaims"],
+      properties: {
+        career: { type: "string", maxLength: 1_000 },
+        programmeClaims: {
+          type: "array",
+          maxItems: 5,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["text", "measureRefs"],
+            properties: {
+              text: { type: "string", maxLength: 700 },
+              measureRefs: {
+                type: "array",
+                minItems: 1,
+                maxItems: 12,
+                items: { type: "string", pattern: "^M[1-9][0-9]*$" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const GROUNDING_RESPONSE_FORMAT = {
+  type: "json_schema" as const,
+  json_schema: {
+    name: "candidate_synthesis_grounding",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["claims"],
+      properties: {
+        claims: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["index", "supported", "reason"],
+            properties: {
+              index: { type: "integer", minimum: 0 },
+              supported: { type: "boolean" },
+              reason: { type: "string", maxLength: 500 },
+              correctedText: { type: "string", maxLength: 700 },
+            },
+          },
+        },
+      },
+    },
+  },
+};
 
 /**
  * Why a refusal is a RETURNED value and never a throw.
@@ -59,47 +130,19 @@ export type SynthesisGenerationResult =
     }
   | { ok: false; reason: SynthesisRefusal; message: string };
 
-/**
- * Anthropic first, Mistral if it fails, same broad fallback as `classify-theme`.
- *
- * Falling back on any error rather than on a quota signal is deliberate and copied from there:
- * telling a spent balance apart from a rate limit or a bad request is brittle, and the output goes
- * through `screenSynthesis` whatever produced it. The failure this actually covers is the recurring
- * one on this project, an Anthropic balance at zero, which returns a plain 400.
- *
- * Both errors are carried into the throw. A run that dies with only the second one would hide the
- * reason the first provider was skipped.
- */
-async function generate(system: string, user: string): Promise<{ text: string; provider: string }> {
-  let anthropicError: string;
-  try {
-    const response = await callAnthropic([{ role: "user", content: user }], {
-      system,
-      maxTokens: 900,
-    });
-    return {
-      text: response.content.find((c) => c.type === "text")?.text ?? "",
-      provider: "anthropic",
-    };
-  } catch (error) {
-    anthropicError = error instanceof Error ? error.message : String(error);
-  }
-
-  try {
-    const response = await callMistral(
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { maxTokens: 900 }
-    );
-    return { text: extractMistralText(response), provider: "mistral" };
-  } catch (error) {
-    const mistralError = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Génération impossible — anthropic : ${anthropicError} ; mistral : ${mistralError}`
-    );
-  }
+async function generate(
+  system: string,
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  maxTokens = 2_400,
+  responseFormat: NonNullable<MistralOptions["responseFormat"]> = SYNTHESIS_RESPONSE_FORMAT
+): Promise<{ text: string; provider: string }> {
+  const response = await callMistral([{ role: "system", content: system }, ...messages], {
+    model: "mistral-large-latest",
+    maxTokens,
+    temperature: 0,
+    responseFormat,
+  });
+  return { text: extractMistralText(response), provider: response.model?.trim() || "mistral" };
 }
 
 /**
@@ -213,50 +256,156 @@ export async function generateCandidateSynthesis(
   const system = buildSynthesisSystemPrompt(material);
   const prompt = buildCandidateSynthesisPrompt(input);
 
-  let attempt: { text: string; provider: string };
-  try {
-    attempt = await generate(system, prompt);
-  } catch (error) {
-    return {
-      ok: false,
-      reason: "generation",
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
-  let screened = screenSynthesis(attempt.text, material);
+  let validationDetail = "la réponse ne respecte pas le format attendu";
+  let previousResponseText: string | undefined;
+  let expectedClaimCount: number | undefined;
+  const preservedClaims = new Map<number, CandidateProgrammeClaim>();
+  let lastGenerationError: string | undefined;
+  let pendingCorrectedOutput:
+    | { career: string; programmeClaims: CandidateProgrammeClaim[] }
+    | undefined;
+  let lastProvider = "mistral-large-latest";
+  let accepted:
+    | { text: string; provider: string; programmeClaims: CandidateProgrammeClaim[] }
+    | undefined;
 
-  // One retry, naming the rule that was broken. Measured on a first full run: the model obeys the
-  // rules it is reminded of and slips on the ones it is only told once, the long dash above all.
-  // Retrying blind would just roll the dice again, and retrying twice would paper over a prompt
-  // that genuinely needs fixing.
-  if (!screened.ok) {
+  for (let attemptIndex = 0; attemptIndex < 3; attemptIndex += 1) {
+    const messages = previousResponseText
+      ? [
+          { role: "user" as const, content: prompt },
+          { role: "assistant" as const, content: previousResponseText.slice(0, 10_000) },
+          {
+            role: "user" as const,
+            content: `Cette réponse a été refusée : ${validationDetail.replace(/[<>"\n\r]/g, " ").slice(0, 1_500)}. Corrige uniquement les affirmations signalées. Conserve exactement le même nombre d'affirmations, dans le même ordre. Pour chaque axe, garde seulement 2 à 4 références qui soutiennent réellement un élément concret du texte. Produis une synthèse en axes sans juxtaposer les mesures. Les codes M1, M2 et suivants doivent apparaître uniquement dans measureRefs. Réponds uniquement avec l'objet JSON complet.`,
+          },
+        ]
+      : [{ role: "user" as const, content: prompt }];
+
     try {
-      attempt = await generate(
-        system,
-        `${prompt}\n\nTa réponse précédente a été refusée : ${screened.detail}. Recommence en respectant cette règle.`
-      );
+      const attempt = pendingCorrectedOutput
+        ? { text: JSON.stringify(pendingCorrectedOutput), provider: lastProvider }
+        : await generate(system, messages);
+      pendingCorrectedOutput = undefined;
+      lastProvider = attempt.provider;
+      previousResponseText = attempt.text;
+      const parsed = parseMistralJSON<unknown>(attempt.text);
+      const candidateOutput =
+        parsed && typeof parsed === "object"
+          ? { ...parsed, career: buildCanonicalCareer(input) }
+          : parsed;
+      let screened = screenCandidateSynthesis(candidateOutput, input);
+      if (!screened.ok) {
+        validationDetail = screened.detail;
+        continue;
+      }
+
+      const parsedOutput = candidateOutput as {
+        career: string;
+        programmeClaims: CandidateProgrammeClaim[];
+      };
+      if (
+        expectedClaimCount !== undefined &&
+        parsedOutput.programmeClaims.length !== expectedClaimCount
+      ) {
+        validationDetail = `le nombre d'affirmations doit rester égal à ${expectedClaimCount}`;
+        continue;
+      }
+      if (preservedClaims.size > 0) {
+        const restoredClaims = [...parsedOutput.programmeClaims];
+        for (const [index, claim] of preservedClaims) restoredClaims[index] = claim;
+        screened = screenCandidateSynthesis(
+          { career: parsedOutput.career, programmeClaims: restoredClaims },
+          input
+        );
+        if (!screened.ok) {
+          validationDetail = screened.detail;
+          continue;
+        }
+      }
+
+      const claims = screened.programmeClaims ?? [];
+      expectedClaimCount ??= claims.length;
+      if (claims.length > 0) {
+        const verification = await generate(
+          "Tu contrôles strictement l'étayage d'une synthèse politique. N'utilise aucune connaissance extérieure.",
+          [{ role: "user", content: buildCandidateSynthesisGroundingPrompt(claims, input) }],
+          1_800,
+          GROUNDING_RESPONSE_FORMAT
+        );
+        const grounding = screenCandidateSynthesisGrounding(
+          parseMistralJSON<unknown>(verification.text),
+          claims.length
+        );
+        if (!grounding.ok) {
+          for (const index of grounding.supportedIndexes) {
+            const claim = claims[index];
+            if (claim) preservedClaims.set(index, claim);
+          }
+          validationDetail = `contrôle d'étayage refusé : ${grounding.detail}`;
+          if (grounding.corrections.size > 0) {
+            const correctedClaims = claims.map((claim, index) => ({
+              ...claim,
+              text: grounding.corrections.get(index) ?? claim.text,
+            }));
+            const corrected = {
+              career: buildCanonicalCareer(input),
+              programmeClaims: correctedClaims,
+            };
+            const correctedScreen = screenCandidateSynthesis(corrected, input);
+            if (correctedScreen.ok) pendingCorrectedOutput = corrected;
+          }
+          if (attemptIndex === 2 && grounding.supportedIndexes.length > 0) {
+            const supportedOnly = {
+              career: buildCanonicalCareer(input),
+              programmeClaims: grounding.supportedIndexes.flatMap((index) => {
+                const claim = claims[index];
+                return claim ? [claim] : [];
+              }),
+            };
+            const supportedScreen = screenCandidateSynthesis(supportedOnly, input);
+            if (supportedScreen.ok) {
+              accepted = {
+                text: supportedScreen.text,
+                provider: attempt.provider,
+                programmeClaims: supportedScreen.programmeClaims ?? [],
+              };
+              break;
+            }
+          }
+          continue;
+        }
+      }
+      accepted = { text: screened.text, provider: attempt.provider, programmeClaims: claims };
+      break;
     } catch (error) {
+      if (error instanceof SyntaxError) {
+        validationDetail = "la réponse JSON est invalide";
+        continue;
+      }
+      lastGenerationError = error instanceof Error ? error.message : String(error);
+      validationDetail = `appel Mistral interrompu : ${lastGenerationError}`;
+    }
+  }
+
+  if (!accepted) {
+    if (lastGenerationError) {
       return {
         ok: false,
         reason: "generation",
-        message: error instanceof Error ? error.message : String(error),
+        message: `Mistral reste indisponible après trois essais : ${lastGenerationError}`,
       };
     }
-    screened = screenSynthesis(attempt.text, material);
-  }
-
-  if (!screened.ok) {
     return {
       ok: false,
       reason: "refuse",
-      message: `Texte refusé par le contrôle : ${screened.reason} (${screened.detail}).`,
+      message: `La synthèse a été refusée après trois essais : ${validationDetail}.`,
     };
   }
 
   const base = {
     ok: true as const,
-    text: screened.text,
-    provider: attempt.provider,
+    text: accepted.text,
+    provider: accepted.provider,
     measureCount: input.measures.length,
     mandateCount: mandates.length,
   };
@@ -280,7 +429,7 @@ export async function generateCandidateSynthesis(
   const generatedAt = new Date();
   await db.candidacyPresidential.update({
     where: { id: candidacy.presidentialData.id },
-    data: { synthesis: screened.text, synthesisGeneratedAt: generatedAt },
+    data: { synthesis: accepted.text, synthesisGeneratedAt: generatedAt },
   });
 
   await db.auditLog.create({
@@ -290,9 +439,10 @@ export async function generateCandidateSynthesis(
       entityId: candidacy.presidentialData.id,
       changes: {
         synthesisGeneratedAt: generatedAt.toISOString(),
-        provider: attempt.provider,
+        provider: accepted.provider,
         measureCount: input.measures.length,
         mandateCount: mandates.length,
+        programmeClaimCount: accepted.programmeClaims.length,
       },
     },
   });

@@ -11,8 +11,7 @@ import { ListCard } from "@/components/elections/municipales/ListCard";
 import { AlerteCumul } from "@/components/elections/municipales/PoliticianBridge";
 import { IncumbentMaireCard } from "@/components/elections/municipales/IncumbentMaireCard";
 import { NATIONAL_MANDATE_TYPES } from "@/config/labels";
-import { HistoriqueSection2020 } from "@/components/elections/municipales/HistoriqueSection2020";
-import { HistoriqueSection2014 } from "@/components/elections/municipales/HistoriqueSection2014";
+import { HistoriqueSection } from "@/components/elections/municipales/HistoriqueSection";
 import { ResultatsBanner } from "@/components/elections/municipales/ResultatsBanner";
 import { EventJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -229,14 +228,14 @@ export default async function CommuneDetailPage({ params }: PageProps) {
         {/* Historique 2020 */}
         {historique2020 && (
           <section className="mb-8">
-            <HistoriqueSection2020 data={historique2020} />
+            <HistoriqueSection data={historique2020} year={2020} />
           </section>
         )}
 
         {/* Historique 2014 */}
         {historique2014 && (
           <section className="mb-8">
-            <HistoriqueSection2014 data={historique2014} />
+            <HistoriqueSection data={historique2014} year={2014} />
           </section>
         )}
 

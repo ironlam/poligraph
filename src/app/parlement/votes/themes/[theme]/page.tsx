@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { themeFromSlug, getAllThemeSlugs, themeToSlug } from "@/lib/theme-utils";
+import { getAllLegacyThemeSlugs, legacyThemeFromSlug, themeToSlug } from "@/lib/theme-utils";
 import {
   buildThemeTitle,
   buildThemeDescription,
@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/utils";
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 3600;
 
@@ -32,7 +33,7 @@ const TYPE_TAB_MAP: Record<string, { type?: ScrutinType; excludeType?: ScrutinTy
 };
 
 export async function generateStaticParams() {
-  return getAllThemeSlugs().map((theme) => ({ theme }));
+  return getAllLegacyThemeSlugs().map((theme) => ({ theme }));
 }
 
 /**
@@ -72,7 +73,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { theme: slug } = await params;
   const sp = await searchParams;
-  const theme = themeFromSlug(slug);
+  const theme = legacyThemeFromSlug(slug);
   if (!theme) return { title: "Thème introuvable" };
 
   const coverage = coverageOf(await getThemeTypeChamberCounts(theme));
@@ -96,10 +97,10 @@ export default async function ThemePage({
 }) {
   const { theme: slug } = await params;
   const { page: pageParam, type: typeTab = "votes" } = await searchParams;
-  const theme = themeFromSlug(slug);
+  const theme = legacyThemeFromSlug(slug);
   if (!theme) notFound();
 
-  const page = Math.max(1, parseInt(pageParam || "1", 10));
+  const page = parsePageParam(pageParam);
   const skip = (page - 1) * PAGE_SIZE;
   const label = THEME_CATEGORY_LABELS[theme];
   const icon = THEME_CATEGORY_ICONS[theme];

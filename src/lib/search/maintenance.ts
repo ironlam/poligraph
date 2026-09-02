@@ -1,6 +1,8 @@
 import type { SearchEntityType } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { lockMeasure, lockMeasureCandidacy } from "@/lib/measures/lock";
 import { syncSearchDocument } from "@/lib/measures/search-sync";
+import { syncCandidacySearchDocument } from "@/lib/presidentielle/search-sync";
 
 /**
  * Maintenance of the search index: rebuilding it, and auditing what the substrate can see by itself.
@@ -17,19 +19,82 @@ import { syncSearchDocument } from "@/lib/measures/search-sync";
 /**
  * The entity types something knows how to index, with how to enumerate them.
  *
- * One entry today. Lot 1B refused to write this registry when it would have been empty, which was
- * right: a registry with no entries is speculative generality. With one real entry it is the thing
+ * Lot 1B refused to write this registry when it would have been empty, which was right. It is now
+ * the thing
  * that lets `search:audit` say "this document has a type nobody indexes" instead of ignoring it.
  */
-const INDEXABLE: Record<
-  Extract<SearchEntityType, "MEASURE">,
-  { label: string; existingIds: () => Promise<Set<string>> }
-> = {
+export type ReindexableSearchEntityType = Extract<SearchEntityType, "CANDIDACY" | "MEASURE">;
+
+type Indexable = {
+  label: string;
+  existingIds: (ids: string[]) => Promise<Set<string>>;
+  nextIds: (
+    after: string | undefined,
+    take: number,
+    electionSlug: string | undefined
+  ) => Promise<string[]>;
+  sync: (entityId: string) => Promise<void>;
+};
+
+const INDEXABLE: Record<ReindexableSearchEntityType, Indexable> = {
+  CANDIDACY: {
+    label: "candidatures",
+    existingIds: async (ids) => {
+      const rows = await db.candidacy.findMany({
+        where: { id: { in: ids } },
+        select: { id: true },
+      });
+      return new Set(rows.map((row) => row.id));
+    },
+    nextIds: async (after, take, electionSlug) => {
+      const rows = await db.candidacy.findMany({
+        where: {
+          ...(after ? { id: { gt: after } } : {}),
+          ...(electionSlug ? { election: { slug: electionSlug } } : {}),
+        },
+        orderBy: { id: "asc" },
+        take,
+        select: { id: true },
+      });
+      return rows.map((row) => row.id);
+    },
+    sync: async (entityId) => {
+      await db.$transaction(async (tx) => {
+        await lockMeasureCandidacy(tx, entityId);
+        await syncCandidacySearchDocument(tx, entityId);
+      });
+    },
+  },
   MEASURE: {
     label: "mesures",
-    existingIds: async () => {
-      const rows = await db.measure.findMany({ select: { id: true } });
+    existingIds: async (ids) => {
+      const rows = await db.measure.findMany({ where: { id: { in: ids } }, select: { id: true } });
       return new Set(rows.map((row) => row.id));
+    },
+    nextIds: async (after, take, electionSlug) => {
+      const rows = await db.measure.findMany({
+        where: {
+          ...(after ? { id: { gt: after } } : {}),
+          ...(electionSlug ? { election: { slug: electionSlug } } : {}),
+        },
+        orderBy: { id: "asc" },
+        take,
+        select: { id: true },
+      });
+      return rows.map((row) => row.id);
+    },
+    sync: async (entityId) => {
+      await db.$transaction(async (tx) => {
+        // Match the transition lock order so a maintenance rebuild cannot overwrite a publication
+        // document derived from a newer measure or candidacy state.
+        await lockMeasure(tx, entityId);
+        const measure = await tx.measure.findUnique({
+          where: { id: entityId },
+          select: { candidacyId: true },
+        });
+        if (measure?.candidacyId) await lockMeasureCandidacy(tx, measure.candidacyId);
+        await syncSearchDocument(tx, entityId);
+      });
     },
   },
 };
@@ -49,9 +114,24 @@ export async function auditSearchDocuments(): Promise<SearchAuditViolation[]> {
     select: { entityType: true, entityId: true },
   });
 
+  const documentIdsByType = new Map<string, string[]>();
+  for (const document of documents) {
+    const ids = documentIdsByType.get(document.entityType) ?? [];
+    ids.push(document.entityId);
+    documentIdsByType.set(document.entityType, ids);
+  }
+
   const existing = new Map<string, Set<string>>();
   for (const type of KNOWN_TYPES) {
-    existing.set(type, await INDEXABLE[type].existingIds());
+    const documentIds = documentIdsByType.get(type) ?? [];
+    const ids = new Set<string>();
+    // Audit only entities referenced by the index. Enumerating every candidacy would load the
+    // 500k+ municipal corpus to validate a handful of presidential documents.
+    for (let offset = 0; offset < documentIds.length; offset += 500) {
+      const found = await INDEXABLE[type].existingIds(documentIds.slice(offset, offset + 500));
+      for (const id of found) ids.add(id);
+    }
+    existing.set(type, ids);
   }
 
   for (const document of documents) {
@@ -78,7 +158,56 @@ export async function auditSearchDocuments(): Promise<SearchAuditViolation[]> {
   return violations;
 }
 
-export type ReindexResult = { entityType: string; processed: number };
+export type ReindexResult = {
+  entityType: ReindexableSearchEntityType;
+  processed: number;
+  batches: number;
+  lastId: string | null;
+};
+
+export type ReindexOptions = {
+  /** Exclusive cursor. The next batch starts with ids greater than this value. */
+  after?: string;
+  /** Bounds memory and query size. Values outside 1..1000 are clamped. */
+  batchSize?: number;
+  /** Optional election boundary, resolved through the entity's Election relation. */
+  electionSlug?: string;
+  onBatch?: (progress: ReindexResult) => void;
+};
+
+function boundedBatchSize(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 100;
+  return Math.min(Math.max(Math.trunc(value), 1), 1000);
+}
+
+/**
+ * Rebuild one entity family in stable id order, using bounded reads and one transaction per entity.
+ * The cursor is logged after a whole batch succeeds, so an interrupted run can safely resume from it.
+ */
+export async function reindexSearchEntityType(
+  entityType: ReindexableSearchEntityType,
+  options: ReindexOptions = {}
+): Promise<ReindexResult> {
+  const indexer = INDEXABLE[entityType];
+  const batchSize = boundedBatchSize(options.batchSize);
+  let cursor = options.after;
+  let processed = 0;
+  let batches = 0;
+
+  while (true) {
+    const ids = await indexer.nextIds(cursor, batchSize, options.electionSlug);
+    if (ids.length === 0) break;
+
+    for (const id of ids) await indexer.sync(id);
+
+    cursor = ids.at(-1);
+    processed += ids.length;
+    batches += 1;
+    options.onBatch?.({ entityType, processed, batches, lastId: cursor ?? null });
+  }
+
+  return { entityType, processed, batches, lastId: cursor ?? null };
+}
 
 /**
  * Rebuilds every measure's document from its pointers.
@@ -90,14 +219,6 @@ export type ReindexResult = { entityType: string; processed: number };
  * would hold locks for as long as the rebuild takes, and a failure in the middle would roll back work
  * that was correct.
  */
-export async function reindexMeasures(): Promise<ReindexResult> {
-  const measures = await db.measure.findMany({ select: { id: true } });
-
-  for (const measure of measures) {
-    await db.$transaction(async (tx) => {
-      await syncSearchDocument(tx, measure.id);
-    });
-  }
-
-  return { entityType: "MEASURE", processed: measures.length };
+export async function reindexMeasures(options: ReindexOptions = {}): Promise<ReindexResult> {
+  return reindexSearchEntityType("MEASURE", options);
 }

@@ -8,7 +8,7 @@
 
 import { db } from "@/lib/db";
 import { foldJudicialReference } from "@/lib/affairs/judicial-reference";
-import type { AffairCategory, Prisma } from "@/generated/prisma";
+import type { AffairCategory, AffairStatus, Prisma } from "@/generated/prisma";
 
 export type MatchConfidence = "CERTAIN" | "HIGH" | "POSSIBLE";
 
@@ -193,6 +193,117 @@ export interface MatchResult {
 }
 
 /**
+ * Statuses where the affair is still moving and no court has ruled yet.
+ *
+ * These are the stages an investigation passes through as the press covers it, and
+ * the ones where the matcher is blind: an affair here has no ECLI, no pourvoi
+ * number and no verdictDate, so priorities 1, 2 and 5 below can never fire and
+ * title text is the only signal left (issue #763).
+ *
+ * APPEL_EN_COURS and POURVOI_EN_CASSATION are deliberately excluded: a first
+ * decision has been handed down, so they carry a verdictDate that discriminates
+ * them properly.
+ */
+const PRE_DECISION_STATUSES = new Set<string>([
+  "ENQUETE_PRELIMINAIRE",
+  "INSTRUCTION",
+  "MISE_EN_EXAMEN",
+  "RENVOI_TRIBUNAL",
+  "PROCES_EN_COURS",
+]);
+
+export function isPreDecisionStatus(status: string | null | undefined): boolean {
+  return status != null && PRE_DECISION_STATUSES.has(status);
+}
+
+/**
+ * Shared significant vocabulary between two titles, as a Jaccard ratio.
+ *
+ * Jaccard rather than the overlap coefficient (shared / smaller set) on purpose:
+ * the overlap coefficient scores 1.0 whenever the shorter title's words all appear
+ * in the longer one, which is exactly the short-offense-label false positive that
+ * issue #520 fixed ("diffamation" inside "condamnation definitive pour diffamation
+ * envers patrick klugman"). Jaccard scores that pair 0.17.
+ */
+export function titleVocabularyOverlap(a: string, b: string): { shared: number; ratio: number } {
+  const wordsA = significantTitleWords(a);
+  const wordsB = significantTitleWords(b);
+
+  let shared = 0;
+  for (const word of wordsB) {
+    if (wordsA.has(word)) shared++;
+  }
+
+  const union = wordsA.size + wordsB.size - shared;
+  return { shared, ratio: union === 0 ? 0 : shared / union };
+}
+
+/**
+ * Minimum Jaccard ratio and shared-word count for two pre-decision affairs to be
+ * reported as successive states of one investigation.
+ *
+ * Measured over the 189 pre-decision affairs in production, scoring every
+ * same-politician pair (issue #763). Ranked by ratio, the list is clean down to
+ * 0.40 — every pair at or above it is one story fragmented across imports:
+ *
+ *   1.00  "Enquête sur un emploi présumé fictif au Parlement européen en 2015"
+ *         vs "Enquête pour emploi présumé fictif au Parlement européen en 2015"
+ *   0.80  "Enquête pour détournement de fonds publics à la RATP"
+ *         vs "Enquête pour détournement de fonds publics lié à l'emploi à la RATP"
+ *   0.43  "Enquête pour détournement de fonds publics et cumul d'emplois"
+ *         vs "Enquête pour détournement de fonds publics lié à l'emploi à la RATP"
+ *   0.40  "Signalement de trafics d'enfants présumés sur Vinted"
+ *         vs "Soupçons de trafic d'enfants sur Vinted"
+ *
+ * The first genuine false positives appear just below it, where two distinct
+ * probity cases share only the generic vocabulary of their category:
+ *
+ *   0.30  "Détournement de fonds publics visant Ciotti et ses collaborateurs (mai 2024)"
+ *         vs "Détournement de fonds publics lors de la campagne législative de 2022"
+ *   0.25  "Soupçons d'emploi fictif de Jordan Bardella au Parlement européen"
+ *         vs "Dépenses irrégulières du groupe Patriots au Parlement européen"
+ *
+ * Two shared words are required on top of the ratio: with a single shared word the
+ * ratio only clears 0.40 when both titles are two words long, which is too little
+ * to name anything.
+ */
+export const EVOLUTION_MIN_OVERLAP_RATIO = 0.4;
+export const EVOLUTION_MIN_SHARED_WORDS = 2;
+
+/**
+ * Whether two pre-decision affairs look like successive states of one investigation.
+ *
+ * Reported at POSSIBLE deliberately, never HIGH. POSSIBLE is below the bar
+ * `pickConfidentMatch` uses to enrich, so this signal changes no importer's
+ * behaviour on its own: it surfaces the pair for review. Acting on it — filing an
+ * update proposal instead of creating a second draft — is the caller's decision,
+ * made explicitly through `findEvolutionCandidates`.
+ *
+ * The AUTRE wildcard is accepted here, unlike in the duplicate path guarded by
+ * `pairingRestsOnWildcard` (#521). That guard asks for a second signal before
+ * pairing on the wildcard, and the vocabulary threshold is one: measured on
+ * production, wildcard-paired hits at or above the threshold are real
+ * ("Propos racistes et menaces envers Kylian Mbappé" against "Enquête pour propos
+ * racistes envers Kylian Mbappé", 0.83, AUTRE vs INCITATION_HAINE). Importers
+ * routinely fall back to AUTRE on an early-stage story precisely because the
+ * qualification is not established yet, so excluding it would blind the signal to
+ * the cases it exists for.
+ */
+export function evolutionMatch(
+  normalizedCandidate: string,
+  normalizedExisting: string,
+  sameFamily: boolean
+): Omit<MatchResult, "affairId"> | null {
+  if (!sameFamily) return null;
+
+  const { shared, ratio } = titleVocabularyOverlap(normalizedCandidate, normalizedExisting);
+  if (shared < EVOLUTION_MIN_SHARED_WORDS) return null;
+  if (ratio < EVOLUTION_MIN_OVERLAP_RATIO) return null;
+
+  return { confidence: "POSSIBLE", score: 0.55, matchedBy: "evolution-title-overlap" };
+}
+
+/**
  * Re-exported so callers keep importing the match vocabulary from the matcher, next
  * to the code that produces the signals. The definitions live in a database-free
  * module because the merge planner that consumes them is pure (#557).
@@ -322,6 +433,14 @@ export interface MatchCandidate {
   category?: AffairCategory;
   verdictDate?: Date | null;
   /**
+   * Procedural stage of the candidate, when known.
+   *
+   * Only consulted by the evolution signal (priority 6), which needs both sides to
+   * be pre-decision. Absent, that signal stays silent and matching behaves exactly
+   * as before.
+   */
+  status?: AffairStatus;
+  /**
    * Set when the candidate IS an existing row, so it cannot match itself.
    *
    * Importers leave this empty: they match a candidate that has no row yet.
@@ -442,10 +561,14 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
     const normalizedCandidate = normalizeAffairTitle(candidate.title, politicianName);
 
     const samePoliticianAffairs = await db.affair.findMany({
-      where: { politicianId: candidate.politicianId },
+      where: {
+        politicianId: candidate.politicianId,
+        publicationStatus: { in: ["DRAFT", "PUBLISHED"] },
+      },
       // verdictDate discriminates repeated convictions for the same offense,
-      // which titles alone cannot (issue #520).
-      select: { id: true, title: true, category: true, verdictDate: true },
+      // which titles alone cannot (issue #520). status gates the evolution
+      // signal below, which only applies before a decision is handed down.
+      select: { id: true, title: true, category: true, verdictDate: true, status: true },
     });
 
     for (const existing of samePoliticianAffairs) {
@@ -484,6 +607,29 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
       );
       if (containment) {
         matches.push({ affairId: existing.id, ...containment });
+        continue;
+      }
+
+      // Priority 6: successive states of one pre-decision investigation.
+      //
+      // Only reached when containment found nothing, which is the blind spot: a
+      // follow-up article rephrases the headline, so neither title contains the
+      // other, and with no ECLI, pourvoi or verdict date yet nothing else fires
+      // either (issue #763). Requires both sides to be pre-decision — once a court
+      // has ruled, the verdict date discriminates and this heuristic would only
+      // conflate repeated convictions for the same offense.
+      const bothPreDecision =
+        isPreDecisionStatus(candidate.status) && isPreDecisionStatus(existing.status);
+
+      if (bothPreDecision && !datesRuleOutSameAffair) {
+        const evolution = evolutionMatch(
+          normalizedCandidate,
+          normalizedExisting,
+          Boolean(candidate.category) && sameCategoryFamily(candidate.category!, existing.category)
+        );
+        if (evolution) {
+          matches.push({ affairId: existing.id, ...evolution });
+        }
       }
     }
   }
@@ -500,6 +646,7 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
         politicianId: candidate.politicianId,
         category: candidate.category,
         verdictDate: { gte: dateMin, lte: dateMax },
+        publicationStatus: { in: ["DRAFT", "PUBLISHED"] },
       },
       select: { id: true },
     });
@@ -528,4 +675,61 @@ export async function findMatchingAffairs(candidate: MatchCandidate): Promise<Ma
 export async function isDuplicate(candidate: MatchCandidate): Promise<boolean> {
   const matches = await findMatchingAffairs(candidate);
   return matches.some((m) => m.confidence === "CERTAIN" || m.confidence === "HIGH");
+}
+
+/**
+ * Existing affairs the candidate looks like a later development of.
+ *
+ * Separate from `findMatchingAffairs` on purpose. That function answers "is this
+ * the same affair?", and its CERTAIN/HIGH tiers authorise an importer to write to
+ * an existing row. This one answers a different question — "is this the same story,
+ * further along?" — whose answer must never authorise a silent write: the caller is
+ * expected to file an `AffairUpdateProposal` for a human, not to enrich in place.
+ *
+ * Ordered by score, best first. Ambiguity is not collapsed here the way
+ * `pickConfidentMatch` collapses it: several candidates on one story is normal
+ * once a story has already fragmented, and the reviewer needs to see the whole
+ * cluster to pick the survivor.
+ */
+export async function findEvolutionCandidates(candidate: MatchCandidate): Promise<MatchResult[]> {
+  if (!isPreDecisionStatus(candidate.status)) return [];
+
+  const matches = await findMatchingAffairs(candidate);
+  return matches.filter((m) => m.matchedBy === "evolution-title-overlap");
+}
+
+export type AffairMatchRouting =
+  | { kind: "CONFIDENT_MATCH"; match: MatchResult }
+  | { kind: "CONFIDENT_AMBIGUOUS"; candidates: MatchResult[] }
+  | { kind: "UNIQUE_EVOLUTION"; match: MatchResult }
+  | { kind: "POSSIBLE_AMBIGUOUS"; candidates: MatchResult[] }
+  | { kind: "NO_MATCH"; looseMatch: MatchResult | null };
+
+/**
+ * Classifies one complete matcher result without hiding a competing signal.
+ * Importers must call the database matcher once, then route through this helper.
+ */
+export function classifyAffairMatches(matches: MatchResult[]): AffairMatchRouting {
+  const confident = pickConfidentMatch(matches);
+  if (confident.kind === "match") return { kind: "CONFIDENT_MATCH", match: confident.match };
+  if (confident.kind === "ambiguous") {
+    return { kind: "CONFIDENT_AMBIGUOUS", candidates: confident.candidates };
+  }
+
+  const possibleByAffair = new Map<string, MatchResult>();
+  for (const match of matches) {
+    if (match.confidence === "POSSIBLE" && !possibleByAffair.has(match.affairId)) {
+      possibleByAffair.set(match.affairId, match);
+    }
+  }
+  const possible = [...possibleByAffair.values()];
+  if (possible.length > 1) return { kind: "POSSIBLE_AMBIGUOUS", candidates: possible };
+  if (possible.length === 0) return { kind: "NO_MATCH", looseMatch: null };
+
+  const only = possible[0]!;
+  const evolution = matches.find(
+    (match) => match.affairId === only.affairId && match.matchedBy === "evolution-title-overlap"
+  );
+  if (evolution) return { kind: "UNIQUE_EVOLUTION", match: evolution };
+  return { kind: "NO_MATCH", looseMatch: only };
 }

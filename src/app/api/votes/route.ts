@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { withCache } from "@/lib/cache";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { parseIntFilter } from "@/lib/data/query-params";
 
 /**
  * @openapi
@@ -79,12 +80,16 @@ export const GET = withPublicRoute(async (request) => {
       ? (result as (typeof ALLOWED_RESULTS)[number])
       : undefined;
 
+  // `parseInt("abc")` is NaN, and a NaN in a `where` makes Prisma throw rather
+  // than match nothing, so an unparseable legislature drops the filter.
+  const safeLegislature = parseIntFilter(legislature);
+
   const where = {
     ...(search && {
       title: { contains: search, mode: "insensitive" as const },
     }),
     ...(validResult && { result: validResult }),
-    ...(legislature && { legislature: parseInt(legislature, 10) }),
+    ...(safeLegislature !== undefined && { legislature: safeLegislature }),
   };
 
   const [scrutins, total] = await Promise.all([

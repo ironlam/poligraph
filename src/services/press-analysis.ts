@@ -47,7 +47,11 @@ export interface DetectedAffair {
   politicianName: string;
   involvement: "DIRECT" | "INDIRECT" | "MENTIONED_ONLY" | "VICTIM" | "PLAINTIFF";
   category: string;
+  /** False when an unknown model value was replaced by the conservative fallback. */
+  categoryValidated?: boolean;
   status: string;
+  /** Required for evolution routing, where a fallback would create a false match. */
+  statusValidated?: boolean;
   title: string;
   description: string;
   factsDate: string | null;
@@ -203,6 +207,8 @@ export async function analyzeArticle(input: ArticleAnalysisInput): Promise<Artic
   // Validate and sanitize the result
   const affairs: DetectedAffair[] = ((result.affairs as Record<string, unknown>[]) || []).map(
     (a: Record<string, unknown>) => {
+      const categoryValidated = isEnumValue(a.category as string, AFFAIR_CATEGORIES);
+      const statusValidated = isEnumValue(a.status as string, AFFAIR_STATUSES);
       const category = validateEnum(a.category as string, AFFAIR_CATEGORIES, "AUTRE");
       const status = validateEnum(a.status as string, AFFAIR_STATUSES, "ENQUETE_PRELIMINAIRE");
       const involvement = validateEnum(
@@ -215,7 +221,9 @@ export async function analyzeArticle(input: ArticleAnalysisInput): Promise<Artic
         politicianName: String(a.politician_name || ""),
         involvement,
         category,
+        categoryValidated,
         status,
+        statusValidated,
         title: String(a.title || ""),
         description: String(a.description || ""),
         factsDate: a.facts_date ? String(a.facts_date) : null,
@@ -261,4 +269,8 @@ function validateEnum<T extends string>(value: string, validValues: readonly T[]
     return value as T;
   }
   return fallback;
+}
+
+function isEnumValue<T extends string>(value: string, validValues: readonly T[]): value is T {
+  return (validValues as readonly string[]).includes(value);
 }

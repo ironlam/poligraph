@@ -7,6 +7,8 @@
 -- pg_trgm used to be created here, for a GIN trigram index this lot no longer declares.
 -- Lot 7 owns approximate search and will create whatever its own measurements justify.
 CREATE EXTENSION IF NOT EXISTS "unaccent";
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 
 -- The poligraphId sequences, which `prisma db push` cannot create because they are not
 -- in the datamodel: they are created by scripts/create-public-id-sequences.ts and read

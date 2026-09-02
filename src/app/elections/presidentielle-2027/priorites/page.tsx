@@ -23,7 +23,7 @@ export const revalidate = 86400;
 export const metadata: Metadata = {
   title: "Où chacun met l'accent : priorités des candidats | Poligraph",
   description:
-    "La part du programme de chaque candidature consacrée à chaque sujet, et les conditions à réunir avant de pouvoir la comparer.",
+    "La part du programme de chaque candidature consacrée à chaque thème, et les conditions à réunir avant de pouvoir la comparer.",
   robots: { index: false, follow: true },
   alternates: { canonical: "/elections/presidentielle-2027/priorites" },
 };

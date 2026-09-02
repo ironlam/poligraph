@@ -14,6 +14,7 @@ export interface PaginationMeta {
 interface PaginationOptions {
   defaultLimit?: number;
   maxLimit?: number;
+  maxPage?: number;
 }
 
 /**
@@ -30,6 +31,40 @@ export function parsePagination(
   const rawLimit = parseInt(searchParams.get("limit") || String(defaultLimit), 10);
   const limit = Math.min(maxLimit, Math.max(1, Number.isNaN(rawLimit) ? defaultLimit : rawLimit));
   const skip = (page - 1) * limit;
+  return { page, limit, skip };
+}
+
+/**
+ * Parse pagination without correcting malformed client input.
+ *
+ * Public contracts that promise bounded integers use this variant so `1.5`, `0`, an unsafe
+ * integer or an out-of-range limit is rejected instead of being silently truncated or clamped.
+ */
+export function parseStrictPagination(
+  searchParams: URLSearchParams,
+  options?: PaginationOptions
+): PaginationResult | null {
+  const { defaultLimit = 50, maxLimit = 100, maxPage = Number.MAX_SAFE_INTEGER } = options ?? {};
+  const rawPage = searchParams.get("page");
+  const rawLimit = searchParams.get("limit");
+  const isPositiveInteger = (value: string): boolean => /^[1-9][0-9]*$/.test(value);
+
+  if (rawPage !== null && !isPositiveInteger(rawPage)) return null;
+  if (rawLimit !== null && !isPositiveInteger(rawLimit)) return null;
+
+  const page = rawPage === null ? 1 : Number(rawPage);
+  const limit = rawLimit === null ? defaultLimit : Number(rawLimit);
+  if (
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(limit) ||
+    page > maxPage ||
+    limit > maxLimit
+  ) {
+    return null;
+  }
+
+  const skip = (page - 1) * limit;
+  if (!Number.isSafeInteger(skip)) return null;
   return { page, limit, skip };
 }
 

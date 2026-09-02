@@ -13,7 +13,7 @@ interface ParticipationSectionProps {
 
 function participationNotice(chamber?: Chamber): string {
   if (chamber === "SENAT") {
-    return "Le Sénat ne publie pas actuellement une donnée permettant de mesurer la présence individuelle de façon suffisamment fiable.";
+    return "La participation aux scrutins publics du Sénat reste indisponible pendant la validation de la complétude officielle et des identités reliées. Elle ne mesure jamais la présence physique.";
   }
   return "Les agrégats de participation ne sont pas publiés tant qu'ils ne peuvent pas être dérivés du même périmètre d'éligibilité que l'indicateur individuel.";
 }
@@ -29,7 +29,7 @@ export function ParticipationSection({
 
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle id="participation-heading">Participation aux scrutins</CardTitle>
+          <CardTitle id="participation-heading">Participation aux scrutins publics</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">{participationNotice(chamber)}</p>
@@ -70,8 +70,10 @@ export function ParticipationSection({
               méthode supportée et au moins un scrutin éligible.
             </p>
             <p>
-              Les positions pour, contre et abstention alimentent le numérateur. NON_VOTANT ne
-              constitue pas une preuve de présence.
+              Pour le Sénat, les positions pour, contre et abstention alimentent le numérateur. Le
+              dénominateur ajoute NON_VOTANT, uniquement sur les scrutins dont la liste nominative
+              est officiellement complète et pendant le mandat. NON_VOTANT signifie « n&apos;a pas
+              pris part au vote », pas une absence physique.
             </p>
           </div>
         }

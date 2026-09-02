@@ -3,6 +3,7 @@ import { streamText } from "ai";
 import { headers } from "next/headers";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { Prisma } from "@/generated/prisma";
 import { searchSimilar, rerankResults, type SearchResult } from "@/services/embeddings";
 import { db } from "@/lib/db";
 import { getSystemPrompt } from "@/services/chat/systemPrompt";
@@ -91,7 +92,7 @@ async function getGlobalStats(): Promise<{
         total_ministers: bigint;
       },
     ]
-  >`
+  >(Prisma.sql`
     SELECT
       (SELECT COUNT(*) FROM "Affair" a
         WHERE ${getPublishedAffairSqlWhere()}
@@ -127,7 +128,7 @@ async function getGlobalStats(): Promise<{
         WHERE m."isCurrent" = true
           AND m."type" IN ('MINISTRE', 'MINISTRE_DELEGUE', 'SECRETAIRE_ETAT', 'PREMIER_MINISTRE')
           AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}) AS total_ministers
-  `;
+  `);
 
   const r = rows[0];
   return {

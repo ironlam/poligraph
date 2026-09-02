@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { VotesFilterBar, type VotesFilterBarProps } from "../VotesFilterBar";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 import { formatLegislature } from "@/lib/votes/legislature";
 
 const mockUpdateParams = vi.fn();
@@ -42,9 +43,7 @@ describe("VotesFilterBar", () => {
 
   it("renders all 13 theme categories, never truncated", () => {
     render(<VotesFilterBar {...baseProps()} />);
-    const themeCodes = Object.keys(THEME_CATEGORY_LABELS) as Array<
-      keyof typeof THEME_CATEGORY_LABELS
-    >;
+    const themeCodes = LEGACY_THEME_CATEGORIES;
     expect(themeCodes).toHaveLength(13);
     for (const code of themeCodes) {
       const label = THEME_CATEGORY_LABELS[code];

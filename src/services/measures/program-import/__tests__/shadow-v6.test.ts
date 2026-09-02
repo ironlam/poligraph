@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   electionFind: vi.fn(),
+  candidacyFind: vi.fn(),
   editionFindMany: vi.fn(),
   acquireDocument: vi.fn(),
   parseDocument: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({
   db: {
     election: { findUniqueOrThrow: mocks.electionFind },
+    candidacy: { findUnique: mocks.candidacyFind },
     programEdition: { findMany: mocks.editionFindMany },
   },
 }));
@@ -86,6 +88,7 @@ describe("V6 shadow READ-ONLY", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.electionFind.mockResolvedValue({ id: "election-2027" });
+    mocks.candidacyFind.mockResolvedValue(null);
     mocks.editionFindMany.mockResolvedValue([
       {
         id: "edition-travail",
@@ -155,7 +158,7 @@ describe("V6 shadow READ-ONLY", () => {
         attributionBasis: "CANDIDATE_COMMITMENT",
         normalizedText: "Créer une caisse publique pour financer la formation des salariés.",
         classification: "MEASURE",
-        theme: "SOCIAL_TRAVAIL",
+        theme: "EMPLOI_TRAVAIL",
         confidence: 0.93,
         rationale: "Le titre et le paragraphe établissent l'action.",
         outputGuards: [],
@@ -288,7 +291,7 @@ describe("V6 shadow READ-ONLY", () => {
     expect(proposal.preparedCandidate).toMatchObject({
       classification: "MEASURE",
       formulation: "Créer une caisse publique pour financer la formation des salariés.",
-      theme: "SOCIAL_TRAVAIL",
+      theme: "EMPLOI_TRAVAIL",
       draftContext: {
         candidacyId: "candidacy-ruffin",
         programEditionId: "edition-travail",
@@ -364,6 +367,79 @@ describe("V6 shadow READ-ONLY", () => {
     expect(renderV6ShadowMarkdown(report)).toBe(markdown);
   });
 
+  it("attribue un programme de parti uniquement à la candidature explicitement compatible", async () => {
+    mocks.candidacyFind.mockResolvedValue({
+      id: "candidacy-philippot",
+      candidateName: "Florian Philippot",
+      electionId: "election-2027",
+      partyId: "party-patriotes",
+    });
+    mocks.editionFindMany.mockResolvedValue([
+      {
+        id: "edition-patriotes",
+        label: "Grandes orientations pour un projet patriote",
+        ownerType: "PARTY",
+        documentUrl: "https://example.test/projet.pdf",
+        publishedAt: new Date("2025-09-07T00:00:00.000Z"),
+        candidacyId: null,
+        partyId: "party-patriotes",
+        candidacy: null,
+        party: { name: "Les Patriotes" },
+      },
+    ]);
+    const reportDir = await mkdtemp(path.join(tmpdir(), "poligraph-v6-party-test-"));
+
+    const report = await runV6ShadowImport({
+      party: "les-patriotes",
+      partyProgramCandidacyId: "candidacy-philippot",
+      reportDir,
+    });
+
+    expect(report.editions[0]).toMatchObject({ candidate: "Florian Philippot", errors: [] });
+    expect(report.editions[0]!.proposals[0]!.preparedCandidate).toMatchObject({
+      reviewReadiness: "READY_FOR_REVIEW",
+      draftContext: {
+        candidacyId: "candidacy-philippot",
+        attribution: "PARTY_PROGRAM",
+      },
+      source: { sourceKind: "PROGRAMME_PARTI", tier: "PRIMARY" },
+    });
+  });
+
+  it("refuse une candidature dont le parti ne possède pas le programme", async () => {
+    mocks.candidacyFind.mockResolvedValue({
+      id: "candidacy-other",
+      candidateName: "Autre candidature",
+      electionId: "election-2027",
+      partyId: "party-other",
+    });
+    mocks.editionFindMany.mockResolvedValue([
+      {
+        id: "edition-patriotes",
+        label: "Grandes orientations pour un projet patriote",
+        ownerType: "PARTY",
+        documentUrl: "https://example.test/projet.pdf",
+        publishedAt: new Date("2025-09-07T00:00:00.000Z"),
+        candidacyId: null,
+        partyId: "party-patriotes",
+        candidacy: null,
+        party: { name: "Les Patriotes" },
+      },
+    ]);
+    const reportDir = await mkdtemp(path.join(tmpdir(), "poligraph-v6-party-mismatch-test-"));
+
+    const report = await runV6ShadowImport({
+      party: "les-patriotes",
+      partyProgramCandidacyId: "candidacy-other",
+      reportDir,
+    });
+
+    expect(report.documents.parsed).toBe(0);
+    expect(report.editions[0]!.errors).toEqual([
+      "Plateforme de parti non attribuable automatiquement à une candidature 2027.",
+    ]);
+  });
+
   it("isole une réponse de fenêtre mal formée sans interrompre le document", async () => {
     const manyBlocks = Array.from({ length: 13 }, (_, index) =>
       block(
@@ -406,7 +482,7 @@ describe("V6 shadow READ-ONLY", () => {
           attributionBasis: "CANDIDATE_COMMITMENT",
           normalizedText: "Créer un fonds public pour la formation.",
           classification: "MEASURE",
-          theme: "SOCIAL_TRAVAIL",
+          theme: "EMPLOI_TRAVAIL",
           confidence: 0.91,
           rationale: "Action explicite.",
           outputGuards: [],

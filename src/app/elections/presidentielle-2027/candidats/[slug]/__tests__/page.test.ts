@@ -33,6 +33,7 @@ const candidacy = (overrides: Record<string, unknown> = {}) => ({
   sourceLabel: "Le Monde, 14 janvier 2026",
   partyLabel: "Parti Test",
   partyLogoUrl: null,
+  partyColor: "#123456",
   programmeIdentified: false,
   declaredAt: null,
   withdrewAt: null,
@@ -55,13 +56,21 @@ describe("page présidentielle d'une personne", () => {
       id: "p1",
       slug: "camille-riviere",
       fullName: "Camille Rivière",
+      firstName: "Camille",
+      lastName: "Rivière",
       civility: "Mme",
       photoUrl: null,
       blobPhotoUrl: null,
       declarations: [],
       affairs: [],
     });
-    mockGetDetail.mockResolvedValue({ themes: [], recentVotes: [], mandateCount: 0 });
+    mockGetDetail.mockResolvedValue({
+      themes: [],
+      recentVotes: [],
+      mandateCount: 0,
+      probityConvictionCount: 0,
+      probityNonDefinitiveConvictionCount: 0,
+    });
   });
 
   it("rend en 200 une page minimale avec zéro proposition publiée", async () => {
@@ -70,7 +79,9 @@ describe("page présidentielle d'une personne", () => {
     render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Camille Rivière");
     expect(
-      screen.getByText("Poligraph n’a identifié aucun programme publié à ce jour.")
+      screen.getByText(
+        "Poligraph n’a pas encore trouvé ou traité de programme pour cette candidature."
+      )
     ).toBeInTheDocument();
     expect(mockRedirect).not.toHaveBeenCalled();
     expect(mockGetDetail).not.toHaveBeenCalled();
@@ -81,7 +92,7 @@ describe("page présidentielle d'une personne", () => {
     const { default: Page } = await import("../page");
     render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
     expect(
-      screen.getByText("Programme identifié, aucune proposition encore publiée sur Poligraph.")
+      screen.getByText("Poligraph a repéré un programme. Son traitement éditorial est en cours.")
     ).toBeInTheDocument();
   });
 
@@ -129,9 +140,7 @@ describe("page présidentielle d'une personne", () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
     const { default: Page } = await import("../page");
     render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
-    expect(
-      screen.getByRole("heading", { name: "Source du statut de candidature" })
-    ).toBeInTheDocument();
+    expect(screen.getByText("Vérifier le statut de candidature")).toBeInTheDocument();
     const source = screen.getByRole("link", { name: /source originale, lien externe/ });
     expect(source).toHaveAttribute("href", "https://example.org/source");
     expect(source).toHaveAttribute("rel", "nofollow noopener noreferrer");
@@ -161,6 +170,21 @@ describe("page présidentielle d'une personne", () => {
       params: Promise.resolve({ slug: "camille-riviere" }),
     });
     expect(metadata.robots).toBeUndefined();
+  });
+
+  it("rend des données structurées Person et Breadcrumb seulement sur une fiche publiable", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+    const { default: Page } = await import("../page");
+    const { container } = render(
+      await Page({ params: Promise.resolve({ slug: "camille-riviere" }) })
+    );
+    const jsonLd = [...container.querySelectorAll('script[type="application/ld+json"]')].map(
+      (node) => JSON.parse(node.textContent ?? "{}") as { "@type"?: string }
+    );
+
+    expect(jsonLd.map((entry) => entry["@type"])).toEqual(
+      expect.arrayContaining(["Person", "BreadcrumbList"])
+    );
   });
 
   it("décrit la fiche pour les aperçus de partage", async () => {

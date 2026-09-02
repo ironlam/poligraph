@@ -1,6 +1,6 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import type { PlatformUpdateType } from "@/generated/prisma";
+import { Prisma, type PlatformUpdateType } from "@/generated/prisma";
 import { getCertaintyLevel } from "@/config/certainty";
 import {
   getPublicFactCheckSqlWhere,
@@ -396,7 +396,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           politicianName: string;
           politicianSlug: string;
         }>
-      >`
+      >(Prisma.sql`
       SELECT
         a.slug,
         a.title,
@@ -436,7 +436,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         ELSE 4
       END ASC
       LIMIT 10
-    `,
+    `),
 
       // 4. Fact-checks this week
       Promise.all([
@@ -457,7 +457,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
             partyColor: string | null;
             count: bigint;
           }>
-        >`
+        >(Prisma.sql`
         SELECT
           p.slug,
           p."fullName" as "fullName",
@@ -477,7 +477,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
         ORDER BY count DESC
         LIMIT 5
-      `,
+      `),
       ]),
 
       // 5. Press mentions this week (only articles with at least one mention)

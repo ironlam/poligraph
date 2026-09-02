@@ -18,7 +18,11 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
     if (!confirmed || isPending) return;
     startTransition(async () => {
       const actionResult = await reviewDraftBatchAction({
-        items: group.items.map(({ measureId, revisionId }) => ({ measureId, revisionId })),
+        items: group.items.map(({ measureId, revisionId, batchKind }) => ({
+          measureId,
+          revisionId,
+          batchKind,
+        })),
       });
       if (actionResult.ok) {
         router.refresh();
@@ -36,7 +40,10 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.electionTitle}, {count} brouillon{count > 1 ? "s" : ""} sourcé
+            {group.batchKind === "CONTEXT_CORRECTION"
+              ? "Corrections de contexte"
+              : "Premières publications"}
+            , {group.electionTitle}, {count} brouillon{count > 1 ? "s" : ""} sourcé
             {count > 1 ? "s" : ""}
           </p>
         </div>
@@ -44,9 +51,25 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
           <summary className="min-h-11 cursor-pointer py-2 text-primary underline">
             Vérifier le contenu du lot
           </summary>
-          <ol className="mt-2 max-h-72 max-w-2xl list-decimal space-y-2 overflow-y-auto pl-5">
+          <ol className="mt-2 max-h-96 max-w-3xl list-decimal space-y-4 overflow-y-auto pl-5">
             {group.items.map((item) => (
-              <li key={item.revisionId}>{item.text}</li>
+              <li key={item.revisionId}>
+                <span className="font-medium">{item.text}</span>
+                {item.details ? (
+                  <span className="mt-1 block text-muted-foreground">
+                    Contexte proposé : {item.details}
+                  </span>
+                ) : null}
+                <a
+                  href={`/admin/mesures/${item.measureId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Vérifier la mesure et ses preuves dans un nouvel onglet : ${item.text}`}
+                  className="mt-2 inline-flex min-h-11 items-center text-primary underline"
+                >
+                  Vérifier la mesure et ses preuves
+                </a>
+              </li>
             ))}
           </ol>
         </details>
@@ -112,13 +135,14 @@ export function BatchReviewPanel({ groups }: { groups: BatchReviewGroup[] }) {
         Relecture par lot
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Chaque lot contient uniquement les brouillons actifs et sourcés d{"'"}une édition. Cette
-        étape ne publie rien. Une fois la relecture enregistrée, le lot passe dans la section de
+        Chaque lot contient uniquement des brouillons actifs et sourcés. Les corrections de contexte
+        sont incluses seulement si la formulation publique reste strictement identique. Cette étape
+        ne publie rien. Une fois la relecture enregistrée, le lot passe dans la section de
         publication.
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
-          <BatchReviewCard key={group.programEditionId} group={group} />
+          <BatchReviewCard key={group.groupKey} group={group} />
         ))}
       </div>
     </section>

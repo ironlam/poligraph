@@ -45,7 +45,11 @@ describeIfDisposableDb("depublishMeasure", () => {
   it("leaves a trace of why", async () => {
     const { measureId } = await publishSeededMeasure();
 
-    await depublishMeasure({ measureId, reason: "Erreur factuelle signalée." });
+    await depublishMeasure({
+      measureId,
+      reason: "Erreur factuelle signalée.",
+      depublishedBy: "admin",
+    });
 
     const measure = await db.measure.findUniqueOrThrow({ where: { id: measureId } });
     // Without these two fields, a depublished measure is indistinguishable from one that
@@ -59,6 +63,16 @@ describeIfDisposableDb("depublishMeasure", () => {
       where: { id: measure.publishedRevisionId! },
     });
     expect(revision.supersededAt).toBeNull();
+    await expect(
+      db.auditLog.findFirst({
+        where: {
+          action: "DEPUBLISH_MEASURE",
+          entityType: "Measure",
+          entityId: measureId,
+          userId: "admin",
+        },
+      })
+    ).resolves.not.toBeNull();
   });
 
   it("rolls back the depublication when indexing fails", async () => {
@@ -128,7 +142,7 @@ describeIfDisposableDb("withdrawMeasure", () => {
     expect(measure.withdrawnSourceLabel).toBeNull();
   });
 
-  it("keeps a withdrawn measure published and searchable", async () => {
+  it("keeps a withdrawn measure published but closes its search document", async () => {
     const { measureId, revisionId } = await publishSeededMeasure();
 
     await withdrawMeasure({
@@ -148,6 +162,6 @@ describeIfDisposableDb("withdrawMeasure", () => {
     expect(measure.withdrawnAt).not.toBeNull();
     expect(measure.publicationStatus).toBe("PUBLISHED");
     expect(measure.publishedRevisionId).toBe(revisionId);
-    expect(doc.visibility).toBe("PUBLIC");
+    expect(doc.visibility).toBe("ADMIN_ONLY");
   });
 });

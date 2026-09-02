@@ -4,19 +4,16 @@ import Link from "next/link";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { formatDate, formatCompactCurrency } from "@/lib/utils";
-import { MANDATE_TYPE_LABELS, PARTY_ROLE_LABELS, feminizePartyRole } from "@/config/labels";
+import { MANDATE_TYPE_LABELS } from "@/config/labels";
 import { statsHref, DEFAULT_STATS_TAB } from "@/config/routes";
-import { ensureContrast } from "@/lib/contrast";
-import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { MandateTimeline } from "@/components/politicians/MandateTimeline";
 import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { DeclarationCard } from "@/components/declarations/DeclarationCard";
 import { MarkdownText } from "@/components/ui/markdown";
 import type { DeclarationDetails } from "@/types/hatvp";
-import { FileText, Mail, Globe, Facebook } from "lucide-react";
+import { FileText } from "lucide-react";
 import { StatusBadge } from "@/components/legislation";
 import { BetaDisclaimer } from "@/components/BetaDisclaimer";
 import { ProfileTabs } from "@/components/politicians/ProfileTabs";
@@ -31,8 +28,7 @@ import {
 } from "@/services/voteStats";
 import { getPolitician } from "@/lib/data/politicians";
 import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
-import { FollowButton } from "@/components/politicians/FollowButton";
-import { CopyableId } from "@/components/politicians/CopyableId";
+import { PoliticianHeader } from "./_components/PoliticianHeader";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
 import { computeJudicialCounts } from "@/lib/politicians/judicial-counts";
@@ -310,163 +306,7 @@ export default async function PoliticianPage({ params }: PageProps) {
         />
 
         {/* Header */}
-        <div className="flex items-start gap-6 mb-8">
-          <PoliticianAvatar
-            photoUrl={politician.photoUrl}
-            blobPhotoUrl={politician.blobPhotoUrl}
-            firstName={politician.firstName}
-            lastName={politician.lastName}
-            size="lg"
-          />
-          <div className="min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-display font-extrabold tracking-tight">
-                {politician.fullName}
-              </h1>
-              <FollowButton slug={politician.slug} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {politician.currentParty && (
-                <Link
-                  href={
-                    politician.currentParty.slug
-                      ? `/partis/${politician.currentParty.slug}`
-                      : "/partis"
-                  }
-                >
-                  <Badge
-                    className="text-sm hover:opacity-80 transition-opacity cursor-pointer whitespace-normal text-center"
-                    style={{
-                      backgroundColor: politician.currentParty.color
-                        ? `${politician.currentParty.color}20`
-                        : undefined,
-                      color: politician.currentParty.color
-                        ? ensureContrast(politician.currentParty.color, "#ffffff")
-                        : undefined,
-                    }}
-                  >
-                    <span className="opacity-70 mr-1">Parti :</span>
-                    {politician.currentParty.name}
-                  </Badge>
-                </Link>
-              )}
-              {currentGroup && (
-                <Badge
-                  variant="outline"
-                  className="text-sm"
-                  style={{
-                    borderColor: currentGroup.color || undefined,
-                    color: currentGroup.color
-                      ? ensureContrast(currentGroup.color, "#ffffff")
-                      : undefined,
-                  }}
-                  title={currentGroup.name}
-                >
-                  Groupe : {currentGroup.name} ({currentGroup.code})
-                </Badge>
-              )}
-              {politician.partyHistory
-                .filter((ph) => !ph.endDate && ph.role !== "MEMBRE")
-                .map((ph) => (
-                  <Badge key={ph.id} variant="outline" className="text-sm">
-                    {feminizePartyRole(PARTY_ROLE_LABELS[ph.role], politician.civility)}
-                    {ph.party.shortName !== politician.currentParty?.shortName &&
-                      ` · ${ph.party.shortName}`}
-                  </Badge>
-                ))}
-            </div>
-            {(politician.contactEmail ||
-              politician.contactTwitter ||
-              politician.contactFacebook ||
-              politician.contactWebsite) && (
-              <div className="flex items-center gap-1 mt-2">
-                {politician.contactEmail && (
-                  <a
-                    href={`mailto:${politician.contactEmail}`}
-                    aria-label={`Envoyer un email à ${politician.fullName}`}
-                    title="Email"
-                    className="inline-flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                  >
-                    <Mail className="h-4 w-4" />
-                  </a>
-                )}
-                {politician.contactTwitter && (
-                  <a
-                    href={
-                      politician.contactTwitter.startsWith("http")
-                        ? politician.contactTwitter
-                        : `https://x.com/${politician.contactTwitter.replace("@", "")}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Profil X de ${politician.fullName}`}
-                    title="X (Twitter)"
-                    className="inline-flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                  </a>
-                )}
-                {politician.contactFacebook && (
-                  <a
-                    href={
-                      politician.contactFacebook.startsWith("http")
-                        ? politician.contactFacebook
-                        : `https://facebook.com/${politician.contactFacebook}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Page Facebook de ${politician.fullName}`}
-                    title="Facebook"
-                    className="inline-flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                  >
-                    <Facebook className="h-4 w-4" />
-                  </a>
-                )}
-                {politician.contactWebsite && (
-                  <a
-                    href={
-                      politician.contactWebsite.startsWith("http")
-                        ? politician.contactWebsite
-                        : `https://${politician.contactWebsite}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Site web de ${politician.fullName}`}
-                    title="Site web"
-                    className="inline-flex items-center justify-center h-11 w-11 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
-                  >
-                    <Globe className="h-4 w-4" />
-                  </a>
-                )}
-              </div>
-            )}
-            {politician.birthDate && (
-              <p className="text-muted-foreground mt-2">
-                {politician.civility === "Mme" ? "Née" : "Né"} le {formatDate(politician.birthDate)}
-                {politician.birthPlace && ` à ${politician.birthPlace}`}
-                {politician.deathDate && (
-                  <span className="text-gray-500">
-                    {" "}
-                    - Décédé{politician.civility === "Mme" ? "e" : ""} le{" "}
-                    {formatDate(politician.deathDate)}
-                  </span>
-                )}
-              </p>
-            )}
-            {politician.publicId && (
-              <div className="mt-1">
-                <CopyableId value={politician.publicId} />
-              </div>
-            )}
-          </div>
-        </div>
+        <PoliticianHeader politician={politician} currentGroup={currentGroup} />
 
         {/* Full width, under the badges, above the tabs, at both widths. Never a badge in the
             party/mandate row: there it would read as a qualification awarded by Poligraph. */}

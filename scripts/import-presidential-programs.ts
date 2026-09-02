@@ -22,8 +22,14 @@ function value(name: string): string | undefined {
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const draftV6 = argv.includes("--draft-v6");
+  const partyProgramCandidacyId = value("party-program-candidacy-id");
   if (draftV6 && argv.includes("--shadow-v6")) {
     throw new Error("Options incompatibles: choisir --draft-v6 ou --shadow-v6.");
+  }
+  if (draftV6 && partyProgramCandidacyId) {
+    throw new Error(
+      "L'attribution explicite PARTY_PROGRAM est disponible uniquement en shadow V6 lecture seule."
+    );
   }
   const shadowV6 = draftV6 ? false : assertV6ShadowReadOnly(argv);
   const reconcileReport = value("reconcile-report");
@@ -70,6 +76,7 @@ async function main(): Promise<void> {
     const report = await runV6ShadowImport({
       candidate: value("candidate"),
       party: value("party"),
+      partyProgramCandidacyId,
       source: value("source"),
       limit: limitValue ? Number(limitValue) : undefined,
       forceRefetch: process.argv.includes("--force-refetch"),

@@ -27,7 +27,9 @@ vi.mock("@/lib/db", () => ({
 import { getISOWeekString, getWeeklyRecap, parseISOWeekString } from "../recap";
 
 function rawSqlText(call: unknown[]): string {
-  const strings = call[0] as readonly string[];
+  const query = call[0] as { sql?: string } | readonly string[];
+  if (!Array.isArray(query)) return (query as { sql?: string }).sql ?? "";
+  const strings = query;
   const values = call.slice(1);
   return strings
     .map((part, index) => {

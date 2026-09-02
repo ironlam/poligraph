@@ -74,6 +74,24 @@ describeIfDisposableDb("SearchDocument schema", () => {
 
     expect(indexes.some((i) => i.indexdef.includes("visibility"))).toBe(true);
   });
+
+  it("declares a nullable election scope with its visibility index", async () => {
+    const columns = await db.$queryRaw<ColumnRow[]>`
+      SELECT data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'SearchDocument' AND column_name = 'electionId'
+    `;
+    const indexes = await searchDocumentIndexes();
+
+    expect(columns).toEqual([{ data_type: "text", is_nullable: "YES" }]);
+    expect(
+      indexes.some(
+        (index) =>
+          index.indexdef.includes('(\"electionId\", visibility)') ||
+          index.indexdef.includes('(\"electionId\", \"visibility\")')
+      )
+    ).toBe(true);
+  });
 });
 
 // Runs `prisma db push` the way the harness does: explicit --url so prisma.config.ts

@@ -26,7 +26,7 @@ export const PUBLICATION_GATES = {
   priorites: {
     minVerifiedMeasures: 15,
     minThemesCovered: 5,
-    totalThemes: 13,
+    totalThemes: THEMES_IN_ORDER.length,
     minPrimarySourceShare: 0.6,
     /** Ratio between the best and least documented candidacy included. */
     maxCoverageRatio: 3,
@@ -127,3 +127,4 @@ export function isPrioritesPublishable(params: {
     params.segmentationDoctrinePublished
   );
 }
+import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";

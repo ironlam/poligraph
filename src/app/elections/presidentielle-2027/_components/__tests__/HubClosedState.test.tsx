@@ -4,16 +4,13 @@ import { PUBLICATION_GATES } from "@/config/publication-gates";
 import { HubClosedState } from "../HubClosedState";
 
 describe("HubClosedState", () => {
-  it("nomme l'état et renvoie vers l'index des sujets", () => {
+  it("nomme l'état sans répéter le lien de couverture placé dans l'état du corpus", () => {
     render(<HubClosedState verifiedMeasureCount={0} themeCount={13} />);
 
     expect(
       screen.getByRole("heading", { name: /Les comparaisons ne sont pas encore ouvertes/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /index des sujets/i })).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/sujets"
-    );
+    expect(screen.queryByRole("link", { name: /index des thématiques/i })).not.toBeInTheDocument();
   });
 
   it("dit l'absence de mesure au lieu d'afficher un compteur nul", () => {
@@ -34,7 +31,7 @@ describe("HubClosedState", () => {
         new RegExp(`quand au moins ${attendu} candidatures y portent une mesure sourcée et relue`)
       )
     ).toBeInTheDocument();
-    expect(screen.getByText(/aucun des 13 sujets n'atteint ce seuil/)).toBeInTheDocument();
+    expect(screen.getByText(/aucune des 13 thématiques n'atteint ce seuil/)).toBeInTheDocument();
   });
 
   it("n'invoque ni neutralité ni absence de classement", () => {

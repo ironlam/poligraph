@@ -15,6 +15,7 @@ import type { Prisma } from "@/generated/prisma";
 // Business results go to `stats`.
 
 export const IMPORTER_DISCOVER_AFFAIRS = "discover-affairs";
+export const IMPORTER_PRESS_ANALYSIS = "press-analysis";
 export const IMPORTER_JUDILIBRE = "judilibre";
 /** Reserved for admin-initiated proposals, so they never end up run-less. */
 export const IMPORTER_MANUAL_ADMIN = "manual-admin";
