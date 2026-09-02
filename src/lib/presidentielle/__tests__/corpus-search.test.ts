@@ -156,6 +156,7 @@ describe("searchPresidentialCorpus", () => {
     findSubtopic.mockResolvedValue({
       slug: "acces-aux-soins",
       label: "Accès aux soins",
+      theme: "SANTE",
       active: true,
     });
     listMeasures.mockResolvedValue({
@@ -191,7 +192,12 @@ describe("searchPresidentialCorpus", () => {
       total: 74,
       page: 2,
       totalPages: 2,
-      filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },
+      filter: {
+        type: "subtopic",
+        slug: "acces-aux-soins",
+        label: "Accès aux soins",
+        theme: "SANTE",
+      },
     });
   });
 

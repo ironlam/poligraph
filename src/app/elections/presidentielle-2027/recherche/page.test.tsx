@@ -130,7 +130,12 @@ describe("page complète de recherche présidentielle", () => {
           sourceUrl: null,
         },
       ],
-      filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },
+      filter: {
+        type: "subtopic",
+        slug: "acces-aux-soins",
+        label: "Accès aux soins",
+        theme: "SANTE",
+      },
       page: 1,
       totalPages: 2,
     });
@@ -150,6 +155,20 @@ describe("page complète de recherche présidentielle", () => {
       "href",
       "/elections/presidentielle-2027/recherche?sous-theme=acces-aux-soins&page=2"
     );
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Mesures sur « Accès aux soins »" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sous-thème")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Santé" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/themes/sante"
+    );
+
+    const measureLink = screen.getByRole("link", { name: "Ouvrir des centres de santé" });
+    const newSearch = screen.getByRole("search");
+    expect(
+      measureLink.compareDocumentPosition(newSearch) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("présente un thème comme un résultat sans message vide ni promesse de comparabilité", async () => {

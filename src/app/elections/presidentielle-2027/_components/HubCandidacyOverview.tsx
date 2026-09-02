@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import type { HubCandidacy } from "@/lib/data/hub";
-import {
-  CANDIDACY_FILTERS,
-  CANDIDACY_FILTER_LABELS,
-  matchesCandidacyFilter,
-  matchesPublishedProposals,
-} from "@/lib/presidentielle/candidacy-filters";
+import { matchesPublishedProposals } from "@/lib/presidentielle/candidacy-filters";
 import { CandidacyDirectoryLink } from "./CandidacyDirectoryLink";
 
 /**
@@ -19,20 +14,6 @@ export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidac
     matchesPublishedProposals(candidacy, true)
   );
   const publishedTotal = candidaciesWithPublishedProposals.length;
-  const filters = [
-    ...CANDIDACY_FILTERS.filter((key) => key !== "toutes").map((key) => ({
-      key,
-      label: CANDIDACY_FILTER_LABELS[key],
-      count: candidacies.filter((candidacy) => matchesCandidacyFilter(candidacy, key)).length,
-      href: `/elections/presidentielle-2027/candidats?statut=${key}`,
-    })),
-    {
-      key: "publiees" as const,
-      label: "Avec des propositions publiées",
-      count: candidacies.filter((candidacy) => matchesPublishedProposals(candidacy, true)).length,
-      href: "/elections/presidentielle-2027/candidats?propositions=publiees",
-    },
-  ];
 
   return (
     <section id="candidatures" aria-labelledby="hub-candidatures" className="space-y-4">
@@ -42,13 +23,11 @@ export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidac
             id="hub-candidatures"
             className="font-display text-xl font-bold tracking-tight md:text-2xl"
           >
-            {publishedTotal} {publishedTotal === 1 ? "personnalité a" : "personnalités ont"} déjà
-            des propositions publiées
+            Candidats et candidates déjà documentés
           </h2>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            L&apos;accueil montre les personnalités pour lesquelles des mesures sont déjà
-            documentées. L&apos;annuaire rassemble les {total} personnalités suivies, y compris
-            celles dont les propositions restent à documenter.
+            {publishedTotal} {publishedTotal === 1 ? "personne a" : "personnes ont"} des
+            propositions publiées. L&apos;annuaire rassemble les {total} candidatures suivies.
           </p>
         </div>
         {total > 0 && (
@@ -57,7 +36,7 @@ export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidac
             prefetch={false}
             className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            Explorer {total === 1 ? "la personnalité suivie" : `les ${total} personnalités`}
+            Voir {total === 1 ? "la candidature" : `les ${total} candidatures`}
             <ArrowRight aria-hidden="true" className="h-4 w-4" />
           </Link>
         )}
@@ -68,33 +47,20 @@ export function HubCandidacyOverview({ candidacies }: { candidacies: HubCandidac
           Aucune proposition publiée à ce jour.
         </p>
       ) : (
-        <>
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          role="region"
+          aria-label="Candidats et candidates avec des propositions publiées"
+          tabIndex={0}
+          className="-mx-4 overflow-x-auto px-4 pb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:mx-0 sm:px-0"
+        >
+          <ul className="flex w-max snap-x snap-mandatory gap-3">
             {candidaciesWithPublishedProposals.map((candidacy) => (
-              <li key={candidacy.id}>
+              <li key={candidacy.id} className="w-[min(19rem,82vw)] shrink-0 snap-start sm:w-72">
                 <CandidacyDirectoryLink candidacy={candidacy} />
               </li>
             ))}
           </ul>
-
-          <nav aria-label="Explorer l'annuaire des personnalités" className="flex flex-wrap gap-2">
-            <span className="self-center text-xs text-muted-foreground-strong">
-              Explorer l&apos;annuaire :
-            </span>
-            {filters
-              .filter((filter) => filter.count > 0)
-              .map((filter) => (
-                <Link
-                  key={filter.key}
-                  href={filter.href}
-                  prefetch={false}
-                  className="inline-flex min-h-11 items-center rounded-full border border-border px-3.5 text-xs font-medium hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {filter.label} · {filter.count}
-                </Link>
-              ))}
-          </nav>
-        </>
+        </div>
       )}
     </section>
   );

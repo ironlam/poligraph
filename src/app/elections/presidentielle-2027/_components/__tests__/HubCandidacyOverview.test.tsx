@@ -32,40 +32,22 @@ const field = [
 ];
 
 describe("HubCandidacyOverview", () => {
-  it("montre seulement les personnalités ayant des propositions et compte tous les filtres", () => {
+  it("montre seulement les personnes ayant des propositions dans un aperçu compact", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
     expect(screen.getAllByRole("link", { name: /Alix Dupont/ })).toHaveLength(1);
-    expect(screen.getByText(/1 personnalité a déjà des propositions publiées/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Candidatures annoncées · 2/ })).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/candidats?statut=annoncees"
-    );
-    expect(screen.getByRole("link", { name: /Personnalités pressenties · 2/ })).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/candidats?statut=pressenties"
-    );
-  });
-
-  it("ouvre la liste sur les personnes ayant des propositions publiées", () => {
-    render(<HubCandidacyOverview candidacies={field} />);
-
+    expect(screen.getByText(/1 personne a des propositions publiées/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Avec des propositions publiées · 1/ })
-    ).toHaveAttribute("href", "/elections/presidentielle-2027/candidats?propositions=publiees");
-  });
-
-  it("ne rend pas un filtre vide, qui n'aurait rien à montrer", () => {
-    render(<HubCandidacyOverview candidacies={field} />);
-
-    // Aucune candidature retirée dans ce champ : le compteur reste du texte.
-    expect(screen.queryByText("Candidatures retirées")).not.toBeInTheDocument();
+      screen.getByRole("region", {
+        name: "Candidats et candidates avec des propositions publiées",
+      })
+    ).toHaveClass("overflow-x-auto");
   });
 
   it("mène au champ complet, avec son effectif dans le libellé du lien", () => {
     render(<HubCandidacyOverview candidacies={field} />);
 
-    expect(screen.getByRole("link", { name: /Explorer les 4 personnalités/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Voir les 4 candidatures/ })).toHaveAttribute(
       "href",
       "/elections/presidentielle-2027/candidats"
     );

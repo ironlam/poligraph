@@ -76,7 +76,7 @@ export default async function PresidentialHubPage() {
         url={`${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}`}
         numberOfItems={context.verifiedMeasureCount}
       />
-      <div className="container mx-auto space-y-10 px-4 pt-4 pb-8">
+      <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
         <Breadcrumb
           items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
         />
@@ -109,6 +109,8 @@ export default async function PresidentialHubPage() {
           )}
         </header>
 
+        <HubCandidacyOverview candidacies={field} />
+
         <PresidentialCorpusSearch />
 
         {/* Below the gate the body says so too, instead of leaving the state in a meta tag. */}
@@ -124,8 +126,6 @@ export default async function PresidentialHubPage() {
         <HubSubjects themes={context.themes} />
 
         <HubReaderGuides guides={context.featuredReaderGuides} />
-
-        <HubCandidacyOverview candidacies={field} />
 
         <HubComparisonLauncher candidacies={field} themes={context.themes} />
 
