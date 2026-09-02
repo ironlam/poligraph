@@ -61,8 +61,58 @@ function screenSynthesis(raw: string, material?: SynthesisMaterial) {
 describe("buildCandidateSynthesisPrompt", () => {
   it("construit le parcours uniquement avec les mandats enregistrés", () => {
     expect(buildCanonicalCareer(BASE)).toBe(
-      "Jeanne Martin a exercé les fonctions suivantes : Députée (Assemblée nationale) depuis 2017 et Maire (Villeneuve) de 2008 à 2017."
+      "Jeanne Martin est actuellement députée (Assemblée nationale) depuis 2017. Jeanne Martin a également été maire (Villeneuve) de 2008 à 2017."
     );
+  });
+
+  it("fusionne les mandats parlementaires découpés par législature", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      candidateName: "Delphine Batho",
+      mandates: [
+        {
+          role: "Députée de la 2ème circonscription",
+          institution: "Assemblée nationale",
+          startYear: 2024,
+          endYear: null,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2022,
+          endYear: 2024,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2017,
+          endYear: 2022,
+        },
+        {
+          role: "Députée de la 2e circonscription",
+          institution: "Assemblée nationale",
+          startYear: 2013,
+          endYear: 2017,
+        },
+        {
+          role: "Ministre de l'Écologie",
+          institution: "Gouvernement Jean-Marc Ayrault n°2",
+          startYear: 2012,
+          endYear: 2013,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2007,
+          endYear: 2012,
+        },
+      ],
+    });
+
+    expect(career).toBe(
+      "Delphine Batho est actuellement députée de la 2e circonscription (Assemblée nationale), avec des mandats enregistrés depuis 2007. Delphine Batho a également été ministre de l'Écologie (Gouvernement Jean-Marc Ayrault n°2) de 2012 à 2013."
+    );
+    expect(career.match(/Assemblée nationale/g)).toHaveLength(1);
   });
 
   it("groups measures by theme under their French label", () => {
@@ -193,6 +243,21 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).toContain("les engagements rapprochent");
     expect(result.ok && result.text).toContain("dessertes ferroviaires");
     expect(result.ok && result.text).not.toContain("thèmes suivants");
+  });
+
+  it("retire les espaces laissés devant la ponctuation par les marqueurs de preuve", () => {
+    const raw = output([
+      {
+        text: `${healthAxis} M1 .`,
+        measureRefs: ["M1", "M2"],
+      },
+      { text: `${transportAxis} M3 .`, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toMatch(/\s+[.,;:!?]/u);
   });
 
   it("accepte le vocabulaire judiciaire lorsqu'il provient d'une mesure citée", () => {
@@ -404,6 +469,13 @@ describe("buildSynthesisSystemPrompt", () => {
         "Recopie sans la modifier la phrase de parcours"
       );
     }
+  });
+
+  it("demande de hiérarchiser les axes sans couvrir chaque thème", () => {
+    const prompt = buildSynthesisSystemPrompt(FULL);
+
+    expect(prompt).toContain("Ne cherche pas à couvrir chaque thème");
+    expect(prompt).toContain("Hiérarchise");
   });
 
   it("accorde cent mots au plus à un parcours entièrement documenté", () => {
