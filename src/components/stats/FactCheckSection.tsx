@@ -40,10 +40,10 @@ interface FactCheckSectionProps {
   total: number;
   groups: VerdictBreakdown;
   bySource: { source: string; count: number }[];
-  mostReliablePoliticians: RankedPolitician[];
-  leastReliablePoliticians: RankedPolitician[];
-  mostReliableParties: RankedParty[];
-  leastReliableParties: RankedParty[];
+  topVraiSharePoliticians: RankedPolitician[];
+  topFauxSharePoliticians: RankedPolitician[];
+  topVraiShareParties: RankedParty[];
+  topFauxShareParties: RankedParty[];
 }
 
 function PoliticianRankingItem({
@@ -53,12 +53,12 @@ function PoliticianRankingItem({
 }: {
   pol: RankedPolitician;
   rank: number;
-  mode: "reliable" | "unreliable";
+  mode: "vrai" | "faux";
 }) {
   const scorable = pol.totalMentions - pol.breakdown.inverifiable;
   const rawPct =
     scorable > 0
-      ? mode === "reliable"
+      ? mode === "vrai"
         ? pol.breakdown.vrai / scorable
         : pol.breakdown.faux / scorable
       : 0;
@@ -86,7 +86,7 @@ function PoliticianRankingItem({
       <span
         className="text-sm font-bold tabular-nums shrink-0"
         style={{
-          color: mode === "reliable" ? VERDICT_GROUP_COLORS.vrai : VERDICT_GROUP_COLORS.faux,
+          color: mode === "vrai" ? VERDICT_GROUP_COLORS.vrai : VERDICT_GROUP_COLORS.faux,
         }}
       >
         {(rawPct * 100).toFixed(0)}%
@@ -102,12 +102,12 @@ function PartyRankingItem({
 }: {
   party: RankedParty;
   rank: number;
-  mode: "reliable" | "unreliable";
+  mode: "vrai" | "faux";
 }) {
   const scorable = party.totalMentions - party.breakdown.inverifiable;
   const rawPct =
     scorable > 0
-      ? mode === "reliable"
+      ? mode === "vrai"
         ? party.breakdown.vrai / scorable
         : party.breakdown.faux / scorable
       : 0;
@@ -137,7 +137,7 @@ function PartyRankingItem({
       <span
         className="text-sm font-bold tabular-nums shrink-0"
         style={{
-          color: mode === "reliable" ? VERDICT_GROUP_COLORS.vrai : VERDICT_GROUP_COLORS.faux,
+          color: mode === "vrai" ? VERDICT_GROUP_COLORS.vrai : VERDICT_GROUP_COLORS.faux,
         }}
       >
         {(rawPct * 100).toFixed(0)}%
@@ -150,10 +150,10 @@ export function FactCheckSection({
   total,
   groups,
   bySource,
-  mostReliablePoliticians,
-  leastReliablePoliticians,
-  mostReliableParties,
-  leastReliableParties,
+  topVraiSharePoliticians,
+  topFauxSharePoliticians,
+  topVraiShareParties,
+  topFauxShareParties,
 }: FactCheckSectionProps) {
   const vraiPct = total > 0 ? ((groups.vrai / total) * 100).toFixed(0) : "0";
   const trompeurPct = total > 0 ? ((groups.trompeur / total) * 100).toFixed(0) : "0";
@@ -191,12 +191,21 @@ export function FactCheckSection({
             <li>
               <strong>Seuil :</strong> minimum 5 propos vérifiés pour figurer dans les classements
             </li>
+            <li>
+              <strong>Unité comptée :</strong> uniquement les affirmations dont le responsable
+              politique est l&apos;auteur direct, pas les simples mentions
+            </li>
+            <li>
+              <strong>Parti affiché :</strong> affiliation partisane actuelle, pas nécessairement
+              celle au moment de l&apos;affirmation
+            </li>
           </ul>
         }
       >
-        Le nombre de fact-checks reflète la place d&apos;un responsable politique dans le débat
-        public. Les proportions et le score pondéré permettent de comparer leur fiabilité
-        indépendamment de leur exposition médiatique.
+        Ces classements décrivent la répartition des verdicts sur un corpus d&apos;affirmations
+        attribuées : ils ne constituent pas un jugement global sur l&apos;honnêteté d&apos;une
+        personne ou d&apos;un parti. Le nombre de fact-checks reflète surtout la place d&apos;un
+        responsable politique dans le débat public.
       </MethodologyDisclaimer>
 
       {/* KPI cards — 4 columns */}
@@ -244,36 +253,36 @@ export function FactCheckSection({
 
       {/* Politician rankings — 2 columns */}
       <div className="grid md:grid-cols-2 gap-8 mb-8">
-        {mostReliablePoliticians.length > 0 && (
+        {topVraiSharePoliticians.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Politiques les plus fiables</CardTitle>
+              <CardTitle className="text-lg">Propos les plus souvent jugés vrais</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Par proportion de propos vérifiés vrais (classement pondéré)
+                Part des affirmations attribuées jugées vraies (classement pondéré)
               </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {mostReliablePoliticians.map((pol, i) => (
-                  <PoliticianRankingItem key={pol.slug} pol={pol} rank={i + 1} mode="reliable" />
+                {topVraiSharePoliticians.map((pol, i) => (
+                  <PoliticianRankingItem key={pol.slug} pol={pol} rank={i + 1} mode="vrai" />
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {leastReliablePoliticians.length > 0 && (
+        {topFauxSharePoliticians.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Politiques les moins fiables</CardTitle>
+              <CardTitle className="text-lg">Propos les plus souvent jugés faux</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Par proportion de propos vérifiés faux (classement pondéré)
+                Part des affirmations attribuées jugées fausses (classement pondéré)
               </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {leastReliablePoliticians.map((pol, i) => (
-                  <PoliticianRankingItem key={pol.slug} pol={pol} rank={i + 1} mode="unreliable" />
+                {topFauxSharePoliticians.map((pol, i) => (
+                  <PoliticianRankingItem key={pol.slug} pol={pol} rank={i + 1} mode="faux" />
                 ))}
               </div>
             </CardContent>
@@ -283,36 +292,40 @@ export function FactCheckSection({
 
       {/* Party rankings — 2 columns */}
       <div className="grid md:grid-cols-2 gap-8 mb-8">
-        {mostReliableParties.length > 0 && (
+        {topVraiShareParties.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Partis les plus fiables</CardTitle>
+              <CardTitle className="text-lg">
+                Partis : affirmations les plus souvent jugées vraies
+              </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Par proportion de propos vérifiés vrais (classement pondéré)
+                Part des affirmations attribuées jugées vraies (classement pondéré)
               </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {mostReliableParties.map((party, i) => (
-                  <PartyRankingItem key={party.name} party={party} rank={i + 1} mode="reliable" />
+                {topVraiShareParties.map((party, i) => (
+                  <PartyRankingItem key={party.name} party={party} rank={i + 1} mode="vrai" />
                 ))}
               </div>
             </CardContent>
           </Card>
         )}
 
-        {leastReliableParties.length > 0 && (
+        {topFauxShareParties.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Partis les moins fiables</CardTitle>
+              <CardTitle className="text-lg">
+                Partis : affirmations les plus souvent jugées fausses
+              </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Par proportion de propos vérifiés faux (classement pondéré)
+                Part des affirmations attribuées jugées fausses (classement pondéré)
               </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-1">
-                {leastReliableParties.map((party, i) => (
-                  <PartyRankingItem key={party.name} party={party} rank={i + 1} mode="unreliable" />
+                {topFauxShareParties.map((party, i) => (
+                  <PartyRankingItem key={party.name} party={party} rank={i + 1} mode="faux" />
                 ))}
               </div>
             </CardContent>

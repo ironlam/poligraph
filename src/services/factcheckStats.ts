@@ -76,15 +76,29 @@ export interface RankedParty {
   scoreFaux: number;
 }
 
-/** Shape returned by getStatisticsData() — consumed by statistiques/page.tsx */
+/**
+ * Shape returned by getStatisticsData() — consumed by statistiques/page.tsx.
+ *
+ * Doctrine éditoriale (issue #727) : ces classements décrivent la
+ * répartition des verdicts sur un corpus d'affirmations attribuées, pas la
+ * fiabilité générale d'une personne ou d'un parti. D'où des noms de champs
+ * et des libellés descriptifs ("part de vrai/faux") plutôt que normatifs
+ * ("le/la plus fiable").
+ *
+ * Unité comptée : uniquement les mentions où le responsable politique est
+ * l'auteur direct de l'affirmation (`isClaimant = true`), pas une simple
+ * mention. L'affiliation partisane utilisée est l'affiliation actuelle du
+ * responsable (`currentPartyId`), pas nécessairement celle au moment de
+ * l'affirmation.
+ */
 export interface FactCheckStatisticsData {
   total: number;
   groups: VerdictBreakdown;
   bySource: Array<{ source: string; count: number }>;
-  mostReliablePoliticians: RankedPolitician[];
-  leastReliablePoliticians: RankedPolitician[];
-  mostReliableParties: RankedParty[];
-  leastReliableParties: RankedParty[];
+  topVraiSharePoliticians: RankedPolitician[];
+  topFauxSharePoliticians: RankedPolitician[];
+  topVraiShareParties: RankedParty[];
+  topFauxShareParties: RankedParty[];
 }
 
 // ============================================
@@ -177,11 +191,21 @@ async function getPageStats(): Promise<FactCheckPageStats> {
 /** Minimum fact-check mentions required to include a politician/party in rankings */
 const MIN_MENTIONS = 5;
 
-function classifyRating(rating: string): keyof VerdictBreakdown {
+/**
+ * Classe un `verdictRating` dans une des quatre catégories connues.
+ *
+ * `UNVERIFIABLE` est un verdict éditorial explicite ("l'affirmation ne peut
+ * être vérifiée"), pas une valeur par défaut. Un code non reconnu (futur
+ * enum Prisma non encore mappé ici) doit donc renvoyer `null` plutôt que
+ * d'être assimilé à `inverifiable` : inconnu ≠ invérifiable. Les appelants
+ * doivent exclure les `null` des agrégats plutôt que de les compter.
+ */
+export function classifyRating(rating: string): keyof VerdictBreakdown | null {
   if ((VERDICT_GROUPS.vrai as readonly string[]).includes(rating)) return "vrai";
   if ((VERDICT_GROUPS.trompeur as readonly string[]).includes(rating)) return "trompeur";
   if ((VERDICT_GROUPS.faux as readonly string[]).includes(rating)) return "faux";
-  return "inverifiable";
+  if ((VERDICT_GROUPS.inverifiable as readonly string[]).includes(rating)) return "inverifiable";
+  return null;
 }
 
 /**
@@ -253,7 +277,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     vrai: VERDICT_GROUPS.vrai.reduce((sum, r) => sum + (ratingMap[r] || 0), 0),
     trompeur: VERDICT_GROUPS.trompeur.reduce((sum, r) => sum + (ratingMap[r] || 0), 0),
     faux: VERDICT_GROUPS.faux.reduce((sum, r) => sum + (ratingMap[r] || 0), 0),
-    inverifiable: ratingMap["UNVERIFIABLE"] || 0,
+    inverifiable: VERDICT_GROUPS.inverifiable.reduce((sum, r) => sum + (ratingMap[r] || 0), 0),
   };
 
   const politicianMap = new Map<
@@ -283,6 +307,12 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
   for (const row of allMentions) {
     const count = Number(row.mentionCount);
     const verdict = classifyRating(row.verdictRating);
+    if (!verdict) {
+      // Code de verdict non reconnu : exclu des classements plutôt que
+      // rattaché à "inverifiable" par défaut (voir classifyRating()).
+      console.warn(`[factcheckStats] verdictRating inconnu ignoré: ${row.verdictRating}`);
+      continue;
+    }
     const partyKey = row.partySlug;
     const partyDisplayName = row.partyName || row.partyShortName;
 
@@ -343,12 +373,12 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
   };
 
   const rankedPoliticians = allPols.map(scorePolitician);
-  const mostReliablePoliticians = [...rankedPoliticians]
+  const topVraiSharePoliticians = [...rankedPoliticians]
     .sort((a, b) => b.scoreVrai - a.scoreVrai)
     .slice(0, 5);
-  const mostReliableSlugs = new Set(mostReliablePoliticians.map((p) => p.slug));
-  const leastReliablePoliticians = [...rankedPoliticians]
-    .filter((p) => !mostReliableSlugs.has(p.slug))
+  const topVraiSlugs = new Set(topVraiSharePoliticians.map((p) => p.slug));
+  const topFauxSharePoliticians = [...rankedPoliticians]
+    .filter((p) => !topVraiSlugs.has(p.slug))
     .sort((a, b) => b.scoreFaux - a.scoreFaux)
     .slice(0, 5);
 
@@ -379,12 +409,12 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
   };
 
   const rankedParties = allParties.map(scoreParty);
-  const mostReliableParties = [...rankedParties]
+  const topVraiShareParties = [...rankedParties]
     .sort((a, b) => b.scoreVrai - a.scoreVrai)
     .slice(0, 5);
-  const mostReliablePartyNames = new Set(mostReliableParties.map((p) => p.name));
-  const leastReliableParties = [...rankedParties]
-    .filter((p) => !mostReliablePartyNames.has(p.name))
+  const topVraiPartyNames = new Set(topVraiShareParties.map((p) => p.name));
+  const topFauxShareParties = [...rankedParties]
+    .filter((p) => !topVraiPartyNames.has(p.name))
     .sort((a, b) => b.scoreFaux - a.scoreFaux)
     .slice(0, 5);
 
@@ -392,10 +422,10 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
     total,
     groups,
     bySource: bySourceRaw.map((s) => ({ source: s.source, count: s._count })),
-    mostReliablePoliticians,
-    leastReliablePoliticians,
-    mostReliableParties,
-    leastReliableParties,
+    topVraiSharePoliticians,
+    topFauxSharePoliticians,
+    topVraiShareParties,
+    topFauxShareParties,
   };
 }
 
