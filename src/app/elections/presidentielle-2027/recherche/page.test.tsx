@@ -51,6 +51,20 @@ describe("page complète de recherche présidentielle", () => {
     );
   });
 
+  it("ne présente pas un sous-thème valide comme introuvable lorsque le quota est atteint", async () => {
+    render(
+      await PresidentialSearchPage({
+        searchParams: Promise.resolve({ "sous-theme": "acces-aux-soins", limite: "1" }),
+      })
+    );
+
+    expect(search).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Recherche momentanément indisponible" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Sous-thème introuvable")).not.toBeInTheDocument();
+  });
+
   it("affiche le texte complet et le lien canonique de la mesure", async () => {
     render(await PresidentialSearchPage({ searchParams: Promise.resolve({ q: "logement" }) }));
     expect(
@@ -169,6 +183,9 @@ describe("page complète de recherche présidentielle", () => {
 
     const measureLink = screen.getByRole("link", { name: "Ouvrir des centres de santé" });
     const newSearch = screen.getByRole("search");
+    expect(
+      screen.getByRole("searchbox", { name: /mesure, un thème ou un candidat/ })
+    ).toBeVisible();
     expect(
       measureLink.compareDocumentPosition(newSearch) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();

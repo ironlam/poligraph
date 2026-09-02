@@ -31,14 +31,12 @@ function CorpusSearchForm({ query, compact = false }: { query: string; compact?:
         {compact ? "Rechercher autre chose" : "Rechercher dans le corpus"}
       </h2>
       <form role="search" className="mt-3" action={PAGE_PATH}>
-        <label htmlFor="full-corpus-query" className="sr-only">
-          Rechercher une mesure, un thème ou une personnalité suivie
-        </label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             id="full-corpus-query"
             name="q"
             type="search"
+            aria-label="Rechercher une mesure, un thème ou un candidat"
             defaultValue={query}
             placeholder="Posez une question ou saisissez un sujet…"
             aria-describedby="full-corpus-ai-notice"
@@ -159,19 +157,21 @@ export default async function PresidentialSearchPage({
           {isSubtopicBrowse && parentTheme ? "Retour à la thématique" : "Retour au hub"}
         </Link>
         <header>
-          {isSubtopicBrowse && (
+          {isSubtopicBrowse && !isRateLimited && (
             <p className="text-xs font-bold uppercase tracking-widest text-brand-on-surface">
               Sous-thème
             </p>
           )}
           <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-            {isSubtopicBrowse
-              ? subtopicFilter
-                ? `Mesures sur « ${subtopicFilter.label} »`
-                : "Sous-thème introuvable"
-              : query.length >= 2
-                ? `Résultats pour « ${resultLabel} »`
-                : "Rechercher dans les programmes 2027"}
+            {isRateLimited
+              ? "Recherche momentanément indisponible"
+              : isSubtopicBrowse
+                ? subtopicFilter
+                  ? `Mesures sur « ${subtopicFilter.label} »`
+                  : "Sous-thème introuvable"
+                : query.length >= 2
+                  ? `Résultats pour « ${resultLabel} »`
+                  : "Rechercher dans les programmes 2027"}
           </h1>
           {isSubtopicBrowse && subtopicFilter && (
             <p className="mt-3 text-base text-muted-foreground" role="status" aria-live="polite">
