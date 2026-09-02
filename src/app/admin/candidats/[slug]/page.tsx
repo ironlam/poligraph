@@ -55,6 +55,7 @@ export default async function AdminCandidacyPage({ params }: PageProps) {
           })
         ? "CONTRADICTED"
         : "CURRENT",
+    synthesis: candidacy.presidentialData?.synthesis ?? null,
     synthesisGeneratedAt: candidacy.presidentialData?.synthesisGeneratedAt ?? null,
     editions: editions.map((edition) => ({
       id: edition.id,

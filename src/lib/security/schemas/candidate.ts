@@ -8,6 +8,7 @@ const WITHDREW_REASON_MAX = 1000;
 const NOTES_MAX = 2000;
 const RANK_MAX = 999;
 const SOURCE_LABEL_MAX = 300;
+const SYNTHESIS_MAX = 5_000;
 
 export const createCandidatePresidentialSchema = z.object({
   candidacyId: z.string().min(1),
@@ -30,6 +31,10 @@ export const updateCandidatePresidentialSchema = z.object({
   notes: z.string().max(NOTES_MAX).nullable().optional(),
   publicationStatus: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "EXCLUDED", "REJECTED"]).optional(),
 });
+
+export const reviewCandidateSynthesisSchema = z
+  .object({ synthesis: z.string().trim().min(20).max(SYNTHESIS_MAX) })
+  .strict();
 
 // Schéma combiné pour POST /api/admin/candidats : crée la Candidacy (via picker)
 // ET les métadonnées CandidacyPresidential dans une seule transaction.

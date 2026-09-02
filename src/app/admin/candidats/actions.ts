@@ -27,7 +27,9 @@ import { generateCandidateSynthesis } from "@/services/candidate-synthesis";
  */
 
 /** Business errors are returned so the moderator reads the reason on screen; auth failures throw. */
-export type CandidacyActionResult = { ok: true } | { ok: false; message: string };
+export type CandidacyActionResult =
+  | { ok: true; text?: string; reviewWarning?: string }
+  | { ok: false; message: string };
 
 const publicationStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "EXCLUDED", "REJECTED"]);
 
@@ -282,7 +284,7 @@ export async function setProgramEditionPublicationAction(input: {
 }
 
 /**
- * Regenerates the synthesis of one candidacy, inline, on the moderator's click.
+ * Generates a synthesis proposal for one candidacy, inline, on the moderator's click.
  *
  * Inline and not queued, following `regenerateScrutinPolicyTitle`: one candidacy is one or two
  * provider calls, the moderator is watching the row, and a queue would put a job board between them
@@ -291,7 +293,8 @@ export async function setProgramEditionPublicationAction(input: {
  *
  * The generation itself, including the rule that only a DECLARED candidacy carries a synthesis,
  * belongs to `@/services/candidate-synthesis`. This action adds what an admin surface owes: the
- * session check, the input validation, the cache purge, and a refusal the moderator can read.
+ * session check, input validation, and a refusal the moderator can read. Cache invalidation only
+ * happens later, when the moderator explicitly saves the reviewed proposal.
  */
 export async function regenerateCandidateSynthesisAction(input: {
   candidacyId: string;
@@ -312,15 +315,20 @@ export async function regenerateCandidateSynthesisAction(input: {
     return { ok: false, message: "Candidature introuvable." };
   }
 
-  const result = await generateCandidateSynthesis(candidacyId, { persist: true });
+  const result = await generateCandidateSynthesis(candidacyId, {
+    persist: false,
+    returnRejectedProposal: true,
+  });
   if (!result.ok) {
     return { ok: false, message: result.message };
   }
 
-  // The fiche reads the synthesis through `getPoliticianPresidentialCandidacy`, which carries this
-  // tag: without the purge the new text waits out the 24h ISR backstop behind the old one.
-  invalidatePresidentialCandidacyTags(candidacy.electionId);
-  revalidate();
-
-  return { ok: true };
+  // Nothing is written here. The moderator receives a proposal, edits it if needed, then saves it
+  // through the reviewed-synthesis endpoint. This prevents a provider response from becoming
+  // public solely because somebody clicked "Générer".
+  return {
+    ok: true,
+    text: result.text,
+    ...(result.reviewWarning ? { reviewWarning: result.reviewWarning } : {}),
+  };
 }

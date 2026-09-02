@@ -25,8 +25,11 @@ import {
   buildCandidateSynthesisGroundingPrompt,
   buildCanonicalCareer,
   buildSynthesisSystemPrompt,
+  formatCandidateSynthesisProposal,
+  MAX_PROGRAMME_CLAIMS,
   screenCandidateSynthesis,
   screenCandidateSynthesisGrounding,
+  screenSynthesis,
   synthesisMaterial,
   type CandidateProgrammeClaim,
   type CandidateSynthesisInput,
@@ -48,7 +51,7 @@ const SYNTHESIS_RESPONSE_FORMAT = {
         career: { type: "string", maxLength: 1_000 },
         programmeClaims: {
           type: "array",
-          maxItems: 5,
+          maxItems: MAX_PROGRAMME_CLAIMS,
           items: {
             type: "object",
             additionalProperties: false,
@@ -125,10 +128,16 @@ export type SynthesisGenerationResult =
       /** What the prompt was built from, for the script's log and the action's message. */
       measureCount: number;
       mandateCount: number;
-      /** False on a dry run: the text was produced and screened, nothing was written. */
+      /** False on a dry run or admin-review proposal: nothing was written. */
       persisted: boolean;
+      /** Present only for an admin-review draft that did not pass the automatic controls. */
+      reviewWarning?: string;
     }
   | { ok: false; reason: SynthesisRefusal; message: string };
+
+export type CandidateSynthesisReviewResult =
+  | { ok: true; electionId: string }
+  | { ok: false; message: string };
 
 async function generate(
   system: string,
@@ -174,9 +183,15 @@ async function loadInput(candidacyId: string) {
 export type GenerateCandidateSynthesisOptions = {
   /**
    * Write the result on the candidacy's presidential extension. False is the script's dry run: the
-   * text is produced and screened so the operator can read what WOULD be stored.
+   * text is produced and screened so the operator can read what WOULD be stored. An admin caller
+   * may separately request a rejected but structurally usable proposal for manual correction.
    */
   persist: boolean;
+  /**
+   * Return the best structurally usable draft when automatic controls reject it. This is only
+   * honored when `persist` is false: a rejected provider response must never be stored directly.
+   */
+  returnRejectedProposal?: boolean;
 };
 
 /**
@@ -216,7 +231,14 @@ export async function generateCandidateSynthesis(
   const [mandates, voteCount, measures] = await Promise.all([
     db.mandate.findMany({
       where: { politicianId },
-      select: { role: true, title: true, institution: true, startDate: true, endDate: true },
+      select: {
+        role: true,
+        title: true,
+        institution: true,
+        startDate: true,
+        endDate: true,
+        isCurrent: true,
+      },
       orderBy: { startDate: "desc" },
       take: MANDATE_LIMIT,
     }),
@@ -242,6 +264,7 @@ export async function generateCandidateSynthesis(
       institution: m.institution,
       startYear: m.startDate.getUTCFullYear(),
       endYear: m.endDate?.getUTCFullYear() ?? null,
+      isCurrent: m.isCurrent,
     })),
     voteCount,
     measures: measures.flatMap((m) =>
@@ -268,6 +291,7 @@ export async function generateCandidateSynthesis(
   let accepted:
     | { text: string; provider: string; programmeClaims: CandidateProgrammeClaim[] }
     | undefined;
+  let bestProposal: { text: string; provider: string } | undefined;
 
   for (let attemptIndex = 0; attemptIndex < 3; attemptIndex += 1) {
     const messages = previousResponseText
@@ -293,11 +317,14 @@ export async function generateCandidateSynthesis(
         parsed && typeof parsed === "object"
           ? { ...parsed, career: buildCanonicalCareer(input) }
           : parsed;
+      const proposal = formatCandidateSynthesisProposal(candidateOutput, input);
+      if (proposal) bestProposal = { text: proposal, provider: attempt.provider };
       let screened = screenCandidateSynthesis(candidateOutput, input);
       if (!screened.ok) {
         validationDetail = screened.detail;
         continue;
       }
+      bestProposal = { text: screened.text, provider: attempt.provider };
 
       const parsedOutput = candidateOutput as {
         career: string;
@@ -388,6 +415,19 @@ export async function generateCandidateSynthesis(
   }
 
   if (!accepted) {
+    if (!options.persist && options.returnRejectedProposal && bestProposal) {
+      return {
+        ok: true,
+        text: bestProposal.text,
+        provider: bestProposal.provider,
+        measureCount: input.measures.length,
+        mandateCount: mandates.length,
+        persisted: false,
+        reviewWarning:
+          "Cette proposition n'a pas passé le contrôle automatique : " +
+          `${validationDetail}. Corrigez-la avant de l'enregistrer.`,
+      };
+    }
     if (lastGenerationError) {
       return {
         ok: false,
@@ -448,4 +488,103 @@ export async function generateCandidateSynthesis(
   });
 
   return { ...base, persisted: true };
+}
+
+/**
+ * Stores the text a moderator has actually read and edited.
+ *
+ * Generation and publication are deliberately separate operations: a provider response is a
+ * proposal, while this function is the explicit human decision that makes the text public. The
+ * same mechanical style and length checks still apply, but institutional judicial vocabulary is
+ * accepted when it is present in the programme or career material supplied on the fiche.
+ */
+export async function saveReviewedCandidateSynthesis(
+  candidacyId: string,
+  rawText: string,
+  auditMeta: { ipAddress?: string; userAgent?: string } = {}
+): Promise<CandidateSynthesisReviewResult> {
+  const candidacy = await db.candidacy.findUnique({
+    where: { id: candidacyId },
+    select: {
+      id: true,
+      electionId: true,
+      politicianId: true,
+      status: true,
+      presidentialData: { select: { id: true, synthesis: true } },
+    },
+  });
+  if (!candidacy) return { ok: false, message: "Candidature introuvable." };
+  if (candidacy.status !== "DECLARE") {
+    return { ok: false, message: "Seule une candidature déclarée porte une synthèse." };
+  }
+  if (!candidacy.politicianId) {
+    return { ok: false, message: "Aucune personnalité n'est rattachée à cette candidature." };
+  }
+  if (!candidacy.presidentialData) {
+    return { ok: false, message: "Les métadonnées présidentielles sont absentes." };
+  }
+
+  const [mandates, voteCount, measures] = await Promise.all([
+    db.mandate.findMany({
+      where: { politicianId: candidacy.politicianId },
+      select: { role: true, title: true, institution: true },
+      take: MANDATE_LIMIT,
+    }),
+    db.vote.count({ where: { politicianId: candidacy.politicianId } }),
+    db.measure.findMany({
+      where: {
+        candidacyId,
+        publicationStatus: "PUBLISHED",
+        withdrawnAt: null,
+        publishedRevision: { reviewedAt: { not: null } },
+      },
+      select: { publishedRevision: { select: { text: true } } },
+    }),
+  ]);
+  const measureTexts = measures.flatMap((measure) =>
+    measure.publishedRevision ? [measure.publishedRevision.text] : []
+  );
+  const reviewed = screenSynthesis({
+    text: rawText,
+    generatedText: rawText,
+    exemptSourceTexts: [],
+    allowedJudicialSourceTexts: [
+      ...measureTexts,
+      ...mandates.flatMap((mandate) => [mandate.role ?? mandate.title, mandate.institution ?? ""]),
+    ],
+    material: {
+      mandateCount: mandates.length,
+      voteCount,
+      measureCount: measureTexts.length,
+    },
+  });
+  if (!reviewed.ok) {
+    return {
+      ok: false,
+      message: `La synthèse ne peut pas être enregistrée : ${reviewed.detail}.`,
+    };
+  }
+
+  const reviewedAt = new Date();
+  await db.candidacyPresidential.update({
+    where: { id: candidacy.presidentialData.id },
+    data: { synthesis: reviewed.text, synthesisGeneratedAt: reviewedAt },
+  });
+  await db.auditLog.create({
+    data: {
+      action: "UPDATE",
+      entityType: "CandidacyPresidential",
+      entityId: candidacy.presidentialData.id,
+      changes: {
+        synthesis: reviewed.text,
+        previousSynthesis: candidacy.presidentialData.synthesis,
+        reviewedManually: true,
+        synthesisGeneratedAt: reviewedAt.toISOString(),
+      },
+      ipAddress: auditMeta.ipAddress,
+      userAgent: auditMeta.userAgent,
+    },
+  });
+
+  return { ok: true, electionId: candidacy.electionId };
 }

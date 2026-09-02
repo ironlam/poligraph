@@ -46,7 +46,7 @@ const FIELD_LIMIT = 240;
  * the tightest margin being 27 words against a floor of 25.
  */
 export const SYNTHESIS_MAX_WORDS = 200;
-/** Five programme themes plus a career paragraph fit without turning into a catalogue. */
+/** Four programme axes plus a career paragraph fit without turning into a catalogue. */
 export const LARGE_SYNTHESIS_MAX_WORDS = 250;
 /**
  * Safety ceiling, deliberately distinct from the editorial target.
@@ -61,7 +61,7 @@ export const SYNTHESIS_HARD_MAX_WORDS = 350;
 /** Below one hundred measures, the existing 200-word format already carries the material. */
 export const LARGE_PROGRAMME_MEASURES = 100;
 /** Enough alternatives for the model to choose without sending an entire manifesto. */
-export const MAX_PROGRAMME_CLAIMS = 5;
+export const MAX_PROGRAMME_CLAIMS = 4;
 
 /** The provider writes the career and a bounded set of programme axes. */
 export const TARGET_EMPTY_CAREER_MIN = 8;
@@ -132,6 +132,8 @@ export type SynthesisMandate = {
   institution: string | null;
   startYear: number | null;
   endYear: number | null;
+  /** The domain flag is authoritative; a closed imported row may still have no end date. */
+  isCurrent: boolean;
 };
 
 export type CandidateSynthesisInput = {
@@ -166,6 +168,15 @@ const generatedCandidateSynthesisSchema = z
       .max(MAX_PROGRAMME_CLAIMS),
   })
   .strict();
+
+/** Wider than the publication schema, but still bounded, for a moderator-editable JSON draft. */
+const reviewableCandidateSynthesisSchema = z
+  .object({
+    programmeClaims: z
+      .array(z.object({ text: z.string().trim().min(1).max(2_000) }).passthrough())
+      .max(12),
+  })
+  .passthrough();
 
 type ProgrammeReference = {
   ref: string;
@@ -220,12 +231,118 @@ function safeCorpus(value: string): string {
 
 /** Reader-facing measure wording, changed only where the house style already requires it. */
 function canonicalMeasureText(value: string): string {
-  return value.replace(/[—–]/g, "-").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[—–]/g, "-")
+    .replace(/\b1(?:er|ère|eme|ème)\b/giu, "1re")
+    .replace(/\b([2-9]|[1-9][0-9]+)(?:eme|ème)\b/giu, "$1e")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function joinFrench(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} et ${items.at(-1)}`;
+}
+
+type CanonicalMandate = SynthesisMandate & { occurrences: number };
+
+function mandateFamily(role: string, institution: string | null): string | null {
+  const plainRole = role.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const plainInstitution = (institution ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  if (/depute/u.test(plainRole) && /assemblee nationale/u.test(plainInstitution)) {
+    return "depute-assemblee-nationale";
+  }
+  if (/(?:senateur|senatrice)/u.test(plainRole) && /senat/u.test(plainInstitution)) {
+    return "senateur-senat";
+  }
+  if (/(?:depute europeen|parlement europeen)/u.test(`${plainRole} ${plainInstitution}`)) {
+    return "depute-parlement-europeen";
+  }
+  return null;
+}
+
+/** Legislative imports split one parliamentary function into one row per legislature. */
+function compactMandates(mandates: SynthesisMandate[]): CanonicalMandate[] {
+  const compacted: CanonicalMandate[] = [];
+  const families = new Map<string, number>();
+  for (const mandate of mandates) {
+    const normalized = {
+      ...mandate,
+      role: canonicalMeasureText(mandate.role),
+      institution: mandate.institution ? canonicalMeasureText(mandate.institution) : null,
+    };
+    const family = mandateFamily(normalized.role, normalized.institution);
+    const existingIndex = family ? families.get(family) : undefined;
+    if (existingIndex === undefined) {
+      compacted.push({ ...normalized, occurrences: 1 });
+      if (family) families.set(family, compacted.length - 1);
+      continue;
+    }
+
+    const existing = compacted[existingIndex]!;
+    existing.occurrences += 1;
+    if (normalized.role.length > existing.role.length) existing.role = normalized.role;
+    if (normalized.startYear !== null) {
+      existing.startYear =
+        existing.startYear === null
+          ? normalized.startYear
+          : Math.min(existing.startYear, normalized.startYear);
+    }
+    existing.endYear =
+      existing.isCurrent || normalized.isCurrent
+        ? null
+        : Math.max(existing.endYear ?? 0, normalized.endYear ?? 0) || null;
+    existing.isCurrent ||= normalized.isCurrent;
+  }
+  return compacted;
+}
+
+function lowercaseInitial(value: string): string {
+  return value.length === 0 ? value : `${value[0]!.toLocaleLowerCase("fr")}${value.slice(1)}`;
+}
+
+function containsWholePhrase(value: string, phrase: string): boolean {
+  let offset = value.indexOf(phrase);
+  while (offset >= 0) {
+    const before = value[offset - 1];
+    const after = value[offset + phrase.length];
+    if ((!before || !/\p{L}/u.test(before)) && (!after || !/\p{L}/u.test(after))) return true;
+    offset = value.indexOf(phrase, offset + 1);
+  }
+  return false;
+}
+
+function formatCanonicalMandate(mandate: CanonicalMandate): string {
+  const institution = mandate.institution ? canonicalMeasureText(mandate.institution) : null;
+  let role = canonicalMeasureText(mandate.role);
+  if (institution && role.endsWith(` - ${institution}`)) {
+    role = role.slice(0, -` - ${institution}`.length);
+  }
+  if (/^Dirigeant\(e\)$/iu.test(role) && institution) {
+    role = `Direction de ${institution}`;
+  }
+  const where = institution && !containsWholePhrase(role, institution) ? ` (${institution})` : "";
+  if (mandate.occurrences > 1 && mandate.startYear) {
+    const dates = mandate.isCurrent
+      ? `, avec des mandats enregistrés depuis ${mandate.startYear}`
+      : mandate.endYear
+        ? `, à plusieurs reprises de ${mandate.startYear} à ${mandate.endYear}`
+        : `, avec des mandats enregistrés à partir de ${mandate.startYear}`;
+    return `${role}${where}${dates}`;
+  }
+  const dates = mandate.startYear
+    ? mandate.isCurrent
+      ? ` depuis ${mandate.startYear}`
+      : mandate.endYear
+        ? mandate.startYear === mandate.endYear
+          ? ` en ${mandate.startYear}`
+          : ` de ${mandate.startYear} à ${mandate.endYear}`
+        : ` à partir de ${mandate.startYear}`
+    : "";
+  return `${role}${where}${dates}`;
 }
 
 /** Career wording is deterministic: the model cannot add a plausible but unrecorded office. */
@@ -234,24 +351,27 @@ export function buildCanonicalCareer(input: CandidateSynthesisInput): string {
   if (input.mandates.length === 0) {
     return `${name} ne dispose d'aucun mandat enregistré sur le site.`;
   }
-  const mandates = input.mandates.map((mandate) => {
-    const institution = mandate.institution ? canonicalMeasureText(mandate.institution) : null;
-    let role = canonicalMeasureText(mandate.role);
-    if (institution && role.endsWith(` - ${institution}`)) {
-      role = role.slice(0, -` - ${institution}`.length);
-    }
-    if (/^Dirigeant\(e\)$/iu.test(role) && institution) {
-      role = `Direction de ${institution}`;
-    }
-    const where = institution && !role.includes(institution) ? ` (${institution})` : "";
-    const dates = mandate.startYear
-      ? mandate.endYear
-        ? ` de ${mandate.startYear} à ${mandate.endYear}`
-        : ` depuis ${mandate.startYear}`
-      : "";
-    return `${role}${where}${dates}`;
-  });
-  return `${name} a exercé les fonctions suivantes : ${joinFrench(mandates)}.`;
+  const mandates = compactMandates(input.mandates).map((mandate) => ({
+    ...mandate,
+    text: formatCanonicalMandate(mandate),
+  }));
+  const current = mandates.filter((mandate) => mandate.isCurrent);
+  const previous = mandates.filter((mandate) => !mandate.isCurrent);
+  const sentences: string[] = [];
+  if (current.length > 0) {
+    const roles = current.map((mandate) => {
+      const text = lowercaseInitial(mandate.text);
+      return text.startsWith("direction de ") ? `à la ${text}` : text;
+    });
+    sentences.push(`${name} est actuellement ${joinFrench(roles)}.`);
+  }
+  if (previous.length > 0) {
+    const roles = previous.map((mandate) => lowercaseInitial(mandate.text));
+    sentences.push(
+      `${name} ${current.length > 0 ? "a également" : "a notamment"} été ${joinFrench(roles)}.`
+    );
+  }
+  return sentences.join(" ");
 }
 
 /**
@@ -268,11 +388,13 @@ export function buildSynthesisSystemPrompt(_material: SynthesisMaterial): string
 
 Règles absolues :
 - N'écris RIEN qui ne figure pas dans les données fournies. Aucune connaissance extérieure, aucune inférence sur les intentions, aucune prévision.
-- Ne mentionne AUCUNE affaire judiciaire, enquête, mise en examen ou condamnation, même si tu en connais. Ce n'est pas le sujet de ce texte et c'est traité ailleurs sur le site.
+- Ne mentionne AUCUNE affaire judiciaire concernant la personne, même si tu en connais. Tu peux employer le vocabulaire de la justice lorsqu'il décrit explicitement une mesure du programme fourni.
 - Aucun jugement de valeur, aucun qualificatif d'appréciation. Ni « ambitieux », ni « radical », ni « crédible », ni « clivant ». Décris, ne commente pas.
 - Aucune comparaison avec un autre candidat.
 - Ne compte pas les mesures et ne dis pas combien il y en a : le chiffre est affiché à côté et il bougera.
 - Appuie-toi sur la répartition fournie pour comprendre le corpus, sans énumérer mécaniquement ses thèmes.
+- Ne cherche pas à couvrir chaque thème. Hiérarchise les idées selon leur place dans le corpus et ne retiens une mesure isolée que si elle apporte un axe distinct.
+- Ne transforme pas les intitulés de thèmes en débuts de paragraphes administratifs comme « Les institutions... », « La justice... » ou « En matière de... ».
 - Dégage les idées directrices et les moyens récurrents. Relie plusieurs mesures lorsqu'elles forment réellement un même axe.
 - Ne juxtapose pas les mesures et ne reproduis pas leur formulation l'une après l'autre.
 - Chaque affirmation sur le programme doit citer les références exactes des mesures qui l'étayent.
@@ -380,6 +502,39 @@ function numericTokens(value: string): string[] {
   return value.match(/\b[0-9]+(?:[.,][0-9]+)?(?:\s*%)?/gu) ?? [];
 }
 
+const JUDICIAL_TERMS = [
+  { family: "mise_en_examen", pattern: /(?<!\p{L})mises? en examen(?!\p{L})/iu },
+  {
+    family: "condamnation",
+    pattern: /(?<!\p{L})condamn(?:é|ée|és|ées|ation|ations)(?!\p{L})/iu,
+  },
+  { family: "proces", pattern: /(?<!\p{L})procès(?!\p{L})/iu },
+  { family: "enquete", pattern: /(?<!\p{L})enquête judiciaire(?!\p{L})/iu },
+  { family: "garde_a_vue", pattern: /(?<!\p{L})garde à vue(?!\p{L})/iu },
+  {
+    family: "instruction",
+    pattern: /(?<!\p{L})instruction judiciaire(?!\p{L})/iu,
+  },
+  { family: "tribunal", pattern: /(?<!\p{L})(?:tribunal|tribunaux)(?!\p{L})/iu },
+  { family: "cour_appel", pattern: /(?<!\p{L})cour d['’]appel(?!\p{L})/iu },
+  { family: "parquet", pattern: /(?<!\p{L})parquets?(?!\p{L})/iu },
+  { family: "ineligibilite", pattern: /(?<!\p{L})inéligibilité(?!\p{L})/iu },
+] as const;
+
+function findJudicialTerms(text: string) {
+  const matches: Array<{ family: string; match: string }> = [];
+  for (const term of JUDICIAL_TERMS) {
+    const match = term.pattern.exec(text);
+    if (match) matches.push({ family: term.family, match: match[0] });
+  }
+  return matches;
+}
+
+function sourceCarriesJudicialFamily(sourceTexts: readonly string[], family: string): boolean {
+  const term = JUDICIAL_TERMS.find((candidate) => candidate.family === family);
+  return Boolean(term && sourceTexts.some((source) => term.pattern.test(source)));
+}
+
 function programmeSafetyFloor(measureCount: number): number {
   if (measureCount <= 2) return 15;
   if (measureCount <= 6) return 30;
@@ -397,9 +552,36 @@ function isComparativeClaim(value: string): boolean {
 function stripEvidenceMarkers(value: string): string {
   return value
     .replace(/\s*[([]\s*M[1-9][0-9]*(?:\s*[,;]\s*M[1-9][0-9]*)*\s*[)\]]/gu, " ")
-    .replace(/\s+M[1-9][0-9]*(?:\s*[,;]\s*M[1-9][0-9]*)*(?=[,.;:!?]|$)/gu, "")
+    .replace(/\s+M[1-9][0-9]*(?:\s*[,;]\s*M[1-9][0-9]*)*(?=\s*[,.;:!?]|$)/gu, "")
     .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?])/gu, "$1")
     .trim();
+}
+
+/**
+ * Turns a structurally usable provider response into an admin-review proposal.
+ *
+ * This deliberately does not make the text publishable: the strict screen and grounding pass may
+ * still reject it. Its sole purpose is to avoid throwing away readable work when a moderator can
+ * correct the precise defect in the editor. The career remains deterministic even in that draft,
+ * so an invented office never reaches the review surface.
+ */
+export function formatCandidateSynthesisProposal(
+  raw: unknown,
+  input: CandidateSynthesisInput
+): string | null {
+  const parsed = reviewableCandidateSynthesisSchema.safeParse(raw);
+  if (!parsed.success) return null;
+
+  const claims = parsed.data.programmeClaims
+    .map((claim) => stripEvidenceMarkers(claim.text))
+    .filter(Boolean);
+  if (input.measures.length > 0 && claims.length === 0) return null;
+
+  return [
+    buildCanonicalCareer(input),
+    ...(input.measures.length === 0 ? [EMPTY_PROGRAMME_SENTENCE] : claims),
+  ].join("\n\n");
 }
 
 export function screenCandidateSynthesis(
@@ -563,6 +745,10 @@ export function screenCandidateSynthesis(
     text: `${career}\n\n${programmeText}`,
     generatedText: `${career}\n\n${programmeText}`,
     exemptSourceTexts: [],
+    allowedJudicialSourceTexts: [
+      ...input.measures.map((measure) => measure.text),
+      ...input.mandates.flatMap((mandate) => [mandate.role, mandate.institution ?? ""]),
+    ],
     material: synthesisMaterial(input),
   });
   return screened.ok ? { ...screened, programmeClaims: normalizedClaims } : screened;
@@ -672,6 +858,7 @@ export function screenSynthesis({
   text: raw,
   generatedText,
   exemptSourceTexts,
+  allowedJudicialSourceTexts = [],
   material = {
     mandateCount: SUBSTANTIAL_MANDATES,
     voteCount: SUBSTANTIAL_VOTES,
@@ -684,6 +871,8 @@ export function screenSynthesis({
   generatedText: string;
   /** One canonical source formulation per mandatory theme, excluded from the flexible maximum. */
   exemptSourceTexts: string[];
+  /** Prompt sources allowed to supply institutional judicial vocabulary. */
+  allowedJudicialSourceTexts?: readonly string[];
   /** Omitted, the strictest ordinary floor applies. */
   material?: SynthesisMaterial;
 }): SynthesisScreen {
@@ -707,12 +896,15 @@ export function screenSynthesis({
   // non-word character. `\binéligibilité\b` therefore fails to match the very word it
   // names, which is how this pattern first shipped. Every term here is accented or
   // followed by one, so the whole family was affected.
-  const judicial =
-    /(?<!\p{L})(mises? en examen|condamn(?:é|ée|és|ées|ation|ations)|procès|enquête judiciaire|garde à vue|instruction judiciaire|tribunal|cour d'appel|parquet|inéligibilité)(?!\p{L})/iu.exec(
-      generatedText
-    );
-  if (judicial) {
-    return { ok: false, reason: "judiciaire", detail: `mention « ${judicial[0]} »` };
+  const unsupportedJudicial = findJudicialTerms(generatedText).find(
+    (judicial) => !sourceCarriesJudicialFamily(allowedJudicialSourceTexts, judicial.family)
+  );
+  if (unsupportedJudicial) {
+    return {
+      ok: false,
+      reason: "judiciaire",
+      detail: `mention « ${unsupportedJudicial.match} »`,
+    };
   }
 
   const words = wordCount(text);

@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CandidatesListClient, type CandidateRowView } from "../CandidatesListClient";
 
-type ActionResult = { ok: true } | { ok: false; message: string };
+type ActionResult =
+  | { ok: true; text?: string; reviewWarning?: string }
+  | { ok: false; message: string };
 
 const setCandidacyPublicationMock = vi.fn<(input: unknown) => Promise<ActionResult>>(async () => ({
   ok: true,
@@ -12,11 +14,12 @@ const setProgramEditionPublicationMock = vi.fn<(input: unknown) => Promise<Actio
   async () => ({ ok: true })
 );
 const regenerateCandidateSynthesisMock = vi.fn<(input: unknown) => Promise<ActionResult>>(
-  async () => ({ ok: true })
+  async () => ({ ok: true, text: "Une proposition de synthèse suffisamment développée." })
 );
 const setCandidacyStatusMock = vi.fn<(input: unknown) => Promise<ActionResult>>(async () => ({
   ok: true,
 }));
+const fetchMock = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../actions", () => ({
@@ -49,6 +52,7 @@ function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
       firstPublishedAt: new Date("2026-08-01T00:00:00.000Z"),
     },
     synthesisState: "CURRENT",
+    synthesis: "Une synthèse existante relue par la rédaction.",
     synthesisGeneratedAt: new Date("2026-08-07T00:00:00.000Z"),
     editions: [
       { id: "ed-1", label: "Premiers engagements", version: 1, publicationStatus: "DRAFT" },
@@ -59,6 +63,8 @@ function row(over: Partial<CandidateRowView> = {}): CandidateRowView {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 });
 
 describe("CandidatesListClient", () => {
@@ -77,7 +83,7 @@ describe("CandidatesListClient", () => {
     render(<CandidatesListClient rows={[row({ publicationStatus: "PUBLISHED" })]} />);
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Dépublier" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dépublier la fiche" })).toBeInTheDocument();
   });
 
   it("signale une candidature publiée dont la personnalité reste masquée", () => {
@@ -195,6 +201,7 @@ describe("CandidatesListClient", () => {
               firstPublishedAt: null,
             },
             synthesisState: "MISSING",
+            synthesis: null,
             synthesisGeneratedAt: null,
             editions: [],
           }),
@@ -202,21 +209,67 @@ describe("CandidatesListClient", () => {
       />
     );
 
-    expect(screen.getByText("Aucune")).toBeInTheDocument();
-    expect(screen.getByText("Métadonnées absentes")).toBeInTheDocument();
-    expect(screen.getByText("Aucune édition")).toBeInTheDocument();
+    expect(screen.getByText("Aucune mesure prête")).toBeInTheDocument();
+    expect(screen.getByText("Fiche sans métadonnées")).toBeInTheDocument();
+    expect(screen.getByText("Aucune édition de programme.")).toBeInTheDocument();
     expect(screen.getByText("Absente")).toBeInTheDocument();
   });
 
-  it("régénère la synthèse d'une candidature depuis la liste", async () => {
+  it("ouvre la proposition générée sans la publier", async () => {
     const user = userEvent.setup();
     render(<CandidatesListClient rows={[row()]} />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
-    );
+    await user.click(screen.getByRole("button", { name: "Générer une proposition" }));
 
     expect(regenerateCandidateSynthesisMock).toHaveBeenCalledWith({ candidacyId: "cand-1" });
+    expect(await screen.findByLabelText("Texte public")).toHaveValue(
+      "Une proposition de synthèse suffisamment développée."
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("ouvre aussi une proposition refusée avec le motif à corriger", async () => {
+    regenerateCandidateSynthesisMock.mockResolvedValueOnce({
+      ok: true,
+      text: "Une proposition lisible qui doit encore être corrigée avant publication.",
+      reviewWarning: "Cette proposition n'a pas passé le contrôle automatique : mention parquet.",
+    });
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.click(screen.getByRole("button", { name: "Générer une proposition" }));
+
+    expect(await screen.findByLabelText("Texte public")).toHaveValue(
+      "Une proposition lisible qui doit encore être corrigée avant publication."
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Cette proposition n'a pas passé le contrôle automatique : mention parquet."
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("permet de modifier puis d'enregistrer la synthèse existante", async () => {
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.click(screen.getByRole("button", { name: "Modifier le texte" }));
+    const editor = screen.getByLabelText("Texte public");
+    expect(editor).toHaveValue("Une synthèse existante relue par la rédaction.");
+    await user.clear(editor);
+    await user.type(
+      editor,
+      "Cette synthèse corrigée présente les principaux axes du programme documenté et leurs moyens."
+    );
+    await user.click(screen.getByRole("button", { name: "Enregistrer la synthèse" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/candidats/cand-1/synthesis", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        synthesis:
+          "Cette synthèse corrigée présente les principaux axes du programme documenté et leurs moyens.",
+      }),
+    });
   });
 
   // Le bug d'origine : la synthèse d'Arthaud, écrite sur une candidature vide, niait les cinq
@@ -240,9 +293,7 @@ describe("CandidatesListClient", () => {
     // son programme. Le bouton la porte aussi, plutôt que de laisser l'action répondre par un refus.
     render(<CandidatesListClient rows={[row({ status: "PRESSENTI" })]} />);
 
-    expect(
-      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Générer une proposition" })).toBeDisabled();
   });
 
   it("affiche l'échec d'une régénération au lieu de le taire", async () => {
@@ -253,9 +304,7 @@ describe("CandidatesListClient", () => {
     const user = userEvent.setup();
     render(<CandidatesListClient rows={[row()]} />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Régénérer la synthèse de Alix Démonstration" })
-    );
+    await user.click(screen.getByRole("button", { name: "Générer une proposition" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Texte refusé par le contrôle : tiret_long."

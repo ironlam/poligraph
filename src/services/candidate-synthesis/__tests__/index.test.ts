@@ -129,10 +129,45 @@ describe("generateCandidateSynthesis", () => {
           name: "candidate_synthesis",
           schema: {
             required: ["career", "programmeClaims"],
+            properties: {
+              programmeClaims: { maxItems: 4 },
+            },
           },
         },
       },
     });
+  });
+
+  it("accepte le vocabulaire judiciaire lorsqu'il provient d'une mesure publiée", async () => {
+    const judicialAxis =
+      "Sur la justice, le programme propose de créer un parquet financier européen aux compétences élargies pour traiter les dossiers concernés.";
+    dbMock.measure.findMany.mockResolvedValue([
+      {
+        theme: "SECURITE_JUSTICE",
+        publishedRevision: {
+          text: "Créer des parquets financiers européens aux compétences élargies.",
+        },
+      },
+    ]);
+    callMistralMock.mockImplementation((messages: Array<{ content: string }>) => {
+      const grounding = messages.some((message) =>
+        message.content.includes("Vérifie si chaque affirmation")
+      );
+      return Promise.resolve({
+        text: grounding
+          ? groundingOutput()
+          : providerOutput({
+              programmeClaims: [{ text: judicialAxis, measureRefs: ["M1"] }],
+            }),
+        model: "mistral-large-latest",
+      });
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", { persist: true });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
   });
 
   it("refuse une candidature qui n'est pas déclarée", async () => {
@@ -265,6 +300,50 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
+  it("rend à l'admin un brouillon exploitable que l'étayage a refusé", async () => {
+    callMistralMock.mockImplementation((messages: Array<{ content: string }>) => {
+      const grounding = messages.some((message) =>
+        message.content.includes("Vérifie si chaque affirmation")
+      );
+      return Promise.resolve({
+        text: grounding ? groundingOutput(false) : providerOutput(),
+        model: "mistral-large-latest",
+      });
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", {
+      persist: false,
+      returnRejectedProposal: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      persisted: false,
+      reviewWarning: expect.stringContaining("contrôle d'étayage refusé"),
+    });
+    expect(result.ok && result.text).toContain(PROGRAMME_AXIS);
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("ne persiste jamais un brouillon refusé même si l'option de relecture est demandée", async () => {
+    callMistralMock.mockResolvedValue({
+      text: JSON.stringify({ career: `${CAREER}.`, programmeClaims: [] }),
+      model: "mistral-large-latest",
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", {
+      persist: true,
+      returnRejectedProposal: true,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "refuse" });
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it("gère un programme vide sans lancer de contrôle d'étayage", async () => {
     dbMock.measure.findMany.mockResolvedValue([]);
     callMistralMock.mockResolvedValue({
@@ -279,5 +358,60 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update.mock.calls[0]![0].data.synthesis).toContain(
       "Aucune mesure n'est publiée"
     );
+  });
+});
+
+describe("saveReviewedCandidateSynthesis", () => {
+  it("enregistre explicitement le texte relu et son audit", async () => {
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}.\n\n${PROGRAMME_AXIS}`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text, {
+      ipAddress: "203.0.113.10",
+      userAgent: "Poligraph test",
+    });
+
+    expect(result).toEqual({ ok: true, electionId: "elec-1" });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledWith({
+      where: { id: "pres-1" },
+      data: { synthesis: text, synthesisGeneratedAt: expect.any(Date) },
+    });
+    expect(dbMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ synthesis: text, reviewedManually: true }),
+          ipAddress: "203.0.113.10",
+          userAgent: "Poligraph test",
+        }),
+      })
+    );
+  });
+
+  it("accepte un parquet lorsque le terme figure dans les mesures publiées", async () => {
+    dbMock.measure.findMany.mockResolvedValue([
+      {
+        publishedRevision: {
+          text: "Créer un parquet financier européen aux compétences élargies.",
+        },
+      },
+    ]);
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}. Le programme propose de créer un parquet financier européen aux compétences élargies pour les dossiers concernés.`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
+  });
+
+  it("refuse une mention judiciaire absente du corpus", async () => {
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}. Le parquet a ouvert une enquête judiciaire concernant la candidature et ses responsables.`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import {
   buildCandidateSynthesisGroundingPrompt,
   buildCanonicalCareer,
   buildSynthesisSystemPrompt,
+  formatCandidateSynthesisProposal,
   isSynthesisContradictedByMeasures,
   screenCandidateSynthesis,
   screenSynthesis as screenSynthesisSegments,
@@ -33,8 +34,20 @@ const BASE: CandidateSynthesisInput = {
   candidateName: "Jeanne Martin",
   partyLabel: "Parti fictif",
   mandates: [
-    { role: "Députée", institution: "Assemblée nationale", startYear: 2017, endYear: null },
-    { role: "Maire", institution: "Villeneuve", startYear: 2008, endYear: 2017 },
+    {
+      role: "Députée",
+      institution: "Assemblée nationale",
+      startYear: 2017,
+      endYear: null,
+      isCurrent: true,
+    },
+    {
+      role: "Maire",
+      institution: "Villeneuve",
+      startYear: 2008,
+      endYear: 2017,
+      isCurrent: false,
+    },
   ],
   voteCount: 421,
   measures: [
@@ -61,8 +74,108 @@ function screenSynthesis(raw: string, material?: SynthesisMaterial) {
 describe("buildCandidateSynthesisPrompt", () => {
   it("construit le parcours uniquement avec les mandats enregistrés", () => {
     expect(buildCanonicalCareer(BASE)).toBe(
-      "Jeanne Martin a exercé les fonctions suivantes : Députée (Assemblée nationale) depuis 2017 et Maire (Villeneuve) de 2008 à 2017."
+      "Jeanne Martin est actuellement députée (Assemblée nationale) depuis 2017. Jeanne Martin a également été maire (Villeneuve) de 2008 à 2017."
     );
+  });
+
+  it("fusionne les mandats parlementaires découpés par législature", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      candidateName: "Delphine Batho",
+      mandates: [
+        {
+          role: "Députée de la 2ème circonscription",
+          institution: "Assemblée nationale",
+          startYear: 2024,
+          endYear: null,
+          isCurrent: true,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2022,
+          endYear: 2024,
+          isCurrent: false,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2017,
+          endYear: 2022,
+          isCurrent: false,
+        },
+        {
+          role: "Députée de la 2e circonscription",
+          institution: "Assemblée nationale",
+          startYear: 2013,
+          endYear: 2017,
+          isCurrent: false,
+        },
+        {
+          role: "Ministre de l'Écologie",
+          institution: "Gouvernement Jean-Marc Ayrault n°2",
+          startYear: 2012,
+          endYear: 2013,
+          isCurrent: false,
+        },
+        {
+          role: "député français",
+          institution: "Assemblée nationale",
+          startYear: 2007,
+          endYear: 2012,
+          isCurrent: false,
+        },
+      ],
+    });
+
+    expect(career).toBe(
+      "Delphine Batho est actuellement députée de la 2e circonscription (Assemblée nationale), avec des mandats enregistrés depuis 2007. Delphine Batho a également été ministre de l'Écologie (Gouvernement Jean-Marc Ayrault n°2) de 2012 à 2013."
+    );
+    expect(career.match(/Assemblée nationale/g)).toHaveLength(1);
+  });
+
+  it("utilise isCurrent même quand une fin de mandat importée n'a pas de date", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      mandates: [
+        {
+          role: "Député français",
+          institution: "Assemblée nationale",
+          startYear: 2022,
+          endYear: null,
+          isCurrent: false,
+        },
+      ],
+    });
+
+    expect(career).not.toContain("actuellement");
+    expect(career).not.toContain("depuis 2022");
+    expect(career).toContain("à partir de 2022");
+  });
+
+  it("fusionne aussi les mandats successifs d'une sénatrice", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      mandates: [
+        {
+          role: "Sénatrice",
+          institution: "Sénat",
+          startYear: 2023,
+          endYear: null,
+          isCurrent: true,
+        },
+        {
+          role: "Sénatrice",
+          institution: "Sénat",
+          startYear: 2017,
+          endYear: 2023,
+          isCurrent: false,
+        },
+      ],
+    });
+
+    expect(career.match(/Sénat/g)).toHaveLength(1);
+    expect(career).toContain("mandats enregistrés depuis 2017");
   });
 
   it("groups measures by theme under their French label", () => {
@@ -170,6 +283,29 @@ describe("buildCandidateSynthesisPrompt", () => {
   });
 });
 
+describe("formatCandidateSynthesisProposal", () => {
+  it("conserve un brouillon éditable sans reprendre un parcours inventé", () => {
+    const proposal = formatCandidateSynthesisProposal(
+      {
+        career: "Jeanne Martin a exercé une fonction absente des données.",
+        programmeClaims: [
+          {
+            text: "Les mesures rapprochent les soins de proximité et les dessertes ferroviaires. (M1, M3)",
+          },
+        ],
+      },
+      BASE
+    );
+
+    expect(proposal).toContain(buildCanonicalCareer(BASE));
+    expect(proposal).toContain(
+      "Les mesures rapprochent les soins de proximité et les dessertes ferroviaires."
+    );
+    expect(proposal).not.toContain("fonction absente");
+    expect(proposal).not.toContain("M1");
+  });
+});
+
 describe("screenCandidateSynthesis", () => {
   const career = words(30);
   const healthAxis =
@@ -193,6 +329,44 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).toContain("les engagements rapprochent");
     expect(result.ok && result.text).toContain("dessertes ferroviaires");
     expect(result.ok && result.text).not.toContain("thèmes suivants");
+  });
+
+  it("retire les espaces laissés devant la ponctuation par les marqueurs de preuve", () => {
+    const raw = output([
+      {
+        text: `${healthAxis} M1 .`,
+        measureRefs: ["M1", "M2"],
+      },
+      { text: `${transportAxis} M3 .`, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toMatch(/\s+[.,;:!?]/u);
+  });
+
+  it("accepte le vocabulaire judiciaire lorsqu'il provient d'une mesure citée", () => {
+    const input: CandidateSynthesisInput = {
+      ...BASE,
+      measures: [
+        {
+          theme: "SECURITE_JUSTICE",
+          text: "Créer des parquets financiers européens aux compétences élargies.",
+        },
+      ],
+    };
+    const result = screenCandidateSynthesis(
+      output([
+        {
+          text: "Sur la justice, le programme propose de créer un parquet financier européen aux compétences élargies pour traiter les dossiers concernés.",
+          measureRefs: ["M1"],
+        },
+      ]),
+      input
+    );
+
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("refuse l'ancien sommaire de thèmes", () => {
@@ -383,6 +557,13 @@ describe("buildSynthesisSystemPrompt", () => {
     }
   });
 
+  it("demande de hiérarchiser les axes sans couvrir chaque thème", () => {
+    const prompt = buildSynthesisSystemPrompt(FULL);
+
+    expect(prompt).toContain("Ne cherche pas à couvrir chaque thème");
+    expect(prompt).toContain("Hiérarchise");
+  });
+
   it("accorde cent mots au plus à un parcours entièrement documenté", () => {
     expect(synthesisTargetRange(FULL)).toEqual({ min: 30, max: 100 });
   });
@@ -428,7 +609,8 @@ describe("buildSynthesisSystemPrompt", () => {
 
   it("garde les règles absolues quelle que soit la matière", () => {
     const prompt = buildSynthesisSystemPrompt(BARE);
-    expect(prompt).toContain("Ne mentionne AUCUNE affaire judiciaire");
+    expect(prompt).toContain("Ne mentionne AUCUNE affaire judiciaire concernant la personne");
+    expect(prompt).toContain("vocabulaire de la justice");
     expect(prompt).toContain("Aucun tiret cadratin");
   });
 });
@@ -494,6 +676,22 @@ describe("screenSynthesis", () => {
     // "procession" contains "procès" only if the pattern forgets its word boundaries.
     const result = screenSynthesis(`Elle a ouvert la procession du 14 juillet. ${words(120)}`);
     expect(result.ok).toBe(true);
+  });
+
+  it("refuse chaque famille judiciaire absente des sources", () => {
+    const result = screenSynthesisSegments({
+      text: `Le programme prévoit un parquet spécialisé sans évoquer de condamnation individuelle. ${words(40)}`,
+      generatedText:
+        "Le programme prévoit un parquet spécialisé sans évoquer de condamnation individuelle.",
+      exemptSourceTexts: [],
+      allowedJudicialSourceTexts: ["Créer un parquet financier spécialisé."],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "judiciaire",
+      detail: "mention « condamnation »",
+    });
   });
 
   it.each(["—", "–"])("rejects the long dash %s", (dash) => {
