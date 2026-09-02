@@ -2,9 +2,52 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { parseScrutinMetadata } from "@/services/sync/scrutins-senat";
+import {
+  getNextSenateCursor,
+  parseScrutinMetadata,
+  shouldSaveSenateCursor,
+} from "@/services/sync/scrutins-senat";
 
 describe("import des scrutins publics du Sénat", () => {
+  it("garde le curseur derrière un scrutin rejeté au milieu d'une liste descendante", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 105, outcome: "PROCESSED" },
+        { number: 104, outcome: "RETRY" },
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "PROCESSED" },
+      ])
+    ).toBe(103);
+  });
+
+  it("avance au plus grand scrutin quand aucun numéro ne doit être retenté", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "PROCESSED" },
+      ])
+    ).toBe(103);
+  });
+
+  it("conserve le curseur courant si le prochain scrutin doit être retenté", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "RETRY" },
+      ])
+    ).toBe(100);
+  });
+
+  it("réinitialise un ancien curseur quand un import forcé échoue dès le numéro 1", () => {
+    const nextCursor = getNextSenateCursor(0, [{ number: 1, outcome: "RETRY" }]);
+
+    expect(nextCursor).toBe(0);
+    expect(shouldSaveSenateCursor(false, true, 0, nextCursor)).toBe(true);
+  });
+
   it("extrait le total de contrôle officiel sans supposer 348 sièges", () => {
     const html = `
       <p class="page-lead">Projet de loi de test</p>
