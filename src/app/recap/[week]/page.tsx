@@ -13,6 +13,20 @@ import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 
 export const revalidate = 600;
 
+// Empty on purpose: the archive grows by one week every week,
+// so nothing is prerendered at build time. The mere
+// presence of generateStaticParams is what makes the route ISR-cacheable instead
+// of fully dynamic, so the `revalidate` above finally applies. Each URL is
+// rendered on first request, then served from cache until the next revalidation.
+// Same pattern and same reasoning as /parlement/votes/[slug].
+//
+// Only safe while this route does NOT read `searchParams`: that would keep it
+// dynamic whatever it declares, and combining the two with the "use cache" data
+// functions triggers DYNAMIC_SERVER_USAGE.
+export async function generateStaticParams() {
+  return [];
+}
+
 interface PageProps {
   params: Promise<{ week: string }>;
 }

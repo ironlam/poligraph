@@ -16,6 +16,20 @@ import { formatDate } from "@/lib/utils";
 
 export const revalidate = 86400;
 
+// Empty on purpose: the guide slugs live in the database,
+// so nothing is prerendered at build time. The mere
+// presence of generateStaticParams is what makes the route ISR-cacheable instead
+// of fully dynamic, so the `revalidate` above finally applies. Each URL is
+// rendered on first request, then served from cache until the next revalidation.
+// Same pattern and same reasoning as /parlement/votes/[slug].
+//
+// Only safe while this route does NOT read `searchParams`: that would keep it
+// dynamic whatever it declares, and combining the two with the "use cache" data
+// functions triggers DYNAMIC_SERVER_USAGE.
+export async function generateStaticParams() {
+  return [];
+}
+
 type PageProps = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
