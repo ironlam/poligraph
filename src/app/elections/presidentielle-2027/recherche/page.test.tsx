@@ -51,8 +51,25 @@ describe("page complète de recherche présidentielle", () => {
     );
   });
 
+  it("ne présente pas un sous-thème valide comme introuvable lorsque le quota est atteint", async () => {
+    render(
+      await PresidentialSearchPage({
+        searchParams: Promise.resolve({ "sous-theme": "acces-aux-soins", limite: "1" }),
+      })
+    );
+
+    expect(search).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Recherche momentanément indisponible" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Sous-thème introuvable")).not.toBeInTheDocument();
+  });
+
   it("affiche le texte complet et le lien canonique de la mesure", async () => {
     render(await PresidentialSearchPage({ searchParams: Promise.resolve({ q: "logement" }) }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Résultats pour « logement »" })
+    ).toBeInTheDocument();
     const link = screen.getByRole("link", {
       name: /Construire davantage de logements accessibles sur tout le territoire/,
     });
@@ -130,7 +147,12 @@ describe("page complète de recherche présidentielle", () => {
           sourceUrl: null,
         },
       ],
-      filter: { type: "subtopic", slug: "acces-aux-soins", label: "Accès aux soins" },
+      filter: {
+        type: "subtopic",
+        slug: "acces-aux-soins",
+        label: "Accès aux soins",
+        theme: "SANTE",
+      },
       page: 1,
       totalPages: 2,
     });
@@ -150,6 +172,23 @@ describe("page complète de recherche présidentielle", () => {
       "href",
       "/elections/presidentielle-2027/recherche?sous-theme=acces-aux-soins&page=2"
     );
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Mesures sur « Accès aux soins »" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sous-thème")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Santé" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/themes/sante"
+    );
+
+    const measureLink = screen.getByRole("link", { name: "Ouvrir des centres de santé" });
+    const newSearch = screen.getByRole("search");
+    expect(
+      screen.getByRole("searchbox", { name: /mesure, un thème ou un candidat/ })
+    ).toBeVisible();
+    expect(
+      measureLink.compareDocumentPosition(newSearch) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("présente un thème comme un résultat sans message vide ni promesse de comparabilité", async () => {

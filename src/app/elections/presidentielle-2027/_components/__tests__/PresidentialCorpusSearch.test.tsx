@@ -69,6 +69,23 @@ describe("PresidentialCorpusSearch", () => {
     });
   }
 
+  it("présente une recherche compacte avec son périmètre et une aide accessible", () => {
+    render(<PresidentialCorpusSearch />);
+
+    expect(screen.queryByText("Chercher dans le corpus 2027")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", {
+        name: "Recherche dans les programmes de la présidentielle 2027",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Recherche dans les contenus publiés par Poligraph.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Le texte saisi peut être transmis/).closest("details")
+    ).not.toHaveAttribute("open");
+  });
+
   it("ne lance pas de requête sous deux caractères", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

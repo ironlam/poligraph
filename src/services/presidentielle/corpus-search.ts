@@ -68,7 +68,7 @@ export type PresidentialCorpusSearchResult = {
   measures: PresidentialMeasureSearchResult[];
   /** Unified hydrated order used when a retrieval strategy must be evaluated without UI grouping. */
   rankedResults?: Array<PresidentialCandidacySearchResult | PresidentialMeasureSearchResult>;
-  filter?: { type: "subtopic"; slug: string; label: string };
+  filter?: { type: "subtopic"; slug: string; label: string; theme: ThemeCategory };
   page?: number;
   totalPages?: number;
   searchStrategy?: "lexical" | "semantic" | "hybrid" | "lexical-fallback";
@@ -143,7 +143,7 @@ export async function searchPresidentialCorpus(
     const { listPublicPresidentialMeasures } = await import("@/lib/data/measures");
     const subtopic = await db.measureSubtopic.findUnique({
       where: { slug: subtopicSlug },
-      select: { slug: true, label: true, active: true },
+      select: { slug: true, label: true, theme: true, active: true },
     });
     if (subtopic === null || !subtopic.active) {
       return { query: "", total: 0, subjects: [], candidacies: [], measures: [] };
@@ -188,7 +188,12 @@ export async function searchPresidentialCorpus(
       subjects: [],
       candidacies: [],
       measures,
-      filter: { type: "subtopic", slug: subtopic.slug, label: subtopic.label },
+      filter: {
+        type: "subtopic",
+        slug: subtopic.slug,
+        label: subtopic.label,
+        theme: subtopic.theme,
+      },
       page,
       totalPages,
     };

@@ -168,11 +168,11 @@ export function PresidentialCorpusSearch() {
             : "";
 
   return (
-    <section aria-labelledby="corpus-search-title" className="mx-auto w-full max-w-3xl">
-      <h2 id="corpus-search-title" className="font-display text-2xl font-extrabold tracking-tight">
-        Chercher dans le corpus 2027
-      </h2>
-      <div ref={rootRef} className="relative mt-4">
+    <section
+      aria-label="Recherche dans les programmes de la présidentielle 2027"
+      className="mx-auto w-full max-w-3xl"
+    >
+      <div ref={rootRef} className="relative">
         <form
           role="search"
           onSubmit={(event) => {
@@ -181,7 +181,7 @@ export function PresidentialCorpusSearch() {
           }}
         >
           <label htmlFor="presidential-corpus-query" className="mb-2 block font-bold">
-            Rechercher un thème, une mesure ou une personnalité suivie
+            Rechercher une mesure, un thème ou un candidat
           </label>
           <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
             <Search aria-hidden="true" className="ml-4 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -192,7 +192,7 @@ export function PresidentialCorpusSearch() {
               inputMode="search"
               disabled={!hydrated}
               value={query}
-              placeholder="logement, retraites, une personnalité…"
+              placeholder="Ex. Que proposent les candidats sur les retraites ?"
               autoComplete="off"
               role="combobox"
               aria-autocomplete="list"
@@ -409,10 +409,19 @@ export function PresidentialCorpusSearch() {
           </div>
         )}
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Recherche limitée aux thématiques et contenus publics de l{"'"}élection présidentielle 2027.
-        Une absence de résultat ne prouve pas qu{"'"}une proposition n{"'"}existe pas.
-      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+        <span>Recherche dans les contenus publiés par Poligraph.</span>
+        <details>
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+            Comment fonctionne la recherche ?
+          </summary>
+          <p className="max-w-2xl pb-2 leading-relaxed">
+            Le texte saisi peut être transmis à Mistral AI pour retrouver et ordonner les résultats
+            par proximité textuelle. Ce classement porte sur la pertinence des résultats, jamais sur
+            les candidats ou leurs propositions. L’IA ne rédige pas la réponse.
+          </p>
+        </details>
+      </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {liveMessage}
       </div>

@@ -21,6 +21,50 @@ export const metadata: Metadata = {
   alternates: { canonical: PAGE_PATH },
 };
 
+function CorpusSearchForm({ query, compact = false }: { query: string; compact?: boolean }) {
+  return (
+    <section
+      aria-labelledby="full-corpus-search-title"
+      className={compact ? "border-t border-border pt-6" : "mt-6"}
+    >
+      <h2 id="full-corpus-search-title" className="font-display text-xl font-extrabold">
+        {compact ? "Rechercher autre chose" : "Rechercher dans le corpus"}
+      </h2>
+      <form role="search" className="mt-3" action={PAGE_PATH}>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            id="full-corpus-query"
+            name="q"
+            type="search"
+            aria-label="Rechercher une mesure, un thème ou un candidat"
+            defaultValue={query}
+            placeholder="Posez une question ou saisissez un sujet…"
+            aria-describedby="full-corpus-ai-notice"
+            className="min-h-12 min-w-0 flex-1 rounded-xl border border-border bg-card px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          />
+          <button
+            type="submit"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-5 font-bold text-primary-foreground hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            Rechercher
+          </button>
+        </div>
+      </form>
+      <details id="full-corpus-ai-notice" className="mt-2 text-sm text-muted-foreground">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-primary hover:underline">
+          Comment fonctionne la recherche ?
+        </summary>
+        <p className="max-w-3xl pb-2 leading-relaxed">
+          Le texte saisi peut être transmis à Mistral AI pour retrouver et ordonner les résultats
+          par proximité textuelle. Ce classement porte sur la pertinence des résultats, jamais sur
+          les candidats ou leurs propositions. L’IA ne rédige pas la réponse.{" "}
+          <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
+        </p>
+      </details>
+    </section>
+  );
+}
+
 export default async function PresidentialSearchPage({
   searchParams,
 }: {
@@ -53,6 +97,9 @@ export default async function PresidentialSearchPage({
   const hasResults = result !== null && result.total > 0;
   const hasSearch = query.length >= 2 || subtopicSlug !== undefined;
   const resultLabel = result?.query || query;
+  const isSubtopicBrowse = subtopicSlug !== undefined;
+  const subtopicFilter = result?.filter?.type === "subtopic" ? result.filter : null;
+  const parentTheme = subtopicFilter?.theme ?? result?.measures[0]?.theme;
   const measuresByThemeAndCandidate = new Map<
     NonNullable<typeof result>["measures"][number]["theme"],
     Map<string, NonNullable<typeof result>["measures"]>
@@ -94,53 +141,58 @@ export default async function PresidentialSearchPage({
         items={[
           { label: "Élections", href: "/elections" },
           { label: "Présidentielle 2027", href: "/elections/presidentielle-2027" },
-          { label: "Recherche" },
+          { label: subtopicFilter?.label ?? "Recherche" },
         ]}
       />
       <div className="mx-auto max-w-4xl">
         <Link
-          href="/elections/presidentielle-2027"
+          href={
+            isSubtopicBrowse && parentTheme
+              ? `/elections/presidentielle-2027/themes/${themeToSlug(parentTheme)}`
+              : "/elections/presidentielle-2027"
+          }
           className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Retour au hub
+          {isSubtopicBrowse && parentTheme ? "Retour à la thématique" : "Retour au hub"}
         </Link>
-        <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-          Résultats dans le corpus 2027
-        </h1>
+        <header>
+          {isSubtopicBrowse && !isRateLimited && (
+            <p className="text-xs font-bold uppercase tracking-widest text-brand-on-surface">
+              Sous-thème
+            </p>
+          )}
+          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+            {isRateLimited
+              ? "Recherche momentanément indisponible"
+              : isSubtopicBrowse
+                ? subtopicFilter
+                  ? `Mesures sur « ${subtopicFilter.label} »`
+                  : "Sous-thème introuvable"
+                : query.length >= 2
+                  ? `Résultats pour « ${resultLabel} »`
+                  : "Rechercher dans les programmes 2027"}
+          </h1>
+          {isSubtopicBrowse && subtopicFilter && (
+            <p className="mt-3 text-base text-muted-foreground" role="status" aria-live="polite">
+              {result?.total ?? 0} mesure{result?.total === 1 ? "" : "s"} publiée
+              {result?.total === 1 ? "" : "s"}
+              {parentTheme && (
+                <>
+                  {" dans "}
+                  <Link
+                    href={`/elections/presidentielle-2027/themes/${themeToSlug(parentTheme)}`}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    {THEME_CATEGORY_LABELS[parentTheme]}
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
+        </header>
 
-        <form role="search" className="mt-6" action={PAGE_PATH}>
-          <label htmlFor="full-corpus-query" className="block font-bold">
-            Rechercher une mesure ou une personnalité suivie
-          </label>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              id="full-corpus-query"
-              name="q"
-              type="search"
-              defaultValue={query}
-              placeholder="logement, retraites, une personnalité…"
-              aria-describedby="full-corpus-examples full-corpus-ai-notice"
-              className="min-h-12 min-w-0 flex-1 rounded-xl border border-border bg-card px-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            />
-            <button
-              type="submit"
-              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-5 font-bold text-primary-foreground hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              Rechercher
-            </button>
-          </div>
-        </form>
-        <p id="full-corpus-examples" className="mt-3 text-sm text-muted-foreground">
-          Exemples : « Comment réduire les déserts médicaux ? », « Que propose Marine Le Pen sur les
-          transports ? »
-        </p>
-        <p id="full-corpus-ai-notice" className="mt-2 text-sm text-muted-foreground">
-          Lors d’une recherche complète, le texte saisi peut être transmis à Mistral AI pour
-          retrouver et ordonner des résultats par proximité textuelle. Ce classement mesure la
-          pertinence pour la recherche, pas les candidats ni leurs propositions. L’IA ne rédige pas
-          la réponse. <Link href="/sources#intelligence-artificielle">En savoir plus</Link>
-        </p>
+        {!isSubtopicBrowse && <CorpusSearchForm query={query} />}
 
         {isRateLimited ? (
           <section role="alert" className="mt-10 rounded-2xl border border-border bg-card p-6">
@@ -170,10 +222,12 @@ export default async function PresidentialSearchPage({
             </p>
           </section>
         ) : (
-          <div className="mt-10 space-y-10">
-            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-              {result.total} résultat{result.total > 1 ? "s" : ""} dans le corpus public
-            </p>
+          <div className="mt-6 space-y-8">
+            {!isSubtopicBrowse && (
+              <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                {result.total} résultat{result.total > 1 ? "s" : ""} dans le corpus public
+              </p>
+            )}
             {result.subjects.length > 0 && (
               <section aria-labelledby="full-subjects-title">
                 <h2
@@ -327,6 +381,7 @@ export default async function PresidentialSearchPage({
             )}
           </div>
         )}
+        {isSubtopicBrowse && <CorpusSearchForm query="" compact />}
       </div>
     </main>
   );
