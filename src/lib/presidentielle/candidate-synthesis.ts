@@ -175,7 +175,6 @@ type ProgrammeReference = {
 
 type ProgrammePlan = {
   references: ProgrammeReference[];
-  expectedThemes: ThemeCategory[];
   themeCounts: Map<ThemeCategory, number>;
 };
 
@@ -273,7 +272,7 @@ Règles absolues :
 - Aucun jugement de valeur, aucun qualificatif d'appréciation. Ni « ambitieux », ni « radical », ni « crédible », ni « clivant ». Décris, ne commente pas.
 - Aucune comparaison avec un autre candidat.
 - Ne compte pas les mesures et ne dis pas combien il y en a : le chiffre est affiché à côté et il bougera.
-- Appuie-toi sur la répartition et la couverture attendue fournies avec le programme.
+- Appuie-toi sur la répartition fournie pour comprendre le corpus, sans énumérer mécaniquement ses thèmes.
 - Dégage les idées directrices et les moyens récurrents. Relie plusieurs mesures lorsqu'elles forment réellement un même axe.
 - Ne juxtapose pas les mesures et ne reproduis pas leur formulation l'une après l'autre.
 - Chaque affirmation sur le programme doit citer les références exactes des mesures qui l'étayent.
@@ -305,23 +304,11 @@ function buildProgrammePlan(input: CandidateSynthesisInput): ProgrammePlan {
   for (const reference of allReferences) {
     counts.set(reference.theme, (counts.get(reference.theme) ?? 0) + 1);
   }
-  const themes = [...counts.entries()].sort(
-    ([themeA, countA], [themeB, countB]) =>
-      countB - countA ||
-      THEME_CATEGORY_LABELS[themeA].localeCompare(THEME_CATEGORY_LABELS[themeB], "fr")
-  );
-  // Theme frequency is context, not an editorial ranking. It gives a stable, candidate-agnostic
-  // answer to “principal themes” while the explicit cap prevents the largest family swallowing the
-  // paragraph. Five examples fit the large 250-word format; three fit the standard one. A longer
-  // selection reads like an extraction dump rather than a summary, especially on mobile.
-  const coverageLimit = input.measures.length >= LARGE_PROGRAMME_MEASURES ? 5 : 3;
-  const expectedThemes = themes.slice(0, coverageLimit).map(([theme]) => theme);
   // Every published measure reaches the model. The earlier deterministic sample produced fluent
   // prose, but it was a synthesis of 24 examples rather than of a 70-measure programme.
   const references = allReferences;
   return {
     references,
-    expectedThemes,
     themeCounts: counts,
   };
 }
@@ -338,7 +325,6 @@ export function buildCandidateSynthesisPrompt(input: CandidateSynthesisInput): s
       (programmePlan.themeCounts.get(themeB) ?? 0) - (programmePlan.themeCounts.get(themeA) ?? 0) ||
       THEME_CATEGORY_LABELS[themeA].localeCompare(THEME_CATEGORY_LABELS[themeB], "fr")
   );
-  const expectedThemes = programmePlan.expectedThemes.map((theme) => THEME_CATEGORY_LABELS[theme]);
   const measures =
     themes.length > 0
       ? themes
@@ -360,11 +346,6 @@ export function buildCandidateSynthesisPrompt(input: CandidateSynthesisInput): s
           })
           .join("\n")
       : "Aucun thème représenté.";
-  const coverage =
-    expectedThemes.length > 0
-      ? `Représente au moins une mesure de chacun de ces thèmes : ${expectedThemes.join(", ")}.`
-      : "Aucun thème à représenter.";
-
   return `<candidature>
 <nom>${safe(input.candidateName)}</nom>
 <parti>${input.partyLabel ? safe(input.partyLabel) : "non renseigné"}</parti>
@@ -376,9 +357,6 @@ export function buildCandidateSynthesisPrompt(input: CandidateSynthesisInput): s
 <repartition_themes>
 ${distribution}
 </repartition_themes>
-<couverture_attendue>
-${coverage}
-</couverture_attendue>
 <mesures_par_theme>
 ${measures}
 </mesures_par_theme>
@@ -413,6 +391,15 @@ function isComparativeClaim(value: string): boolean {
   return /\b(?:contrairement aux|par rapport aux|plus que les autres|moins que les autres|les autres candidat(?:s|es)?)\b/iu.test(
     value
   );
+}
+
+/** Removes prompt-only evidence labels when the provider repeats them in reader-facing prose. */
+function stripEvidenceMarkers(value: string): string {
+  return value
+    .replace(/\s*[([]\s*M[1-9][0-9]*(?:\s*[,;]\s*M[1-9][0-9]*)*\s*[)\]]/gu, " ")
+    .replace(/\s+M[1-9][0-9]*(?:\s*[,;]\s*M[1-9][0-9]*)*(?=[,.;:!?]|$)/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function screenCandidateSynthesis(
@@ -469,32 +456,46 @@ export function screenCandidateSynthesis(
     };
   }
   const references = new Map(plan.references.map((reference) => [reference.ref, reference]));
-  const coveredThemes = new Set<ThemeCategory>();
   let hasGroupedAxis = false;
+  let firstClaimFailure: Extract<SynthesisScreen, { ok: false }> | undefined;
   const normalizedClaims: CandidateProgrammeClaim[] = [];
   for (const claim of claims) {
+    let claimFailure: Extract<SynthesisScreen, { ok: false }> | undefined;
     if (new Set(claim.measureRefs).size !== claim.measureRefs.length) {
-      return { ok: false, reason: "preuve_repetee", detail: "une référence est répétée" };
+      claimFailure = {
+        ok: false,
+        reason: "preuve_repetee",
+        detail: "une référence est répétée",
+      };
     }
     const cited = claim.measureRefs.flatMap((reference) => {
       const measure = references.get(reference);
       return measure ? [measure] : [];
     });
-    if (cited.length !== claim.measureRefs.length) {
-      return {
+    if (!claimFailure && cited.length !== claim.measureRefs.length) {
+      claimFailure = {
         ok: false,
         reason: "preuve_inconnue",
         detail: "une référence ne correspond à aucune mesure fournie",
       };
     }
-    if (isComparativeClaim(claim.text)) {
-      return { ok: false, reason: "comparaison", detail: "la synthèse compare des candidatures" };
+    const publicText = stripEvidenceMarkers(claim.text);
+    if (!claimFailure && isComparativeClaim(publicText)) {
+      claimFailure = {
+        ok: false,
+        reason: "comparaison",
+        detail: "la synthèse compare des candidatures",
+      };
     }
-    if (/[—–<>]/u.test(claim.text)) {
-      return { ok: false, reason: "style", detail: "la synthèse contient un caractère interdit" };
+    if (!claimFailure && /[—–<>]/u.test(publicText)) {
+      claimFailure = {
+        ok: false,
+        reason: "style",
+        detail: "la synthèse contient un caractère interdit",
+      };
     }
-    if (/(?:^|\W)M[1-9][0-9]*(?:\W|$)/u.test(claim.text)) {
-      return {
+    if (!claimFailure && /(?:^|\W)M[1-9][0-9]*(?:\W|$)/u.test(publicText)) {
+      claimFailure = {
         ok: false,
         reason: "style",
         detail: "les références de preuves doivent rester dans measureRefs",
@@ -502,27 +503,42 @@ export function screenCandidateSynthesis(
     }
     const evidence = cited.map((measure) => measure.text).join(" ");
     const allowedNumbers = new Set(numericTokens(evidence));
-    const unsupportedNumber = numericTokens(claim.text).find((token) => !allowedNumbers.has(token));
-    if (unsupportedNumber) {
-      return {
+    const unsupportedNumber = numericTokens(publicText).find((token) => !allowedNumbers.has(token));
+    if (!claimFailure && unsupportedNumber) {
+      claimFailure = {
         ok: false,
         reason: "quantite",
         detail: `la quantité ${unsupportedNumber} n'est pas présente dans les mesures citées`,
       };
     }
-    const normalizedText = claim.text.replace(/\s+/g, " ").trim();
-    if (cited.some((measure) => canonicalMeasureText(measure.text) === normalizedText)) {
-      return {
+    const normalizedText = publicText;
+    if (
+      !claimFailure &&
+      cited.some((measure) => canonicalMeasureText(measure.text) === normalizedText)
+    ) {
+      claimFailure = {
         ok: false,
         reason: "catalogue",
         detail: "un axe recopie une mesure au lieu de la synthétiser",
       };
     }
+    if (claimFailure) {
+      firstClaimFailure ??= claimFailure;
+      continue;
+    }
     if (claim.measureRefs.length >= 2) hasGroupedAxis = true;
-    cited.forEach((measure) => coveredThemes.add(measure.theme));
     normalizedClaims.push({ text: normalizedText, measureRefs: claim.measureRefs });
   }
 
+  if (normalizedClaims.length < minimumClaims) {
+    return (
+      firstClaimFailure ?? {
+        ok: false,
+        reason: "synthese_insuffisante",
+        detail: `le programme doit comporter au moins ${minimumClaims} axes synthétiques`,
+      }
+    );
+  }
   if (input.measures.length >= 6 && !hasGroupedAxis) {
     return {
       ok: false,
@@ -530,25 +546,17 @@ export function screenCandidateSynthesis(
       detail: "aucun axe ne regroupe plusieurs mesures",
     };
   }
-  for (const theme of plan.expectedThemes) {
-    if (!coveredThemes.has(theme)) {
-      return {
-        ok: false,
-        reason: "couverture_theme",
-        detail: `aucun axe étayé ne représente le thème ${THEME_CATEGORY_LABELS[theme]}`,
-      };
-    }
-  }
-
   const programmeText = normalizedClaims.map((claim) => claim.text).join("\n\n");
   const programmeWords = wordCount(programmeText);
   const programmeFloor = programmeSafetyFloor(input.measures.length);
   if (programmeWords < programmeFloor) {
-    return {
-      ok: false,
-      reason: "programme_trop_court",
-      detail: `${programmeWords} mots pour le programme, minimum ${programmeFloor}`,
-    };
+    return (
+      firstClaimFailure ?? {
+        ok: false,
+        reason: "programme_trop_court",
+        detail: `${programmeWords} mots pour le programme, minimum ${programmeFloor}`,
+      }
+    );
   }
 
   const screened = screenSynthesis({
@@ -568,6 +576,7 @@ const groundingResponseSchema = z
           index: z.number().int().nonnegative(),
           supported: z.boolean(),
           reason: z.string().trim().min(1).max(800),
+          correctedText: z.string().trim().max(900),
         })
         .strict()
     ),
@@ -599,37 +608,56 @@ Une affirmation est non étayée si elle ajoute un objectif, un effet, une causa
 ${claimsXml}
 </affirmations>
 
+Pour chaque affirmation refusée, correctedText doit proposer une version concise entièrement étayée par les preuves citées, sans ajouter de nouvelle référence. Pour une affirmation acceptée, correctedText doit être une chaîne vide.
+
 Réponds uniquement en JSON :
-{"claims":[{"index":0,"supported":true,"reason":"justification concise"}]}`;
+{"claims":[{"index":0,"supported":true,"reason":"justification concise","correctedText":""}]}`;
 }
 
 export function screenCandidateSynthesisGrounding(
   raw: unknown,
   expectedClaimCount: number
 ):
-  | { ok: true; supportedIndexes: number[] }
-  | { ok: false; detail: string; supportedIndexes: number[] } {
+  | { ok: true; supportedIndexes: number[]; corrections: Map<number, string> }
+  | {
+      ok: false;
+      detail: string;
+      supportedIndexes: number[];
+      corrections: Map<number, string>;
+    } {
   const parsed = groundingResponseSchema.safeParse(raw);
-  if (!parsed.success || parsed.data.claims.length !== expectedClaimCount) {
-    return { ok: false, detail: "le contrôle d'étayage est incomplet", supportedIndexes: [] };
+  if (!parsed.success) {
+    return {
+      ok: false,
+      detail: "le contrôle d'étayage est incomplet",
+      supportedIndexes: [],
+      corrections: new Map(),
+    };
   }
   const byIndex = new Map(parsed.data.claims.map((claim) => [claim.index, claim]));
   const failures: string[] = [];
   const supportedIndexes: number[] = [];
+  const corrections = new Map<number, string>();
   for (let index = 0; index < expectedClaimCount; index += 1) {
     const claim = byIndex.get(index);
     if (!claim || !claim.supported) {
       failures.push(`affirmation ${index + 1} : ${claim?.reason ?? "elle n'a pas été contrôlée"}`);
+      if (claim?.correctedText) corrections.set(index, claim.correctedText);
     } else {
       supportedIndexes.push(index);
     }
   }
   if (failures.length > 0) {
-    return { ok: false, detail: failures.join(" ; "), supportedIndexes };
+    return { ok: false, detail: failures.join(" ; "), supportedIndexes, corrections };
   }
   return byIndex.size === expectedClaimCount
-    ? { ok: true, supportedIndexes }
-    : { ok: false, detail: "le contrôle contient des index inattendus", supportedIndexes: [] };
+    ? { ok: true, supportedIndexes, corrections }
+    : {
+        ok: false,
+        detail: "le contrôle contient des index inattendus",
+        supportedIndexes: [],
+        corrections: new Map(),
+      };
 }
 
 /**

@@ -74,17 +74,15 @@ describe("buildCandidateSynthesisPrompt", () => {
     expect(prompt.match(/Santé \(2 mesures\) :/g)).toHaveLength(1);
   });
 
-  it("provides theme counts and an explicit coverage target", () => {
+  it("provides theme counts without imposing a catalogue", () => {
     const prompt = buildCandidateSynthesisPrompt(BASE);
     expect(prompt).toContain("Santé : 2 mesures");
     expect(prompt).toContain("Transports : 1 mesure");
-    expect(prompt).toContain(
-      "Représente au moins une mesure de chacun de ces thèmes : Santé, Transports."
-    );
+    expect(prompt).not.toContain("couverture_attendue");
     expect(prompt).toContain("[M1] Rouvrir des maternités de proximité.");
   });
 
-  it("asks a large programme to cover its five most represented themes", () => {
+  it("does not turn a large programme into a mandatory list of themes", () => {
     const themes = [
       "SANTE",
       "TRANSPORTS",
@@ -101,10 +99,8 @@ describe("buildCandidateSynthesisPrompt", () => {
       text: `Mesure ${index}.`,
     }));
     const prompt = buildCandidateSynthesisPrompt({ ...BASE, measures });
-    const coverage = prompt.match(/<couverture_attendue>\n(.+)\n<\/couverture_attendue>/)?.[1];
-
-    expect(coverage?.match(/,/g)).toHaveLength(4);
-    expect(coverage).not.toContain("Transports");
+    expect(prompt).not.toContain("couverture_attendue");
+    expect(prompt).toContain("<repartition_themes>");
   });
 
   it("presents every measure of a very large programme to the model", () => {
@@ -213,13 +209,17 @@ describe("screenCandidateSynthesis", () => {
     ).toMatchObject({ ok: false });
   });
 
-  it("refuse une synthèse qui omet un thème attendu", () => {
-    expect(
-      screenCandidateSynthesis(output([{ text: healthAxis, measureRefs: ["M1", "M2"] }]), BASE)
-    ).toMatchObject({
-      ok: false,
-      reason: "couverture_theme",
-    });
+  it("accepte une sélection éditoriale étayée sans imposer chaque thème", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        {
+          text: `${healthAxis} Elles associent ainsi la réouverture de services de proximité au remboursement intégral des soins prescrits.`,
+          measureRefs: ["M1", "M2"],
+        },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("refuse une référence inconnue", () => {
@@ -237,6 +237,18 @@ describe("screenCandidateSynthesis", () => {
     });
   });
 
+  it("retire du texte public les marqueurs de preuve répétés par le modèle", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        { text: `${healthAxis} (M1, M2)`, measureRefs: ["M1", "M2"] },
+        { text: `${transportAxis} M3.`, measureRefs: ["M3"] },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toMatch(/\bM[1-9][0-9]*\b/u);
+  });
+
   it("refuse une quantité absente des mesures citées", () => {
     expect(
       screenCandidateSynthesis(
@@ -250,6 +262,23 @@ describe("screenCandidateSynthesis", () => {
       ok: false,
       reason: "quantite",
     });
+  });
+
+  it("écarte un axe invalide quand les axes restants forment encore une synthèse", () => {
+    const result = screenCandidateSynthesis(
+      output([
+        { text: healthAxis, measureRefs: ["M1", "M2"] },
+        { text: transportAxis, measureRefs: ["M3"] },
+        {
+          text: "Une enveloppe supplémentaire de 90 millions financerait également ces politiques publiques.",
+          measureRefs: ["M1"],
+        },
+      ]),
+      BASE
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.text).not.toContain("90 millions");
+    expect(result.ok && result.programmeClaims).toHaveLength(2);
   });
 
   it("rend une phrase canonique quand le programme est vide", () => {

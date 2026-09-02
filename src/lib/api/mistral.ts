@@ -14,7 +14,17 @@ export interface MistralOptions {
   maxTokens?: number;
   system?: string;
   temperature?: number;
-  responseFormat?: { type: "json_object" };
+  responseFormat?:
+    | { type: "json_object" }
+    | {
+        type: "json_schema";
+        json_schema: {
+          name: string;
+          description?: string;
+          schema: Record<string, unknown>;
+          strict?: boolean;
+        };
+      };
 }
 
 export interface MistralMessage {
