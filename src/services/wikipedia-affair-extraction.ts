@@ -15,6 +15,7 @@
 import { AI_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
+import { AffairStatus } from "@/generated/prisma";
 
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 2000;
@@ -83,21 +84,8 @@ const AFFAIR_CATEGORIES = [
   "AUTRE",
 ] as const;
 
-const AFFAIR_STATUSES = [
-  "ENQUETE_PRELIMINAIRE",
-  "INSTRUCTION",
-  "MISE_EN_EXAMEN",
-  "RENVOI_TRIBUNAL",
-  "PROCES_EN_COURS",
-  "CONDAMNATION_PREMIERE_INSTANCE",
-  "APPEL_EN_COURS",
-  "CONDAMNATION_DEFINITIVE",
-  "RELAXE",
-  "ACQUITTEMENT",
-  "NON_LIEU",
-  "PRESCRIPTION",
-  "CLASSEMENT_SANS_SUITE",
-] as const;
+// Dérivée de l'enum Prisma pour ne jamais diverger (#583).
+const AFFAIR_STATUSES = Object.values(AffairStatus);
 
 // ============================================
 // TOOL DEFINITION (Anthropic tool_use)

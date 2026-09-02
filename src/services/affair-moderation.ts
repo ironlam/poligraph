@@ -13,6 +13,7 @@
 
 import { AI_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
+import { AffairStatus } from "@/generated/prisma";
 
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 2000;
@@ -74,22 +75,10 @@ export const SENSITIVE_CATEGORIES = new Set([
   "VIOLENCE",
 ]);
 
-export const AFFAIR_STATUSES = [
-  "ENQUETE_PRELIMINAIRE",
-  "INSTRUCTION",
-  "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN",
-  "MISE_EN_EXAMEN",
-  "RENVOI_TRIBUNAL",
-  "PROCES_EN_COURS",
-  "CONDAMNATION_PREMIERE_INSTANCE",
-  "APPEL_EN_COURS",
-  "CONDAMNATION_DEFINITIVE",
-  "RELAXE",
-  "ACQUITTEMENT",
-  "NON_LIEU",
-  "PRESCRIPTION",
-  "CLASSEMENT_SANS_SUITE",
-] as const;
+// Dérivée de l'enum Prisma pour ne jamais diverger (#583) : une liste recopiée à la
+// main a déjà omis POURVOI_EN_CASSATION, laissant une affaire non définitive sans
+// garde valide pour une correction de statut appliquée sans revue.
+export const AFFAIR_STATUSES = Object.values(AffairStatus);
 
 export const AFFAIR_CATEGORIES = [
   "CORRUPTION",

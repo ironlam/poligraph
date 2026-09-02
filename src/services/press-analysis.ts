@@ -14,6 +14,7 @@
 import { AI_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import { AffairStatus } from "@/generated/prisma";
 
 const TIER_MODELS = {
   TIER_1: "mistral-large-latest",
@@ -96,21 +97,8 @@ const AFFAIR_CATEGORIES = [
   "AUTRE",
 ] as const;
 
-const AFFAIR_STATUSES = [
-  "ENQUETE_PRELIMINAIRE",
-  "INSTRUCTION",
-  "MISE_EN_EXAMEN",
-  "RENVOI_TRIBUNAL",
-  "PROCES_EN_COURS",
-  "CONDAMNATION_PREMIERE_INSTANCE",
-  "APPEL_EN_COURS",
-  "CONDAMNATION_DEFINITIVE",
-  "RELAXE",
-  "ACQUITTEMENT",
-  "NON_LIEU",
-  "PRESCRIPTION",
-  "CLASSEMENT_SANS_SUITE",
-] as const;
+// Dérivée de l'enum Prisma pour ne jamais diverger (#583).
+const AFFAIR_STATUSES = Object.values(AffairStatus);
 
 const SENSITIVE_CATEGORIES = new Set(["AGRESSION_SEXUELLE", "HARCELEMENT_SEXUEL"]);
 
