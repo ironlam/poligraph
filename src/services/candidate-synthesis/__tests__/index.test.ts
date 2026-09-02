@@ -313,3 +313,58 @@ describe("generateCandidateSynthesis", () => {
     );
   });
 });
+
+describe("saveReviewedCandidateSynthesis", () => {
+  it("enregistre explicitement le texte relu et son audit", async () => {
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}.\n\n${PROGRAMME_AXIS}`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text, {
+      ipAddress: "203.0.113.10",
+      userAgent: "Poligraph test",
+    });
+
+    expect(result).toEqual({ ok: true, electionId: "elec-1" });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledWith({
+      where: { id: "pres-1" },
+      data: { synthesis: text, synthesisGeneratedAt: expect.any(Date) },
+    });
+    expect(dbMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          changes: expect.objectContaining({ synthesis: text, reviewedManually: true }),
+          ipAddress: "203.0.113.10",
+          userAgent: "Poligraph test",
+        }),
+      })
+    );
+  });
+
+  it("accepte un parquet lorsque le terme figure dans les mesures publiées", async () => {
+    dbMock.measure.findMany.mockResolvedValue([
+      {
+        publishedRevision: {
+          text: "Créer un parquet financier européen aux compétences élargies.",
+        },
+      },
+    ]);
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}. Le programme propose de créer un parquet financier européen aux compétences élargies pour les dossiers concernés.`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text);
+
+    expect(result).toMatchObject({ ok: true });
+    expect(dbMock.candidacyPresidential.update).toHaveBeenCalledOnce();
+  });
+
+  it("refuse une mention judiciaire absente du corpus", async () => {
+    const { saveReviewedCandidateSynthesis } = await service();
+    const text = `${CAREER}. Le parquet a ouvert une enquête judiciaire concernant la candidature et ses responsables.`;
+
+    const result = await saveReviewedCandidateSynthesis("cand-1", text);
+
+    expect(result).toMatchObject({ ok: false });
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
+  });
+});

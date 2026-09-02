@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createCandidacyPresidentialFromPickerSchema } from "../candidate";
+import {
+  createCandidacyPresidentialFromPickerSchema,
+  reviewCandidateSynthesisSchema,
+} from "../candidate";
 
 const declare = {
   politicianId: "p1",
@@ -92,6 +95,25 @@ describe("createCandidacyPresidentialFromPickerSchema : declaredAt facultatif (c
       createCandidacyPresidentialFromPickerSchema.safeParse({
         ...declare,
         declaredAt: "2026-03-01T10:00:00.000Z",
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("reviewCandidateSynthesisSchema", () => {
+  it("accepte un texte relu et refuse une valeur trop courte ou un champ imprévu", () => {
+    expect(
+      reviewCandidateSynthesisSchema.safeParse({
+        synthesis: "Une synthèse éditoriale relue et suffisamment développée.",
+      }).success
+    ).toBe(true);
+    expect(reviewCandidateSynthesisSchema.safeParse({ synthesis: "Trop court." }).success).toBe(
+      false
+    );
+    expect(
+      reviewCandidateSynthesisSchema.safeParse({
+        synthesis: "Une synthèse éditoriale relue et suffisamment développée.",
+        publicationStatus: "PUBLISHED",
       }).success
     ).toBe(false);
   });

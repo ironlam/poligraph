@@ -27,6 +27,7 @@ import {
   buildSynthesisSystemPrompt,
   screenCandidateSynthesis,
   screenCandidateSynthesisGrounding,
+  screenSynthesis,
   synthesisMaterial,
   type CandidateProgrammeClaim,
   type CandidateSynthesisInput,
@@ -129,6 +130,10 @@ export type SynthesisGenerationResult =
       persisted: boolean;
     }
   | { ok: false; reason: SynthesisRefusal; message: string };
+
+export type CandidateSynthesisReviewResult =
+  | { ok: true; electionId: string }
+  | { ok: false; message: string };
 
 async function generate(
   system: string,
@@ -448,4 +453,103 @@ export async function generateCandidateSynthesis(
   });
 
   return { ...base, persisted: true };
+}
+
+/**
+ * Stores the text a moderator has actually read and edited.
+ *
+ * Generation and publication are deliberately separate operations: a provider response is a
+ * proposal, while this function is the explicit human decision that makes the text public. The
+ * same mechanical style and length checks still apply, but institutional judicial vocabulary is
+ * accepted when it is present in the programme or career material supplied on the fiche.
+ */
+export async function saveReviewedCandidateSynthesis(
+  candidacyId: string,
+  rawText: string,
+  auditMeta: { ipAddress?: string; userAgent?: string } = {}
+): Promise<CandidateSynthesisReviewResult> {
+  const candidacy = await db.candidacy.findUnique({
+    where: { id: candidacyId },
+    select: {
+      id: true,
+      electionId: true,
+      politicianId: true,
+      status: true,
+      presidentialData: { select: { id: true, synthesis: true } },
+    },
+  });
+  if (!candidacy) return { ok: false, message: "Candidature introuvable." };
+  if (candidacy.status !== "DECLARE") {
+    return { ok: false, message: "Seule une candidature déclarée porte une synthèse." };
+  }
+  if (!candidacy.politicianId) {
+    return { ok: false, message: "Aucune personnalité n'est rattachée à cette candidature." };
+  }
+  if (!candidacy.presidentialData) {
+    return { ok: false, message: "Les métadonnées présidentielles sont absentes." };
+  }
+
+  const [mandates, voteCount, measures] = await Promise.all([
+    db.mandate.findMany({
+      where: { politicianId: candidacy.politicianId },
+      select: { role: true, title: true, institution: true },
+      take: MANDATE_LIMIT,
+    }),
+    db.vote.count({ where: { politicianId: candidacy.politicianId } }),
+    db.measure.findMany({
+      where: {
+        candidacyId,
+        publicationStatus: "PUBLISHED",
+        withdrawnAt: null,
+        publishedRevision: { reviewedAt: { not: null } },
+      },
+      select: { publishedRevision: { select: { text: true } } },
+    }),
+  ]);
+  const measureTexts = measures.flatMap((measure) =>
+    measure.publishedRevision ? [measure.publishedRevision.text] : []
+  );
+  const reviewed = screenSynthesis({
+    text: rawText,
+    generatedText: rawText,
+    exemptSourceTexts: [],
+    allowedJudicialSourceTexts: [
+      ...measureTexts,
+      ...mandates.flatMap((mandate) => [mandate.role ?? mandate.title, mandate.institution ?? ""]),
+    ],
+    material: {
+      mandateCount: mandates.length,
+      voteCount,
+      measureCount: measureTexts.length,
+    },
+  });
+  if (!reviewed.ok) {
+    return {
+      ok: false,
+      message: `La synthèse ne peut pas être enregistrée : ${reviewed.detail}.`,
+    };
+  }
+
+  const reviewedAt = new Date();
+  await db.candidacyPresidential.update({
+    where: { id: candidacy.presidentialData.id },
+    data: { synthesis: reviewed.text, synthesisGeneratedAt: reviewedAt },
+  });
+  await db.auditLog.create({
+    data: {
+      action: "UPDATE",
+      entityType: "CandidacyPresidential",
+      entityId: candidacy.presidentialData.id,
+      changes: {
+        synthesis: reviewed.text,
+        previousSynthesis: candidacy.presidentialData.synthesis,
+        reviewedManually: true,
+        synthesisGeneratedAt: reviewedAt.toISOString(),
+      },
+      ipAddress: auditMeta.ipAddress,
+      userAgent: auditMeta.userAgent,
+    },
+  });
+
+  return { ok: true, electionId: candidacy.electionId };
 }

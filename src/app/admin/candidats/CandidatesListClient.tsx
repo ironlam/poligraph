@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CandidacyStatus, PublicationStatus } from "@/generated/prisma";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { PUBLICATION_STATUS_LABELS, PUBLICATION_STATUS_STYLES } from "@/config/labels";
 import { formatDate } from "@/lib/utils";
 import type { CandidacyMeasureReadiness } from "@/lib/data/measures";
@@ -67,6 +68,7 @@ export type CandidateRowView = {
   rank: number | null;
   readiness: CandidacyMeasureReadiness;
   synthesisState: SynthesisState;
+  synthesis: string | null;
   synthesisGeneratedAt: Date | null;
   editions: ProgramEditionView[];
 };
@@ -81,6 +83,11 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [synthesisEditor, setSynthesisEditor] = useState<{
+    candidacyId: string;
+    candidateName: string;
+    text: string;
+  } | null>(null);
   const [statusDrafts, setStatusDrafts] = useState(() =>
     Object.fromEntries(
       rows.map((row) => [
@@ -129,6 +136,55 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
       setBusy(null);
       router.refresh();
     });
+  }
+
+  async function generateSynthesisProposal(row: CandidateRowView) {
+    const key = `synthese:${row.candidacyId}`;
+    setBusy(key);
+    setError(null);
+    try {
+      const result = await regenerateCandidateSynthesisAction({ candidacyId: row.candidacyId });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setSynthesisEditor({
+        candidacyId: row.candidacyId,
+        candidateName: row.candidateName,
+        text: result.text ?? "",
+      });
+    } catch (err) {
+      setError(`Erreur : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveSynthesis() {
+    if (!synthesisEditor) return;
+    const key = `synthese-save:${synthesisEditor.candidacyId}`;
+    setBusy(key);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/admin/candidats/${synthesisEditor.candidacyId}/synthesis`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ synthesis: synthesisEditor.text }),
+        }
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "L'enregistrement a échoué.");
+      }
+      setSynthesisEditor(null);
+      router.refresh();
+    } catch (err) {
+      setError(`Erreur : ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -201,314 +257,404 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
         </p>
       )}
 
-      <div className="rounded-lg border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr>
-              <th className="text-left px-3 py-2">Rang</th>
-              <th className="text-left px-3 py-2">Candidat</th>
-              <th className="text-left px-3 py-2">Parti</th>
-              <th className="text-left px-3 py-2">Statut</th>
-              <th className="text-left px-3 py-2">Mesures prêtes</th>
-              <th className="text-left px-3 py-2">Fiche publique</th>
-              <th className="text-left px-3 py-2">Programme</th>
-              <th className="text-left px-3 py-2">Synthèse</th>
-              <th className="text-left px-3 py-2">Slogan</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const publicationKey = `publication:${row.candidacyId}`;
-              const statusKey = `statut:${row.candidacyId}`;
-              const synthesisKey = `synthese:${row.candidacyId}`;
-              const published = row.publicationStatus === "PUBLISHED";
-              const locked = busy !== null || pending;
-              const statusDraft = statusDrafts[row.candidacyId] ?? {
-                status: row.status ?? "",
-                sourceUrl: row.sourceUrl ?? "",
-                sourceLabel: row.sourceLabel ?? "",
-              };
-              const updateStatusDraft = (patch: Partial<typeof statusDraft>) =>
-                setStatusDrafts((current) => ({
-                  ...current,
-                  [row.candidacyId]: { ...statusDraft, ...patch },
-                }));
-              return (
-                <tr key={row.candidacyId} className="border-t align-top">
-                  <td className="px-3 py-2 w-12">
-                    <input
-                      type="number"
-                      min={0}
-                      defaultValue={row.rank ?? ""}
-                      onBlur={(e) => {
-                        const value = e.target.value ? Number(e.target.value) : null;
-                        if (row.presidentialId)
-                          patchPresidential(row.presidentialId, { rank: value });
-                      }}
-                      className="w-12 rounded border px-1 py-0.5 text-sm dark:bg-slate-800"
-                      aria-label={`Rang de ${row.candidateName}`}
-                      disabled={locked || !row.presidentialId}
-                    />
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
+      <div className="space-y-4">
+        {rows.map((row) => {
+          const publicationKey = `publication:${row.candidacyId}`;
+          const statusKey = `statut:${row.candidacyId}`;
+          const synthesisKey = `synthese:${row.candidacyId}`;
+          const saveKey = `synthese-save:${row.candidacyId}`;
+          const published = row.publicationStatus === "PUBLISHED";
+          const locked = busy !== null || pending;
+          const statusDraft = statusDrafts[row.candidacyId] ?? {
+            status: row.status ?? "",
+            sourceUrl: row.sourceUrl ?? "",
+            sourceLabel: row.sourceLabel ?? "",
+          };
+          const updateStatusDraft = (patch: Partial<typeof statusDraft>) =>
+            setStatusDrafts((current) => ({
+              ...current,
+              [row.candidacyId]: { ...statusDraft, ...patch },
+            }));
+          const editorOpen = synthesisEditor?.candidacyId === row.candidacyId;
+
+          return (
+            <article
+              key={row.candidacyId}
+              aria-labelledby={`candidat-${row.candidacyId}`}
+              className="rounded-xl border bg-card p-4 shadow-sm sm:p-5"
+            >
+              <header className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 id={`candidat-${row.candidacyId}`} className="font-display text-xl font-bold">
                     {row.politicianSlug ? (
                       <Link
                         href={`/admin/candidats/${row.politicianSlug}`}
-                        className="text-primary hover:underline"
+                        className="hover:underline"
                       >
                         {row.candidateName}
                       </Link>
                     ) : (
-                      <span>{row.candidateName}</span>
+                      row.candidateName
                     )}
-                    {row.politicianId && row.politicianPublicationStatus !== "PUBLISHED" && (
-                      <Link
-                        href={`/admin/politiques/${row.politicianId}`}
-                        className="mt-1 inline-flex min-h-11 items-center rounded px-2 text-xs font-semibold text-primary underline underline-offset-2"
-                      >
-                        Publier la personnalité
-                      </Link>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{row.partyLabel ?? "Sans parti"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <label className="sr-only" htmlFor={statusKey}>
-                      Statut de {row.candidateName}
-                    </label>
-                    <div className="flex min-w-64 flex-col gap-2">
-                      <select
-                        id={statusKey}
-                        value={statusDraft.status}
-                        onChange={(event) => updateStatusDraft({ status: event.target.value })}
-                        disabled={locked}
-                        className="min-h-11 rounded border bg-background px-2 text-sm md:min-h-[36px]"
-                        aria-label={`Statut de ${row.candidateName}`}
-                      >
-                        {!row.status && <option value="">Statut non renseigné</option>}
-                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="url"
-                        value={statusDraft.sourceUrl}
-                        onChange={(event) => updateStatusDraft({ sourceUrl: event.target.value })}
-                        disabled={locked}
-                        className="min-h-11 rounded border bg-background px-2 text-sm md:min-h-[36px]"
-                        aria-label={`URL source du statut de ${row.candidateName}`}
-                        placeholder="https://site-officiel.fr/annonce"
-                      />
-                      <input
-                        type="text"
-                        value={statusDraft.sourceLabel}
-                        onChange={(event) => updateStatusDraft({ sourceLabel: event.target.value })}
-                        disabled={locked}
-                        className="min-h-11 rounded border bg-background px-2 text-sm md:min-h-[36px]"
-                        aria-label={`Libellé source du statut de ${row.candidateName}`}
-                        placeholder="Annonce officielle, date"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          runAction(statusKey, () =>
-                            setCandidacyStatusAction({
-                              candidacyId: row.candidacyId,
-                              status: statusDraft.status as CandidacyStatus,
-                              sourceUrl: statusDraft.sourceUrl.trim(),
-                              sourceLabel: statusDraft.sourceLabel.trim(),
-                            })
-                          )
-                        }
-                        disabled={
-                          locked ||
-                          !statusDraft.status ||
-                          !statusDraft.sourceUrl.trim() ||
-                          !statusDraft.sourceLabel.trim()
-                        }
-                        className="inline-flex min-h-11 items-center justify-center rounded border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50 md:min-h-[36px]"
-                      >
-                        {busy === statusKey ? "Enregistrement..." : "Enregistrer le statut"}
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    {row.readiness.measureCount === 0 ? (
-                      <span className="text-muted-foreground">Aucune</span>
-                    ) : (
-                      <>
-                        <span className="font-semibold">{row.readiness.measureCount}</span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          · {row.readiness.themesCoveredCount} thèmes ·{" "}
-                          {row.readiness.primarySourceMeasureCount} sourcées 1re main
-                        </span>
-                      </>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Badge
-                        variant="outline"
-                        className={
-                          row.publicationStatus
-                            ? PUBLICATION_STATUS_STYLES[row.publicationStatus]
-                            : ""
-                        }
-                      >
-                        {row.publicationStatus
-                          ? PUBLICATION_STATUS_LABELS[row.publicationStatus]
-                          : "Métadonnées absentes"}
-                      </Badge>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          runAction(publicationKey, () =>
-                            setCandidacyPublicationAction({
-                              candidacyId: row.candidacyId,
-                              status: published ? "DRAFT" : "PUBLISHED",
-                            })
-                          )
-                        }
-                        disabled={locked || (!published && !row.sourced)}
-                        title={
-                          !published && !row.sourced
-                            ? "Renseigner le statut et la source de la candidature avant publication"
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {row.partyLabel ?? "Sans parti"} ·{" "}
+                    {STATUS_LABELS[row.status ?? ""] ?? "Statut non renseigné"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={
+                      row.publicationStatus ? PUBLICATION_STATUS_STYLES[row.publicationStatus] : ""
+                    }
+                  >
+                    {row.publicationStatus === "PUBLISHED"
+                      ? "Fiche publiée"
+                      : row.publicationStatus === "DRAFT"
+                        ? "Fiche en brouillon"
+                        : row.publicationStatus
+                          ? `Fiche ${PUBLICATION_STATUS_LABELS[row.publicationStatus].toLowerCase()}`
+                          : "Fiche sans métadonnées"}
+                  </Badge>
+                  {row.politicianSlug && (
+                    <Link
+                      href={`/elections/presidentielle-2027/candidats/${row.politicianSlug}`}
+                      className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-primary underline underline-offset-2"
+                    >
+                      Voir la fiche publique
+                    </Link>
+                  )}
+                </div>
+              </header>
+
+              <div className="grid gap-6 py-5 xl:grid-cols-[minmax(18rem,1.15fr)_minmax(16rem,0.9fr)_minmax(18rem,1fr)]">
+                <section aria-labelledby={`${statusKey}-titre`} className="space-y-3">
+                  <div>
+                    <h3 id={`${statusKey}-titre`} className="font-semibold">
+                      Statut et source
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      La source justifie le statut public de la candidature.
+                    </p>
+                  </div>
+                  <label className="sr-only" htmlFor={statusKey}>
+                    Statut de {row.candidateName}
+                  </label>
+                  <select
+                    id={statusKey}
+                    value={statusDraft.status}
+                    onChange={(event) => updateStatusDraft({ status: event.target.value })}
+                    disabled={locked}
+                    className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    {!row.status && <option value="">Statut non renseigné</option>}
+                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="url"
+                    value={statusDraft.sourceUrl}
+                    onChange={(event) => updateStatusDraft({ sourceUrl: event.target.value })}
+                    disabled={locked}
+                    className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
+                    aria-label={`URL source du statut de ${row.candidateName}`}
+                    placeholder="https://site-officiel.fr/annonce"
+                  />
+                  <input
+                    type="text"
+                    value={statusDraft.sourceLabel}
+                    onChange={(event) => updateStatusDraft({ sourceLabel: event.target.value })}
+                    disabled={locked}
+                    className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
+                    aria-label={`Libellé source du statut de ${row.candidateName}`}
+                    placeholder="Annonce officielle, date"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runAction(statusKey, () =>
+                        setCandidacyStatusAction({
+                          candidacyId: row.candidacyId,
+                          status: statusDraft.status as CandidacyStatus,
+                          sourceUrl: statusDraft.sourceUrl.trim(),
+                          sourceLabel: statusDraft.sourceLabel.trim(),
+                        })
+                      )
+                    }
+                    disabled={
+                      locked ||
+                      !statusDraft.status ||
+                      !statusDraft.sourceUrl.trim() ||
+                      !statusDraft.sourceLabel.trim()
+                    }
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-md border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+                  >
+                    {busy === statusKey ? "Enregistrement..." : "Enregistrer le statut"}
+                  </button>
+                </section>
+
+                <section aria-labelledby={`${publicationKey}-titre`} className="space-y-3">
+                  <div>
+                    <h3 id={`${publicationKey}-titre`} className="font-semibold">
+                      Publication et programme
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {row.readiness.measureCount === 0
+                        ? "Aucune mesure prête"
+                        : `${row.readiness.measureCount} mesures · ${row.readiness.themesCoveredCount} thèmes · ${row.readiness.primarySourceMeasureCount} sourcées en première main`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runAction(publicationKey, () =>
+                        setCandidacyPublicationAction({
+                          candidacyId: row.candidacyId,
+                          status: published ? "DRAFT" : "PUBLISHED",
+                        })
+                      )
+                    }
+                    disabled={locked || (!published && !row.sourced)}
+                    title={
+                      !published && !row.sourced
+                        ? "Renseigner le statut et la source avant publication"
+                        : undefined
+                    }
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-md border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+                  >
+                    {busy === publicationKey
+                      ? "En cours..."
+                      : published
+                        ? "Dépublier la fiche"
+                        : "Publier la fiche"}
+                  </button>
+                  {!published && !row.sourced && (
+                    <p className="text-xs text-muted-foreground">Statut et source obligatoires</p>
+                  )}
+                  {row.editions.length === 0 ? (
+                    <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+                      Aucune édition de programme.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {row.editions.map((edition) => {
+                        const editionKey = `edition:${edition.id}`;
+                        const editionPublished = edition.publicationStatus === "PUBLISHED";
+                        return (
+                          <li key={edition.id} className="rounded-md border p-3 text-sm">
+                            <p className="font-medium">
+                              {edition.label}{" "}
+                              <span className="text-muted-foreground">(v{edition.version})</span>
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={PUBLICATION_STATUS_STYLES[edition.publicationStatus]}
+                              >
+                                {PUBLICATION_STATUS_LABELS[edition.publicationStatus]}
+                              </Badge>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  runAction(editionKey, () =>
+                                    setProgramEditionPublicationAction({
+                                      programEditionId: edition.id,
+                                      status: editionPublished ? "DRAFT" : "PUBLISHED",
+                                    })
+                                  )
+                                }
+                                disabled={locked}
+                                aria-label={`${editionPublished ? "Dépublier" : "Publier"} l'édition ${edition.label} de ${row.candidateName}`}
+                                className="inline-flex min-h-11 items-center rounded-md px-3 text-xs font-semibold text-primary underline underline-offset-2 disabled:opacity-50"
+                              >
+                                {busy === editionKey
+                                  ? "En cours..."
+                                  : editionPublished
+                                    ? "Dépublier"
+                                    : "Publier"}
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+
+                <section aria-labelledby={`${synthesisKey}-titre`} className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 id={`${synthesisKey}-titre`} className="font-semibold">
+                      Synthèse générale
+                    </h3>
+                    <Badge variant="outline" className={SYNTHESIS_STYLES[row.synthesisState]}>
+                      {SYNTHESIS_LABELS[row.synthesisState]}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    La génération crée une proposition. Elle ne remplace le texte public qu’après
+                    ton enregistrement.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row xl:flex-col 2xl:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => generateSynthesisProposal(row)}
+                      disabled={locked || row.status !== "DECLARE" || !row.presidentialId}
+                      title={
+                        row.status !== "DECLARE"
+                          ? "Seule une candidature déclarée porte une synthèse"
+                          : !row.presidentialId
+                            ? "Publier la fiche crée les métadonnées nécessaires"
                             : undefined
-                        }
-                        className="inline-flex min-h-11 items-center justify-center rounded border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50 md:min-h-[36px]"
-                      >
-                        {busy === publicationKey
-                          ? "En cours..."
-                          : published
-                            ? "Dépublier"
-                            : "Publier la fiche"}
-                      </button>
-                      {!published && !row.sourced && (
-                        <span className="text-xs text-muted-foreground">
-                          Statut et source obligatoires
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 max-w-xs">
-                    {row.editions.length === 0 ? (
-                      <span className="text-muted-foreground">Aucune édition</span>
-                    ) : (
-                      <ul className="space-y-2">
-                        {row.editions.map((edition) => {
-                          const editionKey = `edition:${edition.id}`;
-                          const editionPublished = edition.publicationStatus === "PUBLISHED";
-                          return (
-                            <li key={edition.id} className="space-y-1">
-                              <p className="line-clamp-2">
-                                {edition.label}{" "}
-                                <span className="text-muted-foreground">(v{edition.version})</span>
-                              </p>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={PUBLICATION_STATUS_STYLES[edition.publicationStatus]}
-                                >
-                                  {PUBLICATION_STATUS_LABELS[edition.publicationStatus]}
-                                </Badge>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    runAction(editionKey, () =>
-                                      setProgramEditionPublicationAction({
-                                        programEditionId: edition.id,
-                                        status: editionPublished ? "DRAFT" : "PUBLISHED",
-                                      })
-                                    )
-                                  }
-                                  disabled={locked}
-                                  aria-label={`${editionPublished ? "Dépublier" : "Publier"} l'édition ${edition.label} de ${row.candidateName}`}
-                                  className="inline-flex min-h-11 items-center justify-center rounded border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50 md:min-h-[36px]"
-                                >
-                                  {busy === editionKey
-                                    ? "En cours..."
-                                    : editionPublished
-                                      ? "Dépublier"
-                                      : "Publier"}
-                                </button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Badge variant="outline" className={SYNTHESIS_STYLES[row.synthesisState]}>
-                        {SYNTHESIS_LABELS[row.synthesisState]}
-                      </Badge>
+                      }
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {busy === synthesisKey ? "Génération..." : "Générer une proposition"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSynthesisEditor({
+                          candidacyId: row.candidacyId,
+                          candidateName: row.candidateName,
+                          text: row.synthesis ?? "",
+                        })
+                      }
+                      disabled={locked || !row.synthesis}
+                      className="inline-flex min-h-11 items-center justify-center rounded-md border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+                    >
+                      Modifier le texte
+                    </button>
+                  </div>
+                  {row.synthesisGeneratedAt !== null && (
+                    <p className="text-xs text-muted-foreground">
+                      Dernière version : {formatDate(row.synthesisGeneratedAt)}
+                    </p>
+                  )}
+                  {row.politicianSlug && (
+                    <Link
+                      href={`/admin/candidats/${row.politicianSlug}/syntheses-thematiques`}
+                      className="inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-2"
+                    >
+                      Gérer les synthèses par thème
+                    </Link>
+                  )}
+                </section>
+              </div>
+
+              {editorOpen && synthesisEditor && (
+                <section
+                  aria-labelledby={`editeur-${row.candidacyId}`}
+                  className="mb-5 rounded-lg border border-primary/30 bg-muted/40 p-4"
+                >
+                  <h3 id={`editeur-${row.candidacyId}`} className="font-display text-lg font-bold">
+                    Relire la synthèse de {synthesisEditor.candidateName}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Corrige librement la proposition. Rien n’est publié avant « Enregistrer la
+                    synthèse ».
+                  </p>
+                  <label
+                    htmlFor={`texte-synthese-${row.candidacyId}`}
+                    className="mt-4 block text-sm font-semibold"
+                  >
+                    Texte public
+                  </label>
+                  <Textarea
+                    id={`texte-synthese-${row.candidacyId}`}
+                    value={synthesisEditor.text}
+                    onChange={(event) =>
+                      setSynthesisEditor((current) =>
+                        current ? { ...current, text: event.target.value } : current
+                      )
+                    }
+                    rows={10}
+                    className="mt-2 text-base leading-7"
+                  />
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {synthesisEditor.text.trim().split(/\s+/).filter(Boolean).length} mots
+                    </p>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          runAction(synthesisKey, () =>
-                            regenerateCandidateSynthesisAction({ candidacyId: row.candidacyId })
-                          )
-                        }
-                        disabled={locked || row.status !== "DECLARE" || !row.presidentialId}
-                        title={
-                          row.status !== "DECLARE"
-                            ? "Seule une candidature déclarée porte une synthèse"
-                            : !row.presidentialId
-                              ? "Publier la fiche crée les métadonnées où la synthèse est écrite"
-                              : undefined
-                        }
-                        aria-label={`Régénérer la synthèse de ${row.candidateName}`}
-                        className="inline-flex min-h-11 items-center justify-center rounded border px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50 md:min-h-[36px]"
+                        onClick={() => setSynthesisEditor(null)}
+                        disabled={locked}
+                        className="inline-flex min-h-11 items-center justify-center rounded-md border px-4 text-sm font-semibold hover:bg-muted disabled:opacity-50"
                       >
-                        {busy === synthesisKey ? "Génération..." : "Régénérer"}
+                        Annuler
                       </button>
-                      {row.synthesisGeneratedAt !== null && (
-                        <span className="text-xs text-muted-foreground">
-                          {formatDate(row.synthesisGeneratedAt)}
-                        </span>
-                      )}
-                      {row.politicianSlug && (
-                        <Link
-                          href={`/admin/candidats/${row.politicianSlug}/syntheses-thematiques`}
-                          className="inline-flex min-h-11 items-center text-xs font-semibold text-primary hover:underline md:min-h-[36px]"
-                        >
-                          Gérer les synthèses par thème
-                        </Link>
-                      )}
+                      <button
+                        type="button"
+                        onClick={saveSynthesis}
+                        disabled={locked || synthesisEditor.text.trim().length < 20}
+                        className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {busy === saveKey ? "Enregistrement..." : "Enregistrer la synthèse"}
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-3 py-2 max-w-md">
+                  </div>
+                </section>
+              )}
+
+              <details className="border-t pt-4">
+                <summary className="min-h-11 cursor-pointer text-sm font-semibold text-primary">
+                  Paramètres secondaires
+                </summary>
+                <div className="grid gap-4 pt-3 sm:grid-cols-[8rem_1fr]">
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Rang</span>
+                    <input
+                      type="number"
+                      min={0}
+                      defaultValue={row.rank ?? ""}
+                      onBlur={(event) => {
+                        const value = event.target.value ? Number(event.target.value) : null;
+                        if (row.presidentialId)
+                          patchPresidential(row.presidentialId, { rank: value });
+                      }}
+                      className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
+                      disabled={locked || !row.presidentialId}
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Slogan</span>
                     <input
                       type="text"
                       defaultValue={row.slogan ?? ""}
-                      onBlur={(e) => {
-                        const value = e.target.value.trim() || null;
+                      onBlur={(event) => {
+                        const value = event.target.value.trim() || null;
                         if (row.presidentialId)
                           patchPresidential(row.presidentialId, { slogan: value });
                       }}
-                      className="w-full rounded border px-2 py-0.5 text-sm dark:bg-slate-800"
-                      aria-label={`Slogan de ${row.candidateName}`}
+                      className="min-h-11 w-full rounded-md border bg-background px-3 text-sm"
                       disabled={locked || !row.presidentialId}
                       placeholder={
-                        row.presidentialId ? "ex : Vous protéger" : "Métadonnées absentes"
+                        row.presidentialId ? "Ex. : Vous protéger" : "Métadonnées absentes"
                       }
                     />
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
-                  Aucune candidature enregistrée.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </label>
+                </div>
+                {row.politicianId && row.politicianPublicationStatus !== "PUBLISHED" && (
+                  <Link
+                    href={`/admin/politiques/${row.politicianId}`}
+                    className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline underline-offset-2"
+                  >
+                    Publier la personnalité
+                  </Link>
+                )}
+              </details>
+            </article>
+          );
+        })}
+        {rows.length === 0 && (
+          <p className="rounded-lg border p-6 text-center text-muted-foreground">
+            Aucune candidature enregistrée.
+          </p>
+        )}
       </div>
     </div>
   );

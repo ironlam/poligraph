@@ -60,6 +60,7 @@ export default async function AdminCandidatsPage() {
             })
           ? "CONTRADICTED"
           : "CURRENT",
+      synthesis: candidacy.presidentialData?.synthesis ?? null,
       synthesisGeneratedAt: candidacy.presidentialData?.synthesisGeneratedAt ?? null,
       editions: editions
         .filter((edition) => edition.candidacyId === candidacy.id)

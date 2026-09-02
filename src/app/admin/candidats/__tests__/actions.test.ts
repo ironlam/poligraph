@@ -79,10 +79,10 @@ beforeEach(() => {
   generateSynthesisMock.mockResolvedValue({
     ok: true,
     text: "Une synthèse.",
-    provider: "anthropic",
+    provider: "mistral-large-latest",
     measureCount: 5,
     mandateCount: 0,
-    persisted: true,
+    persisted: false,
   });
 });
 
@@ -326,7 +326,7 @@ describe("statut politique d'une candidature", () => {
  * Same doctrine as the two switches above: the action is a network endpoint, so an unauthenticated
  * call must reach neither the provider nor the database.
  */
-describe("régénération de la synthèse d'une candidature", () => {
+describe("génération d'une proposition de synthèse", () => {
   it("n'appelle pas le générateur sans session", async () => {
     isAuthenticatedMock.mockResolvedValue(false);
     const { regenerateCandidateSynthesisAction } = await actions();
@@ -335,16 +335,15 @@ describe("régénération de la synthèse d'une candidature", () => {
     expect(generateSynthesisMock).not.toHaveBeenCalled();
   });
 
-  it("écrit la synthèse et purge le tag des surfaces présidentielles", async () => {
+  it("renvoie une proposition sans écrire ni purger les surfaces publiques", async () => {
     const { regenerateCandidateSynthesisAction } = await actions();
 
     const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
 
-    expect(result).toEqual({ ok: true });
-    expect(generateSynthesisMock).toHaveBeenCalledWith("cand-1", { persist: true });
-    // Sans cette purge, la fiche sert l'ancien texte jusqu'au filet ISR de 24 h.
-    expect(invalidateCandidacyTagsMock).toHaveBeenCalledWith("elec-1");
-    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/candidats");
+    expect(result).toEqual({ ok: true, text: "Une synthèse." });
+    expect(generateSynthesisMock).toHaveBeenCalledWith("cand-1", { persist: false });
+    expect(invalidateCandidacyTagsMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
   });
 
   it("rend le refus du service au lieu de le traduire en échec générique", async () => {
