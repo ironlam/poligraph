@@ -7,6 +7,7 @@ import {
   getThemeSynthesisState,
   screenThemeSynthesis,
   screenThemeSynthesisGrounding,
+  themeSynthesisMaxAxes,
   themeSynthesisSafetyFloor,
   themeSynthesisTargetRange,
   type ThemeSynthesisInput,
@@ -53,9 +54,12 @@ describe("synthèse thématique d'une candidature", () => {
     expect(themeSynthesisTargetRange(2)).toEqual({ min: 45, max: 80 });
     expect(themeSynthesisTargetRange(8)).toEqual({ min: 90, max: 150 });
     expect(themeSynthesisTargetRange(25)).toEqual({ min: 120, max: 200 });
-    expect(themeSynthesisSafetyFloor(2)).toBe(20);
+    expect(themeSynthesisSafetyFloor(2)).toBe(0);
     expect(themeSynthesisSafetyFloor(8)).toBe(50);
     expect(themeSynthesisSafetyFloor(25)).toBe(70);
+    expect(themeSynthesisMaxAxes(1)).toBe(1);
+    expect(themeSynthesisMaxAxes(2)).toBe(2);
+    expect(themeSynthesisMaxAxes(25)).toBe(3);
   });
 
   it("dérive l'obsolescence de l'empreinte courante sans modifier la synthèse", () => {
@@ -114,6 +118,14 @@ describe("synthèse thématique d'une candidature", () => {
     expect(prompt).toContain(
       "ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre mesure"
     );
+  });
+
+  it("demande des axes sans forcer le regroupement de mesures sans rapport", () => {
+    const prompt = buildThemeSynthesisPrompt(input());
+
+    expect(prompt).toContain("2 axes cohérents au maximum");
+    expect(prompt).toContain("Une mesure peut former un axe à elle seule");
+    expect(prompt).toContain("une suite de reformulations n'est pas une synthèse");
   });
 
   it("accepte uniquement des affirmations rattachées à des mesures connues", () => {
@@ -176,6 +188,42 @@ describe("synthèse thématique d'une candidature", () => {
         ],
       },
     ],
+    [
+      "une finalité absente des mesures citées",
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Créer 100 centres de santé publics pour simplifier le système de soins.",
+            measureRefs: ["M2"],
+          },
+        ],
+      },
+    ],
+    [
+      "une finalité absente précédée d'un adverbe",
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Créer 100 centres de santé publics pour mieux simplifier le système de soins.",
+            measureRefs: ["M2"],
+          },
+        ],
+      },
+    ],
+    [
+      "une finalité absente précédée d'une négation",
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Créer 100 centres de santé publics pour ne pas réduire l'offre de soins.",
+            measureRefs: ["M2"],
+          },
+        ],
+      },
+    ],
   ])("refuse %s", (_label, output) => {
     expect(screenThemeSynthesis(output, input())).toMatchObject({ ok: false });
   });
@@ -190,23 +238,115 @@ describe("synthèse thématique d'une candidature", () => {
     const prompt = buildThemeSynthesisGroundingPrompt(claims, input());
 
     expect(prompt).toContain('<affirmation index="0">');
+    expect(prompt).toContain("<corpus>");
     expect(prompt).toContain('<preuve ref="M1">');
     expect(prompt).toContain('<preuve ref="M2">');
     expect(
       screenThemeSynthesisGrounding(
-        { claims: [{ index: 0, supported: true, reason: "Les preuves le disent." }] },
+        {
+          claims: [{ index: 0, supported: true, reason: "Les preuves le disent." }],
+          quality: {
+            isSynthesis: true,
+            representsMainAxes: true,
+            reason: "Les propositions sont regroupées par orientation.",
+          },
+        },
         1
       )
     ).toEqual({ ok: true });
     expect(
       screenThemeSynthesisGrounding(
-        { claims: [{ index: 0, supported: false, reason: "La gratuité est absente." }] },
+        {
+          claims: [{ index: 0, supported: false, reason: "La gratuité est absente." }],
+          quality: {
+            isSynthesis: true,
+            representsMainAxes: true,
+            reason: "La structure est synthétique.",
+          },
+        },
         1
       )
     ).toEqual({ ok: false, detail: "La gratuité est absente." });
   });
 
-  it("refuse une sortie trop courte selon la taille du corpus", () => {
+  it("refuse une énumération même lorsque chaque affirmation est étayée", () => {
+    expect(
+      screenThemeSynthesisGrounding(
+        {
+          claims: [
+            { index: 0, supported: true, reason: "La preuve le dit." },
+            { index: 1, supported: true, reason: "La preuve le dit." },
+          ],
+          quality: {
+            isSynthesis: false,
+            representsMainAxes: true,
+            reason: "Le texte reformule les mesures l'une après l'autre.",
+          },
+        },
+        2
+      )
+    ).toEqual({
+      ok: false,
+      detail: "Le texte reformule les mesures l'une après l'autre.",
+    });
+  });
+
+  it("refuse une synthèse qui ignore les orientations principales du corpus", () => {
+    expect(
+      screenThemeSynthesisGrounding(
+        {
+          claims: [{ index: 0, supported: true, reason: "La preuve le dit." }],
+          quality: {
+            isSynthesis: true,
+            representsMainAxes: false,
+            reason: "Le texte retient une proposition isolée et omet les axes dominants.",
+          },
+        },
+        1
+      )
+    ).toEqual({
+      ok: false,
+      detail: "Le texte retient une proposition isolée et omet les axes dominants.",
+    });
+  });
+
+  it("autorise deux axes distincts lorsque deux mesures ne peuvent pas être regroupées", () => {
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          { text: "La première mesure porte sur les maternités.", measureRefs: ["M1"] },
+          { text: "La seconde prévoit 100 centres de santé publics.", measureRefs: ["M2"] },
+        ],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("refuse plus de trois axes pour un corpus riche", () => {
+    const measures = Array.from({ length: 8 }, (_, index) => ({
+      id: `measure-${index + 1}`,
+      revisionId: `revision-${index + 1}`,
+      text: `Mesure publiée numéro ${index + 1}.`,
+      details: null,
+    }));
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: Array.from({ length: 4 }, (_, index) => ({
+          text: `Cette orientation reprend la mesure publiée numéro ${index + 1} avec une formulation suffisamment développée pour le contrôle.`,
+          measureRefs: [`M${index + 1}`],
+        })),
+      },
+      input({ measures })
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "catalogue" });
+  });
+
+  it("accepte une sortie courte pour un corpus de deux mesures", () => {
     const result = screenThemeSynthesis(
       {
         theme: "SANTE",
@@ -217,6 +357,6 @@ describe("synthèse thématique d'une candidature", () => {
       input()
     );
 
-    expect(result).toMatchObject({ ok: false, reason: "trop_court" });
+    expect(result).toMatchObject({ ok: true });
   });
 });

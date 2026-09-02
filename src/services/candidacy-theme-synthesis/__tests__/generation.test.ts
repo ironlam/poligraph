@@ -44,6 +44,11 @@ const validOutput = JSON.stringify({
 });
 const validVerification = JSON.stringify({
   claims: [{ index: 0, supported: true, reason: "Les deux mesures citées l'étayent." }],
+  quality: {
+    isSynthesis: true,
+    representsMainAxes: true,
+    reason: "Les mesures sont regroupées dans un axe commun.",
+  },
 });
 
 beforeEach(() => {
@@ -87,6 +92,12 @@ describe("generateCandidacyThemeSynthesis", () => {
     expect(result).toMatchObject({ ok: true, persisted: false, measureCount: 2 });
     expect(mocks.upsertSynthesis).not.toHaveBeenCalled();
     expect(mocks.createAudit).not.toHaveBeenCalled();
+    expect(mocks.callMistral.mock.calls[0]![1]).toMatchObject({
+      responseFormat: { type: "json_schema" },
+    });
+    expect(mocks.callMistral.mock.calls[1]![1]).toMatchObject({
+      responseFormat: { type: "json_schema" },
+    });
   });
 
   it("enregistre seulement un brouillon à relire avec son empreinte et ses preuves", async () => {
@@ -110,6 +121,7 @@ describe("generateCandidacyThemeSynthesis", () => {
           status: "PENDING_REVIEW",
           evidence: expect.objectContaining({ claims: expect.any(Array) }),
           corpusFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+          promptVersion: "candidacy-theme-synthesis-v3",
         }),
         update: expect.objectContaining({
           status: "PENDING_REVIEW",
@@ -195,6 +207,11 @@ describe("generateCandidacyThemeSynthesis", () => {
         model: "mistral-large-2508",
         text: JSON.stringify({
           claims: [{ index: 0, supported: false, reason: "Un effet est ajouté." }],
+          quality: {
+            isSynthesis: true,
+            representsMainAxes: true,
+            reason: "La structure est synthétique.",
+          },
         }),
       })
       .mockResolvedValueOnce({ model: "mistral-large-2508", text: validOutput })
