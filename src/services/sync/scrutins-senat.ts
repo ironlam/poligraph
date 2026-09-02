@@ -110,6 +110,10 @@ export function shouldSaveSenateCursor(
   return !dryRun && (force || nextCursor > currentCursor);
 }
 
+export function shouldRewriteSenateVotes(resolvedVotes: number): boolean {
+  return resolvedVotes > 0;
+}
+
 /**
  * Get list of scrutin numbers from a session page
  */
@@ -517,6 +521,23 @@ export async function syncScrutinsSenat(
               }
             }
 
+            if (!shouldRewriteSenateVotes(votesToCreate.length)) {
+              stats.scrutinsSkipped++;
+              stats.errors.push(
+                `Session ${currentSession} n°${number}: aucune identité de sénateur résolue`
+              );
+              await db.scrutinVoteImport.update({
+                where: { scrutinId: scrutin.id },
+                data: {
+                  status: "INCOMPLETE",
+                  statusReason: "no_resolved_senators",
+                },
+              });
+              cursorOutcomes.push({ number: numInt, outcome: "RETRY" });
+              progress.tick();
+              continue;
+            }
+
             // Check votes hash to skip unchanged scrutins
             const newHash = hashVotes(votesToCreate);
 
@@ -551,14 +572,23 @@ export async function syncScrutinsSenat(
             cursorOutcomes.push({ number: numInt, outcome: "PROCESSED" });
           } else {
             // Dry run: just count
-            stats.scrutinsCreated++;
             if (sourceAssessment.status === "COMPLETE") {
+              const resolvedVotes = votes.filter((vote) =>
+                matriculeToId.has(vote.matricule)
+              ).length;
               for (const vote of votes) {
                 if (!matriculeToId.has(vote.matricule)) {
                   stats.senatorsNotFound.add(vote.matricule);
-                } else {
-                  stats.votesCreated++;
                 }
+              }
+              if (!shouldRewriteSenateVotes(resolvedVotes)) {
+                stats.scrutinsSkipped++;
+                stats.errors.push(
+                  `Session ${currentSession} n°${number}: aucune identité de sénateur résolue`
+                );
+              } else {
+                stats.scrutinsCreated++;
+                stats.votesCreated += resolvedVotes;
               }
             } else {
               stats.scrutinsSkipped++;
