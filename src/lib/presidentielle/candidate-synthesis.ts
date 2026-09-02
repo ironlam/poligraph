@@ -132,6 +132,8 @@ export type SynthesisMandate = {
   institution: string | null;
   startYear: number | null;
   endYear: number | null;
+  /** The domain flag is authoritative; a closed imported row may still have no end date. */
+  isCurrent: boolean;
 };
 
 export type CandidateSynthesisInput = {
@@ -244,7 +246,7 @@ function mandateFamily(role: string, institution: string | null): string | null 
   if (/depute/u.test(plainRole) && /assemblee nationale/u.test(plainInstitution)) {
     return "depute-assemblee-nationale";
   }
-  if (/senateur/u.test(plainRole) && /senat/u.test(plainInstitution)) {
+  if (/(?:senateur|senatrice)/u.test(plainRole) && /senat/u.test(plainInstitution)) {
     return "senateur-senat";
   }
   if (/(?:depute europeen|parlement europeen)/u.test(`${plainRole} ${plainInstitution}`)) {
@@ -281,15 +283,27 @@ function compactMandates(mandates: SynthesisMandate[]): CanonicalMandate[] {
           : Math.min(existing.startYear, normalized.startYear);
     }
     existing.endYear =
-      existing.endYear === null || normalized.endYear === null
+      existing.isCurrent || normalized.isCurrent
         ? null
-        : Math.max(existing.endYear, normalized.endYear);
+        : Math.max(existing.endYear ?? 0, normalized.endYear ?? 0) || null;
+    existing.isCurrent ||= normalized.isCurrent;
   }
   return compacted;
 }
 
 function lowercaseInitial(value: string): string {
   return value.length === 0 ? value : `${value[0]!.toLocaleLowerCase("fr")}${value.slice(1)}`;
+}
+
+function containsWholePhrase(value: string, phrase: string): boolean {
+  let offset = value.indexOf(phrase);
+  while (offset >= 0) {
+    const before = value[offset - 1];
+    const after = value[offset + phrase.length];
+    if ((!before || !/\p{L}/u.test(before)) && (!after || !/\p{L}/u.test(after))) return true;
+    offset = value.indexOf(phrase, offset + 1);
+  }
+  return false;
 }
 
 function formatCanonicalMandate(mandate: CanonicalMandate): string {
@@ -301,19 +315,23 @@ function formatCanonicalMandate(mandate: CanonicalMandate): string {
   if (/^Dirigeant\(e\)$/iu.test(role) && institution) {
     role = `Direction de ${institution}`;
   }
-  const where = institution && !role.includes(institution) ? ` (${institution})` : "";
+  const where = institution && !containsWholePhrase(role, institution) ? ` (${institution})` : "";
   if (mandate.occurrences > 1 && mandate.startYear) {
-    const dates = mandate.endYear
-      ? `, à plusieurs reprises de ${mandate.startYear} à ${mandate.endYear}`
-      : `, avec des mandats enregistrés depuis ${mandate.startYear}`;
+    const dates = mandate.isCurrent
+      ? `, avec des mandats enregistrés depuis ${mandate.startYear}`
+      : mandate.endYear
+        ? `, à plusieurs reprises de ${mandate.startYear} à ${mandate.endYear}`
+        : `, avec des mandats enregistrés à partir de ${mandate.startYear}`;
     return `${role}${where}${dates}`;
   }
   const dates = mandate.startYear
-    ? mandate.endYear
-      ? mandate.startYear === mandate.endYear
-        ? ` en ${mandate.startYear}`
-        : ` de ${mandate.startYear} à ${mandate.endYear}`
-      : ` depuis ${mandate.startYear}`
+    ? mandate.isCurrent
+      ? ` depuis ${mandate.startYear}`
+      : mandate.endYear
+        ? mandate.startYear === mandate.endYear
+          ? ` en ${mandate.startYear}`
+          : ` de ${mandate.startYear} à ${mandate.endYear}`
+        : ` à partir de ${mandate.startYear}`
     : "";
   return `${role}${where}${dates}`;
 }
@@ -328,8 +346,8 @@ export function buildCanonicalCareer(input: CandidateSynthesisInput): string {
     ...mandate,
     text: formatCanonicalMandate(mandate),
   }));
-  const current = mandates.filter((mandate) => mandate.endYear === null);
-  const previous = mandates.filter((mandate) => mandate.endYear !== null);
+  const current = mandates.filter((mandate) => mandate.isCurrent);
+  const previous = mandates.filter((mandate) => !mandate.isCurrent);
   const sentences: string[] = [];
   if (current.length > 0) {
     const roles = current.map((mandate) => {
@@ -494,12 +512,13 @@ const JUDICIAL_TERMS = [
   { family: "ineligibilite", pattern: /(?<!\p{L})inéligibilité(?!\p{L})/iu },
 ] as const;
 
-function findJudicialTerm(text: string) {
+function findJudicialTerms(text: string) {
+  const matches: Array<{ family: string; match: string }> = [];
   for (const term of JUDICIAL_TERMS) {
     const match = term.pattern.exec(text);
-    if (match) return { family: term.family, match: match[0] };
+    if (match) matches.push({ family: term.family, match: match[0] });
   }
-  return null;
+  return matches;
 }
 
 function sourceCarriesJudicialFamily(sourceTexts: readonly string[], family: string): boolean {
@@ -842,9 +861,15 @@ export function screenSynthesis({
   // non-word character. `\binéligibilité\b` therefore fails to match the very word it
   // names, which is how this pattern first shipped. Every term here is accented or
   // followed by one, so the whole family was affected.
-  const judicial = findJudicialTerm(generatedText);
-  if (judicial && !sourceCarriesJudicialFamily(allowedJudicialSourceTexts, judicial.family)) {
-    return { ok: false, reason: "judiciaire", detail: `mention « ${judicial.match} »` };
+  const unsupportedJudicial = findJudicialTerms(generatedText).find(
+    (judicial) => !sourceCarriesJudicialFamily(allowedJudicialSourceTexts, judicial.family)
+  );
+  if (unsupportedJudicial) {
+    return {
+      ok: false,
+      reason: "judiciaire",
+      detail: `mention « ${unsupportedJudicial.match} »`,
+    };
   }
 
   const words = wordCount(text);

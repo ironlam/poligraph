@@ -33,8 +33,20 @@ const BASE: CandidateSynthesisInput = {
   candidateName: "Jeanne Martin",
   partyLabel: "Parti fictif",
   mandates: [
-    { role: "Députée", institution: "Assemblée nationale", startYear: 2017, endYear: null },
-    { role: "Maire", institution: "Villeneuve", startYear: 2008, endYear: 2017 },
+    {
+      role: "Députée",
+      institution: "Assemblée nationale",
+      startYear: 2017,
+      endYear: null,
+      isCurrent: true,
+    },
+    {
+      role: "Maire",
+      institution: "Villeneuve",
+      startYear: 2008,
+      endYear: 2017,
+      isCurrent: false,
+    },
   ],
   voteCount: 421,
   measures: [
@@ -75,36 +87,42 @@ describe("buildCandidateSynthesisPrompt", () => {
           institution: "Assemblée nationale",
           startYear: 2024,
           endYear: null,
+          isCurrent: true,
         },
         {
           role: "député français",
           institution: "Assemblée nationale",
           startYear: 2022,
           endYear: 2024,
+          isCurrent: false,
         },
         {
           role: "député français",
           institution: "Assemblée nationale",
           startYear: 2017,
           endYear: 2022,
+          isCurrent: false,
         },
         {
           role: "Députée de la 2e circonscription",
           institution: "Assemblée nationale",
           startYear: 2013,
           endYear: 2017,
+          isCurrent: false,
         },
         {
           role: "Ministre de l'Écologie",
           institution: "Gouvernement Jean-Marc Ayrault n°2",
           startYear: 2012,
           endYear: 2013,
+          isCurrent: false,
         },
         {
           role: "député français",
           institution: "Assemblée nationale",
           startYear: 2007,
           endYear: 2012,
+          isCurrent: false,
         },
       ],
     });
@@ -113,6 +131,50 @@ describe("buildCandidateSynthesisPrompt", () => {
       "Delphine Batho est actuellement députée de la 2e circonscription (Assemblée nationale), avec des mandats enregistrés depuis 2007. Delphine Batho a également été ministre de l'Écologie (Gouvernement Jean-Marc Ayrault n°2) de 2012 à 2013."
     );
     expect(career.match(/Assemblée nationale/g)).toHaveLength(1);
+  });
+
+  it("utilise isCurrent même quand une fin de mandat importée n'a pas de date", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      mandates: [
+        {
+          role: "Député français",
+          institution: "Assemblée nationale",
+          startYear: 2022,
+          endYear: null,
+          isCurrent: false,
+        },
+      ],
+    });
+
+    expect(career).not.toContain("actuellement");
+    expect(career).not.toContain("depuis 2022");
+    expect(career).toContain("à partir de 2022");
+  });
+
+  it("fusionne aussi les mandats successifs d'une sénatrice", () => {
+    const career = buildCanonicalCareer({
+      ...BASE,
+      mandates: [
+        {
+          role: "Sénatrice",
+          institution: "Sénat",
+          startYear: 2023,
+          endYear: null,
+          isCurrent: true,
+        },
+        {
+          role: "Sénatrice",
+          institution: "Sénat",
+          startYear: 2017,
+          endYear: 2023,
+          isCurrent: false,
+        },
+      ],
+    });
+
+    expect(career.match(/Sénat/g)).toHaveLength(1);
+    expect(career).toContain("mandats enregistrés depuis 2017");
   });
 
   it("groups measures by theme under their French label", () => {
@@ -590,6 +652,22 @@ describe("screenSynthesis", () => {
     // "procession" contains "procès" only if the pattern forgets its word boundaries.
     const result = screenSynthesis(`Elle a ouvert la procession du 14 juillet. ${words(120)}`);
     expect(result.ok).toBe(true);
+  });
+
+  it("refuse chaque famille judiciaire absente des sources", () => {
+    const result = screenSynthesisSegments({
+      text: `Le programme prévoit un parquet spécialisé sans évoquer de condamnation individuelle. ${words(40)}`,
+      generatedText:
+        "Le programme prévoit un parquet spécialisé sans évoquer de condamnation individuelle.",
+      exemptSourceTexts: [],
+      allowedJudicialSourceTexts: ["Créer un parquet financier spécialisé."],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "judiciaire",
+      detail: "mention « condamnation »",
+    });
   });
 
   it.each(["—", "–"])("rejects the long dash %s", (dash) => {

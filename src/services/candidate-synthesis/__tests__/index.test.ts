@@ -129,6 +129,9 @@ describe("generateCandidateSynthesis", () => {
           name: "candidate_synthesis",
           schema: {
             required: ["career", "programmeClaims"],
+            properties: {
+              programmeClaims: { maxItems: 4 },
+            },
           },
         },
       },

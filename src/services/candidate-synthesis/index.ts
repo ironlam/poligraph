@@ -25,6 +25,7 @@ import {
   buildCandidateSynthesisGroundingPrompt,
   buildCanonicalCareer,
   buildSynthesisSystemPrompt,
+  MAX_PROGRAMME_CLAIMS,
   screenCandidateSynthesis,
   screenCandidateSynthesisGrounding,
   screenSynthesis,
@@ -49,7 +50,7 @@ const SYNTHESIS_RESPONSE_FORMAT = {
         career: { type: "string", maxLength: 1_000 },
         programmeClaims: {
           type: "array",
-          maxItems: 5,
+          maxItems: MAX_PROGRAMME_CLAIMS,
           items: {
             type: "object",
             additionalProperties: false,
@@ -221,7 +222,14 @@ export async function generateCandidateSynthesis(
   const [mandates, voteCount, measures] = await Promise.all([
     db.mandate.findMany({
       where: { politicianId },
-      select: { role: true, title: true, institution: true, startDate: true, endDate: true },
+      select: {
+        role: true,
+        title: true,
+        institution: true,
+        startDate: true,
+        endDate: true,
+        isCurrent: true,
+      },
       orderBy: { startDate: "desc" },
       take: MANDATE_LIMIT,
     }),
@@ -247,6 +255,7 @@ export async function generateCandidateSynthesis(
       institution: m.institution,
       startYear: m.startDate.getUTCFullYear(),
       endYear: m.endDate?.getUTCFullYear() ?? null,
+      isCurrent: m.isCurrent,
     })),
     voteCount,
     measures: measures.flatMap((m) =>
