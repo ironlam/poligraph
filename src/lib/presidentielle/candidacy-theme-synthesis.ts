@@ -291,7 +291,7 @@ function purposeVerbs(value: string): Set<string> {
   return new Set(
     Array.from(
       value.matchAll(
-        /\b(?:afin\s+(?:de|d['’])|dans\s+le\s+but\s+de|pour|vise(?:nt)?\s+à)\s*([\p{L}-]+(?:er|ir|re))\b/giu
+        /\b(?:afin\s+(?:de|d['’])|dans\s+le\s+but\s+de|pour|vise(?:nt)?\s+à)\s*(?:(?:ne\s+(?:pas|plus|jamais)|mieux|davantage|plus|moins|encore|pleinement|progressivement|rapidement)\s+){0,3}([\p{L}-]+(?:er|ir|re))\b/giu
       ),
       (match) => match[1]!.toLocaleLowerCase("fr")
     )

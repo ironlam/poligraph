@@ -200,6 +200,30 @@ describe("synthèse thématique d'une candidature", () => {
         ],
       },
     ],
+    [
+      "une finalité absente précédée d'un adverbe",
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Créer 100 centres de santé publics pour mieux simplifier le système de soins.",
+            measureRefs: ["M2"],
+          },
+        ],
+      },
+    ],
+    [
+      "une finalité absente précédée d'une négation",
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Créer 100 centres de santé publics pour ne pas réduire l'offre de soins.",
+            measureRefs: ["M2"],
+          },
+        ],
+      },
+    ],
   ])("refuse %s", (_label, output) => {
     expect(screenThemeSynthesis(output, input())).toMatchObject({ ok: false });
   });
