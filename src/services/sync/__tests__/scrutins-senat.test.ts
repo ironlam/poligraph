@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { getNextSenateCursor, parseScrutinMetadata } from "@/services/sync/scrutins-senat";
+import {
+  getNextSenateCursor,
+  parseScrutinMetadata,
+  shouldSaveSenateCursor,
+} from "@/services/sync/scrutins-senat";
 
 describe("import des scrutins publics du Sénat", () => {
   it("garde le curseur derrière un scrutin rejeté au milieu d'une liste descendante", () => {
@@ -35,6 +39,13 @@ describe("import des scrutins publics du Sénat", () => {
         { number: 101, outcome: "RETRY" },
       ])
     ).toBe(100);
+  });
+
+  it("réinitialise un ancien curseur quand un import forcé échoue dès le numéro 1", () => {
+    const nextCursor = getNextSenateCursor(0, [{ number: 1, outcome: "RETRY" }]);
+
+    expect(nextCursor).toBe(0);
+    expect(shouldSaveSenateCursor(false, true, 0, nextCursor)).toBe(true);
   });
 
   it("extrait le total de contrôle officiel sans supposer 348 sièges", () => {

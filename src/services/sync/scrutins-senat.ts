@@ -101,6 +101,15 @@ export function getNextSenateCursor(
   return lowestRetry === null ? highestProcessed : Math.min(highestProcessed, lowestRetry - 1);
 }
 
+export function shouldSaveSenateCursor(
+  dryRun: boolean,
+  force: boolean,
+  currentCursor: number,
+  nextCursor: number
+): boolean {
+  return !dryRun && (force || nextCursor > currentCursor);
+}
+
 /**
  * Get list of scrutin numbers from a session page
  */
@@ -580,7 +589,7 @@ export async function syncScrutinsSenat(
 
       // Update cursor for this session
       const nextCursor = getNextSenateCursor(cursorNum, cursorOutcomes);
-      if (!dryRun && nextCursor > cursorNum) {
+      if (shouldSaveSenateCursor(dryRun, force, cursorNum, nextCursor)) {
         await syncMetadata.markCompleted(sessionKey, {
           cursor: String(nextCursor),
           itemCount: stats.scrutinsProcessed,
