@@ -17,6 +17,7 @@ export type PoliticianRow = {
   prominenceScore: number;
   hasCurrentMandate: boolean;
   hasPublishedDirectAffair: boolean;
+  hasPublishedPresidentialCandidacy: boolean;
 };
 
 export function determineStatus(p: PoliticianRow): PublicationStatus | null {
@@ -40,7 +41,15 @@ export function determineStatus(p: PoliticianRow): PublicationStatus | null {
     return PublicationStatus.EXCLUDED;
   }
 
-  // Rule 3b: Publishing someone's judicial affair publishes their profile.
+  // Rule 3b: A sourced presidential candidacy keeps an already-published profile public.
+  // Candidate pages and their measures require a PUBLISHED Politician, so the prominence
+  // pass must not undo that explicit editorial decision. This is deliberately sticky rather
+  // than promotional: a DRAFT profile still requires its own publication decision.
+  if (p.hasPublishedPresidentialCandidacy && p.publicationStatus === PublicationStatus.PUBLISHED) {
+    return PublicationStatus.PUBLISHED;
+  }
+
+  // Rule 3c: Publishing someone's judicial affair publishes their profile.
   // /politiques and the sitemap only list PUBLISHED profiles, so leaving the
   // profile ARCHIVED or DRAFT would link readers from a published affair to a
   // page the site excludes from its own directory and index. Prominence has

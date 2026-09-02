@@ -13,6 +13,7 @@ function row(over: Partial<PoliticianRow> = {}): PoliticianRow {
     prominenceScore: 15,
     hasCurrentMandate: false,
     hasPublishedDirectAffair: false,
+    hasPublishedPresidentialCandidacy: false,
     ...over,
   };
 }
@@ -27,6 +28,21 @@ describe("determineStatus", () => {
     // affair while leaving the profile out of both would link readers to a page
     // the site itself does not acknowledge.
     expect(determineStatus(row({ hasPublishedDirectAffair: true }))).toBe("PUBLISHED");
+  });
+
+  it("keeps a sourced published presidential candidate profile public", () => {
+    expect(
+      determineStatus(
+        row({
+          publicationStatus: "PUBLISHED",
+          hasPublishedPresidentialCandidacy: true,
+        })
+      )
+    ).toBe("PUBLISHED");
+  });
+
+  it("does not publish a draft profile from the candidacy signal alone", () => {
+    expect(determineStatus(row({ hasPublishedPresidentialCandidacy: true }))).toBe("ARCHIVED");
   });
 
   it("keeps publishing anyone holding a current mandate", () => {
@@ -44,6 +60,17 @@ describe("determineStatus", () => {
     // drag a nineteenth-century figure back into the directory.
     expect(
       determineStatus(row({ deathDate: new Date("1935-04-02"), hasPublishedDirectAffair: true }))
+    ).toBe("EXCLUDED");
+  });
+
+  it("leaves pre-1958 deceased figures excluded even with a presidential candidacy", () => {
+    expect(
+      determineStatus(
+        row({
+          deathDate: new Date("1935-04-02"),
+          hasPublishedPresidentialCandidacy: true,
+        })
+      )
     ).toBe("EXCLUDED");
   });
 

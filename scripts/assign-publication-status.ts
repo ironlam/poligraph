@@ -5,11 +5,13 @@
  *   1. statusOverride = true → skip (manual override)
  *   2. Deceased before 1958 → EXCLUDED
  *   3. Born before 1920 AND no current mandate AND low score → EXCLUDED
- *   4. Has current mandate → PUBLISHED
- *   5. prominenceScore >= 150 AND has photo or biography → PUBLISHED
- *   6. Deceased > 10 years → ARCHIVED
- *   7. prominenceScore < 50 AND no current mandate → ARCHIVED
- *   8. Otherwise → DRAFT
+ *   4. Published profile with a sourced published presidential candidacy → keep PUBLISHED
+ *   5. Published direct affair → PUBLISHED
+ *   6. Has current mandate → PUBLISHED
+ *   7. prominenceScore >= 150 AND has photo or biography → PUBLISHED
+ *   8. Deceased > 10 years → ARCHIVED
+ *   9. prominenceScore < 50 AND no current mandate → ARCHIVED
+ *   10. Otherwise → DRAFT
  *
  * Usage:
  *   npx tsx scripts/assign-publication-status.ts              # Apply changes
