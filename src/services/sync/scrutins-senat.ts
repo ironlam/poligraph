@@ -572,14 +572,23 @@ export async function syncScrutinsSenat(
             cursorOutcomes.push({ number: numInt, outcome: "PROCESSED" });
           } else {
             // Dry run: just count
-            stats.scrutinsCreated++;
             if (sourceAssessment.status === "COMPLETE") {
+              const resolvedVotes = votes.filter((vote) =>
+                matriculeToId.has(vote.matricule)
+              ).length;
               for (const vote of votes) {
                 if (!matriculeToId.has(vote.matricule)) {
                   stats.senatorsNotFound.add(vote.matricule);
-                } else {
-                  stats.votesCreated++;
                 }
+              }
+              if (!shouldRewriteSenateVotes(resolvedVotes)) {
+                stats.scrutinsSkipped++;
+                stats.errors.push(
+                  `Session ${currentSession} n°${number}: aucune identité de sénateur résolue`
+                );
+              } else {
+                stats.scrutinsCreated++;
+                stats.votesCreated += resolvedVotes;
               }
             } else {
               stats.scrutinsSkipped++;
