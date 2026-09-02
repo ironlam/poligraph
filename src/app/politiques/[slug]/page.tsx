@@ -28,6 +28,7 @@ import {
 } from "@/services/voteStats";
 import { getPolitician } from "@/lib/data/politicians";
 import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PoliticianHeader } from "./_components/PoliticianHeader";
 import { SITE_URL } from "@/config/site";
 import { ShareBar } from "@/components/ui/ShareBar";
@@ -104,7 +105,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const politician = await getPolitician(slug);
 
   if (!politician) {
-    return { title: "Politicien non trouvé" };
+    return missingEntityMetadata("Politicien non trouvé");
   }
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);

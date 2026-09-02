@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VotingResultBadge, VotePositionBadge } from "@/components/votes";
@@ -191,7 +192,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { scrutin } = await getScrutinWithRedirect(slug);
 
   if (!scrutin) {
-    return { title: "Scrutin non trouvé" };
+    return missingEntityMetadata("Scrutin non trouvé");
   }
 
   // Prefer citizen impact for SEO description (more user-friendly)

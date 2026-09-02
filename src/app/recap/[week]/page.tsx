@@ -9,6 +9,7 @@ import {
 } from "@/lib/data/recap";
 import { RecapView } from "@/components/recap/RecapView";
 import { ArticleJsonLd } from "@/components/seo/JsonLd";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 
 export const revalidate = 600;
 
@@ -33,8 +34,10 @@ function formatRange(start: Date, end: Date): string {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { week } = await params;
   const weekStart = parseISOWeekString(week);
-  if (!weekStart) {
-    return { title: "Recap introuvable" };
+  // Same two gates as the page below: an unparsable week and a future week both
+  // end in notFound(), so neither URL may be offered to the index.
+  if (!weekStart || weekStart > getWeekStart(new Date())) {
+    return missingEntityMetadata("Recap introuvable");
   }
   const weekEnd = getWeekEnd(weekStart);
   const weekNum = getISOWeekNumber(weekStart);

@@ -4,6 +4,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, stripMarkdown } from "@/lib/utils";
@@ -228,7 +229,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { affair } = await getAffairWithRedirect(slug);
 
   if (!affair) {
-    return { title: "Affaire non trouvée" };
+    return missingEntityMetadata("Affaire non trouvée");
   }
 
   // Off-site there is often only a name and an affair title left: append the

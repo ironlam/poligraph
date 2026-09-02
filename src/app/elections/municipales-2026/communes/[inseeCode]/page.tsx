@@ -18,6 +18,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { db } from "@/lib/db";
 import { communeRobotsMetadata } from "@/lib/seo/commune-robots";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -39,7 +40,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const commune = await getCommune(inseeCode);
 
   if (!commune) {
-    return { title: "Commune non trouvée" };
+    return missingEntityMetadata("Commune non trouvée");
   }
 
   const { stats } = commune;

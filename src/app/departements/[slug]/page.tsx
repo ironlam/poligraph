@@ -7,6 +7,7 @@ import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { ensureContrast } from "@/lib/contrast";
 import { getDepartmentBySlug, DEPARTMENTS } from "@/config/departments";
 import { getDeputesByDepartment, getSenateursByDepartment } from "@/lib/data/departments";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
 export const revalidate = 3600; // ISR: revalidate every hour
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const dept = getDepartmentBySlug(slug);
 
   if (!dept) {
-    return { title: "Département introuvable" };
+    return missingEntityMetadata("Département introuvable");
   }
 
   const { name } = dept;

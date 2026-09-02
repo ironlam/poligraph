@@ -2,6 +2,7 @@ import { cache } from "react";
 import { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownText } from "@/components/ui/markdown";
@@ -150,7 +151,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { dossier } = await getDossierWithRedirect(slug);
 
   if (!dossier) {
-    return { title: "Dossier non trouvé" };
+    return missingEntityMetadata("Dossier non trouvé");
   }
 
   return {

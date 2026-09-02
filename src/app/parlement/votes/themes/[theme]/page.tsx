@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/utils";
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 3600;
@@ -74,7 +75,7 @@ export async function generateMetadata({
   const { theme: slug } = await params;
   const sp = await searchParams;
   const theme = legacyThemeFromSlug(slug);
-  if (!theme) return { title: "Thème introuvable" };
+  if (!theme) return missingEntityMetadata("Thème introuvable");
 
   const coverage = coverageOf(await getThemeTypeChamberCounts(theme));
 

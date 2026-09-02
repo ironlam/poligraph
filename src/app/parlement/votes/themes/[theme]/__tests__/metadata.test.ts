@@ -77,4 +77,12 @@ describe("/parlement/votes/themes/[theme] metadata", () => {
     expect(m.title).toBe("Thème introuvable");
     expect(groupBy).not.toHaveBeenCalled();
   });
+
+  it("noindexes an unknown theme instead of inviting indexation", async () => {
+    const m = await generateMetadata({
+      params: Promise.resolve({ theme: "theme-inexistant" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(m.robots).toEqual({ index: false, follow: true });
+  });
 });

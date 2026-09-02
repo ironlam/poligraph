@@ -20,6 +20,7 @@ import {
   getPoliticianVoteChamberCoverage,
 } from "@/services/voteStats";
 import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getPoliticianIndexSignals } from "@/lib/seo/politician-index-signals";
 import { SeoIntro } from "@/components/seo/SeoIntro";
 import {
@@ -147,7 +148,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   ]);
 
   if (!politician) {
-    return { title: "Politicien non trouvé" };
+    return missingEntityMetadata("Politicien non trouvé");
   }
 
   const voteChambers = await getPoliticianVoteChamberCoverage(politician.id);

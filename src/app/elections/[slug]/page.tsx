@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { SENATORIALES_2026_SLUG } from "@/lib/data/senatoriales";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,7 +125,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const election = await getElection(slug);
 
   if (!election) {
-    return { title: "Élection non trouvée" };
+    return missingEntityMetadata("Élection non trouvée");
   }
 
   const typeLabel = ELECTION_TYPE_LABELS[election.type];

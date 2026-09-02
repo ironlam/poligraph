@@ -52,4 +52,16 @@ describe("/parlement/groupes/[slug] metadata", () => {
     const m = await metadataFor({ stats: [] });
     expect(String(m.description)).not.toContain("cohésion");
   });
+
+  it("noindexes an unknown group instead of inviting indexation", async () => {
+    getGroupeDetail.mockResolvedValue(null);
+    const m = await generateMetadata({ params: Promise.resolve({ slug: "x-bidon" }) });
+    expect(m.title).toBe("Groupe non trouvé");
+    expect(m.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("leaves an existing group's metadata untouched", async () => {
+    const m = await metadataFor();
+    expect(m.robots).toBeUndefined();
+  });
 });

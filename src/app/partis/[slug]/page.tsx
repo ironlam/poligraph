@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getParty, getPartyLeadership, getPartyRoles } from "@/lib/data/partis";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getPartyPlatform } from "@/lib/data/platforms";
 import { ProgrammeCTA, ProgrammeCTAEmpty } from "@/components/programmes/ProgrammeCTA";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const party = await getParty(slug);
 
   if (!party) {
-    return { title: "Parti non trouvé" };
+    return missingEntityMetadata("Parti non trouvé");
   }
 
   const memberCount = party.politicians.length;

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { RelationsClient } from "./RelationsClient";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { politicianRobotsMetadata } from "@/lib/seo/politician-robots";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { getPoliticianIndexSignals } from "@/lib/seo/politician-index-signals";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   ]);
 
   if (!politician) {
-    return { title: "Non trouvé" };
+    return missingEntityMetadata("Non trouvé");
   }
 
   return {

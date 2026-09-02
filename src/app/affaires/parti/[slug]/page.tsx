@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
@@ -205,7 +206,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const data = await getPartyAffairsData(slug);
 
-  if (!data) return { title: "Parti non trouvé" };
+  if (!data) return missingEntityMetadata("Parti non trouvé");
 
   const { party, condamnesCount, proceduresCount, victimPoliticians, misEnCauseAffairs } = data;
   const totalMisEnCause = new Set(misEnCauseAffairs.map((a) => a.politician.id)).size;

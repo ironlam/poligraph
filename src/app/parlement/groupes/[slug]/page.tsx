@@ -14,6 +14,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { Users, TrendingUp, Target, Activity, FileCheck2 } from "lucide-react";
 import { ParliamentaryGroupJsonLd } from "@/components/seo/JsonLd";
 import { buildGroupeSeo } from "@/lib/seo/groupe-metadata";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 
 export const revalidate = 3600;
 
@@ -24,7 +25,7 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const group = await getGroupeDetail(slug);
-  if (!group) return { title: "Groupe non trouvé" };
+  if (!group) return missingEntityMetadata("Groupe non trouvé");
 
   const seo = buildGroupeSeo({
     name: group.name,

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
+import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
@@ -61,7 +62,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const factCheck = await getFactCheck(slug);
 
   if (!factCheck) {
-    return { title: "Fact-check non trouvé" };
+    return missingEntityMetadata("Fact-check non trouvé");
   }
 
   const ratingLabel = FACTCHECK_RATING_LABELS[factCheck.verdictRating];

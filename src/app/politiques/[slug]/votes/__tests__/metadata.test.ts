@@ -120,4 +120,22 @@ describe("/politiques/[slug]/votes metadata", () => {
     });
     expect(m.title).toBe("Politicien non trouvé");
   });
+
+  it("noindexes an unknown politician instead of inviting indexation", async () => {
+    findUnique.mockResolvedValue(null);
+    const m = await generateMetadata({
+      params: Promise.resolve({ slug: "inconnu" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(m.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("leaves an existing politician's metadata untouched", async () => {
+    const m = await metadataFor(
+      "Jean Dupont",
+      [{ type: "DEPUTE", isCurrent: true, role: null }],
+      ["AN"]
+    );
+    expect(m.robots).toBeUndefined();
+  });
 });
