@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/utils";
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 3600;
 
@@ -99,7 +100,7 @@ export default async function ThemePage({
   const theme = legacyThemeFromSlug(slug);
   if (!theme) notFound();
 
-  const page = Math.max(1, parseInt(pageParam || "1", 10));
+  const page = parsePageParam(pageParam);
   const skip = (page - 1) * PAGE_SIZE;
   const label = THEME_CATEGORY_LABELS[theme];
   const icon = THEME_CATEGORY_ICONS[theme];

@@ -30,6 +30,7 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/affaires-metadata";
 import { AFFAIRES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { buildRetourParam } from "@/lib/affairs/listing-return";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -112,7 +113,7 @@ export default async function AffairesPage({ searchParams }: PageProps) {
   const categoryFilter = params.category || "";
   const certaintyFilter = (params.certainty || "") as CertaintyLevel | "";
   const partiFilter = params.parti || "";
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
   const mode = (params.mode === "victime" ? "victime" : "mise-en-cause") as
     | "mise-en-cause"
     | "victime";

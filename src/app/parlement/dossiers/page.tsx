@@ -27,6 +27,7 @@ import { SeoIntro } from "@/components/seo/SeoIntro";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import { DOSSIERS_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
@@ -132,7 +133,7 @@ export default async function AssembleePage({ searchParams }: PageProps) {
   const statusFilter = params.status || "";
   const themeFilter = params.theme || "";
   const sortFilter = params.sort || "";
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
 
   const [{ dossiers, total, totalPages }, statusCounts, themeCounts, pplStats] = await Promise.all([
     getDossiers(statusFilter, themeFilter, sortFilter, page),

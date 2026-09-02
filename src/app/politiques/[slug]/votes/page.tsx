@@ -29,6 +29,7 @@ import {
 } from "@/lib/seo/politician-votes-metadata";
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag (pagination is client-side)
 
@@ -167,7 +168,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function PoliticianVotesPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page || "1", 10));
+  const page = parsePageParam(sp.page);
   const limit = 20;
   const typeTab = sp.type || "votes";
 

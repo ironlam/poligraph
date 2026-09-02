@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cacheTag, cacheLife } from "next/cache";
-import { Prisma } from "@/generated/prisma";
+import { Prisma, ElectionType as ElectionTypeEnum } from "@/generated/prisma";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
 import type { ElectionType } from "@/types";
 import type { ElectionRoundScore } from "@/lib/elections/banner-state";
@@ -693,7 +694,11 @@ export async function getElections(typeFilter?: ElectionType) {
   cacheTag("elections");
   cacheLife("synced");
 
-  const where = typeFilter ? { type: typeFilter } : {};
+  // Defense-in-depth: the page already whitelists `type`, but this is a cached
+  // boundary reachable from anywhere, and an out-of-enum value would both throw
+  // in Prisma and mint a cache entry per payload.
+  const safeType = pickEnumValue(typeFilter, ElectionTypeEnum);
+  const where = safeType ? { type: safeType } : {};
 
   return db.election.findMany({
     where,
