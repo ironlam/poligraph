@@ -6,6 +6,7 @@ import {
   getNextSenateCursor,
   parseScrutinMetadata,
   shouldSaveSenateCursor,
+  shouldRewriteSenateVotes,
 } from "@/services/sync/scrutins-senat";
 
 describe("import des scrutins publics du Sénat", () => {
@@ -46,6 +47,11 @@ describe("import des scrutins publics du Sénat", () => {
 
     expect(nextCursor).toBe(0);
     expect(shouldSaveSenateCursor(false, true, 0, nextCursor)).toBe(true);
+  });
+
+  it("refuse de réécrire les votes quand aucune identité de sénateur n'est résolue", () => {
+    expect(shouldRewriteSenateVotes(0)).toBe(false);
+    expect(shouldRewriteSenateVotes(1)).toBe(true);
   });
 
   it("extrait le total de contrôle officiel sans supposer 348 sièges", () => {

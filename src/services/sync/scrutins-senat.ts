@@ -110,6 +110,10 @@ export function shouldSaveSenateCursor(
   return !dryRun && (force || nextCursor > currentCursor);
 }
 
+export function shouldRewriteSenateVotes(resolvedVotes: number): boolean {
+  return resolvedVotes > 0;
+}
+
 /**
  * Get list of scrutin numbers from a session page
  */
@@ -515,6 +519,23 @@ export async function syncScrutinsSenat(
               } else {
                 stats.senatorsNotFound.add(vote.matricule);
               }
+            }
+
+            if (!shouldRewriteSenateVotes(votesToCreate.length)) {
+              stats.scrutinsSkipped++;
+              stats.errors.push(
+                `Session ${currentSession} n°${number}: aucune identité de sénateur résolue`
+              );
+              await db.scrutinVoteImport.update({
+                where: { scrutinId: scrutin.id },
+                data: {
+                  status: "INCOMPLETE",
+                  statusReason: "no_resolved_senators",
+                },
+              });
+              cursorOutcomes.push({ number: numInt, outcome: "RETRY" });
+              progress.tick();
+              continue;
             }
 
             // Check votes hash to skip unchanged scrutins
