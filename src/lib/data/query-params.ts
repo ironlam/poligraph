@@ -22,12 +22,23 @@ function firstValue(value: RawParam): string | undefined {
 }
 
 /**
+ * Upper bound on a page number. Callers turn a page into an offset with
+ * `(page - 1) * limit`, so a page that is itself a safe integer can still
+ * produce an offset past Number.MAX_SAFE_INTEGER, i.e. an imprecise float
+ * handed to the database as an OFFSET. The bound sits far above any real
+ * listing here (the largest table is under 30k pages) while keeping the
+ * product exact for any page size up to 1000.
+ */
+const MAX_PAGE = 1_000_000;
+
+/**
  * Page number for a listing, clamped to a usable page. Anything unparseable,
- * absent, zero or negative reads as page 1 rather than crashing the listing.
+ * absent, zero, negative or absurdly large reads as page 1 rather than
+ * crashing the listing.
  */
 export function parsePageParam(value: RawParam): number {
   const parsed = parseInt(firstValue(value) ?? "", 10);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1;
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_PAGE) return 1;
   return parsed;
 }
 
