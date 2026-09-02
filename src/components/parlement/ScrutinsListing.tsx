@@ -19,6 +19,7 @@ import { themeSeoPhrase } from "@/lib/seo/theme-metadata";
 import { SITE_URL } from "@/config/site";
 import { statsHref } from "@/config/routes";
 import type { VotingResult, Chamber, ThemeCategory, ScrutinType } from "@/types";
+import { parsePageParam, parseIntFilter } from "@/lib/data/query-params";
 
 // Map URL param values to data layer params
 const TYPE_TAB_MAP: Record<string, { type?: ScrutinType; excludeType?: ScrutinType }> = {
@@ -41,10 +42,10 @@ interface ScrutinsListingProps {
 }
 
 export async function ScrutinsListing({ searchParams: params, sort }: ScrutinsListingProps) {
-  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const page = parsePageParam(params.page);
   const limit = 20;
   const result = (params.result || undefined) as VotingResult | undefined;
-  const legislature = params.legislature ? parseInt(params.legislature, 10) : undefined;
+  const legislature = parseIntFilter(params.legislature);
   const chamber = (params.chamber || undefined) as Chamber | undefined;
   const theme = (params.theme || undefined) as ThemeCategory | undefined;
   const search = params.search || undefined;

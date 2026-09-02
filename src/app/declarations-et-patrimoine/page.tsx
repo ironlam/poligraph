@@ -24,6 +24,7 @@ import {
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300;
 
@@ -60,7 +61,7 @@ export default async function DeclarationsPage({ searchParams }: PageProps) {
   const search = params.search || "";
   const partyFilter = params.party || "";
   const sortOption = (params.sort || "portfolio") as DeclarationSortOption;
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
 
   const [stats, topPortfolios, topCompanies, tableData, parties, transparency] = await Promise.all([
     getDeclarationStats(),

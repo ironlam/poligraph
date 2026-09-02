@@ -5,10 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ElectionCountdown, ElectionTimeline } from "@/components/elections";
 import { ELECTION_TYPE_LABELS, ELECTION_TYPE_ICONS } from "@/config/labels";
 import { getElections, getTypeCounts } from "@/lib/data/elections";
+import { pickEnumValue } from "@/lib/data/enum-guards";
+import { ElectionType } from "@/generated/prisma";
 import { resolveElectionStatus } from "@/lib/elections/status";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
-import type { ElectionType } from "@/types";
 
 export const revalidate = 300; // ISR: revalidate every 5 minutes
 
@@ -27,7 +28,11 @@ interface PageProps {
 
 export default async function ElectionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const typeFilter = params.type as ElectionType | undefined;
+  // A ?type= that is not an ElectionType is dropped, not forwarded: Prisma
+  // rejects an out-of-enum value with a validation error, which surfaces as an
+  // unhandled 500. An unknown filter means "no filter", so the calendar still
+  // renders for a stale bookmark or a scanner payload alike.
+  const typeFilter = pickEnumValue(params.type, ElectionType);
 
   const [rawElections, typeCounts] = await Promise.all([getElections(typeFilter), getTypeCounts()]);
 
@@ -44,7 +49,7 @@ export default async function ElectionsPage({ searchParams }: PageProps) {
   // Build filter URL helper
   const buildUrl = (newParams: Record<string, string | undefined>) => {
     const current = new URLSearchParams();
-    if (params.type) current.set("type", params.type);
+    if (typeFilter) current.set("type", typeFilter);
 
     for (const [key, value] of Object.entries(newParams)) {
       if (value) {

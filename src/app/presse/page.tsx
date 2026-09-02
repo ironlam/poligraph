@@ -10,6 +10,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getPress, getPressStats, getPartiesWithPressMentions } from "@/lib/data/press";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
@@ -45,7 +46,7 @@ export default async function PressePage({ searchParams }: PageProps) {
   if (!(await isFeatureEnabled("PRESS_SECTION"))) notFound();
 
   const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const page = parsePageParam(params.page);
   const limit = 12;
   const source = params.source;
   const partyId = params.party;

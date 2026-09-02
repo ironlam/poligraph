@@ -4,6 +4,7 @@ import { ElectionType, ElectionStatus } from "@/generated/prisma";
 import { withCache } from "@/lib/cache";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { pickEnumValue } from "@/lib/data/enum-guards";
 
 /**
  * @openapi
@@ -76,9 +77,14 @@ export const GET = withPublicRoute(async (request) => {
 
   const year = yearStr ? parseInt(yearStr, 10) : null;
 
+  // An out-of-enum ?type=/?status= is dropped rather than cast: Prisma answers
+  // a bad enum with a validation error, i.e. an unhandled 500 on a public route.
+  const safeType = pickEnumValue(type, ElectionType);
+  const safeStatus = pickEnumValue(status, ElectionStatus);
+
   const where = {
-    ...(type && { type: type as ElectionType }),
-    ...(status && { status: status as ElectionStatus }),
+    ...(safeType && { type: safeType }),
+    ...(safeStatus && { status: safeStatus }),
     ...(year && {
       round1Date: {
         gte: new Date(year, 0, 1),

@@ -22,6 +22,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import type { FactCheckRating } from "@/types";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -88,7 +89,7 @@ const VERDICT_GROUP_LABELS: Record<string, string> = {
 
 export default async function FactChecksPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const page = parsePageParam(params.page);
   const limit = 12;
   const source = params.source;
   const verdict = params.verdict;
