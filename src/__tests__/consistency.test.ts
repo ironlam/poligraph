@@ -74,4 +74,14 @@ describe("Daily sync orchestration", () => {
     expect(command, "press analysis step not found in sync-daily.ts").toBeDefined();
     expect(command).toContain("--force");
   });
+
+  // scripts/sync-daily.ts forces every press analysis run (no throttle left to
+  // gate it). If the Inngest scheduler also ran press analysis on the same
+  // cron, both processes could list the same unanalyzed articles before
+  // either marks them, paying for duplicate AI analyses (#765).
+  it("press analysis is not scheduled by both the workflow and Inngest", () => {
+    const inngestSteps = read("src/inngest/functions/sync-daily.ts");
+
+    expect(inngestSteps).not.toContain('name: "press-analysis"');
+  });
 });
