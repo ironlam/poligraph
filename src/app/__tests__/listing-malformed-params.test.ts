@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ElectionType } from "@/generated/prisma";
+import { ElectionType, PoliticalPosition } from "@/generated/prisma";
 
 /**
  * Regression guard for the production incident of 2026-09-01: an automated
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getElections: vi.fn(),
   getTypeCounts: vi.fn(),
   getAffairs: vi.fn(),
+  getParties: vi.fn(),
   getPartiesWithAffairs: vi.fn(),
   getPublicPartyMetadataBySlug: vi.fn(),
   notFound: vi.fn(() => {
@@ -37,10 +38,15 @@ vi.mock("@/lib/data/affairs", () => ({
   getPartiesWithAffairs: mocks.getPartiesWithAffairs,
   getPublicPartyMetadataBySlug: mocks.getPublicPartyMetadataBySlug,
 }));
+vi.mock("@/lib/data/partis", () => ({
+  getParties: mocks.getParties,
+  getPartiesStats: vi.fn().mockResolvedValue({}),
+}));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 
 import ElectionsPage from "../elections/page";
 import AffairesPage from "../affaires/page";
+import PartisPage from "../partis/page";
 
 type Params = Record<string, string>;
 const render = (page: unknown, searchParams: Params) =>
@@ -77,6 +83,15 @@ beforeEach(() => {
   });
   mocks.getPartiesWithAffairs.mockResolvedValue([]);
   mocks.getPublicPartyMetadataBySlug.mockResolvedValue(null);
+  mocks.getParties.mockImplementation(async (_search?: unknown, position?: unknown) => {
+    if (
+      position !== undefined &&
+      !(Object.values(PoliticalPosition) as unknown[]).includes(position)
+    ) {
+      throw new Error("PrismaClientValidationError: Expected PoliticalPosition.");
+    }
+    return [];
+  });
 });
 
 describe("/elections : un ?type= hors enum", () => {
@@ -113,5 +128,21 @@ describe("/affaires : un ?page= inexploitable", () => {
   it("conserve une page valide", async () => {
     await render(AffairesPage, { page: "3" });
     expect(mocks.getAffairs.mock.calls[0]?.[5]).toBe(3);
+  });
+});
+
+describe("/partis : un ?position= hors enum", () => {
+  it("rend la page au lieu de faire lever Prisma", async () => {
+    await expect(render(PartisPage, { position: SQLI_PROBE })).resolves.toBeDefined();
+  });
+
+  it("ignore le filtre plutôt que de le transmettre", async () => {
+    await render(PartisPage, { position: SQLI_PROBE });
+    expect(mocks.getParties.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it("conserve une position valide", async () => {
+    await render(PartisPage, { position: "CENTER_LEFT" });
+    expect(mocks.getParties.mock.calls[0]?.[1]).toBe("CENTER_LEFT");
   });
 });
