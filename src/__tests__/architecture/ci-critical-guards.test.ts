@@ -1689,6 +1689,22 @@ function repositoryViolations(model: ProjectModel): Violation[] {
   return violations;
 }
 
+/**
+ * Timeout for the two cases that call `expectCompiles`.
+ *
+ * `ts.createProgram` is fully synchronous, so it blocks the worker event loop and vitest can only
+ * notice the overrun once the case returns. The first program built in a worker also pays a
+ * one-time cost that the second does not: parsing the default ES2022 lib set and warming the
+ * TypeScript parser, binder, and checker code paths.
+ *
+ * Measured on 14 cores, per case: 621ms and 445ms with the machine idle. Under a deliberate 40-way
+ * CPU load (about 3x oversubscription, harsher than a real full-suite run) whichever case runs
+ * first reaches 5.9s while the second stays at 2.3s, so the default 5s timeout is not enough. 30s
+ * leaves roughly 5x headroom over that worst measurement while still failing fast if a compile
+ * ever genuinely hangs, which is what this timeout is for: the real budget is under a second.
+ */
+const COMPILE_CASE_TIMEOUT_MS = 30_000;
+
 function expectCompiles(files: Record<string, string>): void {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci01-compile-"));
   try {
@@ -1710,6 +1726,13 @@ function expectCompiles(files: Record<string, string>): void {
         skipLibCheck: true,
         baseUrl: root,
         paths: { "@/*": ["src/*"] },
+        // Without an explicit empty list, TypeScript auto-includes every @types package it finds
+        // by walking up from process.cwd(), so this two-file fixture pulled the repository's whole
+        // ambient type surface into the program: 593 source files instead of 65, about 1.2s of
+        // synchronous work per call. Under parallel vitest workers that blew past the 5s test
+        // timeout. The fixtures reference no ambient package type, and dropping them only removes
+        // declarations, so a clean compile here is a strictly stronger result than before.
+        types: [],
       },
     });
     const diagnostics = ts
@@ -1838,21 +1861,25 @@ describe("CI-01 public JSON contract", () => {
     expect(formatted).toContain("src/lib/api/dynamic.ts");
   });
 
-  it("accepts the canonical helper through a compilable alias import", () => {
-    const route =
-      'import { safeJsonParse } from "@/lib/api/safe-json"; declare const raw:string; const parsed = safeJsonParse(raw); void parsed;';
-    const safe =
-      "export function safeJsonParse(raw:string):unknown { try{return JSON.parse(raw)}catch{return null} }";
-    const model = fixtureModel({
-      "src/app/api/example/route.ts": route,
-      "src/lib/api/safe-json.ts": safe,
-    });
-    expect(analyzePublicJson(model)).toEqual([]);
-    expectCompiles({
-      "src/app/api/example/route.ts": route,
-      "src/lib/api/safe-json.ts": safe,
-    });
-  });
+  it(
+    "accepts the canonical helper through a compilable alias import",
+    () => {
+      const route =
+        'import { safeJsonParse } from "@/lib/api/safe-json"; declare const raw:string; const parsed = safeJsonParse(raw); void parsed;';
+      const safe =
+        "export function safeJsonParse(raw:string):unknown { try{return JSON.parse(raw)}catch{return null} }";
+      const model = fixtureModel({
+        "src/app/api/example/route.ts": route,
+        "src/lib/api/safe-json.ts": safe,
+      });
+      expect(analyzePublicJson(model)).toEqual([]);
+      expectCompiles({
+        "src/app/api/example/route.ts": route,
+        "src/lib/api/safe-json.ts": safe,
+      });
+    },
+    COMPILE_CASE_TIMEOUT_MS
+  );
 });
 
 describe("CI-01 admin authentication contract", () => {
@@ -1877,21 +1904,25 @@ describe("CI-01 admin authentication contract", () => {
     );
   });
 
-  it("accepts imported aliases and nested validation in compilable TypeScript", () => {
-    const route =
-      'import {withAdminAuth as secure} from "@/lib/api/with-admin-auth"; declare const schema:unknown; declare const withValidation:(s:unknown,h:()=>Promise<Response>)=>()=>Promise<Response>; export const POST=secure(withValidation(schema,async()=>Response.json({ok:true})));';
-    const auth =
-      "export function withAdminAuth<T extends (...args:any[])=>any>(handler:T):T{return handler}";
-    const model = fixtureModel({
-      "src/app/api/admin/example/route.ts": route,
-      "src/lib/api/with-admin-auth.ts": auth,
-    });
-    expect(analyzeAdminRoutes(model)).toEqual([]);
-    expectCompiles({
-      "src/app/api/admin/example/route.ts": route,
-      "src/lib/api/with-admin-auth.ts": auth,
-    });
-  });
+  it(
+    "accepts imported aliases and nested validation in compilable TypeScript",
+    () => {
+      const route =
+        'import {withAdminAuth as secure} from "@/lib/api/with-admin-auth"; declare const schema:unknown; declare const withValidation:(s:unknown,h:()=>Promise<Response>)=>()=>Promise<Response>; export const POST=secure(withValidation(schema,async()=>Response.json({ok:true})));';
+      const auth =
+        "export function withAdminAuth<T extends (...args:any[])=>any>(handler:T):T{return handler}";
+      const model = fixtureModel({
+        "src/app/api/admin/example/route.ts": route,
+        "src/lib/api/with-admin-auth.ts": auth,
+      });
+      expect(analyzeAdminRoutes(model)).toEqual([]);
+      expectCompiles({
+        "src/app/api/admin/example/route.ts": route,
+        "src/lib/api/with-admin-auth.ts": auth,
+      });
+    },
+    COMPILE_CASE_TIMEOUT_MS
+  );
 });
 
 describe("CI-01 Affair and Measure publication contract", () => {
