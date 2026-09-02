@@ -1,5 +1,10 @@
 import type { Prisma, ThemeCategory } from "@/generated/prisma";
-import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
+import {
+  callMistral,
+  extractMistralText,
+  parseMistralJSON,
+  type MistralOptions,
+} from "@/lib/api/mistral";
 import { db } from "@/lib/db";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import {
@@ -9,11 +14,96 @@ import {
   screenThemeSynthesis,
   screenThemeSynthesisGrounding,
   THEME_SYNTHESIS_PROMPT_VERSION,
+  themeSynthesisMaxAxes,
   type ThemeSynthesisClaim,
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
 import { loadCandidacyThemeSynthesisCorpus } from "@/lib/presidentielle/candidacy-theme-synthesis-corpus";
 
 const MODEL = "mistral-large-latest";
+
+function buildSynthesisResponseFormat(
+  theme: ThemeCategory,
+  measureCount: number
+): NonNullable<MistralOptions["responseFormat"]> {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "candidacy_theme_synthesis_v3",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["theme", "claims"],
+        properties: {
+          theme: { type: "string", enum: [theme] },
+          claims: {
+            type: "array",
+            minItems: 1,
+            maxItems: themeSynthesisMaxAxes(measureCount),
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["text", "measureRefs"],
+              properties: {
+                text: { type: "string", minLength: 10, maxLength: 800 },
+                measureRefs: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 12,
+                  items: { type: "string", pattern: "^M[1-9][0-9]*$" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function buildGroundingResponseFormat(
+  claimCount: number
+): NonNullable<MistralOptions["responseFormat"]> {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "candidacy_theme_synthesis_grounding_v3",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["claims", "quality"],
+        properties: {
+          claims: {
+            type: "array",
+            minItems: claimCount,
+            maxItems: claimCount,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["index", "supported", "reason"],
+              properties: {
+                index: { type: "integer", minimum: 0 },
+                supported: { type: "boolean" },
+                reason: { type: "string", minLength: 1, maxLength: 300 },
+              },
+            },
+          },
+          quality: {
+            type: "object",
+            additionalProperties: false,
+            required: ["isSynthesis", "representsMainAxes", "reason"],
+            properties: {
+              isSynthesis: { type: "boolean" },
+              representsMainAxes: { type: "boolean" },
+              reason: { type: "string", minLength: 1, maxLength: 500 },
+            },
+          },
+        },
+      },
+    },
+  };
+}
 
 export type ThemeSynthesisActor = {
   id: string;
@@ -111,7 +201,10 @@ export async function generateCandidacyThemeSynthesis(
         model: MODEL,
         maxTokens: 900,
         temperature: 0,
-        responseFormat: { type: "json_object" },
+        responseFormat: buildSynthesisResponseFormat(
+          corpus.input.theme,
+          corpus.input.measures.length
+        ),
       });
       previousResponseText = extractMistralText(response);
       const parsed = parseMistralJSON<unknown>(previousResponseText);
@@ -128,7 +221,7 @@ export async function generateCandidacyThemeSynthesis(
             model: MODEL,
             maxTokens: 700,
             temperature: 0,
-            responseFormat: { type: "json_object" },
+            responseFormat: buildGroundingResponseFormat(screened.claims.length),
           }
         );
         const verification = screenThemeSynthesisGrounding(
