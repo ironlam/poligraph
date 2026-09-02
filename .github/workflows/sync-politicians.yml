@@ -16,7 +16,10 @@ env:
 jobs:
   sync-politicians:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    # The full refresh can legitimately exceed an hour when official sources
+    # throttle requests. Keep a generous job bound while retaining per-step
+    # limits so a permanently hung source still unblocks the remaining syncs.
+    timeout-minutes: 90
     environment: production
 
     steps:
@@ -41,13 +44,13 @@ jobs:
       - name: Sync Assemblée Nationale (Deputies)
         id: sync-assemblee
         run: npm run sync:assemblee
-        timeout-minutes: 15
+        timeout-minutes: 20
         continue-on-error: true
 
       - name: Sync Sénat (Senators)
         id: sync-senat
         run: npm run sync:senat
-        timeout-minutes: 10
+        timeout-minutes: 15
         continue-on-error: true
 
       - name: Sync Gouvernement (Ministers)
@@ -62,19 +65,19 @@ jobs:
       - name: Sync Careers (Wikidata P39/P488/P112)
         id: sync-careers
         run: npm run sync:careers -- --limit=3000
-        timeout-minutes: 10
+        timeout-minutes: 15
         continue-on-error: true
 
       - name: Sync Photos
         id: sync-photos
         run: npm run sync:photos -- --limit=2000
-        timeout-minutes: 10
+        timeout-minutes: 15
         continue-on-error: true
 
       - name: Sync Deceased (from Wikidata)
         id: sync-deceased
         run: npm run sync:deceased
-        timeout-minutes: 5
+        timeout-minutes: 10
         continue-on-error: true
 
       - name: Show sync stats
