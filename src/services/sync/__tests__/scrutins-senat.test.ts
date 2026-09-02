@@ -2,9 +2,41 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { parseScrutinMetadata } from "@/services/sync/scrutins-senat";
+import { getNextSenateCursor, parseScrutinMetadata } from "@/services/sync/scrutins-senat";
 
 describe("import des scrutins publics du Sénat", () => {
+  it("garde le curseur derrière un scrutin rejeté au milieu d'une liste descendante", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 105, outcome: "PROCESSED" },
+        { number: 104, outcome: "RETRY" },
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "PROCESSED" },
+      ])
+    ).toBe(103);
+  });
+
+  it("avance au plus grand scrutin quand aucun numéro ne doit être retenté", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "PROCESSED" },
+      ])
+    ).toBe(103);
+  });
+
+  it("conserve le curseur courant si le prochain scrutin doit être retenté", () => {
+    expect(
+      getNextSenateCursor(100, [
+        { number: 103, outcome: "PROCESSED" },
+        { number: 102, outcome: "PROCESSED" },
+        { number: 101, outcome: "RETRY" },
+      ])
+    ).toBe(100);
+  });
+
   it("extrait le total de contrôle officiel sans supposer 348 sièges", () => {
     const html = `
       <p class="page-lead">Projet de loi de test</p>

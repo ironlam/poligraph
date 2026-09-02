@@ -73,6 +73,34 @@ export interface ScrutinsSenatSyncStats {
 // Helpers
 // ---------------------------------------------------------------------------
 
+export interface SenateCursorOutcome {
+  number: number;
+  outcome: "PROCESSED" | "RETRY";
+}
+
+export function getNextSenateCursor(
+  currentCursor: number,
+  outcomes: SenateCursorOutcome[]
+): number {
+  const highestProcessed = outcomes.reduce(
+    (highest, result) =>
+      result.outcome === "PROCESSED" ? Math.max(highest, result.number) : highest,
+    currentCursor
+  );
+  const lowestRetry = outcomes.reduce<number | null>(
+    (lowest, result) =>
+      result.outcome === "RETRY" && result.number > currentCursor
+        ? Math.min(lowest ?? result.number, result.number)
+        : lowest,
+    null
+  );
+
+  // The cursor skips every lower or equal number on later incremental runs.
+  // Keep it immediately behind the first rejected scrutin so temporary source
+  // gaps are retried, while already completed lower numbers can still advance it.
+  return lowestRetry === null ? highestProcessed : Math.min(highestProcessed, lowestRetry - 1);
+}
+
 /**
  * Get list of scrutin numbers from a session page
  */
@@ -318,8 +346,9 @@ export async function syncScrutinsSenat(
         }
       }
 
-      // Process each scrutin
-      let maxProcessedNumber = cursorNum;
+      // Process each scrutin. The final cursor must retain every hole that
+      // needs another attempt, even though the source list is descending.
+      const cursorOutcomes: SenateCursorOutcome[] = [];
 
       const progress = new ProgressTracker({
         total: scrutinNumbers.length,
@@ -349,6 +378,7 @@ export async function syncScrutinsSenat(
           const metadata = parseScrutinMetadata(html, currentSession, number!);
           if (!metadata) {
             stats.scrutinsSkipped++;
+            cursorOutcomes.push({ number: numInt, outcome: "RETRY" });
             progress.tick();
             continue;
           }
@@ -458,6 +488,7 @@ export async function syncScrutinsSenat(
               stats.errors.push(
                 `Session ${currentSession} n°${number}: source nominative ${sourceAssessment.status.toLowerCase()} (${sourceAssessment.reason})`
               );
+              cursorOutcomes.push({ number: numInt, outcome: "RETRY" });
               progress.tick();
               continue;
             }
@@ -508,10 +539,7 @@ export async function syncScrutinsSenat(
               data: { votesHash: newHash },
             });
 
-            // Track max processed number for cursor
-            if (numInt > maxProcessedNumber) {
-              maxProcessedNumber = numInt;
-            }
+            cursorOutcomes.push({ number: numInt, outcome: "PROCESSED" });
           } else {
             // Dry run: just count
             stats.scrutinsCreated++;
@@ -536,6 +564,7 @@ export async function syncScrutinsSenat(
           stats.errors.push(
             `Session ${currentSession} n°${number}: ${err instanceof Error ? err.message : String(err)}`
           );
+          cursorOutcomes.push({ number: numInt, outcome: "RETRY" });
         }
 
         progress.update({
@@ -550,9 +579,10 @@ export async function syncScrutinsSenat(
       progress.finish();
 
       // Update cursor for this session
-      if (!dryRun && maxProcessedNumber > cursorNum) {
+      const nextCursor = getNextSenateCursor(cursorNum, cursorOutcomes);
+      if (!dryRun && nextCursor > cursorNum) {
         await syncMetadata.markCompleted(sessionKey, {
-          cursor: String(maxProcessedNumber),
+          cursor: String(nextCursor),
           itemCount: stats.scrutinsProcessed,
         });
       }
