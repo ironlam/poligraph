@@ -87,6 +87,7 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
     candidacyId: string;
     candidateName: string;
     text: string;
+    reviewWarning?: string;
   } | null>(null);
   const [statusDrafts, setStatusDrafts] = useState(() =>
     Object.fromEntries(
@@ -152,6 +153,7 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
         candidacyId: row.candidacyId,
         candidateName: row.candidateName,
         text: result.text ?? "",
+        reviewWarning: result.reviewWarning,
       });
     } catch (err) {
       setError(`Erreur : ${err instanceof Error ? err.message : String(err)}`);
@@ -557,6 +559,14 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                     Corrige librement la proposition. Rien n’est publié avant « Enregistrer la
                     synthèse ».
                   </p>
+                  {synthesisEditor.reviewWarning && (
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                    >
+                      {synthesisEditor.reviewWarning}
+                    </p>
+                  )}
                   <label
                     htmlFor={`texte-synthese-${row.candidacyId}`}
                     className="mt-4 block text-sm font-semibold"

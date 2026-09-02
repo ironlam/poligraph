@@ -25,6 +25,7 @@ import {
   buildCandidateSynthesisGroundingPrompt,
   buildCanonicalCareer,
   buildSynthesisSystemPrompt,
+  formatCandidateSynthesisProposal,
   MAX_PROGRAMME_CLAIMS,
   screenCandidateSynthesis,
   screenCandidateSynthesisGrounding,
@@ -127,8 +128,10 @@ export type SynthesisGenerationResult =
       /** What the prompt was built from, for the script's log and the action's message. */
       measureCount: number;
       mandateCount: number;
-      /** False on a dry run: the text was produced and screened, nothing was written. */
+      /** False on a dry run or admin-review proposal: nothing was written. */
       persisted: boolean;
+      /** Present only for an admin-review draft that did not pass the automatic controls. */
+      reviewWarning?: string;
     }
   | { ok: false; reason: SynthesisRefusal; message: string };
 
@@ -180,9 +183,15 @@ async function loadInput(candidacyId: string) {
 export type GenerateCandidateSynthesisOptions = {
   /**
    * Write the result on the candidacy's presidential extension. False is the script's dry run: the
-   * text is produced and screened so the operator can read what WOULD be stored.
+   * text is produced and screened so the operator can read what WOULD be stored. An admin caller
+   * may separately request a rejected but structurally usable proposal for manual correction.
    */
   persist: boolean;
+  /**
+   * Return the best structurally usable draft when automatic controls reject it. This is only
+   * honored when `persist` is false: a rejected provider response must never be stored directly.
+   */
+  returnRejectedProposal?: boolean;
 };
 
 /**
@@ -282,6 +291,7 @@ export async function generateCandidateSynthesis(
   let accepted:
     | { text: string; provider: string; programmeClaims: CandidateProgrammeClaim[] }
     | undefined;
+  let bestProposal: { text: string; provider: string } | undefined;
 
   for (let attemptIndex = 0; attemptIndex < 3; attemptIndex += 1) {
     const messages = previousResponseText
@@ -307,11 +317,14 @@ export async function generateCandidateSynthesis(
         parsed && typeof parsed === "object"
           ? { ...parsed, career: buildCanonicalCareer(input) }
           : parsed;
+      const proposal = formatCandidateSynthesisProposal(candidateOutput, input);
+      if (proposal) bestProposal = { text: proposal, provider: attempt.provider };
       let screened = screenCandidateSynthesis(candidateOutput, input);
       if (!screened.ok) {
         validationDetail = screened.detail;
         continue;
       }
+      bestProposal = { text: screened.text, provider: attempt.provider };
 
       const parsedOutput = candidateOutput as {
         career: string;
@@ -402,6 +415,19 @@ export async function generateCandidateSynthesis(
   }
 
   if (!accepted) {
+    if (!options.persist && options.returnRejectedProposal && bestProposal) {
+      return {
+        ok: true,
+        text: bestProposal.text,
+        provider: bestProposal.provider,
+        measureCount: input.measures.length,
+        mandateCount: mandates.length,
+        persisted: false,
+        reviewWarning:
+          "Cette proposition n'a pas passé le contrôle automatique : " +
+          `${validationDetail}. Corrigez-la avant de l'enregistrer.`,
+      };
+    }
     if (lastGenerationError) {
       return {
         ok: false,

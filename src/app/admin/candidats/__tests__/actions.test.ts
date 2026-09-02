@@ -341,9 +341,33 @@ describe("génération d'une proposition de synthèse", () => {
     const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
 
     expect(result).toEqual({ ok: true, text: "Une synthèse." });
-    expect(generateSynthesisMock).toHaveBeenCalledWith("cand-1", { persist: false });
+    expect(generateSynthesisMock).toHaveBeenCalledWith("cand-1", {
+      persist: false,
+      returnRejectedProposal: true,
+    });
     expect(invalidateCandidacyTagsMock).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+
+  it("transmet à l'éditeur l'avertissement du contrôle automatique", async () => {
+    generateSynthesisMock.mockResolvedValue({
+      ok: true,
+      text: "Une proposition à corriger.",
+      provider: "mistral-large-latest",
+      measureCount: 5,
+      mandateCount: 0,
+      persisted: false,
+      reviewWarning: "Cette proposition n'a pas passé le contrôle automatique.",
+    });
+    const { regenerateCandidateSynthesisAction } = await actions();
+
+    const result = await regenerateCandidateSynthesisAction({ candidacyId: "cand-1" });
+
+    expect(result).toEqual({
+      ok: true,
+      text: "Une proposition à corriger.",
+      reviewWarning: "Cette proposition n'a pas passé le contrôle automatique.",
+    });
   });
 
   it("rend le refus du service au lieu de le traduire en échec générique", async () => {

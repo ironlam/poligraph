@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CandidatesListClient, type CandidateRowView } from "../CandidatesListClient";
 
-type ActionResult = { ok: true; text?: string } | { ok: false; message: string };
+type ActionResult =
+  | { ok: true; text?: string; reviewWarning?: string }
+  | { ok: false; message: string };
 
 const setCandidacyPublicationMock = vi.fn<(input: unknown) => Promise<ActionResult>>(async () => ({
   ok: true,
@@ -222,6 +224,26 @@ describe("CandidatesListClient", () => {
     expect(regenerateCandidateSynthesisMock).toHaveBeenCalledWith({ candidacyId: "cand-1" });
     expect(await screen.findByLabelText("Texte public")).toHaveValue(
       "Une proposition de synthèse suffisamment développée."
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("ouvre aussi une proposition refusée avec le motif à corriger", async () => {
+    regenerateCandidateSynthesisMock.mockResolvedValueOnce({
+      ok: true,
+      text: "Une proposition lisible qui doit encore être corrigée avant publication.",
+      reviewWarning: "Cette proposition n'a pas passé le contrôle automatique : mention parquet.",
+    });
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.click(screen.getByRole("button", { name: "Générer une proposition" }));
+
+    expect(await screen.findByLabelText("Texte public")).toHaveValue(
+      "Une proposition lisible qui doit encore être corrigée avant publication."
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Cette proposition n'a pas passé le contrôle automatique : mention parquet."
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });

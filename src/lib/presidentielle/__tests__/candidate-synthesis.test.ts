@@ -4,6 +4,7 @@ import {
   buildCandidateSynthesisGroundingPrompt,
   buildCanonicalCareer,
   buildSynthesisSystemPrompt,
+  formatCandidateSynthesisProposal,
   isSynthesisContradictedByMeasures,
   screenCandidateSynthesis,
   screenSynthesis as screenSynthesisSegments,
@@ -279,6 +280,29 @@ describe("buildCandidateSynthesisPrompt", () => {
       measures: [{ theme: "SANTE", text: "a".repeat(1000) }],
     });
     expect(prompt).toContain("a".repeat(1000));
+  });
+});
+
+describe("formatCandidateSynthesisProposal", () => {
+  it("conserve un brouillon éditable sans reprendre un parcours inventé", () => {
+    const proposal = formatCandidateSynthesisProposal(
+      {
+        career: "Jeanne Martin a exercé une fonction absente des données.",
+        programmeClaims: [
+          {
+            text: "Les mesures rapprochent les soins de proximité et les dessertes ferroviaires. (M1, M3)",
+          },
+        ],
+      },
+      BASE
+    );
+
+    expect(proposal).toContain(buildCanonicalCareer(BASE));
+    expect(proposal).toContain(
+      "Les mesures rapprochent les soins de proximité et les dessertes ferroviaires."
+    );
+    expect(proposal).not.toContain("fonction absente");
+    expect(proposal).not.toContain("M1");
   });
 });
 

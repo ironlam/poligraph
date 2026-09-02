@@ -169,6 +169,15 @@ const generatedCandidateSynthesisSchema = z
   })
   .strict();
 
+/** Wider than the publication schema, but still bounded, for a moderator-editable JSON draft. */
+const reviewableCandidateSynthesisSchema = z
+  .object({
+    programmeClaims: z
+      .array(z.object({ text: z.string().trim().min(1).max(2_000) }).passthrough())
+      .max(12),
+  })
+  .passthrough();
+
 type ProgrammeReference = {
   ref: string;
   theme: ThemeCategory;
@@ -547,6 +556,32 @@ function stripEvidenceMarkers(value: string): string {
     .replace(/\s+/g, " ")
     .replace(/\s+([,.;:!?])/gu, "$1")
     .trim();
+}
+
+/**
+ * Turns a structurally usable provider response into an admin-review proposal.
+ *
+ * This deliberately does not make the text publishable: the strict screen and grounding pass may
+ * still reject it. Its sole purpose is to avoid throwing away readable work when a moderator can
+ * correct the precise defect in the editor. The career remains deterministic even in that draft,
+ * so an invented office never reaches the review surface.
+ */
+export function formatCandidateSynthesisProposal(
+  raw: unknown,
+  input: CandidateSynthesisInput
+): string | null {
+  const parsed = reviewableCandidateSynthesisSchema.safeParse(raw);
+  if (!parsed.success) return null;
+
+  const claims = parsed.data.programmeClaims
+    .map((claim) => stripEvidenceMarkers(claim.text))
+    .filter(Boolean);
+  if (input.measures.length > 0 && claims.length === 0) return null;
+
+  return [
+    buildCanonicalCareer(input),
+    ...(input.measures.length === 0 ? [EMPTY_PROGRAMME_SENTENCE] : claims),
+  ].join("\n\n");
 }
 
 export function screenCandidateSynthesis(

@@ -300,6 +300,50 @@ describe("generateCandidateSynthesis", () => {
     expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
   });
 
+  it("rend à l'admin un brouillon exploitable que l'étayage a refusé", async () => {
+    callMistralMock.mockImplementation((messages: Array<{ content: string }>) => {
+      const grounding = messages.some((message) =>
+        message.content.includes("Vérifie si chaque affirmation")
+      );
+      return Promise.resolve({
+        text: grounding ? groundingOutput(false) : providerOutput(),
+        model: "mistral-large-latest",
+      });
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", {
+      persist: false,
+      returnRejectedProposal: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      persisted: false,
+      reviewWarning: expect.stringContaining("contrôle d'étayage refusé"),
+    });
+    expect(result.ok && result.text).toContain(PROGRAMME_AXIS);
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("ne persiste jamais un brouillon refusé même si l'option de relecture est demandée", async () => {
+    callMistralMock.mockResolvedValue({
+      text: JSON.stringify({ career: `${CAREER}.`, programmeClaims: [] }),
+      model: "mistral-large-latest",
+    });
+    const { generateCandidateSynthesis } = await service();
+
+    const result = await generateCandidateSynthesis("cand-1", {
+      persist: true,
+      returnRejectedProposal: true,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "refuse" });
+    expect(dbMock.candidacyPresidential.update).not.toHaveBeenCalled();
+    expect(dbMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it("gère un programme vide sans lancer de contrôle d'étayage", async () => {
     dbMock.measure.findMany.mockResolvedValue([]);
     callMistralMock.mockResolvedValue({

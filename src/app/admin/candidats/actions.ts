@@ -27,7 +27,9 @@ import { generateCandidateSynthesis } from "@/services/candidate-synthesis";
  */
 
 /** Business errors are returned so the moderator reads the reason on screen; auth failures throw. */
-export type CandidacyActionResult = { ok: true; text?: string } | { ok: false; message: string };
+export type CandidacyActionResult =
+  | { ok: true; text?: string; reviewWarning?: string }
+  | { ok: false; message: string };
 
 const publicationStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED", "EXCLUDED", "REJECTED"]);
 
@@ -313,7 +315,10 @@ export async function regenerateCandidateSynthesisAction(input: {
     return { ok: false, message: "Candidature introuvable." };
   }
 
-  const result = await generateCandidateSynthesis(candidacyId, { persist: false });
+  const result = await generateCandidateSynthesis(candidacyId, {
+    persist: false,
+    returnRejectedProposal: true,
+  });
   if (!result.ok) {
     return { ok: false, message: result.message };
   }
@@ -321,5 +326,9 @@ export async function regenerateCandidateSynthesisAction(input: {
   // Nothing is written here. The moderator receives a proposal, edits it if needed, then saves it
   // through the reviewed-synthesis endpoint. This prevents a provider response from becoming
   // public solely because somebody clicked "Générer".
-  return { ok: true, text: result.text };
+  return {
+    ok: true,
+    text: result.text,
+    ...(result.reviewWarning ? { reviewWarning: result.reviewWarning } : {}),
+  };
 }
