@@ -47,11 +47,17 @@ function summary() {
 describe("Hemicycle summary", () => {
   it("rend chaque siège occupé accessible au clavier", () => {
     const { container } = render(<Hemicycle groups={groups} />);
+    const hemicycle = screen.getByRole("group", { name: /Hémicycle de l'Assemblée nationale/ });
     const links = container.querySelectorAll('svg a[href^="/politiques/"]');
 
+    expect(hemicycle).toBeInTheDocument();
+    expect(container.querySelector('svg[role="img"]')).toBeNull();
     expect(links).toHaveLength(5);
     expect([...links].map((link) => link.getAttribute("aria-label"))).toContain(
       "Voir la fiche de Jean Nom1"
+    );
+    expect([...links].every((link) => !link.getAttribute("class")?.includes("outline-none"))).toBe(
+      true
     );
   });
 

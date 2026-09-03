@@ -145,7 +145,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
       <svg
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         className="w-full h-auto"
-        role="img"
+        role="group"
         aria-label={`Hémicycle de l'Assemblée nationale : ${summary.misEnCause} député${summary.misEnCause !== 1 ? "s" : ""}${summary.groupLabel ? ` du groupe ${summary.groupLabel}` : ""} mis en cause dans une affaire judiciaire sur ${summary.seatCount}`}
         aria-describedby={descId}
       >
@@ -194,7 +194,6 @@ export function Hemicycle({ groups }: HemicycleProps) {
               key={i}
               href={`/politiques/${data.deputy.slug}`}
               aria-label={`Voir la fiche de ${deputyName}`}
-              className="group focus:outline-none"
               onFocus={() =>
                 setTooltip({
                   deputy: data.deputy,
