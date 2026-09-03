@@ -8,7 +8,6 @@ function deputy(over: Partial<HemicycleDeputy> & { id: string }): HemicycleDeput
     slug: `d-${over.id}`,
     firstName: "Jean",
     lastName: `Nom${over.id}`,
-    photoUrl: null,
     severityScore: 0,
     maxCertaintyLevel: null,
     activeAffairCount: 0,

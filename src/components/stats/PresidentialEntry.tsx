@@ -83,6 +83,7 @@ export function PresidentialEntry({ stats }: { stats: PresidentialOverviewStats 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link
             href={HUB_PATH}
+            prefetch={false}
             className={cn(buttonVariants({ variant: "default" }), "min-h-11 justify-center")}
           >
             Voir le dossier présidentielle 2027
@@ -90,6 +91,7 @@ export function PresidentialEntry({ stats }: { stats: PresidentialOverviewStats 
           </Link>
           <Link
             href={`${HUB_PATH}/comparer`}
+            prefetch={false}
             className={cn(buttonVariants({ variant: "outline" }), "min-h-11 justify-center")}
           >
             Comparer les mesures des candidats

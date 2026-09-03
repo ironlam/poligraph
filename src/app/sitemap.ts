@@ -158,6 +158,12 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       changeFrequency: "weekly",
       priority: 0.8,
     },
+    ...["factchecks", "legislatif", "participation"].map((section) => ({
+      url: `${SITE_URL}/statistiques/${section}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    })),
     {
       url: `${SITE_URL}/elections`,
       lastModified: new Date(),

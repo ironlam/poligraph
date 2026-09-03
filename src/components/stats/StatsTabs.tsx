@@ -1,89 +1,56 @@
-"use client";
-
-import { useSearchParams } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { Scale, ShieldCheck, FileText, BarChart3 } from "lucide-react";
-import { STATS_TABS, DEFAULT_STATS_TAB, type StatsTab } from "@/config/routes";
+import { BarChart3, FileText, Scale, ShieldCheck } from "lucide-react";
+import { statsHref, type StatsTab } from "@/config/routes";
 
-interface StatsTabsProps {
-  judicialContent: ReactNode;
-  factCheckContent: ReactNode;
-  legislativeContent: ReactNode;
-  participationContent: ReactNode;
-}
+const ITEMS: Array<{
+  tab: StatsTab;
+  label: string;
+  shortLabel: string;
+  icon: typeof Scale;
+}> = [
+  { tab: "judiciaire", label: "Judiciaire", shortLabel: "Justice", icon: Scale },
+  { tab: "factchecks", label: "Fact-checking", shortLabel: "Facts", icon: ShieldCheck },
+  { tab: "legislatif", label: "Législatif", shortLabel: "Lois", icon: FileText },
+  {
+    tab: "participation",
+    label: "Participation aux scrutins publics",
+    shortLabel: "Votes",
+    icon: BarChart3,
+  },
+];
 
-function StatsTabsInner({
-  judicialContent,
-  factCheckContent,
-  legislativeContent,
-  participationContent,
-}: StatsTabsProps) {
-  const searchParams = useSearchParams();
-
-  const tabFromUrl = useMemo<StatsTab>(() => {
-    const raw = searchParams.get("tab");
-    return STATS_TABS.includes(raw as StatsTab) ? (raw as StatsTab) : DEFAULT_STATS_TAB;
-  }, [searchParams]);
-
-  const [tab, setTab] = useState<StatsTab>(tabFromUrl);
-
-  // Keep local state in sync when the URL changes externally
-  // (browser back/forward, in-page <Link href="?tab=...">).
-  useEffect(() => {
-    setTab(tabFromUrl);
-  }, [tabFromUrl]);
-
-  function onTabChange(value: string) {
-    const next = value as StatsTab;
-    setTab(next);
-    const params = new URLSearchParams(window.location.search);
-    if (next === DEFAULT_STATS_TAB) {
-      params.delete("tab");
-    } else {
-      params.set("tab", next);
-    }
-    const qs = params.toString();
-    window.history.replaceState(null, "", `/statistiques${qs ? `?${qs}` : ""}`);
-  }
-
+/** Server-rendered navigation avoids mounting and prefetching hidden datasets. */
+export function StatsTabs({ active, children }: { active: StatsTab; children: ReactNode }) {
   return (
-    <Tabs value={tab} onValueChange={onTabChange}>
-      <TabsList>
-        <TabsTrigger value="judiciaire">
-          <Scale className="h-4 w-4" />
-          <span className="hidden sm:inline">Judiciaire</span>
-          <span className="sm:hidden">Justice</span>
-        </TabsTrigger>
-        <TabsTrigger value="factchecks">
-          <ShieldCheck className="h-4 w-4" />
-          <span className="hidden sm:inline">Fact-checking</span>
-          <span className="sm:hidden">Facts</span>
-        </TabsTrigger>
-        <TabsTrigger value="legislatif">
-          <FileText className="h-4 w-4" />
-          <span className="hidden sm:inline">Législatif</span>
-          <span className="sm:hidden">Lois</span>
-        </TabsTrigger>
-        <TabsTrigger value="participation">
-          <BarChart3 className="h-4 w-4" />
-          <span className="hidden sm:inline">Participation aux scrutins publics</span>
-          <span className="sm:hidden">Votes</span>
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="judiciaire">{judicialContent}</TabsContent>
-      <TabsContent value="factchecks">{factCheckContent}</TabsContent>
-      <TabsContent value="legislatif">{legislativeContent}</TabsContent>
-      <TabsContent value="participation">{participationContent}</TabsContent>
-    </Tabs>
-  );
-}
-
-export function StatsTabs(props: StatsTabsProps) {
-  return (
-    <Suspense>
-      <StatsTabsInner {...props} />
-    </Suspense>
+    <>
+      <nav aria-label="Rubriques statistiques" className="overflow-x-auto pb-1">
+        <ul className="flex min-w-max gap-1 rounded-lg bg-muted p-[3px]">
+          {ITEMS.map((item) => {
+            const Icon = item.icon;
+            const selected = item.tab === active;
+            return (
+              <li key={item.tab}>
+                <Link
+                  href={statsHref(item.tab)}
+                  prefetch={false}
+                  aria-current={selected ? "page" : undefined}
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    selected
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon aria-hidden="true" className="h-4 w-4" />
+                  <span className="hidden sm:inline">{item.label}</span>
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      {children}
+    </>
   );
 }

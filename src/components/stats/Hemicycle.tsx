@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useCallback, useId } from "react";
 import { useRouter } from "next/navigation";
-import { scaleLinear } from "d3-scale";
 import { computeHemicycleLayout } from "./hemicycle-layout";
 import { CERTAINTY_LABELS } from "@/config/certainty";
 import type { HemicycleGroup, HemicycleDeputy } from "@/lib/data/hemicycle";
@@ -23,6 +22,26 @@ const SVG_WIDTH = 800;
 const SVG_HEIGHT = 420;
 const BASE_RADIUS = 3.8;
 const MAX_SCALE = 3;
+const RADIUS_STOPS = [
+  [0, BASE_RADIUS],
+  [1, BASE_RADIUS * 1.4],
+  [4, BASE_RADIUS * 2],
+  [12, BASE_RADIUS * MAX_SCALE],
+] as const;
+
+function radiusForScore(score: number): number {
+  const value = Math.max(0, Math.min(score, 12));
+
+  for (let index = 1; index < RADIUS_STOPS.length; index++) {
+    const [nextScore, nextRadius] = RADIUS_STOPS[index]!;
+    if (value > nextScore) continue;
+    const [previousScore, previousRadius] = RADIUS_STOPS[index - 1]!;
+    const ratio = (value - previousScore) / (nextScore - previousScore);
+    return previousRadius + ratio * (nextRadius - previousRadius);
+  }
+
+  return BASE_RADIUS * MAX_SCALE;
+}
 
 export function Hemicycle({ groups }: HemicycleProps) {
   const router = useRouter();
@@ -103,16 +122,6 @@ export function Hemicycle({ groups }: HemicycleProps) {
     };
   }, [deputyMap, seats, highlightGroup, groups]);
 
-  // Severity score → circle radius
-  const radiusScale = useMemo(
-    () =>
-      scaleLinear()
-        .domain([0, 1, 4, 12])
-        .range([BASE_RADIUS, BASE_RADIUS * 1.4, BASE_RADIUS * 2, BASE_RADIUS * MAX_SCALE])
-        .clamp(true),
-    []
-  );
-
   const handleMouseEnter = useCallback(
     (seatIdx: number, event: React.MouseEvent<SVGCircleElement>) => {
       const data = deputyMap.get(seatIdx);
@@ -154,7 +163,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
           const data = deputyMap.get(seat.seatIndex);
           const deputy = data?.deputy;
           const score = deputy?.severityScore ?? 0;
-          const r = radiusScale(score);
+          const r = radiusForScore(score);
           const isHighlighted = !highlightGroup || seat.groupCode === highlightGroup;
           const hasIssue = score > 0;
           const maxLevel = deputy?.maxCertaintyLevel;
