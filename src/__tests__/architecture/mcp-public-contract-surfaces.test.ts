@@ -146,7 +146,10 @@ const PARTY_SURFACES = [
   "src/app/recap/[week]/opengraph-image.tsx",
   "src/app/recap/[week]/page.tsx",
   "src/app/recap/page.tsx",
+  "src/app/statistiques/factchecks/page.tsx",
+  "src/app/statistiques/legislatif/page.tsx",
   "src/app/statistiques/page.tsx",
+  "src/app/statistiques/participation/page.tsx",
 ] as const;
 
 const FACTCHECK_SURFACES = [
@@ -174,7 +177,10 @@ const FACTCHECK_SURFACES = [
   "src/app/recap/[week]/opengraph-image.tsx",
   "src/app/recap/[week]/page.tsx",
   "src/app/recap/page.tsx",
+  "src/app/statistiques/factchecks/page.tsx",
+  "src/app/statistiques/legislatif/page.tsx",
   "src/app/statistiques/page.tsx",
+  "src/app/statistiques/participation/page.tsx",
 ] as const;
 
 const AFFAIR_SURFACES = [
@@ -226,7 +232,10 @@ const AFFAIR_SURFACES = [
   "src/app/recap/[week]/opengraph-image.tsx",
   "src/app/recap/[week]/page.tsx",
   "src/app/recap/page.tsx",
+  "src/app/statistiques/factchecks/page.tsx",
+  "src/app/statistiques/legislatif/page.tsx",
   "src/app/statistiques/page.tsx",
+  "src/app/statistiques/participation/page.tsx",
 ] as const;
 
 const PARTY_AFFAIRS_AT_TIME_SURFACES = new Set([

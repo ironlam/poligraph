@@ -3,6 +3,7 @@ import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard"
 
 let db: typeof import("@/lib/db").db;
 let getPublicMeasureStatsByCandidacy: typeof import("../measures").getPublicMeasureStatsByCandidacy;
+let getPublicMeasureRollupsByElection: typeof import("../measures").getPublicMeasureRollupsByElection;
 let getMeasureReadinessByCandidacies: typeof import("../measures").getMeasureReadinessByCandidacies;
 
 const SLUG = "stats-by-candidacy";
@@ -24,8 +25,11 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
   beforeAll(async () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
-    ({ getPublicMeasureStatsByCandidacy, getMeasureReadinessByCandidacies } =
-      await import("../measures"));
+    ({
+      getPublicMeasureStatsByCandidacy,
+      getPublicMeasureRollupsByElection,
+      getMeasureReadinessByCandidacies,
+    } = await import("../measures"));
     const { createMeasure, reviewMeasureRevision, publishMeasureRevision, draftMeasureRevision } =
       await import("@/lib/measures/transitions");
 
@@ -155,6 +159,41 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
     expect(stats.measureCount).toBe(2);
     expect(stats.themesCoveredCount).toBe(2);
+  });
+
+  it("agrège le même corpus public pour toute l'élection", async () => {
+    const rollups = await getPublicMeasureRollupsByElection(electionId);
+    const publishedStats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
+    const secondaryStats = await getPublicMeasureStatsByCandidacy(secondarySourceCandidacyId);
+
+    expect(rollups.get(publishedCandidacyId)).toEqual({
+      measureCount: publishedStats.measureCount,
+      themesCoveredCount: publishedStats.themesCoveredCount,
+    });
+    expect(rollups.get(secondarySourceCandidacyId)).toEqual({
+      measureCount: secondaryStats.measureCount,
+      themesCoveredCount: secondaryStats.themesCoveredCount,
+    });
+    expect(rollups.has(draftExtensionCandidacyId)).toBe(false);
+  });
+
+  it("ignore les mesures retirées dans les deux lectures publiques", async () => {
+    const measure = await db.measure.findFirstOrThrow({
+      where: { candidacyId: publishedCandidacyId },
+      select: { id: true },
+    });
+    await db.measure.update({ where: { id: measure.id }, data: { withdrawnAt: new Date() } });
+
+    try {
+      const rollups = await getPublicMeasureRollupsByElection(electionId);
+      const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
+      expect(rollups.get(publishedCandidacyId)).toEqual({
+        measureCount: stats.measureCount,
+        themesCoveredCount: stats.themesCoveredCount,
+      });
+    } finally {
+      await db.measure.update({ where: { id: measure.id }, data: { withdrawnAt: null } });
+    }
   });
 
   it("compte une seule mesure à source primaire quand l'autre est secondaire", async () => {

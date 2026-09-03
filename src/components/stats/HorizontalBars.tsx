@@ -49,7 +49,12 @@ export function HorizontalBars({ bars, title, maxValue: globalMax }: HorizontalB
           );
 
           return bar.href ? (
-            <Link key={bar.label} href={bar.href} className="block hover:opacity-80">
+            <Link
+              key={bar.label}
+              href={bar.href}
+              prefetch={false}
+              className="block hover:opacity-80"
+            >
               {label}
               {barEl}
             </Link>

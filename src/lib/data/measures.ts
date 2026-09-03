@@ -616,6 +616,40 @@ export async function getPublicMeasureStatsByCandidacy(
   };
 }
 
+export type PublicCandidacyMeasureRollup = {
+  measureCount: number;
+  themesCoveredCount: number;
+};
+
+export async function getPublicMeasureRollupsByElection(
+  electionId: string
+): Promise<Map<string, PublicCandidacyMeasureRollup>> {
+  const rows = await db.measure.groupBy({
+    by: ["candidacyId", "theme"],
+    where: {
+      electionId,
+      candidacyId: { not: null },
+      candidacy: { is: PUBLIC_CANDIDACY_WHERE },
+      withdrawnAt: null,
+      ...PUBLIC_MEASURE_WHERE,
+    },
+    _count: { _all: true },
+  });
+
+  const result = new Map<string, PublicCandidacyMeasureRollup>();
+  for (const row of rows) {
+    if (row.candidacyId === null) continue;
+    const current = result.get(row.candidacyId) ?? {
+      measureCount: 0,
+      themesCoveredCount: 0,
+    };
+    current.measureCount += row._count._all;
+    if (isPresidentialTheme(row.theme)) current.themesCoveredCount += 1;
+    result.set(row.candidacyId, current);
+  }
+  return result;
+}
+
 /**
  * The same measure population as the public reads, for a set of candidacies, WITHOUT the
  * `PUBLIC_CANDIDACY_WHERE` gate.

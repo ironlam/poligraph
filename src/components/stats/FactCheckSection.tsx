@@ -65,6 +65,7 @@ function PoliticianRankingItem({
   return (
     <Link
       href={`/politiques/${pol.slug}`}
+      prefetch={false}
       className="flex items-center gap-3 hover:bg-muted/50 rounded-lg p-2 -mx-1 sm:-mx-2 transition-colors"
     >
       <span className="text-sm font-bold text-muted-foreground w-6 text-right tabular-nums shrink-0">
@@ -114,6 +115,7 @@ function PartyRankingItem({
   return (
     <Link
       href={party.slug ? `/partis/${party.slug}` : "#"}
+      prefetch={false}
       className="flex items-center gap-3 hover:bg-muted/50 rounded-lg p-2 -mx-1 sm:-mx-2 transition-colors"
     >
       <span className="text-sm font-bold text-muted-foreground w-6 text-right tabular-nums shrink-0">

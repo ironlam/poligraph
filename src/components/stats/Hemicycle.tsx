@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback, useId } from "react";
-import { useRouter } from "next/navigation";
-import { scaleLinear } from "d3-scale";
 import { computeHemicycleLayout } from "./hemicycle-layout";
 import { CERTAINTY_LABELS } from "@/config/certainty";
 import type { HemicycleGroup, HemicycleDeputy } from "@/lib/data/hemicycle";
@@ -23,9 +21,28 @@ const SVG_WIDTH = 800;
 const SVG_HEIGHT = 420;
 const BASE_RADIUS = 3.8;
 const MAX_SCALE = 3;
+const RADIUS_STOPS = [
+  [0, BASE_RADIUS],
+  [1, BASE_RADIUS * 1.4],
+  [4, BASE_RADIUS * 2],
+  [12, BASE_RADIUS * MAX_SCALE],
+] as const;
+
+function radiusForScore(score: number): number {
+  const value = Math.max(0, Math.min(score, 12));
+
+  for (let index = 1; index < RADIUS_STOPS.length; index++) {
+    const [nextScore, nextRadius] = RADIUS_STOPS[index]!;
+    if (value > nextScore) continue;
+    const [previousScore, previousRadius] = RADIUS_STOPS[index - 1]!;
+    const ratio = (value - previousScore) / (nextScore - previousScore);
+    return previousRadius + ratio * (nextRadius - previousRadius);
+  }
+
+  return BASE_RADIUS * MAX_SCALE;
+}
 
 export function Hemicycle({ groups }: HemicycleProps) {
-  const router = useRouter();
   const descId = useId();
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [highlightGroup, setHighlightGroup] = useState<string | null>(null);
@@ -103,16 +120,6 @@ export function Hemicycle({ groups }: HemicycleProps) {
     };
   }, [deputyMap, seats, highlightGroup, groups]);
 
-  // Severity score → circle radius
-  const radiusScale = useMemo(
-    () =>
-      scaleLinear()
-        .domain([0, 1, 4, 12])
-        .range([BASE_RADIUS, BASE_RADIUS * 1.4, BASE_RADIUS * 2, BASE_RADIUS * MAX_SCALE])
-        .clamp(true),
-    []
-  );
-
   const handleMouseEnter = useCallback(
     (seatIdx: number, event: React.MouseEvent<SVGCircleElement>) => {
       const data = deputyMap.get(seatIdx);
@@ -133,20 +140,12 @@ export function Hemicycle({ groups }: HemicycleProps) {
 
   const handleMouseLeave = useCallback(() => setTooltip(null), []);
 
-  const handleClick = useCallback(
-    (seatIdx: number) => {
-      const data = deputyMap.get(seatIdx);
-      if (data) router.push(`/politiques/${data.deputy.slug}`);
-    },
-    [deputyMap, router]
-  );
-
   return (
     <div className="relative">
       <svg
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         className="w-full h-auto"
-        role="img"
+        role="group"
         aria-label={`Hémicycle de l'Assemblée nationale : ${summary.misEnCause} député${summary.misEnCause !== 1 ? "s" : ""}${summary.groupLabel ? ` du groupe ${summary.groupLabel}` : ""} mis en cause dans une affaire judiciaire sur ${summary.seatCount}`}
         aria-describedby={descId}
       >
@@ -154,7 +153,7 @@ export function Hemicycle({ groups }: HemicycleProps) {
           const data = deputyMap.get(seat.seatIndex);
           const deputy = data?.deputy;
           const score = deputy?.severityScore ?? 0;
-          const r = radiusScale(score);
+          const r = radiusForScore(score);
           const isHighlighted = !highlightGroup || seat.groupCode === highlightGroup;
           const hasIssue = score > 0;
           const maxLevel = deputy?.maxCertaintyLevel;
@@ -172,9 +171,8 @@ export function Hemicycle({ groups }: HemicycleProps) {
           const strokeWidth =
             maxLevel === "ETABLI" ? 2 : maxLevel === "PRONONCE" ? 1.5 : hasIssue ? 0.8 : 0;
 
-          return (
+          const circle = (
             <circle
-              key={i}
               cx={seat.x}
               cy={seat.y}
               r={r}
@@ -185,8 +183,31 @@ export function Hemicycle({ groups }: HemicycleProps) {
               className="cursor-pointer transition-opacity duration-200"
               onMouseEnter={(e) => handleMouseEnter(seat.seatIndex, e)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => handleClick(seat.seatIndex)}
             />
+          );
+
+          if (!data) return <g key={i}>{circle}</g>;
+
+          const deputyName = `${data.deputy.firstName} ${data.deputy.lastName}`;
+          return (
+            <a
+              key={i}
+              href={`/politiques/${data.deputy.slug}`}
+              aria-label={`Voir la fiche de ${deputyName}`}
+              onFocus={() =>
+                setTooltip({
+                  deputy: data.deputy,
+                  groupName: data.groupName,
+                  groupCode: data.groupCode,
+                  x: seat.x,
+                  y: seat.y,
+                })
+              }
+              onBlur={handleMouseLeave}
+            >
+              <title>{`${deputyName}, ${data.groupName}`}</title>
+              {circle}
+            </a>
           );
         })}
       </svg>

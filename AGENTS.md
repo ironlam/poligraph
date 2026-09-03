@@ -253,6 +253,8 @@ When unsure: if the noun is specific to French politics, law, or administration,
 - Prettier: 100 char width, 2-space indent, double quotes, trailing commas (es5), semicolons.
 - ESLint: `next/core-web-vitals` + prettier. Unused vars with `_` prefix allowed. `no-console` is a warning (disabled in `api/`, `services/`, `lib/`, `sync/`).
 - Pre-commit: `lint-staged` runs ESLint fix + Prettier on staged files. Do not skip hooks.
+- Comments explain a non-obvious invariant or constraint. Do not narrate the diff, the former
+  implementation, or code that is already self-explanatory.
 
 ### Language rules for user-facing text
 
@@ -352,6 +354,12 @@ These are scar-tissue lessons. Reading them costs thirty seconds; rediscovering 
 - **`permanentRedirect()` in a page renders an HTML meta-refresh shell, not an HTTP 308.** For citation resolvers, URL shorteners, or crawler-facing redirects, use a Route Handler (`route.ts` returning `Response.redirect(url, 308)`).
 - **`generateStaticParams` with `searchParams` and `useCache: true` crashes** with `DYNAMIC_SERVER_USAGE`. Use `revalidate = N` alone for ISR on dynamic pages.
 - **ISR pages prerender at build time.** If the DB is unreachable during build, pages render empty. Vercel env vars must be set before build.
+- **Repeated public images stay optimized.** Do not use `unoptimized` in public app or component
+  code. Store unreliable remote assets in Blob rather than serving full originals to every reader.
+- **Large link collections do not prefetch by default.** Footer, result grids and directories use
+  `prefetch={false}`. The `href` remains in server HTML for readers and crawlers.
+- **One visible dataset per client boundary.** Do not pass hidden panels or whole corpora into a
+  client component. Give substantial indexable sections stable server-rendered URLs.
 
 ### Prisma 7
 

@@ -109,4 +109,16 @@ describe("the sitemap route renders per request", () => {
   it("returns nothing for an unknown shard rather than throwing", async () => {
     await expect(sitemap({ id: Promise.resolve("9") })).resolves.toEqual([]);
   });
+
+  it("keeps every server-rendered statistics section discoverable", async () => {
+    const urls = (await sitemap({ id: Promise.resolve("0") })).map((entry) => entry.url);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/\/statistiques$/),
+        expect.stringMatching(/\/statistiques\/factchecks$/),
+        expect.stringMatching(/\/statistiques\/legislatif$/),
+        expect.stringMatching(/\/statistiques\/participation$/),
+      ])
+    );
+  });
 });

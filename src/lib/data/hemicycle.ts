@@ -10,11 +10,9 @@ import {
 import type { PoliticalPosition } from "@/generated/prisma";
 
 export interface HemicycleDeputy {
-  id: string;
   slug: string;
   firstName: string;
   lastName: string;
-  photoUrl: string | null;
   /** Certainty-based severity score */
   severityScore: number;
   /** Highest certainty level among active affairs */
@@ -56,11 +54,9 @@ export async function getHemicycleData(): Promise<HemicycleGroup[]> {
             select: {
               politician: {
                 select: {
-                  id: true,
                   slug: true,
                   firstName: true,
                   lastName: true,
-                  photoUrl: true,
                   affairs: {
                     where: {
                       publicationStatus: "PUBLISHED",
@@ -108,11 +104,9 @@ export async function getHemicycleData(): Promise<HemicycleGroup[]> {
         }
 
         return {
-          id: m.politician.id,
           slug: m.politician.slug,
           firstName: m.politician.firstName,
           lastName: m.politician.lastName,
-          photoUrl: m.politician.photoUrl,
           severityScore: score,
           maxCertaintyLevel: maxCertainty,
           activeAffairCount: activeCount,
