@@ -5,6 +5,12 @@ import { OG_IMAGE_NOINDEX_HEADERS } from "./src/lib/seo/og-image-robots";
 import { API_NOINDEX_HEADERS } from "./src/lib/seo/api-robots";
 import { buildSecurityHeaders } from "./src/lib/security-headers";
 
+const LEGACY_STATS_REDIRECTS = [
+  ["factchecks", "/statistiques/factchecks"],
+  ["legislatif", "/statistiques/legislatif"],
+  ["participation", "/statistiques/participation"],
+] as const;
+
 const nextConfig: NextConfig = {
   serverExternalPackages: ["jsdom"],
   staticPageGenerationTimeout: 120,
@@ -99,6 +105,12 @@ const nextConfig: NextConfig = {
         destination: "/statistiques",
         permanent: true,
       },
+      ...LEGACY_STATS_REDIRECTS.map(([tab, destination]) => ({
+        source: "/statistiques",
+        has: [{ type: "query" as const, key: "tab", value: tab }],
+        destination,
+        permanent: true,
+      })),
       {
         source: "/api-docs",
         destination: "/docs/api",

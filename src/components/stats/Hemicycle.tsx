@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback, useId } from "react";
-import { useRouter } from "next/navigation";
 import { computeHemicycleLayout } from "./hemicycle-layout";
 import { CERTAINTY_LABELS } from "@/config/certainty";
 import type { HemicycleGroup, HemicycleDeputy } from "@/lib/data/hemicycle";
@@ -44,7 +43,6 @@ function radiusForScore(score: number): number {
 }
 
 export function Hemicycle({ groups }: HemicycleProps) {
-  const router = useRouter();
   const descId = useId();
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [highlightGroup, setHighlightGroup] = useState<string | null>(null);
@@ -142,14 +140,6 @@ export function Hemicycle({ groups }: HemicycleProps) {
 
   const handleMouseLeave = useCallback(() => setTooltip(null), []);
 
-  const handleClick = useCallback(
-    (seatIdx: number) => {
-      const data = deputyMap.get(seatIdx);
-      if (data) router.push(`/politiques/${data.deputy.slug}`);
-    },
-    [deputyMap, router]
-  );
-
   return (
     <div className="relative">
       <svg
@@ -181,9 +171,8 @@ export function Hemicycle({ groups }: HemicycleProps) {
           const strokeWidth =
             maxLevel === "ETABLI" ? 2 : maxLevel === "PRONONCE" ? 1.5 : hasIssue ? 0.8 : 0;
 
-          return (
+          const circle = (
             <circle
-              key={i}
               cx={seat.x}
               cy={seat.y}
               r={r}
@@ -194,8 +183,32 @@ export function Hemicycle({ groups }: HemicycleProps) {
               className="cursor-pointer transition-opacity duration-200"
               onMouseEnter={(e) => handleMouseEnter(seat.seatIndex, e)}
               onMouseLeave={handleMouseLeave}
-              onClick={() => handleClick(seat.seatIndex)}
             />
+          );
+
+          if (!data) return <g key={i}>{circle}</g>;
+
+          const deputyName = `${data.deputy.firstName} ${data.deputy.lastName}`;
+          return (
+            <a
+              key={i}
+              href={`/politiques/${data.deputy.slug}`}
+              aria-label={`Voir la fiche de ${deputyName}`}
+              className="group focus:outline-none"
+              onFocus={() =>
+                setTooltip({
+                  deputy: data.deputy,
+                  groupName: data.groupName,
+                  groupCode: data.groupCode,
+                  x: seat.x,
+                  y: seat.y,
+                })
+              }
+              onBlur={handleMouseLeave}
+            >
+              <title>{`${deputyName}, ${data.groupName}`}</title>
+              {circle}
+            </a>
           );
         })}
       </svg>

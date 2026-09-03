@@ -2,17 +2,10 @@ import type { ReactNode } from "react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
-import { statsHref, type StatsTab } from "@/config/routes";
+import { STATS_SECTIONS, statsHref, type StatsTab } from "@/config/routes";
 import type { PresidentialOverviewStats } from "@/lib/data/presidential-stats";
 import { PresidentialEntry } from "./PresidentialEntry";
 import { StatsTabs } from "./StatsTabs";
-
-const SECTION_LABELS: Record<StatsTab, string> = {
-  judiciaire: "Judiciaire",
-  factchecks: "Fact-checking",
-  legislatif: "Législatif",
-  participation: "Participation",
-};
 
 export function StatisticsPageLayout({
   active,
@@ -38,7 +31,7 @@ export function StatisticsPageLayout({
               ? [{ label: "Statistiques" }]
               : [
                   { label: "Statistiques", href: "/statistiques" },
-                  { label: SECTION_LABELS[active] },
+                  { label: STATS_SECTIONS[active].label },
                 ]
           }
         />

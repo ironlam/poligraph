@@ -621,7 +621,6 @@ export type PublicCandidacyMeasureRollup = {
   themesCoveredCount: number;
 };
 
-/** Aggregate public measure counts without loading complete revisions. */
 export async function getPublicMeasureRollupsByElection(
   electionId: string
 ): Promise<Map<string, PublicCandidacyMeasureRollup>> {

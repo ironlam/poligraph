@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
+import { STATS_SECTIONS, STATS_TABS } from "@/config/routes";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -158,8 +159,8 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       changeFrequency: "weekly",
       priority: 0.8,
     },
-    ...["factchecks", "legislatif", "participation"].map((section) => ({
-      url: `${SITE_URL}/statistiques/${section}`,
+    ...STATS_TABS.filter((section) => section !== "judiciaire").map((section) => ({
+      url: `${SITE_URL}${STATS_SECTIONS[section].path}`,
       lastModified: new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.7,

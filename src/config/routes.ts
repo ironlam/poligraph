@@ -15,23 +15,29 @@ export const ROUTES = {
 } as const;
 
 /** Stable URLs keep each statistics section server-rendered and indexable. */
-export const STATS_TABS = ["judiciaire", "factchecks", "legislatif", "participation"] as const;
-export type StatsTab = (typeof STATS_TABS)[number];
+export const STATS_SECTIONS = {
+  judiciaire: { path: "/statistiques", label: "Judiciaire", shortLabel: "Justice" },
+  factchecks: {
+    path: "/statistiques/factchecks",
+    label: "Fact-checking",
+    shortLabel: "Facts",
+  },
+  legislatif: { path: "/statistiques/legislatif", label: "Législatif", shortLabel: "Lois" },
+  participation: {
+    path: "/statistiques/participation",
+    label: "Participation aux scrutins publics",
+    shortLabel: "Votes",
+  },
+} as const;
+
+export type StatsTab = keyof typeof STATS_SECTIONS;
+export const STATS_TABS = Object.keys(STATS_SECTIONS) as StatsTab[];
 export const DEFAULT_STATS_TAB: StatsTab = "judiciaire";
 
-export const STATS_PATHS: Record<StatsTab, string> = {
-  judiciaire: "/statistiques",
-  factchecks: "/statistiques/factchecks",
-  legislatif: "/statistiques/legislatif",
-  participation: "/statistiques/participation",
-};
-
-/**
- * Build a statistics URL. `chamber` is only read by the participation section.
- */
 export function statsHref(tab: StatsTab, params?: { chamber?: Chamber }): string {
   const search = new URLSearchParams();
   if (params?.chamber) search.set("chamber", params.chamber);
   const qs = search.toString();
-  return qs ? `${STATS_PATHS[tab]}?${qs}` : STATS_PATHS[tab];
+  const path = STATS_SECTIONS[tab].path;
+  return qs ? `${path}?${qs}` : path;
 }

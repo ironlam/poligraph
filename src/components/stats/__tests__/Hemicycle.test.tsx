@@ -45,6 +45,16 @@ function summary() {
 }
 
 describe("Hemicycle summary", () => {
+  it("rend chaque siège occupé accessible au clavier", () => {
+    const { container } = render(<Hemicycle groups={groups} />);
+    const links = container.querySelectorAll('svg a[href^="/politiques/"]');
+
+    expect(links).toHaveLength(5);
+    expect([...links].map((link) => link.getAttribute("aria-label"))).toContain(
+      "Voir la fiche de Jean Nom1"
+    );
+  });
+
   it("counts the whole chamber when no group is selected", () => {
     render(<Hemicycle groups={groups} />);
 

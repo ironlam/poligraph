@@ -1,23 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BarChart3, FileText, Scale, ShieldCheck } from "lucide-react";
-import { statsHref, type StatsTab } from "@/config/routes";
+import { STATS_SECTIONS, statsHref, type StatsTab } from "@/config/routes";
 
 const ITEMS: Array<{
   tab: StatsTab;
-  label: string;
-  shortLabel: string;
   icon: typeof Scale;
 }> = [
-  { tab: "judiciaire", label: "Judiciaire", shortLabel: "Justice", icon: Scale },
-  { tab: "factchecks", label: "Fact-checking", shortLabel: "Facts", icon: ShieldCheck },
-  { tab: "legislatif", label: "Législatif", shortLabel: "Lois", icon: FileText },
-  {
-    tab: "participation",
-    label: "Participation aux scrutins publics",
-    shortLabel: "Votes",
-    icon: BarChart3,
-  },
+  { tab: "judiciaire", icon: Scale },
+  { tab: "factchecks", icon: ShieldCheck },
+  { tab: "legislatif", icon: FileText },
+  { tab: "participation", icon: BarChart3 },
 ];
 
 /** Server-rendered navigation avoids mounting and prefetching hidden datasets. */
@@ -29,6 +22,7 @@ export function StatsTabs({ active, children }: { active: StatsTab; children: Re
           {ITEMS.map((item) => {
             const Icon = item.icon;
             const selected = item.tab === active;
+            const section = STATS_SECTIONS[item.tab];
             return (
               <li key={item.tab}>
                 <Link
@@ -42,8 +36,8 @@ export function StatsTabs({ active, children }: { active: StatsTab; children: Re
                   }`}
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
-                  <span className="hidden sm:inline">{item.label}</span>
-                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{section.label}</span>
+                  <span className="sm:hidden">{section.shortLabel}</span>
                 </Link>
               </li>
             );
