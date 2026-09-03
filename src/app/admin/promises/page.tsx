@@ -8,6 +8,7 @@ import {
 } from "@/config/labels";
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
 import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
+import { parsePageParam } from "@/lib/data/query-params";
 
 export const metadata = { title: "Promesses (admin)", robots: { index: false } };
 
@@ -28,7 +29,7 @@ export default async function AdminPromisesPage({ searchParams }: PageProps) {
   const theme = THEME_KEYS.includes(params.theme as ThemeCategory)
     ? (params.theme as ThemeCategory)
     : undefined;
-  const page = params.page ? Math.max(1, Number(params.page)) : 1;
+  const page = parsePageParam(params.page);
 
   const [result, stats] = await Promise.all([
     getPromisesForModeration({ status, theme, page, pageSize: ITEMS_PER_PAGE }),

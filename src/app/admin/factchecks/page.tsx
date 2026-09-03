@@ -14,6 +14,7 @@ import {
   AddMentionButton,
 } from "@/components/admin/FactcheckActions";
 import { updateFactcheckStatus } from "./actions";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{
@@ -156,7 +157,7 @@ const RATING_OPTIONS: FactCheckRating[] = [
 
 export default async function AdminFactchecksPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
   const rating = RATING_OPTIONS.includes(params.rating as FactCheckRating)
     ? (params.rating as FactCheckRating)
     : undefined;

@@ -12,6 +12,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import { DossierFilters } from "@/components/admin/DossierFilters";
 import type { DossierStatus, ThemeCategory, Prisma } from "@/generated/prisma";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{
@@ -125,7 +126,7 @@ async function getStats() {
 
 export default async function AdminDossiersPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
   const status = params.status as DossierStatus | undefined;
   const hasSummary =
     params.hasSummary === "true" ? true : params.hasSummary === "false" ? false : undefined;

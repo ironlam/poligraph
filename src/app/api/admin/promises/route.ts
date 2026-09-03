@@ -5,6 +5,7 @@ import { withValidation } from "@/lib/security/validate";
 import { createPromiseSchema } from "@/lib/security/schemas";
 import { getRequestMeta } from "@/lib/security/audit";
 import { getPromisesForModeration } from "@/lib/data/promises";
+import { parseIntFilter, parsePageParam } from "@/lib/data/query-params";
 import { PROMISE_EXTRACTION_STATUS_LABELS } from "@/config/labels";
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
 import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
@@ -21,8 +22,10 @@ export const GET = withAdminAuth(async (request) => {
       rawStatus && STATUS_KEYS.has(rawStatus) ? (rawStatus as PromiseExtractionStatus) : undefined,
     theme: rawTheme && THEME_KEYS.has(rawTheme) ? (rawTheme as ThemeCategory) : undefined,
     politicianSlug: searchParams.get("politicianSlug") ?? undefined,
-    page: Number(searchParams.get("page") ?? 1),
-    pageSize: Number(searchParams.get("pageSize") ?? 25),
+    page: parsePageParam(searchParams.get("page")),
+    // Math.min(NaN, 100) is NaN in the loader, so an unreadable pageSize would
+    // reach Prisma as `take: NaN`. The floor also keeps a negative out.
+    pageSize: Math.max(1, parseIntFilter(searchParams.get("pageSize")) ?? 25),
   });
   return NextResponse.json(result);
 });

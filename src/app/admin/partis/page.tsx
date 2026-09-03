@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { POLITICAL_POSITION_LABELS, POLITICAL_POSITION_COLORS } from "@/config/labels";
 import type { PoliticalPosition, Prisma } from "@/generated/prisma";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{
@@ -57,7 +58,7 @@ export default async function AdminPartiesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const search = params.q || "";
   const position = params.position as PoliticalPosition | undefined;
-  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const page = parsePageParam(params.page);
 
   const { parties, total, totalPages } = await getParties({ search, position, page });
 

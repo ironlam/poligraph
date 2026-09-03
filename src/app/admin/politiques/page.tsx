@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ensureContrast } from "@/lib/contrast";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{ q?: string; page?: string; status?: string; filter?: string }>;
@@ -63,7 +64,7 @@ async function getPoliticians(search: string, page: number, status?: string, fil
 export default async function AdminPoliticiansPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const search = params.q || "";
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
   const status = params.status;
   const filter = params.filter;
 

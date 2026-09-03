@@ -7,6 +7,7 @@ import { AdminDeleteButton } from "@/components/admin/AdminDeleteButton";
 import { PressPurgeButton } from "@/components/admin/PressPurgeButton";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import type { Prisma } from "@/generated/prisma";
+import { parsePageParam } from "@/lib/data/query-params";
 
 interface PageProps {
   searchParams: Promise<{
@@ -101,7 +102,7 @@ async function getSources() {
 
 export default async function AdminPressePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const page = parseInt(params.page || "1", 10);
+  const page = parsePageParam(params.page);
 
   const [{ articles, total, totalPages }, stats, sources] = await Promise.all([
     getArticles({ search: params.search, source: params.source, mention: params.mention, page }),
