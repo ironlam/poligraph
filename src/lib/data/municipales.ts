@@ -655,22 +655,10 @@ export async function getDepartmentMunicipales(
       MAX(CASE WHEN c."isElected" THEN c."round1Pct" END)::float AS "winnerPct"
     FROM "Commune" co
     INNER JOIN "Candidacy" c ON c."communeId" = co.id AND c."electionId" = ${election.id}
-    -- The mayor is reached through MandateLocal, which is what ties a mandate to
-    -- a commune. Joining "Mandate" directly had no key to co, so every commune
-    -- row was multiplied by every current MAIRE mandate in the country: 21396
-    -- distinct (fullName, civility) pairs, i.e. 125.8M intermediate rows for a
-    -- department of 266 communes, and a statement timeout (Postgres 57014).
-    -- It was also wrong, not just slow: the GROUP BY carried p."fullName", so a
-    -- commune came back once per mayor in France, each row naming someone else.
-    --
-    -- LATERAL rather than two plain LEFT JOINs from MandateLocal, which would
-    -- also fix the timeout: no constraint enforces one current MAIRE mandate per
-    -- commune. @@unique([communeId, mandateId]) allows two mandates on the same
-    -- commune, and a duplicate-isCurrent-MAIRE backlog is open by design. Under
-    -- plain joins such a commune would appear twice and silently push another
-    -- one off this paginated page; LIMIT 1 makes that impossible by construction.
-    -- Measured today: 0 communes carry more than one, so this is a guard, not a
-    -- current necessity. ORDER BY makes the pick deterministic.
+    -- MandateLocal is what keys a mandate to a commune. Joining "Mandate" on its
+    -- own flags multiplied every commune row by every current MAIRE in France.
+    -- LIMIT 1 because no constraint enforces one current MAIRE per commune, and a
+    -- duplicate would push another commune off this paginated page.
     LEFT JOIN LATERAL (
       SELECT p."fullName" AS "maireName", p.civility AS "maireGender"
       FROM "MandateLocal" ml

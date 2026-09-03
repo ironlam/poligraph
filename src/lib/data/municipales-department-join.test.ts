@@ -20,25 +20,15 @@ vi.mock("@/lib/db", () => ({
 
 import { getDepartmentMunicipales } from "./municipales";
 
-/**
- * Drop `-- ...` comments before asserting. The query documents its own history,
- * so it names both `GROUP BY` and `p."fullName"` in prose; without this, every
- * predicate below matches the comment instead of the SQL and the guard passes on
- * a query that reintroduces the bug. That happened while writing this file.
- */
+/** Strip `-- ...` comments: the query names GROUP BY and p."fullName" in prose. */
 function rawSqlText(query: unknown): string {
   return (query as { sql: string }).sql.replace(/--[^\n]*/g, "");
 }
 
 /**
- * The communes query used to join "Mandate" with no key back to "Commune":
- *
- *   LEFT JOIN "Mandate" m ON m."isCurrent" = true AND m.type = 'MAIRE'
- *
- * Measured on production: 21396 distinct current MAIRE mandates, so a department
- * of 266 communes produced 125.8M intermediate rows and died on Postgres 57014
- * (statement timeout). It was also incorrect, because the GROUP BY carried
- * p."fullName": a commune came back once per mayor in the country.
+ * The communes query used to join "Mandate" with no key back to "Commune", which
+ * multiplied every commune by every current MAIRE mandate in the country: statement
+ * timeout, and a commune returned once per mayor rather than once.
  */
 describe("getDepartmentMunicipales, jointure du maire", () => {
   beforeEach(() => {
