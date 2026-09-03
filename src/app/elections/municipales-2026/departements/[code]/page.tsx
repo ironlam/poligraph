@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const dept = DEPARTMENTS[code];
   if (!dept) return {};
   return {
-    title: `Municipales 2026 en ${dept.name} - Communes, listes et candidats | Poligraph`,
+    title: `Municipales 2026 en ${dept.name} - Communes, listes et candidats`,
     description: `Découvrez les candidats aux élections municipales 2026 dans le département ${dept.name} (${code}). Listes, maires sortants et indices de compétition.`,
     alternates: { canonical: `/elections/municipales-2026/departements/${code}` },
   };

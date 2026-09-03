@@ -8,7 +8,7 @@ import { getMunicipalesStats, getParityBySize, getParityOutliers } from "@/lib/d
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "Parité femmes-hommes — Municipales 2026 | Poligraph",
+  title: "Parité femmes-hommes — Municipales 2026",
   description:
     "Analyse de la parité femmes-hommes dans les candidatures aux élections municipales 2026 par parti, par taille de commune et par liste.",
   alternates: { canonical: "/elections/municipales-2026/parite" },

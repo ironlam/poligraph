@@ -9,7 +9,7 @@ import {
 } from "@/config/labels";
 import { PromiseModerationActions } from "./PromiseModerationActions";
 
-export const metadata = { title: "Réviser promesse | Poligraph", robots: { index: false } };
+export const metadata = { title: "Réviser promesse", robots: { index: false } };
 
 interface PageProps {
   params: Promise<{ id: string }>;

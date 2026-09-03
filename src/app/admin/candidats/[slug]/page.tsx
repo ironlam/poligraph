@@ -7,7 +7,7 @@ import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidat
 import { CandidatesListClient, type CandidateRowView } from "../CandidatesListClient";
 
 export const metadata = {
-  title: "Modifier une candidature présidentielle (admin) | Poligraph",
+  title: "Modifier une candidature présidentielle (admin)",
   robots: { index: false },
 };
 

@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const publishable = data !== null && isHubPublishable(data.publishableSubjectPageCount);
 
   return {
-    title: "Programmes par thème, présidentielle 2027 | Poligraph",
+    title: "Programmes par thème, présidentielle 2027",
     description:
       "Comparez les mesures publiées des candidats à la présidentielle 2027 sur le logement, la santé, l'économie, l'écologie et les autres thèmes.",
     robots: publishable ? undefined : { index: false, follow: true },

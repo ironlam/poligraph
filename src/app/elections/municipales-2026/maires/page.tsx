@@ -25,7 +25,7 @@ interface PageProps {
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams;
   return {
-    title: "Maires de France — Annuaire des 35 000 maires | Poligraph",
+    title: "Maires de France — Annuaire des 35 000 maires",
     description:
       "Explorez l'annuaire des maires de France : parité, couleur politique, ancienneté. Données issues du Répertoire National des Élus.",
     // Filtered/paginated variants: noindex,follow, canonical consolidates on the bare listing.

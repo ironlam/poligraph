@@ -6,7 +6,7 @@ import { getProbityStats } from "@/lib/affairs/probity-stats";
 import type { ThemeCategory } from "@/types";
 
 export const metadata = {
-  title: "Comparer 2 candidats 2027 (admin) | Poligraph",
+  title: "Comparer 2 candidats 2027 (admin)",
   robots: { index: false },
 };
 

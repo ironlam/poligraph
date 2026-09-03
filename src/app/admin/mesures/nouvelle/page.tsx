@@ -5,7 +5,7 @@ import { NewMeasureForm } from "../_components/NewMeasureForm";
 import { listPresidentialCandidacies } from "../_data/candidacies-query";
 
 export const metadata = {
-  title: "Nouvelle mesure (admin) | Poligraph",
+  title: "Nouvelle mesure (admin)",
   robots: { index: false },
 };
 

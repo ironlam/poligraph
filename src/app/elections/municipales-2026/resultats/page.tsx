@@ -21,7 +21,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const qs = cp.toString();
 
   return {
-    title: "Résultats - Municipales 2026 | Poligraph",
+    title: "Résultats - Municipales 2026",
     description:
       "Résultats des élections municipales 2026. Participation, listes élues et résultats par commune.",
     alternates: {

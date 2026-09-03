@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Municipales 2020 par département | Poligraph",
+  title: "Municipales 2020 par département",
   description: "Résultats des municipales 2020 par département : communes, listes et candidatures.",
   alternates: { canonical: "/elections/municipales-2020/departements" },
 };

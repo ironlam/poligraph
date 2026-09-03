@@ -34,7 +34,9 @@ function collectTsFiles(dir: string): string[] {
     for (const entry of readdirSync(current)) {
       const full = join(current, entry);
       if (statSync(full).isDirectory()) {
-        if (entry === "__tests__" || entry === "node_modules") continue;
+        // `.local` holds gitignored throwaway scripts: never shipped, never in
+        // CI's checkout, so scanning it only fails this guard locally.
+        if (entry === "__tests__" || entry === "node_modules" || entry === ".local") continue;
         walk(full);
         continue;
       }

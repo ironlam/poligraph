@@ -61,7 +61,10 @@ function collectReferences(): Reference[] {
       const relative = path.relative(ROOT, absolute).split(path.sep).join("/");
 
       if (entry.isDirectory()) {
-        if (entry.name === "generated" || entry.name === "node_modules") continue;
+        // `.local` holds gitignored throwaway scripts: never shipped, never in
+        // CI's checkout, so scanning it only fails this guard locally.
+        if (entry.name === "generated" || entry.name === "node_modules" || entry.name === ".local")
+          continue;
         walk(absolute);
         continue;
       }

@@ -9,7 +9,7 @@ import {
 import type { PromiseExtractionStatus, ThemeCategory } from "@/types";
 import { LEGACY_THEME_CATEGORIES } from "@/lib/theme-utils";
 
-export const metadata = { title: "Promesses (admin) | Poligraph", robots: { index: false } };
+export const metadata = { title: "Promesses (admin)", robots: { index: false } };
 
 interface PageProps {
   searchParams: Promise<{ status?: string; theme?: string; page?: string }>;

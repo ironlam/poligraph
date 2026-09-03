@@ -25,7 +25,7 @@ const CITY_INSEE = "33063"; // Bordeaux
 const VILLAGE_INSEE = "33036"; // Bazas
 
 export const metadata: Metadata = {
-  title: "Le collège électoral sénatorial : qui vote à votre place | Poligraph",
+  title: "Le collège électoral sénatorial : qui vote à votre place",
   description:
     "Le nombre de grands électeurs d'une commune découle d'un barème, articles L. 284 et " +
     "L. 285 du code électoral. Le calcul posé sur une commune réelle, et la comparaison " +

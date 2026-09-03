@@ -5,7 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 const PAGE_PATH = "/methodologie/mesures-presidentielle-2027";
 
 export const metadata: Metadata = {
-  title: "Méthode des mesures de la présidentielle 2027 | Poligraph",
+  title: "Méthode des mesures de la présidentielle 2027",
   description:
     "Comment Poligraph sélectionne, source, relit, classe et compare les mesures des candidates et candidats à l'élection présidentielle de 2027.",
   alternates: { canonical: PAGE_PATH },

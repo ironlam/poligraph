@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const guide = await getPresidentialReaderGuide(PRESIDENTIELLE_2027_SLUG, slug);
   if (!guide) {
-    return { title: "Repère indisponible | Poligraph", robots: { index: false, follow: true } };
+    return { title: "Repère indisponible", robots: { index: false, follow: true } };
   }
   const canonical = presidentialReaderGuidePath(guide.slug);
   return {

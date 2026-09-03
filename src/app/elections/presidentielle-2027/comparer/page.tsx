@@ -17,7 +17,7 @@ const COMPARISON_PATH = `/elections/${ELECTION_SLUG}/comparer`;
 export const revalidate = 86400;
 
 export const metadata: Metadata = {
-  title: "Comparer les programmes, présidentielle 2027 | Poligraph",
+  title: "Comparer les programmes, présidentielle 2027",
   description:
     "Comparer côte à côte les mesures publiées des candidats à la présidentielle 2027, par thème et avec leurs sources.",
   alternates: { canonical: COMPARISON_PATH },

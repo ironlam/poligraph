@@ -4,7 +4,7 @@ import { getAdminCandidacyThemeSyntheses } from "@/lib/data/candidacy-theme-synt
 import { ThemeSynthesesClient } from "./ThemeSynthesesClient";
 
 export const metadata = {
-  title: "Synthèses thématiques (admin) | Poligraph",
+  title: "Synthèses thématiques (admin)",
   robots: { index: false },
 };
 

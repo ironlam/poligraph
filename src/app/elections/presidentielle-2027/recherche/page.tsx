@@ -15,7 +15,7 @@ import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/them
 const PAGE_PATH = "/elections/presidentielle-2027/recherche";
 
 export const metadata: Metadata = {
-  title: "Recherche dans le corpus présidentielle 2027 | Poligraph",
+  title: "Recherche dans le corpus présidentielle 2027",
   description: "Rechercher les personnalités suivies et les mesures publiques du corpus 2027.",
   robots: { index: false, follow: true },
   alternates: { canonical: PAGE_PATH },

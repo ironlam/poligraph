@@ -5,7 +5,7 @@ import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidat
 import { CandidatesListClient, type CandidateRowView } from "./CandidatesListClient";
 
 export const metadata = {
-  title: "Candidats présidentielle 2027 (admin) | Poligraph",
+  title: "Candidats présidentielle 2027 (admin)",
   robots: { index: false },
 };
 

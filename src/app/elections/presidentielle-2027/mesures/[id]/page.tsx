@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const measure = await getPublicPresidentialMeasureDetail(ELECTION_SLUG, id);
   if (measure === null) {
     return {
-      title: "Mesure indisponible | Poligraph",
+      title: "Mesure indisponible",
       robots: { index: false, follow: true },
     };
   }

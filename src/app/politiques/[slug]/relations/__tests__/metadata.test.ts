@@ -34,7 +34,7 @@ describe("/politiques/[slug]/relations metadata", () => {
 
     const m = await metadataFor("jean-dupont");
 
-    expect(m.title).toBe("Relations de Jean Dupont | Poligraph");
+    expect(m.title).toBe("Relations de Jean Dupont");
     expect(m.description).toContain("Jean Dupont");
     expect(m.alternates?.canonical).toBe("/politiques/jean-dupont/relations");
     expect(m.robots).toBeUndefined();

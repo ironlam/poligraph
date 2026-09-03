@@ -7,7 +7,7 @@ import { PARTY_COLORS, getPartyColor } from "@/config/party-colors";
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "Carte des forces politiques — Municipales 2026 | Poligraph",
+  title: "Carte des forces politiques — Municipales 2026",
   description:
     "Cartographie des forces politiques par département pour les élections municipales 2026. Découvrez quel parti domine dans chaque département.",
   alternates: { canonical: "/elections/municipales-2026/carte" },

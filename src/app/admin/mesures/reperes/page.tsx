@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { ReaderGuideAdmin } from "./ReaderGuideAdmin";
 
 export const metadata = {
-  title: "Repères des mesures (admin) | Poligraph",
+  title: "Repères des mesures (admin)",
   robots: { index: false },
 };
 

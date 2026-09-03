@@ -24,7 +24,7 @@ import {
 } from "./_data/queue-query";
 
 export const metadata = {
-  title: "Mesures : relecture (admin) | Poligraph",
+  title: "Mesures : relecture (admin)",
   robots: { index: false },
 };
 

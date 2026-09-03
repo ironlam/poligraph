@@ -8,7 +8,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 export const revalidate = 300; // ISR: re-check feature flag every 5 minutes
 
 export const metadata: Metadata = {
-  title: "Carte des Résultats Électoraux | Poligraph",
+  title: "Carte des Résultats Électoraux",
   description:
     "Carte interactive des résultats électoraux par département. Visualisez la répartition politique des sièges aux législatives 2024 en France métropolitaine et outre-mer.",
   openGraph: {

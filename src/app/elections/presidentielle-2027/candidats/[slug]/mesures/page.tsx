@@ -71,7 +71,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const canonical = measuresPath(slug);
   const hasUtilityParams = Object.values(rawSearchParams).some((value) => value !== undefined);
   return {
-    title: `Mesures de ${politician.fullName}, présidentielle 2027 | Poligraph`,
+    title: `Mesures de ${politician.fullName}, présidentielle 2027`,
     description: `Explorer les mesures documentées de ${politician.fullName} par thème, avec leurs sources.`,
     alternates: { canonical },
     robots:

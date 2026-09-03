@@ -10,7 +10,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Municipales 2014 — Résultats | Poligraph",
+  title: "Municipales 2014 — Résultats",
   description:
     "Résultats des élections municipales 2014 : participation, listes élues, résultats commune par commune.",
   alternates: { canonical: "/elections/municipales-2014" },

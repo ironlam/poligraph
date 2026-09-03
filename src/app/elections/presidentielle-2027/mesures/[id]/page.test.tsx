@@ -217,7 +217,7 @@ describe("page publique d'une mesure présidentielle", () => {
     const metadata = await generateMetadata({
       params: Promise.resolve({ id: "measure-fermee" }),
     });
-    expect(metadata.title).toBe("Mesure indisponible | Poligraph");
+    expect(metadata.title).toBe("Mesure indisponible");
     expect(metadata.description).toBeUndefined();
     expect(metadata.robots).toEqual({ index: false, follow: true });
   });

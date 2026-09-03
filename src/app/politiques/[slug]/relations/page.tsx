@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   return {
-    title: `Relations de ${politician.fullName} | Poligraph`,
+    title: `Relations de ${politician.fullName}`,
     description: `Découvrez les relations politiques de ${politician.fullName} : gouvernement, entreprises, département, parcours partisan.`,
     // Same gate as the profile: a bare RNE-imported mayor has no relations to
     // show, so the tab must not be a second crawlable URL for a noindexed

@@ -35,7 +35,7 @@ const getElection = cache(async function getElection() {
 });
 
 export const metadata: Metadata = {
-  title: "Municipales 2026 — Candidats, listes et résultats | Poligraph",
+  title: "Municipales 2026 — Candidats, listes et résultats",
   description:
     "Découvrez les candidats et listes aux élections municipales 2026 dans votre commune. Recherche par ville, carte des forces politiques, parité et cumul des mandats.",
   openGraph: {
