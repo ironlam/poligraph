@@ -13,7 +13,9 @@ export function ThemeToggle() {
         className="p-2 rounded-lg hover:bg-accent transition-colors"
         aria-label="Changer le thème"
       >
-        <div className="w-5 h-5" />
+        {/* span, not div: a button may only contain phrasing content, and this
+            placeholder ships in the SSR HTML of every page. */}
+        <span className="block w-5 h-5" />
       </button>
     );
   }

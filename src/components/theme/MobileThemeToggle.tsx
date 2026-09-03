@@ -14,7 +14,8 @@ export function MobileThemeToggle() {
         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80"
         aria-label="Changer le thème"
       >
-        <div className="w-5 h-5" />
+        {/* span, not div: a button may only contain phrasing content. */}
+        <span className="block w-5 h-5" />
         <span>Thème</span>
       </button>
     );
