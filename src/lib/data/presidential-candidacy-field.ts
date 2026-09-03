@@ -3,16 +3,12 @@ import type { CandidacyStatus, ElectionType } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { resolveCandidateAccentColor } from "@/lib/presidentielle/candidate-accent";
 import { sortPresidentialCandidatesBySurname } from "@/lib/presidentielle/candidate-order";
-import {
-  resolveProgrammeAbsence,
-  rollupMeasuresByCandidacy,
-} from "@/lib/presidentielle/candidacy-rollup";
-import { getPublicMeasuresByElection } from "./measures";
+import { resolveProgrammeAbsence } from "@/lib/presidentielle/candidacy-rollup";
+import { getPublicMeasureRollupsByElection } from "./measures";
 import {
   getPublicTrackedPresidentialCandidacyWhere,
   PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE,
 } from "./presidential-candidacy-policy";
-import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
 
 export type PublicPresidentialElection = {
   id: string;
@@ -88,7 +84,7 @@ export async function getPublicPresidentialCandidacyField(
     return { election, candidacies: [] };
   }
 
-  const [rows, measures, publicCandidates, editions] = await Promise.all([
+  const [rows, measureRollups, editions] = await Promise.all([
     db.candidacy.findMany({
       where: {
         electionId: election.id,
@@ -114,8 +110,7 @@ export async function getPublicPresidentialCandidacyField(
         party: { select: { color: true, name: true, shortName: true, logoUrl: true } },
       },
     }),
-    getPublicMeasuresByElection(election.id),
-    getPublicPresidentialCandidates(electionSlug),
+    getPublicMeasureRollupsByElection(election.id),
     // A party edition is not a candidate programme without an explicit candidacy owner.
     db.programEdition.findMany({
       where: {
@@ -127,14 +122,6 @@ export async function getPublicPresidentialCandidacyField(
     }),
   ]);
 
-  const byCandidacy = rollupMeasuresByCandidacy(
-    measures.map((measure) => ({
-      candidacyId: measure.candidacyId,
-      theme: measure.theme,
-      hasPrimarySource: measure.sources.some((source) => source.tier === "PRIMARY"),
-    })),
-    new Set(publicCandidates.map((candidate) => candidate.id))
-  );
   const editionCandidacyIds = new Set(
     editions.map((edition) => edition.candidacyId).filter((id): id is string => id !== null)
   );
@@ -149,7 +136,7 @@ export async function getPublicPresidentialCandidacyField(
       return [];
     }
 
-    const rollup = byCandidacy.get(candidacy.id);
+    const rollup = measureRollups.get(candidacy.id);
     const measureCount = rollup?.measureCount ?? 0;
 
     return [

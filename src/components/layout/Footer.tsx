@@ -58,6 +58,7 @@ export async function Footer() {
                     ) : (
                       <Link
                         href={link.href}
+                        prefetch={false}
                         className="text-muted-foreground hover:text-foreground transition-colors nav-link-underline"
                       >
                         {link.label}

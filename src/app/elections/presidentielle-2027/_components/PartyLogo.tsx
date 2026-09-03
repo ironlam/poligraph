@@ -43,7 +43,6 @@ export function PartyLogo({
           src={logoUrl}
           alt=""
           fill
-          unoptimized
           sizes={size === "lg" ? "96px" : size === "md" ? "48px" : "24px"}
           onError={() => setLogoFailed(true)}
           className="object-contain p-1"
