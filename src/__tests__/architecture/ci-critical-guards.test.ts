@@ -159,7 +159,10 @@ function collectSourceText(root: string): Map<string, string> {
       if (entry.isSymbolicLink()) throw new Error(`symlink in guard scan root: ${full}`);
       if (entry.isDirectory()) {
         if (
-          ["node_modules", ".next", "coverage", "storybook-static", "generated"].includes(
+          // `.local` holds gitignored throwaway scripts: never shipped, never in
+          // CI's checkout, so scanning it only fails this guard on the author's
+          // machine for code that will never run in production.
+          ["node_modules", ".next", "coverage", "storybook-static", "generated", ".local"].includes(
             entry.name
           )
         ) {
