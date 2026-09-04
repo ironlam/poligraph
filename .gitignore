@@ -83,6 +83,9 @@ Thumbs.db
 CLAUDE.md
 .claude/
 
+# Codex local configuration
+/.codex/
+
 # database backups (sensitive data)
 /backups
 job-logs.txt
