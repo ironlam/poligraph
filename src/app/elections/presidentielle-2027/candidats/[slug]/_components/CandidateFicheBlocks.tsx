@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { THEME_ACCENT_BAR, THEME_CATEGORY_LABELS, VOTE_POSITION_LABELS } from "@/config/labels";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
@@ -230,23 +230,42 @@ export function CandidateThemes({
                         <p className="text-[0.9375rem] leading-relaxed text-foreground">
                           {claim.text}
                         </p>
-                        <ul
-                          aria-label={`Mesures qui étayent l’affirmation ${index + 1}`}
-                          className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs"
-                        >
-                          {claim.measures.map((measure) => (
-                            <li key={measure.id}>
-                              <Link
-                                href={`/elections/${electionSlug}/mesures/${measure.slug}`}
-                                prefetch={false}
-                                className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
-                                aria-label={`Voir la mesure et sa source : ${measure.text}`}
-                              >
-                                Voir la mesure et sa source
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
+                        {claim.measures.length === 1 ? (
+                          <Link
+                            href={`/elections/${electionSlug}/mesures/${claim.measures[0]!.slug}`}
+                            prefetch={false}
+                            className="inline-flex min-h-11 items-center text-xs font-semibold underline underline-offset-2"
+                            aria-label={`Voir la mesure citée et sa source : ${claim.measures[0]!.text}`}
+                          >
+                            Voir la mesure citée
+                          </Link>
+                        ) : (
+                          <details className="group mt-1 text-xs">
+                            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1 font-semibold underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+                              <span>Voir les {claim.measures.length} mesures citées</span>
+                              <ChevronDown
+                                aria-hidden="true"
+                                className="size-4 group-open:rotate-180"
+                              />
+                            </summary>
+                            <ul
+                              aria-label={`Mesures qui étayent l’affirmation ${index + 1}`}
+                              className="ml-5 list-disc space-y-1 pb-2"
+                            >
+                              {claim.measures.map((measure) => (
+                                <li key={measure.id}>
+                                  <Link
+                                    href={`/elections/${electionSlug}/mesures/${measure.slug}`}
+                                    prefetch={false}
+                                    className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+                                  >
+                                    {measure.text}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
                       </div>
                     ))}
                   </div>
