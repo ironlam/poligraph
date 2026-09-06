@@ -147,8 +147,50 @@ describe("CandidateThemes", () => {
     ).toBeTruthy();
     expect(screen.getByText(/puis relue par Poligraph/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Voir la mesure et sa source : Rouvrir/ })
+      screen.getByRole("link", { name: /Voir la mesure citée et sa source : Rouvrir/ })
     ).toHaveAttribute("href", "/elections/presidentielle-2027/mesures/rouvrir-des-maternites");
+  });
+
+  it("regroupe les références nombreuses derrière un seul contrôle lisible", () => {
+    const citedMeasures = Array.from({ length: 4 }, (_, index) => ({
+      id: `m${index + 1}`,
+      slug: `mesure-${index + 1}`,
+      text: `Mesure citée ${index + 1}.`,
+      sourceUrl: "https://example.org/programme.pdf",
+    }));
+    render(
+      <CandidateThemes
+        themes={[
+          theme({
+            measureCount: 4,
+            measures: citedMeasures,
+            synthesis: {
+              claims: [
+                {
+                  text: "La synthèse rassemble plusieurs engagements institutionnels.",
+                  measures: citedMeasures,
+                },
+              ],
+            },
+          }),
+        ]}
+        electionSlug="presidentielle-2027"
+        candidateSlug="camille-riviere"
+        measureCount={16}
+        lastReviewedAt={null}
+      />
+    );
+
+    expect(screen.getByText("Voir les 4 mesures citées")).toBeInTheDocument();
+    expect(screen.queryByText("Voir la mesure et sa source")).not.toBeInTheDocument();
+    const evidence = screen.getByRole("list", {
+      name: "Mesures qui étayent l’affirmation 1",
+    });
+    expect(within(evidence).getAllByRole("link")).toHaveLength(4);
+    expect(within(evidence).getByRole("link", { name: "Mesure citée 1." })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/mesures/mesure-1"
+    );
   });
 
   it("n'affiche aucun extrait arbitraire pour un grand programme", () => {
