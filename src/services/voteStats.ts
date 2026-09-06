@@ -700,75 +700,6 @@ export async function getPoliticianDissidence(
   return computeTargetedPoliticianDissidence(politicianId);
 }
 
-/**
- * Rank current parliamentarians by dissidence without depending on participation rows.
- * Only expressed positions enter this independent metric.
- */
-export async function getPoliticianDissidenceRanking(
-  chamber?: Chamber,
-  page: number = 1,
-  pageSize: number = 24
-): Promise<{ politicianIds: string[]; total: number }> {
-  const chamberScope = chamber ?? null;
-  const rows = await db.$queryRaw<{ politicianId: string; totalRows: number }[]>`
-    WITH current_votes AS (
-      SELECT
-        v."politicianId",
-        v."scrutinId",
-        v.position,
-        mp."parliamentaryGroupId" as "groupId"
-      FROM "Vote" v
-      JOIN "Mandate" m ON m."politicianId" = v."politicianId"
-        AND m."isCurrent" = true
-        AND m.type IN ('DEPUTE'::"MandateType", 'SENATEUR'::"MandateType")
-      JOIN "MandateParliamentary" mp ON mp."mandateId" = m.id
-      WHERE v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
-        AND v.chamber = CASE
-          WHEN m.type = 'DEPUTE'::"MandateType" THEN 'AN'::"Chamber"
-          ELSE 'SENAT'::"Chamber"
-        END
-        AND v."votingDate" >= m."startDate"
-        AND (m."endDate" IS NULL OR v."votingDate" <= m."endDate")
-        AND (${chamberScope}::text IS NULL OR v.chamber = ${chamberScope}::"Chamber")
-    ), position_counts AS (
-      SELECT "scrutinId", "groupId", position, COUNT(*)::int AS count
-      FROM current_votes
-      GROUP BY "scrutinId", "groupId", position
-    ), majorities AS (
-      SELECT "scrutinId", "groupId", position
-      FROM (
-        SELECT *, ROW_NUMBER() OVER (
-          PARTITION BY "scrutinId", "groupId"
-          ORDER BY count DESC, position ASC
-        ) AS rank
-        FROM position_counts
-      ) ranked
-      WHERE rank = 1
-    ), rates AS (
-      SELECT
-        cv."politicianId",
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE cv.position <> ma.position)::int AS dissident
-      FROM current_votes cv
-      JOIN majorities ma USING ("scrutinId", "groupId")
-      GROUP BY cv."politicianId"
-    )
-    SELECT
-      "politicianId",
-      COUNT(*) OVER()::int AS "totalRows"
-    FROM rates
-    WHERE total > 0
-    ORDER BY dissident::numeric / total DESC, "politicianId" ASC
-    OFFSET ${(page - 1) * pageSize}
-    LIMIT ${pageSize}
-  `;
-
-  return {
-    politicianIds: rows.map((row) => row.politicianId),
-    total: rows[0]?.totalRows ?? 0,
-  };
-}
-
 // ============================================
 // Legislative stats (from StatsSnapshot)
 // ============================================
@@ -928,7 +859,6 @@ export const voteStatsService = {
   getPartyParticipationStats,
   getGroupParticipationStats,
   getPoliticianParliamentaryCard,
-  getPoliticianDissidenceRanking,
   getLegislativeStats,
   getPoliticianThemeDistribution,
   getGroupDissidenceStats,
