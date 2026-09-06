@@ -1,17 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Le tri « Plus indépendants » a été retiré (voir la PR de suppression).
+ * Invariant : une valeur de `?sort=` que le produit ne propose plus doit se
+ * comporter comme n'importe quelle valeur inconnue. Elle retombe sur le tri par
+ * défaut, elle emprunte le chemin de listing normal, et elle n'atteint jamais
+ * le `<select>` de tri, qui n'aurait pas d'option correspondante.
  *
- * Deux raisons, l'éditoriale d'abord : `docs/design/patterns/VoteBreakdown.md`
- * pose que la position du groupe est « le seul contexte qui permet de lire une
- * dissidence », et que le vocabulaire de l'écart au groupe doit rester
- * « descriptif et borné ». Un classement décontextualisé des « plus
- * indépendants » fait exactement l'inverse. Techniquement, la requête qui
- * l'alimentait n'aboutissait jamais dans le statement timeout (POLIGRAPH-1E).
- *
- * Ce test garde les liens et signets périmés : `?sort=dissidence` doit rendre
- * la page par le chemin normal, sans branche dédiée.
+ * `dissidence` est le cas concret qui a motivé ce test (tri retiré), mais
+ * l'invariant vaut pour toute valeur retirée par la suite.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -71,6 +67,20 @@ describe("/politiques : le tri dissidence a été retiré", () => {
   it("traite un ?sort= inconnu exactement pareil", async () => {
     await render({ sort: "nimportequoi" });
     expect(mocks.politicianCount).toHaveBeenCalled();
+  });
+
+  it("normalise vers le tri par défaut plutôt que de propager la valeur retirée", async () => {
+    // Le tri par défaut ordonne par notoriété ; le repli muet de SORT_CONFIGS
+    // ordonnait par nom. Distinguer les deux prouve que la normalisation a eu
+    // lieu en amont, donc que le <select> et les liens de filtre reçoivent une
+    // valeur qui existe.
+    await render({ sort: "dissidence" });
+
+    expect(mocks.politicianFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ prominenceScore: "desc" }, { lastName: "asc" }],
+      })
+    );
   });
 
   it("n'exécute aucune requête brute de classement", async () => {

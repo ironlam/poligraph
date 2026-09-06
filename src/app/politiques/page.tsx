@@ -395,7 +395,12 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const mandateFilter = (
     rawMandate === "president_parti" ? "dirigeants" : rawMandate
   ) as MandateFilter;
-  const sortOption = (params.sort || "prominence") as SortOption;
+  // Normalised, not cast: an unknown ?sort= (a bookmark on the retired
+  // "dissidence" sort, say) would otherwise reach the <select> as a value with
+  // no matching option, showing an empty sort box over an alphabetically
+  // sorted list, and get echoed back into every filter link the grid builds.
+  const rawSort = params.sort ?? "";
+  const sortOption: SortOption = rawSort in SORT_CONFIGS ? (rawSort as SortOption) : "prominence";
   const page = parsePageParam(params.page);
 
   const [{ politicians, total, totalPages }, parties, counts] = await Promise.all([
