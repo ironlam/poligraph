@@ -298,21 +298,6 @@ describe("agrégats et données persistées hostiles", () => {
     expect(dbMock.statsSnapshot.findUnique).not.toHaveBeenCalled();
   });
 
-  it("conserve le classement de dissidence sans lire PoliticianParticipation", async () => {
-    dbMock.$queryRaw.mockResolvedValue([
-      { politicianId: "senateur-dissident", totalRows: 12 },
-      { politicianId: "senateur-2", totalRows: 12 },
-    ]);
-
-    const result = await voteStatsService.getPoliticianDissidenceRanking("SENAT", 1, 2);
-
-    expect(result).toEqual({
-      politicianIds: ["senateur-dissident", "senateur-2"],
-      total: 12,
-    });
-    expect(dbMock.politicianParticipation.findMany).not.toHaveBeenCalled();
-  });
-
   it.each(["AN", "SENAT"] as const)(
     "neutralise averageParticipationPct pour %s même si la ligne vaut 100",
     async (chamber) => {

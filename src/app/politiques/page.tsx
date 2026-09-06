@@ -13,7 +13,6 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
-import { getPoliticianDissidenceRanking } from "@/services/voteStats";
 import { parsePageParam } from "@/lib/data/query-params";
 
 // Minimum members to show a party in filters (avoid cluttering with old/small parties)
@@ -77,10 +76,9 @@ const SORT_CONFIGS: Record<SortOption, unknown> = {
   "alpha-desc": { lastName: "desc" },
   recent: { createdAt: "desc" },
   affairs: [{ affairs: { _count: "desc" } }, { lastName: "asc" }],
-  dissidence: [{ lastName: "asc" }], // placeholder — handled by special code path
 };
 
-// Shared include block — used by both normal and dissidence query paths
+// Shared include block for the listing query
 const POLITICIAN_INCLUDE = {
   currentParty: true,
   _count: {
@@ -186,53 +184,6 @@ async function queryPoliticians(
 
   const where = conditions.length > 0 ? { AND: conditions } : {};
 
-  // Dissidence is computed from expressed vote positions, independently of participation rows.
-  if (sortOption === "dissidence") {
-    const chamber =
-      mandateFilter === "depute" ? "AN" : mandateFilter === "senateur" ? "SENAT" : undefined;
-    const dissidenceRanking = await getPoliticianDissidenceRanking(chamber, page, limit);
-    const orderedIds = dissidenceRanking.politicianIds;
-
-    const dissidentPoliticians = await db.politician.findMany({
-      where: { id: { in: orderedIds }, publicationStatus: "PUBLISHED" },
-      include: POLITICIAN_INCLUDE,
-    });
-
-    const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
-    dissidentPoliticians.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
-
-    const dissidentsWithConviction = dissidentPoliticians.map((p) => {
-      const significantRole = p.partyHistory[0] || null;
-      const mandate = p.mandates[0] || null;
-      const isActiveParliamentarian =
-        mandate !== null && (mandate.type === "DEPUTE" || mandate.type === "SENATEUR");
-      const hasDeclaration = p.declarations.length > 0;
-      return {
-        ...p,
-        hasCritiqueAffair: p.affairs.length > 0,
-        affairs: undefined,
-        currentMandate: mandate,
-        mandates: undefined,
-        declarations: undefined,
-        partyHistory: undefined,
-        missingDeclaration: isActiveParliamentarian && !hasDeclaration,
-        significantPartyRole: significantRole
-          ? {
-              role: significantRole.role,
-              partyName: significantRole.party.name,
-              partyShortName: significantRole.party.shortName,
-            }
-          : null,
-      };
-    });
-
-    return {
-      politicians: dissidentsWithConviction,
-      total: dissidenceRanking.total,
-      page,
-      totalPages: Math.ceil(dissidenceRanking.total / limit),
-    };
-  }
 
   // Get order by config
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
