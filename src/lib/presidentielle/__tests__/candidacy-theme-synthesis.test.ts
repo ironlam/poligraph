@@ -171,17 +171,44 @@ describe("synthèse thématique d'une candidature", () => {
     expect(result).toMatchObject({ ok: false, reason: "style" });
   });
 
-  it("refuse un axe qui reprend une mesure à l'infinitif", () => {
+  it.each([
+    "Le programme applique l'art. 3 et rouvre des maternités.",
+    "Le programme rouvre des maternités, etc. puis développe les soins de proximité.",
+  ])("ne confond pas une abréviation avec une fin de phrase : %s", (text) => {
     const result = screenThemeSynthesis(
       {
         theme: "SANTE",
-        claims: [{ text: "Créer 100 centres de santé publics.", measureRefs: ["M2"] }],
+        claims: [{ text, measureRefs: ["M1"] }],
       },
-      input()
+      input({
+        measures: [
+          {
+            id: "measure-1",
+            revisionId: "revision-1",
+            text: "Le programme applique l'art. 3, rouvre des maternités et développe les soins de proximité, etc.",
+            details: null,
+          },
+        ],
+      })
     );
 
-    expect(result).toMatchObject({ ok: false, reason: "style" });
+    expect(result.ok).toBe(true);
   });
+
+  it.each(["Créer", "Rouvrir", "Développer", "Baisser"])(
+    "refuse un axe qui commence par l'infinitif %s",
+    (verb) => {
+      const result = screenThemeSynthesis(
+        {
+          theme: "SANTE",
+          claims: [{ text: `${verb} les centres de santé publics.`, measureRefs: ["M2"] }],
+        },
+        input()
+      );
+
+      expect(result).toMatchObject({ ok: false, reason: "style" });
+    }
+  );
 
   it("refuse une reprise anaphorique artificielle", () => {
     const result = screenThemeSynthesis(
@@ -437,7 +464,10 @@ describe("synthèse thématique d'une candidature", () => {
       {
         theme: "SANTE",
         claims: [
-          { text: "Rouvrir partout les maternités de proximité rapidement.", measureRefs: ["M1"] },
+          {
+            text: "Le programme rouvrirait partout les maternités de proximité rapidement.",
+            measureRefs: ["M1"],
+          },
         ],
       },
       input()

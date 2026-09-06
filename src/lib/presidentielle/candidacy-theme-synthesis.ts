@@ -306,6 +306,93 @@ function isComparativeClaim(value: string): boolean {
   );
 }
 
+const SENTENCE_ABBREVIATIONS = new Set([
+  "al",
+  "art",
+  "av",
+  "bd",
+  "cf",
+  "chap",
+  "dr",
+  "etc",
+  "ex",
+  "fig",
+  "m",
+  "mme",
+  "mmes",
+  "n",
+  "no",
+  "p",
+  "pp",
+  "pr",
+  "st",
+  "ste",
+]);
+
+const IRREGULAR_FRENCH_INFINITIVES = new Set([
+  "accroître",
+  "asseoir",
+  "avoir",
+  "conduire",
+  "construire",
+  "couvrir",
+  "croire",
+  "devenir",
+  "devoir",
+  "dire",
+  "découvrir",
+  "faire",
+  "interdire",
+  "lire",
+  "mettre",
+  "obtenir",
+  "offrir",
+  "ouvrir",
+  "permettre",
+  "prendre",
+  "recevoir",
+  "réduire",
+  "savoir",
+  "suivre",
+  "tenir",
+  "traduire",
+  "venir",
+  "vivre",
+  "voir",
+  "écrire",
+  "élire",
+  "être",
+]);
+
+function containsMultipleSentences(value: string): boolean {
+  for (const match of value.matchAll(/[.!?](?=\s+\S)/gu)) {
+    const punctuation = match[0];
+    const offset = match.index ?? 0;
+    const remainder = value.slice(offset + punctuation.length).trimStart();
+    if (!remainder) continue;
+    if (punctuation !== ".") return true;
+
+    const previousWord = value
+      .slice(0, offset)
+      .match(/([\p{L}]+)$/u)?.[1]
+      ?.toLowerCase();
+    if (previousWord && (previousWord.length === 1 || SENTENCE_ABBREVIATIONS.has(previousWord))) {
+      continue;
+    }
+    if (/^[A-ZÀ-ÖØ-Þ]/u.test(remainder)) return true;
+  }
+  return false;
+}
+
+function startsWithFrenchInfinitive(value: string): boolean {
+  const firstWord = value.match(/^([\p{L}]+)/u)?.[1]?.toLowerCase();
+  if (!firstWord) return false;
+  return (
+    IRREGULAR_FRENCH_INFINITIVES.has(firstWord) ||
+    (firstWord.length >= 5 && /(?:er|ir|re|oir)$/u.test(firstWord))
+  );
+}
+
 export function screenThemeSynthesis(
   raw: unknown,
   input: ThemeSynthesisInput
@@ -324,18 +411,14 @@ export function screenThemeSynthesis(
   );
 
   for (const claim of parsed.data.claims) {
-    if (/[.!?]\s+\S/u.test(claim.text)) {
+    if (containsMultipleSentences(claim.text)) {
       return {
         ok: false,
         reason: "style",
         detail: "Un axe contient plusieurs phrases au lieu d'une affirmation synthétique.",
       };
     }
-    if (
-      /^(?:Créer|Engager|Favoriser|Lutter|Mettre|Proposer|Ramener|Réorganiser|Renforcer|Valoriser)\b/u.test(
-        claim.text
-      )
-    ) {
+    if (startsWithFrenchInfinitive(claim.text)) {
       return {
         ok: false,
         reason: "style",
