@@ -154,6 +154,92 @@ describe("synthèse thématique d'une candidature", () => {
     });
   });
 
+  it("refuse un axe rédigé comme une succession de phrases", () => {
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Des maternités seraient rouvertes. Des centres de santé seraient créés.",
+            measureRefs: ["M1", "M2"],
+          },
+        ],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "style" });
+  });
+
+  it("refuse un axe qui reprend une mesure à l'infinitif", () => {
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [{ text: "Créer 100 centres de santé publics.", measureRefs: ["M2"] }],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "style" });
+  });
+
+  it("refuse une reprise anaphorique artificielle", () => {
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "Les urgences le seraient également.",
+            measureRefs: ["M1"],
+          },
+        ],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "style" });
+  });
+
+  it("ne force pas une synthèse à dépasser la matière disponible dans un corpus très bref", () => {
+    const sparse = input({
+      measures: [
+        {
+          id: "measure-1",
+          revisionId: "revision-1",
+          text: "Redonner du pouvoir d'achat.",
+          details: null,
+        },
+        {
+          id: "measure-2",
+          revisionId: "revision-2",
+          text: "Relancer l'activité économique.",
+          details: null,
+        },
+        {
+          id: "measure-3",
+          revisionId: "revision-3",
+          text: "Baisser les taxes sur l'énergie.",
+          details: null,
+        },
+      ],
+    });
+
+    expect(
+      screenThemeSynthesis(
+        {
+          theme: "SANTE",
+          claims: [
+            {
+              text: "Le programme propose de redonner du pouvoir d'achat, de relancer l'activité économique et de baisser les taxes sur l'énergie.",
+              measureRefs: ["M1", "M2", "M3"],
+            },
+          ],
+        },
+        sparse
+      ).ok
+    ).toBe(true);
+  });
+
   it.each([
     [
       "un autre thème",

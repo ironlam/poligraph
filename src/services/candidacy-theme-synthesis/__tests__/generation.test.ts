@@ -37,7 +37,7 @@ const validOutput = JSON.stringify({
   theme: "SANTE",
   claims: [
     {
-      text: "Les mesures prévoient de rouvrir des maternités et de développer les soins de proximité. Elles mentionnent les maternités, les soins et leur proximité.",
+      text: "Les mesures prévoient de rouvrir des maternités et de développer les soins de proximité.",
       measureRefs: ["M1", "M2"],
     },
   ],
@@ -121,7 +121,7 @@ describe("generateCandidacyThemeSynthesis", () => {
           status: "PENDING_REVIEW",
           evidence: expect.objectContaining({ claims: expect.any(Array) }),
           corpusFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-          promptVersion: "candidacy-theme-synthesis-v3",
+          promptVersion: "candidacy-theme-synthesis-v4",
         }),
         update: expect.objectContaining({
           status: "PENDING_REVIEW",

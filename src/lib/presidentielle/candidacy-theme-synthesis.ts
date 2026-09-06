@@ -5,7 +5,7 @@ import { THEME_CATEGORY_LABELS } from "@/config/labels";
 
 const PROMPT_FIELD_LIMIT = 2_000;
 export const THEME_SYNTHESIS_HARD_MAX_WORDS = 260;
-export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v3";
+export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v4";
 
 export type ThemeSynthesisMeasure = {
   id: string;
@@ -171,6 +171,8 @@ Règles absolues :
 - n'invente aucune finalité avec « pour », « afin de » ou « vise à » si elle n'est pas écrite dans les mesures citées ;
 - ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre mesure, même lorsqu'elles portent sur un axe proche ;
 - retiens les orientations principales et organise-les en ${maxAxes} axes cohérents au maximum ;
+- chaque axe doit tenir dans une seule phrase grammaticale avec un verbe conjugué ;
+- ne commence pas un axe par un infinitif et n'enchaîne pas « propose », « prévoit », « souhaite » ou « envisage » pour énumérer les mesures ;
 - une suite de reformulations n'est pas une synthèse, ne rédige pas une phrase pour chaque mesure ;
 - regroupe seulement les mesures qui expriment réellement une orientation commune. Une mesure peut former un axe à elle seule si aucun regroupement fidèle n'est possible ;
 - conserve les conditions, limites et nuances importantes ;
@@ -322,6 +324,31 @@ export function screenThemeSynthesis(
   );
 
   for (const claim of parsed.data.claims) {
+    if (/[.!?]\s+\S/u.test(claim.text)) {
+      return {
+        ok: false,
+        reason: "style",
+        detail: "Un axe contient plusieurs phrases au lieu d'une affirmation synthétique.",
+      };
+    }
+    if (
+      /^(?:Créer|Engager|Favoriser|Lutter|Mettre|Proposer|Ramener|Réorganiser|Renforcer|Valoriser)\b/u.test(
+        claim.text
+      )
+    ) {
+      return {
+        ok: false,
+        reason: "style",
+        detail: "Un axe commence par un infinitif au lieu d'une phrase rédigée.",
+      };
+    }
+    if (/\b(?:le|la|les) (?:serait|seraient|sera|seront) également\b/iu.test(claim.text)) {
+      return {
+        ok: false,
+        reason: "style",
+        detail: "Un axe contient une reprise anaphorique ambiguë.",
+      };
+    }
     if (new Set(claim.measureRefs).size !== claim.measureRefs.length) {
       return { ok: false, reason: "preuves", detail: "Une référence est répétée." };
     }
@@ -375,7 +402,15 @@ export function screenThemeSynthesis(
   }
   const text = claims.map((claim) => claim.text).join(" ");
   const wordCount = text.split(/\s+/u).filter(Boolean).length;
-  const safetyFloor = themeSynthesisSafetyFloor(input.measures.length);
+  // A refusal floor cannot demand more prose than the source corpus contains. Sparse
+  // programmes sometimes publish several one-line commitments; padding them to the
+  // count-based floor would force the synthesis to invent context or repeat itself.
+  const corpusWordCount = measures
+    .map((measure) => `${measure.text} ${measure.details ?? ""}`)
+    .join(" ")
+    .split(/\s+/u)
+    .filter(Boolean).length;
+  const safetyFloor = Math.min(themeSynthesisSafetyFloor(input.measures.length), corpusWordCount);
   if (wordCount < safetyFloor) {
     return {
       ok: false,
