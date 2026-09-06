@@ -13,6 +13,7 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import * as Sentry from "@sentry/nextjs";
 import { getPoliticianDissidenceRanking } from "@/services/voteStats";
 import { parsePageParam } from "@/lib/data/query-params";
 
@@ -190,7 +191,19 @@ async function queryPoliticians(
   if (sortOption === "dissidence") {
     const chamber =
       mandateFilter === "depute" ? "AN" : mandateFilter === "senateur" ? "SENAT" : undefined;
-    const dissidenceRanking = await getPoliticianDissidenceRanking(chamber, page, limit);
+    // POLIGRAPH-1E: this ranking aggregates every expressed vote of every
+    // sitting parliamentarian and cannot finish inside the statement timeout,
+    // so Postgres cancels it with 57014. Unguarded, that took the whole
+    // listing down with a 500. A ranking we cannot compute degrades to an
+    // empty one, and the failure is reported rather than swallowed.
+    let dissidenceRanking: { politicianIds: string[]; total: number };
+    try {
+      dissidenceRanking = await getPoliticianDissidenceRanking(chamber, page, limit);
+    } catch (error) {
+      Sentry.captureException(error, { tags: { feature: "dissidence-ranking" } });
+      return { politicians: [], total: 0, page, totalPages: 0 };
+    }
+
     const orderedIds = dissidenceRanking.politicianIds;
 
     const dissidentPoliticians = await db.politician.findMany({

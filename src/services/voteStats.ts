@@ -701,6 +701,16 @@ export async function getPoliticianDissidence(
 }
 
 /**
+ * Duration past which the ranking query earns a line in the logs.
+ *
+ * A tripwire, not a limit anyone is near: measured against production on
+ * 2026-09-06 the aggregate below does not finish within the 120s statement
+ * timeout at all (POLIGRAPH-1E). The threshold is there so that whoever makes
+ * it fast enough to succeed still hears about it before it drifts back.
+ */
+const DISSIDENCE_RANKING_SLOW_MS = 5_000;
+
+/**
  * Rank current parliamentarians by dissidence without depending on participation rows.
  * Only expressed positions enter this independent metric.
  */
@@ -710,6 +720,7 @@ export async function getPoliticianDissidenceRanking(
   pageSize: number = 24
 ): Promise<{ politicianIds: string[]; total: number }> {
   const chamberScope = chamber ?? null;
+  const startedAt = Date.now();
   const rows = await db.$queryRaw<{ politicianId: string; totalRows: number }[]>`
     WITH current_votes AS (
       SELECT
@@ -761,7 +772,15 @@ export async function getPoliticianDissidenceRanking(
     ORDER BY dissident::numeric / total DESC, "politicianId" ASC
     OFFSET ${(page - 1) * pageSize}
     LIMIT ${pageSize}
-  `;
+  `.finally(() => {
+    // Timed on both outcomes: the interesting duration is usually the failing one.
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > DISSIDENCE_RANKING_SLOW_MS) {
+      console.warn(
+        `[dissidence-ranking] ${elapsedMs}ms (chamber=${chamberScope ?? "all"}, page=${page}): heading for the statement timeout`
+      );
+    }
+  });
 
   return {
     politicianIds: rows.map((row) => row.politicianId),
