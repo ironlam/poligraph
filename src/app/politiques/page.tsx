@@ -184,7 +184,6 @@ async function queryPoliticians(
 
   const where = conditions.length > 0 ? { AND: conditions } : {};
 
-
   // Get order by config
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const orderBy = (SORT_CONFIGS[sortOption] || SORT_CONFIGS.alpha) as any;
