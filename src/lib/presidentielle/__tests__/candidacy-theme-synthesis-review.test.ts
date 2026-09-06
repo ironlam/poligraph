@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   findCandidacy: vi.fn(),
   findMeasures: vi.fn(),
   updateSynthesis: vi.fn(),
+  upsertSynthesis: vi.fn(),
   createAudit: vi.fn(),
   lockCandidacy: vi.fn(),
 }));
@@ -32,6 +33,7 @@ vi.mock("@/lib/db", () => ({
         candidacyThemeSynthesis: {
           findUnique: mocks.findSynthesis,
           update: mocks.updateSynthesis,
+          upsert: mocks.upsertSynthesis,
         },
         candidacy: { findUnique: mocks.findCandidacy },
         measure: { findMany: mocks.findMeasures },
@@ -68,7 +70,150 @@ beforeEach(() => {
     },
   ]);
   mocks.updateSynthesis.mockResolvedValue({ id: "synthesis-1" });
+  mocks.upsertSynthesis.mockResolvedValue({ id: "synthesis-1" });
   mocks.createAudit.mockResolvedValue({ id: "audit-1" });
+});
+
+describe("saveReviewedCandidacyThemeSynthesisDraft", () => {
+  it("enregistre une correction éditoriale comme brouillon sans la publier", async () => {
+    mocks.findSynthesis.mockResolvedValue(null);
+    const { computeThemeCorpusFingerprint } = await import("../candidacy-theme-synthesis");
+    const corpusFingerprint = computeThemeCorpusFingerprint({
+      theme: "SANTE",
+      measures: [
+        {
+          id: "measure-1",
+          revisionId: "revision-1",
+          text: "Rouvrir des maternités.",
+          details: null,
+        },
+      ],
+    });
+    const { saveReviewedCandidacyThemeSynthesisDraft } =
+      await import("../candidacy-theme-synthesis-review");
+
+    const result = await saveReviewedCandidacyThemeSynthesisDraft({
+      candidacyId: "cand-1",
+      theme: "SANTE",
+      claims: [{ text: "Le programme propose de rouvrir des maternités.", measureRefs: ["M1"] }],
+      expectedCorpusFingerprint: corpusFingerprint,
+      model: "mistral-large-latest",
+      promptVersion: "candidacy-theme-synthesis-v3",
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      electionId: "election-1",
+      synthesisId: "synthesis-1",
+      contentFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(mocks.upsertSynthesis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ status: "PENDING_REVIEW" }),
+        update: expect.objectContaining({
+          status: "PENDING_REVIEW",
+          validatedAt: null,
+          publishedAt: null,
+        }),
+      })
+    );
+    expect(mocks.createAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "SAVE_REVIEWED_THEME_SYNTHESIS_DRAFT",
+          changes: expect.objectContaining({ reviewedManually: true }),
+        }),
+      })
+    );
+  });
+
+  it("refuse une correction lorsque le corpus a changé", async () => {
+    const { saveReviewedCandidacyThemeSynthesisDraft } =
+      await import("../candidacy-theme-synthesis-review");
+
+    const result = await saveReviewedCandidacyThemeSynthesisDraft({
+      candidacyId: "cand-1",
+      theme: "SANTE",
+      claims: [{ text: "Le programme propose de rouvrir des maternités.", measureRefs: ["M1"] }],
+      expectedCorpusFingerprint: "old",
+      model: "mistral-large-latest",
+      promptVersion: "candidacy-theme-synthesis-v3",
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "OBSOLETE" });
+    expect(mocks.upsertSynthesis).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("préserve une synthèse déjà publiée", async () => {
+    mocks.findSynthesis.mockResolvedValue({
+      id: "synthesis-1",
+      status: "PUBLISHED",
+      text: "Synthèse publiée.",
+      corpusFingerprint: "current",
+    });
+    const { computeThemeCorpusFingerprint } = await import("../candidacy-theme-synthesis");
+    const corpusFingerprint = computeThemeCorpusFingerprint({
+      theme: "SANTE",
+      measures: [
+        {
+          id: "measure-1",
+          revisionId: "revision-1",
+          text: "Rouvrir des maternités.",
+          details: null,
+        },
+      ],
+    });
+    const { saveReviewedCandidacyThemeSynthesisDraft } =
+      await import("../candidacy-theme-synthesis-review");
+
+    const result = await saveReviewedCandidacyThemeSynthesisDraft({
+      candidacyId: "cand-1",
+      theme: "SANTE",
+      claims: [{ text: "Le programme propose de rouvrir des maternités.", measureRefs: ["M1"] }],
+      expectedCorpusFingerprint: corpusFingerprint,
+      model: "mistral-large-latest",
+      promptVersion: "candidacy-theme-synthesis-v4",
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "NOT_REVIEWABLE" });
+    expect(mocks.upsertSynthesis).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuse une quantité absente de la mesure citée", async () => {
+    const { computeThemeCorpusFingerprint } = await import("../candidacy-theme-synthesis");
+    const corpusFingerprint = computeThemeCorpusFingerprint({
+      theme: "SANTE",
+      measures: [
+        {
+          id: "measure-1",
+          revisionId: "revision-1",
+          text: "Rouvrir des maternités.",
+          details: null,
+        },
+      ],
+    });
+    const { saveReviewedCandidacyThemeSynthesisDraft } =
+      await import("../candidacy-theme-synthesis-review");
+
+    const result = await saveReviewedCandidacyThemeSynthesisDraft({
+      candidacyId: "cand-1",
+      theme: "SANTE",
+      claims: [{ text: "Le programme propose de rouvrir 500 maternités.", measureRefs: ["M1"] }],
+      expectedCorpusFingerprint: corpusFingerprint,
+      model: "mistral-large-latest",
+      promptVersion: "candidacy-theme-synthesis-v3",
+      actor: { id: "admin", ipAddress: "127.0.0.1", userAgent: "vitest" },
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "INVALID" });
+    expect(mocks.upsertSynthesis).not.toHaveBeenCalled();
+    expect(mocks.createAudit).not.toHaveBeenCalled();
+  });
 });
 
 describe("publishCandidacyThemeSynthesis", () => {
