@@ -16,9 +16,11 @@ const mocks = vi.hoisted(() => ({
   politicianCount: vi.fn(),
   partyFindMany: vi.fn(),
   queryRaw: vi.fn(),
+  captureException: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@sentry/nextjs", () => ({ captureException: mocks.captureException }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/services/voteStats", () => ({
   getPoliticianDissidenceRanking: mocks.getPoliticianDissidenceRanking,
@@ -68,6 +70,26 @@ beforeEach(() => {
 });
 
 describe("/politiques : le classement de dissidence échoue", () => {
+  it("signale l'échec à Sentry plutôt que de l'avaler", async () => {
+    const boom = statementTimeout();
+    mocks.getPoliticianDissidenceRanking.mockRejectedValue(boom);
+
+    await render({ sort: "dissidence" });
+
+    expect(mocks.captureException).toHaveBeenCalledWith(
+      boom,
+      expect.objectContaining({ tags: { feature: "dissidence-ranking" } })
+    );
+  });
+
+  it("laisse remonter une panne qui n'est pas le classement", async () => {
+    // Un échec du listing lui-même ne doit pas être maquillé en liste vide.
+    mocks.getPoliticianDissidenceRanking.mockResolvedValue({ politicianIds: ["p1"], total: 1 });
+    mocks.politicianFindMany.mockRejectedValue(new Error("connection terminated"));
+
+    await expect(render({ sort: "dissidence" })).rejects.toThrow("connection terminated");
+  });
+
   it("rend la page malgré un statement timeout sur le classement", async () => {
     mocks.getPoliticianDissidenceRanking.mockRejectedValue(statementTimeout());
 

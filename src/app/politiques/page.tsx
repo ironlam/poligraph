@@ -123,6 +123,13 @@ const POLITICIAN_INCLUDE = {
   },
 } as const;
 
+/**
+ * Marker for "the dissidence ranking could not be computed". Carried in the
+ * message rather than by class identity so it survives any re-wrapping on the
+ * way out of the cached path.
+ */
+const DISSIDENCE_RANKING_UNAVAILABLE = "DISSIDENCE_RANKING_UNAVAILABLE";
+
 // Core query logic shared by cached and uncached paths
 async function queryPoliticians(
   search?: string,
@@ -194,14 +201,19 @@ async function queryPoliticians(
     // POLIGRAPH-1E: this ranking aggregates every expressed vote of every
     // sitting parliamentarian and cannot finish inside the statement timeout,
     // so Postgres cancels it with 57014. Unguarded, that took the whole
-    // listing down with a 500. A ranking we cannot compute degrades to an
-    // empty one, and the failure is reported rather than swallowed.
+    // listing down with a 500.
+    //
+    // Reported here, but NOT turned into an empty listing here: this runs
+    // inside `getPoliticiansFiltered`, whose "use cache" would store that empty
+    // listing under the `synced` profile and keep serving "0 representants" for
+    // a day after the database recovered. The fallback belongs to
+    // `getPoliticians`, outside the cache boundary.
     let dissidenceRanking: { politicianIds: string[]; total: number };
     try {
       dissidenceRanking = await getPoliticianDissidenceRanking(chamber, page, limit);
     } catch (error) {
       Sentry.captureException(error, { tags: { feature: "dissidence-ranking" } });
-      return { politicians: [], total: 0, page, totalPages: 0 };
+      throw new Error(DISSIDENCE_RANKING_UNAVAILABLE);
     }
 
     const orderedIds = dissidenceRanking.politicianIds;
@@ -331,10 +343,17 @@ async function getPoliticians(
   sortOption: SortOption = "alpha",
   page = 1
 ) {
-  if (search) {
-    return searchPoliticians(search, partyId, withConviction, mandateFilter, sortOption, page);
+  try {
+    return search
+      ? await searchPoliticians(search, partyId, withConviction, mandateFilter, sortOption, page)
+      : await getPoliticiansFiltered(partyId, withConviction, mandateFilter, sortOption, page);
+  } catch (error) {
+    // Only the dissidence ranking degrades; every other failure still surfaces.
+    if (!(error instanceof Error) || !error.message.includes(DISSIDENCE_RANKING_UNAVAILABLE)) {
+      throw error;
+    }
+    return { politicians: [], total: 0, page, totalPages: 0 };
   }
-  return getPoliticiansFiltered(partyId, withConviction, mandateFilter, sortOption, page);
 }
 
 async function getParties() {
