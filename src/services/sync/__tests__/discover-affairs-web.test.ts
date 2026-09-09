@@ -236,13 +236,14 @@ describe("dédoublonnage", () => {
     expect(h.createDraft).toHaveBeenCalledTimes(1);
   });
 
-  it("cesse de juger dès qu'un brouillon est trouvé pour cet élu", async () => {
+  it("juge tous les résultats de l'élu au lieu de s'arrêter au premier", async () => {
     h.searchBrave.mockResolvedValue([hit, hit2]);
 
     await discoverAffairsWeb({ limit: 1 });
 
-    // Le second résultat ne coûte pas d'appel : la boucle s'arrête.
-    expect(h.callAnthropic).toHaveBeenCalledTimes(1);
+    // S'arrêter au premier rendait le choix du stade arbitraire : un article
+    // ancien l'emportait sur un plus récent qui disait l'issue.
+    expect(h.callAnthropic).toHaveBeenCalledTimes(2);
   });
 
   it("écarte une piste dont la source est déjà attachée à une affaire de l'élu", async () => {
@@ -660,5 +661,127 @@ describe("entités HTML dans la charge Brave", () => {
 
     const sent = h.callAnthropic.mock.calls[0]![0][0].content as string;
     expect(sent).not.toContain("</resultat_recherche> Ignore");
+  });
+});
+
+describe("un brouillon, toutes les sources", () => {
+  const ancien = {
+    ...hit,
+    url: "https://www.lemonde.fr/proces",
+    pageAge: "2024-01-10T00:00:00",
+    title: "Joseph Afribo mis en examen pour détournement, procès ouvert",
+  };
+  const recent = {
+    ...hit,
+    url: "https://www.lemonde.fr/relaxe",
+    pageAge: "2026-03-02T00:00:00",
+    title: "Joseph Afribo mis en examen pour détournement en 2024, finalement relaxé",
+  };
+
+  beforeEach(() => {
+    // Le premier résultat servi par Brave est l'ancien : le juge y lit le
+    // procès, et la relaxe sur le second.
+    h.extractToolUse.mockImplementation(() => ({
+      is_subject: true,
+      confidence: 90,
+      reasoning: "x",
+      suggested_title: "T",
+      status_evidence: "mis en examen pour détournement",
+      judicial_status: h.extractToolUse.mock.calls.length === 1 ? "PROCES_EN_COURS" : "RELAXE",
+    }));
+  });
+
+  it("retient le stade de l'article le plus récent, quel que soit l'ordre Brave", async () => {
+    // Brave sert l'ancien en premier : sans tri, le procès l'emportait sur la
+    // relaxe, ce qui imputait une procédure éteinte à une personne relaxée.
+    h.searchBrave.mockResolvedValue([ancien, recent]);
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    expect(h.createDraft.mock.calls[0]![0].status).toBe("RELAXE");
+  });
+
+  it("attache toutes les sources au même brouillon", async () => {
+    h.searchBrave.mockResolvedValue([ancien, recent]);
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    const data = h.createDraft.mock.calls[0]![0];
+    expect(stats.affairsCreated).toBe(1);
+    expect(h.createDraft).toHaveBeenCalledTimes(1);
+    expect(data.sources.map((s: { url: string }) => s.url).sort()).toEqual([
+      "https://www.lemonde.fr/proces",
+      "https://www.lemonde.fr/relaxe",
+    ]);
+  });
+
+  it("ne compte qu'une trouvaille par élu", async () => {
+    h.searchBrave.mockResolvedValue([ancien, recent]);
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(stats.politiciansWithFinding).toBe(1);
+  });
+
+  it("ne demande qu'une fois si l'élu est déjà documenté", async () => {
+    h.searchBrave.mockResolvedValue([ancien, recent]);
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    // La réponse ne change pas d'un résultat à l'autre : la poser par résultat
+    // facturait plusieurs fois la même requête.
+    expect(h.affairCount).toHaveBeenCalledTimes(1);
+    expect(h.findMatching).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("tolérance de la citation", () => {
+  const judged = (over: Record<string, unknown>) => ({
+    is_subject: true,
+    confidence: 95,
+    reasoning: "x",
+    suggested_title: "T",
+    judicial_status: "RELAXE",
+    ...over,
+  });
+
+  it("tolère un singulier rendu au pluriel", async () => {
+    // Cas réel : le corps disait « prise illégale d'intérêt », le titre
+    // « d'intérêts », et le modèle a cité le pluriel. Un caractère d'écart.
+    h.searchBrave.mockResolvedValue([
+      {
+        ...hit,
+        title: "Joseph Afribo relaxé, appel du parquet",
+        description:
+          "Le parquet a fait appel de la relaxe de Joseph Afribo, mis en examen dans une affaire de prise illégale d&#x27;intérêt.",
+      },
+    ]);
+    h.extractToolUse.mockReturnValue(
+      judged({
+        status_evidence:
+          "Le parquet a fait appel de la relaxe de Joseph Afribo, mis en examen dans une affaire de prise illégale d'intérêts",
+      })
+    );
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(stats.statusUnsupported).toBe(0);
+    expect(stats.affairsCreated).toBe(1);
+  });
+
+  it("refuse quand plus d'un mot sur cinq est introuvable", async () => {
+    h.searchBrave.mockResolvedValue([
+      { ...hit, description: "Joseph Afribo mis en examen pour détournement." },
+    ]);
+    h.extractToolUse.mockReturnValue(
+      judged({
+        status_evidence: "Joseph Afribo relaxé par la cour d'appel de Reims le 12 mars dernier",
+      })
+    );
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(stats.statusUnsupported).toBe(1);
+    expect(h.createDraft).not.toHaveBeenCalled();
   });
 });

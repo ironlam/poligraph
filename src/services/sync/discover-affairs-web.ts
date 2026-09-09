@@ -267,9 +267,11 @@ interface Judgment {
  *    `<strong>`, and the judge is shown the sanitized text, so a faithful quote
  *    could not match the string it came from. The comparison has to run on the
  *    exact text the model received.
- * 2. It required one contiguous run. A model legitimately elides with "...",
- *    quoting the two ends of a passage, so each fragment is checked in order
- *    instead.
+ * 2. It required one contiguous run of characters. A model legitimately elides
+ *    with "...", and it normalises as it copies: measured on a real snippet,
+ *    the body read "prise illégale d'intérêt" and the quote came back with the
+ *    plural from the headline. One character sank an honest quote, so the
+ *    comparison now runs on words and tolerates a fifth of them missing.
  *
  * Folded before comparing (accents, case, quote marks, whitespace): a model
  * reproduces wording faithfully and punctuation loosely.
@@ -284,32 +286,43 @@ function foldForEvidence(value: string): string {
     .trim();
 }
 
-/** Minimum folded characters that must be traced back to the source. */
-const EVIDENCE_MIN_MATCHED_CHARS = 12;
-/** Below this a fragment matches almost any article, so it is not counted. */
-const EVIDENCE_MIN_FRAGMENT_CHARS = 6;
+/** Below this an "exact quote" is too short to attest anything. */
+const EVIDENCE_MIN_WORDS = 4;
+/** Share of the quoted words that must be traced back, in order. */
+const EVIDENCE_MIN_WORD_RATIO = 0.8;
+
+function evidenceWords(value: string): string[] {
+  return foldForEvidence(value)
+    .split(/[^\p{Letter}\p{Number}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * Length of the longest run of quoted words found in order in the source.
+ *
+ * Order is the point. Counting words anywhere would accept a sentence
+ * reassembled from vocabulary scattered across the article, which is exactly
+ * the fabrication the check exists to catch.
+ */
+function orderedWordOverlap(quote: string[], source: string[]): number {
+  let previous = new Array<number>(source.length + 1).fill(0);
+  for (const word of quote) {
+    const current = new Array<number>(source.length + 1).fill(0);
+    for (let j = 0; j < source.length; j++) {
+      current[j + 1] =
+        word === source[j] ? previous[j]! + 1 : Math.max(current[j]!, previous[j + 1]!);
+    }
+    previous = current;
+  }
+  return previous[source.length]!;
+}
 
 function evidenceSupportsStatus(evidence: string | null, judgedText: string): boolean {
   if (!evidence) return false;
-
-  const haystack = foldForEvidence(judgedText);
-  const fragments = evidence
-    .split(/\s*(?:\.{3}|\u2026)\s*/)
-    .map(foldForEvidence)
-    .filter((fragment) => fragment.length >= EVIDENCE_MIN_FRAGMENT_CHARS);
-  if (fragments.length === 0) return false;
-
-  // In order: an elided quote reads left to right, and allowing fragments to
-  // match anywhere would accept a sentence reassembled from scattered words.
-  let cursor = 0;
-  let matched = 0;
-  for (const fragment of fragments) {
-    const at = haystack.indexOf(fragment, cursor);
-    if (at === -1) return false;
-    cursor = at + fragment.length;
-    matched += fragment.length;
-  }
-  return matched >= EVIDENCE_MIN_MATCHED_CHARS;
+  const quote = evidenceWords(evidence);
+  if (quote.length < EVIDENCE_MIN_WORDS) return false;
+  const matched = orderedWordOverlap(quote, evidenceWords(judgedText));
+  return matched / quote.length >= EVIDENCE_MIN_WORD_RATIO;
 }
 
 function parseJudicialStatus(raw: unknown): AffairStatus | null {
@@ -405,14 +418,16 @@ export async function discoverAffairsWeb(options: {
 
     stats.resultsReturned += results.length;
 
-    // Un élu ne produit qu'un brouillon par passe. La mesure sur 200 élus a
-    // montré cinq résultats pour la MÊME mise en examen de Steeve Briois :
-    // sans ce garde, une affaire médiatisée inonde la file de modération.
-    let alreadyFoundForTarget = false;
+    // Un élu ne produit toujours qu'un brouillon par passe, mais ce brouillon
+    // porte désormais TOUTES ses sources. S'arrêter au premier résultat évitait
+    // bien d'inonder la file (cinq articles pour la même mise en examen de
+    // Steeve Briois, mesuré sur 200 élus), au prix d'un choix arbitraire : un
+    // maire ressortait « procès en cours » sur le premier article alors qu'un
+    // autre, plus récent, le disait relaxé. Juger tous les survivants coûte
+    // 25 % d'appels en plus, mesuré, et rend la trajectoire au modérateur.
+    const candidates: LeadCandidate[] = [];
 
     for (const result of results) {
-      if (alreadyFoundForTarget) break;
-
       const screen = screenWebResult(result, {
         firstName: target.firstName,
         lastName: target.lastName,
@@ -526,77 +541,10 @@ export async function discoverAffairsWeb(options: {
         continue;
       }
 
-      const candidateTitle =
-        judgment.suggestedTitle ?? `Procédure judiciaire visant ${target.fullName}`;
-      // The stage matters to the matcher, not just to the draft: the evolution
-      // signal (priority 6) needs both sides pre-decision, and omitting it kept
-      // that signal silent here. Measured cost of the omission: a lead titled
-      // "detournement de biens publics" did not match an affair already filed as
-      // "detournement de fonds publics", one word apart.
-      const matches = await findMatchingAffairs({
-        politicianId: target.id,
-        title: candidateTitle,
-        category: "AUTRE",
-        status: judgment.judicialStatus,
-      });
-      if (matches.length > 0) {
-        stats.duplicatesSkipped++;
-        continue;
-      }
-
-      // A politician who already has a filed affair is where every duplicate in
-      // the measurement came from (Allisio, Darmanin), and a politician with none
-      // is where every genuine discovery came from (14 of 16 on tier 2). When the
-      // matcher stays silent on someone already documented, the title simply
-      // failed to name the same event, so this hands the pair to a human rather
-      // than filing a second affair. Deliberate trade: a real second affair waits
-      // for review instead of being created.
-      const documented = await db.affair.count({
-        where: {
-          politicianId: target.id,
-          publicationStatus: { in: ["DRAFT", "PUBLISHED"] },
-        },
-      });
-      if (documented > 0) {
-        stats.alreadyDocumented++;
-        continue;
-      }
-
-      alreadyFoundForTarget = true;
-      stats.politiciansWithFinding++;
-
-      if (dryRun) {
-        stats.affairsCreated++;
-        // Pipe-delimited so a measurement run can be parsed back. The name and
-        // the title alone cannot be checked against anything: verifying a lead
-        // means reopening the source the judge actually read, so the URL, the
-        // publisher and the reasoning have to travel with it.
-        console.log(
-          [
-            "  [DRY-RUN]",
-            target.fullName,
-            judgment.confidence,
-            judgment.judicialStatus,
-            result.publisher ?? "",
-            publishedAt.toISOString().slice(0, 10),
-            result.url,
-            judgment.suggestedTitle ?? "",
-            judgment.reasoning.replace(/\s+/g, " "),
-          ].join(" | ")
-        );
-        continue;
-      }
-
-      await createDraftFromLead(
-        target,
-        result,
-        judgment,
-        candidateTitle,
-        publishedAt,
-        judgment.judicialStatus
-      );
-      stats.affairsCreated++;
+      candidates.push({ result, judgment, publishedAt, status: judgment.judicialStatus });
     }
+
+    await settleCandidates(target, candidates, dryRun, stats);
 
     // Estampiller même sans trouvaille : c'est ce qui fait avancer la rotation.
     // Sans ça la passe rechercherait indéfiniment les mêmes premiers élus, le
@@ -614,6 +562,98 @@ export async function discoverAffairsWeb(options: {
   return stats;
 }
 
+/** A result that cleared every gate and can found or document an affair. */
+interface LeadCandidate {
+  result: BraveSearchResult;
+  judgment: Judgment;
+  publishedAt: Date;
+  status: AffairStatus;
+}
+
+/**
+ * Enough sources to show a trajectory, not enough to bury a reviewer.
+ *
+ * A well-covered case returns the same event from every masthead, so the tail
+ * repeats what the first entries already say.
+ */
+const MAX_SOURCES_PER_DRAFT = 8;
+
+/**
+ * Turn everything found for one politician into at most one draft.
+ *
+ * The per-politician checks live here rather than in the result loop: whether
+ * this politician is already documented does not change from one result to the
+ * next, and asking once per result billed the same query several times.
+ */
+async function settleCandidates(
+  target: SearchTarget,
+  candidates: LeadCandidate[],
+  dryRun: boolean,
+  stats: WebDiscoveryStats
+): Promise<void> {
+  if (candidates.length === 0) return;
+
+  // The stage comes from the most recent article: a procedure moves forward in
+  // time and the press reports each step as it happens. Known limit, accepted
+  // because a human reviews the draft: a recent retrospective describing an old
+  // stage would outrank the article that reported the outcome.
+  candidates.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+  const lead = candidates[0]!;
+  const title = lead.judgment.suggestedTitle ?? `Procédure judiciaire visant ${target.fullName}`;
+
+  // The stage matters to the matcher, not just to the draft: the evolution
+  // signal (priority 6) needs both sides pre-decision, and omitting it kept
+  // that signal silent here. Measured cost of the omission: a lead titled
+  // "detournement de biens publics" did not match an affair already filed as
+  // "detournement de fonds publics", one word apart.
+  const matches = await findMatchingAffairs({
+    politicianId: target.id,
+    title,
+    category: "AUTRE",
+    status: lead.status,
+  });
+  if (matches.length > 0) {
+    stats.duplicatesSkipped++;
+    return;
+  }
+
+  // A politician who already has a filed affair is where every duplicate in the
+  // measurement came from, and a politician with none is where every genuine
+  // discovery came from (14 of 16 on tier 2). When the matcher stays silent on
+  // someone already documented, the title simply failed to name the same event,
+  // so this hands the pair to a human rather than filing a second affair.
+  // Deliberate trade: a real second affair waits for review.
+  const documented = await db.affair.count({
+    where: { politicianId: target.id, publicationStatus: { in: ["DRAFT", "PUBLISHED"] } },
+  });
+  if (documented > 0) {
+    stats.alreadyDocumented++;
+    return;
+  }
+
+  stats.politiciansWithFinding++;
+  stats.affairsCreated++;
+
+  if (dryRun) {
+    console.log(
+      [
+        "  [DRY-RUN]",
+        target.fullName,
+        lead.judgment.confidence,
+        lead.status,
+        `${candidates.length} source(s)`,
+        lead.publishedAt.toISOString().slice(0, 10),
+        lead.result.url,
+        lead.judgment.suggestedTitle ?? "",
+        lead.judgment.reasoning.replace(/\s+/g, " "),
+      ].join(" | ")
+    );
+    return;
+  }
+
+  await createDraftFromLead(target, candidates, lead, title);
+}
+
 /**
  * A discovery always lands as a DRAFT with its source attached.
  *
@@ -627,33 +667,41 @@ export async function discoverAffairsWeb(options: {
  */
 async function createDraftFromLead(
   target: SearchTarget,
-  result: BraveSearchResult,
-  judgment: Judgment,
-  title: string,
-  publishedAt: Date,
-  /** Non-nullable on purpose: there is no default status to fall back on. */
-  status: AffairStatus
+  candidates: LeadCandidate[],
+  lead: LeadCandidate,
+  title: string
 ): Promise<void> {
+  // Deduplicated by URL: two Brave results can point at the same article
+  // through different query paths, and a repeated source reads as corroboration
+  // it is not.
+  const seen = new Set<string>();
+  const sources = candidates
+    .filter((candidate) => {
+      if (seen.has(candidate.result.url)) return false;
+      seen.add(candidate.result.url);
+      return true;
+    })
+    .slice(0, MAX_SOURCES_PER_DRAFT)
+    .map((candidate) => ({
+      url: candidate.result.url,
+      title: candidate.result.title,
+      publisher: candidate.result.publisher ?? "",
+      publishedAt: candidate.publishedAt,
+      sourceType: "PRESSE" as const,
+      // The passage the status rests on, kept next to the source so a moderator
+      // checks the claim without reopening the article.
+      excerpt: candidate.judgment.statusEvidence,
+    }));
+
   await createDraftAffairFromDiscovery({
     politicianId: target.id,
     title,
     baseSlug: `${target.lastName}-${title}`,
-    description: `Piste détectée par recherche web le ${new Date().toISOString().slice(0, 10)}. ${judgment.reasoning}`,
-    status,
+    description: `Piste détectée par recherche web le ${new Date().toISOString().slice(0, 10)}. ${lead.judgment.reasoning}`,
+    status: lead.status,
     category: "AUTRE",
     involvement: "MENTIONED_ONLY",
-    confidenceScore: judgment.confidence,
-    sources: [
-      {
-        url: result.url,
-        title: result.title,
-        publisher: result.publisher ?? "",
-        publishedAt,
-        sourceType: "PRESSE",
-        // The passage the status rests on, kept next to the source so a
-        // moderator checks the claim without reopening the article.
-        excerpt: judgment.statusEvidence,
-      },
-    ],
+    confidenceScore: lead.judgment.confidence,
+    sources,
   });
 }
