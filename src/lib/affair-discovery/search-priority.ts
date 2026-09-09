@@ -46,7 +46,16 @@ export interface SearchTarget {
  * A politician clean this year may be charged the next, so the pass has to
  * return rather than mark everyone done for ever.
  */
-export async function selectSearchTargets(limit: number): Promise<SearchTarget[]> {
+export async function selectSearchTargets(
+  limit: number,
+  /**
+   * Restrict the pass to one tier. Measurement only: the yield of the feature
+   * differs by an order of magnitude between a minister the press already
+   * covers and a mayor nobody has written about, and a mixed sample cannot
+   * tell the two apart.
+   */
+  onlyTier?: number
+): Promise<SearchTarget[]> {
   const rows = await db.$queryRaw<
     {
       id: string;
@@ -82,6 +91,7 @@ export async function selectSearchTargets(limit: number): Promise<SearchTarget[]
     WHERE p."publicationStatus" = 'PUBLISHED'
       AND p."lastName" <> ''
     ) ranked
+    WHERE (${onlyTier ?? null}::int IS NULL OR tier = ${onlyTier ?? null}::int)
     -- Jamais cherché d'abord, puis les plus anciens : la rotation prime sur la
     -- priorité, sinon un ministre monopoliserait chaque passe.
     -- La population ne départage QUE les maires : appliquée au tier 1, elle
