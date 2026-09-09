@@ -158,3 +158,39 @@ describe("screenWebResult", () => {
     });
   });
 });
+
+describe("contenu hébergé plutôt qu'édité", () => {
+  const politician = { firstName: "Damien", lastName: "Meslot" };
+  const base = {
+    title: "Damien Meslot mis en examen pour détournement de fonds publics",
+    description: "",
+    publisher: "Mediapart",
+    pageAge: "2023-01-01T00:00:00",
+    age: undefined,
+  };
+
+  it("écarte un billet de blog hébergé par un éditeur admis", () => {
+    // Mesuré : blogs.mediapart.fr/<pseudo>/liste-non-exhaustive-de-responsables
+    const decision = screenWebResult(
+      { ...base, url: "https://blogs.mediapart.fr/jean-marc-b/blog/290820/liste" },
+      politician
+    );
+    expect(decision.keep).toBe(false);
+  });
+
+  it("écarte une page de tag", () => {
+    const decision = screenWebResult(
+      { ...base, url: "https://www.lefigaro.fr/tag/detournement-de-fonds-publics" },
+      politician
+    );
+    expect(decision.keep).toBe(false);
+  });
+
+  it("garde un article ordinaire du même éditeur", () => {
+    const decision = screenWebResult(
+      { ...base, url: "https://www.mediapart.fr/journal/france/290820/un-article" },
+      politician
+    );
+    expect(decision.keep).toBe(true);
+  });
+});

@@ -93,6 +93,35 @@ function namesSomeoneElsesCase(title: string, surname: string): boolean {
  * Keep a result only if it is from a trusted publisher, names the politician,
  * carries a judicial term, and does not announce someone else's case.
  */
+/**
+ * Editorial article, or something the publisher merely hosts?
+ *
+ * `isVerifiedAffairPressUrl` accepts any subdomain of an allowed host, which is
+ * right for the ingested press feeds that share it but wrong here: a Brave
+ * query surfaced `blogs.mediapart.fr/<pseudo>/liste-de-responsables-condamnes`,
+ * reader-published content carrying the trust of the masthead, and
+ * `lefigaro.fr/tag/detournement-de-fonds-publics`, an index page that names an
+ * offence next to whoever happens to be listed. Both reached the judge and both
+ * were caught further down by luck rather than by design.
+ *
+ * Kept local to the discovery screen on purpose: the shared helper also serves
+ * `press-analysis`, and narrowing it there is a separate decision.
+ */
+function isHostedRatherThanEdited(rawUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return true;
+  }
+  const host = url.hostname.toLowerCase();
+  if (/^blogs?\./.test(host)) return true;
+
+  // Index pages list an offence, they do not report one about a named person.
+  const path = url.pathname.toLowerCase();
+  return /(^|\/)(tag|tags|mots-cles|theme|thematique|sujet)(\/|$)/.test(path);
+}
+
 export function screenWebResult(
   result: WebResult,
   politician: { firstName: string; lastName: string }
@@ -107,6 +136,9 @@ export function screenWebResult(
   // qu'elle est admissible.
   if (!isVerifiedAffairPressUrl(result.url)) {
     return { keep: false, reason: "éditeur non admis pour un fait judiciaire" };
+  }
+  if (isHostedRatherThanEdited(result.url)) {
+    return { keep: false, reason: "billet de blog ou page d'index, pas un article" };
   }
 
   const haystack = normalize(`${result.title} ${result.description}`);
