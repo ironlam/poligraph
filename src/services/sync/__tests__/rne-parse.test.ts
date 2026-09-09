@@ -9,6 +9,8 @@ import {
   parseFrenchDate,
   parseMaireRows,
   type ParsedMaireRow,
+  sameCalendarDay,
+  parisCalendarDay,
 } from "../rne-parse";
 
 function csvRow(overrides: Partial<MaireRNECSV> = {}): MaireRNECSV {
@@ -33,13 +35,13 @@ function csvRow(overrides: Partial<MaireRNECSV> = {}): MaireRNECSV {
 
 describe("parseFrenchDate", () => {
   it("reads DD/MM/YYYY", () => {
-    expect(parseFrenchDate("05/03/1977")).toEqual(new Date(1977, 2, 5));
+    expect(parisCalendarDay(parseFrenchDate("05/03/1977")!)).toBe("1977-03-05");
   });
 
   it("reads YYYY-MM-DD, the shape the RNE publishes now", () => {
     // L'export des maires d'août 2026 est intégralement en ISO : 34 826 lignes,
     // zéro en DD/MM/YYYY. Ce test affirmait l'inverse.
-    expect(parseFrenchDate("1977-03-05")).toEqual(new Date(1977, 2, 5));
+    expect(parisCalendarDay(parseFrenchDate("1977-03-05")!)).toBe("1977-03-05");
   });
 
   it.each(["", "   ", "05/03", "00/03/1977", "05/03/1850", "05/03/2200", "1850-03-05"])(
@@ -202,5 +204,32 @@ describe("mandate shaping", () => {
     expect(mandateStartDate({ ...base, functionStart: null, mandateStart: null })).toEqual(
       DEFAULT_MANDATE_START
     );
+  });
+});
+
+describe("sameCalendarDay, indépendant du fuseau du process", () => {
+  // Vécu : la comparaison par getters locaux passait sur une machine réglée sur
+  // Europe/Paris et échouait sur la CI et Vercel, qui tournent en UTC.
+  const stockeParisMinuit = new Date("1965-11-26T23:00:00.000Z"); // 27 nov à Paris
+  const luDuRne = parseFrenchDate("1965-11-27")!;
+
+  it("reconnaît le même jour", () => {
+    expect(sameCalendarDay(stockeParisMinuit, luDuRne)).toBe(true);
+  });
+
+  it("sépare deux jours différents", () => {
+    expect(sameCalendarDay(stockeParisMinuit, parseFrenchDate("1965-11-28")!)).toBe(false);
+  });
+
+  it("refuse une date absente plutôt que de deviner", () => {
+    expect(sameCalendarDay(null, luDuRne)).toBe(false);
+    expect(sameCalendarDay(stockeParisMinuit, null)).toBe(false);
+  });
+
+  it("lit une date d'été, stockée à 22:00Z", () => {
+    // L'heure d'été décale d'une heure de plus : 1977-07-06T22:00:00Z vaut le 7.
+    expect(
+      sameCalendarDay(new Date("1977-07-06T22:00:00.000Z"), parseFrenchDate("1977-07-07")!)
+    ).toBe(true);
   });
 });

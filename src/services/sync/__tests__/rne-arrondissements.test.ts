@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseArrondissementRows, foldName } from "../rne-arrondissements-parse";
+import { parisCalendarDay } from "../rne-parse";
 
 const HEADER =
   "Code du département;Libellé du département;Code de la commune;Libellé de la commune;" +
@@ -39,10 +40,9 @@ describe("parseArrondissementRows", () => {
   it("lit la date de naissance, seul discriminant fiable des homonymes", () => {
     const rows = parseArrondissementRows([HEADER, row("Maire d'arrondissement")].join("\n"));
 
-    // Comparé sur les composantes locales : la date vaut minuit à Paris, donc
-    // son ISO est la veille à 23:00Z.
-    expect(rows[0]!.birthDate?.getFullYear()).toBe(1970);
-    expect(rows[0]!.birthDate?.getDate()).toBe(2);
+    // Asserté sur le jour à Paris : c'est la garantie du parseur, et les
+    // getters locaux dépendent du fuseau de la machine qui lance les tests.
+    expect(parisCalendarDay(rows[0]!.birthDate!)).toBe("1970-04-02");
   });
 
   it("garde les trois villes distinctes par leur secteur", () => {
@@ -82,9 +82,7 @@ describe("format de date du RNE", () => {
     // Les 34 826 lignes de l'export d'août 2026 sont en YYYY-MM-DD ; aucune
     // en DD/MM/YYYY. Ne lire que l'ancien format annulait toutes les dates.
     expect(rows[0]!.birthDate).not.toBeNull();
-    expect(rows[0]!.birthDate!.getFullYear()).toBe(1970);
-    expect(rows[0]!.birthDate!.getMonth()).toBe(3);
-    expect(rows[0]!.birthDate!.getDate()).toBe(2);
+    expect(parisCalendarDay(rows[0]!.birthDate!)).toBe("1970-04-02");
   });
 
   it("lit encore l'ancien format, au cas où un export le reprendrait", () => {
@@ -94,7 +92,6 @@ describe("format de date du RNE", () => {
     ].join("\n");
     const rows = parseArrondissementRows(csv);
 
-    expect(rows[0]!.birthDate!.getFullYear()).toBe(1970);
-    expect(rows[0]!.birthDate!.getDate()).toBe(2);
+    expect(parisCalendarDay(rows[0]!.birthDate!)).toBe("1970-04-02");
   });
 });
