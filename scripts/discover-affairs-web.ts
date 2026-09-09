@@ -44,6 +44,7 @@ async function main() {
   console.log(`    dont doublon           : ${stats.duplicatesSkipped}`);
   console.log(`    dont stade non attesté : ${stats.statusUnknown}`);
   console.log(`    dont citation absente  : ${stats.statusUnsupported}`);
+  console.log(`  autres procédures écartées : ${stats.otherProceedings}`);
   console.log(`    dont élu déjà documenté: ${stats.alreadyDocumented}`);
   console.log(
     `  brouillons ${dryRun ? "qui seraient créés" : "créés          "} : ${stats.affairsCreated}`

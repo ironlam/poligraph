@@ -37,7 +37,13 @@ vi.mock("@/services/affairs/create-draft", () => ({
   createDraftAffairFromDiscovery: h.createDraft,
 }));
 vi.mock("@/lib/affair-matching/resolver", () => ({ resolveAffairPolitician: h.resolve }));
-vi.mock("@/services/affairs/matching", () => ({ findMatchingAffairs: h.findMatching }));
+// Mock partiel : seul l'accès base est simulé. Le regroupement par procédure
+// s'appuie sur la vraie comparaison de vocabulaire du matcher, sinon le test
+// validerait un seuil imaginaire.
+vi.mock("@/services/affairs/matching", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/affairs/matching")>()),
+  findMatchingAffairs: h.findMatching,
+}));
 vi.mock("@/config/rate-limits", () => ({ BRAVE_SEARCH_RATE_LIMIT_MS: 0 }));
 
 import { discoverAffairsWeb } from "../discover-affairs-web";
@@ -394,6 +400,9 @@ describe("statut judiciaire", () => {
   });
 
   it("reporte le stade lu dans la source, pas un défaut", async () => {
+    h.searchBrave.mockResolvedValue([
+      { ...hit, description: "Joseph Afribo, mis en examen pour détournement, a été condamné." },
+    ]);
     h.extractToolUse.mockReturnValue(judgment({ judicial_status: "CONDAMNATION_DEFINITIVE" }));
 
     await discoverAffairsWeb({ limit: 1 });
@@ -404,6 +413,9 @@ describe("statut judiciaire", () => {
   it("reporte une issue favorable telle quelle", async () => {
     // Mesuré sur Darmanin et Platret : le pipeline forçait « enquête
     // préliminaire » sur des personnes relaxées ou bénéficiant d'un non-lieu.
+    h.searchBrave.mockResolvedValue([
+      { ...hit, description: "Joseph Afribo, mis en examen pour détournement, a été relaxé." },
+    ]);
     h.extractToolUse.mockReturnValue(judgment({ judicial_status: "RELAXE" }));
 
     await discoverAffairsWeb({ limit: 1 });
@@ -492,7 +504,7 @@ describe("citation à l'appui du stade", () => {
     confidence: 95,
     reasoning: "x",
     suggested_title: "T",
-    judicial_status: "CONDAMNATION_DEFINITIVE",
+    judicial_status: "MISE_EN_EXAMEN",
     status_evidence: "mis en examen pour détournement",
     ...over,
   });
@@ -685,9 +697,11 @@ describe("un brouillon, toutes les sources", () => {
       is_subject: true,
       confidence: 90,
       reasoning: "x",
-      suggested_title: "T",
       status_evidence: "mis en examen pour détournement",
       judicial_status: h.extractToolUse.mock.calls.length === 1 ? "PROCES_EN_COURS" : "RELAXE",
+      // Titre réaliste : le regroupement par procédure compare le vocabulaire,
+      // et un « T » ne porte rien de comparable.
+      suggested_title: "Procédure visant Joseph Afribo pour détournement de fonds publics",
     }));
   });
 
@@ -783,5 +797,113 @@ describe("tolérance de la citation", () => {
 
     expect(stats.statusUnsupported).toBe(1);
     expect(h.createDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe("le mot qui porte le stade", () => {
+  it("refuse un stade que la source contredit, malgré 80 % de mots communs", async () => {
+    // « condamné définitivement » contre « relaxé définitivement » : cinq mots
+    // sur six, donc la tolérance passait, sur une source disant l'inverse.
+    h.searchBrave.mockResolvedValue([
+      { ...hit, description: "Joseph Afribo a été condamné définitivement pour détournement." },
+    ]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      confidence: 95,
+      reasoning: "x",
+      suggested_title: "T",
+      judicial_status: "RELAXE",
+      status_evidence: "Joseph Afribo a été relaxé définitivement pour détournement",
+    });
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(stats.statusUnsupported).toBe(1);
+    expect(h.createDraft).not.toHaveBeenCalled();
+  });
+
+  it("accepte quand la source porte bien le terme du stade", async () => {
+    h.searchBrave.mockResolvedValue([
+      { ...hit, description: "Joseph Afribo a été relaxé définitivement, après mise en examen." },
+    ]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      confidence: 95,
+      reasoning: "x",
+      suggested_title: "T",
+      judicial_status: "RELAXE",
+      status_evidence: "Joseph Afribo a été relaxé définitivement",
+    });
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(stats.statusUnsupported).toBe(0);
+    expect(stats.affairsCreated).toBe(1);
+  });
+});
+
+describe("procédures distinctes du même élu", () => {
+  const favoritisme = {
+    ...hit,
+    url: "https://www.lemonde.fr/favoritisme",
+    pageAge: "2026-01-05T00:00:00",
+    title: "Joseph Afribo mis en examen pour favoritisme dans des marchés publics",
+  };
+  const diffamation = {
+    ...hit,
+    url: "https://www.lemonde.fr/diffamation",
+    pageAge: "2020-06-01T00:00:00",
+    title: "Joseph Afribo mis en examen pour diffamation envers une conseillère",
+  };
+
+  beforeEach(() => {
+    h.extractToolUse.mockImplementation(() => ({
+      is_subject: true,
+      confidence: 90,
+      reasoning: "x",
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence:
+        h.extractToolUse.mock.calls.length === 1
+          ? "mis en examen pour favoritisme"
+          : "mis en examen pour diffamation",
+      suggested_title:
+        h.extractToolUse.mock.calls.length === 1
+          ? "Mise en examen de Joseph Afribo pour favoritisme dans des marchés publics"
+          : "Mise en examen de Joseph Afribo pour diffamation envers une conseillère",
+    }));
+  });
+
+  it("n'attache pas l'article d'une autre procédure comme source", async () => {
+    h.searchBrave.mockResolvedValue([favoritisme, diffamation]);
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    const data = h.createDraft.mock.calls[0]![0];
+    expect(data.sources.map((s: { url: string }) => s.url)).toEqual([
+      "https://www.lemonde.fr/favoritisme",
+    ]);
+    expect(stats.otherProceedings).toBe(1);
+  });
+
+  it("regroupe bien deux articles sur la MÊME procédure", async () => {
+    const suite = {
+      ...favoritisme,
+      url: "https://www.lemonde.fr/favoritisme-suite",
+      pageAge: "2026-02-01T00:00:00",
+    };
+    h.extractToolUse.mockImplementation(() => ({
+      is_subject: true,
+      confidence: 90,
+      reasoning: "x",
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour favoritisme",
+      suggested_title: "Mise en examen de Joseph Afribo pour favoritisme dans des marchés publics",
+    }));
+    h.searchBrave.mockResolvedValue([favoritisme, suite]);
+
+    const stats = await discoverAffairsWeb({ limit: 1 });
+
+    expect(h.createDraft.mock.calls[0]![0].sources).toHaveLength(2);
+    expect(stats.otherProceedings).toBe(0);
   });
 });
