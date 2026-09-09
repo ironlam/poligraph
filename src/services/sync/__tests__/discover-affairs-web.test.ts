@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   sourceFindFirst: vi.fn(),
   politicianUpdate: vi.fn(),
   resolve: vi.fn(),
+  preview: vi.fn(),
   findMatching: vi.fn(),
 }));
 
@@ -36,7 +37,10 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/services/affairs/create-draft", () => ({
   createDraftAffairFromDiscovery: h.createDraft,
 }));
-vi.mock("@/lib/affair-matching/resolver", () => ({ resolveAffairPolitician: h.resolve }));
+vi.mock("@/lib/affair-matching/resolver", () => ({
+  resolveAffairPolitician: h.resolve,
+  previewAffairPolitician: h.preview,
+}));
 // Mock partiel : seul l'accès base est simulé. Le regroupement par procédure
 // s'appuie sur la vraie comparaison de vocabulaire du matcher, sinon le test
 // validerait un seuil imaginaire.
@@ -84,6 +88,7 @@ beforeEach(() => {
   h.affairCount.mockResolvedValue(0);
   h.politicianUpdate.mockResolvedValue({});
   h.resolve.mockResolvedValue({ judgment: "SAME", topCandidateId: "p1", decisionId: "d1" });
+  h.preview.mockResolvedValue({ judgment: "SAME", topCandidateId: "p1" });
   h.findMatching.mockResolvedValue([]);
   h.callAnthropic.mockResolvedValue({ content: [] });
 });
@@ -905,5 +910,43 @@ describe("procédures distinctes du même élu", () => {
 
     expect(h.createDraft.mock.calls[0]![0].sources).toHaveLength(2);
     expect(stats.otherProceedings).toBe(0);
+  });
+});
+
+describe("un dry-run n'écrit rien du tout", () => {
+  it("n'appelle pas le resolver qui persiste une ligne d'audit", async () => {
+    h.searchBrave.mockResolvedValue([hit]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      confidence: 90,
+      reasoning: "x",
+      suggested_title: "T",
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour détournement",
+    });
+
+    await discoverAffairsWeb({ limit: 1, dryRun: true });
+
+    // resolveAffairPolitician crée un AffairPoliticianDecision : une passe de
+    // mesure annoncée sans écriture en laissait en production.
+    expect(h.resolve).not.toHaveBeenCalled();
+    expect(h.preview).toHaveBeenCalledTimes(1);
+  });
+
+  it("utilise le resolver persistant hors dry-run", async () => {
+    h.searchBrave.mockResolvedValue([hit]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      confidence: 90,
+      reasoning: "x",
+      suggested_title: "T",
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour détournement",
+    });
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    expect(h.resolve).toHaveBeenCalledTimes(1);
+    expect(h.preview).not.toHaveBeenCalled();
   });
 });

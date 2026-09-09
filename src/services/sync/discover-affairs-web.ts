@@ -26,7 +26,7 @@ import { BRAVE_SEARCH_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { selectSearchTargets, type SearchTarget } from "@/lib/affair-discovery/search-priority";
 import { screenWebResult } from "@/lib/affair-discovery/web-lead-filter";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
-import { resolveAffairPolitician } from "@/lib/affair-matching/resolver";
+import { resolveAffairPolitician, previewAffairPolitician } from "@/lib/affair-matching/resolver";
 import {
   findMatchingAffairs,
   normalizeAffairTitle,
@@ -552,7 +552,11 @@ export async function discoverAffairsWeb(options: {
       // décision qui existe. C'est ce qui empêche un homonyme d'être publié
       // plus tard, du type « Affaire Xavier Dupont de Ligonnès » rattachée à
       // l'élu Xavier Dupont.
-      const resolved = await resolveAffairPolitician({
+      // En dry-run, le variant sans persistance : `resolveAffairPolitician`
+      // écrit une ligne d'audit AffairPoliticianDecision, si bien qu'une passe
+      // de mesure annoncée sans écriture en laissait quand même en production.
+      const resolve = dryRun ? previewAffairPolitician : resolveAffairPolitician;
+      const resolved = await resolve({
         text: `${result.title}\n${result.description}`,
         candidateNames: [target.fullName],
         metadata: {
