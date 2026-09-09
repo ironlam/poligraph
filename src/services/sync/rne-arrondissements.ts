@@ -100,10 +100,12 @@ export async function syncArrondissementMayors(
       }
 
       const politicianId = await findExactPolitician(row);
-      if (politicianId) stats.linkedToExisting++;
-      else stats.createdAsDraft++;
 
-      if (dryRun) continue;
+      if (dryRun) {
+        if (politicianId) stats.linkedToExisting++;
+        else stats.createdAsDraft++;
+        continue;
+      }
 
       const mandateData = {
         type: MandateType.MAIRE_ARRONDISSEMENT,
@@ -125,6 +127,7 @@ export async function syncArrondissementMayors(
 
       if (politicianId) {
         await db.mandate.create({ data: { ...mandateData, politicianId } });
+        stats.linkedToExisting++;
         continue;
       }
 
@@ -146,6 +149,10 @@ export async function syncArrondissementMayors(
           mandates: { create: mandateData },
         },
       });
+      // Compté après l'écriture, jamais avant : une collision de publicId a
+      // fait annoncer 33 créations pour 32 réelles, et un compteur qui décrit
+      // l'intention plutôt que le résultat ment sans planter.
+      stats.createdAsDraft++;
     } catch (error) {
       stats.errors.push(
         `${row.fullName} (${row.sectorLabel}) : ${error instanceof Error ? error.message : String(error)}`
