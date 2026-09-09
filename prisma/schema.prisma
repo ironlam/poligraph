@@ -1,11 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
   extensions = [pg_trgm]
 }
 
@@ -57,8 +57,8 @@ model Politician {
   // Rotation cursors for bounded weekly syncs (see sync-politicians workflow).
   // Each run processes the oldest-checked N politicians, then stamps these so
   // the next run picks up where it left off (NULLS FIRST = never checked yet).
-  photoCheckedAt  DateTime? // Last time sync:photos evaluated this politician
-  careerCheckedAt DateTime? // Last time sync:careers evaluated this politician
+  photoCheckedAt     DateTime? // Last time sync:photos evaluated this politician
+  careerCheckedAt    DateTime? // Last time sync:careers evaluated this politician
   // Same rotation contract for the web discovery pass: oldest-checked first,
   // NULLS FIRST for never searched. Also gives periodic re-search for free, a
   // politician clean this year may be charged the next.
@@ -404,6 +404,11 @@ model MandateLocal {
   regionCode       String?
   rneExternalId    String?
   partyLabel       String?
+  // Secteur électoral pour un mandat PLM ("Paris 5Eme Secteur", "Marseille
+  // Secteur 1"). Le RNE rattache ces élus à la commune-mère, et les secteurs ne
+  // correspondent pas aux arrondissements INSEE : Paris Centre en fusionne
+  // quatre, Marseille élit huit maires pour seize arrondissements.
+  sectorLabel      String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -527,6 +532,10 @@ enum MandateType {
   PRESIDENT_DEPARTEMENT
   VICE_PRESIDENT_DEPARTEMENT
   MAIRE
+  // Maire d'arrondissement ou de secteur (loi PLM). Distinct de MAIRE : il ne
+  // dirige pas une commune, et les confondre gonflerait les compteurs de maires
+  // et la population ciblée par la découverte web.
+  MAIRE_ARRONDISSEMENT
   ADJOINT_MAIRE
   CONSEILLER_REGIONAL
   CONSEILLER_DEPARTEMENTAL

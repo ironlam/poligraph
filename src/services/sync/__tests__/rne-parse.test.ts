@@ -36,7 +36,13 @@ describe("parseFrenchDate", () => {
     expect(parseFrenchDate("05/03/1977")).toEqual(new Date(1977, 2, 5));
   });
 
-  it.each(["", "   ", "1977-03-05", "05/03", "00/03/1977", "05/03/1850", "05/03/2200"])(
+  it("reads YYYY-MM-DD, the shape the RNE publishes now", () => {
+    // L'export des maires d'août 2026 est intégralement en ISO : 34 826 lignes,
+    // zéro en DD/MM/YYYY. Ce test affirmait l'inverse.
+    expect(parseFrenchDate("1977-03-05")).toEqual(new Date(1977, 2, 5));
+  });
+
+  it.each(["", "   ", "05/03", "00/03/1977", "05/03/1850", "05/03/2200", "1850-03-05"])(
     "rejects %j",
     (input) => {
       expect(parseFrenchDate(input)).toBeNull();

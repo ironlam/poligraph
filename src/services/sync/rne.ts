@@ -8,20 +8,21 @@ import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
 import { resolveBatch } from "@/lib/identity";
 import { generateSlug } from "@/lib/utils";
 import { mandateLabels, mandateStartDate, parseMaireRows, type ParsedMaireRow } from "./rne-parse";
+import { resolveRneResourceUrl, RNE_MAIRES_FRAGMENTS } from "./rne-resource";
 
 const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
-
-const RNE_MAIRES_CSV_URL =
-  "https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20251223-104211/elus-maires-mai.csv";
 
 /** Rows are written in chunks so one failure does not roll back the whole file. */
 const UPSERT_BATCH_SIZE = 500;
 
 /** Fetch and parse RNE maires CSV */
 async function fetchRNECSV(): Promise<MaireRNECSV[]> {
-  console.log(`Fetching RNE maires data from: ${RNE_MAIRES_CSV_URL}`);
+  // Résolue à chaque exécution : l'URL pinnée ici renvoyait 404, le nom du
+  // fichier ayant perdu une lettre en plus de changer d'horodatage.
+  const url = await resolveRneResourceUrl(RNE_MAIRES_FRAGMENTS);
+  console.log(`Fetching RNE maires data from: ${url}`);
 
-  const { data: csvText } = await client.getText(RNE_MAIRES_CSV_URL);
+  const { data: csvText } = await client.getText(url);
   const records = parse(csvText, {
     columns: true,
     skip_empty_lines: true,
