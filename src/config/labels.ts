@@ -401,6 +401,7 @@ export const LOCAL_MANDATE_TYPES: MandateType[] = [
 
 export const ROLE_TO_MANDATE_TYPE: Record<string, MandateType> = {
   MAIRE: "MAIRE",
+  MAIRE_ARRONDISSEMENT: "MAIRE_ARRONDISSEMENT",
   ADJOINT_MAIRE: "ADJOINT_MAIRE",
   CONSEILLER_MUNICIPAL: "CONSEILLER_MUNICIPAL",
   PRESIDENT_DEPARTEMENT: "PRESIDENT_DEPARTEMENT",
@@ -425,6 +426,7 @@ export const MANDATE_TYPE_LABELS: Record<MandateType, string> = {
   PRESIDENT_DEPARTEMENT: "Président de département",
   VICE_PRESIDENT_DEPARTEMENT: "Vice-président du conseil départemental",
   MAIRE: "Maire",
+  MAIRE_ARRONDISSEMENT: "Maire d'arrondissement",
   ADJOINT_MAIRE: "Adjoint au maire",
   CONSEILLER_REGIONAL: "Conseiller régional",
   CONSEILLER_DEPARTEMENTAL: "Conseiller départemental",
@@ -447,6 +449,7 @@ export const MANDATE_TYPE_LABELS_PLURAL: Record<MandateType, string> = {
   PRESIDENT_DEPARTEMENT: "Présidents de département",
   VICE_PRESIDENT_DEPARTEMENT: "Vice-présidents du conseil départemental",
   MAIRE: "Maires",
+  MAIRE_ARRONDISSEMENT: "Maires d'arrondissement",
   ADJOINT_MAIRE: "Adjoints au maire",
   CONSEILLER_REGIONAL: "Conseillers régionaux",
   CONSEILLER_DEPARTEMENTAL: "Conseillers départementaux",

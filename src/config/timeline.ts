@@ -15,6 +15,7 @@ export const MANDATE_TYPE_COLORS: Record<MandateType, string> = {
   PRESIDENT_DEPARTEMENT: "#10b981", // Emerald-500
   VICE_PRESIDENT_DEPARTEMENT: "#6ee7b7", // Emerald-300
   MAIRE: "#22c55e", // Green-500
+  MAIRE_ARRONDISSEMENT: "#34d399", // Emerald-400
   ADJOINT_MAIRE: "#4ade80", // Green-400
   CONSEILLER_REGIONAL: "#84cc16", // Lime-500
   CONSEILLER_DEPARTEMENTAL: "#a3e635", // Lime-400

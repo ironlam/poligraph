@@ -38,20 +38,51 @@ export interface ParsedMaires {
   duplicatesDropped: number;
 }
 
-/** Parse a French date string (DD/MM/YYYY) to a Date object. */
+/**
+ * Parse an RNE date, in either shape the export has used.
+ *
+ * The files were published as DD/MM/YYYY and are now published as YYYY-MM-DD:
+ * every one of the 34 826 rows in the August 2026 maires export is ISO. Reading
+ * only the old shape returns null for all of them, which is worse than failing
+ * loudly: birth dates vanish and `mandateStartDate` silently falls back to its
+ * May 2020 default, dating a whole cycle of mandates six years early.
+ *
+ * Built with the local-time constructor on purpose. Birth dates in this base
+ * are stored as midnight Paris ("1965-11-26T23:00:00Z" for 27 November), and
+ * `new Date("1965-11-27")` would be UTC midnight, one hour off and unequal to
+ * every row already written.
+ */
 export function parseFrenchDate(str: string): Date | null {
   if (!str || str.trim() === "") return null;
+  const trimmed = str.trim();
 
-  const parts = str.trim().split("/");
-  if (parts.length !== 3) return null;
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const [day, month, year] = iso
+    ? [Number(iso[3]), Number(iso[2]), Number(iso[1])]
+    : trimmed.split("/").map(Number);
 
-  const [day, month, year] = parts.map(Number);
   if (!day || !month || !year) return null;
 
   const date = new Date(year, month - 1, day);
   if (isNaN(date.getTime()) || year < 1900 || year > 2100) return null;
 
   return date;
+}
+
+/**
+ * Same calendar day, read locally.
+ *
+ * Comparing instants fails across the base: a value written under summer time
+ * sits at 22:00Z, one under winter time at 23:00Z, and a value parsed from an
+ * ISO string at 00:00Z. All three mean the same birthday.
+ */
+export function sameCalendarDay(a: Date | null, b: Date | null): boolean {
+  if (!a || !b) return false;
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 /**
