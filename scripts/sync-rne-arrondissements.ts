@@ -18,6 +18,7 @@ async function main() {
   console.log("");
   console.log(`  maires trouvés dans le RNE : ${stats.mayorsFound}`);
   console.log(`  déjà en base, à jour       : ${stats.alreadyCurrent}`);
+  console.log(`  successions traitées       : ${stats.succeeded}`);
   console.log(`  reliés à une fiche existante: ${stats.linkedToExisting}`);
   console.log(`  créés en brouillon         : ${stats.createdAsDraft}`);
 

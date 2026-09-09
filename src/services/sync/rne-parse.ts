@@ -63,26 +63,40 @@ export function parseFrenchDate(str: string): Date | null {
 
   if (!day || !month || !year) return null;
 
-  const date = new Date(year, month - 1, day);
+  // Midi UTC, pas minuit local : construire la date avec le fuseau du process
+  // la fait glisser d'un jour selon l'endroit où le script tourne. À midi UTC,
+  // le jour calendaire à Paris est celui qu'on a lu, partout.
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
   if (isNaN(date.getTime()) || year < 1900 || year > 2100) return null;
 
   return date;
 }
 
 /**
- * Same calendar day, read locally.
+ * Same calendar day in Paris, whatever timezone the process runs in.
  *
- * Comparing instants fails across the base: a value written under summer time
- * sits at 22:00Z, one under winter time at 23:00Z, and a value parsed from an
- * ISO string at 00:00Z. All three mean the same birthday.
+ * Comparing with the process-local getters passes on a developer machine set to
+ * Europe/Paris and fails on CI and on Vercel, which run UTC: a birth date stored
+ * as Paris midnight sits at "1965-11-26T23:00:00Z", whose UTC day is the 26th
+ * while the freshly parsed value lands on the 27th. The mismatch would recreate
+ * as a duplicate the very person it was written to recognise.
+ *
+ * The legal day is the French one, so it is the one both sides are read in.
  */
+const PARIS_DAY = new Intl.DateTimeFormat("fr-CA", {
+  timeZone: "Europe/Paris",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export function parisCalendarDay(date: Date): string {
+  return PARIS_DAY.format(date);
+}
+
 export function sameCalendarDay(a: Date | null, b: Date | null): boolean {
   if (!a || !b) return false;
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return parisCalendarDay(a) === parisCalendarDay(b);
 }
 
 /**
