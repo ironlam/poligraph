@@ -456,7 +456,7 @@ export interface MatchCandidate {
  * Stripping the politician name is essential because different import pipelines
  * format titles differently (e.g., "Crime — Name" vs "Condamnation de Name pour Crime").
  */
-function normalizeAffairTitle(title: string, politicianName?: string): string {
+export function normalizeAffairTitle(title: string, politicianName?: string): string {
   let normalized = title
     .normalize("NFC")
     .replace(/^\[À VÉRIFIER\]\s*/i, "")

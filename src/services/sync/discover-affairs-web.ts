@@ -27,7 +27,13 @@ import { selectSearchTargets, type SearchTarget } from "@/lib/affair-discovery/s
 import { screenWebResult } from "@/lib/affair-discovery/web-lead-filter";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { resolveAffairPolitician } from "@/lib/affair-matching/resolver";
-import { findMatchingAffairs } from "@/services/affairs/matching";
+import {
+  findMatchingAffairs,
+  normalizeAffairTitle,
+  titleVocabularyOverlap,
+  EVOLUTION_MIN_OVERLAP_RATIO,
+  EVOLUTION_MIN_SHARED_WORDS,
+} from "@/services/affairs/matching";
 
 const MODEL = "claude-sonnet-5";
 
@@ -42,6 +48,8 @@ export interface WebDiscoveryStats {
   statusUnknown: number;
   /** Pistes dont la citation censée porter le stade est absente de la source. */
   statusUnsupported: number;
+  /** Procédures distinctes trouvées pour un même élu, non retenues dans le brouillon. */
+  otherProceedings: number;
   /** Pistes visant un élu déjà documenté, que le matcher n'a pas su relier. */
   alreadyDocumented: number;
   affairsCreated: number;
@@ -317,6 +325,46 @@ function orderedWordOverlap(quote: string[], source: string[]): number {
   return previous[source.length]!;
 }
 
+/**
+ * The words a source must actually contain to attest each stage.
+ *
+ * The 80 % word tolerance exists for incidental drift (a plural, a comma), and
+ * it must never stretch to the word carrying the legal claim: "condamné
+ * définitivement" against "relaxé définitivement" shares five words out of six,
+ * so a RELAXE answer would clear the ratio on a source saying the opposite.
+ *
+ * Checked against the source, not the quote: the model writes the quote, and a
+ * guard that reads only what the model wrote guards nothing.
+ */
+const STATUS_KEYWORDS: Record<AffairStatus, readonly string[]> = {
+  ENQUETE_PRELIMINAIRE: ["enquete", "garde a vue", "signalement", "plainte", "soupcon", "vise par"],
+  INSTRUCTION: ["instruction", "information judiciaire"],
+  INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: [
+    "fin d information",
+    "instruction close",
+    "cloture",
+    "requisition",
+  ],
+  MISE_EN_EXAMEN: ["mis en examen", "mise en examen"],
+  RENVOI_TRIBUNAL: ["renvoi", "renvoye", "correctionnelle", "comparaitre"],
+  PROCES_EN_COURS: ["proces", "juge", "audience", "comparait", "requis"],
+  CONDAMNATION_PREMIERE_INSTANCE: ["condamn"],
+  APPEL_EN_COURS: ["appel"],
+  POURVOI_EN_CASSATION: ["pourvoi", "cassation"],
+  CONDAMNATION_DEFINITIVE: ["condamn", "definitif", "definitive"],
+  RELAXE: ["relax"],
+  ACQUITTEMENT: ["acquitt"],
+  NON_LIEU: ["non lieu"],
+  PRESCRIPTION: ["prescri"],
+  CLASSEMENT_SANS_SUITE: ["classement", "classe sans suite", "classee sans suite"],
+};
+
+/** Does the source itself carry a word that can establish this stage? */
+function sourceCarriesStatusTerm(status: AffairStatus, judgedText: string): boolean {
+  const haystack = foldForEvidence(judgedText);
+  return STATUS_KEYWORDS[status].some((keyword) => haystack.includes(keyword));
+}
+
 function evidenceSupportsStatus(evidence: string | null, judgedText: string): boolean {
   if (!evidence) return false;
   const quote = evidenceWords(evidence);
@@ -385,6 +433,7 @@ export async function discoverAffairsWeb(options: {
     notSubject: 0,
     statusUnknown: 0,
     statusUnsupported: 0,
+    otherProceedings: 0,
     alreadyDocumented: 0,
     affairsCreated: 0,
     identityRejected: 0,
@@ -467,7 +516,10 @@ export async function discoverAffairsWeb(options: {
         result.description,
         800
       )}`;
-      if (!evidenceSupportsStatus(judgment.statusEvidence, judgedText)) {
+      if (
+        !evidenceSupportsStatus(judgment.statusEvidence, judgedText) ||
+        !sourceCarriesStatusTerm(judgment.judicialStatus, judgedText)
+      ) {
         stats.statusUnsupported++;
         if (dryRun) {
           console.log(
@@ -579,6 +631,45 @@ interface LeadCandidate {
 const MAX_SOURCES_PER_DRAFT = 8;
 
 /**
+ * Do two leads describe the same proceeding?
+ *
+ * Reuses the matcher's own vocabulary comparison and thresholds rather than a
+ * second opinion: a pair this module groups and the deduplication path splits
+ * would be a contradiction inside one pipeline.
+ */
+function sameProceeding(a: string, b: string): boolean {
+  const { shared, ratio } = titleVocabularyOverlap(a, b);
+  return shared >= EVOLUTION_MIN_SHARED_WORDS && ratio >= EVOLUTION_MIN_OVERLAP_RATIO;
+}
+
+/**
+ * Split one politician's leads into the distinct proceedings they describe.
+ *
+ * A mayor prosecuted for favouritism and separately sued for defamation returns
+ * results for both, and every one of them clears the person and stage checks.
+ * Pouring them into a single draft would attach one proceeding's articles as
+ * sources for the other, which corrupts provenance rather than enriching it.
+ */
+function groupByProceeding(candidates: LeadCandidate[], politicianName: string): LeadCandidate[][] {
+  const normalised = new Map<LeadCandidate, string>();
+  const titleOf = (candidate: LeadCandidate) =>
+    normalised.get(candidate) ??
+    normalised
+      .set(candidate, normalizeAffairTitle(candidate.judgment.suggestedTitle ?? "", politicianName))
+      .get(candidate)!;
+
+  const groups: LeadCandidate[][] = [];
+  for (const candidate of candidates) {
+    const home = groups.find((group) =>
+      group.some((other) => sameProceeding(titleOf(candidate), titleOf(other)))
+    );
+    if (home) home.push(candidate);
+    else groups.push([candidate]);
+  }
+  return groups;
+}
+
+/**
  * Turn everything found for one politician into at most one draft.
  *
  * The per-politician checks live here rather than in the result loop: whether
@@ -598,7 +689,16 @@ async function settleCandidates(
   // because a human reviews the draft: a recent retrospective describing an old
   // stage would outrank the article that reported the outcome.
   candidates.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-  const lead = candidates[0]!;
+
+  // Only the proceeding the most recent article talks about. The others are a
+  // second affair for this politician, and filing one draft that mixes them
+  // would be worse than not filing them at all.
+  const newest = candidates[0]!;
+  const groups = groupByProceeding(candidates, target.fullName);
+  const group = groups.find((proceeding) => proceeding.includes(newest))!;
+  stats.otherProceedings += groups.length - 1;
+
+  const lead = group[0]!;
   const title = lead.judgment.suggestedTitle ?? `Procédure judiciaire visant ${target.fullName}`;
 
   // The stage matters to the matcher, not just to the draft: the evolution
@@ -641,7 +741,7 @@ async function settleCandidates(
         target.fullName,
         lead.judgment.confidence,
         lead.status,
-        `${candidates.length} source(s)`,
+        `${group.length} source(s)`,
         lead.publishedAt.toISOString().slice(0, 10),
         lead.result.url,
         lead.judgment.suggestedTitle ?? "",
@@ -651,7 +751,7 @@ async function settleCandidates(
     return;
   }
 
-  await createDraftFromLead(target, candidates, lead, title);
+  await createDraftFromLead(target, group, lead, title);
 }
 
 /**
