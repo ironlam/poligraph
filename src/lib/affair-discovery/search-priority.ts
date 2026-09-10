@@ -105,3 +105,23 @@ export async function selectSearchTargets(
 
   return rows;
 }
+
+/**
+ * Crédits Brave déjà dépensés ce mois calendaire.
+ *
+ * Un politicien estampillé égale une requête, donc la colonne de rotation tient
+ * lieu de compteur : pas de table ni de compteur séparé à maintenir, et pas de
+ * dérive possible entre les deux.
+ *
+ * Exact tant qu'un même élu n'est pas cherché deux fois dans le mois. Avec une
+ * rotation de plus de 22 000 noms et un plafond mensuel de l'ordre du millier,
+ * la première répétition est à presque deux ans.
+ */
+export async function countSearchesThisMonth(): Promise<number> {
+  const rows = await db.$queryRaw<{ count: bigint }[]>`
+    SELECT COUNT(*) AS count
+    FROM "Politician"
+    WHERE "webSearchCheckedAt" >= date_trunc('month', now())
+  `;
+  return Number(rows[0]?.count ?? 0);
+}
