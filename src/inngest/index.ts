@@ -4,6 +4,7 @@ import { generateAi } from "./functions/generate-ai";
 import { indexEmbeddings } from "./functions/index-embeddings";
 import { maintenance } from "./functions/maintenance";
 import { moderationPreflight } from "./functions/moderation-preflight";
+import { discoverAffairsWebWave } from "./functions/discover-affairs-web";
 import { syncFactchecksGrouped } from "./functions/sync-factchecks";
 import { syncLegislation } from "./functions/sync-legislation";
 import { syncPoliticians } from "./functions/sync-politicians";
@@ -30,6 +31,7 @@ const groupedFunctions = [
   syncPoliticians,
   maintenance,
   moderationPreflight,
+  discoverAffairsWebWave,
   syncDaily,
   generateSocialDrafts,
   publishApprovedPost,

@@ -21,7 +21,18 @@ export const HATVP_RATE_LIMIT_MS = 200; // hatvp.fr — politesse
 export const JUDILIBRE_RATE_LIMIT_MS = 500; // PISTE OAuth API — politesse
 
 // --- Recherche web ---
-export const BRAVE_SEARCH_RATE_LIMIT_MS = 1100; // Free tier: 1 req/s
+/**
+ * Brave Search throttle.
+ *
+ * Was 1100 ms, sized for the free tier at 1 req/s. The account is on the
+ * prepaid Search plan, which allows 50 req/s: a 250-politician wave spent four
+ * and a half minutes asleep for nothing, enough on its own to threaten a
+ * scheduled function's budget.
+ *
+ * 10 req/s rather than the 50 the plan permits, so a manual enrichment from the
+ * admin can run alongside a scheduled wave without either hitting the ceiling.
+ */
+export const BRAVE_SEARCH_RATE_LIMIT_MS = 100;
 
 // --- Elections (scraping ministere) ---
 export const INTERIEUR_RATE_LIMIT_MS = 500; // resultats-elections.interieur.gouv.fr
