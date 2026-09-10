@@ -3,6 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 import { SITE_URL, SITE_HOSTNAME } from "./src/config/site";
 import { OG_IMAGE_NOINDEX_HEADERS } from "./src/lib/seo/og-image-robots";
 import { API_NOINDEX_HEADERS } from "./src/lib/seo/api-robots";
+import { NEXT_STATIC_NOINDEX_HEADERS } from "./src/lib/seo/next-static-robots";
 import { buildSecurityHeaders } from "./src/lib/security-headers";
 
 const LEGACY_STATS_REDIRECTS = [
@@ -89,6 +90,11 @@ const nextConfig: NextConfig = {
       // Same reasoning for /api: machine endpoints, publicly fetchable, never a
       // search result. The human docs at /docs/api stay indexable.
       ...API_NOINDEX_HEADERS,
+      // SEO: keep /_next/static/* build assets crawlable (Googlebot needs them to
+      // render pages) but out of the index — same X-Robots-Tag pattern as the two
+      // rules above. Does not touch Next's own immutable Cache-Control on these
+      // files: different header key, so both are sent together.
+      ...NEXT_STATIC_NOINDEX_HEADERS,
     ];
   },
   async redirects() {

@@ -13,6 +13,7 @@ import { voteDateArchiveRobotsMetadata } from "../parliament-robots";
 import { scrutinRobotsMetadata, type ScrutinIndexSignals } from "../scrutin-robots";
 import { OG_IMAGE_ROBOTS_SOURCE } from "../og-image-robots";
 import { API_NOINDEX_HEADERS, API_ROBOTS_SOURCE } from "../api-robots";
+import { NEXT_STATIC_NOINDEX_HEADERS, NEXT_STATIC_ROBOTS_SOURCE } from "../next-static-robots";
 import {
   AFFAIRES_LISTING_FILTER_KEYS,
   POLITIQUES_LISTING_FILTER_KEYS,
@@ -447,6 +448,47 @@ describe("doctrine — /api endpoints stay noindexed", () => {
   // The human-readable API documentation is a real page and must stay indexable.
   it.each(["/docs/api", "/statistiques"])("leaves real page %s indexable", (path) => {
     expect(re.test(path)).toBe(false);
+  });
+});
+
+describe("doctrine — /_next/static build assets stay noindexed but crawlable", () => {
+  const require = createRequire(import.meta.url);
+  const { pathToRegexp } = require("next/dist/compiled/path-to-regexp") as {
+    pathToRegexp: (path: string, keys?: unknown[], opts?: Record<string, unknown>) => RegExp;
+  };
+  const re = pathToRegexp(NEXT_STATIC_ROBOTS_SOURCE, [], {
+    delimiter: "/",
+    sensitive: false,
+    strict: false,
+  });
+
+  it("tags every rule with X-Robots-Tag: noindex", () => {
+    expect(NEXT_STATIC_NOINDEX_HEADERS.length).toBeGreaterThan(0);
+    for (const rule of NEXT_STATIC_NOINDEX_HEADERS) {
+      expect(rule.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex" });
+    }
+  });
+
+  it("noindexes static build chunks", () => {
+    expect(re.test("/_next/static/chunks/main-abc123.js")).toBe(true);
+  });
+
+  // robots.txt must never Disallow this prefix: Googlebot needs the CSS/JS to render
+  // the page it is about to score, so the noindex header above is deliberately the
+  // only lever here (see next-static-robots.ts).
+  it("stays outside every robots.txt Disallow group", async () => {
+    const robots = (await import("../../../app/robots")).default();
+    const rules = Array.isArray(robots.rules) ? robots.rules : robots.rules ? [robots.rules] : [];
+    for (const rule of rules) {
+      const disallow = Array.isArray(rule.disallow)
+        ? rule.disallow
+        : rule.disallow
+          ? [rule.disallow]
+          : [];
+      for (const pattern of disallow) {
+        expect(pattern.startsWith("/_next/")).toBe(false);
+      }
+    }
   });
 });
 
