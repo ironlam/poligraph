@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * `Party.slug` is nullable, and a party is public as soon as one of its politicians is published,
  * with no condition on the slug. A slugless row therefore reaches generateStaticParams, which
  * hands Next `{ slug: null }` and fails the whole build with "a required parameter (slug) was not
- * provided as a string received object" — typeof null being "object".
+ * provided as a string received object", typeof null being "object".
  *
  * Measured on production data 2026-09-10: one such row, created two days earlier, broke
  * `next build` at page collection while CI stayed green, since CI builds without the database.
