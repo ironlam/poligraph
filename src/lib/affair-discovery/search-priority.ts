@@ -107,15 +107,22 @@ export async function selectSearchTargets(
 }
 
 /**
- * Crédits Brave déjà dépensés ce mois calendaire.
+ * Requêtes Brave dépensées ce mois par les passes RÉELLES.
  *
  * Un politicien estampillé égale une requête, donc la colonne de rotation tient
- * lieu de compteur : pas de table ni de compteur séparé à maintenir, et pas de
- * dérive possible entre les deux.
+ * lieu de compteur, sans table ni compteur séparé à maintenir.
  *
- * Exact tant qu'un même élu n'est pas cherché deux fois dans le mois. Avec une
- * rotation de plus de 22 000 noms et un plafond mensuel de l'ordre du millier,
- * la première répétition est à presque deux ans.
+ * Ce que ce compte NE couvre PAS : un dry-run interroge Brave et consomme un
+ * crédit par politicien, mais n'estampille personne, par construction. Ses
+ * requêtes sont donc invisibles ici. Le plafond borne la dépense PLANIFIÉE, pas
+ * la dépense totale du compte : une campagne de mesure manuelle passe à côté.
+ *
+ * Le script le signale au moment où l'écart se crée. Un comptage réel des
+ * requêtes demanderait une table d'usage, que le schéma n'a pas.
+ *
+ * Exact tant qu'un même élu n'est pas cherché deux fois dans le mois. Avec plus
+ * de 22 000 noms en rotation et un plafond de l'ordre du millier, la première
+ * répétition est à presque deux ans.
  */
 export async function countSearchesThisMonth(): Promise<number> {
   const rows = await db.$queryRaw<{ count: bigint }[]>`
