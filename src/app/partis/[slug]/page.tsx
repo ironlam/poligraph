@@ -32,7 +32,10 @@ export async function generateStaticParams() {
     orderBy: { name: "asc" },
     take: 50,
   });
-  return parties.map((p) => ({ slug: p.slug }));
+  // Party.slug is nullable and a slugless party has no URL, so it cannot be a static param:
+  // Next rejects `{ slug: null }` and fails the whole build. Same filter as the sitemap and
+  // /affaires/parti/[slug].
+  return parties.filter((p) => p.slug).map((p) => ({ slug: p.slug as string }));
 }
 
 interface PageProps {
