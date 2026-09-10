@@ -21,13 +21,17 @@ function stripComments(source: string): string {
 }
 
 const inngestPipeline = stripComments(readFileSync("src/inngest/functions/sync-daily.ts", "utf8"));
-const workflowPipeline = stripComments(readFileSync("scripts/sync-daily.ts", "utf8"));
+const dailyScript = stripComments(readFileSync("scripts/sync-daily.ts", "utf8"));
+const workflow = readFileSync(".github/workflows/sync-daily.yml", "utf8");
+const packageJson = readFileSync("package.json", "utf8");
 
 describe("computeStats n'a qu'un seul propriétaire", () => {
-  it("lit bien les deux pipelines", () => {
+  it("lit bien les quatre sources", () => {
     // Guards the reads: an empty source would make every assertion below vacuously true.
     expect(inngestPipeline).toContain("compute-municipales-snapshots");
-    expect(workflowPipeline).toContain("scripts/compute-stats.ts");
+    expect(dailyScript).toContain("scripts/compute-stats.ts");
+    expect(workflow).toContain("Daily Sync");
+    expect(packageJson).toContain('"sync:daily"');
   });
 
   it("le pipeline Inngest n'appelle plus computeStats", () => {
@@ -35,15 +39,20 @@ describe("computeStats n'a qu'un seul propriétaire", () => {
     expect(inngestPipeline).not.toContain("compute-stats");
   });
 
-  it("le workflow GitHub Actions le lance toujours", () => {
-    // The complement matters as much as the removal: dropping it here too would silently stop
-    // producing PoliticianParticipation and StatsSnapshot rows.
-    expect(workflowPipeline).toContain("scripts/compute-stats.ts");
+  it("la chaîne GitHub Actions le lance toujours, de bout en bout", () => {
+    // The complement matters as much as the removal: losing it here too would silently stop
+    // producing PoliticianParticipation and StatsSnapshot rows. Asserting on the script alone left
+    // the first link unchecked, so the workflow could drop the call and this guard stay green.
+    expect(workflow).toMatch(/run:\s*npm run sync:daily/);
+    expect(workflow).toMatch(/schedule:/);
+    expect(packageJson).toMatch(/"sync:daily":\s*"tsx scripts\/sync-daily\.ts"/);
+    expect(dailyScript).toContain("scripts/compute-stats.ts");
+    expect(packageJson).toMatch(/"sync:compute-stats":\s*"tsx scripts\/compute-stats\.ts"/);
   });
 
   it("laisse les snapshots municipales à Inngest, qui en est le seul propriétaire", () => {
     // They exist nowhere else, so they must stay, and their queries average ten seconds or less.
     expect(inngestPipeline).toContain("computeMunicipalesSnapshots");
-    expect(workflowPipeline).not.toContain("municipales-snapshots");
+    expect(dailyScript).not.toContain("municipales-snapshots");
   });
 });
