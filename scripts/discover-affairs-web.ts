@@ -24,6 +24,14 @@ async function main() {
   console.log(
     `Découverte web : ${limit} politiciens${dryRun ? " [DRY-RUN, aucune écriture]" : ""}`
   );
+  if (dryRun) {
+    // Un dry-run n'estampille personne, donc ses requêtes échappent au plafond
+    // mensuel de la vague planifiée, qui se lit sur la colonne de rotation.
+    console.log(
+      `  Note : ces ${limit} requêtes Brave sont bien facturées mais ne seront pas` +
+        ` comptées dans le plafond mensuel du cron.`
+    );
+  }
   console.log("");
 
   const started = Date.now();
