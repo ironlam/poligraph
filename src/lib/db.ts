@@ -33,7 +33,16 @@ function buildExtendedClient() {
     connectionTimeoutMillis: 15_000,
     ssl: useSsl ? { rejectUnauthorized: false } : false,
     allowExitOnIdle: true, // Release idle connections faster in serverless
-    statement_timeout: 30_000, // Kill queries after 30s to prevent pool starvation
+    // No statement_timeout here on purpose. It is silently ignored on this database, and declaring
+    // it claimed a cap that never existed: a runaway query holds one of the two pool slots for the
+    // server default (2 min), not for 30 s. Measured 2026-09-10 from a session opened by this pool,
+    // where `SHOW statement_timeout` returns the server default with the option set, with the
+    // PostgreSQL startup parameter `options=-c statement_timeout=...`, and with both.
+    //
+    // A session `SET` is the only mechanism that works, and it cannot be used from here: the pooler
+    // hands the same physical backend to unrelated clients without resetting session state, so a cap
+    // meant for a page request leaks onto the batch jobs that legitimately run for minutes.
+    // docs/engineering/db-statement-timeout.md records the measurements and the dedicated-role path.
   });
   globalForPrisma.pool = pool;
 
