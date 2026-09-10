@@ -58,6 +58,7 @@ const MANDATE_CATEGORIES: Record<string, { label: string; icon: string; types: M
       "PRESIDENT_REGION",
       "PRESIDENT_DEPARTEMENT",
       "MAIRE",
+      "MAIRE_ARRONDISSEMENT",
       "ADJOINT_MAIRE",
       "CONSEILLER_REGIONAL",
       "CONSEILLER_DEPARTEMENTAL",
