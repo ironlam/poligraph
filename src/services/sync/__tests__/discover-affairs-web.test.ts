@@ -87,8 +87,19 @@ beforeEach(() => {
   h.sourceFindFirst.mockResolvedValue(null);
   h.affairCount.mockResolvedValue(0);
   h.politicianUpdate.mockResolvedValue({});
-  h.resolve.mockResolvedValue({ judgment: "SAME", topCandidateId: "p1", decisionId: "d1" });
-  h.preview.mockResolvedValue({ judgment: "SAME", topCandidateId: "p1" });
+  h.resolve.mockResolvedValue({
+    judgment: "SAME",
+    topCandidateId: "p1",
+    topScore: 6.2,
+    gap: 7.4,
+    decisionId: "d1",
+  });
+  h.preview.mockResolvedValue({
+    judgment: "SAME",
+    topCandidateId: "p1",
+    topScore: 6.2,
+    gap: 7.4,
+  });
   h.findMatching.mockResolvedValue([]);
   h.callAnthropic.mockResolvedValue({ content: [] });
 });
