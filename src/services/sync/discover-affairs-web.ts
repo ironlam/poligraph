@@ -27,6 +27,7 @@ import { selectSearchTargets, type SearchTarget } from "@/lib/affair-discovery/s
 import { screenWebResult } from "@/lib/affair-discovery/web-lead-filter";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { resolveAffairPolitician, previewAffairPolitician } from "@/lib/affair-matching/resolver";
+import { isIdentityConfident } from "@/lib/affair-matching/identity-confidence";
 import {
   findMatchingAffairs,
   normalizeAffairTitle,
@@ -566,7 +567,13 @@ export async function discoverAffairsWeb(options: {
           court: null,
         },
       });
-      if (resolved.judgment !== "SAME" || resolved.topCandidateId !== target.id) {
+      // On interroge le resolver sur l'IDENTITÉ seule. Son verdict combine
+      // identité et implication, et refuse une identité parfaite faute de
+      // corroboration : mesuré, un titre nommant l'élu en toutes lettres score
+      // 5,7 et ressort NO_MATCH parce qu'un titre ne porte ni juridiction ni
+      // date des faits. L'implication, ici, c'est le juge qui l'établit, avec
+      // une citation vérifiée dans la source.
+      if (!isIdentityConfident(resolved, target.id)) {
         stats.identityRejected++;
         // The resolver contradicting the judge is either a homonym caught or a
         // good lead lost, and the counter alone cannot tell them apart.
