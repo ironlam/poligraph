@@ -368,13 +368,12 @@ const DAILY_STEPS: DailyStep[] = [
       return assignPublicationStatus();
     },
   },
-  {
-    name: "compute-stats",
-    run: async () => {
-      const { computeStats } = await import("@/services/sync/compute-stats");
-      return computeStats();
-    },
-  },
+  // computeStats() is deliberately absent. The GitHub Actions daily sync runs it on the same
+  // schedule through scripts/compute-stats.ts, with two retries and a backoff for the transient
+  // Supabase drops of #442, so running it here only duplicated the work. Its first step is the
+  // heaviest query in the codebase, averaging 54 s, and it held one of the two pool slots of a
+  // lambda that also serves page requests. src/__tests__/architecture/compute-stats-single-owner.test.ts
+  // fails if it comes back, or if the workflow stops running it.
   {
     name: "compute-municipales-snapshots",
     run: async () => {
