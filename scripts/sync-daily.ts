@@ -150,7 +150,7 @@ const steps: SyncStep[] = [
     // 1.2M-row Candidacy table on the request path (POLIGRAPH-1H). Non-blocking: the page falls
     // back to computing it live, so a failure here costs speed, never accuracy.
     name: "Snapshots présidentielle",
-    command: `npx tsx scripts/compute-presidential-snapshots.ts`,
+    command: `npx tsx scripts/compute-presidential-snapshots.ts${dryRunFlag}`,
     allowFailure: true,
   },
   {

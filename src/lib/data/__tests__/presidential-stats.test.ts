@@ -91,6 +91,7 @@ describe("compteur de probité pré-calculé", () => {
   it("lit le snapshot sans interroger Affair", async () => {
     mocks.snapshotFindUnique.mockResolvedValue({
       data: { electionSlug: "presidentielle-2027", count: 7 },
+      computedAt: new Date(),
     });
 
     const stats = await getPresidentialOverviewStats("presidentielle-2027");
@@ -115,6 +116,42 @@ describe("compteur de probité pré-calculé", () => {
 
     const stats = await getPresidentialOverviewStats("presidentielle-2027");
 
+    expect(stats?.probityCandidateCount).toBe(2);
+    expect(mocks.groupBy).toHaveBeenCalled();
+  });
+});
+
+describe("fraîcheur du snapshot", () => {
+  it("sert un snapshot récent", async () => {
+    mocks.snapshotFindUnique.mockResolvedValue({
+      data: { electionSlug: "presidentielle-2027", count: 7 },
+      computedAt: new Date(),
+    });
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
+    expect(stats?.probityCandidateCount).toBe(7);
+    expect(mocks.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("refuse un snapshot abandonné et recalcule", async () => {
+    // The daily step is allowFailure, so a broken job leaves the previous row in place. Serving a
+    // months-old conviction count as current would be a false claim, not a slow page.
+    mocks.snapshotFindUnique.mockResolvedValue({
+      data: { electionSlug: "presidentielle-2027", count: 7 },
+      computedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    });
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
+    expect(stats?.probityCandidateCount).toBe(2);
+    expect(mocks.groupBy).toHaveBeenCalled();
+  });
+});
+
+describe("snapshot sans horodatage", () => {
+  it("ne fait pas confiance à une ligne sans computedAt", async () => {
+    // Prisma always writes computedAt, so its absence means the row did not come from the job.
+    mocks.snapshotFindUnique.mockResolvedValue({
+      data: { electionSlug: "presidentielle-2027", count: 7 },
+    });
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
     expect(stats?.probityCandidateCount).toBe(2);
     expect(mocks.groupBy).toHaveBeenCalled();
   });

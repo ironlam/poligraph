@@ -60,11 +60,17 @@ export async function getPresidentialOverviewStats(
  * the snapshot buys speed, it is not the authority on the value. The trade-off is freshness, the
  * count trails a newly published affair until the next daily run.
  */
+const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 async function readProbityCandidateCount(electionSlug: string): Promise<number> {
   const snapshot = await db.statsSnapshot.findUnique({
     where: { key: probityCandidateCountKey(electionSlug) },
   });
   const parsed = ProbityCandidateCountSchema.safeParse(snapshot?.data);
-  if (parsed.success) return parsed.data.count;
+  const age = snapshot ? Date.now() - new Date(snapshot.computedAt).getTime() : Infinity;
+  // The daily step is allowFailure, so a broken job leaves the previous row in place. A few failed
+  // runs are worth absorbing rather than falling back to the slow query; a month of them is not,
+  // because serving a stale conviction count as current is a false claim, not a slow page.
+  if (parsed.success && age <= SNAPSHOT_MAX_AGE_MS) return parsed.data.count;
   return computeProbityCandidateCountLive(electionSlug);
 }
