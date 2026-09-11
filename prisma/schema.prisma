@@ -565,9 +565,12 @@ model Affair {
   originalDescription   String?   @db.Text // Pre-enrichment description (for rollback)
   descriptionEnrichedAt DateTime? // When AI description enrichment was applied
 
-  status      AffairStatus
-  category    AffairCategory
-  involvement Involvement    @default(MENTIONED_ONLY)
+  status            AffairStatus
+  category          AffairCategory
+  // Défaut PENAL : la quasi-totalité des affaires suivies, et le compteur
+  // public « condamnés » ne retient que cet ordre.
+  jurisdictionOrder JurisdictionOrder @default(PENAL)
+  involvement       Involvement       @default(MENTIONED_ONLY)
 
   // Who / what the procedure actually targets when it is not the tracked person
   // (I2/I3). subjectLabel null = the tracked person is the subject.
@@ -762,6 +765,24 @@ enum SubjectKind {
   PERSON
   ORGANISATION
   UNKNOWN
+}
+
+/**
+ * Ordre de juridiction dont relève la procédure.
+ * Les stades de `AffairStatus` (condamnation, appel, relaxe) existent dans les
+ * trois ordres, mais ils n'y ont pas le même sens public : une amende infligée
+ * par la chambre du contentieux de la Cour des comptes à un gestionnaire public
+ * n'est pas une condamnation pénale, et les additionner dans un compteur
+ * « élus condamnés » ferait lire l'une pour l'autre.
+ * Axe séparé plutôt que nouvelles valeurs de statut : une procédure financière
+ * connaît elle aussi la première instance, l'appel (Cour d'appel financière) et
+ * la cassation (Conseil d'État), donc dupliquer l'échelle des stades par ordre
+ * la ferait croître en produit plutôt qu'en somme.
+ */
+enum JurisdictionOrder {
+  PENAL
+  FINANCIER
+  ADMINISTRATIF
 }
 
 enum AffairCategory {

@@ -98,3 +98,25 @@ describe("public-filters — contrat des agrégats (RGPD art. 10)", () => {
     ]);
   });
 });
+
+describe("ordre de juridiction dans les agrégats à charge", () => {
+  // Une amende de la chambre du contentieux de la Cour des comptes est une
+  // vraie sanction, mais « condamné » sans qualificatif se lit comme pénal.
+  // L'affaire doit figurer sur la fiche sans gonfler les totaux publics.
+  it("limite les condamnations comptées à l'ordre pénal", () => {
+    expect(getConvictionOnlyWhere().jurisdictionOrder).toBe("PENAL");
+  });
+
+  it("limite les affaires à charge à l'ordre pénal", () => {
+    expect(getAdverseAffairWhere().jurisdictionOrder).toBe("PENAL");
+  });
+
+  it("limite les mis en cause à l'ordre pénal", () => {
+    expect(getMisEnCauseWhere().jurisdictionOrder).toBe("PENAL");
+  });
+
+  it("n'exclut PAS les affaires financières des affaires publiées", () => {
+    // Elles doivent rester visibles sur la fiche de l'élu.
+    expect(getPublishedAffairWhere()).not.toHaveProperty("jurisdictionOrder");
+  });
+});
