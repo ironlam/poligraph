@@ -33,13 +33,36 @@ import { Prisma, type PrismaClient } from "@/generated/prisma";
  */
 export const ID_COLLISION_RETRIES = 5;
 
+/**
+ * Les colonnes en conflit d'une P2002, quelle que soit la forme du message.
+ *
+ * Deux formes coexistent, et le projet reçoit la seconde. Sans adaptateur,
+ * Prisma remplit `meta.target`. Avec `PrismaPg`, que `src/lib/db.ts` configure,
+ * `meta.target` est **undefined** et les colonnes vivent sous
+ * `meta.driverAdapterError.cause.constraint.fields`, entourées de guillemets :
+ * `["\"publicId\""]`. Relevé sur une vraie erreur de production.
+ *
+ * Ne lire que `meta.target` rendait la garde inerte là où elle devait servir.
+ */
+function conflictingFields(error: Prisma.PrismaClientKnownRequestError): string[] {
+  const meta = error.meta as
+    | {
+        target?: unknown;
+        driverAdapterError?: { cause?: { constraint?: { fields?: unknown } } };
+      }
+    | undefined;
+
+  const adapterFields = meta?.driverAdapterError?.cause?.constraint?.fields;
+  const raw = Array.isArray(adapterFields) ? adapterFields : (meta?.target ?? []);
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.map((field) => String(field).replace(/"/g, ""));
+}
+
 /** Une violation d'unicité qui porte précisément sur `publicId`. */
 export function isPublicIdCollision(error: unknown): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   if (error.code !== "P2002") return false;
-  const target = error.meta?.target;
-  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? "")];
-  return fields.some((field) => field.includes("publicId"));
+  return conflictingFields(error).includes("publicId");
 }
 
 /**

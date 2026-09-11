@@ -745,10 +745,9 @@ async function settleCandidates(
     return;
   }
 
-  stats.politiciansWithFinding++;
-  stats.affairsCreated++;
-
   if (dryRun) {
+    stats.politiciansWithFinding++;
+    stats.affairsCreated++;
     console.log(
       [
         "  [DRY-RUN]",
@@ -766,6 +765,10 @@ async function settleCandidates(
   }
 
   await createDraftFromLead(target, group, lead, title);
+  // Comptés après l'écriture : la garde par élu transforme un échec en retour
+  // normal, donc compter avant ferait annoncer une création qui n'a pas eu lieu.
+  stats.politiciansWithFinding++;
+  stats.affairsCreated++;
 }
 
 /**
