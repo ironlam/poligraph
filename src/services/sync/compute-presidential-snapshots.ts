@@ -18,8 +18,10 @@ import { probityCandidateCountKey, type ProbityCandidateCount } from "@/types/st
  * Idempotent. Safe to run concurrently, the upsert key prevents duplicates.
  */
 export async function computePresidentialSnapshots(
-  electionSlug = "presidentielle-2027"
+  electionSlug = "presidentielle-2027",
+  options: { dryRun?: boolean } = {}
 ): Promise<{ ok: true; computed: string[]; totalDurationMs: number }> {
+  const { dryRun = false } = options;
   const t0 = Date.now();
   const computed: string[] = [];
 
@@ -29,17 +31,22 @@ export async function computePresidentialSnapshots(
   const durationMs = Date.now() - t1;
 
   const data: ProbityCandidateCount = { electionSlug, count };
-  await db.statsSnapshot.upsert({
-    where: { key },
-    create: { key, data: data as unknown as Prisma.InputJsonValue, durationMs },
-    update: {
-      data: data as unknown as Prisma.InputJsonValue,
-      durationMs,
-      computedAt: new Date(),
-    },
-  });
+  if (dryRun) {
+    // `.env` points at production on this project, so a preview run must not write.
+    console.log(`  [DRY RUN] would upsert ${key} -> ${count} (${durationMs}ms)`);
+  } else {
+    await db.statsSnapshot.upsert({
+      where: { key },
+      create: { key, data: data as unknown as Prisma.InputJsonValue, durationMs },
+      update: {
+        data: data as unknown as Prisma.InputJsonValue,
+        durationMs,
+        computedAt: new Date(),
+      },
+    });
+    console.log(`  [snapshot] ${key} -> ${count} in ${durationMs}ms`);
+  }
   computed.push(`${key} = ${count} (${durationMs}ms)`);
-  console.log(`  [snapshot] ${key} -> ${count} in ${durationMs}ms`);
 
   return { ok: true, computed, totalDurationMs: Date.now() - t0 };
 }
