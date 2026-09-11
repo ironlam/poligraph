@@ -1,10 +1,9 @@
 import "server-only";
 
 import { cacheLife, cacheTag } from "next/cache";
-import { getCategoriesForSuper } from "@/config/labels";
-import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { db } from "@/lib/db";
-import { PUBLIC_HUB_CANDIDACY_WHERE } from "@/lib/presidentielle/publication";
+import { computeProbityCandidateCountLive } from "@/services/sync/compute-presidential-snapshots";
+import { ProbityCandidateCountSchema, probityCandidateCountKey } from "@/types/stats-snapshots";
 import { getHubCandidacyField, getHubMeasureContext } from "./hub";
 
 export type PresidentialOverviewStats = {
@@ -35,26 +34,10 @@ export async function getPresidentialOverviewStats(
   // and it was paying that toll every minute. Freshness comes from the tags above, not the timer.
   cacheLife("synced");
 
-  const [field, context, probityCandidates] = await Promise.all([
+  const [field, context, probityCandidateCount] = await Promise.all([
     getHubCandidacyField(electionSlug),
     getHubMeasureContext(electionSlug),
-    db.affair.groupBy({
-      by: ["politicianId"],
-      where: {
-        ...getConvictionOnlyWhere(),
-        category: { in: getCategoriesForSuper("PROBITE") },
-        politician: {
-          is: {
-            candidacies: {
-              some: {
-                election: { slug: electionSlug },
-                ...PUBLIC_HUB_CANDIDACY_WHERE,
-              },
-            },
-          },
-        },
-      },
-    }),
+    readProbityCandidateCount(electionSlug),
   ]);
 
   if (context === null) return null;
@@ -64,6 +47,24 @@ export async function getPresidentialOverviewStats(
     documentedCandidacyCount: field.filter((candidacy) => candidacy.measureCount > 0).length,
     verifiedMeasureCount: context.verifiedMeasureCount,
     comparableThemeCount: context.publishableSubjectPageCount,
-    probityCandidateCount: probityCandidates.length,
+    probityCandidateCount,
   };
+}
+
+/**
+ * The probity count comes from the daily snapshot. Its live form is an EXISTS over the 1.2M-row
+ * Candidacy table, sub-millisecond warm but several seconds on a cold buffer cache, which is what
+ * Sentry flagged as POLIGRAPH-1H on this page.
+ *
+ * A missing or malformed row falls back to computing it, so the number is never silently wrong:
+ * the snapshot buys speed, it is not the authority on the value. The trade-off is freshness, the
+ * count trails a newly published affair until the next daily run.
+ */
+async function readProbityCandidateCount(electionSlug: string): Promise<number> {
+  const snapshot = await db.statsSnapshot.findUnique({
+    where: { key: probityCandidateCountKey(electionSlug) },
+  });
+  const parsed = ProbityCandidateCountSchema.safeParse(snapshot?.data);
+  if (parsed.success) return parsed.data.count;
+  return computeProbityCandidateCountLive(electionSlug);
 }

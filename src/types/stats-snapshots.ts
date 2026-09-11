@@ -95,6 +95,25 @@ export const OutgoingSenateCompositionSchema = z.object({
 });
 export type OutgoingSenateComposition = z.infer<typeof OutgoingSenateCompositionSchema>;
 
+// ─── <slug>-probity-candidates ────────────────────────────
+/**
+ * Number of tracked candidates in one presidential election carrying a probity conviction.
+ *
+ * Pre-computed because the live form is an EXISTS over the 1.2M-row Candidacy table, 99 % of which
+ * is municipal data, to answer a question about a few dozen presidential candidacies. Sub-millisecond
+ * warm, several seconds on a cold buffer cache, which is what Sentry flagged as POLIGRAPH-1H.
+ */
+export const ProbityCandidateCountSchema = z.object({
+  electionSlug: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type ProbityCandidateCount = z.infer<typeof ProbityCandidateCountSchema>;
+
+/** Snapshot key for one election's probity count. */
+export function probityCandidateCountKey(electionSlug: string): string {
+  return `${electionSlug}-probity-candidates`;
+}
+
 // ─── Key registry ─────────────────────────────────────────
 export const MUNICIPALES_SNAPSHOT_KEYS = {
   parityOutliers: "municipales-2026-parite-outliers",

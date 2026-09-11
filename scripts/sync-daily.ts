@@ -146,6 +146,14 @@ const steps: SyncStep[] = [
     retries: 2,
   },
   {
+    // Pre-computes the presidential probity count so /statistiques stops running an EXISTS over the
+    // 1.2M-row Candidacy table on the request path (POLIGRAPH-1H). Non-blocking: the page falls
+    // back to computing it live, so a failure here costs speed, never accuracy.
+    name: "Snapshots présidentielle",
+    command: `npx tsx scripts/compute-presidential-snapshots.ts`,
+    allowFailure: true,
+  },
+  {
     name: "IndexNow",
     command: `npx tsx scripts/submit-indexnow.ts`,
   },

@@ -89,6 +89,7 @@
     "sync:dossier-summaries:force": "tsx -e \"import {generateDossierSummaries} from './src/services/sync/generate-dossier-summaries'; generateDossierSummaries({limit:20,force:true}).then(console.log)\"",
     "sync:compute-stats": "tsx scripts/compute-stats.ts",
     "sync:municipales-snapshots": "tsx scripts/compute-municipales-snapshots.ts",
+    "sync:presidential-snapshots": "tsx scripts/compute-presidential-snapshots.ts",
     "sync:senat:stats": "tsx scripts/sync-senat.ts --stats",
     "sync:gouvernement:stats": "tsx scripts/sync-gouvernement.ts --stats",
     "sync:wikidata-ids": "tsx scripts/sync-wikidata-ids.ts",
