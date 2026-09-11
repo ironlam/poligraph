@@ -17,8 +17,15 @@ import {
  *   PRESCRIPTION), ni MENTIONED_ONLY/VICTIM/PLAINTIFF ;
  * - « condamnés » n'utilise que les statuts de condamnation ;
  * - « mis en cause » n'utilise que le Tier 2 (procédures validées par un
- *   juge), jamais l'enquête préliminaire.
+ *   juge), jamais l'enquête préliminaire ;
+ * - tout agrégat à charge se limite à l'ordre PÉNAL. Une amende infligée par la
+ *   chambre du contentieux de la Cour des comptes est une vraie sanction, mais
+ *   « condamné » sans qualificatif se lit comme pénal : l'affaire figure sur la
+ *   fiche, elle n'entre pas dans les totaux.
  */
+
+/** Seul ordre de juridiction compté dans les agrégats à charge. */
+export const ADVERSE_JURISDICTION_ORDER = "PENAL" as const;
 
 /** Involvements comptés dans les agrégats à charge. */
 export const ADVERSE_INVOLVEMENTS = ["DIRECT", "INDIRECT"] as const;
@@ -43,6 +50,7 @@ export function getAdverseAffairWhere(): Prisma.AffairWhereInput {
   return {
     publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
     involvement: { in: [...ADVERSE_INVOLVEMENTS] },
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     status: { in: AGGREGATE_STATUSES },
   };
 }
@@ -52,6 +60,7 @@ export function getConvictionOnlyWhere(): Prisma.AffairWhereInput {
   return {
     publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
     involvement: { in: [...ADVERSE_INVOLVEMENTS] },
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     status: { in: CONDAMNATION_STATUSES },
   };
 }
@@ -61,6 +70,7 @@ export function getMisEnCauseWhere(): Prisma.AffairWhereInput {
   return {
     publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
     involvement: { in: [...ADVERSE_INVOLVEMENTS] },
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     status: { in: PROCEDURE_VALIDEE_STATUSES },
   };
 }
