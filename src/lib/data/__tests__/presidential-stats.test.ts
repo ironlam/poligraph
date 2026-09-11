@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getField: vi.fn(),
   getContext: vi.fn(),
   groupBy: vi.fn(),
+  snapshotFindUnique: vi.fn(),
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
 }));
@@ -19,26 +20,30 @@ vi.mock("@/lib/data/hub", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { affair: { groupBy: mocks.groupBy } },
+  db: {
+    affair: { groupBy: mocks.groupBy },
+    statsSnapshot: { findUnique: (...args: unknown[]) => mocks.snapshotFindUnique(...args) },
+  },
 }));
 
 import { getPresidentialOverviewStats } from "../presidential-stats";
 
-describe("getPresidentialOverviewStats", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getField.mockResolvedValue([
-      { id: "c1", measureCount: 12 },
-      { id: "c2", measureCount: 0 },
-      { id: "c3", measureCount: 2 },
-    ]);
-    mocks.getContext.mockResolvedValue({
-      verifiedMeasureCount: 14,
-      publishableSubjectPageCount: 5,
-    });
-    mocks.groupBy.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p3" }]);
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.getField.mockResolvedValue([
+    { id: "c1", measureCount: 12 },
+    { id: "c2", measureCount: 0 },
+    { id: "c3", measureCount: 2 },
+  ]);
+  mocks.getContext.mockResolvedValue({
+    verifiedMeasureCount: 14,
+    publishableSubjectPageCount: 5,
   });
+  mocks.groupBy.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p3" }]);
+  mocks.snapshotFindUnique.mockResolvedValue(null);
+});
 
+describe("getPresidentialOverviewStats", () => {
   it("compte les personnalités, les programmes documentés et les thèmes comparables", async () => {
     await expect(getPresidentialOverviewStats("presidentielle-2027")).resolves.toEqual({
       trackedCandidacyCount: 3,
@@ -73,5 +78,44 @@ describe("getPresidentialOverviewStats", () => {
     mocks.getContext.mockResolvedValue(null);
 
     await expect(getPresidentialOverviewStats("inconnue")).resolves.toBeNull();
+  });
+});
+
+/**
+ * The probity count used to run an EXISTS over the 1.2M-row Candidacy table on the request path,
+ * which Sentry flagged as POLIGRAPH-1H: 0.6 ms warm but 4.5 s on a cold buffer cache. The count is
+ * now pre-computed by the daily sync, and the live computation stays as the fallback so a missing
+ * snapshot degrades speed rather than correctness.
+ */
+describe("compteur de probité pré-calculé", () => {
+  it("lit le snapshot sans interroger Affair", async () => {
+    mocks.snapshotFindUnique.mockResolvedValue({
+      data: { electionSlug: "presidentielle-2027", count: 7 },
+    });
+
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
+
+    expect(stats?.probityCandidateCount).toBe(7);
+    expect(mocks.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("retombe sur le calcul direct quand le snapshot est absent", async () => {
+    mocks.snapshotFindUnique.mockResolvedValue(null);
+
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
+
+    // Two rows in the default groupBy mock, so the fallback must report 2, not 0.
+    expect(stats?.probityCandidateCount).toBe(2);
+    expect(mocks.groupBy).toHaveBeenCalled();
+  });
+
+  it("retombe aussi sur le calcul direct si le snapshot est illisible", async () => {
+    // A row whose JSON drifted must not be served as a silent zero.
+    mocks.snapshotFindUnique.mockResolvedValue({ data: { count: "sept" } });
+
+    const stats = await getPresidentialOverviewStats("presidentielle-2027");
+
+    expect(stats?.probityCandidateCount).toBe(2);
+    expect(mocks.groupBy).toHaveBeenCalled();
   });
 });
