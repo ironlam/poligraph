@@ -12,7 +12,7 @@
  * (press has no legal authority, only Judilibre upgrades status).
  */
 
-import { db } from "@/lib/db";
+import { db, withAdvisoryLock } from "@/lib/db";
 import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
 import { cleanAffairTitle, generateSlug, sleep } from "@/lib/utils";
 import { getArticleScraper } from "@/lib/api/article-scraper";
@@ -107,6 +107,7 @@ export function isPressAnalysisSuccessful(
 
 const SYNC_SOURCE_KEY = "press-analysis";
 const MIN_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const PRESS_ANALYSIS_LOCK_KEY = "sync:press-analysis";
 
 // ============================================
 // MAIN SYNC
@@ -118,17 +119,22 @@ const MIN_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 export async function syncPressAnalysis(
   options: PressAnalysisOptions = {}
 ): Promise<PressAnalysisStats> {
-  const {
-    dryRun = false,
-    force = false,
-    limit,
-    feedSource,
-    politicianSlug,
-    reanalyze = false,
-    verbose = false,
-  } = options;
+  const stats = createEmptyPressAnalysisStats();
 
-  const stats: PressAnalysisStats = {
+  const result = await withAdvisoryLock(PRESS_ANALYSIS_LOCK_KEY, () =>
+    runPressAnalysis(options, stats)
+  );
+
+  if (result === null) {
+    console.log("Une analyse presse est déjà en cours. Cette exécution est ignorée.");
+    return stats;
+  }
+
+  return result;
+}
+
+function createEmptyPressAnalysisStats(): PressAnalysisStats {
+  return {
     articlesProcessed: 0,
     articlesAnalyzed: 0,
     articlesAffairRelated: 0,
@@ -148,6 +154,21 @@ export async function syncPressAnalysis(
     sensitiveWarnings: 0,
     quotaStopped: false,
   };
+}
+
+async function runPressAnalysis(
+  options: PressAnalysisOptions,
+  stats: PressAnalysisStats
+): Promise<PressAnalysisStats> {
+  const {
+    dryRun = false,
+    force = false,
+    limit,
+    feedSource,
+    politicianSlug,
+    reanalyze = false,
+    verbose = false,
+  } = options;
 
   // Check sync interval
   if (!force && !politicianSlug) {

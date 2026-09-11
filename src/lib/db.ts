@@ -64,6 +64,37 @@ function buildExtendedClient() {
 export const db = globalForPrisma.prisma ?? buildExtendedClient();
 
 /**
+ * Run work while holding a PostgreSQL advisory lock on a dedicated connection.
+ * The client must stay checked out for the whole callback: session-level locks
+ * are released when that connection is released, not when another pooled
+ * Prisma query finishes.
+ */
+export async function withAdvisoryLock<T>(
+  key: string,
+  callback: () => Promise<T>
+): Promise<T | null> {
+  const pool = globalForPrisma.pool;
+  if (!pool) throw new Error("Prisma pool is not initialized");
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked",
+      [key]
+    );
+    if (!result.rows[0]?.locked) return null;
+
+    try {
+      return await callback();
+    } finally {
+      await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [key]);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * The client handed to a `db.$transaction(async (tx) => …)` callback.
  *
  * Derived from `db` rather than written as `Prisma.TransactionClient`: this client
