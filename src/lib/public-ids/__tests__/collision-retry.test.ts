@@ -2,11 +2,33 @@ import { describe, it, expect, vi } from "vitest";
 import { Prisma } from "@/generated/prisma";
 import { createWithPublicId, isPublicIdCollision } from "../prisma-extension";
 
+/** Forme sans adaptateur : les colonnes sont dans meta.target. */
 function collisionSur(champ: string) {
   return new Prisma.PrismaClientKnownRequestError("dup", {
     code: "P2002",
     clientVersion: "7",
     meta: { target: [champ] },
+  });
+}
+
+/**
+ * Forme réelle sous PrismaPg, relevée en production : meta.target est absent
+ * et les colonnes arrivent entre guillemets sous driverAdapterError.
+ */
+function collisionAdaptateur(champ: string) {
+  return new Prisma.PrismaClientKnownRequestError("dup", {
+    code: "P2002",
+    clientVersion: "7",
+    meta: {
+      modelName: "Affair",
+      driverAdapterError: {
+        cause: {
+          originalCode: "23505",
+          kind: "UniqueConstraintViolation",
+          constraint: { fields: [`"${champ}"`] },
+        },
+      },
+    },
   });
 }
 
@@ -28,9 +50,30 @@ describe("isPublicIdCollision", () => {
   it("ignore une erreur qui n'est pas une violation d'unicité", () => {
     expect(isPublicIdCollision(new Error("boom"))).toBe(false);
   });
+
+  it("reconnaît la forme de l'adaptateur pg, celle que la prod produit", () => {
+    // meta.target est undefined avec PrismaPg : ne lire que lui rendait la
+    // garde inerte là précisément où elle devait servir.
+    expect(isPublicIdCollision(collisionAdaptateur("publicId"))).toBe(true);
+  });
+
+  it("ignore un autre champ dans la forme de l'adaptateur", () => {
+    expect(isPublicIdCollision(collisionAdaptateur("slug"))).toBe(false);
+  });
 });
 
 describe("createWithPublicId", () => {
+  it("réessaie sur la forme de l'adaptateur, celle de la production", async () => {
+    const query = vi
+      .fn()
+      .mockRejectedValueOnce(collisionAdaptateur("publicId"))
+      .mockResolvedValueOnce({ id: "a1" });
+    const args = { data: {} as { publicId?: string | null } };
+
+    await expect(createWithPublicId(args, query, allocateur(576))).resolves.toEqual({ id: "a1" });
+    expect(args.data.publicId).toBe("AF-000577");
+  });
+
   it("réessaie et franchit une valeur déjà prise", async () => {
     // Vécu : séquence à 575 pour un maximum réel de 576, donc le premier
     // nextval rend une valeur existante. Deux passes de production tuées.
