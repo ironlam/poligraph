@@ -600,7 +600,17 @@ export async function discoverAffairsWeb(options: {
       candidates.push({ result, judgment, publishedAt, status: judgment.judicialStatus });
     }
 
-    await settleCandidates(target, candidates, dryRun, stats);
+    // Un échec sur un élu ne doit pas emporter la passe entière. Vécu : une
+    // collision de publicId sur la troisième création a tué un balayage de
+    // 1 000 maires, après deux élus traités. L'estampille suit quand même, pour
+    // que la rotation avance et ne rejoue pas indéfiniment le même échec.
+    try {
+      await settleCandidates(target, candidates, dryRun, stats);
+    } catch (err) {
+      stats.errors.push(
+        `création ${target.fullName} : ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
 
     // Estampiller même sans trouvaille : c'est ce qui fait avancer la rotation.
     // Sans ça la passe rechercherait indéfiniment les mêmes premiers élus, le

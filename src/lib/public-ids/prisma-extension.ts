@@ -17,6 +17,62 @@ import { Prisma, type PrismaClient } from "@/generated/prisma";
  * The factory takes the raw (unextended) client so the hooks can call
  * `$queryRaw` without recursing back through the extension.
  */
+/**
+ * Combien de valeurs déjà prises la séquence peut franchir avant d'abandonner.
+ *
+ * Une séquence peut se retrouver derrière les identifiants réellement
+ * attribués : un backfill qui écrit `MAX + 1` sans appeler `setval`, une
+ * restauration, un import. `nextval` rend alors une valeur existante et la
+ * création échoue sur la contrainte d'unicité.
+ *
+ * Sans repli, ça a tué deux passes de production : l'import des maires
+ * d'arrondissement (une fiche perdue) puis un balayage de 1 000 maires, arrêté
+ * net au troisième élu. Chaque tentative avance la séquence, donc réessayer la
+ * fait franchir le trou ; la borne évite de boucler si la collision vient
+ * d'autre chose que du retard de séquence.
+ */
+export const ID_COLLISION_RETRIES = 5;
+
+/** Une violation d'unicité qui porte précisément sur `publicId`. */
+export function isPublicIdCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (error.code !== "P2002") return false;
+  const target = error.meta?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? "")];
+  return fields.some((field) => field.includes("publicId"));
+}
+
+/**
+ * Crée en réallouant l'identifiant tant qu'il tombe sur une valeur prise.
+ *
+ * Ne rattrape QUE la collision sur `publicId` : toute autre violation
+ * d'unicité, un slug en double par exemple, doit remonter telle quelle, sinon
+ * on boucle sur une erreur qui ne se résoudra jamais.
+ *
+ * Exporté pour être testable : `defineExtension` rend une fonction qui attend
+ * un client, donc les hooks ne sont pas atteignables depuis un test.
+ */
+export async function createWithPublicId<A extends { data: { publicId?: string | null } }, R>(
+  args: A,
+  query: (args: A) => Promise<R>,
+  allocate: () => Promise<string>,
+  retries = ID_COLLISION_RETRIES
+): Promise<R> {
+  if (args.data.publicId) return query(args);
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    args.data.publicId = await allocate();
+    try {
+      return await query(args);
+    } catch (error) {
+      if (!isPublicIdCollision(error)) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 export function createPoligraphIdExtension(rawClient: PrismaClient) {
   async function allocate(sequenceSql: Prisma.Sql, prefix: string): Promise<string> {
     const rows = await rawClient.$queryRaw<{ nextval: bigint }[]>(sequenceSql);
@@ -32,112 +88,72 @@ export function createPoligraphIdExtension(rawClient: PrismaClient) {
     query: {
       politician: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_politician_seq') AS nextval`,
-              "PG"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_politician_seq') AS nextval`, "PG")
+          );
         },
       },
       affair: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_affair_seq') AS nextval`,
-              "AF"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_affair_seq') AS nextval`, "AF")
+          );
         },
       },
       factCheck: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_factcheck_seq') AS nextval`,
-              "FC"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_factcheck_seq') AS nextval`, "FC")
+          );
         },
       },
       scrutin: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_scrutin_seq') AS nextval`,
-              "SC"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_scrutin_seq') AS nextval`, "SC")
+          );
         },
       },
       party: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_party_seq') AS nextval`,
-              "PT"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_party_seq') AS nextval`, "PT")
+          );
         },
       },
       election: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_election_seq') AS nextval`,
-              "EL"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_election_seq') AS nextval`, "EL")
+          );
         },
       },
       mandate: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_mandate_seq') AS nextval`,
-              "MA"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_mandate_seq') AS nextval`, "MA")
+          );
         },
       },
       legislativeDossier: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_dossier_seq') AS nextval`,
-              "DO"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_dossier_seq') AS nextval`, "DO")
+          );
         },
       },
       parliamentaryGroup: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_group_seq') AS nextval`,
-              "GP"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_group_seq') AS nextval`, "GP")
+          );
         },
       },
       electoralList: {
         async create({ args, query }) {
-          if (!args.data.publicId) {
-            args.data.publicId = await allocate(
-              Prisma.sql`SELECT nextval('poligraph_electoral_list_seq') AS nextval`,
-              "LM"
-            );
-          }
-          return query(args);
+          return createWithPublicId(args, query, () =>
+            allocate(Prisma.sql`SELECT nextval('poligraph_electoral_list_seq') AS nextval`, "LM")
+          );
         },
       },
     },
