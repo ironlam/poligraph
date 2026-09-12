@@ -35,13 +35,20 @@ const ROOT = process.cwd();
  * `take` — a dropdown, a paginable listing — falls into none of these and has no place here: bound
  * it instead.
  */
-const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
+type AllowedEntry = { count: number; reason: string };
+type AllowedUnbounded = Map<string, Map<string, AllowedEntry>>;
+
+const ALLOWED_UNBOUNDED: AllowedUnbounded = new Map([
   [
     "src/app/api/admin/partis/[id]/route.ts",
     new Map([
       [
         "PUT",
-        "verrouillage avant mutation : toutes les candidatures présidentielles du parti doivent être prises",
+        {
+          count: 1,
+          reason:
+            "verrouillage avant mutation : toutes les candidatures présidentielles du parti doivent être prises",
+        },
       ],
     ]),
   ],
@@ -50,7 +57,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "PUT",
-        "verrouillage avant mutation : toutes les candidatures présidentielles du politique doivent être prises",
+        {
+          count: 1,
+          reason:
+            "verrouillage avant mutation : toutes les candidatures présidentielles du politique doivent être prises",
+        },
       ],
     ]),
   ],
@@ -59,11 +70,19 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getCommuneResults2020",
-        "fiche commune 2020 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+        {
+          count: 1,
+          reason:
+            "fiche commune 2020 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+        },
       ],
       [
         "getCommuneResults2014",
-        "fiche commune 2014 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+        {
+          count: 1,
+          reason:
+            "fiche commune 2014 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+        },
       ],
     ]),
   ],
@@ -72,11 +91,19 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getCommune",
-        "fiche commune : toutes les candidatures doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+        {
+          count: 1,
+          reason:
+            "fiche commune : toutes les candidatures doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+        },
       ],
       [
         "getCumulCandidates",
-        "page cumul des mandats : tous les cumulards doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+        {
+          count: 1,
+          reason:
+            "page cumul des mandats : tous les cumulards doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+        },
       ],
     ]),
   ],
@@ -85,11 +112,19 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getCandidates2027ForModeration",
-        "modération d'une seule élection présidentielle : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+        {
+          count: 1,
+          reason:
+            "modération d'une seule élection présidentielle : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+        },
       ],
       [
         "getCandidateCrossCycle",
-        "historique cross-cycle d'un seul politique : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+        {
+          count: 1,
+          reason:
+            "historique cross-cycle d'un seul politique : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+        },
       ],
     ]),
   ],
@@ -98,7 +133,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getPublicPresidentialCandidacyField",
-        "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        {
+          count: 1,
+          reason:
+            "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        },
       ],
     ]),
   ],
@@ -107,7 +146,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getPublicPresidentialCandidates",
-        "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        {
+          count: 1,
+          reason:
+            "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        },
       ],
     ]),
   ],
@@ -116,7 +159,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "getPresidentielle2027Candidates",
-        "champ admin complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        {
+          count: 1,
+          reason:
+            "champ admin complet d'une élection présidentielle : une borne en tronquerait des candidats",
+        },
       ],
     ]),
   ],
@@ -125,7 +172,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "listMeasureQueueCandidates",
-        "liste de filtre de la file de modération : une borne masquerait des candidatures existantes sans signal pour l'utilisateur",
+        {
+          count: 1,
+          reason:
+            "liste de filtre de la file de modération : une borne masquerait des candidatures existantes sans signal pour l'utilisateur",
+        },
       ],
     ]),
   ],
@@ -134,7 +185,11 @@ const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
     new Map([
       [
         "listPresidentialCandidacies",
-        "déjà borné par la constante MAX_CANDIDACIES (200) ; le détecteur n'accepte qu'un littéral, jamais une constante nommée",
+        {
+          count: 1,
+          reason:
+            "déjà borné par la constante MAX_CANDIDACIES (200) ; le détecteur n'accepte qu'un littéral, jamais une constante nommée",
+        },
       ],
     ]),
   ],
@@ -302,36 +357,55 @@ export function unboundedCandidacyReads(path: string, code: string): UnboundedRe
   return reads;
 }
 
-/** Unbounded reads not covered by any declared exception for their file and function. */
+/** Number of unbounded reads found per function, for one file. */
+function unboundedCountsByFunction(
+  path: string,
+  readFile: (path: string) => string
+): Map<string, number> {
+  const reads = unboundedCandidacyReads(path, readFile(path));
+  const counts = new Map<string, number>();
+  for (const read of reads) {
+    counts.set(read.functionName, (counts.get(read.functionName) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Functions with more unbounded reads than their declared count — either a function absent from
+ * the allowlist entirely, or one already declared whose count no longer matches. A presence check
+ * alone (`Map.has`) would let a declared function accumulate any number of unreviewed reads behind
+ * a single approved name; comparing counts closes that.
+ */
 function findUnexpectedReads(
   files: string[],
-  allowed: Map<string, Map<string, string>>,
+  allowed: AllowedUnbounded,
   readFile: (path: string) => string
 ): string[] {
   return files.flatMap((path) => {
-    const reads = unboundedCandidacyReads(path, readFile(path));
+    const counts = unboundedCountsByFunction(path, readFile);
     const allowedFunctions = allowed.get(path);
-    return reads.flatMap((read) =>
-      allowedFunctions?.has(read.functionName)
-        ? []
-        : [`${path}:${read.line} dans ${read.functionName} : lecture non bornée non déclarée`]
-    );
+    return [...counts.entries()].flatMap(([functionName, count]) => {
+      const allowedCount = allowedFunctions?.get(functionName)?.count ?? 0;
+      return count > allowedCount
+        ? [`${path} dans ${functionName} : ${count} non bornée(s), ${allowedCount} autorisée(s)`]
+        : [];
+    });
   });
 }
 
-/** Declared exceptions whose function no longer exists, or no longer contains an unbounded read. */
+/** Declared exceptions whose function no longer exists, or now contains fewer unbounded reads than declared. */
 function findStaleExceptions(
-  allowed: Map<string, Map<string, string>>,
+  allowed: AllowedUnbounded,
   readFile: (path: string) => string
 ): string[] {
   return [...allowed.entries()].flatMap(([path, functions]) => {
-    const reads = unboundedCandidacyReads(path, readFile(path));
-    const foundNames = new Set(reads.map((read) => read.functionName));
-    return [...functions.keys()].flatMap((functionName) =>
-      foundNames.has(functionName)
-        ? []
-        : [`${path} : ${functionName} déclarée, aucune lecture non bornée trouvée`]
-    );
+    const counts = unboundedCountsByFunction(path, readFile);
+    return [...functions.entries()].flatMap(([functionName, { count: allowedCount }]) => {
+      const observed = counts.get(functionName) ?? 0;
+      return observed < allowedCount
+        ? [`${path} : ${functionName} déclare ${allowedCount}, ${observed} trouvée(s)`]
+        : [];
+    });
   });
 }
 
@@ -433,7 +507,9 @@ describe("allowlist ancrée par fonction (pas par compte)", () => {
       "  await db.candidacy.findMany({ where: { id } });",
       "}",
     ].join("\n");
-    const allowed = new Map([["fake.ts", new Map([["fonctionDeclaree", "raison de test"]])]]);
+    const allowed: AllowedUnbounded = new Map([
+      ["fake.ts", new Map([["fonctionDeclaree", { count: 1, reason: "raison de test" }]])],
+    ]);
 
     const unexpected = findUnexpectedReads(["fake.ts"], allowed, () => code);
 
@@ -444,7 +520,9 @@ describe("allowlist ancrée par fonction (pas par compte)", () => {
   it("signale une exception périmée dont la fonction n'existe plus", () => {
     const code =
       "declare const db: any;\nasync function fonctionActuelle() { await db.candidacy.findMany({ take: 50 }); }";
-    const allowed = new Map([["fake.ts", new Map([["fonctionRenommee", "raison de test"]])]]);
+    const allowed: AllowedUnbounded = new Map([
+      ["fake.ts", new Map([["fonctionRenommee", { count: 1, reason: "raison de test" }]])],
+    ]);
 
     const stale = findStaleExceptions(allowed, () => code);
 
@@ -455,7 +533,9 @@ describe("allowlist ancrée par fonction (pas par compte)", () => {
   it("signale une exception périmée dont la fonction est redevenue bornée", () => {
     const code =
       "declare const db: any;\nasync function fonctionCorrigee() { await db.candidacy.findMany({ take: 50 }); }";
-    const allowed = new Map([["fake.ts", new Map([["fonctionCorrigee", "raison de test"]])]]);
+    const allowed: AllowedUnbounded = new Map([
+      ["fake.ts", new Map([["fonctionCorrigee", { count: 1, reason: "raison de test" }]])],
+    ]);
 
     const stale = findStaleExceptions(allowed, () => code);
 
@@ -473,11 +553,55 @@ describe("allowlist ancrée par fonction (pas par compte)", () => {
   });
 
   it("signale clairement une entrée d'exception dont le fichier a disparu", () => {
-    const missing = new Map([
-      ["src/lib/data/ce-fichier-n-existe-plus.ts", new Map([["x", "raison de test"]])],
+    const missing: AllowedUnbounded = new Map([
+      [
+        "src/lib/data/ce-fichier-n-existe-plus.ts",
+        new Map([["x", { count: 1, reason: "raison de test" }]]),
+      ],
     ]);
 
     expect(() => findStaleExceptions(missing, readSourceFile)).toThrow(/introuvable/);
+  });
+
+  // Handlers composed by higher-order functions (`export const PUT = withAdminAuth(withValidation(
+  // schema, async (req, ctx, body) => {...}))`) resolve every call inside them to the same
+  // top-level name (`PUT`, see `topLevelBindingName`). A presence check on that name would let any
+  // number of unreviewed reads hide behind one approved handler; only a count comparison catches it.
+  const hocHandlerCode = (readCount: number) =>
+    [
+      "declare const db: any;",
+      "declare function withAdminAuth(fn: unknown): unknown;",
+      "declare function withValidation(schema: unknown, fn: unknown): unknown;",
+      "declare const schema: unknown;",
+      "export const PUT = withAdminAuth(",
+      "  withValidation(schema, async (req: unknown, ctx: unknown, body: unknown) => {",
+      ...Array.from(
+        { length: readCount },
+        () => "    await db.candidacy.findMany({ where: { id } });"
+      ),
+      "  })",
+      ");",
+    ].join("\n");
+
+  it("un handler composé par HOC déclaré à 1 lecture qui en contient 2 échoue", () => {
+    const allowed: AllowedUnbounded = new Map([
+      ["fake-route.ts", new Map([["PUT", { count: 1, reason: "raison de test" }]])],
+    ]);
+
+    const unexpected = findUnexpectedReads(["fake-route.ts"], allowed, () => hocHandlerCode(2));
+
+    expect(unexpected).toHaveLength(1);
+    expect(unexpected[0]).toContain("PUT");
+  });
+
+  it("un handler composé par HOC déclaré à 1 lecture qui en contient 1 passe", () => {
+    const allowed: AllowedUnbounded = new Map([
+      ["fake-route.ts", new Map([["PUT", { count: 1, reason: "raison de test" }]])],
+    ]);
+
+    const unexpected = findUnexpectedReads(["fake-route.ts"], allowed, () => hocHandlerCode(1));
+
+    expect(unexpected).toEqual([]);
   });
 });
 
