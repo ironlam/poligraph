@@ -6,6 +6,8 @@ export {
 export {
   computeTextHash,
   loadCandidatePool,
+  loadAffairResolverContext,
+  type AffairResolverContext,
   loadBlocklist,
   persistDecision,
   type PersistInput,

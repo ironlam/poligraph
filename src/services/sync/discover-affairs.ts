@@ -28,9 +28,10 @@ import { classifyAffairMatches, findMatchingAffairs } from "@/services/affairs/m
 import { clampConfidenceScore } from "@/services/affairs/confidence";
 import type { AffairCategory, AffairStatus, SourceType } from "@/generated/prisma";
 import { scoreAffairAgainstCandidates, resolveAffairPolitician } from "@/lib/affair-matching";
-import { loadCandidatePool, loadSurnameVocabulary } from "@/lib/affair-matching/persistence";
-import type { SurnameVocabulary } from "@/lib/affair-matching/surname-ambiguity";
-import type { AffairCandidateRecord } from "@/lib/affair-matching";
+import {
+  loadAffairResolverContext,
+  type AffairResolverContext,
+} from "@/lib/affair-matching/persistence";
 import {
   hashSourceContent,
   previewAffairEventProposal,
@@ -319,29 +320,22 @@ export async function discoverAffairs(options?: {
     return stats;
   }
 
+  // One bounded context for both resolver phases. Blocklists remain loaded per
+  // affair inside the resolver, so a human exclusion is visible immediately.
+  const resolverContext = await loadAffairResolverContext();
+
   // Phase 1: Wikidata
   let phase1Affairs: DiscoveredAffair[] = [];
   if (!wikipediaOnly) {
-    phase1Affairs = await runPhase1Wikidata(politicians, stats, dryRun);
+    phase1Affairs = await runPhase1Wikidata(politicians, stats, dryRun, resolverContext);
   }
 
   // Phase 2: Wikipedia
   let phase2Affairs: DiscoveredAffair[] = [];
   if (!wikidataOnly) {
-    // Load the candidate pool once for the entire Wikipedia pass.
-    // Building a Map avoids repeated array scans during per-politician lookups.
-    const [candidatePool, vocabulary] = await Promise.all([
-      loadCandidatePool(),
-      loadSurnameVocabulary(),
-    ]);
-    const poolById = new Map<string, AffairCandidateRecord>(candidatePool.map((c) => [c.id, c]));
-    phase2Affairs = await runPhase2Wikipedia(
-      politicians,
-      phase1Affairs,
-      stats,
-      poolById,
-      vocabulary
-    );
+    // Reuse the bounded context for the entire Wikipedia pass. Building a Map
+    // avoids repeated array scans during per-politician lookups.
+    phase2Affairs = await runPhase2Wikipedia(politicians, phase1Affairs, stats, resolverContext);
   }
 
   // Phase 3: Reconciliation
@@ -380,7 +374,8 @@ async function runPhase1Wikidata(
     externalIds: Array<{ externalId: string }>;
   }>,
   stats: DiscoverAffairsResult,
-  dryRun: boolean
+  dryRun: boolean,
+  resolverContext: AffairResolverContext
 ): Promise<DiscoveredAffair[]> {
   const discovered: DiscoveredAffair[] = [];
   const wikidataService = new WikidataService();
@@ -432,8 +427,8 @@ async function runPhase1Wikidata(
               },
             };
             const resolveResult = dryRun
-              ? await previewAffairPolitician(resolverInput)
-              : await resolveAffairPolitician(resolverInput);
+              ? await previewAffairPolitician(resolverInput, resolverContext)
+              : await resolveAffairPolitician(resolverInput, resolverContext);
             decisionId = resolveResult.decisionId;
           } catch (resolveErr) {
             console.warn(
@@ -489,11 +484,13 @@ async function runPhase2Wikipedia(
   }>,
   phase1Affairs: DiscoveredAffair[],
   stats: DiscoverAffairsResult,
-  poolById: Map<string, AffairCandidateRecord>,
-  vocabulary: SurnameVocabulary
+  resolverContext: AffairResolverContext
 ): Promise<DiscoveredAffair[]> {
   const discovered: DiscoveredAffair[] = [];
   const phase1Keys = new Set(phase1Affairs.map((a) => `${a.politicianId}:${a.category}`));
+  const poolById = new Map(
+    resolverContext.candidatePool.map((candidate) => [candidate.id, candidate])
+  );
 
   console.log(`Phase 2: Wikipedia - ${politicians.length} politicians`);
 
@@ -545,7 +542,7 @@ async function runPhase2Wikipedia(
               },
             },
             [candidate],
-            vocabulary
+            resolverContext.vocabulary
           );
 
           if (sanityCheck.judgment !== "SAME") {

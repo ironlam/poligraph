@@ -44,6 +44,10 @@ import {
 } from "@/services/affairs/proposals";
 import { IMPORTER_PRESS_ANALYSIS, withImportRun } from "@/services/affairs/import-run";
 import { isVerifiedAffairPressUrl } from "@/config/affair-sources";
+import {
+  loadAffairResolverContext,
+  type AffairResolverContext,
+} from "@/lib/affair-matching/persistence";
 
 // ============================================
 // TYPES
@@ -194,6 +198,10 @@ async function runPressAnalysis(
 
   console.log(`${articles.length} article(s) à analyser`);
 
+  // The context is scoped to this execution. Each affair still performs its
+  // own blocklist read and persistence operation in the resolver.
+  const resolverContext = await loadAffairResolverContext();
+
   // Classify articles into tiers and sort by priority
   const classifiedArticles = articles.map((article) => ({
     ...article,
@@ -268,6 +276,7 @@ async function runPressAnalysis(
           dryRun,
           verbose,
           importRunId,
+          resolverContext,
         });
       } catch (error) {
         stats.analysisErrors++;
@@ -369,9 +378,14 @@ export async function processAnalyzedArticle(
   analysisContent: string,
   result: ArticleAnalysisResult,
   stats: PressAnalysisStats,
-  options: { dryRun: boolean; verbose: boolean; importRunId?: string | null }
+  options: {
+    dryRun: boolean;
+    verbose: boolean;
+    importRunId?: string | null;
+    resolverContext?: AffairResolverContext;
+  }
 ): Promise<void> {
-  const { dryRun, verbose, importRunId = null } = options;
+  const { dryRun, verbose, importRunId = null, resolverContext } = options;
 
   stats.articlesAnalyzed++;
 
@@ -443,8 +457,8 @@ export async function processAnalyzedArticle(
       },
     };
     const resolveResult = dryRun
-      ? await previewAffairPolitician(resolverInput)
-      : await resolveAffairPolitician(resolverInput);
+      ? await previewAffairPolitician(resolverInput, resolverContext)
+      : await resolveAffairPolitician(resolverInput, resolverContext);
 
     if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
       if (verbose) {

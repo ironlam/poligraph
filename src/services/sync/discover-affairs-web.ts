@@ -27,6 +27,7 @@ import { selectSearchTargets, type SearchTarget } from "@/lib/affair-discovery/s
 import { screenWebResult } from "@/lib/affair-discovery/web-lead-filter";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { resolveAffairPolitician, previewAffairPolitician } from "@/lib/affair-matching/resolver";
+import { loadAffairResolverContext } from "@/lib/affair-matching/persistence";
 import {
   findMatchingAffairs,
   normalizeAffairTitle,
@@ -445,6 +446,7 @@ export async function discoverAffairsWeb(options: {
   };
 
   const targets = await selectSearchTargets(limit, onlyTier);
+  const resolverContext = targets.length > 0 ? await loadAffairResolverContext() : undefined;
 
   for (const target of targets) {
     const query = `"${target.fullName}" condamné OR "mis en examen" OR procès OR détournement`;
@@ -556,16 +558,19 @@ export async function discoverAffairsWeb(options: {
       // écrit une ligne d'audit AffairPoliticianDecision, si bien qu'une passe
       // de mesure annoncée sans écriture en laissait quand même en production.
       const resolve = dryRun ? previewAffairPolitician : resolveAffairPolitician;
-      const resolved = await resolve({
-        text: `${result.title}\n${result.description}`,
-        candidateNames: [target.fullName],
-        metadata: {
-          source: "PRESSE",
-          sourceRef: result.url,
-          factsDate: null,
-          court: null,
+      const resolved = await resolve(
+        {
+          text: `${result.title}\n${result.description}`,
+          candidateNames: [target.fullName],
+          metadata: {
+            source: "PRESSE",
+            sourceRef: result.url,
+            factsDate: null,
+            court: null,
+          },
         },
-      });
+        resolverContext
+      );
       if (resolved.judgment !== "SAME" || resolved.topCandidateId !== target.id) {
         stats.identityRejected++;
         // The resolver contradicting the judge is either a homonym caught or a

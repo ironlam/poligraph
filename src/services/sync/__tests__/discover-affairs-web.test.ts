@@ -41,6 +41,9 @@ vi.mock("@/lib/affair-matching/resolver", () => ({
   resolveAffairPolitician: h.resolve,
   previewAffairPolitician: h.preview,
 }));
+vi.mock("@/lib/affair-matching/persistence", () => ({
+  loadAffairResolverContext: vi.fn().mockResolvedValue(undefined),
+}));
 // Mock partiel : seul l'accès base est simulé. Le regroupement par procédure
 // s'appuie sur la vraie comparaison de vocabulaire du matcher, sinon le test
 // validerait un seuil imaginaire.
