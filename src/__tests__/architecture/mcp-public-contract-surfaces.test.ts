@@ -324,7 +324,7 @@ describe("MCP-01 public contract surfaces", () => {
   const partyDetailRoute = readSource("src/app/api/partis/[slug]/route.ts");
   const dedicatedPartySearch = readSource("src/app/api/search/parties/route.ts");
   const compareSearchIndex = readSource("src/app/api/compare/search-index/route.ts");
-  const electionDetailRoute = readSource("src/app/api/elections/[slug]/route.ts");
+  const electionDetailData = readSource("src/lib/data/election-details.ts");
   const partyData = readSource("src/lib/data/partis.ts");
   const partyPage = readSource("src/app/partis/[slug]/page.tsx");
   const partyOgImage = readSource("src/app/partis/[slug]/opengraph-image.tsx");
@@ -409,10 +409,6 @@ describe("MCP-01 public contract surfaces", () => {
       "export const GET = withPublicRoute"
     );
     const compareIndexLoader = executionBlock(compareSearchIndex, "async function getSearchIndex");
-    const electionHandler = executionBlock(
-      electionDetailRoute,
-      "export const GET = withPublicRoute"
-    );
     const partyLoader = executionBlock(partyData, "export const getParty = cache");
     const partyStaticParams = executionBlock(
       partyPage,
@@ -431,8 +427,8 @@ describe("MCP-01 public contract surfaces", () => {
     expect(partySearchHandler).toContain("politicians: { where: PUBLIC_POLITICIAN_WHERE }");
     expect(compareIndexLoader).toContain("...PUBLIC_PARTY_WHERE");
     expect(compareIndexLoader).toContain("politicians: { where: PUBLIC_POLITICIAN_WHERE }");
-    expect(electionHandler).toContain("politicians: { where: PUBLIC_POLITICIAN_WHERE }");
-    expect(electionHandler).toContain("candidacy.party._count.politicians > 0");
+    expect(electionDetailData).toContain("politicians: { where: PUBLIC_POLITICIAN_WHERE }");
+    expect(electionDetailData).toContain("candidacy.party._count.politicians > 0");
     expect(partyLoader).toContain("where: { slug, ...PUBLIC_PARTY_WHERE }");
     expect(partyLoader).toContain("successors: { where: PUBLIC_PARTY_WHERE }");
     expect(partyLoader).toContain("party.predecessor._count.politicians > 0");
