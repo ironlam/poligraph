@@ -12,11 +12,21 @@ import { NAV_ELECTIONS } from "@/config/navigation";
 // Types
 // ============================================
 
+/**
+ * Headline counters for the 2020 municipal election.
+ *
+ * Two former counters were dropped on 2026-09-12 because neither measured what its label claimed.
+ * `municipales-2020.ts` writes `listName: list.listName || candidateName`, so in communes under
+ * 1000 inhabitants (93 % of the rows) the list name is the person's name: the "lists" counter read
+ * 375 368 where there are roughly 20 000 actual lists. The "elected mayors" counter filtered on
+ * `listPosition = 1`, which the 2020 import never fills, so it published a plain 0.
+ *
+ * `totalCandidacies` is kept but is not clean either: one row is a person in small communes and a
+ * list in larger ones. Both counters return once the import has an explicit data unit.
+ */
 export interface Municipales2020Stats {
   totalCandidacies: number;
   totalCommunes: number;
-  totalLists: number;
-  electedMayorsCount: number;
 }
 
 export interface ElectionRoundData {
@@ -81,7 +91,7 @@ export const getMunicipales2020Stats = cache(
     const electionId = await getElectionId();
     if (!electionId) return null;
 
-    const [totalCandidacies, communeGroups, listGroups, electedMayorsCount] = await Promise.all([
+    const [totalCandidacies, communeGroups] = await Promise.all([
       db.candidacy.count({
         where: { electionId },
       }),
@@ -90,26 +100,11 @@ export const getMunicipales2020Stats = cache(
         by: ["communeId"],
         where: { electionId, communeId: { not: null } },
       }),
-
-      db.candidacy.groupBy({
-        by: ["listName", "communeId"],
-        where: { electionId, listName: { not: null }, communeId: { not: null } },
-      }),
-
-      db.candidacy.count({
-        where: {
-          electionId,
-          isElected: true,
-          listPosition: 1,
-        },
-      }),
     ]);
 
     return {
       totalCandidacies,
       totalCommunes: communeGroups.length,
-      totalLists: listGroups.length,
-      electedMayorsCount,
     };
   }
 );
