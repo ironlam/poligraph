@@ -725,60 +725,67 @@
  *           type: string
  *           nullable: true
  *         candidacies:
- *           type: array
- *           items:
- *             type: object
- *             properties:
- *               id:
- *                 type: string
- *               candidateName:
- *                 type: string
- *               partyLabel:
- *                 type: string
- *                 nullable: true
- *               constituencyName:
- *                 type: string
- *                 nullable: true
- *               isElected:
- *                 type: boolean
- *               round1Votes:
- *                 type: integer
- *                 nullable: true
- *               round1Pct:
- *                 type: number
- *                 nullable: true
- *               round2Votes:
- *                 type: integer
- *                 nullable: true
- *               round2Pct:
- *                 type: number
- *                 nullable: true
- *               politician:
+ *           type: object
+ *           required: [data, pagination]
+ *           description: Page de candidatures. La collection complète se parcourt avec page et limit.
+ *           properties:
+ *             data:
+ *               type: array
+ *               items:
  *                 type: object
- *                 nullable: true
  *                 properties:
  *                   id:
  *                     type: string
- *                   slug:
+ *                   candidateName:
  *                     type: string
- *                   fullName:
- *                     type: string
- *                   photoUrl:
+ *                   partyLabel:
  *                     type: string
  *                     nullable: true
- *               party:
- *                 type: object
- *                 nullable: true
- *                 properties:
- *                   id:
- *                     type: string
- *                   slug:
- *                     type: string
- *                   shortName:
- *                     type: string
- *                   color:
+ *                   constituencyName:
  *                     type: string
  *                     nullable: true
+ *                   isElected:
+ *                     type: boolean
+ *                   round1Votes:
+ *                     type: integer
+ *                     nullable: true
+ *                   round1Pct:
+ *                     type: number
+ *                     nullable: true
+ *                   round2Votes:
+ *                     type: integer
+ *                     nullable: true
+ *                   round2Pct:
+ *                     type: number
+ *                     nullable: true
+ *                   politician:
+ *                     type: object
+ *                     nullable: true
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       slug:
+ *                         type: string
+ *                       fullName:
+ *                         type: string
+ *                       photoUrl:
+ *                         type: string
+ *                         nullable: true
+ *                   party:
+ *                     type: object
+ *                     nullable: true
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       slug:
+ *                         type: string
+ *                       shortName:
+ *                         type: string
+ *                       color:
+ *                         type: string
+ *                         nullable: true
+ *             pagination:
+ *               $ref: '#/components/schemas/Pagination'
  *         rounds:
  *           type: array
  *           items:

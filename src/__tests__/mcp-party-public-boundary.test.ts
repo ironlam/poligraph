@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   factCheckCount: vi.fn(),
   groupFindMany: vi.fn(),
   electionFindUnique: vi.fn(),
+  candidacyCount: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({
@@ -30,6 +31,7 @@ vi.mock("@/lib/db", () => ({
     factCheck: { count: mocks.factCheckCount },
     parliamentaryGroup: { findMany: mocks.groupFindMany },
     election: { findUnique: mocks.electionFindUnique },
+    candidacy: { count: mocks.candidacyCount },
   },
 }));
 
@@ -51,6 +53,7 @@ describe("MCP party public boundary", () => {
     mocks.scrutinCount.mockResolvedValue(0);
     mocks.factCheckCount.mockResolvedValue(0);
     mocks.groupFindMany.mockResolvedValue([]);
+    mocks.candidacyCount.mockResolvedValue(1);
   });
 
   it("exclut de la recherche un parti qui ne possède que des personnalités DRAFT", async () => {
@@ -132,6 +135,13 @@ describe("MCP party public boundary", () => {
         {
           id: "candidacy-draft-party",
           candidateName: "Candidate",
+          partyLabel: null,
+          constituencyName: null,
+          isElected: false,
+          round1Votes: null,
+          round1Pct: null,
+          round2Votes: null,
+          round2Pct: null,
           politician: null,
           party: {
             id: "party-draft-only",
@@ -151,11 +161,13 @@ describe("MCP party public boundary", () => {
     );
     const payload = await response.json();
 
-    expect(payload.candidacies[0].party).toBeNull();
+    expect(payload.candidacies.data[0].party).toBeNull();
     expect(mocks.electionFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
+        select: expect.objectContaining({
           candidacies: expect.objectContaining({
+            skip: 0,
+            take: 20,
             select: expect.objectContaining({
               party: {
                 select: expect.objectContaining({
@@ -171,5 +183,6 @@ describe("MCP party public boundary", () => {
         }),
       })
     );
+    expect(mocks.candidacyCount).toHaveBeenCalledWith({ where: { electionId: "election-1" } });
   });
 });
