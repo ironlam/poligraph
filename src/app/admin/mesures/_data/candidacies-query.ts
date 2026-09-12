@@ -19,6 +19,7 @@ import { db } from "@/lib/db";
  * `Candidacy` also holds municipal rows and loading it whole has already produced a 19 MB page.
  */
 const HUB_ELECTION_SLUG = "presidentielle-2027";
+const MAX_CANDIDACIES = 200;
 
 export type CandidacyOption = {
   id: string;
@@ -46,9 +47,10 @@ export async function listPresidentialCandidacies(): Promise<CandidacyOption[]> 
     },
     // Alphabetical, and the page says so: any other order on a list of candidates is a ranking.
     orderBy: [{ candidateName: "asc" }],
-    // Literal, not `MAX_CANDIDACIES`: the read-bounds guard only proves a numeric literal, since
-    // a named constant could hold anything at run time as far as static analysis is concerned.
-    take: 200,
+    // Bounded by MAX_CANDIDACIES (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the
+    // read-bounds guard only proves a numeric literal, so a named constant reads as unbounded to
+    // it even though this call is already correctly bounded at run time.
+    take: MAX_CANDIDACIES,
   });
 
   return rows.flatMap((row) =>

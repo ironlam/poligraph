@@ -20,6 +20,12 @@ const ROOT = process.cwd();
  *
  * What it does NOT guarantee: `take` bounds the rows returned, not the work a GROUP BY does, which
  * PostgreSQL runs in full before limiting the output. This is a transfer and memory guard.
+ *
+ * Scope: this guard only sees direct `db.candidacy.findMany` / `.groupBy` (and `tx.candidacy.*`)
+ * call sites. It is blind to relation loads, e.g. `db.election.findUnique({ include: { candidacies:
+ * true } })`, which read the same unbounded rows without ever writing `db.candidacy.*`. A known
+ * unguarded site of that shape is tracked in the task 5 report rather than here, since fixing it is
+ * a public API contract decision, not a mechanical bound.
  */
 const ALLOWED_UNBOUNDED = new Map<string, { count: number; reason: string }>([
   [
@@ -92,6 +98,14 @@ const ALLOWED_UNBOUNDED = new Map<string, { count: number; reason: string }>([
       count: 1,
       reason:
         "liste de filtre de la file de modération : une borne masquerait des candidatures existantes sans signal pour l'utilisateur",
+    },
+  ],
+  [
+    "src/app/admin/mesures/_data/candidacies-query.ts",
+    {
+      count: 1,
+      reason:
+        "déjà borné par la constante MAX_CANDIDACIES (200) ; le détecteur n'accepte qu'un littéral, jamais une constante nommée",
     },
   ],
 ]);
