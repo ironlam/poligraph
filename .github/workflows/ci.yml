@@ -108,6 +108,60 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
+  election-api-postgres:
+    name: Election API PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # This is a disposable PostgreSQL 17 only. The suite seeds synthetic elections
+    # and never connects to Supabase or any other shared database.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: poligraph_test
+          POSTGRES_PASSWORD: poligraph_test
+          POSTGRES_DB: poligraph_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h localhost -U poligraph_test -d poligraph_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
+      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
+      DATABASE_SSL: "false"
+      NODE_ENV: test
+      DOTENV_CONFIG_PATH: /dev/null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Create extensions and publicId sequences
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
+
+      - name: Apply the schema
+        run: npx prisma db push
+
+      - name: Run election API integration suite
+        run: npx vitest run --no-file-parallelism "src/app/api/elections/[slug]/route.integration.test.ts"
+
   sec-02-role-contract:
     name: SEC-02 role contract
     runs-on: ubuntu-latest
