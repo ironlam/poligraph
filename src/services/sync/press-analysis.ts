@@ -290,7 +290,7 @@ async function runPressAnalysis(
         stats.analysisErrors++;
         if (error instanceof ResolverContextLoadError) {
           console.error(`  ✗ Contexte du resolver indisponible, arrêt du lot: ${error.message}`);
-          break;
+          throw error;
         }
         const errorMsg = error instanceof Error ? error.message : String(error);
 

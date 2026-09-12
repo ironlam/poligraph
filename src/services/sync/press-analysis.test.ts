@@ -604,11 +604,68 @@ describe("syncPressAnalysis : panne du contexte", () => {
     });
     mocks.getResolverContext.mockRejectedValue(new Error("database unavailable"));
 
-    const stats = await syncPressAnalysis({ force: true });
+    await expect(syncPressAnalysis({ force: true })).rejects.toThrow(
+      "Impossible de charger le contexte du resolver"
+    );
 
-    expect(stats.articlesProcessed).toBe(1);
-    expect(stats.analysisErrors).toBe(1);
     expect(mocks.analyzeArticle).toHaveBeenCalledOnce();
     expect(mocks.pressArticleUpdate).not.toHaveBeenCalled();
+    expect(mocks.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it("rejette le lot après un article réussi et laisse le suivant reprenable", async () => {
+    const first = {
+      id: "article-ok",
+      url: "https://www.lemonde.fr/ok",
+      title: "Une information politique",
+      description: "Aucune procédure n’est évoquée.",
+      feedSource: "lemonde",
+      publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+      mentions: [],
+    };
+    const second = {
+      ...first,
+      id: "article-failed",
+      url: "https://www.lemonde.fr/failed",
+      title: "Une enquête vise Jeanne Martin",
+      description: "Jeanne Martin fait l’objet d’une enquête préliminaire.",
+      mentions: [{ politician: { id: "pol-1", fullName: "Jeanne Martin", slug: "jeanne-martin" } }],
+    };
+    mocks.pressArticleFindMany.mockResolvedValue([first, second]);
+    mocks.analyzeArticle
+      .mockResolvedValueOnce({ isAffairRelated: false, summary: "résumé", affairs: [] })
+      .mockResolvedValueOnce({
+        isAffairRelated: true,
+        summary: "résumé",
+        affairs: [
+          {
+            politicianName: "Jeanne Martin",
+            involvement: "DIRECT",
+            category: "DETOURNEMENT_FONDS_PUBLICS",
+            status: "ENQUETE_PRELIMINAIRE",
+            title: "Enquête sur Jeanne Martin",
+            description: "Une enquête préliminaire est ouverte.",
+            factsDate: null,
+            court: null,
+            charges: [],
+            excerpts: [],
+            isNewRevelation: false,
+            confidenceScore: 95,
+            mentionedNames: ["Jeanne Martin"],
+          },
+        ],
+      });
+    mocks.getResolverContext.mockRejectedValue(new Error("database unavailable"));
+
+    await expect(syncPressAnalysis({ force: true })).rejects.toThrow(
+      "Impossible de charger le contexte du resolver"
+    );
+
+    expect(mocks.analyzeArticle).toHaveBeenCalledTimes(2);
+    expect(mocks.pressArticleUpdate).toHaveBeenCalledTimes(1);
+    expect(mocks.pressArticleUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "article-ok" } })
+    );
+    expect(mocks.markCompleted).not.toHaveBeenCalled();
   });
 });
