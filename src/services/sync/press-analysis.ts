@@ -44,6 +44,10 @@ import {
 } from "@/services/affairs/proposals";
 import { IMPORTER_PRESS_ANALYSIS, withImportRun } from "@/services/affairs/import-run";
 import { isVerifiedAffairPressUrl } from "@/config/affair-sources";
+import {
+  createAffairResolverContextLoader,
+  type AffairResolverContext,
+} from "@/lib/affair-matching/persistence";
 
 // ============================================
 // TYPES
@@ -194,6 +198,11 @@ async function runPressAnalysis(
 
   console.log(`${articles.length} article(s) à analyser`);
 
+  // The context is scoped to this execution and loaded only if an affair gets
+  // as far as identity resolution. Each affair still performs its own
+  // blocklist read and persistence operation in the resolver.
+  const getResolverContext = createAffairResolverContextLoader();
+
   // Classify articles into tiers and sort by priority
   const classifiedArticles = articles.map((article) => ({
     ...article,
@@ -268,6 +277,7 @@ async function runPressAnalysis(
           dryRun,
           verbose,
           importRunId,
+          getResolverContext,
         });
       } catch (error) {
         stats.analysisErrors++;
@@ -369,9 +379,15 @@ export async function processAnalyzedArticle(
   analysisContent: string,
   result: ArticleAnalysisResult,
   stats: PressAnalysisStats,
-  options: { dryRun: boolean; verbose: boolean; importRunId?: string | null }
+  options: {
+    dryRun: boolean;
+    verbose: boolean;
+    importRunId?: string | null;
+    resolverContext?: AffairResolverContext;
+    getResolverContext?: () => Promise<AffairResolverContext>;
+  }
 ): Promise<void> {
-  const { dryRun, verbose, importRunId = null } = options;
+  const { dryRun, verbose, importRunId = null, resolverContext, getResolverContext } = options;
 
   stats.articlesAnalyzed++;
 
@@ -442,9 +458,11 @@ export async function processAnalyzedArticle(
         court: detected.court ?? null,
       },
     };
+    const sharedContext =
+      resolverContext ?? (getResolverContext ? await getResolverContext() : undefined);
     const resolveResult = dryRun
-      ? await previewAffairPolitician(resolverInput)
-      : await resolveAffairPolitician(resolverInput);
+      ? await previewAffairPolitician(resolverInput, sharedContext)
+      : await resolveAffairPolitician(resolverInput, sharedContext);
 
     if (resolveResult.judgment !== "SAME" || !resolveResult.topCandidateId) {
       if (verbose) {

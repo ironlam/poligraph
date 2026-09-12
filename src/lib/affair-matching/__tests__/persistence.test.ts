@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findMany: vi.fn() },
+    commune: { findMany: vi.fn() },
     affairPoliticianDecision: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -11,7 +12,13 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { computeTextHash, persistDecision, loadBlocklist } from "../persistence";
+import {
+  computeTextHash,
+  createAffairResolverContextLoader,
+  loadAffairResolverContext,
+  persistDecision,
+  loadBlocklist,
+} from "../persistence";
 import type { CombinerDecision } from "../combiner";
 import { db } from "@/lib/db";
 import { SourceType } from "@/generated/prisma";
@@ -20,6 +27,8 @@ import type { Mock } from "vitest";
 const mockDecisionCreate = db.affairPoliticianDecision.create as Mock;
 const mockDecisionFindUnique = db.affairPoliticianDecision.findUnique as Mock;
 const mockDecisionFindMany = db.affairPoliticianDecision.findMany as Mock;
+const mockPoliticianFindMany = db.politician.findMany as Mock;
+const mockCommuneFindMany = db.commune.findMany as Mock;
 
 describe("computeTextHash", () => {
   it("produces a stable sha256 hex digest", () => {
@@ -131,5 +140,45 @@ describe("loadBlocklist", () => {
     expect(result.has("pol-a")).toBe(true);
     expect(result.has("pol-b")).toBe(true);
     expect(result.size).toBe(2);
+  });
+});
+
+describe("loadAffairResolverContext", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("charge le pool et le vocabulaire une seule fois dans un contexte explicite", async () => {
+    mockPoliticianFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ firstName: "Jeanne", lastName: "Martin" }]);
+    mockCommuneFindMany.mockResolvedValue([]);
+    mockDecisionFindMany.mockResolvedValue([]);
+
+    const context = await loadAffairResolverContext();
+
+    expect(context.candidatePool).toEqual([]);
+    expect(context.prefilter.filter("Jeanne Martin")).toEqual([]);
+    expect(mockPoliticianFindMany).toHaveBeenCalledTimes(2);
+    expect(mockCommuneFindMany).toHaveBeenCalledOnce();
+    expect(mockDecisionFindMany).toHaveBeenCalledOnce();
+  });
+
+  it("ne charge rien avant le premier besoin et partage la même promesse", async () => {
+    mockPoliticianFindMany.mockResolvedValue([]);
+    mockCommuneFindMany.mockResolvedValue([]);
+    mockDecisionFindMany.mockResolvedValue([]);
+
+    const getContext = createAffairResolverContextLoader();
+    expect(mockPoliticianFindMany).not.toHaveBeenCalled();
+
+    const first = getContext();
+    const second = getContext();
+
+    expect(first).toBe(second);
+    await first;
+    expect(mockPoliticianFindMany).toHaveBeenCalledTimes(2);
+    expect(mockCommuneFindMany).toHaveBeenCalledOnce();
+    expect(mockDecisionFindMany).toHaveBeenCalledOnce();
   });
 });

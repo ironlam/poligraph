@@ -4,7 +4,7 @@ import { type Prisma } from "@/generated/prisma";
 import type { AffairCandidateRecord, AffairScoringInput } from "./signals/types";
 import type { CombinerDecision } from "./combiner";
 import { RESOLVER_VERSION } from "./signals/constants";
-import { normalizeText } from "./candidate-prefilter";
+import { CandidatePrefilter, normalizeText } from "./candidate-prefilter";
 import { buildSurnameVocabulary, type SurnameVocabulary } from "./surname-ambiguity";
 
 /** SHA256 hex digest of a text input, used as the idempotency key. */
@@ -148,6 +148,42 @@ export async function loadSurnameVocabulary(): Promise<SurnameVocabulary> {
     politicianNames,
     corpus: decisions.map((d) => d.candidateText),
   });
+}
+
+export interface AffairResolverContext {
+  candidatePool: AffairCandidateRecord[];
+  vocabulary: SurnameVocabulary;
+  prefilter: CandidatePrefilter;
+}
+
+/**
+ * Loads the immutable scoring context for one bounded resolver execution.
+ * Callers processing a batch must keep this value in that execution only.
+ */
+export async function loadAffairResolverContext(): Promise<AffairResolverContext> {
+  const [candidatePool, vocabulary] = await Promise.all([
+    loadCandidatePool(),
+    loadSurnameVocabulary(),
+  ]);
+
+  return {
+    candidatePool,
+    vocabulary,
+    prefilter: new CandidatePrefilter(candidatePool),
+  };
+}
+
+/**
+ * Creates a loader for one bounded execution. The promise is created only by
+ * the first resolver that needs it, then shared by the remaining resolvers.
+ */
+export function createAffairResolverContextLoader(): () => Promise<AffairResolverContext> {
+  let contextPromise: Promise<AffairResolverContext> | undefined;
+
+  return () => {
+    contextPromise ??= loadAffairResolverContext();
+    return contextPromise;
+  };
 }
 
 export interface PersistInput {

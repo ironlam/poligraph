@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createDraftAffairFromDiscovery: vi.fn(),
   proposeAffairEvent: vi.fn(),
   previewAffairEventProposal: vi.fn(),
+  getResolverContext: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -34,6 +35,9 @@ vi.mock("@/lib/affair-matching", async (importOriginal) => ({
 
 vi.mock("@/lib/affair-matching/resolver", () => ({
   previewAffairPolitician: mocks.previewAffairPolitician,
+}));
+vi.mock("@/lib/affair-matching/persistence", () => ({
+  createAffairResolverContextLoader: () => mocks.getResolverContext,
 }));
 
 // pickConfidentMatch is pure and stays real; only the DB lookup is replaced.
@@ -78,6 +82,7 @@ beforeEach(() => {
     pendingProposalId: null,
     deduped: false,
   });
+  mocks.getResolverContext.mockResolvedValue({ marker: "shared-resolver-context" });
 });
 
 function zeroStats() {
@@ -176,6 +181,7 @@ describe("processAnalyzedArticle", () => {
     );
     expect(stats.articlesAnalyzed).toBe(1);
     expect(stats.articlesAffairRelated).toBe(0);
+    expect(mocks.getResolverContext).not.toHaveBeenCalled();
     expect(stats.affairsCreated).toBe(0);
     expect(stats.affairsEnriched).toBe(0);
   });
@@ -380,6 +386,33 @@ describe("processAnalyzedArticle : proposition d’évolution", () => {
     );
     expect(mocks.createDraftAffairFromDiscovery).not.toHaveBeenCalled();
     expect(stats.proposalsPending).toBe(1);
+  });
+
+  it("charge une fois et transmet le même contexte à plusieurs affaires", async () => {
+    const stats = zeroStats();
+    const secondDetected = { ...detected, title: "Deuxième évolution" };
+    let contextPromise: Promise<unknown> | undefined;
+    const getResolverContext = () => (contextPromise ??= mocks.getResolverContext());
+
+    await processAnalyzedArticle(
+      article,
+      `Introduction. ${excerpt} Suite de l’article.`,
+      { isAffairRelated: true, summary: "résumé", affairs: [detected, secondDetected] },
+      stats,
+      {
+        dryRun: false,
+        verbose: false,
+        importRunId: "run-press",
+        getResolverContext,
+      }
+    );
+
+    expect(mocks.getResolverContext).toHaveBeenCalledOnce();
+    expect(mocks.resolveAffairPolitician).toHaveBeenCalledTimes(2);
+    expect(mocks.resolveAffairPolitician.mock.calls[0]![1]).toBe(
+      mocks.resolveAffairPolitician.mock.calls[1]![1]
+    );
+    expect(mocks.resolveAffairPolitician.mock.calls[0]![1]).toBeTruthy();
   });
 
   it("ne choisit rien lorsqu’un autre candidat POSSIBLE existe", async () => {
