@@ -1906,6 +1906,7 @@ model Candidacy {
   @@index([candidateId])
   @@index([communeId])
   @@index([electoralListId])
+  @@index([partyId])
 }
 
 // Présidentielle : métadonnées éditoriales 1:1 sur Candidacy (cf. spec sub-plan I)
