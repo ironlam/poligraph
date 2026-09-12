@@ -49,6 +49,13 @@ import {
   type AffairResolverContext,
 } from "@/lib/affair-matching/persistence";
 
+export class ResolverContextLoadError extends Error {
+  constructor(cause: unknown) {
+    super("Impossible de charger le contexte du resolver", { cause });
+    this.name = "ResolverContextLoadError";
+  }
+}
+
 // ============================================
 // TYPES
 // ============================================
@@ -281,6 +288,10 @@ async function runPressAnalysis(
         });
       } catch (error) {
         stats.analysisErrors++;
+        if (error instanceof ResolverContextLoadError) {
+          console.error(`  ✗ Contexte du resolver indisponible, arrêt du lot: ${error.message}`);
+          break;
+        }
         const errorMsg = error instanceof Error ? error.message : String(error);
 
         // Detect quota/rate limit errors to avoid marking articles and to stop early
@@ -391,8 +402,9 @@ export async function processAnalyzedArticle(
 
   stats.articlesAnalyzed++;
 
-  // Step 3: Update article with analysis results
-  if (!dryRun) {
+  let articleMarkedAnalyzed = false;
+  const markArticleAnalyzed = async () => {
+    if (dryRun || articleMarkedAnalyzed) return;
     await db.pressArticle.update({
       where: { id: article.id },
       data: {
@@ -402,7 +414,8 @@ export async function processAnalyzedArticle(
         aiAnalysisError: null,
       },
     });
-  }
+    articleMarkedAnalyzed = true;
+  };
 
   if (verbose) {
     console.log(`  Résumé: ${result.summary.slice(0, 100)}...`);
@@ -410,6 +423,7 @@ export async function processAnalyzedArticle(
   }
 
   if (!result.isAffairRelated || result.affairs.length === 0) {
+    await markArticleAnalyzed();
     return;
   }
 
@@ -458,8 +472,14 @@ export async function processAnalyzedArticle(
         court: detected.court ?? null,
       },
     };
-    const sharedContext =
-      resolverContext ?? (getResolverContext ? await getResolverContext() : undefined);
+    let sharedContext: AffairResolverContext | undefined;
+    try {
+      sharedContext =
+        resolverContext ?? (getResolverContext ? await getResolverContext() : undefined);
+    } catch (error) {
+      throw new ResolverContextLoadError(error);
+    }
+    await markArticleAnalyzed();
     const resolveResult = dryRun
       ? await previewAffairPolitician(resolverInput, sharedContext)
       : await resolveAffairPolitician(resolverInput, sharedContext);
@@ -629,6 +649,8 @@ export async function processAnalyzedArticle(
       }
     }
   }
+
+  await markArticleAnalyzed();
 }
 
 function recordEventProposalOutcome(

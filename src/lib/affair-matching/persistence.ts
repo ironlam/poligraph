@@ -181,7 +181,10 @@ export function createAffairResolverContextLoader(): () => Promise<AffairResolve
   let contextPromise: Promise<AffairResolverContext> | undefined;
 
   return () => {
-    contextPromise ??= loadAffairResolverContext();
+    contextPromise ??= loadAffairResolverContext().catch((error) => {
+      contextPromise = undefined;
+      throw error;
+    });
     return contextPromise;
   };
 }

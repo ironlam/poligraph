@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AffairResolverContext } from "@/lib/affair-matching/persistence";
+import { CandidatePrefilter } from "@/lib/affair-matching/candidate-prefilter";
+import { EMPTY_SURNAME_VOCABULARY } from "@/lib/affair-matching/surname-ambiguity";
 
 // Only the DB-backed collaborators are mocked. assessProcedureEvidence and
 // assessPressAttribution stay real: they are pure, and mocking them would empty
@@ -11,11 +14,20 @@ const mocks = vi.hoisted(() => ({
   proposeAffairEvent: vi.fn(),
   previewAffairEventProposal: vi.fn(),
   getResolverContext: vi.fn(),
+  analyzeArticle: vi.fn(),
+  getArticleScraper: vi.fn(),
+  shouldSync: vi.fn(),
+  markCompleted: vi.fn(),
+  pressArticleFindMany: vi.fn(),
+  pressArticleUpdate: vi.fn(async () => ({})),
 }));
 
 vi.mock("@/lib/db", () => ({
   db: {
-    pressArticle: { update: vi.fn(async () => ({})) },
+    pressArticle: {
+      findMany: mocks.pressArticleFindMany,
+      update: mocks.pressArticleUpdate,
+    },
     politician: {
       findUnique: vi.fn(async () => ({
         firstName: "Jeanne",
@@ -26,6 +38,7 @@ vi.mock("@/lib/db", () => ({
     pressArticleAffair: { upsert: vi.fn(async () => ({})) },
     affairPoliticianDecision: { update: vi.fn(async () => ({})) },
   },
+  withAdvisoryLock: vi.fn(async (_key: string, callback: () => unknown) => callback()),
 }));
 
 vi.mock("@/lib/affair-matching", async (importOriginal) => ({
@@ -37,7 +50,30 @@ vi.mock("@/lib/affair-matching/resolver", () => ({
   previewAffairPolitician: mocks.previewAffairPolitician,
 }));
 vi.mock("@/lib/affair-matching/persistence", () => ({
-  createAffairResolverContextLoader: () => mocks.getResolverContext,
+  createAffairResolverContextLoader: () => {
+    let contextPromise: Promise<unknown> | undefined;
+    return () => (contextPromise ??= mocks.getResolverContext());
+  },
+}));
+
+vi.mock("@/services/press-analysis", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/press-analysis")>()),
+  analyzeArticle: mocks.analyzeArticle,
+  getAIRateLimitMs: () => 0,
+}));
+vi.mock("@/lib/api/article-scraper", () => ({
+  getArticleScraper: mocks.getArticleScraper,
+}));
+vi.mock("@/lib/sync", () => ({
+  syncMetadata: {
+    shouldSync: mocks.shouldSync,
+    markCompleted: mocks.markCompleted,
+  },
+}));
+vi.mock("@/services/affairs/import-run", () => ({
+  IMPORTER_PRESS_ANALYSIS: "press-analysis",
+  withImportRun: async (_importer: string, callback: (args: unknown) => unknown) =>
+    callback({ importRunId: "run-press", setStats: vi.fn() }),
 }));
 
 // pickConfidentMatch is pure and stays real; only the DB lookup is replaced.
@@ -56,7 +92,11 @@ vi.mock("@/services/affairs/proposals", async (importOriginal) => ({
   previewAffairEventProposal: mocks.previewAffairEventProposal,
 }));
 
-import { isPressAnalysisSuccessful, processAnalyzedArticle } from "./press-analysis";
+import {
+  isPressAnalysisSuccessful,
+  processAnalyzedArticle,
+  syncPressAnalysis,
+} from "./press-analysis";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -82,7 +122,15 @@ beforeEach(() => {
     pendingProposalId: null,
     deduped: false,
   });
-  mocks.getResolverContext.mockResolvedValue({ marker: "shared-resolver-context" });
+  const resolverContext: AffairResolverContext = {
+    candidatePool: [],
+    vocabulary: EMPTY_SURNAME_VOCABULARY,
+    prefilter: new CandidatePrefilter([]),
+  };
+  mocks.getResolverContext.mockResolvedValue(resolverContext);
+  mocks.shouldSync.mockResolvedValue(true);
+  mocks.pressArticleFindMany.mockResolvedValue([]);
+  mocks.getArticleScraper.mockReturnValue({ canScrape: () => false });
 });
 
 function zeroStats() {
@@ -391,8 +439,9 @@ describe("processAnalyzedArticle : proposition d’évolution", () => {
   it("charge une fois et transmet le même contexte à plusieurs affaires", async () => {
     const stats = zeroStats();
     const secondDetected = { ...detected, title: "Deuxième évolution" };
-    let contextPromise: Promise<unknown> | undefined;
-    const getResolverContext = () => (contextPromise ??= mocks.getResolverContext());
+    let contextPromise: Promise<AffairResolverContext> | undefined;
+    const getResolverContext = (): Promise<AffairResolverContext> =>
+      (contextPromise ??= mocks.getResolverContext());
 
     await processAnalyzedArticle(
       article,
@@ -516,5 +565,50 @@ describe("processAnalyzedArticle : proposition d’évolution", () => {
 
     expect(mocks.proposeAffairEvent).not.toHaveBeenCalled();
     expect(mocks.createDraftAffairFromDiscovery).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("syncPressAnalysis : panne du contexte", () => {
+  it("arrête les articles suivants et ne marque pas le premier comme analysé", async () => {
+    const first = {
+      id: "article-1",
+      url: "https://www.lemonde.fr/1",
+      title: "Une enquête vise Jeanne Martin",
+      description: "Jeanne Martin fait l’objet d’une enquête préliminaire.",
+      feedSource: "lemonde",
+      publishedAt: new Date("2026-08-27T08:00:00.000Z"),
+      mentions: [{ politician: { id: "pol-1", fullName: "Jeanne Martin", slug: "jeanne-martin" } }],
+    };
+    const second = { ...first, id: "article-2", url: "https://www.lemonde.fr/2" };
+    mocks.pressArticleFindMany.mockResolvedValue([first, second]);
+    mocks.analyzeArticle.mockResolvedValue({
+      isAffairRelated: true,
+      summary: "résumé",
+      affairs: [
+        {
+          politicianName: "Jeanne Martin",
+          involvement: "DIRECT",
+          category: "DETOURNEMENT_FONDS_PUBLICS",
+          status: "ENQUETE_PRELIMINAIRE",
+          title: "Enquête sur Jeanne Martin",
+          description: "Une enquête préliminaire est ouverte.",
+          factsDate: null,
+          court: null,
+          charges: [],
+          excerpts: [],
+          isNewRevelation: false,
+          confidenceScore: 95,
+          mentionedNames: ["Jeanne Martin"],
+        },
+      ],
+    });
+    mocks.getResolverContext.mockRejectedValue(new Error("database unavailable"));
+
+    const stats = await syncPressAnalysis({ force: true });
+
+    expect(stats.articlesProcessed).toBe(1);
+    expect(stats.analysisErrors).toBe(1);
+    expect(mocks.analyzeArticle).toHaveBeenCalledOnce();
+    expect(mocks.pressArticleUpdate).not.toHaveBeenCalled();
   });
 });
