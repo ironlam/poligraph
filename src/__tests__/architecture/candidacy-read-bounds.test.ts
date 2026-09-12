@@ -26,87 +26,117 @@ const ROOT = process.cwd();
  * true } })`, which read the same unbounded rows without ever writing `db.candidacy.*`. A known
  * unguarded site of that shape is tracked in the task 5 report rather than here, since fixing it is
  * a public API contract decision, not a mechanical bound.
+ *
+ * An entry earns its place in ALLOWED_UNBOUNDED only by falling into one of three families:
+ * bounded by reality (one commune, one election, one politician — at most a few dozen rows);
+ * exhaustiveness required by the correctness of the code, typically a lock taken before a
+ * mutation, where a `take` would leave rows unlocked; or bounded by a named constant, which this
+ * detector cannot see since it only accepts a literal. A display read that could simply take a
+ * `take` — a dropdown, a paginable listing — falls into none of these and has no place here: bound
+ * it instead.
  */
-const ALLOWED_UNBOUNDED = new Map<string, { count: number; reason: string }>([
+const ALLOWED_UNBOUNDED = new Map<string, Map<string, string>>([
   [
     "src/app/api/admin/partis/[id]/route.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "PUT",
         "verrouillage avant mutation : toutes les candidatures présidentielles du parti doivent être prises",
-    },
+      ],
+    ]),
   ],
   [
     "src/app/api/admin/politiques/[id]/route.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "PUT",
         "verrouillage avant mutation : toutes les candidatures présidentielles du politique doivent être prises",
-    },
+      ],
+    ]),
   ],
   [
     "src/lib/data/elections.ts",
-    {
-      count: 2,
-      reason:
-        "fiches commune 2020 et 2014 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
-    },
+    new Map([
+      [
+        "getCommuneResults2020",
+        "fiche commune 2020 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+      ],
+      [
+        "getCommuneResults2014",
+        "fiche commune 2014 : toutes les listes/candidatures de la commune doivent apparaître, une borne en tronquerait certaines",
+      ],
+    ]),
   ],
   [
     "src/lib/data/municipales.ts",
-    {
-      count: 2,
-      reason:
-        "fiche commune (toutes les candidatures) et page cumul des mandats (tous les cumulards) : listes exhaustives par nature, une borne en tronquerait certaines",
-    },
+    new Map([
+      [
+        "getCommune",
+        "fiche commune : toutes les candidatures doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+      ],
+      [
+        "getCumulCandidates",
+        "page cumul des mandats : tous les cumulards doivent apparaître, liste exhaustive par nature, une borne en tronquerait certaines",
+      ],
+    ]),
   ],
   [
     "src/lib/data/candidates.ts",
-    {
-      count: 2,
-      reason:
-        "modération d'une seule élection présidentielle et historique cross-cycle d'un seul politique : ensembles déjà bornés par le réel, l'exhaustivité conditionne leur exactitude",
-    },
+    new Map([
+      [
+        "getCandidates2027ForModeration",
+        "modération d'une seule élection présidentielle : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+      ],
+      [
+        "getCandidateCrossCycle",
+        "historique cross-cycle d'un seul politique : ensemble déjà borné par le réel, l'exhaustivité conditionne son exactitude",
+      ],
+    ]),
   ],
   [
     "src/lib/data/presidential-candidacy-field.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "getPublicPresidentialCandidacyField",
         "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
-    },
+      ],
+    ]),
   ],
   [
     "src/lib/data/presidential-candidates-public.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "getPublicPresidentialCandidates",
         "champ public complet d'une élection présidentielle : une borne en tronquerait des candidats",
-    },
+      ],
+    ]),
   ],
   [
     "src/lib/data/presidentielle-2027.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "getPresidentielle2027Candidates",
         "champ admin complet d'une élection présidentielle : une borne en tronquerait des candidats",
-    },
+      ],
+    ]),
   ],
   [
     "src/app/admin/mesures/_data/queue-query.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "listMeasureQueueCandidates",
         "liste de filtre de la file de modération : une borne masquerait des candidatures existantes sans signal pour l'utilisateur",
-    },
+      ],
+    ]),
   ],
   [
     "src/app/admin/mesures/_data/candidacies-query.ts",
-    {
-      count: 1,
-      reason:
+    new Map([
+      [
+        "listPresidentialCandidacies",
         "déjà borné par la constante MAX_CANDIDACIES (200) ; le détecteur n'accepte qu'un littéral, jamais une constante nommée",
-    },
+      ],
+    ]),
   ],
 ]);
 
@@ -118,6 +148,24 @@ function sourceFiles(directory: string): string[] {
       ? [relative(ROOT, join(ROOT, path))]
       : [];
   });
+}
+
+/**
+ * Reads a source file for the guard, turning a raw `ENOENT` into a message that names the file and
+ * says why it matters here: an `ALLOWED_UNBOUNDED` entry pointing at it is stale (the file was
+ * renamed or removed), not a generic filesystem failure in the middle of a test run.
+ */
+function readSourceFile(path: string): string {
+  try {
+    return readFileSync(join(ROOT, path), "utf8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      throw new Error(
+        `${path} est introuvable : l'entrée d'exception dans ALLOWED_UNBOUNDED est périmée (fichier renommé ou supprimé).`
+      );
+    }
+    throw error;
+  }
 }
 
 const MAX_ALLOWED_TAKE = 10_000;
@@ -156,9 +204,70 @@ function hasLiteralTake(argument: ts.ObjectLiteralExpression, file: ts.SourceFil
   return !argument.properties.slice(index + 1).some(ts.isSpreadAssignment);
 }
 
-export function unboundedCandidacyReads(path: string, code: string): number[] {
+/**
+ * Nearest top-level module binding enclosing `node` (`export const NAME = ...`), used only when
+ * `node` sits inside nothing but anonymous callbacks — a HOC-composed route handler such as
+ * `export const PUT = withAdminAuth(withValidation(schema, async (req) => {...}))`, where neither
+ * callback has a name of its own. `PUT` is the only stable label left for that shape.
+ */
+function topLevelBindingName(node: ts.Node, file: ts.SourceFile): string | undefined {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if (
+      ts.isVariableDeclaration(current) &&
+      ts.isIdentifier(current.name) &&
+      ts.isVariableDeclarationList(current.parent) &&
+      ts.isVariableStatement(current.parent.parent) &&
+      current.parent.parent.parent === file
+    ) {
+      return current.name.text;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+/**
+ * Name of the function enclosing `node`, the stable location an `ALLOWED_UNBOUNDED` entry is
+ * anchored to instead of a raw count: a file exempted by count can bound the one reviewed read and
+ * add an unrelated unbounded one for free, since the total never changes. Anchoring to the
+ * enclosing function name closes that hole.
+ *
+ * Walks up looking for a `FunctionDeclaration`, a `MethodDeclaration`, a named function
+ * expression, or an arrow/anonymous function expression directly assigned to a variable
+ * (`const f = async () => {}`). When the nearest enclosing function is itself anonymous — a
+ * callback passed straight to a call, with no binding of its own — the search continues outward
+ * to the nearest top-level exported binding, per `topLevelBindingName`.
+ */
+function enclosingFunctionName(node: ts.Node, file: ts.SourceFile): string | undefined {
+  let current: ts.Node | undefined = node.parent;
+  while (current) {
+    if (ts.isFunctionDeclaration(current) && current.name) {
+      return current.name.text;
+    }
+    if (ts.isMethodDeclaration(current) && ts.isIdentifier(current.name)) {
+      return current.name.text;
+    }
+    if (ts.isFunctionExpression(current) && current.name) {
+      return current.name.text;
+    }
+    if (
+      (ts.isFunctionExpression(current) || ts.isArrowFunction(current)) &&
+      ts.isVariableDeclaration(current.parent) &&
+      ts.isIdentifier(current.parent.name)
+    ) {
+      return current.parent.name.text;
+    }
+    current = current.parent;
+  }
+  return topLevelBindingName(node, file);
+}
+
+export type UnboundedRead = { line: number; functionName: string };
+
+export function unboundedCandidacyReads(path: string, code: string): UnboundedRead[] {
   const file = ts.createSourceFile(path, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const lines: number[] = [];
+  const reads: UnboundedRead[] = [];
 
   const visit = (node: ts.Node) => {
     if (
@@ -175,14 +284,55 @@ export function unboundedCandidacyReads(path: string, code: string): number[] {
         hasLiteralTake(argument, file);
 
       if (!bounded) {
-        lines.push(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1);
+        const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
+        const functionName = enclosingFunctionName(node, file);
+        if (functionName === undefined) {
+          throw new Error(
+            `${path}:${line} — lecture non bornée de Candidacy hors de toute fonction nommée ; ` +
+              "impossible de construire une clé d'exception stable (voir ALLOWED_UNBOUNDED dans candidacy-read-bounds.test.ts)."
+          );
+        }
+        reads.push({ line, functionName });
       }
     }
     ts.forEachChild(node, visit);
   };
 
   visit(file);
-  return lines;
+  return reads;
+}
+
+/** Unbounded reads not covered by any declared exception for their file and function. */
+function findUnexpectedReads(
+  files: string[],
+  allowed: Map<string, Map<string, string>>,
+  readFile: (path: string) => string
+): string[] {
+  return files.flatMap((path) => {
+    const reads = unboundedCandidacyReads(path, readFile(path));
+    const allowedFunctions = allowed.get(path);
+    return reads.flatMap((read) =>
+      allowedFunctions?.has(read.functionName)
+        ? []
+        : [`${path}:${read.line} dans ${read.functionName} : lecture non bornée non déclarée`]
+    );
+  });
+}
+
+/** Declared exceptions whose function no longer exists, or no longer contains an unbounded read. */
+function findStaleExceptions(
+  allowed: Map<string, Map<string, string>>,
+  readFile: (path: string) => string
+): string[] {
+  return [...allowed.entries()].flatMap(([path, functions]) => {
+    const reads = unboundedCandidacyReads(path, readFile(path));
+    const foundNames = new Set(reads.map((read) => read.functionName));
+    return [...functions.keys()].flatMap((functionName) =>
+      foundNames.has(functionName)
+        ? []
+        : [`${path} : ${functionName} déclarée, aucune lecture non bornée trouvée`]
+    );
+  });
 }
 
 describe("détecteur de lectures non bornées", () => {
@@ -272,6 +422,65 @@ describe("détecteur de lectures non bornées", () => {
   });
 });
 
+describe("allowlist ancrée par fonction (pas par compte)", () => {
+  it("signale une lecture non déclarée même si le fichier a d'autres exceptions", () => {
+    const code = [
+      "declare const db: any;",
+      "async function fonctionDeclaree() {",
+      "  await db.candidacy.findMany({ where: { id } });",
+      "}",
+      "async function fonctionNonDeclaree() {",
+      "  await db.candidacy.findMany({ where: { id } });",
+      "}",
+    ].join("\n");
+    const allowed = new Map([["fake.ts", new Map([["fonctionDeclaree", "raison de test"]])]]);
+
+    const unexpected = findUnexpectedReads(["fake.ts"], allowed, () => code);
+
+    expect(unexpected).toHaveLength(1);
+    expect(unexpected[0]).toContain("fonctionNonDeclaree");
+  });
+
+  it("signale une exception périmée dont la fonction n'existe plus", () => {
+    const code =
+      "declare const db: any;\nasync function fonctionActuelle() { await db.candidacy.findMany({ take: 50 }); }";
+    const allowed = new Map([["fake.ts", new Map([["fonctionRenommee", "raison de test"]])]]);
+
+    const stale = findStaleExceptions(allowed, () => code);
+
+    expect(stale).toHaveLength(1);
+    expect(stale[0]).toContain("fonctionRenommee");
+  });
+
+  it("signale une exception périmée dont la fonction est redevenue bornée", () => {
+    const code =
+      "declare const db: any;\nasync function fonctionCorrigee() { await db.candidacy.findMany({ take: 50 }); }";
+    const allowed = new Map([["fake.ts", new Map([["fonctionCorrigee", "raison de test"]])]]);
+
+    const stale = findStaleExceptions(allowed, () => code);
+
+    expect(stale).toHaveLength(1);
+    expect(stale[0]).toContain("fonctionCorrigee");
+  });
+
+  it("produit un message clair pour un appel hors de toute fonction nommée", () => {
+    expect(() =>
+      unboundedCandidacyReads(
+        "a.ts",
+        "declare const db: any;\nvoid db.candidacy.findMany({ where: { id } });"
+      )
+    ).toThrow(/hors de toute fonction nommée/);
+  });
+
+  it("signale clairement une entrée d'exception dont le fichier a disparu", () => {
+    const missing = new Map([
+      ["src/lib/data/ce-fichier-n-existe-plus.ts", new Map([["x", "raison de test"]])],
+    ]);
+
+    expect(() => findStaleExceptions(missing, readSourceFile)).toThrow(/introuvable/);
+  });
+});
+
 describe("bornes des lectures de Candidacy", () => {
   const files = [...sourceFiles("src/lib/data"), ...sourceFiles("src/app")].filter(
     (path) =>
@@ -284,25 +493,14 @@ describe("bornes des lectures de Candidacy", () => {
   });
 
   it("n'a pas de lecture non bornée en dehors des exceptions déclarées", () => {
-    const unexpected = files.flatMap((path) => {
-      const lines = unboundedCandidacyReads(path, readFileSync(join(ROOT, path), "utf8"));
-      const allowed = ALLOWED_UNBOUNDED.get(path)?.count ?? 0;
-      return lines.length > allowed
-        ? [`${path} : ${lines.length} non bornée(s), ${allowed} autorisée(s)`]
-        : [];
-    });
+    const unexpected = findUnexpectedReads(files, ALLOWED_UNBOUNDED, readSourceFile);
 
     expect(unexpected).toEqual([]);
   });
 
   it("ne garde pas d'exception périmée", () => {
     // An allowlist nobody prunes stops being a list of decisions and becomes noise.
-    const stale = [...ALLOWED_UNBOUNDED.entries()].flatMap(([path, entry]) => {
-      const lines = unboundedCandidacyReads(path, readFileSync(join(ROOT, path), "utf8"));
-      return lines.length < entry.count
-        ? [`${path} : ${entry.count} déclarée(s), ${lines.length} trouvée(s)`]
-        : [];
-    });
+    const stale = findStaleExceptions(ALLOWED_UNBOUNDED, readSourceFile);
 
     expect(stale).toEqual([]);
   });
