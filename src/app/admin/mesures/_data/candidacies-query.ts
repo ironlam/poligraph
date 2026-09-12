@@ -19,7 +19,6 @@ import { db } from "@/lib/db";
  * `Candidacy` also holds municipal rows and loading it whole has already produced a 19 MB page.
  */
 const HUB_ELECTION_SLUG = "presidentielle-2027";
-const MAX_CANDIDACIES = 200;
 
 export type CandidacyOption = {
   id: string;
@@ -47,7 +46,9 @@ export async function listPresidentialCandidacies(): Promise<CandidacyOption[]> 
     },
     // Alphabetical, and the page says so: any other order on a list of candidates is a ranking.
     orderBy: [{ candidateName: "asc" }],
-    take: MAX_CANDIDACIES,
+    // Literal, not `MAX_CANDIDACIES`: the read-bounds guard only proves a numeric literal, since
+    // a named constant could hold anything at run time as far as static analysis is concerned.
+    take: 200,
   });
 
   return rows.flatMap((row) =>

@@ -187,7 +187,8 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   });
   if (!commune) return null;
 
-  // Fetch all candidacies for this commune
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the fiche
+  // commune must show every list of that one commune, and a take would silently drop some.
   const candidacies = await db.candidacy.findMany({
     where: { electionId, communeId: inseeCode },
     select: {
@@ -359,18 +360,23 @@ export const getMunicipales2014Stats = cache(
     const electionId = await getElection2014Id();
     if (!electionId) return null;
 
-    const [totalCandidacies, communeGroups, electedCount] = await Promise.all([
-      db.candidacy.count({ where: { electionId } }),
-      db.candidacy.groupBy({
-        by: ["communeId"],
-        where: { electionId, communeId: { not: null } },
-      }),
+    // Same fix as getMunicipales2020Stats above: one aggregate row rather than one row per
+    // commune, which the former groupBy shipped back to Node only to read its length.
+    const [[row], electedCount] = await Promise.all([
+      db.$queryRaw<Array<{ totalCandidacies: number; totalCommunes: number }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS "totalCandidacies",
+                 COUNT(DISTINCT "communeId")::int AS "totalCommunes"
+          FROM "Candidacy"
+          WHERE "electionId" = ${electionId}
+        `
+      ),
       db.candidacy.count({ where: { electionId, isElected: true } }),
     ]);
 
     return {
-      totalCandidacies,
-      totalCommunes: communeGroups.length,
+      totalCandidacies: row?.totalCandidacies ?? 0,
+      totalCommunes: row?.totalCommunes ?? 0,
       electedCount,
     };
   }
@@ -452,6 +458,8 @@ export const getCommuneResults2014 = cache(async function getCommuneResults2014(
   if (!commune) return null;
 
   // 2014 import has one candidacy per list (tête de liste only)
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the fiche
+  // commune must show every list of that one commune, and a take would silently drop some.
   const candidacies = await db.candidacy.findMany({
     where: { electionId, communeId: inseeCode },
     select: {
