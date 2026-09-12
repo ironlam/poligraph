@@ -60,7 +60,9 @@ export default async function Municipales2020Page() {
       {stats && (
         <section className="py-8">
           <h2 className="text-xl font-bold mb-4">En chiffres</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {/* "listes" and "maires élus" were removed on 2026-09-12: neither measured its label.
+              See the Municipales2020Stats doc comment. */}
+          <div className="grid grid-cols-2 gap-4">
             <Card>
               <CardContent className="pt-5 text-center">
                 <p className="text-2xl font-bold tabular-nums">
@@ -75,22 +77,6 @@ export default async function Municipales2020Page() {
                   {stats.totalCommunes.toLocaleString("fr-FR")}
                 </p>
                 <p className="text-sm text-muted-foreground">communes</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5 text-center">
-                <p className="text-2xl font-bold tabular-nums">
-                  {stats.totalLists.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-sm text-muted-foreground">listes</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5 text-center">
-                <p className="text-2xl font-bold tabular-nums">
-                  {stats.electedMayorsCount.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-sm text-muted-foreground">maires élus</p>
               </CardContent>
             </Card>
           </div>
