@@ -123,7 +123,7 @@ jobs:
           POSTGRES_PASSWORD: poligraph_test
           POSTGRES_DB: poligraph_test
         ports:
-          - 5432:5432
+          - 55433:5432
         options: >-
           --health-cmd "pg_isready -h localhost -U poligraph_test -d poligraph_test"
           --health-interval 5s
@@ -131,8 +131,8 @@ jobs:
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
-      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:5432/poligraph_test
+      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
+      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
       DATABASE_SSL: "false"
       NODE_ENV: test
       DOTENV_CONFIG_PATH: /dev/null
@@ -160,7 +160,18 @@ jobs:
         run: npx prisma db push
 
       - name: Run election API integration suite
-        run: npx vitest run --no-file-parallelism "src/app/api/elections/[slug]/route.integration.test.ts"
+        run: |
+          npx vitest run --no-file-parallelism \
+            --reporter=json \
+            --outputFile=election-api-postgres-vitest.json \
+            "src/app/api/elections/[slug]/route.integration.test.ts"
+          node -e '
+            const report = require("./election-api-postgres-vitest.json");
+            if (report.numTotalTests > 0 && report.numPassedTests === 0 && report.numPendingTests === report.numTotalTests) {
+              console.error("Election API integration suite was entirely skipped");
+              process.exit(1);
+            }
+          '
 
   sec-02-role-contract:
     name: SEC-02 role contract
