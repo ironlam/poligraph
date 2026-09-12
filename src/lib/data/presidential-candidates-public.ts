@@ -47,6 +47,8 @@ export type PublicPresidentialCandidate = {
 export async function getPublicPresidentialCandidates(
   electionSlug: string
 ): Promise<PublicPresidentialCandidate[]> {
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is the
+  // whole public field of one presidential election, and a take would silently drop candidates.
   const rows = await db.candidacy.findMany({
     where: { election: { slug: electionSlug }, ...PUBLIC_CANDIDACY_WHERE },
     include: {

@@ -85,6 +85,8 @@ export async function getPublicPresidentialCandidacyField(
   }
 
   const [rows, measureRollups, editions] = await Promise.all([
+    // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is the
+    // whole tracked field of one presidential election, and a take would silently drop candidates.
     db.candidacy.findMany({
       where: {
         electionId: election.id,

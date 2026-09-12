@@ -274,7 +274,9 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
     };
   }
 
-  // Get all candidacies for this commune in this election, with candidate + politician data
+  // Get all candidacies for this commune in this election, with candidate + politician data.
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the fiche
+  // commune must show every candidacy of that one commune, and a take would silently drop some.
   const candidacies = await db.candidacy.findMany({
     where: {
       electionId: election.id,
@@ -483,7 +485,9 @@ export const getCumulCandidates = cache(async function getCumulCandidates() {
   });
   if (!election) return [];
 
-  // Get candidacies with linked politicians who have active national mandates
+  // Get candidacies with linked politicians who have active national mandates.
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the page
+  // computes stats over and renders every cumulard, and a take would silently drop some.
   const candidacies = await db.candidacy.findMany({
     where: {
       electionId: election.id,

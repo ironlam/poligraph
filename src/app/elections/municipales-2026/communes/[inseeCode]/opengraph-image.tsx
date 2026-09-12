@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
 import { getDepartmentShapeWithDot } from "@/lib/og-department-shape";
@@ -50,17 +51,18 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
   let listCount = 0;
   let candidateCount = 0;
   if (election) {
-    const stats = await db.candidacy.aggregate({
-      where: { electionId: election.id, communeId: inseeCode },
-      _count: true,
-    });
-    candidateCount = stats._count;
-
-    const lists = await db.candidacy.groupBy({
-      by: ["listName"],
-      where: { electionId: election.id, communeId: inseeCode },
-    });
-    listCount = lists.length;
+    // One aggregate row rather than one row per list: the former groupBy shipped rows back to
+    // Node only to read its length, the same bug fixed in getMunicipales2020Stats.
+    const [row] = await db.$queryRaw<Array<{ candidateCount: number; listCount: number }>>(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS "candidateCount",
+               COUNT(DISTINCT "listName")::int AS "listCount"
+        FROM "Candidacy"
+        WHERE "electionId" = ${election.id} AND "communeId" = ${inseeCode}
+      `
+    );
+    candidateCount = row?.candidateCount ?? 0;
+    listCount = row?.listCount ?? 0;
   }
 
   const populationFormatted = commune.population

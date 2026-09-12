@@ -164,6 +164,8 @@ export type MeasureQueueCandidateOption = {
 
 /** Only offers candidacies that already own at least one measure in the moderation queue. */
 export async function listMeasureQueueCandidates(): Promise<MeasureQueueCandidateOption[]> {
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is a
+  // filter dropdown, and a take would silently hide candidacies from it without any signal.
   const rows = await db.candidacy.findMany({
     where: { measures: { some: {} } },
     select: {

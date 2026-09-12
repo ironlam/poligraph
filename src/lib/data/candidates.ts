@@ -22,6 +22,8 @@ export type CandidatePresidentialRow = Prisma.CandidacyGetPayload<{
 }>;
 
 export async function getCandidates2027ForModeration(): Promise<CandidatePresidentialRow[]> {
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): the moderation
+  // queue must show every candidate of that one election, and a take would silently drop some.
   return db.candidacy.findMany({
     where: { election: { slug: "presidentielle-2027" } },
     include: PRESIDENTIAL_INCLUDE,
@@ -56,6 +58,8 @@ export async function getCandidateCrossCycle(
   politicianId: string,
   excludeElectionSlug: string
 ): Promise<CrossCycleEntry[]> {
+  // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): this is one
+  // politician's whole presidential history, and a take would silently drop past cycles.
   const rows = await db.candidacy.findMany({
     where: {
       politicianId,
