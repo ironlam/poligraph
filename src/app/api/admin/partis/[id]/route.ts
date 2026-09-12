@@ -88,6 +88,9 @@ export const PUT = withAdminAuth(
     }
 
     const { updatedParty, presidentialElectionIds } = await db.$transaction(async (tx) => {
+      // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): every
+      // presidential candidacy of this party must be locked before the mutation, and a take
+      // would leave some unlocked.
       const candidacies = await tx.candidacy.findMany({
         where: { partyId: id, election: { type: "PRESIDENTIELLE" } },
         select: { id: true },
