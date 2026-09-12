@@ -1575,6 +1575,20 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
 };
 
 /**
+ * Citizen-facing explanations for the pre-campaign status axis. These statuses describe a
+ * political signal, not the administrative validation of a presidential candidacy.
+ */
+export const CANDIDACY_STATUS_DESCRIPTIONS: Record<CandidacyStatus, string> = {
+  DECLARE:
+    "La personne a annoncé elle-même sa candidature dans une source vérifiable. Ce statut ne signifie pas encore que sa candidature est officiellement enregistrée pour le scrutin.",
+  PRESSENTI:
+    "Des sources crédibles rapportent une intention de candidature, sans annonce publique établie par la personne.",
+  ENVISAGE:
+    "La personne est citée comme une candidature possible, sans intention suffisamment établie.",
+  RETIRE: "La personne avait annoncé sa candidature, puis a annoncé son retrait ou a été écartée.",
+};
+
+/**
  * The same four levels, without the noun, for the merged status + programme badge.
  *
  * The badge reads "Annoncée · 19 mesures" in a 230px column: repeating "Candidature" in a list

@@ -99,7 +99,78 @@ export default function MethodologiePage() {
             Niveaux de certitude, catégories et règles de comptage.
           </span>
         </Link>
+        <Link
+          href="#candidatures-presidentielle-2027"
+          className="rounded-xl border border-border p-4 hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <span className="block font-bold">Candidatures à la présidentielle 2027</span>
+          <span className="mt-1 block text-sm text-muted-foreground">
+            Statuts de déclaration, sources et distinction avec la candidature officielle.
+          </span>
+        </Link>
       </nav>
+
+      <section
+        id="candidatures-presidentielle-2027"
+        aria-labelledby="candidatures-presidentielle-title"
+        className="mb-12"
+      >
+        <h2
+          id="candidatures-presidentielle-title"
+          className="mb-2 font-display text-2xl font-extrabold tracking-tight"
+        >
+          Candidatures à la présidentielle 2027
+        </h2>
+        <p className="mb-6 text-muted-foreground">
+          Les statuts affichés dans le hub décrivent le niveau de déclaration politique établi par
+          des sources vérifiables. Ils ne constituent pas la liste officielle des candidats au
+          scrutin.
+        </p>
+        <div className="space-y-3 text-sm text-muted-foreground">
+          {[
+            ["Candidature annoncée", "La personne a annoncé elle-même sa candidature."],
+            [
+              "Personnalité pressentie",
+              "Des sources crédibles rapportent une intention, sans annonce publique établie par la personne.",
+            ],
+            [
+              "Personnalité évoquée",
+              "La personne est citée comme une possibilité, sans intention suffisamment établie.",
+            ],
+            ["Candidature retirée", "La candidature avait été annoncée, puis retirée ou écartée."],
+          ].map(([label, description]) => (
+            <div key={label} className="rounded-lg border p-4">
+              <h3 className="font-medium text-foreground mb-1">{label}</h3>
+              <p>{description}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-6 text-sm text-muted-foreground">
+          La qualification officielle intervient dans la procédure électorale après le dépôt des
+          candidatures et la vérification des présentations par le Conseil constitutionnel.
+          Poligraph conserve donc deux notions séparées : le statut politique présenté ici, et la
+          validation administrative qui relève des autorités compétentes. Pour les règles de
+          l’élection, consultez la page du{" "}
+          <Link
+            href="https://www.elections.interieur.gouv.fr/scrutins/lelection-presidentielle/election-presidentielle-je-suis-candidat"
+            className="text-primary hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ministère de l’Intérieur
+          </Link>{" "}
+          et le dossier pédagogique de{" "}
+          <Link
+            href="https://www.vie-publique.fr/questions-reponses/269379-election-presidentielle-2027-lessentiel-en-questions-reponses"
+            className="text-primary hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Vie publique
+          </Link>
+          .
+        </p>
+      </section>
 
       <section id="affaires-judiciaires" aria-labelledby="affaires-judiciaires-title">
         <h2

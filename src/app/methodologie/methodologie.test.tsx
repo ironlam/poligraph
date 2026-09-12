@@ -14,6 +14,14 @@ describe("pages de méthodologie", () => {
       "href",
       "/methodologie/mesures-presidentielle-2027"
     );
+    expect(
+      screen.getByRole("heading", { name: "Candidatures à la présidentielle 2027" })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/ne constituent pas la liste officielle/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ministère de l’Intérieur" })).toHaveAttribute(
+      "target",
+      "_blank"
+    );
     expect(container.querySelector("#comment-nous-comptons")).toBeInTheDocument();
   });
 

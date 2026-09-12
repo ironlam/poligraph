@@ -1,4 +1,5 @@
-import { CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { CANDIDACY_STATUS_DESCRIPTIONS, CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
 import type { CandidacyStatus } from "@/generated/prisma";
 
 /**
@@ -58,9 +59,24 @@ const PILL =
   "inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border px-2.5 py-[3px] font-display text-xs font-bold leading-[1.35]";
 
 export function CandidacyStatusBadge({ status }: { status: CandidacyStatus | null }) {
+  if (status === null) {
+    return (
+      <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]} self-start`}>
+        {candidacyBadgeLabel(status)}
+      </span>
+    );
+  }
+
   return (
-    <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]} self-start`}>
-      {candidacyBadgeLabel(status)}
+    <span className="inline-flex items-center gap-0.5 self-start">
+      <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]}`}>
+        {candidacyBadgeLabel(status)}
+      </span>
+      <InfoTooltip
+        text={CANDIDACY_STATUS_DESCRIPTIONS[status]}
+        className="min-h-11 min-w-11"
+        side="top"
+      />
     </span>
   );
 }
