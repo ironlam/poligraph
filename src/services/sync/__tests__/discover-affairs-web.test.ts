@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   resolve: vi.fn(),
   preview: vi.fn(),
   findMatching: vi.fn(),
+  loadResolverContext: vi.fn(),
 }));
 
 vi.mock("@/lib/api/brave-search", () => ({
@@ -40,6 +41,12 @@ vi.mock("@/services/affairs/create-draft", () => ({
 vi.mock("@/lib/affair-matching/resolver", () => ({
   resolveAffairPolitician: h.resolve,
   previewAffairPolitician: h.preview,
+}));
+vi.mock("@/lib/affair-matching/persistence", () => ({
+  createAffairResolverContextLoader: () => {
+    let contextPromise: Promise<unknown> | undefined;
+    return () => (contextPromise ??= h.loadResolverContext());
+  },
 }));
 // Mock partiel : seul l'accès base est simulé. Le regroupement par procédure
 // s'appuie sur la vraie comparaison de vocabulaire du matcher, sinon le test
@@ -91,6 +98,7 @@ beforeEach(() => {
   h.preview.mockResolvedValue({ judgment: "SAME", topCandidateId: "p1" });
   h.findMatching.mockResolvedValue([]);
   h.callAnthropic.mockResolvedValue({ content: [] });
+  h.loadResolverContext.mockResolvedValue({ marker: "shared-resolver-context" });
 });
 
 describe("discoverAffairsWeb", () => {
@@ -109,6 +117,26 @@ describe("discoverAffairsWeb", () => {
     expect(stats.resultsReturned).toBe(2);
     expect(stats.resultsScreenedOut).toBe(1);
     expect(h.callAnthropic).toHaveBeenCalledTimes(1);
+    expect(h.loadResolverContext).not.toHaveBeenCalled();
+  });
+
+  it("transmet le même contexte à plusieurs résolutions", async () => {
+    h.searchBrave.mockResolvedValue([hit, { ...hit, url: "https://www.lemonde.fr/b" }]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour détournement",
+      confidence: 85,
+      reasoning: "x",
+      suggested_title: "Mise en examen de Joseph Afribo",
+    });
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    expect(h.loadResolverContext).toHaveBeenCalledOnce();
+    expect(h.resolve).toHaveBeenCalledTimes(2);
+    expect(h.resolve.mock.calls[0]![1]).toBe(h.resolve.mock.calls[1]![1]);
+    expect(h.resolve.mock.calls[0]![1]).toBeTruthy();
   });
 
   it("ne crée rien quand l'IA dit que la personne n'est pas le sujet", async () => {

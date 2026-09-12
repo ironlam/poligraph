@@ -6,13 +6,12 @@ import type {
 } from "./signals/types";
 import {
   computeTextHash,
-  loadCandidatePool,
+  loadAffairResolverContext,
   loadBlocklist,
-  loadSurnameVocabulary,
   persistDecision,
 } from "./persistence";
+import type { AffairResolverContext } from "./persistence";
 import type { SurnameVocabulary } from "./surname-ambiguity";
-import { CandidatePrefilter } from "./candidate-prefilter";
 import { RESOLVER_VERSION } from "./signals/constants";
 import { ExternalIdSignal } from "./signals/external-id";
 import { NameQualitySignal } from "./signals/name-quality";
@@ -76,21 +75,23 @@ export type ResolvePreviewResult = Omit<ResolveResult, "decisionId"> & { decisio
  */
 async function resolveAffairPoliticianInternal(
   input: AffairScoringInput,
-  persist: boolean
+  persist: boolean,
+  context?: AffairResolverContext
 ): Promise<ResolveResult | ResolvePreviewResult> {
   if (input.text.length > 100_000) {
     throw new Error("Affair text exceeds 100KB limit");
   }
 
-  const [pool, vocabulary] = await Promise.all([loadCandidatePool(), loadSurnameVocabulary()]);
-  const prefilter = new CandidatePrefilter(pool);
-  const prefiltered = prefilter.filter(input.text);
+  // The optional context is deliberately supplied by the batch boundary. When
+  // absent, this remains the safe one-shot entry point used by administration.
+  const resolverContext = context ?? (await loadAffairResolverContext());
+  const prefiltered = resolverContext.prefilter.filter(input.text);
 
   const textHash = computeTextHash(input.text);
   const blocklist = await loadBlocklist(textHash);
   const candidates = prefiltered.filter((p) => !blocklist.has(p.id));
 
-  const decision = scoreAffairAgainstCandidates(input, candidates, vocabulary);
+  const decision = scoreAffairAgainstCandidates(input, candidates, resolverContext.vocabulary);
 
   const decisionId = persist
     ? (
@@ -112,13 +113,17 @@ async function resolveAffairPoliticianInternal(
   };
 }
 
-export async function resolveAffairPolitician(input: AffairScoringInput): Promise<ResolveResult> {
-  return resolveAffairPoliticianInternal(input, true) as Promise<ResolveResult>;
+export async function resolveAffairPolitician(
+  input: AffairScoringInput,
+  context?: AffairResolverContext
+): Promise<ResolveResult> {
+  return resolveAffairPoliticianInternal(input, true, context) as Promise<ResolveResult>;
 }
 
 /** Runs the same resolver without creating an audit row, for strict dry-runs. */
 export async function previewAffairPolitician(
-  input: AffairScoringInput
+  input: AffairScoringInput,
+  context?: AffairResolverContext
 ): Promise<ResolvePreviewResult> {
-  return resolveAffairPoliticianInternal(input, false) as Promise<ResolvePreviewResult>;
+  return resolveAffairPoliticianInternal(input, false, context) as Promise<ResolvePreviewResult>;
 }
