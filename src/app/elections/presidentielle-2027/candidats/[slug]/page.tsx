@@ -266,6 +266,7 @@ export default async function CandidateFichePage({ params }: PageProps) {
             <CandidateRecentVotes votes={detail.recentVotes} politicianSlug={slug} />
 
             <CandidateTransparency
+              candidacyStatus={candidacy.status}
               declarationCount={politician.declarations.length}
               probityConvictionCount={detail.probityConvictionCount}
               probityNonDefinitiveConvictionCount={detail.probityNonDefinitiveConvictionCount}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CandidacyStatus } from "@/generated/prisma";
 import { ArrowRight, ChevronDown, ExternalLink } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { THEME_ACCENT_BAR, THEME_CATEGORY_LABELS, VOTE_POSITION_LABELS } from "@/config/labels";
@@ -452,11 +453,13 @@ export function CandidateRecentVotes({
  * a bare number next to a candidate's name invites exactly that reading.
  */
 export function CandidateTransparency({
+  candidacyStatus,
   declarationCount,
   probityConvictionCount,
   probityNonDefinitiveConvictionCount,
   politicianSlug,
 }: {
+  candidacyStatus: CandidacyStatus;
   declarationCount: number;
   probityConvictionCount: number;
   probityNonDefinitiveConvictionCount: number;
@@ -472,12 +475,16 @@ export function CandidateTransparency({
       </h2>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border px-4 py-3">
-          <dt className="text-xs text-muted-foreground">Déclarations HATVP</dt>
+          <dt className="text-xs text-muted-foreground">Déclarations HATVP du parcours public</dt>
           <dd className="text-sm font-bold">
             {declarationCount === 0
               ? "Aucune déclaration publiée"
               : `${declarationCount} ${declarationCount === 1 ? "déclaration publiée" : "déclarations publiées"}`}
           </dd>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Déclarations liées aux mandats et fonctions déjà recensés, pas à la candidature
+            présidentielle.
+          </p>
         </div>
         <div className="rounded-lg border border-border px-4 py-3">
           <dt className="text-xs text-muted-foreground">Atteintes à la probité</dt>
@@ -486,6 +493,17 @@ export function CandidateTransparency({
               ? "Aucune condamnation documentée"
               : `${probityConvictionCount} ${probityConvictionCount === 1 ? "condamnation documentée" : "condamnations documentées"}`}
           </dd>
+        </div>
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 sm:col-span-2">
+          <dt className="text-xs text-muted-foreground">Déclarations de la présidentielle 2027</dt>
+          <dd className="text-sm font-bold">Pas encore de publication officielle</dd>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Le statut «{" "}
+            {candidacyStatus === "DECLARE" ? "candidature annoncée" : "candidature suivie"} » décrit
+            une démarche politique. Les déclarations patrimoniale et d’intérêts et d’activités
+            seront affichées ici lorsqu’une liste officielle de candidats aura été établie et que la
+            HATVP les aura publiées.
+          </p>
         </div>
       </dl>
       <p className="text-xs text-muted-foreground">

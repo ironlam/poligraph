@@ -1,4 +1,5 @@
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { CANDIDACY_STATUS_DESCRIPTIONS, CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
 import type { CandidacyStatus } from "@/generated/prisma";
 
@@ -72,11 +73,13 @@ export function CandidacyStatusBadge({ status }: { status: CandidacyStatus | nul
       <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]}`}>
         {candidacyBadgeLabel(status)}
       </span>
-      <InfoTooltip
-        text={CANDIDACY_STATUS_DESCRIPTIONS[status]}
-        className="min-h-11 min-w-11"
-        side="top"
-      />
+      <TooltipProvider>
+        <InfoTooltip
+          text={CANDIDACY_STATUS_DESCRIPTIONS[status]}
+          className="min-h-11 min-w-11"
+          side="top"
+        />
+      </TooltipProvider>
     </span>
   );
 }

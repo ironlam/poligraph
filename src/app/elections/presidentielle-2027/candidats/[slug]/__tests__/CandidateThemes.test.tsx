@@ -336,6 +336,7 @@ describe("CandidateTransparency", () => {
   it("ne présente pas toutes les procédures comme un compteur à charge", () => {
     render(
       <CandidateTransparency
+        candidacyStatus="DECLARE"
         declarationCount={2}
         probityConvictionCount={1}
         probityNonDefinitiveConvictionCount={1}
@@ -344,6 +345,8 @@ describe("CandidateTransparency", () => {
     );
 
     expect(screen.getByText("1 condamnation documentée")).toBeInTheDocument();
+    expect(screen.getByText("Déclarations de la présidentielle 2027")).toBeInTheDocument();
+    expect(screen.getByText("Pas encore de publication officielle")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transparence et probité" })).toBeInTheDocument();
     expect(screen.getByText(/au moins en première instance/)).toBeInTheDocument();
     expect(screen.getByText(/Présomption d'innocence/)).toBeInTheDocument();
