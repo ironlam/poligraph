@@ -8,6 +8,10 @@ import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { resolveBatch } from "@/lib/identity";
 import type { ResolveInput } from "@/lib/identity";
 import { normalizeText, primarySurname } from "@/lib/name-matching";
+import {
+  buildCandidacyUpdateBatch,
+  type CandidacyUpdateRow,
+} from "@/services/sync/candidacy-update-batch";
 
 // 2026 CSV (semicolon-delimited, UTF-8, no comment header)
 const DEFAULT_CSV_URL =
@@ -212,6 +216,61 @@ async function loadRNEBirthdateLookup(): Promise<
     }
   }
   return map;
+}
+
+/**
+ * Apply one chunk: updates first, then inserts, in the order the sequential loop used.
+ *
+ * Exported for its integration test. The ordering of the pair and what happens when the first half
+ * fails are exactly what this refactor changes, and neither can be exercised through
+ * `syncCandidaturesMunicipales` without a full CSV fixture.
+ *
+ * Three deliberate differences from the sequential loop this replaces:
+ * 1. Granularity. The loop wrote row by row, so a failure on row 300 left 299 written. The batch is
+ *    one statement: a failure leaves none of this chunk's updates written.
+ * 2. A failed update aborts before the inserts, so the chunk's inserts are skipped too. The loop had
+ *    already written its updates by the time it reached them.
+ * 3. A vanished id no longer raises P2025. It is reported through `missing` instead.
+ *
+ * It does not throw: a failure is returned alongside the counts. The updates and the inserts are two
+ * statements with no transaction around them, so throwing after a successful update would drop rows
+ * that were really written from `candidaciesUpdated`.
+ */
+export async function applyCandidacyChunk(
+  toUpdate: CandidacyUpdateRow[],
+  toCreate: Prisma.CandidacyCreateManyInput[]
+): Promise<{ updated: number; created: number; missing: number; failure: string | null }> {
+  let updated = 0;
+  let missing = 0;
+
+  const batch = buildCandidacyUpdateBatch(toUpdate, new Date());
+  if (batch !== null) {
+    try {
+      updated = await db.$executeRaw(batch.sql);
+      // Compare against the deduplicated target count, never against toUpdate.length: a CSV holding
+      // the same candidacy twice is legitimate, and comparing to the raw length would report a
+      // missing row that does not exist.
+      missing = batch.targets - updated;
+    } catch (error) {
+      // One statement, so nothing of this chunk was written. The inserts are skipped on purpose.
+      return { updated: 0, created: 0, missing: 0, failure: `mise à jour: ${error}` };
+    }
+  }
+
+  let created = 0;
+  if (toCreate.length > 0) {
+    try {
+      await db.candidacy.createMany({ data: toCreate, skipDuplicates: true });
+      created = toCreate.length;
+    } catch (error) {
+      // The updates above are already committed: there is no transaction around the pair. Reporting
+      // the failure while returning the counts is what keeps candidaciesUpdated truthful; throwing
+      // here would lose rows that really were written.
+      return { updated, created: 0, missing, failure: `création: ${error}` };
+    }
+  }
+
+  return { updated, created, missing, failure: null };
 }
 
 /**
@@ -488,6 +547,7 @@ export async function syncCandidaturesMunicipales(
 
       // ── Step 5: Upsert candidacies for this chunk ──────────────────
       const toCreate: Prisma.CandidacyCreateManyInput[] = [];
+      const toUpdate: CandidacyUpdateRow[] = [];
 
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
@@ -506,20 +566,17 @@ export async function syncCandidaturesMunicipales(
           const existingId = existingCandidacyMap.get(existingKey);
 
           if (existingId) {
-            await db.candidacy.update({
-              where: { id: existingId },
-              data: {
-                politicianId,
-                partyId,
-                partyLabel: row!.partyLabel,
-                listName: row!.listName,
-                listPosition: row!.listPosition,
-                constituencyName: row!.communeName,
-                candidateId,
-                communeId,
-              },
+            toUpdate.push({
+              id: existingId,
+              politicianId,
+              partyId,
+              partyLabel: row!.partyLabel,
+              listName: row!.listName,
+              listPosition: row!.listPosition,
+              constituencyName: row!.communeName,
+              candidateId,
+              communeId,
             });
-            candidaciesUpdated++;
           } else {
             toCreate.push({
               electionId: electionRecord.id,
@@ -540,9 +597,16 @@ export async function syncCandidaturesMunicipales(
         }
       }
 
-      if (toCreate.length > 0) {
-        await db.candidacy.createMany({ data: toCreate, skipDuplicates: true });
-        candidaciesCreated += toCreate.length;
+      const applied = await applyCandidacyChunk(toUpdate, toCreate);
+      candidaciesUpdated += applied.updated;
+      candidaciesCreated += applied.created;
+      if (applied.missing > 0) {
+        errors.push(
+          `Chunk ${chunkIdx + 1}: ${applied.missing} candidature(s) introuvable(s) à la mise à jour`
+        );
+      }
+      if (applied.failure !== null) {
+        errors.push(`Chunk ${chunkIdx + 1}: ${applied.failure}`);
       }
     } catch (error) {
       errors.push(`Chunk ${chunkIdx + 1}: ${error}`);
