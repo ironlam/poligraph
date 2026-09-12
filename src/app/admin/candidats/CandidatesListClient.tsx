@@ -17,6 +17,7 @@ import {
 } from "./actions";
 
 const STATUS_LABELS: Record<string, string> = {
+  OFFICIAL: "Officielle",
   DECLARE: "Déclaré",
   PRESSENTI: "Pressenti",
   ENVISAGE: "Envisagé",
@@ -504,10 +505,14 @@ export function CandidatesListClient({ rows }: { rows: CandidateRowView[] }) {
                     <button
                       type="button"
                       onClick={() => generateSynthesisProposal(row)}
-                      disabled={locked || row.status !== "DECLARE" || !row.presidentialId}
+                      disabled={
+                        locked ||
+                        !["DECLARE", "OFFICIAL"].includes(row.status ?? "") ||
+                        !row.presidentialId
+                      }
                       title={
-                        row.status !== "DECLARE"
-                          ? "Seule une candidature déclarée porte une synthèse"
+                        !["DECLARE", "OFFICIAL"].includes(row.status ?? "")
+                          ? "Seule une candidature déclarée ou officielle porte une synthèse"
                           : !row.presidentialId
                             ? "Publier la fiche crée les métadonnées nécessaires"
                             : undefined

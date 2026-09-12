@@ -6,7 +6,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { getPublicPresidentialCandidacyField } from "@/lib/data/presidential-candidacy-field";
 
-const CANDIDACY_STATUSES = ["DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"] as const;
+const CANDIDACY_STATUSES = ["OFFICIAL", "DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"] as const;
 
 const PROGRAMME_STATES = {
   aucun_programme: {
@@ -106,7 +106,7 @@ export const GET = withPublicRoute(async (request, context) => {
       data,
       pagination: buildPaginationMeta(page, limit, filtered.length),
       meta: {
-        statusScope: "PUBLIC_TRACKING_NOT_OFFICIAL_CANDIDATE_LIST",
+        statusScope: "PUBLIC_TRACKING_WITH_SEPARATE_OFFICIAL_STATUS",
       },
     }),
     "daily"

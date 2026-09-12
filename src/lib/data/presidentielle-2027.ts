@@ -8,11 +8,12 @@ export type PresidentielleCandidate = Candidacy & {
 };
 
 const STATUS_RANK: Record<NonNullable<CandidacyStatus> | "null", number> = {
-  DECLARE: 0,
-  PRESSENTI: 1,
-  ENVISAGE: 2,
-  RETIRE: 4,
-  null: 3,
+  OFFICIAL: 0,
+  DECLARE: 1,
+  PRESSENTI: 2,
+  ENVISAGE: 3,
+  RETIRE: 5,
+  null: 4,
 };
 
 function rank(status: CandidacyStatus | null): number {

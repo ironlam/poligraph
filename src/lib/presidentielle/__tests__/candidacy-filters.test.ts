@@ -22,6 +22,7 @@ function candidacy(over: Partial<FilterableCandidacy> = {}): FilterableCandidacy
 
 describe("filtres de candidatures", () => {
   it("retombe sur toutes pour une valeur d'URL inconnue", () => {
+    expect(parseCandidacyFilter("officielles")).toBe("officielles");
     expect(parseCandidacyFilter("retirees")).toBe("retirees");
     expect(parseCandidacyFilter("depouillees")).toBe("toutes");
     expect(parseCandidacyFilter(null)).toBe("toutes");
@@ -48,6 +49,12 @@ describe("filtres de candidatures", () => {
     );
   });
 
+  it("sépare une candidature officielle d'une candidature annoncée", () => {
+    expect(matchesCandidacyFilter(candidacy({ status: "OFFICIAL" }), "officielles")).toBe(true);
+    expect(matchesCandidacyFilter(candidacy({ status: "OFFICIAL" }), "annoncees")).toBe(false);
+    expect(matchesCandidacyFilter(candidacy({ status: "DECLARE" }), "officielles")).toBe(false);
+  });
+
   it("cherche sans accents dans le nom, le parti et le sigle", () => {
     const row = candidacy({ candidateName: "Jean-Luc Mélenchon", partyLabel: "Lutte ouvrière" });
     expect(matchesCandidacyQuery(row, "melenchon")).toBe(true);
@@ -64,6 +71,7 @@ describe("filtres de candidatures", () => {
 
 describe("compteurs dynamiques", () => {
   const rows = [
+    candidacy({ status: "OFFICIAL" }),
     candidacy({ status: "DECLARE" }),
     candidacy({ status: "DECLARE" }),
     candidacy({ status: "PRESSENTI" }),
@@ -73,7 +81,8 @@ describe("compteurs dynamiques", () => {
 
   it("compte les statuts depuis les données courantes", () => {
     expect(countCandidacyField(rows)).toEqual({
-      total: 5,
+      total: 6,
+      official: 1,
       announced: 2,
       expected: 2,
       withdrawn: 1,
@@ -82,7 +91,7 @@ describe("compteurs dynamiques", () => {
 
   it("accorde le résumé sans total codé en dur", () => {
     expect(formatCandidacyFieldSummary(rows)).toBe(
-      "5 personnes suivies pour 2027 : 2 candidatures annoncées, 2 personnalités pressenties et 1 candidature retirée."
+      "6 personnes suivies pour 2027 : 1 candidature officielle, 2 candidatures annoncées, 2 personnalités pressenties et 1 candidature retirée."
     );
   });
 });

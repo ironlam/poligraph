@@ -42,7 +42,11 @@ export async function loadCandidacyThemeSynthesisCorpus(
     },
   });
   if (!candidacy) return { ok: false, reason: "CANDIDACY_NOT_FOUND" };
-  if (candidacy.status !== "DECLARE" && candidacy.status !== "RETIRE") {
+  if (
+    candidacy.status !== "OFFICIAL" &&
+    candidacy.status !== "DECLARE" &&
+    candidacy.status !== "RETIRE"
+  ) {
     return { ok: false, reason: "CANDIDACY_NOT_DECLARED" };
   }
   if (!candidacy.presidentialData) {

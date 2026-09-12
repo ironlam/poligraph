@@ -13,12 +13,19 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * quality and is exactly the ranking this site does not publish.
  */
 
-export const CANDIDACY_FILTERS = ["toutes", "annoncees", "pressenties", "retirees"] as const;
+export const CANDIDACY_FILTERS = [
+  "toutes",
+  "officielles",
+  "annoncees",
+  "pressenties",
+  "retirees",
+] as const;
 
 export type CandidacyFilter = (typeof CANDIDACY_FILTERS)[number];
 
 export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   toutes: "Toutes",
+  officielles: "Candidatures officielles",
   annoncees: "Candidatures annoncées",
   pressenties: "Personnalités pressenties",
   retirees: "Candidatures retirées",
@@ -46,6 +53,8 @@ export function matchesCandidacyFilter(
   switch (filter) {
     case "toutes":
       return true;
+    case "officielles":
+      return candidacy.status === "OFFICIAL";
     case "annoncees":
       return candidacy.status === "DECLARE";
     // Both, because the difference between "pressentie" and "évoquée" is a degree of sourcing and
@@ -70,6 +79,7 @@ export function matchesPublishedProposals(
 
 export type CandidacyFieldCounts = {
   total: number;
+  official: number;
   announced: number;
   expected: number;
   withdrawn: number;
@@ -78,6 +88,7 @@ export type CandidacyFieldCounts = {
 export function countCandidacyField(candidacies: FilterableCandidacy[]): CandidacyFieldCounts {
   return {
     total: candidacies.length,
+    official: candidacies.filter((c) => c.status === "OFFICIAL").length,
     announced: candidacies.filter((c) => c.status === "DECLARE").length,
     expected: candidacies.filter((c) => c.status === "PRESSENTI" || c.status === "ENVISAGE").length,
     withdrawn: candidacies.filter((c) => c.status === "RETIRE").length,
@@ -86,7 +97,7 @@ export function countCandidacyField(candidacies: FilterableCandidacy[]): Candida
 
 export function formatCandidacyFieldSummary(candidacies: FilterableCandidacy[]): string {
   const counts = countCandidacyField(candidacies);
-  return `${counts.total} ${counts.total === 1 ? "personne suivie" : "personnes suivies"} pour 2027 : ${counts.announced} ${counts.announced === 1 ? "candidature annoncée" : "candidatures annoncées"}, ${counts.expected} ${counts.expected === 1 ? "personnalité pressentie" : "personnalités pressenties"} et ${counts.withdrawn} ${counts.withdrawn === 1 ? "candidature retirée" : "candidatures retirées"}.`;
+  return `${counts.total} ${counts.total === 1 ? "personne suivie" : "personnes suivies"} pour 2027 : ${counts.official} ${counts.official === 1 ? "candidature officielle" : "candidatures officielles"}, ${counts.announced} ${counts.announced === 1 ? "candidature annoncée" : "candidatures annoncées"}, ${counts.expected} ${counts.expected === 1 ? "personnalité pressentie" : "personnalités pressenties"} et ${counts.withdrawn} ${counts.withdrawn === 1 ? "candidature retirée" : "candidatures retirées"}.`;
 }
 
 /** Accent and case insensitive, so "melenchon" finds "Mélenchon" and "lo" finds "Lutte ouvrière". */

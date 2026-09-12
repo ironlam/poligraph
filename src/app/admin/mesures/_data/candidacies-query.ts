@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
  * Scoped, not a full list (issue #660, decisions of 2026-08-06):
  * - the presidential election 2027 only, by slug, not merely the PRESIDENTIELLE type (which also holds
  *   2022 and earlier);
- * - status `DECLARE` only: attaching a measure to a merely pressentie or envisagée candidacy would lend
+ * - status `DECLARE` or `OFFICIAL`: attaching a measure to a merely pressentie or envisagée candidacy would lend
  *   a programme to someone who has not declared;
  * - a sourced candidacy only (`sourceUrl` and `sourceLabel`), per the doctrine that a declared candidacy
  *   is sourced.
@@ -33,7 +33,7 @@ export async function listPresidentialCandidacies(): Promise<CandidacyOption[]> 
   const rows = await db.candidacy.findMany({
     where: {
       election: { slug: HUB_ELECTION_SLUG },
-      status: "DECLARE",
+      status: { in: ["DECLARE", "OFFICIAL"] },
       sourceUrl: { not: null },
       sourceLabel: { not: null },
       politicianId: { not: null },

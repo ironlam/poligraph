@@ -313,7 +313,9 @@ export async function runProgramImport(
   const reports = new Map<string, CandidateReport>(
     candidacies.map((candidacy) => {
       const eligible =
-        candidacy.status === "DECLARE" && candidacy.sourceUrl && candidacy.sourceLabel;
+        (candidacy.status === "DECLARE" || candidacy.status === "OFFICIAL") &&
+        candidacy.sourceUrl &&
+        candidacy.sourceLabel;
       return [
         candidacy.id,
         {

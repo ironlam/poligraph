@@ -128,6 +128,10 @@ export default function MethodologiePage() {
         </p>
         <div className="space-y-3 text-sm text-muted-foreground">
           {[
+            [
+              "Candidature officielle",
+              "La personne figure dans la liste officielle établie après le contrôle institutionnel prévu pour l'élection présidentielle.",
+            ],
             ["Candidature annoncée", "La personne a annoncé elle-même sa candidature."],
             [
               "Personnalité pressentie",
@@ -146,11 +150,12 @@ export default function MethodologiePage() {
           ))}
         </div>
         <p className="mt-6 text-sm text-muted-foreground">
-          La qualification officielle intervient dans la procédure électorale après le dépôt des
-          candidatures et la vérification des présentations par le Conseil constitutionnel.
-          Poligraph conserve donc deux notions séparées : le statut politique présenté ici, et la
-          validation administrative qui relève des autorités compétentes. Pour les règles de
-          l’élection, consultez la page du{" "}
+          Pour la présidentielle, la qualification officielle intervient dans la procédure
+          électorale après le dépôt des candidatures et la vérification des présentations par le
+          Conseil constitutionnel. Poligraph conserve donc deux notions séparées : la candidature
+          annoncée, qui relève d&apos;une déclaration politique sourcée, et la candidature
+          officielle, qui relève de la procédure électorale. Pour les règles de l’élection,
+          consultez la page du{" "}
           <Link
             href="https://www.elections.interieur.gouv.fr/scrutins/lelection-presidentielle/election-presidentielle-je-suis-candidat"
             className="text-primary hover:underline"

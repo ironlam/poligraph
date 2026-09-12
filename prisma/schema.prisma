@@ -1781,7 +1781,8 @@ enum ElectionStatus {
 }
 
 enum CandidacyStatus {
-  DECLARE // Candidature officiellement annoncée par l'intéressé
+  OFFICIAL // Candidature retenue dans la liste officielle publiée après contrôle institutionnel
+  DECLARE // Candidature annoncée publiquement par l'intéressé, avant cette liste officielle
   PRESSENTI // Sources crédibles annoncent l'intention, pas d'annonce officielle
   ENVISAGE // Hypothèse de presse, pas de signal direct de l'intéressé
   RETIRE // Annoncé puis retiré ou écarté

@@ -8,7 +8,7 @@ export type EligibleCandidacy = { electionId: string; politicianId: string };
 /**
  * Server-side gate for creating a measure in the 2027 hub (issue #660, decisions of 2026-08-06).
  *
- * A measure can only be created for a candidacy of the presidential election 2027, at status `DECLARE`,
+ * A measure can only be created for a candidacy of the presidential election 2027, at status `DECLARE` or `OFFICIAL`,
  * and sourced. This is a rule of the hub chain, not a universal constraint of the `Measure` model:
  * `createMeasure()` stays general, this gate is what the admin action calls.
  *
@@ -37,7 +37,7 @@ export async function assertHubMeasureCandidacy(candidacyId: string): Promise<El
       "Une mesure du hub ne peut viser qu'une candidature de la présidentielle 2027."
     );
   }
-  if (candidacy.status !== "DECLARE") {
+  if (candidacy.status !== "DECLARE" && candidacy.status !== "OFFICIAL") {
     throw new MeasureValidationError(
       "La candidature doit être déclarée pour porter une mesure. Les autres statuts restent au suivi éditorial."
     );

@@ -230,7 +230,7 @@ describe("DOSSIER_STATUS_LABELS", () => {
 
 describe("CANDIDACY_STATUS_LABELS", () => {
   it("should have a label for each candidacy status", () => {
-    const statuses = ["DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"];
+    const statuses = ["OFFICIAL", "DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"];
 
     expect(Object.keys(CANDIDACY_STATUS_LABELS)).toHaveLength(statuses.length);
 

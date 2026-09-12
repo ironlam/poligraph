@@ -6,6 +6,7 @@ import { CandidacyStatusBadge, candidacyBadgeLabel } from "../CandidacyStatusBad
 
 describe("CandidacyStatusBadge", () => {
   it.each([
+    ["OFFICIAL", "Officielle"],
     ["DECLARE", "Annoncée"],
     ["PRESSENTI", "Pressentie"],
     ["ENVISAGE", "Évoquée"],

@@ -36,7 +36,7 @@ const election = {
 
 function candidacy(
   id: string,
-  status: "DECLARE" | "PRESSENTI" | "ENVISAGE" | "RETIRE",
+  status: "OFFICIAL" | "DECLARE" | "PRESSENTI" | "ENVISAGE" | "RETIRE",
   programmeAbsence: "aucun_programme" | "non_depouille" | null,
   measureCount: number
 ) {
@@ -73,7 +73,7 @@ describe("GET /api/elections/[slug]/candidacies", () => {
     });
   });
 
-  it("retourne le suivi sourcé, les libellés et les trois états sans statut officiel", async () => {
+  it("retourne le suivi sourcé, les libellés et les statuts de candidature distincts", async () => {
     const response = await getCandidacies(
       new NextRequest("https://poligraph.fr/api/elections/presidentielle-2027/candidacies"),
       context
@@ -97,7 +97,7 @@ describe("GET /api/elections/[slug]/candidacies", () => {
       "NO_PROGRAM_IDENTIFIED",
       "NO_PROGRAM_IDENTIFIED",
     ]);
-    expect(body.meta.statusScope).toBe("PUBLIC_TRACKING_NOT_OFFICIAL_CANDIDATE_LIST");
+    expect(body.meta.statusScope).toBe("PUBLIC_TRACKING_WITH_SEPARATE_OFFICIAL_STATUS");
     expect(body.data[0].trackingStatus.source).toEqual({
       label: "Source 1",
       url: "https://example.org/source-1",

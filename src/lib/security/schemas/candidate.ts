@@ -46,7 +46,7 @@ export const createCandidacyPresidentialFromPickerSchema = z
   .object({
     politicianId: z.string().min(1),
     electionSlug: z.string().min(1),
-    status: z.enum(["DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"]).default("PRESSENTI"),
+    status: z.enum(["OFFICIAL", "DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"]).default("PRESSENTI"),
     sourceUrl: z.string().url().optional(),
     sourceLabel: z.string().min(1).max(SOURCE_LABEL_MAX).optional(),
     slogan: z.string().max(SLOGAN_MAX).optional(),
@@ -58,7 +58,9 @@ export const createCandidacyPresidentialFromPickerSchema = z
     notes: z.string().max(NOTES_MAX).optional(),
   })
   .refine(
-    (data) => data.status !== "DECLARE" || (Boolean(data.sourceUrl) && Boolean(data.sourceLabel)),
+    (data) =>
+      !["DECLARE", "OFFICIAL"].includes(data.status) ||
+      (Boolean(data.sourceUrl) && Boolean(data.sourceLabel)),
     {
       message: "Une candidature déclarée exige une source : URL et libellé.",
       path: ["sourceUrl"],

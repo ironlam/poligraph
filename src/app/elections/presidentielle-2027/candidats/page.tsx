@@ -77,8 +77,9 @@ export default async function PresidentialCandidatesPage() {
           Candidatures à la présidentielle 2027
         </h1>
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          Cette liste n&apos;est pas la liste officielle des candidats. Chaque statut est sourcé et
-          l&apos;ordre reste alphabétique, sans classement.
+          Cette liste de suivi n&apos;est pas un substitut à la liste officielle publiée par le
+          Conseil constitutionnel. Chaque statut est sourcé et l&apos;ordre reste alphabétique, sans
+          classement.
         </p>
       </header>
       <HubCandidacyField candidacies={candidacies} />

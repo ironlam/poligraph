@@ -35,6 +35,33 @@ export default function PresidentialMeasuresMethodologyPage() {
       </header>
 
       <div className="space-y-12">
+        <section aria-labelledby="candidacy-status-title">
+          <h2 id="candidacy-status-title" className="font-display text-2xl font-bold">
+            Statuts des candidatures
+          </h2>
+          <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
+            <p>
+              « Déclarée » signifie que la personne a annoncé sa candidature dans une source
+              vérifiable. Ce statut décrit une annonce politique, pas encore une candidature
+              enregistrée pour le scrutin.
+            </p>
+            <p>
+              « Officielle » est réservé à une candidature figurant dans la liste établie après le
+              contrôle institutionnel prévu par les règles de l&apos;élection. Pour la
+              présidentielle, cette liste est établie par le Conseil constitutionnel au vu des
+              présentations valides et publiée par le Gouvernement. Les deux statuts ne doivent donc
+              pas être confondus.
+            </p>
+            <p>
+              Les statuts « pressentie » et « évoquée » signalent respectivement une intention
+              rapportée par des sources crédibles ou une hypothèse insuffisamment établie. « Retirée
+              » indique une candidature annoncée puis abandonnée ou écartée. La liste Poligraph
+              reste un suivi éditorial sourcé, elle ne remplace pas la liste officielle de
+              l&apos;élection.
+            </p>
+          </div>
+        </section>
+
         <section aria-labelledby="definition-title">
           <h2 id="definition-title" className="font-display text-2xl font-bold">
             Ce que Poligraph appelle une mesure
@@ -65,8 +92,8 @@ export default function PresidentialMeasuresMethodologyPage() {
               indiqué sur la fiche.
             </p>
             <p>
-              Chaque mesure est rattachée à une candidature déclarée et sourcée. Lorsqu&apos;une
-              édition de programme existe, la fiche indique le document, sa date et
+              Chaque mesure est rattachée à une candidature déclarée ou officielle et sourcée.
+              Lorsqu&apos;une édition de programme existe, la fiche indique le document, sa date et
               l&apos;emplacement connu de la mesure.
             </p>
             <p>

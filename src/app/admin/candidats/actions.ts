@@ -40,7 +40,7 @@ const candidacyPublicationSchema = z
 const candidacyStatusSchema = z
   .object({
     candidacyId: z.string().min(1),
-    status: z.enum(["DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"]),
+    status: z.enum(["OFFICIAL", "DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"]),
     sourceUrl: z.string().refine((value) => {
       if (!URL.canParse(value)) return false;
       return ["http:", "https:"].includes(new URL(value).protocol);
@@ -96,7 +96,7 @@ export async function setCandidacyStatusAction(input: {
     });
     if (!candidacy) return { ok: false as const, message: "Candidature introuvable." };
     const mustClearSynthesis =
-      status !== "DECLARE" && candidacy.presidentialData?.synthesis != null;
+      !["DECLARE", "OFFICIAL"].includes(status) && candidacy.presidentialData?.synthesis != null;
     if (
       candidacy.status === status &&
       candidacy.sourceUrl === sourceUrl &&
@@ -291,7 +291,7 @@ export async function setProgramEditionPublicationAction(input: {
  * and a text they want to read now. The batch is the script, which is why there is no "regenerate
  * all" here — twenty candidacies inline is the request that times out.
  *
- * The generation itself, including the rule that only a DECLARED candidacy carries a synthesis,
+ * The generation itself, including the rule that only a declared or official candidacy carries a synthesis,
  * belongs to `@/services/candidate-synthesis`. This action adds what an admin surface owes: the
  * session check, input validation, and a refusal the moderator can read. Cache invalidation only
  * happens later, when the moderator explicitly saves the reviewed proposal.

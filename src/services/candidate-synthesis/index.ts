@@ -217,7 +217,7 @@ export async function generateCandidateSynthesis(
       message: "Candidature sans politique rattaché : ni mandats ni votes à résumer.",
     };
   }
-  if (candidacy.status !== "DECLARE") {
+  if (candidacy.status !== "DECLARE" && candidacy.status !== "OFFICIAL") {
     return {
       ok: false,
       reason: "non_declaree",
@@ -514,7 +514,7 @@ export async function saveReviewedCandidateSynthesis(
     },
   });
   if (!candidacy) return { ok: false, message: "Candidature introuvable." };
-  if (candidacy.status !== "DECLARE") {
+  if (candidacy.status !== "DECLARE" && candidacy.status !== "OFFICIAL") {
     return { ok: false, message: "Seule une candidature déclarée porte une synthèse." };
   }
   if (!candidacy.politicianId) {

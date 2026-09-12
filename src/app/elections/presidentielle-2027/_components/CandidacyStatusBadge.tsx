@@ -20,13 +20,15 @@ import type { CandidacyStatus } from "@/generated/prisma";
  * candidacy is a fact about a schedule, not about a person's record.
  */
 
-type BadgeVariant = "announced" | "expected" | "withdrawn";
+type BadgeVariant = "official" | "announced" | "expected" | "withdrawn";
 
 /**
  * `border` on every variant, transparent where the mockup has none: without it the four states
  * would not share a box height, and the pastilles of two consecutive rows would sit 2px apart.
  */
 const VARIANT_CLASS: Record<BadgeVariant, string> = {
+  official:
+    "border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100",
   announced: "border-primary bg-primary/8 text-primary",
   expected: "border-border bg-muted text-foreground",
   withdrawn: "border-dashed border-border bg-transparent text-muted-foreground-strong",
@@ -34,6 +36,7 @@ const VARIANT_CLASS: Record<BadgeVariant, string> = {
 
 function badgeVariant(status: CandidacyStatus | null): BadgeVariant {
   if (status === "RETIRE") return "withdrawn";
+  if (status === "OFFICIAL") return "official";
   if (status === "DECLARE") return "announced";
   return "expected";
 }

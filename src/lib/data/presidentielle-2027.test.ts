@@ -25,10 +25,10 @@ describe("getPresidentielle2027Candidates", () => {
     });
   });
 
-  it("returns rows sorted DECLARE first, then PRESSENTI, ENVISAGE, RETIRE, then by candidateName", async () => {
+  it("returns rows sorted OFFICIAL first, then DECLARE, PRESSENTI, ENVISAGE, RETIRE, then by candidateName", async () => {
     (db.candidacy.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "1", status: "ENVISAGE", candidateName: "B", politician: null, party: null },
-      { id: "2", status: "DECLARE", candidateName: "A", politician: null, party: null },
+      { id: "2", status: "OFFICIAL", candidateName: "A", politician: null, party: null },
       { id: "3", status: "PRESSENTI", candidateName: "A", politician: null, party: null },
       { id: "4", status: null, candidateName: "Z", politician: null, party: null },
     ]);

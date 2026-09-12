@@ -1565,9 +1565,10 @@ export const PROMISE_EXTRACTION_STATUS_LABELS: Record<PromiseExtractionStatus, s
   NEEDS_REVIEW: "À retraiter",
 };
 
-// Pre-campaign candidacy status. Before official filing, no one is formally a candidate:
-// the four levels must stay distinguishable so a rumour is never rendered as an announcement.
+// Candidacy status. Political announcements and institutional qualification stay distinct so a
+// rumour or announcement is never rendered as an official candidacy.
 export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
+  OFFICIAL: "Candidature officielle",
   DECLARE: "Candidature annoncée",
   PRESSENTI: "Personnalité pressentie",
   ENVISAGE: "Personnalité évoquée",
@@ -1575,10 +1576,12 @@ export const CANDIDACY_STATUS_LABELS: Record<CandidacyStatus, string> = {
 };
 
 /**
- * Citizen-facing explanations for the pre-campaign status axis. These statuses describe a
- * political signal, not the administrative validation of a presidential candidacy.
+ * Citizen-facing explanations for the candidacy status axis. The political announcement and
+ * the administrative validation of a presidential candidacy remain separate signals.
  */
 export const CANDIDACY_STATUS_DESCRIPTIONS: Record<CandidacyStatus, string> = {
+  OFFICIAL:
+    "La candidature figure dans la liste officielle établie après le contrôle institutionnel prévu pour cette élection.",
   DECLARE:
     "La personne a annoncé elle-même sa candidature dans une source vérifiable. Ce statut ne signifie pas encore que sa candidature est officiellement enregistrée pour le scrutin.",
   PRESSENTI:
@@ -1589,7 +1592,7 @@ export const CANDIDACY_STATUS_DESCRIPTIONS: Record<CandidacyStatus, string> = {
 };
 
 /**
- * The same four levels, without the noun, for the merged status + programme badge.
+ * The same statuses, without the noun, for the merged status + programme badge.
  *
  * The badge reads "Annoncée · 19 mesures" in a 230px column: repeating "Candidature" in a list
  * whose column is titled "Candidature" would cost a third of the width to say nothing. The
@@ -1597,6 +1600,7 @@ export const CANDIDACY_STATUS_DESCRIPTIONS: Record<CandidacyStatus, string> = {
  * is the same reason `candidacyRoleLabel` has a neutral branch.
  */
 export const CANDIDACY_STATUS_SHORT_LABELS: Record<CandidacyStatus, string> = {
+  OFFICIAL: "Officielle",
   DECLARE: "Annoncée",
   PRESSENTI: "Pressentie",
   ENVISAGE: "Évoquée",
