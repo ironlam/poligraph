@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { AffairHubTiles } from "../AffairHubTiles";
 
 describe("AffairHubTiles", () => {
-  it("rend les 3 tuiles d'entrée vers les bonnes destinations", () => {
+  it("rend les 4 tuiles d'entrée vers les bonnes destinations", () => {
     render(<AffairHubTiles etabliCount={42} />);
     expect(screen.getByRole("link", { name: /Condamnations définitives/i })).toHaveAttribute(
       "href",
@@ -16,6 +16,10 @@ describe("AffairHubTiles", () => {
     expect(screen.getByRole("link", { name: /Violences contre les élus/i })).toHaveAttribute(
       "href",
       "/affaires?mode=victime"
+    );
+    expect(screen.getByRole("link", { name: /Affaires des candidats 2027/i })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/affaires-judiciaires"
     );
     expect(screen.getByText(/42/)).toBeInTheDocument();
   });
