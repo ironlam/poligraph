@@ -7,8 +7,7 @@
  */
 
 import { RSS_FEEDS } from "../src/lib/api/rss";
-
-const USER_AGENT = "Poligraph source watchdog/1.0 (+https://poligraph.fr)";
+import { USER_AGENT } from "@/config/site";
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_PROBE_BYTES = 4096;
 const MIN_RESPONSE_BYTES = 512;
@@ -169,7 +168,6 @@ export const SOURCE_URLS: SourceUrl[] = [
 
 function getHeaders(source: SourceUrl): Record<string, string> {
   const headers: Record<string, string> = {
-    "User-Agent": USER_AGENT,
     Accept: source.kind === "rss" ? "application/rss+xml, application/xml" : "*/*",
   };
 
@@ -194,7 +192,16 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, { ...init, signal: controller.signal, redirect: "manual" });
+    return await fetch(url, {
+      method: init.method,
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: init.headers?.Accept ?? "*/*",
+        "X-Poligraph-Factcheck-Key": init.headers?.["X-Poligraph-Factcheck-Key"] ?? "",
+      },
+      signal: controller.signal,
+      redirect: "manual",
+    });
   } finally {
     clearTimeout(timer);
   }
