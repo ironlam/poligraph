@@ -62,6 +62,7 @@ export async function getPresidentialAffairs(
           election: { slug: electionSlug },
           status: { not: null },
           sourceUrl: { not: null },
+          sourceLabel: { not: null },
         },
       },
     },
@@ -107,6 +108,7 @@ export async function getPresidentialAffairs(
                 election: { slug: electionSlug },
                 status: { not: null },
                 sourceUrl: { not: null },
+                sourceLabel: { not: null },
               },
               select: {
                 candidateName: true,
