@@ -1,4 +1,10 @@
-import type { AffairStatus, AffairCategory, Involvement, SourceType } from "@/types";
+import type {
+  AffairStatus,
+  AffairCategory,
+  Involvement,
+  SourceType,
+  JurisdictionOrder,
+} from "@/types";
 import type { PublicationStatus } from "@/generated/prisma";
 
 /**
@@ -25,6 +31,7 @@ export interface AffairFormData {
   description: string;
   status: AffairStatus;
   category: AffairCategory;
+  jurisdictionOrder: JurisdictionOrder;
   involvement?: Involvement;
   subjectLabel?: string;
   subjectKind?: "PERSON" | "ORGANISATION" | "UNKNOWN";

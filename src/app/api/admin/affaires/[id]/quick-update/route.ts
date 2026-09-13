@@ -43,6 +43,9 @@ export const PATCH = withAdminAuth(
     if (body.involvement !== undefined) {
       updateData.involvement = body.involvement;
     }
+    if (body.jurisdictionOrder !== undefined) {
+      updateData.jurisdictionOrder = body.jurisdictionOrder;
+    }
     if (body.status !== undefined) {
       updateData.status = body.status;
     }

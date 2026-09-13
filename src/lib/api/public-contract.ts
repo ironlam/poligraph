@@ -1,3 +1,4 @@
+import type { JurisdictionOrder } from "@/generated/prisma";
 import {
   Prisma,
   type AffairCategory,
@@ -12,6 +13,7 @@ import {
   AFFAIR_STATUS_NEEDS_PRESUMPTION,
   FACTCHECK_ALLOWED_SOURCES,
   INVOLVEMENT_LABELS,
+  JURISDICTION_ORDER_LABELS,
 } from "@/config/labels";
 import { CERTAINTY_LABELS, getCertaintyLevel, isAccusedInvolvement } from "@/config/certainty";
 import { getJudicialMaturity, MATURITY_LABELS } from "@/config/judicial-maturity";
@@ -88,6 +90,13 @@ export function getPublicAffairSemantics(affair: {
   status: AffairStatus;
   category: AffairCategory;
   involvement: Involvement;
+  /**
+   * Obligatoire : sans lui, un consommateur reçoit « condamnation définitive »
+   * sans savoir si elle vient d'un tribunal correctionnel ou de la chambre du
+   * contentieux de la Cour des comptes, alors que nos propres compteurs les
+   * distinguent. L'optionnel aurait laissé les appelants l'oublier en silence.
+   */
+  jurisdictionOrder: JurisdictionOrder;
 }) {
   const statusAppliesToPolitician = isAccusedInvolvement(affair.involvement);
   const certaintyLevel = statusAppliesToPolitician ? getCertaintyLevel(affair.status) : null;
@@ -104,6 +113,11 @@ export function getPublicAffairSemantics(affair: {
     certaintyLabel: certaintyLevel ? CERTAINTY_LABELS[certaintyLevel] : null,
     judicialMaturity,
     judicialMaturityLabel: MATURITY_LABELS[judicialMaturity],
+    jurisdictionOrder: affair.jurisdictionOrder,
+    jurisdictionOrderLabel: JURISDICTION_ORDER_LABELS[affair.jurisdictionOrder],
+    // Dit explicitement ce que nos compteurs font de l'affaire, pour qu'un
+    // réutilisateur puisse reproduire l'agrégat sans deviner la règle.
+    countedInAdverseAggregates: affair.jurisdictionOrder === "PENAL",
   };
 }
 

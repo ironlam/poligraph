@@ -40,6 +40,7 @@ export default async function EditAffairPage({ params }: PageProps) {
     description: affair.description,
     status: affair.status,
     category: affair.category,
+    jurisdictionOrder: affair.jurisdictionOrder,
     involvement: affair.involvement,
     subjectLabel: affair.subjectLabel ?? undefined,
     subjectKind: affair.subjectKind ?? undefined,

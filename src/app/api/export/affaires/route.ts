@@ -186,6 +186,7 @@ export const GET = withPublicRoute(async (request) => {
     pageUrl: `${SITE_URL}/affaires/${a.slug}`,
     createdAt: formatDateTimeForCSV(a.createdAt),
     updatedAt: formatDateTimeForCSV(a.updatedAt),
+    jurisdictionOrder: a.jurisdictionOrder,
   }));
 
   const columns = AFFAIR_EXPORT_COLUMNS;

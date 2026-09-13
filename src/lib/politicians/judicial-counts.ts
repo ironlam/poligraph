@@ -1,7 +1,16 @@
-import type { AffairStatus, Involvement } from "@/generated/prisma";
+import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
 import { getJudicialMaturity, isJudiciallyValidated } from "@/config/judicial-maturity";
 
-export type AffairInput = { involvement: Involvement; status: AffairStatus };
+export type AffairInput = {
+  involvement: Involvement;
+  status: AffairStatus;
+  /**
+   * Obligatoire à dessein. Optionnel, un appelant qui oublie de sélectionner
+   * la colonne compile sans broncher et compte une affaire financière comme
+   * pénale : une réponse fausse plutôt qu'une erreur.
+   */
+  jurisdictionOrder: JurisdictionOrder;
+};
 
 export type JudicialCounts = {
   condamnationsDefinitives: number;
@@ -24,7 +33,12 @@ const NON_DEFINITIVE: ReadonlySet<AffairStatus> = new Set<AffairStatus>([
 // a mention) and never labels a witness/secondary as convicted. Enquêtes
 // préliminaires are excluded from all counters (RGPD art. 10 invariant).
 export function computeJudicialCounts(affairs: AffairInput[]): JudicialCounts {
-  const direct = affairs.filter((x) => x.involvement === "DIRECT");
+  // Les compteurs à charge s'en tiennent à l'ordre pénal : une sanction de la
+  // chambre du contentieux de la Cour des comptes reste sur la fiche, mais
+  // « Condamnations définitives » se lit comme pénal et ne doit pas l'englober.
+  const direct = affairs.filter(
+    (x) => x.involvement === "DIRECT" && x.jurisdictionOrder === "PENAL"
+  );
   return {
     condamnationsDefinitives: direct.filter((x) => x.status === "CONDAMNATION_DEFINITIVE").length,
     condamnationsNonDefinitives: direct.filter((x) => NON_DEFINITIVE.has(x.status)).length,

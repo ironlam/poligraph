@@ -7,7 +7,11 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
-import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  getPublishedAffairSqlWhere,
+  getPublishedAffairWhere,
+  ADVERSE_JURISDICTION_ORDER,
+} from "@/lib/affairs/public-filters";
 
 export const MANDAT_BUCKETS: Record<string, MandateType[]> = {
   depute: ["DEPUTE", "DEPUTE_EUROPEEN"],
@@ -66,6 +70,10 @@ export async function getCondamnations(filters: CondamnationsFilters) {
   const where: Prisma.AffairWhereInput = {
     ...getPublishedAffairWhere(),
     involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
+    // Le hub liste des condamnations pénales. Une sanction de la chambre du
+    // contentieux de la Cour des comptes y figurerait comme une condamnation
+    // ordinaire et gonflerait les taux par parti calculés plus bas.
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     ...(statuses !== "all" && { status: { in: statuses } }),
     ...(partiSlug && {
       OR: [
@@ -201,6 +209,7 @@ export async function getCondamnationsStatsByParty(
     LEFT JOIN "Affair" a ON a."politicianId" = p.id
       AND ${getPublishedAffairSqlWhere()}
       AND a.involvement IN ('DIRECT','INDIRECT')
+      AND a."jurisdictionOrder" = ${ADVERSE_JURISDICTION_ORDER}::"JurisdictionOrder"
     WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     ${
       mandateTypes

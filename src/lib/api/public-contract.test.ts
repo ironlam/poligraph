@@ -58,6 +58,7 @@ describe("public affair semantics", () => {
       status: "MISE_EN_EXAMEN",
       category: "CORRUPTION",
       involvement: "DIRECT",
+      jurisdictionOrder: "PENAL",
     });
 
     expect(semantics.statusAppliesToPolitician).toBe(true);
@@ -71,6 +72,7 @@ describe("public affair semantics", () => {
       status: "CONDAMNATION_DEFINITIVE",
       category: "VIOLENCE",
       involvement: "VICTIM",
+      jurisdictionOrder: "PENAL",
     });
 
     expect(semantics.statusAppliesToPolitician).toBe(false);
@@ -85,6 +87,7 @@ describe("public affair semantics", () => {
       status: "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN",
       category: "AUTRE",
       involvement: "DIRECT",
+      jurisdictionOrder: "PENAL",
     });
 
     expect(semantics.statusLabel).toBe("Instruction clôturée, sans mise en examen");
