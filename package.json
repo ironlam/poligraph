@@ -178,6 +178,7 @@
     "sync:rne:arrondissements": "tsx scripts/sync-rne-arrondissements.ts",
     "sync:rne:maires:stats": "tsx scripts/sync-rne.ts --stats",
     "sync:elections:municipales": "tsx scripts/sync-candidatures.ts",
+    "sync:candidatures": "tsx scripts/sync-candidatures.ts",
     "sync:elections:municipales:stats": "tsx scripts/sync-candidatures.ts --stats",
     "sync:municipales-2020": "tsx scripts/sync-municipales-2020.ts",
     "sync:municipales-2020:stats": "tsx scripts/sync-municipales-2020.ts --stats",

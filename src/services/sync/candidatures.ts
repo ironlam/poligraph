@@ -1,10 +1,7 @@
 import { db } from "@/lib/db";
 import { DataSource, ElectionStatus, Judgement, Prisma } from "@/generated/prisma";
-import { parse } from "csv-parse/sync";
 import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
-import type { CandidatureMunicipaleCSV, CandidaturesSyncResult } from "./types";
-import { HTTPClient } from "@/lib/api/http-client";
-import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
+import type { CandidaturesSyncResult } from "./types";
 import { resolveBatch } from "@/lib/identity";
 import type { ResolveInput } from "@/lib/identity";
 import { normalizeText, primarySurname } from "@/lib/name-matching";
@@ -12,45 +9,13 @@ import {
   buildCandidacyUpdateBatch,
   type CandidacyUpdateRow,
 } from "@/services/sync/candidacy-update-batch";
-
-// 2026 CSV (semicolon-delimited, UTF-8, no comment header)
-const DEFAULT_CSV_URL =
-  "https://static.data.gouv.fr/resources/elections-municipales-2026-listes-candidates-au-premier-tour/20260228-020703/municipales-2026-candidatures-france-entiere-tour-1-2026-02-28-02h24.csv";
+import { fetchCandidaturesCSV, fetchResolvedCandidaturesCSV } from "./candidatures-source";
 
 const DEFAULT_ELECTION_SLUG = "municipales-2026";
 
 // 500 rows per chunk: balances batch efficiency vs. DB round-trips.
 // Within each chunk: 1 createMany (candidates) + 1 findMany + 1 createMany (candidacies) + N updates.
 const CHUNK_SIZE = 500;
-
-const dataGouvClient = new HTTPClient({
-  rateLimitMs: DATA_GOUV_RATE_LIMIT_MS,
-  sourceName: "data.gouv.fr (candidatures)",
-});
-
-/**
- * Fetch and parse the candidatures CSV (semicolon-delimited, UTF-8)
- */
-async function fetchCandidaturesCSV(url: string): Promise<CandidatureMunicipaleCSV[]> {
-  console.log(`Fetching candidatures from: ${url}`);
-
-  const { data: buffer } = await dataGouvClient.getBuffer(url);
-  const text = new TextDecoder("utf-8").decode(buffer);
-
-  const records = parse(text, {
-    delimiter: ";",
-    columns: true,
-    skip_empty_lines: true,
-    bom: true,
-    trim: true,
-    relax_column_count: true,
-    quote: '"',
-    record_delimiter: ["\r\n", "\n"],
-  }) as CandidatureMunicipaleCSV[];
-
-  console.log(`Parsed ${records.length} candidature records`);
-  return records;
-}
 
 /**
  * Match party by nuance code using NUANCE_POLITIQUE_MAPPING
@@ -286,7 +251,7 @@ export async function syncCandidaturesMunicipales(
   } = {}
 ): Promise<CandidaturesSyncResult> {
   const {
-    url = DEFAULT_CSV_URL,
+    url,
     election: electionSlug = DEFAULT_ELECTION_SLUG,
     dryRun = false,
     limit,
@@ -315,7 +280,7 @@ export async function syncCandidaturesMunicipales(
   console.log(`  Pre-loaded ${rneLookup.size} RNE birthdates for enrichment`);
 
   // ─── Fetch and parse CSV ────────────────────────────────────────────
-  const records = await fetchCandidaturesCSV(url);
+  const records = url ? await fetchCandidaturesCSV(url) : await fetchResolvedCandidaturesCSV();
   const toProcess = limit ? records.slice(0, limit) : records;
 
   // ─── Parse all rows upfront (CPU-only, no DB) ──────────────────────
