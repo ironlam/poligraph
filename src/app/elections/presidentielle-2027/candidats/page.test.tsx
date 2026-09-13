@@ -36,7 +36,7 @@ describe("metadata de l'annuaire présidentiel", () => {
 
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe("/elections/presidentielle-2027/candidats");
-    expect(String(metadata.title)).toContain("Présidentielle 2027");
+    expect(String(metadata.title)).toContain("Candidats à l'élection présidentielle 2027");
   });
 
   it("passe les variantes filtrées en noindex,follow", async () => {

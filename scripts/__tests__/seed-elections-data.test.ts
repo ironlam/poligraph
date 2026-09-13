@@ -44,6 +44,22 @@ describe("seed élections : sénatoriales 2026", () => {
   });
 });
 
+describe("seed élections : présidentielle 2027", () => {
+  const presidentielle = ELECTIONS.find((e) => e.slug === "presidentielle-2027");
+
+  it("porte les dates officielles des deux tours", () => {
+    expect(presidentielle?.round1Date?.toISOString().slice(0, 10)).toBe("2027-04-18");
+    expect(presidentielle?.round2Date?.toISOString().slice(0, 10)).toBe("2027-05-02");
+  });
+
+  it("indique que les dates sont confirmées par le ministère de l'Intérieur", () => {
+    expect(presidentielle?.dateConfirmed).toBe(true);
+    expect(presidentielle?.sourceUrl).toBe(
+      "https://www.elections.interieur.gouv.fr/scrutins/lelection-presidentielle"
+    );
+  });
+});
+
 /**
  * Le hub ne lit pas `candidacyDeadline` pour décider de sa phase : l'heure de l'article 2
  * est locale à la circonscription de dépôt, et aucun instant ne la représente à l'échelle

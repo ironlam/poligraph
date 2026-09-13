@@ -82,11 +82,13 @@ export const ELECTIONS: ElectionSeed[] = [
     title: "Élection présidentielle de 2027",
     shortTitle: "Présidentielle 2027",
     scope: "NATIONAL",
-    round1Date: new Date("2027-04-11"),
-    round2Date: new Date("2027-04-25"),
-    dateConfirmed: false,
+    // Dates officielles publiées par le ministère de l'Intérieur.
+    round1Date: new Date("2027-04-18"),
+    round2Date: new Date("2027-05-02"),
+    dateConfirmed: true,
     totalSeats: 1,
     suffrage: "DIRECT",
+    sourceUrl: "https://www.elections.interieur.gouv.fr/scrutins/lelection-presidentielle",
   },
   {
     slug: "legislatives-2029",

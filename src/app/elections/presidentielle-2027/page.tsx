@@ -28,9 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const publishable = context !== null && context.hubPublishable;
 
   return {
-    title: "Présidentielle 2027 : programmes, mesures et candidatures",
+    title: "Élection présidentielle 2027 : candidats, programmes et dates",
     description:
-      "Les candidatures à la présidentielle 2027, leurs mesures sourcées et relues par thème, et les votes parlementaires disponibles dans Poligraph.",
+      "Retrouvez les candidats à l'élection présidentielle 2027, leurs programmes et mesures sourcées, les dates officielles des deux tours et les votes parlementaires disponibles dans Poligraph.",
     robots: publishable ? undefined : { index: false, follow: true },
     alternates: { canonical: "/elections/presidentielle-2027" },
   };

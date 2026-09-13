@@ -32,9 +32,9 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   );
 
   return {
-    title: "Présidentielle 2027 : candidatures et programmes",
+    title: "Candidats à l'élection présidentielle 2027 : liste et programmes",
     description:
-      "Les candidatures annoncées et les personnalités suivies pour la présidentielle 2027, avec leur statut sourcé et les propositions publiées sur Poligraph.",
+      "Liste des candidats et candidatures à l'élection présidentielle 2027, avec leur statut sourcé et les programmes publiés sur Poligraph.",
     robots:
       hasUtilityParams || candidacies.length === 0 ? { index: false, follow: true } : undefined,
     alternates: { canonical: PAGE_PATH },

@@ -39,7 +39,8 @@ describe("generateMetadata du hub présidentielle", () => {
   it("titre correct", async () => {
     mockGetContext.mockResolvedValue(context({ hubPublishable: true }));
     const meta = await generateMetadata();
-    expect(String(meta.title)).toMatch(/Présidentielle 2027 : programmes, mesures et candidatures/);
+    expect(String(meta.title)).toContain("Élection présidentielle 2027");
+    expect(String(meta.title)).toContain("candidats");
   });
 
   it("noindex quand le hub n'est pas encore publiable", async () => {
