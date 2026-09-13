@@ -136,6 +136,7 @@ jobs:
       DATABASE_SSL: "false"
       NODE_ENV: test
       DOTENV_CONFIG_PATH: /dev/null
+      PERFORMANCE_METRICS_OUTPUT: election-api-postgres-metrics.json
 
     steps:
       - name: Checkout repository
@@ -161,17 +162,26 @@ jobs:
 
       - name: Run election API integration suite
         run: |
+          test -f "src/app/api/elections/[slug]/route.integration.test.ts"
           npx vitest run --no-file-parallelism \
             --reporter=json \
             --outputFile=election-api-postgres-vitest.json \
             "src/app/api/elections/[slug]/route.integration.test.ts"
           node -e '
             const report = require("./election-api-postgres-vitest.json");
-            if (report.numTotalTests > 0 && report.numPassedTests === 0 && report.numPendingTests === report.numTotalTests) {
-              console.error("Election API integration suite was entirely skipped");
+            if (report.numTotalTests === 0 || report.numPassedTests === 0 || report.numPendingTests === report.numTotalTests || report.numFailedTests > 0) {
+              console.error("Election API integration suite did not execute a passing test");
               process.exit(1);
             }
           '
+
+      - name: Publish election API driver metrics
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: election-api-driver-metrics
+          path: election-api-postgres-metrics.json
+          if-no-files-found: error
 
   presidential-measure-loads-postgres:
     name: Presidential measure load reductions PostgreSQL integration
@@ -201,6 +211,7 @@ jobs:
       DATABASE_SSL: "false"
       NODE_ENV: test
       DOTENV_CONFIG_PATH: /dev/null
+      PERFORMANCE_METRICS_OUTPUT: presidential-measure-loads-metrics.json
 
     steps:
       - name: Checkout repository
@@ -226,6 +237,15 @@ jobs:
 
       - name: Run measure parity and load tests
         run: |
+          expected_files=(
+            "src/lib/data/__tests__/hub.integration.test.ts"
+            "src/lib/data/__tests__/priorites.integration.test.ts"
+            "src/lib/data/__tests__/themes-index.integration.test.ts"
+            "src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts"
+            "src/lib/data/__tests__/presidential-reader-guides.integration.test.ts"
+            "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts"
+          )
+          for expected_file in "${expected_files[@]}"; do test -f "$expected_file"; done
           npx vitest run --no-file-parallelism \
             src/lib/data/__tests__/hub.integration.test.ts \
             src/lib/data/__tests__/priorites.integration.test.ts \
@@ -236,11 +256,19 @@ jobs:
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
           node -e '
             const report = require("./presidential-measure-loads-vitest.json");
-            if (report.numTotalTests === 0 || report.numPassedTests === 0 || report.numPendingTests === report.numTotalTests) {
+            if (report.numTotalTests === 0 || report.numPassedTests === 0 || report.numPendingTests === report.numTotalTests || report.numFailedTests > 0) {
               console.error("Presidential measure PostgreSQL suite did not execute a passing test");
               process.exit(1);
             }
           '
+
+      - name: Publish presidential driver metrics
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presidential-driver-metrics
+          path: presidential-measure-loads-metrics.json
+          if-no-files-found: error
 
   sec-02-role-contract:
     name: SEC-02 role contract
