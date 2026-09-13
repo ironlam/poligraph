@@ -188,7 +188,10 @@ function requestUrl(source: SourceUrl): string {
   return url.toString();
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  init: { method: string; headers: Record<string, string> }
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
