@@ -18,6 +18,8 @@ export type FeaturedSubtopicMeasure = {
   subtopics: Array<{ slug: string; label: string }>;
 };
 
+export type FeaturedSubtopicAggregate = Omit<FeaturedSubtopic, "themeLabel">;
+
 const FEATURED_SUBTOPIC_LIMIT = 10;
 const FEATURED_SUBTOPICS_PER_THEME = 2;
 
@@ -78,5 +80,25 @@ export function selectFeaturedSubtopics(measures: FeaturedSubtopicMeasure[]): Fe
     if (selected.length === FEATURED_SUBTOPIC_LIMIT) break;
   }
 
+  return selected;
+}
+
+/** Same editorial ranking as selectFeaturedSubtopics, after PostgreSQL counted the corpus. */
+export function selectFeaturedSubtopicsFromAggregates(
+  aggregates: FeaturedSubtopicAggregate[]
+): FeaturedSubtopic[] {
+  const perTheme = new Map<ThemeCategory, number>();
+  const selected: FeaturedSubtopic[] = [];
+  for (const subtopic of [...aggregates].sort(
+    (a, b) =>
+      b.candidacyCount - a.candidacyCount ||
+      b.measureCount - a.measureCount ||
+      a.label.localeCompare(b.label, "fr")
+  )) {
+    if ((perTheme.get(subtopic.theme) ?? 0) >= 2) continue;
+    selected.push({ ...subtopic, themeLabel: THEME_CATEGORY_LABELS[subtopic.theme] });
+    perTheme.set(subtopic.theme, (perTheme.get(subtopic.theme) ?? 0) + 1);
+    if (selected.length === 10) break;
+  }
   return selected;
 }

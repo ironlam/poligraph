@@ -166,11 +166,11 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     const publishedStats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
     const secondaryStats = await getPublicMeasureStatsByCandidacy(secondarySourceCandidacyId);
 
-    expect(rollups.get(publishedCandidacyId)).toEqual({
+    expect(rollups.get(publishedCandidacyId)).toMatchObject({
       measureCount: publishedStats.measureCount,
       themesCoveredCount: publishedStats.themesCoveredCount,
     });
-    expect(rollups.get(secondarySourceCandidacyId)).toEqual({
+    expect(rollups.get(secondarySourceCandidacyId)).toMatchObject({
       measureCount: secondaryStats.measureCount,
       themesCoveredCount: secondaryStats.themesCoveredCount,
     });
@@ -187,7 +187,7 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     try {
       const rollups = await getPublicMeasureRollupsByElection(electionId);
       const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
-      expect(rollups.get(publishedCandidacyId)).toEqual({
+      expect(rollups.get(publishedCandidacyId)).toMatchObject({
         measureCount: stats.measureCount,
         themesCoveredCount: stats.themesCoveredCount,
       });
@@ -199,6 +199,33 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
   it("compte une seule mesure à source primaire quand l'autre est secondaire", async () => {
     const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
     expect(stats.primarySourceMeasureCount).toBe(1);
+  });
+
+  it("ne double pas une mesure quand sa révision publiée porte plusieurs sources", async () => {
+    const measure = await db.measure.findFirstOrThrow({
+      where: { candidacyId: publishedCandidacyId },
+      select: { publishedRevisionId: true },
+    });
+    const source = await db.measureSource.create({
+      data: {
+        measureRevisionId: measure.publishedRevisionId!,
+        sourceKind: "ARTICLE_PRESSE",
+        tier: "SECONDARY",
+        url: "https://example.org/source-secondaire",
+        publishedAt: new Date("2026-03-01T00:00:00Z"),
+      },
+      select: { id: true },
+    });
+
+    try {
+      const rollup = (await getPublicMeasureRollupsByElection(electionId)).get(
+        publishedCandidacyId
+      );
+      expect(rollup?.measureCount).toBe(2);
+      expect(rollup?.primarySourceMeasureCount).toBe(1);
+    } finally {
+      await db.measureSource.delete({ where: { id: source.id } });
+    }
   });
 
   it("rend une date de dernière revue", async () => {

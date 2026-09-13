@@ -9,8 +9,7 @@ import {
 } from "./presidential-candidacy-field";
 import { loadThemesIndex } from "./themes-index";
 import type { FeaturedSubtopic } from "./themes-index";
-import { getLatestPresidentialReviewDate } from "./measures";
-import { loadPresidentialReaderGuideIndex } from "./presidential-reader-guides";
+import { loadPresidentialReaderGuideSummaries } from "./presidential-reader-guides";
 
 /**
  * The two read authorities for the presidential hub page.
@@ -92,7 +91,7 @@ export async function loadHubMeasureContext(
   electionId: string,
   electionSlug: string
 ): Promise<HubMeasureContext> {
-  const [election, themesIndex, lastReviewedAt, readerGuides] = await Promise.all([
+  const [election, themesIndex, readerGuides] = await Promise.all([
     db.election.findUniqueOrThrow({
       where: { id: electionId },
       select: {
@@ -104,9 +103,16 @@ export async function loadHubMeasureContext(
       },
     }),
     loadThemesIndex(electionId, electionSlug),
-    getLatestPresidentialReviewDate(electionId),
-    loadPresidentialReaderGuideIndex(electionId),
+    loadPresidentialReaderGuideSummaries(electionId),
   ]);
+
+  const lastReviewedAt = themesIndex.themes.reduce<Date | null>(
+    (latest, theme) =>
+      theme.lastReviewedAt !== null && (latest === null || theme.lastReviewedAt > latest)
+        ? theme.lastReviewedAt
+        : latest,
+    null
+  );
 
   // Derived from the themes index rather than a fresh getPublicMeasuresByElection() read: the
   // subject pages are the only surface that renders a measure, and only for candidacies with a
@@ -136,12 +142,12 @@ export async function loadHubMeasureContext(
     featuredSubtopics: themesIndex.featuredSubtopics,
     featuredReaderGuides: readerGuides
       .filter((guide) => guide.indexable)
-      .sort((a, b) => b.measures.length - a.measures.length || a.label.localeCompare(b.label, "fr"))
+      .sort((a, b) => b.measureCount - a.measureCount || a.label.localeCompare(b.label, "fr"))
       .slice(0, 6)
       .map((guide) => ({
         slug: guide.slug,
         label: guide.label,
-        measureCount: guide.measures.length,
+        measureCount: guide.measureCount,
         candidateCount: guide.candidateCount,
       })),
   };

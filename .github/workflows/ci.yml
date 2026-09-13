@@ -173,6 +173,73 @@ jobs:
             }
           '
 
+  presidential-measure-loads-postgres:
+    name: Presidential measure load reductions PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # PostgreSQL 17 matches production. The port is pinned because describeIfDisposableDb refuses
+    # every database except the disposable harness on localhost:55433.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: poligraph_test
+          POSTGRES_PASSWORD: poligraph_test
+          POSTGRES_DB: poligraph_test
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -h localhost -U poligraph_test -d poligraph_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
+      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
+      DATABASE_SSL: "false"
+      NODE_ENV: test
+      DOTENV_CONFIG_PATH: /dev/null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Create extensions and publicId sequences
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
+
+      - name: Apply the schema
+        run: npx prisma db push
+
+      - name: Run measure parity and load tests
+        run: |
+          npx vitest run --no-file-parallelism \
+            src/lib/data/__tests__/hub.integration.test.ts \
+            src/lib/data/__tests__/priorites.integration.test.ts \
+            src/lib/data/__tests__/themes-index.integration.test.ts \
+            src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts \
+            --reporter=json --outputFile=presidential-measure-loads-vitest.json
+          node -e '
+            const report = require("./presidential-measure-loads-vitest.json");
+            if (report.numTotalTests === 0 || report.numPassedTests === 0 || report.numPendingTests === report.numTotalTests) {
+              console.error("Presidential measure PostgreSQL suite did not execute a passing test");
+              process.exit(1);
+            }
+          '
+
   sec-02-role-contract:
     name: SEC-02 role contract
     runs-on: ubuntu-latest
