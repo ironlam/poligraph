@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   AFFAIR_STATUS_LABELS,
+  JURISDICTION_ORDER_LABELS,
   AFFAIR_CATEGORY_LABELS,
   INVOLVEMENT_LABELS,
   PUBLICATION_STATUS_OPTIONS,
@@ -21,6 +22,7 @@ import { AffairSourceFields } from "@/components/admin/AffairSourceFields";
 import { involvementRequiresNote } from "@/lib/affairs/involvement-note";
 import { formatAffairFormError } from "@/lib/admin/moderation-payload";
 import type { AffairStatus, AffairCategory, Involvement, SourceType } from "@/types";
+import type { JurisdictionOrder } from "@/generated/prisma";
 import type { PublicationStatus } from "@/generated/prisma";
 import type { AffairFormData, Source } from "@/components/admin/affair-form-data";
 
@@ -50,6 +52,7 @@ export function AffairForm({ initialData, initialPoliticianId }: AffairFormProps
       description: "",
       status: "ENQUETE_PRELIMINAIRE" as AffairStatus,
       category: "AUTRE" as AffairCategory,
+      jurisdictionOrder: "PENAL" as JurisdictionOrder,
       involvement: "MENTIONED_ONLY" as Involvement,
       appeal: false,
       linkedAffairId: null,
@@ -223,6 +226,27 @@ export function AffairForm({ initialData, initialPoliticianId }: AffairFormProps
                   </option>
                 ))}
               </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="jurisdictionOrder">Ordre de juridiction</Label>
+              <Select
+                id="jurisdictionOrder"
+                value={formData.jurisdictionOrder || "PENAL"}
+                onChange={(e) =>
+                  updateField("jurisdictionOrder", e.target.value as JurisdictionOrder)
+                }
+              >
+                {Object.entries(JURISDICTION_ORDER_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Hors pénal, l&apos;affaire reste visible sur la fiche mais n&apos;entre pas dans les
+                compteurs publics de condamnations.
+              </p>
             </div>
 
             <div>

@@ -115,6 +115,7 @@ export const GET = withPublicRoute(async (request) => {
         description: true,
         status: true,
         category: true,
+        jurisdictionOrder: true,
         involvement: true,
         factsDate: true,
         startDate: true,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isValidSentenceSplit } from "@/lib/affairs/sentence-split";
-import { VALID_STATUSES } from "@/lib/security/schemas/affair";
+import { VALID_STATUSES, VALID_JURISDICTION_ORDERS } from "@/lib/security/schemas/affair";
 
 // Derived, never re-typed: a hand-copied duplicate had no guard and would drift.
 const AFFAIR_STATUSES = VALID_STATUSES;
@@ -66,6 +66,10 @@ const createAffairFields = z.object({
   description: z.string().min(1),
   status: z.enum(AFFAIR_STATUSES),
   category: z.enum(AFFAIR_CATEGORIES),
+  // Ordre de juridiction. Absent, la base applique PENAL : c'est le cas de la
+  // quasi-totalité des affaires, et l'omettre ne peut donc pas faire entrer par
+  // erreur une procédure pénale dans un autre ordre.
+  jurisdictionOrder: z.enum(VALID_JURISDICTION_ORDERS).optional(),
   involvement: z.enum(INVOLVEMENTS).optional(),
   // Real subject of the procedure when it is not the tracked person, and the
   // sourced nature of the link. involvementNote is required to publish any

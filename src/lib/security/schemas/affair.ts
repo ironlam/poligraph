@@ -38,8 +38,17 @@ const VALID_CATEGORIES = [
   "AUTRE",
 ] as const;
 
+/**
+ * Ordre de juridiction. Doit rester identique à l'enum Prisma
+ * `JurisdictionOrder`, comme `VALID_STATUSES` : une valeur manquante ici est un
+ * ordre que la modération ne peut pas poser, et une valeur absente de Prisma
+ * passe Zod pour échouer en base. Gardé par un test.
+ */
+export const VALID_JURISDICTION_ORDERS = ["PENAL", "FINANCIER", "ADMINISTRATIF"] as const;
+
 export const quickUpdateAffairSchema = z.object({
   status: z.enum(VALID_STATUSES).optional(),
+  jurisdictionOrder: z.enum(VALID_JURISDICTION_ORDERS).optional(),
   involvement: z.enum(VALID_INVOLVEMENTS).optional(),
   severity: z.enum(VALID_SEVERITIES).optional(),
   publicationStatus: z.enum(["PUBLISHED", "DRAFT", "ARCHIVED", "EXCLUDED", "REJECTED"]).optional(),

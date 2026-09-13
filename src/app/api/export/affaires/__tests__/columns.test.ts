@@ -32,3 +32,18 @@ describe("contrat de colonnes de l'export affaires", () => {
     expect(new Set(headers).size).toBe(headers.length);
   });
 });
+
+describe("ordre de juridiction dans l'export", () => {
+  const keys = AFFAIR_EXPORT_COLUMNS.map((c) => c.key);
+
+  it("expose l'ordre de juridiction", () => {
+    // Sans cette colonne, un réutilisateur reçoit « condamnation définitive »
+    // sans savoir si elle vient d'un tribunal correctionnel ou de la chambre
+    // du contentieux de la Cour des comptes.
+    expect(keys).toContain("jurisdictionOrder");
+  });
+
+  it("l'ajoute en fin de liste, sans décaler les colonnes existantes", () => {
+    expect(keys[keys.length - 1]).toBe("jurisdictionOrder");
+  });
+});

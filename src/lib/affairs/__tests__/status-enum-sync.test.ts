@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { AffairStatus } from "@/generated/prisma";
+import { AffairStatus, JurisdictionOrder } from "@/generated/prisma";
 import { COLORS } from "@/config/colors";
-import { VALID_STATUSES } from "@/lib/security/schemas/affair";
+import { VALID_STATUSES, VALID_JURISDICTION_ORDERS } from "@/lib/security/schemas/affair";
 import { AFFAIR_STATUSES } from "@/services/affair-moderation";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import { getCertaintyLevel } from "@/config/certainty";
@@ -43,5 +43,14 @@ describe("cohérence croisée entre les deux taxonomies", () => {
         expect(getJudicialMaturity(status)).toBe("INSTRUCTION_CLOSE");
       }
     }
+  });
+});
+
+describe("la liste des ordres de juridiction suit l'enum Prisma", () => {
+  // Même piège que pour les statuts : une valeur manquante ici est un ordre que
+  // la modération ne peut pas poser, et une valeur en trop passe Zod pour
+  // échouer en base.
+  it("VALID_JURISDICTION_ORDERS couvre tous les ordres", () => {
+    expect([...VALID_JURISDICTION_ORDERS].sort()).toEqual(Object.keys(JurisdictionOrder).sort());
   });
 });

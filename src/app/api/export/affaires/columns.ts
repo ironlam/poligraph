@@ -52,4 +52,7 @@ export const AFFAIR_EXPORT_COLUMNS = [
   { key: "pageUrl" as const, header: "Page Poligraph" },
   { key: "createdAt" as const, header: "Créée le" },
   { key: "updatedAt" as const, header: "Mise à jour le" },
+  // Ajoutée en fin de liste : l'ordre des colonnes est un contrat pour les
+  // scripts qui consomment ce CSV, et insérer au milieu les décalerait tous.
+  { key: "jurisdictionOrder" as const, header: "Ordre de juridiction" },
 ];

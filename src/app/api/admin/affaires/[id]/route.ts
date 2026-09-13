@@ -116,6 +116,9 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
       description: data.description,
       status: data.status,
       category: data.category,
+      // Le PUT remplace la fiche : omettre le champ le laisserait à sa valeur
+      // précédente sans que le formulaire ait pu le changer. Défaut explicite.
+      jurisdictionOrder: data.jurisdictionOrder ?? "PENAL",
       severity,
       isRelatedToMandate: mandateRelated,
       involvement: data.involvement || "DIRECT",

@@ -46,8 +46,8 @@ describe("POURVOI_EN_CASSATION — c'est une condamnation", () => {
 
   it("compte comme condamnation non définitive, jamais comme définitive", () => {
     const counts = computeJudicialCounts([
-      { involvement: "DIRECT", status: STATUS },
-      { involvement: "DIRECT", status: "CONDAMNATION_DEFINITIVE" },
+      { involvement: "DIRECT", status: STATUS, jurisdictionOrder: "PENAL" },
+      { involvement: "DIRECT", status: "CONDAMNATION_DEFINITIVE", jurisdictionOrder: "PENAL" },
     ]);
 
     expect(counts.condamnationsNonDefinitives).toBe(1);

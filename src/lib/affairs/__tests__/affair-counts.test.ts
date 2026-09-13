@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { computeAffairCounts } from "@/lib/affairs/affair-counts";
 
-type A = { status: string; involvement: string };
-const a = (status: string, involvement: string): A => ({ status, involvement });
+type A = { status: string; involvement: string; jurisdictionOrder: "PENAL" };
+const a = (status: string, involvement: string, jurisdictionOrder = "PENAL"): A =>
+  ({ status, involvement, jurisdictionOrder }) as A;
 
 describe("computeAffairCounts — compteurs par rôle (RGPD art. 10)", () => {
   it("adverseAffairsCount = DIRECT/INDIRECT + statuts à charge (Tier 1+2)", () => {
@@ -64,5 +65,30 @@ describe("computeAffairCounts — compteurs par rôle (RGPD art. 10)", () => {
       affairsVictimOrPlaintiffCount: 0,
       favorableOutcomeCount: 0,
     });
+  });
+});
+
+describe("ordre de juridiction", () => {
+  it("exclut le non-pénal des compteurs à charge et favorables", () => {
+    const counts = computeAffairCounts([
+      a("CONDAMNATION_DEFINITIVE", "DIRECT", "FINANCIER"),
+      a("RELAXE", "DIRECT", "FINANCIER"),
+      a("CONDAMNATION_DEFINITIVE", "DIRECT", "PENAL"),
+    ]);
+
+    expect(counts.adverseAffairsCount).toBe(1);
+    expect(counts.favorableOutcomeCount).toBe(0);
+  });
+
+  it("compte toujours mention et victime, quel que soit l'ordre", () => {
+    // Ces compteurs décrivent un rôle, pas une charge : les restreindre
+    // ferait disparaître l'affaire de tous les compteurs à la fois.
+    const counts = computeAffairCounts([
+      a("CONDAMNATION_DEFINITIVE", "MENTIONED_ONLY", "FINANCIER"),
+      a("RELAXE", "VICTIM", "FINANCIER"),
+    ]);
+
+    expect(counts.affairsMentionedCount).toBe(1);
+    expect(counts.affairsVictimOrPlaintiffCount).toBe(1);
   });
 });

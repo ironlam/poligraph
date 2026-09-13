@@ -231,7 +231,11 @@ export default async function PoliticianPage({ params }: PageProps) {
   // Judicial counters: "mis en cause" = DIRECT only (no double count with
   // mentions; enquêtes préliminaires excluded, RGPD art. 10 invariant).
   const judicial = computeJudicialCounts(
-    politician.affairs.map((a) => ({ involvement: a.involvement, status: a.status }))
+    politician.affairs.map((a) => ({
+      involvement: a.involvement,
+      status: a.status,
+      jurisdictionOrder: a.jurisdictionOrder,
+    }))
   );
 
   // Extract companies where politician is a board member for JSON-LD

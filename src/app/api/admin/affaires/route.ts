@@ -186,6 +186,10 @@ export const POST = withAdminAuth(async (request: NextRequest) => {
       description: data.description,
       status: data.status,
       category: data.category,
+      // Propriété explicite et non spread conditionnel : le garde CI-01 scanne
+      // cette charge pour prouver qu'aucune publication ne s'y faufile, et un
+      // spread la rend indémontrable.
+      jurisdictionOrder: data.jurisdictionOrder ?? "PENAL",
       severity,
       isRelatedToMandate: mandateRelated,
       involvement: data.involvement || "DIRECT",

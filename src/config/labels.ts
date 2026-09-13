@@ -28,6 +28,7 @@ import type {
   PromiseSourceKind,
   PromiseExtractionStatus,
   CandidacyStatus,
+  JurisdictionOrder,
 } from "@/types";
 import type {
   MeasureAttribution,
@@ -53,6 +54,18 @@ import type { MeasureBadgeTier } from "@/components/measures/MeasureBadge";
 
 // Nombre de sièges à l'Assemblée nationale (XVIIe législature)
 export const AN_SEAT_COUNT = 577;
+
+/**
+ * Ordre de juridiction, libellé pour la modération.
+ *
+ * Le libellé dit la conséquence, pas seulement le nom : un modérateur qui pose
+ * FINANCIER doit savoir que l'affaire sortira des compteurs publics.
+ */
+export const JURISDICTION_ORDER_LABELS: Record<JurisdictionOrder, string> = {
+  PENAL: "Pénal",
+  FINANCIER: "Financier (Cour des comptes), hors compteurs",
+  ADMINISTRATIF: "Administratif, hors compteurs",
+};
 
 export const AFFAIR_STATUS_LABELS: Record<AffairStatus, string> = {
   ENQUETE_PRELIMINAIRE: "Enquête préliminaire",
