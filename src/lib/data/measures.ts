@@ -659,6 +659,7 @@ export async function getPublicMeasureRollupsByElection(
     LEFT JOIN "ProgramEdition" pe ON pe."id" = m."programEditionId"
     WHERE m."electionId" = ${electionId}
       AND m."candidacyId" IS NOT NULL
+      AND c."electionId" = ${electionId}
       AND m."publicationStatus" = 'PUBLISHED'
       AND m."publishedRevisionId" IS NOT NULL
       AND m."withdrawnAt" IS NULL
@@ -719,6 +720,7 @@ export async function getPublicMeasureSubtopicRollupsByElection(
     JOIN "CandidacyPresidential" cp ON cp."candidacyId" = c."id"
     WHERE m."electionId" = ${electionId}
       AND m."candidacyId" IS NOT NULL AND m."withdrawnAt" IS NULL
+      AND c."electionId" = ${electionId}
       AND m."publicationStatus" = 'PUBLISHED' AND m."publishedRevisionId" IS NOT NULL
       AND r."reviewedAt" IS NOT NULL AND r."publishedAt" IS NOT NULL
       AND r."supersededAt" IS NULL AND r."discardedAt" IS NULL AND r."rejectedAt" IS NULL
@@ -759,6 +761,7 @@ export async function getPublicMeasureThemeRollupsByElection(
     JOIN "CandidacyPresidential" cp ON cp."candidacyId" = c."id"
     WHERE m."electionId" = ${electionId}
       AND m."candidacyId" IS NOT NULL
+      AND c."electionId" = ${electionId}
       AND m."publicationStatus" = 'PUBLISHED'
       AND m."publishedRevisionId" IS NOT NULL
       AND r."reviewedAt" IS NOT NULL AND r."publishedAt" IS NOT NULL

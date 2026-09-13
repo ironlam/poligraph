@@ -231,6 +231,8 @@ jobs:
             src/lib/data/__tests__/priorites.integration.test.ts \
             src/lib/data/__tests__/themes-index.integration.test.ts \
             src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts \
+            src/lib/data/__tests__/presidential-reader-guides.integration.test.ts \
+            src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts \
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
           node -e '
             const report = require("./presidential-measure-loads-vitest.json");

@@ -21,6 +21,7 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
   let draftExtensionCandidacyId: string;
   let secondarySourceCandidacyId: string;
   let electionId: string;
+  let foreignElectionId: string;
 
   beforeAll(async () => {
     assertDisposableTestDb();
@@ -42,6 +43,16 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
       },
     });
     electionId = election.id;
+
+    const foreignElection = await db.election.create({
+      data: {
+        slug: `${SLUG}-foreign-election`,
+        type: "PRESIDENTIELLE",
+        scope: "NATIONAL",
+        title: "Élection étrangère de test",
+      },
+    });
+    foreignElectionId = foreignElection.id;
 
     async function candidacy(name: string, publicationStatus: "PUBLISHED" | "DRAFT") {
       const pol = await db.politician.create({
@@ -145,6 +156,41 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
         },
       ],
     });
+
+    // Deliberately inconsistent legacy data: the measure points at this election while its
+    // candidacy belongs to another one. Election-scoped public surfaces must reject it.
+    const foreignPolitician = await db.politician.create({
+      data: {
+        slug: `${SLUG}-foreign-candidate`,
+        firstName: "Foreign",
+        lastName: "Fixture",
+        fullName: "Foreign Fixture",
+      },
+    });
+    const foreignCandidacy = await db.candidacy.create({
+      data: {
+        electionId: foreignElection.id,
+        politicianId: foreignPolitician.id,
+        candidateName: "Foreign Fixture",
+        status: "DECLARE",
+        sourceUrl: "https://example.org/foreign-source",
+        sourceLabel: "Source",
+      },
+    });
+    await db.candidacyPresidential.create({
+      data: { candidacyId: foreignCandidacy.id, publicationStatus: "PUBLISHED" },
+    });
+    await publishOne({
+      candidacyId: foreignCandidacy.id,
+      politicianId: foreignPolitician.id,
+      theme: "LOGEMENT_URBANISME",
+      tier: "PRIMARY",
+      text: "foreign-cross-election",
+    });
+    await db.measure.updateMany({
+      where: { candidacyId: foreignCandidacy.id },
+      data: { electionId },
+    });
   });
 
   afterAll(async () => {
@@ -152,6 +198,7 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     await db.candidacy.deleteMany({ where: { electionId } });
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     await db.election.deleteMany({ where: { slug: SLUG } });
+    await db.election.delete({ where: { id: foreignElectionId } });
     await db.$disconnect();
   });
 
@@ -194,6 +241,18 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     } finally {
       await db.measure.update({ where: { id: measure.id }, data: { withdrawnAt: null } });
     }
+  });
+
+  it("reste dans l'élection demandée quand une candidature est mal rattachée", async () => {
+    const rollups = await getPublicMeasureRollupsByElection(electionId);
+    expect([...rollups.keys()]).not.toContain(
+      (
+        await db.candidacy.findFirstOrThrow({
+          where: { electionId: foreignElectionId },
+          select: { id: true },
+        })
+      ).id
+    );
   });
 
   it("compte une seule mesure à source primaire quand l'autre est secondaire", async () => {
@@ -259,6 +318,31 @@ describeIfDisposableDb("getPublicMeasureStatsByCandidacy", () => {
     const stats = await getPublicMeasureStatsByCandidacy(secondarySourceCandidacyId);
     expect(stats.measureCount).toBe(1);
     expect(stats.primarySourceMeasureCount).toBe(0);
+  });
+
+  it("exclut une révision publiée devenue inéligible", async () => {
+    const measure = await db.measure.findFirstOrThrow({
+      where: { candidacyId: publishedCandidacyId },
+      select: { id: true, publishedRevisionId: true },
+    });
+    await db.measureRevision.update({
+      where: { id: measure.publishedRevisionId! },
+      data: { reviewedAt: null },
+    });
+
+    try {
+      const rollup = (await getPublicMeasureRollupsByElection(electionId)).get(
+        publishedCandidacyId
+      );
+      const stats = await getPublicMeasureStatsByCandidacy(publishedCandidacyId);
+      expect(rollup?.measureCount).toBe(stats.measureCount);
+      expect(rollup?.measureCount).toBe(1);
+    } finally {
+      await db.measureRevision.update({
+        where: { id: measure.publishedRevisionId! },
+        data: { reviewedAt: new Date("2026-01-02T00:00:00Z") },
+      });
+    }
   });
 
   // La lecture d'administration répond à l'autre question : ce que la publication de l'extension

@@ -71,7 +71,7 @@ export async function loadPresidentialReaderGuideSummaries(
     SELECT g."slug" AS "slug", g."label" AS "label", g."definition" AS "definition",
       g."sourceUrl" AS "sourceUrl", g."reviewedAt" AS "reviewedAt",
       COUNT(DISTINCT m."id")::int AS "measureCount",
-      COUNT(DISTINCT c."id")::int AS "candidateCount"
+      COUNT(DISTINCT p."slug")::int AS "candidateCount"
     FROM "MeasureRevisionReaderGuide" mention
     JOIN "MeasureReaderGuide" g ON g."id" = mention."guideId"
     JOIN "MeasureRevision" r ON r."id" = mention."revisionId"
@@ -81,6 +81,7 @@ export async function loadPresidentialReaderGuideSummaries(
     JOIN "Politician" p ON p."id" = c."politicianId"
     WHERE m."electionId" = ${electionId}
       AND m."candidacyId" IS NOT NULL AND m."withdrawnAt" IS NULL
+      AND c."electionId" = ${electionId}
       AND m."publicationStatus" = 'PUBLISHED' AND m."publishedRevisionId" IS NOT NULL
       AND r."reviewedAt" IS NOT NULL AND r."publishedAt" IS NOT NULL
       AND r."supersededAt" IS NULL AND r."discardedAt" IS NULL AND r."rejectedAt" IS NULL
