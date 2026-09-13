@@ -41,7 +41,7 @@ export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {tiles.map((tile) => (
         <Link
           key={tile.href}
@@ -64,6 +64,14 @@ export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
           <span className="text-xs text-muted-foreground">{tile.subtitle}</span>
         </Link>
       ))}
+      <Link
+        href="/elections/presidentielle-2027/affaires-judiciaires"
+        prefetch={false}
+        className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border border-primary/25 bg-primary/[0.035] px-4 py-3 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <span className="text-sm font-semibold text-foreground">Affaires des candidats 2027</span>
+        <span className="text-xs text-muted-foreground">Présidentielle 2027</span>
+      </Link>
     </div>
   );
 }
