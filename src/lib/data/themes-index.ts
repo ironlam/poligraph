@@ -5,25 +5,25 @@ import { db } from "@/lib/db";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import {
-  selectFeaturedSubtopics,
+  selectFeaturedSubtopicsFromAggregates,
   type FeaturedSubtopic,
 } from "@/lib/presidentielle/featured-subtopics";
 import { getPresidentialThemeIndexOrder, themeToSlug } from "@/lib/presidentielle/themes";
-import { getPublicMeasuresByElection, type PublicMeasure } from "./measures";
-import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
+import {
+  getPublicMeasureSubtopicRollupsByElection,
+  getPublicMeasureThemeRollupsByElection,
+} from "./measures";
 
 export type { FeaturedSubtopic } from "@/lib/presidentielle/featured-subtopics";
 
 /**
  * The read authority for the themes index / hub gate.
  *
- * `loadSubjectPageData` (in `./subject-page.ts`) counts `candidaciesWithVerifiedMeasure` by
- * iterating `getPublicPresidentialCandidates` — candidacies whose `CandidacyPresidential`
- * extension is PUBLISHED — and counting the ones with at least one currently-defended measure
- * on the theme. This authority MUST count on that same population, or it would advertise a
- * subject page as publishable while the page itself renders closed. A measure attached to a
- * DRAFT-extension candidacy therefore never counts here either, which is why every measure is
- * intersected against `publicIds` before being bucketed by theme.
+ * `loadSubjectPageData` (in `./subject-page.ts`) counts `candidaciesWithVerifiedMeasure` on
+ * candidacies whose `CandidacyPresidential` extension is PUBLISHED. This authority MUST count on
+ * that same population, or it would advertise a subject page as publishable while the page itself
+ * renders closed. The PostgreSQL aggregate applies that intersection before grouping, so a measure
+ * attached to a DRAFT-extension candidacy never counts here either.
  */
 
 export type ThemeIndexEntry = {
@@ -53,54 +53,31 @@ export async function loadThemesIndex(
   electionId: string,
   electionSlug: string
 ): Promise<ThemesIndexData> {
-  const [measures, publicCandidates] = await Promise.all([
-    getPublicMeasuresByElection(electionId, { includeWithdrawn: true }),
-    getPublicPresidentialCandidates(electionSlug), // the subject-page population
+  const [byTheme, subtopics] = await Promise.all([
+    getPublicMeasureThemeRollupsByElection(electionId),
+    getPublicMeasureSubtopicRollupsByElection(electionId),
   ]);
-  const publicIds = new Set(publicCandidates.map((c) => c.id));
-
-  const byTheme = new Map<ThemeCategory, PublicMeasure[]>();
-  for (const m of measures) {
-    // The intersection with publicIds is the whole point: a measure on a DRAFT-extension
-    // candidacy must not inflate the documented count or the gate.
-    if (m.candidacyId === null || !publicIds.has(m.candidacyId)) continue;
-    const list = byTheme.get(m.theme) ?? [];
-    list.push(m);
-    byTheme.set(m.theme, list);
-  }
 
   const indexedThemes = getPresidentialThemeIndexOrder(new Set(byTheme.keys()));
   const themes: ThemeIndexEntry[] = indexedThemes.map((theme) => {
-    const onTheme = byTheme.get(theme) ?? [];
-    const defended = onTheme.filter((m) => m.withdrawal === null);
-    const documentedCandidacies = new Set(onTheme.map((m) => m.candidacyId as string));
-    const candidacies = new Set(defended.map((m) => m.candidacyId as string));
-    const lastReviewedAt = onTheme.reduce<Date | null>(
-      (latest, measure) =>
-        latest === null || measure.reviewedAt > latest ? measure.reviewedAt : latest,
-      null
-    );
+    const rollup = byTheme.get(theme);
     return {
       theme,
       label: THEME_CATEGORY_LABELS[theme],
       slug: themeToSlug(theme),
-      documentedMeasureCount: onTheme.length,
-      currentlyDefendedMeasureCount: defended.length,
-      documentedCandidacyCount: documentedCandidacies.size,
-      candidaciesWithVerifiedMeasure: candidacies.size,
-      lastReviewedAt,
-      publishable: isSubjectPagePublishable(candidacies.size),
+      documentedMeasureCount: rollup?.documentedMeasureCount ?? 0,
+      currentlyDefendedMeasureCount: rollup?.currentlyDefendedMeasureCount ?? 0,
+      documentedCandidacyCount: rollup?.documentedCandidacyCount ?? 0,
+      candidaciesWithVerifiedMeasure: rollup?.candidaciesWithVerifiedMeasure ?? 0,
+      lastReviewedAt: rollup?.lastReviewedAt ?? null,
+      publishable: isSubjectPagePublishable(rollup?.candidaciesWithVerifiedMeasure ?? 0),
     };
   });
 
   return {
     electionSlug,
     themes,
-    featuredSubtopics: selectFeaturedSubtopics(
-      measures.filter(
-        (measure) => measure.candidacyId !== null && publicIds.has(measure.candidacyId)
-      )
-    ),
+    featuredSubtopics: selectFeaturedSubtopicsFromAggregates(subtopics),
     publishableSubjectPageCount: themes.filter((t) => t.publishable).length,
   };
 }

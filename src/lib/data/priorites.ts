@@ -7,14 +7,9 @@ import {
   isPrioritesPublishable,
 } from "@/config/publication-gates";
 import { getHubCandidacyField } from "./hub";
-import {
-  getLatestPresidentialReviewDate,
-  getPublicMeasuresByElection,
-  type PublicMeasure,
-} from "./measures";
+import { getLatestPresidentialReviewDate, getPublicMeasureRollupsByElection } from "./measures";
 import { getPublicPresidentialCandidates } from "./presidential-candidates-public";
 import { loadThemesIndex } from "./themes-index";
-import { isPresidentialTheme } from "@/lib/presidentielle/themes";
 
 /**
  * The read authority for `/priorites`, the most sensitive surface of the hub: a distribution in
@@ -25,11 +20,11 @@ import { isPresidentialTheme } from "@/lib/presidentielle/themes";
  * sentences that phrase them belong to the component. That split is deliberate: a sentence baked
  * into the data layer is a sentence no test can contradict with a different number.
  *
- * Measures are counted on the SAME population the subject pages render — candidacies whose
- * `CandidacyPresidential` extension is PUBLISHED — for the reason `themes-index.ts` spells out: a
+ * Measures are counted on the SAME population the subject pages render, candidacies whose
+ * `CandidacyPresidential` extension is PUBLISHED, for the reason `themes-index.ts` spells out: a
  * measure the public cannot reach must not make a candidacy look documented. Withdrawn measures are
- * excluded by taking `getPublicMeasuresByElection`'s default: a dropped proposal is not a defended
- * one, and counting it would inflate the very ratio the gate exists to police.
+ * excluded by the PostgreSQL rollup, as a dropped proposal is not a defended one and counting it
+ * would inflate the very ratio the gate exists to police.
  */
 
 export type PrioritesCandidacyRow = {
@@ -65,40 +60,6 @@ export type PrioritesData = {
   lastReviewedAt: Date | null;
 };
 
-function summarize(
-  candidacy: {
-    id: string;
-    candidateName: string;
-    politicianSlug: string | null;
-    partyLabel: string | null;
-  },
-  measures: PublicMeasure[],
-  publishedEditionIds: Set<string>
-): PrioritesCandidacyRow {
-  const primarySourceMeasureCount = measures.filter((m) =>
-    m.sources.some((s) => s.tier === "PRIMARY")
-  ).length;
-  const programmeMeasureCount = measures.filter(
-    (m) => m.programEditionId !== null && publishedEditionIds.has(m.programEditionId)
-  ).length;
-  const metrics = {
-    verifiedMeasureCount: measures.length,
-    themesCoveredCount: new Set(measures.map((m) => m.theme).filter(isPresidentialTheme)).size,
-    primarySourceShare: measures.length === 0 ? null : primarySourceMeasureCount / measures.length,
-  };
-
-  return {
-    candidacyId: candidacy.id,
-    candidateName: candidacy.candidateName,
-    politicianSlug: candidacy.politicianSlug,
-    partyLabel: candidacy.partyLabel,
-    ...metrics,
-    primarySourceMeasureCount,
-    programmeMeasureCount,
-    eligible: isPrioritesCandidacyEligible(metrics),
-  };
-}
-
 /**
  * Plain async, integration-testable. Pages call `getPrioritesData`, which caches this.
  */
@@ -106,29 +67,13 @@ export async function loadPrioritesData(
   electionId: string,
   electionSlug: string
 ): Promise<PrioritesData> {
-  const [field, measures, publicCandidates, themesIndex, lastReviewedAt, publishedEditions] =
-    await Promise.all([
-      getHubCandidacyField(electionSlug),
-      getPublicMeasuresByElection(electionId),
-      getPublicPresidentialCandidates(electionSlug),
-      loadThemesIndex(electionId, electionSlug),
-      getLatestPresidentialReviewDate(electionId),
-      db.programEdition.findMany({
-        where: { electionId, publicationStatus: "PUBLISHED" },
-        select: { id: true },
-      }),
-    ]);
-
-  const publicIds = new Set(publicCandidates.map((c) => c.id));
-  const publishedEditionIds = new Set(publishedEditions.map((e) => e.id));
-
-  const byCandidacy = new Map<string, PublicMeasure[]>();
-  for (const m of measures) {
-    if (m.candidacyId === null || !publicIds.has(m.candidacyId)) continue;
-    const list = byCandidacy.get(m.candidacyId) ?? [];
-    list.push(m);
-    byCandidacy.set(m.candidacyId, list);
-  }
+  const [field, publicCandidates, themesIndex, lastReviewedAt, measureRollups] = await Promise.all([
+    getHubCandidacyField(electionSlug),
+    getPublicPresidentialCandidates(electionSlug),
+    loadThemesIndex(electionId, electionSlug),
+    getLatestPresidentialReviewDate(electionId),
+    getPublicMeasureRollupsByElection(electionId),
+  ]);
 
   // The field is the display order (already sorted by surname) AND the denominator of the trailing
   // "N other candidacies" row. It is not, however, guaranteed to CONTAIN every candidacy carrying a
@@ -160,7 +105,7 @@ export async function loadPrioritesData(
 
   const fieldOrder = new Map(field.map((c, index) => [c.id, index]));
   const collator = new Intl.Collator("fr", { sensitivity: "base" });
-  const documentedIds = [...byCandidacy.keys()].sort((a, b) => {
+  const documentedIds = [...measureRollups.keys()].sort((a, b) => {
     const orderA = fieldOrder.get(a) ?? Number.MAX_SAFE_INTEGER;
     const orderB = fieldOrder.get(b) ?? Number.MAX_SAFE_INTEGER;
     if (orderA !== orderB) return orderA - orderB;
@@ -172,16 +117,37 @@ export async function loadPrioritesData(
 
   const documentedRows = documentedIds.map((id) => {
     const identity = identities.get(id);
+    const rollup = measureRollups.get(id)!;
+    const metrics = {
+      verifiedMeasureCount: rollup.measureCount,
+      themesCoveredCount: rollup.themesCoveredCount,
+      primarySourceShare:
+        rollup.measureCount === 0 ? null : rollup.primarySourceMeasureCount / rollup.measureCount,
+    };
     // Unreachable: every key of byCandidacy comes from publicIds, and every publicId was just added
     // to `identities`. Kept as a total function rather than a non-null assertion.
     if (identity === undefined) {
-      return summarize(
-        { id, candidateName: id, politicianSlug: null, partyLabel: null },
-        byCandidacy.get(id) ?? [],
-        publishedEditionIds
-      );
+      return {
+        candidacyId: id,
+        candidateName: id,
+        politicianSlug: null,
+        partyLabel: null,
+        ...metrics,
+        primarySourceMeasureCount: rollup.primarySourceMeasureCount,
+        programmeMeasureCount: rollup.programmeMeasureCount,
+        eligible: isPrioritesCandidacyEligible(metrics),
+      };
     }
-    return summarize(identity, byCandidacy.get(id) ?? [], publishedEditionIds);
+    return {
+      candidacyId: identity.id,
+      candidateName: identity.candidateName,
+      politicianSlug: identity.politicianSlug,
+      partyLabel: identity.partyLabel,
+      ...metrics,
+      primarySourceMeasureCount: rollup.primarySourceMeasureCount,
+      programmeMeasureCount: rollup.programmeMeasureCount,
+      eligible: isPrioritesCandidacyEligible(metrics),
+    };
   });
 
   const documentedInField = documentedIds.filter((id) => fieldOrder.has(id)).length;

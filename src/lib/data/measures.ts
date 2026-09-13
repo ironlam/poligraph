@@ -1,4 +1,4 @@
-import type { Prisma, ThemeCategory } from "@/generated/prisma";
+import { Prisma, type ThemeCategory } from "@/generated/prisma";
 import {
   MEASURE_ATTRIBUTION_LABELS,
   MEASURE_PRECISION_LABELS,
@@ -13,7 +13,7 @@ import {
   PUBLIC_MEASURE_WHERE,
   PUBLIC_MEASURE_REVISION_WHERE,
 } from "@/lib/presidentielle/publication";
-import { isPresidentialTheme } from "@/lib/presidentielle/themes";
+import { isPresidentialTheme, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 
 /**
  * The cumulative public measure predicate.
@@ -619,35 +619,169 @@ export async function getPublicMeasureStatsByCandidacy(
 export type PublicCandidacyMeasureRollup = {
   measureCount: number;
   themesCoveredCount: number;
+  primarySourceMeasureCount: number;
+  programmeMeasureCount: number;
 };
 
 export async function getPublicMeasureRollupsByElection(
   electionId: string
 ): Promise<Map<string, PublicCandidacyMeasureRollup>> {
-  const rows = await db.measure.groupBy({
-    by: ["candidacyId", "theme"],
-    where: {
-      electionId,
-      candidacyId: { not: null },
-      candidacy: { is: PUBLIC_CANDIDACY_WHERE },
-      withdrawnAt: null,
-      ...PUBLIC_MEASURE_WHERE,
-    },
-    _count: { _all: true },
-  });
+  type Row = {
+    candidacyId: string;
+    measureCount: number;
+    themesCoveredCount: number;
+    primarySourceMeasureCount: number;
+    programmeMeasureCount: number;
+  };
 
-  const result = new Map<string, PublicCandidacyMeasureRollup>();
-  for (const row of rows) {
-    if (row.candidacyId === null) continue;
-    const current = result.get(row.candidacyId) ?? {
-      measureCount: 0,
-      themesCoveredCount: 0,
-    };
-    current.measureCount += row._count._all;
-    if (isPresidentialTheme(row.theme)) current.themesCoveredCount += 1;
-    result.set(row.candidacyId, current);
-  }
-  return result;
+  // This is deliberately one row per candidacy, not one row per measure. The joins below mirror
+  // PUBLIC_MEASURE_WHERE and PUBLIC_CANDIDACY_WHERE. Sources are an EXISTS so multiple sources
+  // cannot multiply a measure, and the primary-source count remains attached to the published
+  // revision rather than to a draft revision.
+  const rows = await db.$queryRaw<Row[]>(Prisma.sql`
+    SELECT
+      c."id" AS "candidacyId",
+      COUNT(*)::int AS "measureCount",
+      COUNT(DISTINCT m."theme") FILTER (
+        WHERE m."theme" IN (${Prisma.join(THEMES_IN_ORDER)})
+      )::int AS "themesCoveredCount",
+      COUNT(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM "MeasureSource" primary_source
+        WHERE primary_source."measureRevisionId" = r."id" AND primary_source."tier" = 'PRIMARY'
+      ))::int AS "primarySourceMeasureCount",
+      COUNT(*) FILTER (
+        WHERE pe."publicationStatus" = 'PUBLISHED' AND pe."electionId" = ${electionId}
+      )::int AS "programmeMeasureCount"
+    FROM "Measure" m
+    JOIN "MeasureRevision" r ON r."id" = m."publishedRevisionId"
+    JOIN "Candidacy" c ON c."id" = m."candidacyId"
+    JOIN "CandidacyPresidential" cp ON cp."candidacyId" = c."id"
+    LEFT JOIN "ProgramEdition" pe ON pe."id" = m."programEditionId"
+    WHERE m."electionId" = ${electionId}
+      AND m."candidacyId" IS NOT NULL
+      AND c."electionId" = ${electionId}
+      AND m."publicationStatus" = 'PUBLISHED'
+      AND m."publishedRevisionId" IS NOT NULL
+      AND m."withdrawnAt" IS NULL
+      AND r."reviewedAt" IS NOT NULL
+      AND r."publishedAt" IS NOT NULL
+      AND r."supersededAt" IS NULL
+      AND r."discardedAt" IS NULL
+      AND r."rejectedAt" IS NULL
+      AND cp."publicationStatus" = 'PUBLISHED'
+      AND EXISTS (SELECT 1 FROM "MeasureSource" public_source
+        WHERE public_source."measureRevisionId" = r."id")
+    GROUP BY c."id"
+  `);
+
+  return new Map(
+    rows.map((row) => [
+      row.candidacyId,
+      {
+        measureCount: Number(row.measureCount),
+        themesCoveredCount: Number(row.themesCoveredCount),
+        primarySourceMeasureCount: Number(row.primarySourceMeasureCount),
+        programmeMeasureCount: Number(row.programmeMeasureCount),
+      },
+    ])
+  );
+}
+
+export type PublicMeasureThemeRollup = {
+  documentedMeasureCount: number;
+  currentlyDefendedMeasureCount: number;
+  documentedCandidacyCount: number;
+  candidaciesWithVerifiedMeasure: number;
+  lastReviewedAt: Date | null;
+};
+
+export type PublicMeasureSubtopicRollup = {
+  slug: string;
+  label: string;
+  theme: ThemeCategory;
+  measureCount: number;
+  candidacyCount: number;
+};
+
+/** The featured-subtopic selector needs counts only, so no revision body crosses the boundary. */
+export async function getPublicMeasureSubtopicRollupsByElection(
+  electionId: string
+): Promise<PublicMeasureSubtopicRollup[]> {
+  type Row = PublicMeasureSubtopicRollup;
+  const rows = await db.$queryRaw<Row[]>(Prisma.sql`
+    SELECT st."slug" AS "slug", st."label" AS "label", st."theme" AS "theme",
+      COUNT(DISTINCT m."id")::int AS "measureCount",
+      COUNT(DISTINCT c."id")::int AS "candidacyCount"
+    FROM "MeasureRevisionSubtopic" assignment
+    JOIN "MeasureSubtopic" st ON st."id" = assignment."subtopicId"
+    JOIN "MeasureRevision" r ON r."id" = assignment."revisionId"
+    JOIN "Measure" m ON m."publishedRevisionId" = r."id"
+    JOIN "Candidacy" c ON c."id" = m."candidacyId"
+    JOIN "CandidacyPresidential" cp ON cp."candidacyId" = c."id"
+    WHERE m."electionId" = ${electionId}
+      AND m."candidacyId" IS NOT NULL AND m."withdrawnAt" IS NULL
+      AND c."electionId" = ${electionId}
+      AND m."publicationStatus" = 'PUBLISHED' AND m."publishedRevisionId" IS NOT NULL
+      AND r."reviewedAt" IS NOT NULL AND r."publishedAt" IS NOT NULL
+      AND r."supersededAt" IS NULL AND r."discardedAt" IS NULL AND r."rejectedAt" IS NULL
+      AND EXISTS (SELECT 1 FROM "MeasureSource" s WHERE s."measureRevisionId" = r."id")
+      AND cp."publicationStatus" = 'PUBLISHED'
+      AND assignment."status" = 'APPROVED' AND st."active" = true
+    GROUP BY st."slug", st."label", st."theme", st."sortOrder"
+    ORDER BY st."sortOrder" ASC, st."label" ASC
+  `);
+  return rows.map((row) => ({
+    ...row,
+    measureCount: Number(row.measureCount),
+    candidacyCount: Number(row.candidacyCount),
+  }));
+}
+
+/** Counts the exact public subject-page population without transferring measure rows. */
+export async function getPublicMeasureThemeRollupsByElection(
+  electionId: string
+): Promise<Map<ThemeCategory, PublicMeasureThemeRollup>> {
+  type Row = { theme: ThemeCategory } & Record<
+    | "documentedMeasureCount"
+    | "currentlyDefendedMeasureCount"
+    | "documentedCandidacyCount"
+    | "candidaciesWithVerifiedMeasure",
+    number
+  > & { lastReviewedAt: Date | null };
+  const rows = await db.$queryRaw<Row[]>(Prisma.sql`
+    SELECT m."theme" AS "theme",
+      COUNT(*)::int AS "documentedMeasureCount",
+      COUNT(*) FILTER (WHERE m."withdrawnAt" IS NULL)::int AS "currentlyDefendedMeasureCount",
+      COUNT(DISTINCT c."id")::int AS "documentedCandidacyCount",
+      COUNT(DISTINCT c."id") FILTER (WHERE m."withdrawnAt" IS NULL)::int AS "candidaciesWithVerifiedMeasure",
+      MAX(r."reviewedAt") AS "lastReviewedAt"
+    FROM "Measure" m
+    JOIN "MeasureRevision" r ON r."id" = m."publishedRevisionId"
+    JOIN "Candidacy" c ON c."id" = m."candidacyId"
+    JOIN "CandidacyPresidential" cp ON cp."candidacyId" = c."id"
+    WHERE m."electionId" = ${electionId}
+      AND m."candidacyId" IS NOT NULL
+      AND c."electionId" = ${electionId}
+      AND m."publicationStatus" = 'PUBLISHED'
+      AND m."publishedRevisionId" IS NOT NULL
+      AND r."reviewedAt" IS NOT NULL AND r."publishedAt" IS NOT NULL
+      AND r."supersededAt" IS NULL AND r."discardedAt" IS NULL AND r."rejectedAt" IS NULL
+      AND cp."publicationStatus" = 'PUBLISHED'
+      AND EXISTS (SELECT 1 FROM "MeasureSource" s WHERE s."measureRevisionId" = r."id")
+    GROUP BY m."theme"
+  `);
+  return new Map(
+    rows.map((row) => [
+      row.theme,
+      {
+        documentedMeasureCount: Number(row.documentedMeasureCount),
+        currentlyDefendedMeasureCount: Number(row.currentlyDefendedMeasureCount),
+        documentedCandidacyCount: Number(row.documentedCandidacyCount),
+        candidaciesWithVerifiedMeasure: Number(row.candidaciesWithVerifiedMeasure),
+        lastReviewedAt: row.lastReviewedAt,
+      },
+    ])
+  );
 }
 
 /**
