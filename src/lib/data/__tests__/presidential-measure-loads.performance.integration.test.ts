@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import pg from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import {
@@ -221,10 +222,28 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
   });
 
   it("réduit les lignes et le volume du résultat sur deux volumes synthétiques", async () => {
+    const driverPool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
+    const borrowedClientCapture = await measurePostgresDriverOperation(async () => {
+      const client = await driverPool.connect();
+      try {
+        await client.query("SELECT 1 AS borrowed_client_fixture");
+      } finally {
+        client.release();
+      }
+    });
+    await driverPool.end();
+    expect(borrowedClientCapture.metrics.queryCount).toBe(1);
+    expect(borrowedClientCapture.metrics.returnedRowCount).toBe(1);
+
     const volumes = [
       { slug: "measure-loads-small", candidacies: 4, measuresPerCandidacy: 5 },
       { slug: "measure-loads-large", candidacies: 4, measuresPerCandidacy: 50 },
     ];
+    const candidateGrowthVolume = {
+      slug: "measure-loads-candidate-growth",
+      candidacies: 8,
+      measuresPerCandidacy: 5,
+    };
     const reports: Array<{
       volume: string;
       measures: number;
@@ -256,8 +275,15 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
       expect(result.aggregate.queryCount).toBeLessThanOrEqual(result.legacy.queryCount);
     }
 
+    const candidateGrowthElection = await seedVolume(
+      candidateGrowthVolume.slug,
+      candidateGrowthVolume.candidacies,
+      candidateGrowthVolume.measuresPerCandidacy
+    );
+    elections.push(candidateGrowthElection.id);
+
     const pathReports = [];
-    for (const volume of volumes) {
+    for (const volume of [...volumes, candidateGrowthVolume]) {
       const election = await db.election.findUniqueOrThrow({ where: { slug: volume.slug } });
       const captures = await Promise.all([
         measurePostgresDriverOperation(() => loadHubMeasureContext(election.id, volume.slug)),
@@ -267,7 +293,7 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
       const [hub, themes, priorites] = captures;
       expect(hub.result.featuredReaderGuides).toHaveLength(2);
       expect(themes.result.featuredSubtopics.length).toBeGreaterThan(0);
-      expect(priorites.result.documentedRows).toHaveLength(4);
+      expect(priorites.result.documentedRows).toHaveLength(volume.candidacies);
       pathReports.push({
         volume: volume.slug,
         hub: hub.metrics,
@@ -279,7 +305,12 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
     for (const path of ["hub", "themes", "priorites"] as const) {
       const small = pathReports[0]![path];
       const large = pathReports[1]![path];
+      const candidateGrowth = pathReports[2]![path];
+      const absoluteQueryBudgets = { hub: 5, themes: 2, priorites: 17 };
       expect(large.queryCount).toBe(small.queryCount);
+      expect(small.queryCount).toBeLessThanOrEqual(absoluteQueryBudgets[path]);
+      expect(candidateGrowth.queryCount).toBeLessThanOrEqual(absoluteQueryBudgets[path]);
+      expect(candidateGrowth.queryCount).toBe(small.queryCount);
       expect(large.returnedRowCount).toBeLessThanOrEqual(small.returnedRowCount + 20);
       expect(large.serializedDriverResultBytes).toBeLessThanOrEqual(
         small.serializedDriverResultBytes * 2 + 10_000
@@ -298,7 +329,8 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
         activeSubtopics: 2,
       })),
       budgets: {
-        queryGrowth: "0 for fixed candidacy/theme/guide populations",
+        absoluteQueryBudgets: { hub: 5, themes: 2, priorites: 17 },
+        queryGrowth: "0 for fixed and increased candidacy populations",
         rowGrowth: "at most 20 rows when measures increase from 20 to 200",
         serializedResultGrowth: "at most 2x plus 10000 bytes",
       },
