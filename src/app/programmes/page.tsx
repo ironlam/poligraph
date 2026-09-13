@@ -6,10 +6,12 @@ import { ArrowRight, FileCheck2, Info, UsersRound } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { buttonVariants } from "@/components/ui/button";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
+import { HubCandidacyField } from "@/app/elections/presidentielle-2027/_components/HubCandidacyField";
 import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
 import { getLatestPlatformsPerParty } from "@/lib/data/platforms";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { SITE_URL } from "@/config/site";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 300;
@@ -38,8 +40,8 @@ export default async function ProgrammesPage() {
       <CollectionPageJsonLd
         name="Programmes politiques et présidentielle 2027"
         description="Les mesures des candidats à la présidentielle 2027 et les derniers programmes officiels documentés des partis politiques français."
-        url="https://poligraph.fr/programmes"
-        numberOfItems={platforms.length + (presidentialContext?.hubPublishable === true ? 1 : 0)}
+        url={`${SITE_URL}/programmes`}
+        numberOfItems={platforms.length + candidacies.length}
       />
       <Breadcrumb items={[{ label: "Programmes" }]} />
 
@@ -54,7 +56,7 @@ export default async function ProgrammesPage() {
           </p>
         </header>
 
-        {presidentialContext?.hubPublishable === true && (
+        {candidacies.length > 0 && (
           <section
             aria-labelledby="presidentielle-programmes-title"
             className="overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.035]"
@@ -68,62 +70,68 @@ export default async function ProgrammesPage() {
                   id="presidentielle-programmes-title"
                   className="font-display text-2xl font-bold tracking-tight md:text-3xl"
                 >
-                  Comparer les programmes des candidats
+                  Candidats, partis et programmes présidentiels 2027
                 </h2>
                 <p className="leading-relaxed text-muted-foreground">
-                  Les mesures sont extraites de sources datées, relues puis organisées par thème et
-                  sous-thème. Elles sont présentées sans score ni jugement sur leur contenu.
+                  Retrouvez les candidatures sourcées, les partis associés et les programmes déjà
+                  documentés. Lorsqu&apos;aucun programme n&apos;est encore enregistré ou dépouillé,
+                  cette situation est indiquée explicitement.
                 </p>
               </div>
 
-              <dl className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border bg-background p-4">
-                  <dt className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileCheck2 className="h-4 w-4" aria-hidden="true" />
-                    Mesures publiées
-                  </dt>
-                  <dd className="mt-1 font-display text-2xl font-bold">
-                    {presidentialContext.verifiedMeasureCount.toLocaleString("fr-FR")}
-                  </dd>
-                </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <dt className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <UsersRound className="h-4 w-4" aria-hidden="true" />
-                    Personnalités documentées
-                  </dt>
-                  <dd className="mt-1 font-display text-2xl font-bold">
-                    {candidaciesWithMeasures.length.toLocaleString("fr-FR")}
-                  </dd>
-                </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <dt className="text-sm text-muted-foreground">Thèmes comparables</dt>
-                  <dd className="mt-1 font-display text-2xl font-bold">
-                    {presidentialContext.publishableSubjectPageCount.toLocaleString("fr-FR")}
-                  </dd>
-                </div>
-              </dl>
+              {presidentialContext?.hubPublishable === true ? (
+                <>
+                  <dl className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border bg-background p-4">
+                      <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <FileCheck2 className="h-4 w-4" aria-hidden="true" />
+                        Mesures publiées
+                      </dt>
+                      <dd className="mt-1 font-display text-2xl font-bold">
+                        {presidentialContext.verifiedMeasureCount.toLocaleString("fr-FR")}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border bg-background p-4">
+                      <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <UsersRound className="h-4 w-4" aria-hidden="true" />
+                        Personnalités documentées
+                      </dt>
+                      <dd className="mt-1 font-display text-2xl font-bold">
+                        {candidaciesWithMeasures.length.toLocaleString("fr-FR")}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border bg-background p-4">
+                      <dt className="text-sm text-muted-foreground">Thèmes comparables</dt>
+                      <dd className="mt-1 font-display text-2xl font-bold">
+                        {presidentialContext.publishableSubjectPageCount.toLocaleString("fr-FR")}
+                      </dd>
+                    </div>
+                  </dl>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Link
-                  href={PRESIDENTIAL_HUB_PATH}
-                  className={cn(buttonVariants({ variant: "default" }), "min-h-11")}
-                >
-                  Explorer la présidentielle 2027
-                  <ArrowRight aria-hidden="true" />
-                </Link>
-                <Link
-                  href={`${PRESIDENTIAL_HUB_PATH}/candidats`}
-                  className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
-                >
-                  Voir les candidats
-                </Link>
-                <Link
-                  href={`${PRESIDENTIAL_HUB_PATH}/themes`}
-                  className={cn(buttonVariants({ variant: "link" }), "min-h-11")}
-                >
-                  Parcourir les thèmes
-                </Link>
-              </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <Link
+                      href={PRESIDENTIAL_HUB_PATH}
+                      className={cn(buttonVariants({ variant: "default" }), "min-h-11")}
+                    >
+                      Explorer la présidentielle 2027
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                    <Link
+                      href={`${PRESIDENTIAL_HUB_PATH}/themes`}
+                      className={cn(buttonVariants({ variant: "link" }), "min-h-11")}
+                    >
+                      Parcourir les thèmes
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <p className="rounded-xl border border-dashed bg-background/70 p-4 text-sm leading-relaxed text-muted-foreground">
+                  Les comparaisons thématiques seront ouvertes après validation éditoriale du
+                  corpus. Les candidatures et les sources disponibles restent consultables ici.
+                </p>
+              )}
+
+              <HubCandidacyField candidacies={candidacies} />
             </div>
           </section>
         )}

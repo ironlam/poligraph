@@ -82,7 +82,9 @@ describe("page programmes", () => {
     render(await ProgrammesPage());
 
     expect(
-      screen.getByRole("heading", { name: "Comparer les programmes des candidats" })
+      screen.getByRole("heading", {
+        name: "Candidats, partis et programmes présidentiels 2027",
+      })
     ).toBeInTheDocument();
     expect(screen.getByText("845")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
@@ -94,7 +96,7 @@ describe("page programmes", () => {
     );
   });
 
-  it("ne promet pas de comparaison avant le seuil de publication du hub", async () => {
+  it("conserve le répertoire sourcé sans promettre la comparaison avant le seuil du hub", async () => {
     vi.mocked(getHubMeasureContext).mockResolvedValue({
       ...context,
       hubPublishable: false,
@@ -104,8 +106,10 @@ describe("page programmes", () => {
     render(await ProgrammesPage());
 
     expect(
-      screen.queryByRole("heading", { name: "Comparer les programmes des candidats" })
-    ).not.toBeInTheDocument();
+      screen.getByRole("heading", {
+        name: "Candidats, partis et programmes présidentiels 2027",
+      })
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /Explorer la présidentielle 2027/ })
     ).not.toBeInTheDocument();
