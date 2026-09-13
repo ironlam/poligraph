@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   count: vi.fn(),
+  findUnique: vi.fn(),
+  queryRaw: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
-vi.mock("@/lib/db", () => ({ db: { affair: mocks } }));
+vi.mock("@/lib/db", () => ({ db: { affair: mocks, election: mocks, $queryRaw: mocks.queryRaw } }));
 
 import { getPresidentialAffairs } from "./presidentielle-affaires";
 
@@ -48,6 +50,8 @@ describe("getPresidentialAffairs", () => {
       },
     ]);
     mocks.count.mockResolvedValue(1);
+    mocks.findUnique.mockResolvedValue({ id: "election-2027" });
+    mocks.queryRaw.mockResolvedValue([{ id: "affair-1" }]);
 
     const result = await getPresidentialAffairs("presidentielle-2027");
 
@@ -63,10 +67,11 @@ describe("getPresidentialAffairs", () => {
       ],
     });
     expect(mocks.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 100, where: expect.any(Object) })
+      expect.objectContaining({ where: expect.any(Object) })
     );
     const args = mocks.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    expect(JSON.stringify(args.where)).toContain('"slug":"presidentielle-2027"');
+    expect(JSON.stringify(args.where)).toContain('"electionId":"election-2027"');
     expect(JSON.stringify(args.where)).toContain('"sourceUrl":{"not":null}');
+    expect(mocks.queryRaw).toHaveBeenCalled();
   });
 });

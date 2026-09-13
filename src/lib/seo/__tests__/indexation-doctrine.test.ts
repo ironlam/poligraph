@@ -28,8 +28,13 @@ import {
 // database, so stub db here to import the module safely with no DB
 // available (e.g. in CI). Same pattern as explained-seo.test.ts.
 vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("@/lib/data/presidentielle-affaires", () => ({
+  getPresidentialAffairs: vi.fn(),
+}));
 
 import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
+import { generateMetadata as presidentialAffairsGenerateMetadata } from "@/app/elections/presidentielle-2027/affaires-judiciaires/page";
+import { getPresidentialAffairs } from "@/lib/data/presidentielle-affaires";
 import { metadata as presidentialComparisonMetadata } from "@/app/elections/presidentielle-2027/comparer/page";
 import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/methodologie/mesures-presidentielle-2027/page";
 
@@ -72,6 +77,15 @@ const BARE_AMENDMENT: ScrutinIndexSignals = {
 const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINAL" };
 
 describe("doctrine — strong surfaces stay indexable", () => {
+  it("presidential affairs hub with published content stays indexable", async () => {
+    vi.mocked(getPresidentialAffairs).mockResolvedValue({ affairs: [], total: 1 });
+    const metadata = await presidentialAffairsGenerateMetadata();
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.alternates?.canonical).toBe(
+      "/elections/presidentielle-2027/affaires-judiciaires"
+    );
+  });
+
   it("rich politician (député)", () => {
     expect(politicianRobotsMetadata(RICH_DEPUTE)).toEqual(INDEXABLE);
   });

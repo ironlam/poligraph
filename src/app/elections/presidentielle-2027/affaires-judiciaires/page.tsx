@@ -6,25 +6,40 @@ import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { getPresidentialAffairs } from "@/lib/data/presidentielle-affaires";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 
 export const revalidate = 86400;
 
 const PAGE_PATH = "/elections/presidentielle-2027/affaires-judiciaires";
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}): Promise<Metadata> {
   const data = await getPresidentialAffairs(PRESIDENTIELLE_2027_SLUG);
+  const params = await searchParams;
+  const page = Array.isArray(params?.page) ? params.page[0] : params?.page;
 
   return {
     title: "Affaires judiciaires des candidats à la présidentielle 2027",
     description:
       "Affaires judiciaires documentées des candidats et personnalités suivies pour la présidentielle 2027. Procédures, décisions et sources vérifiables, avec présomption d'innocence.",
-    robots: data.total > 0 ? undefined : { index: false, follow: true },
+    ...listingRobotsMetadata(data.total === 0 || hasActiveListingFilter({ page }, [])),
     alternates: { canonical: PAGE_PATH },
   };
 }
 
-export default async function PresidentialAffairsPage() {
-  const data = await getPresidentialAffairs(PRESIDENTIELLE_2027_SLUG);
+export default async function PresidentialAffairsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const rawPage = Array.isArray(params?.page) ? params.page[0] : params?.page;
+  const page = Number.isSafeInteger(Number(rawPage)) && Number(rawPage) > 0 ? Number(rawPage) : 1;
+  const data = await getPresidentialAffairs(PRESIDENTIELLE_2027_SLUG, page);
+  const totalPages = Math.ceil(data.total / 20);
 
   return (
     <main className="container mx-auto space-y-8 px-4 pb-10 pt-4">
@@ -76,9 +91,9 @@ export default async function PresidentialAffairsPage() {
             <h2 id="affairs-list-title" className="font-display text-2xl font-bold">
               {data.total} affaire{data.total > 1 ? "s" : ""} documentée{data.total > 1 ? "s" : ""}
             </h2>
-            {data.total > data.affairs.length && (
+            {totalPages > 1 && (
               <p className="mt-1 text-sm text-muted-foreground">
-                Les {data.affairs.length} fiches les plus récentes sont affichées.
+                Page {page} sur {totalPages}
               </p>
             )}
           </div>
@@ -98,6 +113,28 @@ export default async function PresidentialAffairsPage() {
               </div>
             ))}
           </div>
+          {totalPages > 1 && (
+            <nav aria-label="Pagination des affaires judiciaires" className="flex gap-3 pt-2">
+              {page > 1 && (
+                <Link
+                  href={page === 2 ? PAGE_PATH : `${PAGE_PATH}?page=${page - 1}`}
+                  className="min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold text-primary hover:bg-muted"
+                  prefetch={false}
+                >
+                  Page précédente
+                </Link>
+              )}
+              {page < totalPages && (
+                <Link
+                  href={`${PAGE_PATH}?page=${page + 1}`}
+                  className="min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold text-primary hover:bg-muted"
+                  prefetch={false}
+                >
+                  Page suivante
+                </Link>
+              )}
+            </nav>
+          )}
         </section>
       ) : (
         <section className="rounded-2xl border border-border bg-card p-6">

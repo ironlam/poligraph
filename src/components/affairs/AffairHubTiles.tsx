@@ -13,8 +13,8 @@ interface HubTile {
 }
 
 /**
- * Entry band above the /affaires listing: 3 tiles routing strong intents
- * (condamnations, statistics, victim-mode) away from the bare list.
+ * Entry band above the /affaires listing: four tiles routing strong intents,
+ * including the sourced presidential affairs page, away from the bare list.
  * Replaces the two easily-missed inline text links.
  */
 export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
@@ -69,7 +69,9 @@ export function AffairHubTiles({ etabliCount }: AffairHubTilesProps) {
         prefetch={false}
         className="flex min-h-[44px] flex-col justify-center gap-0.5 rounded-lg border border-primary/25 bg-primary/[0.035] px-4 py-3 transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
-        <span className="text-sm font-semibold text-foreground">Affaires des candidats 2027</span>
+        <span className="text-sm font-semibold text-foreground">
+          Affaires des candidats et personnalités suivies
+        </span>
         <span className="text-xs text-muted-foreground">Présidentielle 2027</span>
       </Link>
     </div>

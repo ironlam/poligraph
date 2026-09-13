@@ -12,7 +12,7 @@ vi.mock("@/lib/data/hub", () => ({
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getLatestPlatformsPerParty } from "@/lib/data/platforms";
 import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
-import ProgrammesPage, { metadata } from "../page";
+import ProgrammesPage, { generateMetadata } from "../page";
 
 const context: HubMeasureContext = {
   electionTitle: "Présidentielle 2027",
@@ -73,13 +73,23 @@ beforeEach(() => {
 
 describe("page programmes", () => {
   it("centre les métadonnées sur les programmes et la présidentielle 2027", () => {
-    expect(metadata.title).toBe("Programmes politiques 2027 et programmes des partis");
-    expect(metadata.description).toContain("présidentielle 2027");
-    expect(metadata.alternates?.canonical).toBe("/programmes");
+    return generateMetadata({}).then((metadata) => {
+      expect(metadata.title).toBe("Programmes politiques 2027 et programmes des partis");
+      expect(metadata.description).toContain("présidentielle 2027");
+      expect(metadata.alternates?.canonical).toBe("/programmes");
+      expect(metadata.robots).toBeUndefined();
+    });
+  });
+
+  it("noindexe les variantes filtrées du répertoire présidentiel", async () => {
+    const metadata = await generateMetadata({
+      searchParams: Promise.resolve({ statut: "annoncees" }),
+    });
+    expect(metadata.robots).toEqual({ index: false, follow: true });
   });
 
   it("compte neutralement les personnalités documentées quel que soit leur statut", async () => {
-    render(await ProgrammesPage());
+    render(await ProgrammesPage({ searchParams: Promise.resolve({}) }));
 
     expect(
       screen.getByRole("heading", {
@@ -103,7 +113,7 @@ describe("page programmes", () => {
       publishableSubjectPageCount: 0,
     });
 
-    render(await ProgrammesPage());
+    render(await ProgrammesPage({ searchParams: Promise.resolve({}) }));
 
     expect(
       screen.getByRole("heading", {

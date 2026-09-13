@@ -135,8 +135,8 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
           <Breadcrumb items={breadcrumbItems} />
           <div className="mb-5 rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
             <p className="text-sm text-muted-foreground">
-              Consultez aussi les affaires judiciaires documentées des candidats à la présidentielle
-              2027.
+              Consultez aussi les affaires judiciaires documentées des candidats et personnalités
+              suivies pour la présidentielle 2027.
             </p>
             <Link
               href="/elections/presidentielle-2027/affaires-judiciaires"
@@ -223,8 +223,8 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
         <Breadcrumb items={breadcrumbItems} />
         <div className="mb-5 rounded-xl border border-primary/25 bg-primary/[0.035] p-4">
           <p className="text-sm text-muted-foreground">
-            Consultez aussi les affaires judiciaires documentées des candidats à la présidentielle
-            2027.
+            Consultez aussi les affaires judiciaires documentées des candidats et personnalités
+            suivies pour la présidentielle 2027.
           </p>
           <Link
             href="/elections/presidentielle-2027/affaires-judiciaires"
