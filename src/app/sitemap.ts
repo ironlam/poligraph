@@ -16,6 +16,7 @@ import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publicat
 import { getPublicPresidentialCandidates } from "@/lib/data/presidential-candidates-public";
 import { getPublicMeasureStatsByCandidacy } from "@/lib/data/measures";
 import { loadPresidentialReaderGuideIndex } from "@/lib/data/presidential-reader-guides";
+import { getPresidentialAffairs } from "@/lib/data/presidentielle-affaires";
 import {
   presidentialReaderGuidePath,
   presidentialReaderGuidesPath,
@@ -551,6 +552,19 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     }
   }
 
+  const presidentialAffairs = await getPresidentialAffairs(PRESIDENTIELLE_2027_SLUG);
+  const presidentialAffairsPage: MetadataRoute.Sitemap =
+    presidentialAffairs.total > 0
+      ? [
+          {
+            url: `${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}/affaires-judiciaires`,
+            lastModified: new Date(),
+            changeFrequency: "daily" as const,
+            priority: 0.6,
+          },
+        ]
+      : [];
+
   const presidentialMeasurePages: MetadataRoute.Sitemap =
     presidentielle2027 === undefined
       ? []
@@ -601,6 +615,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     ...presidentialDirectoryPages,
     ...presidentialSubjectPages,
     ...presidentialReaderGuidePages,
+    ...presidentialAffairsPage,
     ...candidateFichePages,
     ...presidentialMeasurePages,
     ...departmentPages,
