@@ -16,7 +16,7 @@ export async function generateMetadata({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
-} = {}): Promise<Metadata> {
+}): Promise<Metadata> {
   const data = await getPresidentialAffairs(PRESIDENTIELLE_2027_SLUG);
   const params = await searchParams;
   const page = Array.isArray(params?.page) ? params.page[0] : params?.page;
