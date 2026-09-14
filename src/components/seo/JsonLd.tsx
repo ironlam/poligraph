@@ -380,6 +380,7 @@ export function EventJsonLd({
 
 interface LegislationJsonLdProps {
   name: string;
+  alternateName?: string | string[];
   description?: string;
   datePublished?: string;
   legislationIdentifier?: string;
@@ -388,6 +389,7 @@ interface LegislationJsonLdProps {
 
 export function LegislationJsonLd({
   name,
+  alternateName,
   description,
   datePublished,
   legislationIdentifier,
@@ -397,6 +399,7 @@ export function LegislationJsonLd({
     "@context": "https://schema.org",
     "@type": "Legislation",
     name,
+    ...(alternateName && { alternateName }),
     ...(description && { description }),
     ...(datePublished && { datePublished }),
     ...(legislationIdentifier && { legislationIdentifier }),

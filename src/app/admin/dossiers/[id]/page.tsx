@@ -12,6 +12,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import { extractText } from "@/lib/parsing/html-utils";
 import { DossierSummaryEditor } from "@/components/admin/DossierSummaryEditor";
+import { DossierAliasEditor } from "@/components/admin/DossierAliasEditor";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -25,6 +26,7 @@ async function getDossier(id: string) {
         orderBy: { number: "asc" },
         take: 10,
       },
+      aliases: { orderBy: [{ isPreferred: "desc" }, { label: "asc" }] },
     },
   });
 }
@@ -107,6 +109,19 @@ export default async function AdminDossierDetailPage({ params }: PageProps) {
               <p className="text-sm">{dossier.title}</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Noms d’usage sourcés</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Un nom d’usage reste une appellation éditoriale. Le titre officiel est conservé et une
+            source est obligatoire avant publication.
+          </p>
+          <DossierAliasEditor dossierId={dossier.id} aliases={dossier.aliases} />
         </CardContent>
       </Card>
 

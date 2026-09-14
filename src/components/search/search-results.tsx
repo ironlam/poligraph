@@ -57,6 +57,7 @@ export interface GlobalSearchResponse {
     slug: string;
     title: string;
     shortTitle: string | null;
+    aliasLabel: string | null;
     status: string;
     filingDate: string | null;
   }>;
@@ -129,8 +130,8 @@ export function categorizeResults(data: GlobalSearchResponse): SearchResultCateg
       label: "Dossiers",
       results: data.dossiers.map((d) => ({
         href: `/parlement/dossiers/${d.slug}`,
-        primary: d.shortTitle ?? d.title,
-        secondary: d.status,
+        primary: d.aliasLabel ?? d.shortTitle ?? d.title,
+        secondary: d.aliasLabel ? `Dossier associé : ${d.title}` : d.status,
       })),
     },
     {
