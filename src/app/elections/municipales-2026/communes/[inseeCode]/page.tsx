@@ -13,7 +13,7 @@ import { IncumbentMaireCard } from "@/components/elections/municipales/Incumbent
 import { NATIONAL_MANDATE_TYPES } from "@/config/labels";
 import { HistoriqueSection } from "@/components/elections/municipales/HistoriqueSection";
 import { ResultatsBanner } from "@/components/elections/municipales/ResultatsBanner";
-import { EventJsonLd } from "@/components/seo/JsonLd";
+import { EventJsonLd, GovernmentOrganizationJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { db } from "@/lib/db";
@@ -74,6 +74,13 @@ export default async function CommuneDetailPage({ params }: PageProps) {
 
   return (
     <>
+      <GovernmentOrganizationJsonLd
+        name={`Commune de ${commune.name}`}
+        alternateName={commune.name}
+        description={`Informations publiques sur la commune de ${commune.name}, dans le département ${commune.departmentName}.`}
+        address={commune.name}
+        url={`${SITE_URL}/elections/municipales-2026/communes/${commune.id}`}
+      />
       {commune.round1Date && (
         <EventJsonLd
           name={`Municipales 2026 - ${commune.name}`}

@@ -21,6 +21,13 @@ enum PublicationStatus {
   REJECTED // Rejeté après modération (affaires)
 }
 
+enum DossierAliasKind {
+  MEDIA
+  COMMON
+  OFFICIAL_SHORT
+  HISTORICAL
+}
+
 enum ModerationRecommendation {
   PUBLISH
   REJECT
@@ -1282,6 +1289,7 @@ model LegislativeDossier {
   amendments Amendment[]
   scrutins   Scrutin[]
   authors    DossierAuthor[]
+  aliases    LegislativeDossierAlias[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1291,6 +1299,29 @@ model LegislativeDossier {
   @@index([theme])
   @@index([filingDate])
   @@index([exposeCheckedAt]) // rotation cursor for sync:legislation:content
+}
+
+/// Appellation publique d'un dossier, distincte de son intitulé juridique.
+/// PublicationStatus.PUBLISHED est la seule valeur exposée par les pages publiques.
+model LegislativeDossierAlias {
+  id              String            @id @default(cuid())
+  dossierId       String
+  label           String
+  normalizedLabel String
+  kind            DossierAliasKind
+  isPreferred     Boolean           @default(false)
+  status          PublicationStatus @default(DRAFT)
+  sources         Json              @default("[]")
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  dossier LegislativeDossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@unique([dossierId, normalizedLabel])
+  @@index([normalizedLabel])
+  @@index([dossierId, status])
 }
 
 model DossierAuthor {

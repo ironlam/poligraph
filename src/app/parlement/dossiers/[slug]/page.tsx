@@ -23,6 +23,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { formatDate } from "@/lib/utils";
 import type { MandateType } from "@/generated/prisma";
+import { normalizeDossierAlias } from "@/lib/legislation/alias";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -86,6 +87,11 @@ const includeOptions = {
     },
     orderBy: { votingDate: "desc" },
   },
+  aliases: {
+    where: { status: "PUBLISHED" },
+    orderBy: { isPreferred: "desc" },
+    select: { label: true, isPreferred: true },
+  },
 } as const;
 
 /**
@@ -143,6 +149,19 @@ const getDossierWithRedirect = cache(async function getDossierWithRedirect(slugO
     }
   }
 
+  // Public aliases are lookup keys only. The dossier remains the sole
+  // canonical URL, so crawlers and users converge on one page.
+  const alias = await db.legislativeDossierAlias.findFirst({
+    where: { normalizedLabel: normalizeDossierAlias(slugOrId), status: "PUBLISHED" },
+  });
+  if (alias) {
+    const aliasedDossier = await db.legislativeDossier.findUnique({
+      where: { id: alias.dossierId },
+      include: includeOptions,
+    });
+    if (aliasedDossier) return { dossier: aliasedDossier, redirect: aliasedDossier.slug };
+  }
+
   return { dossier: null, redirect: null };
 });
 
@@ -155,7 +174,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   return {
-    title: dossier.title,
+    title: dossier.aliases[0] ? `${dossier.aliases[0].label} | ${dossier.title}` : dossier.title,
     description: dossier.summary || `Dossier législatif ${dossier.number || dossier.externalId}`,
     alternates: { canonical: `/parlement/dossiers/${dossier.slug}` },
   };
@@ -184,7 +203,8 @@ export default async function DossierDetailPage({ params }: PageProps) {
   return (
     <>
       <LegislationJsonLd
-        name={dossier.shortTitle || dossier.title}
+        name={dossier.title}
+        alternateName={dossier.aliases.map((alias) => alias.label)}
         description={dossier.summary || undefined}
         datePublished={dossier.filingDate?.toISOString().split("T")[0]}
         legislationIdentifier={dossier.number || dossier.externalId}
@@ -211,9 +231,14 @@ export default async function DossierDetailPage({ params }: PageProps) {
             <CategoryBadge category={dossier.category} theme={dossier.theme} />
           </div>
 
-          <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight mb-4">
-            {dossier.title}
+          <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight mb-2">
+            {dossier.aliases[0]?.label || dossier.title}
           </h1>
+          {dossier.aliases[0] && (
+            <p className="text-sm text-muted-foreground mb-4">
+              Intitulé officiel : <span className="text-foreground">{dossier.title}</span>
+            </p>
+          )}
 
           {/* Dates */}
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">

@@ -76,6 +76,7 @@ interface DossierResult {
   slug: string;
   title: string;
   shortTitle: string | null;
+  aliasLabel: string | null;
   status: DossierStatus;
   filingDate: string | null;
 }
@@ -615,8 +616,13 @@ function DossierRow({ result }: { result: DossierResult }) {
       <FileText className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
         <span className="font-medium text-base leading-snug">
-          {result.shortTitle || result.title}
+          {result.aliasLabel || result.shortTitle || result.title}
         </span>
+        {result.aliasLabel && (
+          <span className="block text-xs text-muted-foreground">
+            Dossier associé : {result.title}
+          </span>
+        )}
         {result.filingDate && (
           <span className="block text-xs text-muted-foreground">
             {formatDateShort(result.filingDate)}

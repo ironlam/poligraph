@@ -4,7 +4,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findUnique = vi.fn();
 const findFirst = vi.fn();
 vi.mock("@/lib/db", () => ({
-  db: { legislativeDossier: { findUnique: () => findUnique(), findFirst: () => findFirst() } },
+  db: {
+    legislativeDossier: { findUnique: () => findUnique(), findFirst: () => findFirst() },
+    legislativeDossierAlias: { findFirst: vi.fn().mockResolvedValue(null) },
+  },
 }));
 vi.mock("@/lib/data/dossier-amendments", () => ({
   getAmendmentStats: vi.fn(async () => null),
@@ -38,6 +41,7 @@ describe("/parlement/dossiers/[slug] metadata", () => {
       summary: "Résumé du dossier législatif.",
       number: "PPL 3196",
       externalId: "DLR5L17N12345",
+      aliases: [],
     });
 
     const m = await metadataFor("dossier-reel");
@@ -46,5 +50,23 @@ describe("/parlement/dossiers/[slug] metadata", () => {
     expect(m.description).toBe("Résumé du dossier législatif.");
     expect(m.alternates?.canonical).toBe("/parlement/dossiers/dossier-reel");
     expect(m.robots).toBeUndefined();
+  });
+
+  it("utilise le nom d’usage publié tout en conservant l’intitulé officiel", async () => {
+    findUnique.mockResolvedValue({
+      slug: "dossier-reel",
+      title: "Proposition de loi visant à protéger les exploitations agricoles",
+      summary: "Résumé du dossier législatif.",
+      number: "PPL 123",
+      externalId: "DLR5L17N12345",
+      aliases: [{ label: "Loi Duplomb", isPreferred: true }],
+    });
+
+    const m = await metadataFor("dossier-reel");
+
+    expect(m.title).toBe(
+      "Loi Duplomb | Proposition de loi visant à protéger les exploitations agricoles"
+    );
+    expect(m.alternates?.canonical).toBe("/parlement/dossiers/dossier-reel");
   });
 });

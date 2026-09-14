@@ -5,6 +5,7 @@ import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { parsePagination } from "@/lib/api/pagination";
 import { getPublicFactCheckSqlWhere, getPublicPartySqlWhere } from "@/lib/api/public-contract";
+import { normalizeDossierAlias } from "@/lib/legislation/alias";
 
 const MAX_LIMIT = 8;
 
@@ -58,6 +59,7 @@ interface RawDossier {
   shortTitle: string | null;
   status: string;
   filingDate: Date | null;
+  aliasLabel: string | null;
 }
 
 interface RawCommune {
@@ -88,6 +90,7 @@ export const GET = withPublicRoute(async (request) => {
 
   const pattern = `%${query}%`;
   const startsWithPattern = `${query}%`;
+  const normalizedQuery = normalizeDossierAlias(query);
 
   const [politicians, parties, affairs, scrutins, factchecks, dossiers, communes] =
     await Promise.all([
@@ -163,12 +166,20 @@ export const GET = withPublicRoute(async (request) => {
         LIMIT ${limit}
       `),
 
-      // Legislative dossiers: accent-insensitive on title/shortTitle
+      // Aliases are public only after editorial publication. Keep the legal
+      // title and the alias in the result so the UI can explain the match.
       db.$queryRaw<RawDossier[]>`
-        SELECT d."slug", d."title", d."shortTitle", d."status", d."filingDate"
+        SELECT d."slug", d."title", d."shortTitle", d."status", d."filingDate",
+               (SELECT a."label" FROM "LegislativeDossierAlias" a
+                WHERE a."dossierId" = d."id" AND a."status" = 'PUBLISHED'
+                  AND a."normalizedLabel" = ${normalizedQuery}
+                ORDER BY a."isPreferred" DESC, a."label" ASC LIMIT 1) AS "aliasLabel"
         FROM "LegislativeDossier" d
         WHERE unaccent(d."title") ILIKE unaccent(${pattern})
            OR unaccent(COALESCE(d."shortTitle", '')) ILIKE unaccent(${pattern})
+           OR EXISTS (SELECT 1 FROM "LegislativeDossierAlias" a
+                     WHERE a."dossierId" = d."id" AND a."status" = 'PUBLISHED'
+                       AND a."normalizedLabel" = ${normalizedQuery})
         ORDER BY d."filingDate" DESC NULLS LAST
         LIMIT ${limit}
       `,
@@ -227,6 +238,7 @@ export const GET = withPublicRoute(async (request) => {
         slug: d.slug,
         title: d.title,
         shortTitle: d.shortTitle,
+        aliasLabel: d.aliasLabel,
         status: d.status,
         filingDate: d.filingDate?.toISOString() || null,
       })),
