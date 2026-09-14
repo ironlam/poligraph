@@ -44,8 +44,16 @@ Les arguments métier ne deviennent jamais des noms ou dimensions d'événement.
 | `presidential.reader-guides.load` | `loadPresidentialReaderGuideSummaries`, résumés du hub           | Appel direct depuis le chargement du hub, sous son cache                 |
 | `elections.details.load`          | `getPublicElectionDetails`, page bornée de candidatures          | Pas de cache de données ; appelé par le handler                          |
 | `elections.details.http`          | Corps du handler GET `/api/elections/[slug]`                     | Exécution web ; CDN `s-maxage=300`, `stale-while-revalidate=120`         |
-| `presidential.snapshots.sync`     | `computePresidentialSnapshots`                                   | Script ; `scheduled` si `GITHUB_EVENT_NAME=schedule`                     |
-| `presidential.probity.load`       | `computeProbityCandidateCountLive`                               | Lecture du snapshot ou repli public si snapshot absent                   |
+| `presidential.snapshots.sync`     | Phase de lecture de `computePresidentialSnapshots`               | Script ; `scheduled` si `GITHUB_EVENT_NAME=schedule`                     |
+| `presidential.probity.load`       | `computeProbityCandidateCountLive`                               | Calcul du compteur pour le snapshot ou repli public si snapshot absent   |
+
+`presidential.snapshots.sync` couvre uniquement le calcul du compteur. L'upsert
+du snapshot s'exécute après la fermeture de cette observation : ses appels et
+ses lignes retournées ne sont pas des lectures instrumentées. La durée et le
+succès de cet événement décrivent la phase de lecture, pas le job entier ; une
+écriture ultérieure peut échouer après un résumé de lecture réussi. Les lignes
+du calcul sont attribuées exclusivement à l'enfant `presidential.probity.load`,
+avec `presidential.snapshots.sync` comme racine pour l'agrégation.
 
 Les caches présidentiels gardent leurs tags `election-measures` et
 `election-candidacies`, ainsi que `cacheLife("synced")`. Les recherches préalables

@@ -19,16 +19,6 @@ import { probityCandidateCountKey, type ProbityCandidateCount } from "@/types/st
  * Idempotent. Safe to run concurrently, the upsert key prevents duplicates.
  */
 export async function computePresidentialSnapshots(
-  ...args: Parameters<typeof runPresidentialSnapshots>
-) {
-  return observeRead(
-    "presidential.snapshots.sync",
-    () => runPresidentialSnapshots(...args),
-    process.env.GITHUB_EVENT_NAME === "schedule" ? "scheduled" : "script"
-  );
-}
-
-async function runPresidentialSnapshots(
   electionSlug = "presidentielle-2027",
   options: { dryRun?: boolean } = {}
 ): Promise<{ ok: true; computed: string[]; totalDurationMs: number }> {
@@ -38,7 +28,12 @@ async function runPresidentialSnapshots(
 
   const key = probityCandidateCountKey(electionSlug);
   const t1 = Date.now();
-  const count = await computeProbityCandidateCountLive(electionSlug);
+  // Observe only the read phase: an upsert can also return rows through the driver.
+  const count = await observeRead(
+    "presidential.snapshots.sync",
+    () => computeProbityCandidateCountLive(electionSlug),
+    process.env.GITHUB_EVENT_NAME === "schedule" ? "scheduled" : "script"
+  );
   const durationMs = Date.now() - t1;
 
   const data: ProbityCandidateCount = { electionSlug, count };
