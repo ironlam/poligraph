@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { writeFile } from "node:fs/promises";
-import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import { measurePostgresDriverOperation } from "@/test/postgres-driver-observer";
 
@@ -78,6 +78,45 @@ describeIfDisposableDb("GET /api/elections/[slug], PostgreSQL", () => {
     });
     expect(body.candidacies.data[0].candidateName).toBe("Candidate 0020");
     expect(body.candidacies.data.at(-1).candidateName).toBe("Candidate 0039");
+  });
+
+  it("separates the HTTP execution from its SQL loader without logging request data", async () => {
+    const election = await seedElection("telemetry", 25);
+    const events: Array<Record<string, unknown>> = [];
+    vi.stubEnv("DB_READ_TELEMETRY", "true");
+    vi.stubEnv("DB_READ_SAMPLE_RATE", "1");
+    vi.stubEnv("DB_READ_CONTEXT", "");
+    const log = vi
+      .spyOn(console, "info")
+      .mockImplementation((line: string) => events.push(JSON.parse(line)));
+    try {
+      const result = await read(election.slug, "?page=1&limit=20&secret=PRIVATE_QUERY");
+      expect(result.response.status).toBe(200);
+      expect(events).toHaveLength(2);
+      expect(events[0]).toMatchObject({
+        operation: "elections.details.load",
+        parent: "elections.details.http",
+        context: "web",
+        driverCalls: result.metrics.queryCount,
+        driverRows: result.metrics.returnedRowCount,
+      });
+      expect(events[1]).toMatchObject({
+        operation: "elections.details.http",
+        parent: null,
+        driverCalls: 0,
+        driverRows: 0,
+      });
+      expect(JSON.stringify(events)).not.toContain(election.slug);
+      expect(JSON.stringify(events)).not.toContain("PRIVATE_QUERY");
+      events.length = 0;
+      const invalid = await read(election.slug, "?page=-1");
+      expect(invalid.response.status).toBe(400);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ operation: "elections.details.http", driverCalls: 0 });
+    } finally {
+      log.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it("retourne une page vide pour une élection sans candidature", async () => {

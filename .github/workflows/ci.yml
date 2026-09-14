@@ -243,6 +243,7 @@ jobs:
             "src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts"
             "src/lib/data/__tests__/presidential-reader-guides.integration.test.ts"
             "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts"
+            "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
           )
           for expected_file in "${expected_files[@]}"; do test -f "$expected_file"; done
           npx vitest run --no-file-parallelism \
@@ -252,6 +253,7 @@ jobs:
             src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts \
             src/lib/data/__tests__/presidential-reader-guides.integration.test.ts \
             src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts \
+            src/lib/telemetry/__tests__/pg-pool.integration.test.ts \
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
           npx tsx src/test/vitest-report-validator.ts \
             presidential-measure-loads-vitest.json \
@@ -260,7 +262,8 @@ jobs:
             "src/lib/data/__tests__/themes-index.integration.test.ts" \
             "src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts" \
             "src/lib/data/__tests__/presidential-reader-guides.integration.test.ts" \
-            "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts"
+            "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts" \
+            "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
 
       - name: Publish presidential driver metrics
         if: success()

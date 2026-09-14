@@ -7,6 +7,7 @@ import {
 import { buildPaginationMeta, type PaginationResult } from "@/lib/api/pagination";
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 
 const ELECTION_DETAILS_SELECT = {
   id: true,
@@ -93,6 +94,10 @@ export const ELECTION_CANDIDACIES_MAX_LIMIT = 100;
  * database boundary.
  */
 export async function getPublicElectionDetails(slug: string, pagination: PaginationResult) {
+  return observeRead("elections.details.load", () => queryPublicElectionDetails(slug, pagination));
+}
+
+async function queryPublicElectionDetails(slug: string, pagination: PaginationResult) {
   const election = await db.election.findUnique({
     where: { slug },
     select: {

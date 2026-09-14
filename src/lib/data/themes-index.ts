@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { isSubjectPagePublishable } from "@/config/publication-gates";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import {
@@ -49,7 +50,11 @@ export type ThemesIndexData = {
 /**
  * Plain async, integration-testable. Callers on a page use `getThemesIndex`, which caches this.
  */
-export async function loadThemesIndex(
+export async function loadThemesIndex(...args: Parameters<typeof queryThemesIndex>) {
+  return observeRead("presidential.themes.load", () => queryThemesIndex(...args));
+}
+
+async function queryThemesIndex(
   electionId: string,
   electionSlug: string
 ): Promise<ThemesIndexData> {

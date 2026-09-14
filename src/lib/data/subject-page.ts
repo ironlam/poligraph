@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { PUBLICATION_GATES, isSubjectPagePublishable } from "@/config/publication-gates";
 import { getPublicMeasureVoteRelations, type PublicVoteReference } from "@/lib/measures/vote-links";
 import type { VoteRelation } from "@/lib/measures/vote-relation";
@@ -88,7 +89,11 @@ export type SubjectPageData = {
 /**
  * Plain async, integration-testable. Callers on a page use `getSubjectPageData`, which caches this.
  */
-export async function loadSubjectPageData(
+export async function loadSubjectPageData(...args: Parameters<typeof querySubjectPageData>) {
+  return observeRead("presidential.subject.load", () => querySubjectPageData(...args));
+}
+
+async function querySubjectPageData(
   electionId: string,
   electionSlug: string,
   theme: ThemeCategory

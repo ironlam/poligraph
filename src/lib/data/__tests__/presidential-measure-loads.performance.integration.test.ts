@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import {
   measurePostgresDriverOperation,
@@ -219,6 +219,37 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
     await db.measureSubtopic.deleteMany({ where: { slug: { startsWith: "measure-loads-" } } });
     await db.politician.deleteMany({ where: { slug: { startsWith: "measure-loads-" } } });
     await db.$disconnect();
+  });
+
+  it("attributes real loaders with the extended Prisma client against the driver oracle", async () => {
+    const fixture = await seedVolume("measure-loads-telemetry", 4, 5);
+    elections.push(fixture.id);
+    const events: Array<{ driverCalls: number; driverRows: number; operation: string }> = [];
+    vi.stubEnv("DB_READ_TELEMETRY", "true");
+    vi.stubEnv("DB_READ_SAMPLE_RATE", "1");
+    vi.stubEnv("DB_READ_MAX_EVENTS", "10000");
+    const log = vi
+      .spyOn(console, "info")
+      .mockImplementation((line: string) => events.push(JSON.parse(line)));
+    try {
+      for (const loader of [
+        () => getPublicMeasuresByElection(fixture.id),
+        () => loadHubMeasureContext(fixture.id, "measure-loads-telemetry"),
+        () => loadThemesIndex(fixture.id, "measure-loads-telemetry"),
+        () => loadPrioritesData(fixture.id, "measure-loads-telemetry"),
+      ]) {
+        events.length = 0;
+        const observed = await measurePostgresDriverOperation<unknown>(loader);
+        expect(events.length).toBeGreaterThan(0);
+        expect(events.reduce((sum, e) => sum + e.driverCalls, 0)).toBe(observed.metrics.queryCount);
+        expect(events.reduce((sum, e) => sum + e.driverRows, 0)).toBe(
+          observed.metrics.returnedRowCount
+        );
+      }
+    } finally {
+      log.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it("réduit les lignes et le volume du résultat sur deux volumes synthétiques", async () => {

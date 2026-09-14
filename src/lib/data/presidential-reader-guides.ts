@@ -5,6 +5,7 @@ import { cache } from "react";
 import { Prisma, type ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import {
   PUBLIC_MEASURE_REVISION_WHERE,
   PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
@@ -64,6 +65,14 @@ export type PresidentialReaderGuideSummary = {
 
 /** Hub-only projection: guide metadata and counts, without measure text or guide relations. */
 export async function loadPresidentialReaderGuideSummaries(
+  ...args: Parameters<typeof queryPresidentialReaderGuideSummaries>
+) {
+  return observeRead("presidential.reader-guides.load", () =>
+    queryPresidentialReaderGuideSummaries(...args)
+  );
+}
+
+async function queryPresidentialReaderGuideSummaries(
   electionId: string
 ): Promise<PresidentialReaderGuideSummary[]> {
   type Row = Omit<PresidentialReaderGuideSummary, "indexable">;
