@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma";
 import { getCategoriesForSuper } from "@/config/labels";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_HUB_CANDIDACY_WHERE } from "@/lib/presidentielle/publication";
 import { probityCandidateCountKey, type ProbityCandidateCount } from "@/types/stats-snapshots";
@@ -18,6 +19,16 @@ import { probityCandidateCountKey, type ProbityCandidateCount } from "@/types/st
  * Idempotent. Safe to run concurrently, the upsert key prevents duplicates.
  */
 export async function computePresidentialSnapshots(
+  ...args: Parameters<typeof runPresidentialSnapshots>
+) {
+  return observeRead(
+    "presidential.snapshots.sync",
+    () => runPresidentialSnapshots(...args),
+    process.env.GITHUB_EVENT_NAME === "schedule" ? "scheduled" : "script"
+  );
+}
+
+async function runPresidentialSnapshots(
   electionSlug = "presidentielle-2027",
   options: { dryRun?: boolean } = {}
 ): Promise<{ ok: true; computed: string[]; totalDurationMs: number }> {
@@ -57,6 +68,12 @@ export async function computePresidentialSnapshots(
  * candidate fiches use, so an investigation or a favourable outcome can never enter the count.
  */
 export async function computeProbityCandidateCountLive(electionSlug: string): Promise<number> {
+  return observeRead("presidential.probity.load", () =>
+    queryProbityCandidateCountLive(electionSlug)
+  );
+}
+
+async function queryProbityCandidateCountLive(electionSlug: string): Promise<number> {
   const rows = await db.affair.groupBy({
     by: ["politicianId"],
     where: {
