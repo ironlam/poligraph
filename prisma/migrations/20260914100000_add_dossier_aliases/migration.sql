@@ -1,5 +1,8 @@
 -- Editorial aliases are separate from the legal title because one dossier can
 -- have several sourced, moderated public appellations.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+
 CREATE TYPE "DossierAliasKind" AS ENUM ('MEDIA', 'COMMON', 'OFFICIAL_SHORT', 'HISTORICAL');
 
 CREATE TABLE "LegislativeDossierAlias" (
@@ -32,3 +35,10 @@ ALTER TABLE "LegislativeDossierAlias"
   ADD CONSTRAINT "LegislativeDossierAlias_dossierId_fkey"
   FOREIGN KEY ("dossierId") REFERENCES "LegislativeDossier"("id")
   ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- SEC-03: public access goes through the application, which filters publication
+-- status. Direct Data API access must not expose drafts or editorial audit fields.
+ALTER TABLE "LegislativeDossierAlias" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE "LegislativeDossierAlias" FROM PUBLIC, anon, authenticated;
+
+COMMIT;
