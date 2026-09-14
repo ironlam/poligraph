@@ -303,6 +303,43 @@ jobs:
       - name: Verify application function privileges
         run: npm run test:security:function-privileges
 
+  dossier-alias-migration:
+    name: Dossier aliases SQL and audit rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: alias_test
+          POSTGRES_PASSWORD: alias_test
+          POSTGRES_DB: alias_test
+        ports:
+          - 55485:5432
+        options: >-
+          --health-cmd "pg_isready -h localhost -U alias_test -d alias_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://alias_test:alias_test@127.0.0.1:55485/alias_test
+      DIRECT_URL: postgresql://alias_test:alias_test@127.0.0.1:55485/alias_test
+      ALIAS_TEST_DATABASE_URL: postgresql://alias_test:alias_test@127.0.0.1:55485/alias_test
+      DATABASE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run db:generate
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
+      - run: npx prisma db push
+      # The suite replaces the alias table using the committed SQL and tests
+      # protections not represented by db push (partial uniqueness and RLS).
+      - run: npx vitest run src/lib/legislation/__tests__/alias-migration.integration.test.ts
+
   build:
     name: Build
     runs-on: ubuntu-latest
