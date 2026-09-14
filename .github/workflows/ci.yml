@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, staging]
 
+permissions:
+  contents: read
+
 # Cancel the superseded run when a new commit lands on the same pull request: the build
 # job makes an obsolete run expensive rather than merely noisy. Only for pull requests,
 # so every run on main and staging is kept: a cancelled run there would leave a commit
