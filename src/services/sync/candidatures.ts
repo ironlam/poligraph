@@ -13,14 +13,16 @@ import {
   type CandidacyUpdateRow,
 } from "@/services/sync/candidacy-update-batch";
 
-// 2026 CSV (semicolon-delimited, UTF-8, no comment header)
+// Ministry of the Interior, national round-1 CSV (semicolon-delimited, UTF-8).
+// The stable resource endpoint redirects to the latest file, whose dated URL can disappear.
+// https://www.data.gouv.fr/datasets/elections-municipales-2026-listes-candidates-au-premier-tour
 const DEFAULT_CSV_URL =
-  "https://static.data.gouv.fr/resources/elections-municipales-2026-listes-candidates-au-premier-tour/20260228-020703/municipales-2026-candidatures-france-entiere-tour-1-2026-02-28-02h24.csv";
+  "https://www.data.gouv.fr/api/1/datasets/r/b929c2a4-18ec-4e8b-bc37-2ff346a867cd";
 
 const DEFAULT_ELECTION_SLUG = "municipales-2026";
 
 // 500 rows per chunk: balances batch efficiency vs. DB round-trips.
-// Within each chunk: 1 createMany (candidates) + 1 findMany + 1 createMany (candidacies) + N updates.
+// Within each chunk: 1 createMany (candidates) + 1 findMany + 1 createMany (candidacies) + 1 UPDATE.
 const CHUNK_SIZE = 500;
 
 const dataGouvClient = new HTTPClient({
@@ -304,6 +306,10 @@ export async function syncCandidaturesMunicipales(
 
   console.log(`Target election: ${electionRecord.title} (${electionRecord.slug})`);
 
+  // Fetch once before expensive DB preloads, so an unavailable source fails cheaply.
+  const records = await fetchCandidaturesCSV(url);
+  const toProcess = limit ? records.slice(0, limit) : records;
+
   // ─── Phase A: Pre-load reference data ───────────────────────────────
   console.log("\nPhase A: Pre-loading reference data...");
 
@@ -313,10 +319,6 @@ export async function syncCandidaturesMunicipales(
   const partyCache = await preWarmPartyCache();
   const rneLookup = await loadRNEBirthdateLookup();
   console.log(`  Pre-loaded ${rneLookup.size} RNE birthdates for enrichment`);
-
-  // ─── Fetch and parse CSV ────────────────────────────────────────────
-  const records = await fetchCandidaturesCSV(url);
-  const toProcess = limit ? records.slice(0, limit) : records;
 
   // ─── Parse all rows upfront (CPU-only, no DB) ──────────────────────
   console.log(`\nParsing ${toProcess.length} rows...`);

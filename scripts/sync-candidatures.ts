@@ -18,14 +18,13 @@ import {
 
 const handler: SyncHandler = {
   name: "Politic Tracker - Candidatures Municipales Sync",
-  description: "Import candidatures from data.gouv.fr (municipales 2020/2026)",
+  description: "Import candidatures from data.gouv.fr (municipales 2026, tour 1)",
 
   options: [
     {
       name: "--url",
       type: "string",
-      description: "URL of the candidatures CSV/TXT file",
-      default: "(2020 test file)",
+      description: "URL of the candidatures CSV file (default: stable 2026 round-1 resource)",
     },
     {
       name: "--election",
@@ -40,11 +39,11 @@ const handler: SyncHandler = {
 Politic Tracker - Candidatures Municipales Sync
 
 Data source: data.gouv.fr (élections municipales)
-Format: Tab-separated TXT, ISO-8859-1, with comment header
+Format: Semicolon-delimited CSV, UTF-8, with column header
 Imports: Candidate lists and individual candidates
 
-Default URL uses the 2020 file for testing.
-Replace with the 2026 URL when published (~March 2026).
+Default URL follows the stable data.gouv resource for the 2026 national round-1 CSV.
+Use --url to override the source with a CSV using the same columns and encoding.
 
 Examples:
   npm run sync:elections:municipales -- --dry-run --limit=100 --verbose
