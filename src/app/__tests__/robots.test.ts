@@ -57,6 +57,17 @@ describe("robots.txt (non-production)", () => {
 });
 
 describe("robots.txt (production)", () => {
+  it("laisse les résolveurs de noms de lois et la désambiguïsation consultables", async () => {
+    const rules = await loadRobots("production");
+    const disallow = asArray(groupFor(rules, "*")!.disallow);
+    for (const path of [
+      "/parlement/lois/loi-exemple",
+      "/parlement/lois/loi-exemple/dossiers",
+      "/parlement/dossiers/loi-exemple",
+    ]) {
+      expect(disallow.some((pattern) => matchesRobotsPattern(pattern, path))).toBe(false);
+    }
+  });
   let robots: MetadataRoute.Robots;
 
   beforeEach(async () => {

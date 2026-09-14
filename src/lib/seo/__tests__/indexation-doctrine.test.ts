@@ -44,6 +44,16 @@ import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/metho
 const INDEXABLE = {};
 const NOINDEX_FOLLOW = { robots: { index: false, follow: true } };
 
+it("désindexe la désambiguïsation des noms de lois, sans ajouter les alias au sitemap", async () => {
+  const { metadata } = await import("@/app/parlement/lois/[slug]/dossiers/page");
+  expect(metadata.robots).toEqual(NOINDEX_FOLLOW.robots);
+  const sitemap = readFileSync(join(process.cwd(), "src/app/sitemap.ts"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(sitemap).not.toContain("/parlement/lois/");
+  expect(sitemap).toContain("/parlement/dossiers/${d.slug}");
+});
+
 const NO_OTHER_SIGNAL = {
   publishedAffairsCount: 0,
   factCheckMentionsCount: 0,

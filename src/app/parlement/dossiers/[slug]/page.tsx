@@ -23,7 +23,10 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { SITE_URL } from "@/config/site";
 import { formatDate } from "@/lib/utils";
 import type { MandateType } from "@/generated/prisma";
-import { normalizeDossierAlias } from "@/lib/legislation/alias";
+import { getPreferredDossierAlias, getDossierAliasSources } from "@/lib/legislation/alias";
+import { getDossierAliasMatches } from "@/lib/data/dossier-aliases";
+import Link from "next/link";
+import { DossierAliasChoices } from "@/components/legislation/DossierAliasChoices";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -89,8 +92,8 @@ const includeOptions = {
   },
   aliases: {
     where: { status: "PUBLISHED" },
-    orderBy: { isPreferred: "desc" },
-    select: { label: true, isPreferred: true },
+    orderBy: { label: "asc" },
+    select: { label: true, isPreferred: true, sources: true },
   },
 } as const;
 
@@ -151,12 +154,11 @@ const getDossierWithRedirect = cache(async function getDossierWithRedirect(slugO
 
   // Public aliases are lookup keys only. The dossier remains the sole
   // canonical URL, so crawlers and users converge on one page.
-  const alias = await db.legislativeDossierAlias.findFirst({
-    where: { normalizedLabel: normalizeDossierAlias(slugOrId), status: "PUBLISHED" },
-  });
-  if (alias) {
+  const matches = await getDossierAliasMatches(slugOrId);
+  if (matches.length > 1) return { dossier: null, redirect: null, matches };
+  if (matches.length === 1) {
     const aliasedDossier = await db.legislativeDossier.findUnique({
-      where: { id: alias.dossierId },
+      where: { id: matches[0]!.id },
       include: includeOptions,
     });
     if (aliasedDossier) return { dossier: aliasedDossier, redirect: aliasedDossier.slug };
@@ -167,14 +169,22 @@ const getDossierWithRedirect = cache(async function getDossierWithRedirect(slugO
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const { dossier } = await getDossierWithRedirect(slug);
+  const { dossier, matches } = await getDossierWithRedirect(slug);
+
+  // A choice of dossiers is a utility surface, not another indexable dossier.
+  if (matches)
+    return {
+      title: "Nom d’usage partagé : choisir un dossier",
+      robots: { index: false, follow: true },
+    };
 
   if (!dossier) {
     return missingEntityMetadata("Dossier non trouvé");
   }
 
+  const preferredAlias = getPreferredDossierAlias(dossier.aliases);
   return {
-    title: dossier.aliases[0] ? `${dossier.aliases[0].label} | ${dossier.title}` : dossier.title,
+    title: preferredAlias ? `${preferredAlias.label} | ${dossier.title}` : dossier.title,
     description: dossier.summary || `Dossier législatif ${dossier.number || dossier.externalId}`,
     alternates: { canonical: `/parlement/dossiers/${dossier.slug}` },
   };
@@ -182,7 +192,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function DossierDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const { dossier, redirect } = await getDossierWithRedirect(slug);
+  const { dossier, redirect, matches } = await getDossierWithRedirect(slug);
+
+  if (matches) return <DossierAliasChoices matches={matches} />;
 
   // Redirect legacy URLs to canonical slug URL
   if (redirect && redirect !== slug) {
@@ -192,6 +204,8 @@ export default async function DossierDetailPage({ params }: PageProps) {
   if (!dossier) {
     notFound();
   }
+
+  const preferredAlias = getPreferredDossierAlias(dossier.aliases);
 
   // Curated amendments: stats + the first "adopted" page rendered server-side
   // (SEO / no-JS); the client component paginates and switches filters from there.
@@ -232,12 +246,46 @@ export default async function DossierDetailPage({ params }: PageProps) {
           </div>
 
           <h1 className="text-2xl md:text-3xl font-display font-extrabold tracking-tight mb-2">
-            {dossier.aliases[0]?.label || dossier.title}
+            {preferredAlias?.label || dossier.title}
           </h1>
-          {dossier.aliases[0] && (
+          {preferredAlias && (
             <p className="text-sm text-muted-foreground mb-4">
               Intitulé officiel : <span className="text-foreground">{dossier.title}</span>
             </p>
+          )}
+
+          {dossier.aliases.length > 0 && (
+            <section aria-label="Noms d’usage et sources" className="mb-4">
+              <h2 className="font-semibold">Noms d’usage et sources</h2>
+              <ul>
+                {dossier.aliases.map((alias) => (
+                  <li key={alias.label}>
+                    <Link
+                      prefetch={false}
+                      className="inline-flex min-h-11 items-center underline"
+                      href={`/parlement/lois/${encodeURIComponent(alias.label)}`}
+                    >
+                      {alias.label}
+                    </Link>
+                    <ul>
+                      {getDossierAliasSources(alias.sources).map((source) => (
+                        <li key={source.url}>
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-11 items-center underline"
+                            aria-label={`${source.label} (source externe)`}
+                          >
+                            {source.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {/* Dates */}

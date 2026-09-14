@@ -12,6 +12,12 @@ Le modèle distingue quatre cas utiles à la revue : appellation médiatique, ap
 forme courte officielle et appellation historique. Le statut `DRAFT` permet de préparer une
 proposition sans l’exposer. Un seul alias publié peut être principal.
 
+La publication seule ne choisit pas le H1 : sans principal publié, le titre officiel reste affiché.
+Les références sont consultables dans la revue et sur la page publique. Les modifier remet
+l’alias en brouillon. Leur pertinence et l’indépendance des sources restent une décision humaine.
+L’entrée `/parlement/lois/[nom]` renvoie un HTTP 308 seulement si un dossier correspond ; sinon
+elle conduit à une désambiguïsation `noindex,follow`. Seuls les dossiers canoniques sont au sitemap.
+
 ## Règles de validation éditoriale
 
 Une appellation est acceptable si elle est attestée par une source institutionnelle ou plusieurs
@@ -19,8 +25,8 @@ sources journalistiques indépendantes, si elle identifie sans ambiguïté le do
 présente pas comme juridique une formule seulement médiatique. Le nom d’un auteur ou d’un rapporteur
 ne suffit pas à établir un nom de loi.
 
-L’intitulé officiel doit être conservé et affiché. Les sources doivent être des URL HTTPS
-consultables, en privilégiant le Journal officiel via Légifrance, les dossiers de l’Assemblée
+L’intitulé officiel doit être conservé et affiché. Les sources doivent être des URL consultables,
+de préférence HTTPS : le Journal officiel via Légifrance, les dossiers de l’Assemblée
 nationale ou du Sénat, puis les médias de référence autorisés par la politique éditoriale du projet.
 
 Ces règles sont une politique éditoriale Poligraph, pas une prétention à l’existence d’un registre
@@ -43,3 +49,5 @@ par le composant JSON-LD central qui neutralise les balises de fermeture de scri
 - [Dossier du Sénat citant « dite loi Duplomb »](https://www.senat.fr/dossier-legislatif/ppl24-889.html), exemple institutionnel d’une appellation courante distincte de l’intitulé complet.
 - [Schema.org Person](https://schema.org/Person), [GovernmentOrganization](https://schema.org/GovernmentOrganization), [Dataset](https://schema.org/Dataset), [Legislation](https://schema.org/Legislation) et [alternateName](https://schema.org/alternateName), pour les types et propriétés employés.
 - [Google, données structurées](https://developers.google.com/search/docs/appearance/structured-data/intro), pour la distinction entre vocabulaire Schema.org et fonctionnalités de résultats enrichis. Schema.org valide le vocabulaire, mais ne garantit pas un rich result Google.
+- [Next.js, permanentRedirect](https://nextjs.org/docs/app/api-reference/functions/permanentRedirect), pour la différence entre redirection HTTP et redirection HTML en streaming.
+- [Prisma 7, transactions](https://docs.prisma.io/docs/orm/v7/prisma-client/queries/transactions), pour l’atomicité des mutations et de leur journal d’audit.
