@@ -36,23 +36,6 @@ politiques utilisent `Person`, les communes `GovernmentOrganization`, les jeux d
 `name` reste le titre officiel du dossier. Les URLs sont absolues et les chaînes sont sérialisées
 par le composant JSON-LD central qui neutralise les balises de fermeture de script.
 
-## Migration en production
-
-`20260914100000_add_dossier_aliases` a été appliquée le 14 septembre 2026 avec
-Prisma 7.9.1, via `prisma migrate deploy`. La transaction crée la table vide,
-ses index et sa clé étrangère, active RLS et retire les accès directs des rôles
-publics conformément à SEC-03. Les lectures publiques passent par l’application.
-Le checksum du fichier correspond à celui enregistré dans `_prisma_migrations`.
-
-Le dossier `prisma/migrations/manual` contient des archives SQL sans `migration.sql`.
-Prisma le détecte pourtant comme une migration en attente. Pour ce déploiement,
-une configuration temporaire a pointé vers une copie à l’identique des 25 dossiers
-contenant un `migration.sql`, avec `migration_lock.toml`. L’historique complet a
-été conservé et ses checksums vérifiés avant application. Avec cet ensemble,
-`prisma migrate status` confirme qu’aucune migration ne reste en attente.
-La configuration par défaut continue de détecter l’archive `manual` : cela ne
-signifie pas que les scripts qu’elle contient doivent être appliqués.
-
 ## Sources
 
 - [Guide de légistique, fiche 3.1.3, Légifrance](https://www.legifrance.gouv.fr/contenu/Media/files/autour-de-la-loi/guide-de-legistique/2024_12_05_fiche_3.1.3_intitule_texte_0.pdf), sur l’intitulé des textes et la nécessité d’un intitulé clair, précis et concis.
