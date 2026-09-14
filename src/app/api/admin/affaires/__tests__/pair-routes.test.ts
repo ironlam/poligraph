@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   mergeAffairs: vi.fn(),
   recordPairDecision: vi.fn(),
   invalidateEntity: vi.fn(),
+  revalidateTags: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -44,7 +45,10 @@ vi.mock("@/services/affairs/import-run", () => ({
 vi.mock("@/services/affairs/pair-decision", () => ({
   recordPairDecision: h.recordPairDecision,
 }));
-vi.mock("@/lib/cache", () => ({ invalidateEntity: h.invalidateEntity }));
+vi.mock("@/lib/cache", () => ({
+  invalidateEntity: h.invalidateEntity,
+  revalidateTags: h.revalidateTags,
+}));
 vi.mock("@/lib/api/with-admin-auth", () => ({
   withAdminAuth: (fn: (req: unknown, ctx: unknown) => unknown) => (req: unknown, ctx: unknown) =>
     fn(req, ctx),

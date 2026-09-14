@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({ db: h.db }));
 vi.mock("@/services/affairs/reconciliation", () => ({ findPotentialDuplicates: h.duplicates }));
+vi.mock("@/lib/admin/dashboard", () => ({ getPotentialDuplicateCount: h.duplicates }));
 // Les prédicats de charge vivent dans @/lib/admin/queue-counts, partagés avec le
 // tableau de bord. La route délègue ; leur justesse se teste là-bas.
 vi.mock("@/lib/admin/queue-counts", () => ({
@@ -53,7 +54,7 @@ beforeEach(() => {
   h.articlesToLink.mockResolvedValue(11);
   h.recentRejections.mockResolvedValue(9);
   h.recentFailedSyncs.mockResolvedValue(10);
-  h.duplicates.mockResolvedValue([{ id: "duplicate-1" }, { id: "duplicate-2" }]);
+  h.duplicates.mockResolvedValue(2);
   h.candidaciesHoldingBack.mockResolvedValue(6);
   h.pipelines.mockResolvedValue([
     { status: "critical" },

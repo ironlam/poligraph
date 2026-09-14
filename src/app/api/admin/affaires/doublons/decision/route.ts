@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation } from "@/lib/security";
 import { pairDecisionSchema, type PairDecisionBody } from "@/lib/security/schemas/affair-pair";
 import { recordPairDecision } from "@/services/affairs/pair-decision";
+import { revalidateTags } from "@/lib/cache";
 
 /**
  * Records a ruling that does not move data: LINKED, DISTINCT or UNCERTAIN.
@@ -37,6 +38,7 @@ export const POST = withAdminAuth(
       affairAUpdatedAt: updatedAt.get(body.affairIdA)!,
       affairBUpdatedAt: updatedAt.get(body.affairIdB)!,
     });
+    revalidateTags(["affair-duplicates"]);
 
     return NextResponse.json({ success: true, decisionId: id });
   })
