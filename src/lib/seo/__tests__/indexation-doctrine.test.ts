@@ -79,7 +79,7 @@ const BARE_VOTE_SOLENNEL: ScrutinIndexSignals = { ...BARE_AMENDMENT, type: "FINA
 describe("doctrine — strong surfaces stay indexable", () => {
   it("presidential affairs hub with published content stays indexable", async () => {
     vi.mocked(getPresidentialAffairs).mockResolvedValue({ affairs: [], total: 1 });
-    const metadata = await presidentialAffairsGenerateMetadata();
+    const metadata = await presidentialAffairsGenerateMetadata({});
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe(
       "/elections/presidentielle-2027/affaires-judiciaires"
