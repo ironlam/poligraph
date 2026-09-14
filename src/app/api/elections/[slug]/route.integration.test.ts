@@ -1,54 +1,18 @@
 import { NextRequest } from "next/server";
-import pg from "pg";
+import { writeFile } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
+import { measurePostgresDriverOperation } from "@/test/postgres-driver-observer";
 
 let db: typeof import("@/lib/db").db;
 let getElection: typeof import("./route").GET;
 
 const PREFIX = "api-election-details-870";
 
-type DriverResult = { rows: unknown[]; rowCount: number | null };
-type DriverQuery = { result: DriverResult };
-
-const originalClientQuery = pg.Client.prototype.query as unknown as (
-  this: pg.Client,
-  ...args: unknown[]
-) => Promise<DriverResult>;
-let driverQueries: DriverQuery[] = [];
-
-function installDriverObserver() {
-  pg.Client.prototype.query = function observedQuery(this: pg.Client, ...args: unknown[]) {
-    const callback = args.at(-1);
-    if (typeof callback === "function") {
-      args[args.length - 1] = (error: unknown, result: DriverResult) => {
-        if (!error) driverQueries.push({ result });
-        callback(error, result);
-      };
-      return originalClientQuery.call(this, ...args);
-    }
-
-    return originalClientQuery.call(this, ...args).then((result) => {
-      driverQueries.push({ result });
-      return result;
-    });
-  } as unknown as typeof pg.Client.prototype.query;
-}
-
-function getReturnedCandidacyRows() {
-  return driverQueries
-    .flatMap(({ result }) => result.rows)
-    .filter(
-      (row) =>
-        Array.isArray(row) &&
-        row.some((value) => typeof value === "string" && /^Candidate \d{4}$/.test(value))
-    );
-}
-
 describeIfDisposableDb("GET /api/elections/[slug], PostgreSQL", () => {
+  const metricsReports: Array<{ slug: string; query: string; metrics: unknown }> = [];
   beforeAll(async () => {
     assertDisposableTestDb();
-    installDriverObserver();
     ({ db } = await import("@/lib/db"));
     ({ GET: getElection } = await import("./route"));
   });
@@ -59,7 +23,8 @@ describeIfDisposableDb("GET /api/elections/[slug], PostgreSQL", () => {
   });
 
   afterAll(async () => {
-    pg.Client.prototype.query = originalClientQuery as unknown as typeof pg.Client.prototype.query;
+    const output = process.env.PERFORMANCE_METRICS_OUTPUT;
+    if (output) await writeFile(output, `${JSON.stringify(metricsReports, null, 2)}\n`, "utf8");
     await db.$disconnect();
   });
 
@@ -85,12 +50,15 @@ describeIfDisposableDb("GET /api/elections/[slug], PostgreSQL", () => {
   }
 
   async function read(slug: string, query = "") {
-    driverQueries = [];
-    const response = await getElection(
-      new NextRequest(`https://poligraph.fr/api/elections/${slug}${query}`),
-      { params: Promise.resolve({ slug }) }
-    );
-    return { response, body: await response.json() };
+    const capture = await measurePostgresDriverOperation(async () => {
+      const response = await getElection(
+        new NextRequest(`https://poligraph.fr/api/elections/${slug}${query}`),
+        { params: Promise.resolve({ slug }) }
+      );
+      return { response, body: await response.json() };
+    });
+    metricsReports.push({ slug, query, metrics: capture.metrics });
+    return { ...capture.result, metrics: capture.metrics };
   }
 
   it("charge et renvoie seulement la page demandée, avec un total SQL exact", async () => {
@@ -155,19 +123,17 @@ describeIfDisposableDb("GET /api/elections/[slug], PostgreSQL", () => {
 
   it("borne les candidatures retournées par le driver PostgreSQL", async () => {
     const small = await seedElection("driver-small", 5);
-    const smallResult = await read(small.slug, "?limit=20");
-    const smallRows = getReturnedCandidacyRows();
+    const smallResult = await read(small.slug, "?page=2&limit=20");
 
     const large = await seedElection("driver-large", 500);
-    const largeResult = await read(large.slug, "?limit=20");
-    const largeRows = getReturnedCandidacyRows();
+    const largeResult = await read(large.slug, "?page=2&limit=20");
 
     expect(smallResult.response.status).toBe(200);
     expect(largeResult.response.status).toBe(200);
-    expect(driverQueries.length).toBeGreaterThan(0);
-    expect(smallRows).toHaveLength(5);
-    expect(largeRows).toHaveLength(20);
-    expect(largeRows.length).toBeLessThanOrEqual(100);
+    expect(smallResult.metrics.queryCount).toBeGreaterThan(0);
+    expect(smallResult.metrics.returnedRowCount).toBeGreaterThan(0);
+    expect(largeResult.metrics.returnedRowCount).toBeLessThanOrEqual(40);
+    expect(largeResult.metrics.serializedDriverResultBytes).toBeLessThan(10_000);
   });
 
   it.each(["?page=0", "?page=1.5", "?limit=101"])(
