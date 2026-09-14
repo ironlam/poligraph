@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
-import { beforeAll, afterAll, afterEach, expect, it, vi } from "vitest";
+import { beforeAll, afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { assertLocalTestDb, describeIfLocalDb } from "@/test/db-guard";
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -10,6 +10,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 // with prisma db push. Never point this opt-in URL at a shared database.
 const url = process.env.ALIAS_TEST_DATABASE_URL;
 const enabled = Boolean(url);
+const describeAliasDb = enabled ? describeIfLocalDb : describe.skip;
 if (url) {
   const target = new URL(url);
   if (
@@ -35,7 +36,7 @@ vi.mock("@/lib/db", async () => {
   };
 });
 
-describeIfLocalDb.skipIf(!enabled)("alias SQL migration and atomic audit (disposable DB)", () => {
+describeAliasDb("alias SQL migration and atomic audit (disposable DB)", () => {
   let pool: Pool;
   let db: PrismaClient;
   let actions: typeof import("@/app/admin/dossiers/[id]/alias-actions");
