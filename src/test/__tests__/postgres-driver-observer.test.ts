@@ -5,10 +5,12 @@ import { measurePostgresDriverOperation } from "../postgres-driver-observer";
 const clientPrototype = pg.Client.prototype as unknown as Record<string, unknown>;
 const poolPrototype = pg.Pool.prototype as unknown as Record<string, unknown>;
 const realClientQuery = clientPrototype.query;
+const realPoolQuery = poolPrototype.query;
 const realPoolConnect = poolPrototype.connect;
 
 afterEach(() => {
   clientPrototype.query = realClientQuery;
+  poolPrototype.query = realPoolQuery;
   poolPrototype.connect = realPoolConnect;
 });
 

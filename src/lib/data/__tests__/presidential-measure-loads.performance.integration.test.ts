@@ -222,6 +222,27 @@ describeIfDisposableDb("volumes des lectures présidentielles au niveau du drive
   });
 
   it("réduit les lignes et le volume du résultat sur deux volumes synthétiques", async () => {
+    const concurrentPool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 1,
+      ssl: false,
+    });
+    const firstConcurrentOperation = measurePostgresDriverOperation(() =>
+      concurrentPool.query("SELECT pg_sleep(0.05), 1 AS first_concurrent_operation")
+    );
+    const secondConcurrentOperation = measurePostgresDriverOperation(() =>
+      concurrentPool.query("SELECT 2 AS second_concurrent_operation")
+    );
+    const [firstConcurrentCapture, secondConcurrentCapture] = await Promise.all([
+      firstConcurrentOperation,
+      secondConcurrentOperation,
+    ]);
+    await concurrentPool.end();
+    expect(firstConcurrentCapture.metrics.queryCount).toBe(1);
+    expect(firstConcurrentCapture.metrics.returnedRowCount).toBe(1);
+    expect(secondConcurrentCapture.metrics.queryCount).toBe(1);
+    expect(secondConcurrentCapture.metrics.returnedRowCount).toBe(1);
+
     const driverPool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
     const borrowedClientCapture = await measurePostgresDriverOperation(async () => {
       const client = await driverPool.connect();
