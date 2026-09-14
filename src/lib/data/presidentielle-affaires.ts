@@ -111,7 +111,7 @@ async function getPresidentialAffairsCached(
           AND c."sourceUrl" IS NOT NULL
           AND c."sourceLabel" IS NOT NULL
       )
-    ORDER BY COALESCE(a."startDate", a."factsDate", a."createdAt") DESC
+    ORDER BY COALESCE(a."startDate", a."factsDate", a."createdAt") DESC, a."id" DESC
     LIMIT ${AFFAIRS_PAGE_SIZE}
     OFFSET ${(page - 1) * AFFAIRS_PAGE_SIZE}
   `);
