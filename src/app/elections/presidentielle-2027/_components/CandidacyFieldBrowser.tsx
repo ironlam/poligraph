@@ -151,15 +151,15 @@ export function CandidacyFieldBrowser({ candidacies }: { candidacies: HubCandida
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold">Statut public</legend>
-          <div className="-mx-4 overflow-x-auto px-4 pb-1">
-            <div className="flex min-w-max gap-2">
+          <div className="-mx-4 px-4 pb-1">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               {CANDIDACY_FILTERS.map((key) => (
                 <button
                   key={key}
                   type="button"
                   aria-pressed={key === status}
                   onClick={() => selectStatus(key)}
-                  className={`min-h-11 rounded-full border px-4 text-sm font-medium ${
+                  className={`min-h-11 w-full rounded-full border px-2 text-xs font-medium leading-tight sm:w-auto sm:px-4 sm:text-sm ${
                     key === status
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-background hover:border-primary hover:text-primary"
