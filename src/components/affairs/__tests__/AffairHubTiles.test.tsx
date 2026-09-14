@@ -17,10 +17,9 @@ describe("AffairHubTiles", () => {
       "href",
       "/affaires?mode=victime"
     );
-    expect(screen.getByRole("link", { name: /Affaires des candidats 2027/i })).toHaveAttribute(
-      "href",
-      "/elections/presidentielle-2027/affaires-judiciaires"
-    );
+    expect(
+      screen.getByRole("link", { name: /Affaires des candidats et personnalités suivies/i })
+    ).toHaveAttribute("href", "/elections/presidentielle-2027/affaires-judiciaires");
     expect(screen.getByText(/42/)).toBeInTheDocument();
   });
 });

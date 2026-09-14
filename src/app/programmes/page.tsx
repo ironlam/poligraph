@@ -13,19 +13,44 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { SITE_URL } from "@/config/site";
 import { cn } from "@/lib/utils";
+import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
+import { PRESIDENTIAL_CANDIDATES_FILTER_KEYS } from "@/lib/seo/listing-filters";
 
 export const revalidate = 300;
 
 const PRESIDENTIAL_HUB_PATH = `/elections/${PRESIDENTIELLE_2027_SLUG}`;
 
-export const metadata: Metadata = {
+const baseMetadata: Metadata = {
   title: "Programmes politiques 2027 et programmes des partis",
   description:
     "Consultez les programmes et mesures sourcées des candidats à la présidentielle 2027, ainsi que les derniers programmes documentés des partis politiques français.",
   alternates: { canonical: "/programmes" },
 };
 
-export default async function ProgrammesPage() {
+type ProgrammesPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export async function generateMetadata({ searchParams }: ProgrammesPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const flatParams = Object.fromEntries(
+    Object.entries(params ?? {}).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value[0] : value,
+    ])
+  );
+
+  return {
+    ...baseMetadata,
+    // The presidential directory is embedded here, so its utility filters must not create
+    // indexable duplicate programme URLs while the canonical bare page stays indexable.
+    ...listingRobotsMetadata(
+      hasActiveListingFilter(flatParams, PRESIDENTIAL_CANDIDATES_FILTER_KEYS)
+    ),
+  };
+}
+
+export default async function ProgrammesPage({}: ProgrammesPageProps) {
   if (!(await isFeatureEnabled("PROGRAMMES_ENABLED"))) notFound();
 
   const [platforms, presidentialContext, candidacies] = await Promise.all([

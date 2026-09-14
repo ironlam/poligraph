@@ -135,6 +135,18 @@ describe("annuaire présidentiel", () => {
     expect(screen.getByRole("button", { name: "Candidatures retirées (1)" })).toBeInTheDocument();
   });
 
+  it("présente les statuts en grille sur mobile au lieu de les tronquer horizontalement", () => {
+    const { container } = render(
+      <CandidacyFieldBrowser candidacies={[candidacy({ status: "DECLARE" })]} />
+    );
+
+    expect(container.querySelector(".grid.grid-cols-2.sm\\:flex")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Candidatures officielles/ })).toHaveClass(
+      "w-full",
+      "leading-tight"
+    );
+  });
+
   it("filtre le contenu sans changer le sens des compteurs de statut", () => {
     render(
       <CandidacyFieldBrowser

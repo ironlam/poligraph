@@ -38,6 +38,13 @@ const SHORTER_PROFILE_ALLOWED = new Map([
     },
   ],
   [
+    "lib/admin/dashboard.ts",
+    {
+      profile: "minutes",
+      reason: "admin dashboard: exact duplicate count is shared and invalidated after mutations",
+    },
+  ],
+  [
     "lib/data/elections.ts",
     {
       profile: "hours",

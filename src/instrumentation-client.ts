@@ -50,7 +50,15 @@ if (SENTRY_ENABLED) {
     sendDefaultPii: false,
     integrations: IS_ADMIN_ROUTE
       ? []
-      : [Sentry.replayIntegration({ maskAllText: false, blockAllMedia: true })],
+      : [
+          Sentry.replayIntegration({
+            maskAllText: false,
+            blockAllMedia: true,
+            // The production CSP intentionally forbids blob workers. Replay falls back to its
+            // in-thread buffer, avoiding a blocked worker and keeping the security boundary intact.
+            useCompression: false,
+          }),
+        ],
     beforeSend(event) {
       if (!isReactStreamingScriptError(event)) return event;
       if (reactStreamingReported) return null;

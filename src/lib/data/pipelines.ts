@@ -155,14 +155,11 @@ export async function getPipelineHealthAll(): Promise<PipelineHealth[]> {
   cacheTag("pipelines");
 
   const now = new Date();
-  const results: PipelineHealth[] = [];
-
-  for (const config of PIPELINE_REGISTRY) {
-    const lastRun = await getLastRunForPipeline(config);
-    results.push(computePipelineHealth(config, lastRun, now));
-  }
-
-  return results;
+  return Promise.all(
+    PIPELINE_REGISTRY.map(async (config) =>
+      computePipelineHealth(config, await getLastRunForPipeline(config), now)
+    )
+  );
 }
 
 /**

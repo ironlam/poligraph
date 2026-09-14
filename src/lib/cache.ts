@@ -92,6 +92,7 @@ export function invalidateEntity(
         revalidatePath(`/affaires/${slug}`);
       }
       revalidateTag("affairs", DEFAULT_PROFILE);
+      revalidateTag("affair-duplicates", DEFAULT_PROFILE);
       break;
 
     case "mandate": {

@@ -6,7 +6,7 @@ import {
   countRecentFailedSyncs,
 } from "@/lib/admin/queue-counts";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
-import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
+import { getPotentialDuplicateCount } from "@/lib/admin/dashboard";
 import { getPipelineHealthAll } from "@/lib/data/pipelines";
 import { countCandidaciesHoldingBackMeasures } from "@/lib/data/measures";
 
@@ -50,7 +50,7 @@ export const GET = withAdminAuth(async () => {
     // Mêmes prédicats que le tableau de bord : une copie locale afficherait
     // l'historique dans la navigation et la charge sur /admin, au même écran.
     countArticlesToLink(),
-    findPotentialDuplicates(),
+    getPotentialDuplicateCount(),
     countRecentPressRejections(),
     countRecentFailedSyncs(),
     getPipelineHealthAll(),
@@ -60,7 +60,7 @@ export const GET = withAdminAuth(async () => {
   const response: AdminBadgeContract = {
     drafts: { affairs, politicians },
     moderation: { proposalsPending, proposalsConflict, reviewsPending },
-    matching: { decisionsPending, articlesPending, duplicatesPending: duplicates.length },
+    matching: { decisionsPending, articlesPending, duplicatesPending: duplicates },
     candidacies: { publicationPending: candidaciesPublicationPending },
     press: { rejectionsPending },
     operations: {
