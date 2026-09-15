@@ -170,6 +170,18 @@ identifiants des jobs ne sont pas envoyés. Une release est le SHA Git de 40
 caractères hexadécimaux fourni par `VERCEL_GIT_COMMIT_SHA` ou `GITHUB_SHA`, sinon
 `null` ; aucune chaîne arbitraire n'est journalisée comme version.
 
+Le workflow `Daily Sync` lit les quatre variables GitHub Actions
+`DB_READ_TELEMETRY`, `DB_READ_SAMPLE_RATE`, `DB_READ_MAX_EVENTS` et
+`DB_READ_WINDOW_MS` uniquement à l'étape d'exécution du script. Utiliser les
+variables de l'environnement GitHub `production` : les secrets de connexion
+restent inchangés. L'activation reste désactivée par défaut. Une fois activée,
+le taux par défaut de ce job peu fréquent est `1`, avec les mêmes plafonds que
+le web. Un lancement cron porte le contexte `scheduled`, un lancement manuel
+`script` ; `GITHUB_SHA` fournit la version exécutée. Ces variables GitHub sont
+indépendantes de celles de Vercel, où le taux de départ conseillé reste `0.1`.
+Mettre `DB_READ_TELEMETRY=false` dans l'environnement GitHub désactive la
+collecte des prochains jobs, sans interrompre une synchronisation en cours.
+
 Arrêt : retirer `DB_READ_TELEMETRY=true` ou mettre `false`, puis appliquer cette
 configuration selon le mécanisme normal de la plateforme. Aucun accès en base
 n'est requis. Le changement d'une configuration de plateforme n'est pas supposé
