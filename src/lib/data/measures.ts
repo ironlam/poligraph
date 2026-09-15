@@ -5,6 +5,7 @@ import {
   THEME_CATEGORY_LABELS,
 } from "@/config/labels";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { themeToSlug } from "@/lib/theme-utils";
 import { getPublicTrackedPresidentialCandidacyWhere } from "./presidential-candidacy-policy";
 import { PUBLIC_CANDIDACY_WHERE } from "./presidential-candidates-public";
@@ -413,6 +414,12 @@ export async function getPublicMeasure(measureId: string): Promise<PublicMeasure
 }
 
 export async function getPublicMeasuresByElection(
+  ...args: Parameters<typeof queryPublicMeasuresByElection>
+) {
+  return observeRead("measures.election.full", () => queryPublicMeasuresByElection(...args));
+}
+
+async function queryPublicMeasuresByElection(
   electionId: string,
   options?: MeasureListOptions
 ): Promise<PublicMeasure[]> {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { parseStrictPagination } from "@/lib/api/pagination";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
@@ -57,25 +58,31 @@ import {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-export const GET = withPublicRoute(async (_request, context) => {
-  const { slug } = await context.params;
-  if (!slug) {
-    return NextResponse.json({ error: "Slug d'élection invalide" }, { status: 400 });
-  }
-  const pagination = parseStrictPagination(_request.nextUrl.searchParams, {
-    defaultLimit: ELECTION_CANDIDACIES_DEFAULT_LIMIT,
-    maxLimit: ELECTION_CANDIDACIES_MAX_LIMIT,
-  });
+export const GET = withPublicRoute(async (_request, context) =>
+  observeRead(
+    "elections.details.http",
+    async () => {
+      const { slug } = await context.params;
+      if (!slug) {
+        return NextResponse.json({ error: "Slug d'élection invalide" }, { status: 400 });
+      }
+      const pagination = parseStrictPagination(_request.nextUrl.searchParams, {
+        defaultLimit: ELECTION_CANDIDACIES_DEFAULT_LIMIT,
+        maxLimit: ELECTION_CANDIDACIES_MAX_LIMIT,
+      });
 
-  if (pagination === null) {
-    return NextResponse.json({ error: "Pagination invalide" }, { status: 400 });
-  }
+      if (pagination === null) {
+        return NextResponse.json({ error: "Pagination invalide" }, { status: 400 });
+      }
 
-  const election = await getPublicElectionDetails(slug, pagination);
+      const election = await getPublicElectionDetails(slug, pagination);
 
-  if (!election) {
-    return NextResponse.json({ error: "Élection non trouvée" }, { status: 404 });
-  }
+      if (!election) {
+        return NextResponse.json({ error: "Élection non trouvée" }, { status: 404 });
+      }
 
-  return withCache(NextResponse.json(election), "daily");
-});
+      return withCache(NextResponse.json(election), "daily");
+    },
+    "web"
+  )
+);

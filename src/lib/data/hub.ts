@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { ThemeCategory } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import { isHubPublishable } from "@/config/publication-gates";
 import {
   getPublicPresidentialCandidacyField,
@@ -79,15 +80,21 @@ export type HubMeasureContext = {
  * that calls it is only as fresh as its ISR backstop.
  */
 export async function getHubCandidacyField(electionSlug: string): Promise<HubCandidacy[]> {
-  const field = await getPublicPresidentialCandidacyField(electionSlug);
-  return field?.candidacies ?? [];
+  return observeRead("presidential.field.load", async () => {
+    const field = await getPublicPresidentialCandidacyField(electionSlug);
+    return field?.candidacies ?? [];
+  });
 }
 
 /**
  * Plain async, integration-testable. Callers on a page use `getHubMeasureContext`, which
  * caches this.
  */
-export async function loadHubMeasureContext(
+export async function loadHubMeasureContext(...args: Parameters<typeof queryHubMeasureContext>) {
+  return observeRead("presidential.hub.load", () => queryHubMeasureContext(...args));
+}
+
+async function queryHubMeasureContext(
   electionId: string,
   electionSlug: string
 ): Promise<HubMeasureContext> {

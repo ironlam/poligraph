@@ -1,6 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
+import { observeRead } from "@/lib/telemetry/read-operations";
 import {
   SEGMENTATION_DOCTRINE_PUBLISHED,
   isPrioritesCandidacyEligible,
@@ -63,7 +64,11 @@ export type PrioritesData = {
 /**
  * Plain async, integration-testable. Pages call `getPrioritesData`, which caches this.
  */
-export async function loadPrioritesData(
+export async function loadPrioritesData(...args: Parameters<typeof queryPrioritesData>) {
+  return observeRead("presidential.priorities.load", () => queryPrioritesData(...args));
+}
+
+async function queryPrioritesData(
   electionId: string,
   electionSlug: string
 ): Promise<PrioritesData> {

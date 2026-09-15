@@ -140,4 +140,35 @@ describe("public page performance contracts", () => {
     expect(calls.has("getPublicMeasureRollupsByElection")).toBe(true);
     expect(calls.has("getPublicMeasuresByElection")).toBe(false);
   });
+
+  it("keeps telemetry outside cache signatures and inside executed loaders", () => {
+    for (const [file, cached, loader] of [
+      ["hub", "getHubMeasureContextCached", "loadHubMeasureContext"],
+      ["themes-index", "getThemesIndexCached", "loadThemesIndex"],
+      ["priorites", "getPrioritesDataCached", "loadPrioritesData"],
+      ["subject-page", "getSubjectPageDataCached", "loadSubjectPageData"],
+    ]) {
+      const ast = sourceFile(`src/lib/data/${file}.ts`);
+      const functions = ast.statements.filter(ts.isFunctionDeclaration);
+      const boundary = functions.find((fn) => fn.name?.text === cached);
+      expect(boundary, cached).toBeDefined();
+      expect(boundary?.parameters.map((param) => param.name.getText(ast))).toEqual(
+        file === "subject-page"
+          ? ["electionId", "electionSlug", "theme"]
+          : ["electionId", "electionSlug"]
+      );
+      const calls: string[] = [];
+      function visit(node: ts.Node) {
+        if (ts.isCallExpression(node)) calls.push(node.expression.getText(ast));
+        ts.forEachChild(node, visit);
+      }
+      if (boundary) visit(boundary);
+      expect(calls).toContain(loader);
+      expect(calls).not.toContain("observeRead");
+      const executed = functions.find((fn) => fn.name?.text === loader);
+      calls.length = 0;
+      if (executed) visit(executed);
+      expect(calls).toContain("observeRead");
+    }
+  });
 });

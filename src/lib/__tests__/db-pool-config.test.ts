@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 const capturedConfigs: Record<string, unknown>[] = [];
 
 vi.mock("pg", () => ({
+  Client: class {},
   Pool: class {
     constructor(config: Record<string, unknown>) {
       capturedConfigs.push(config);
