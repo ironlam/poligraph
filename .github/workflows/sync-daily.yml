@@ -55,6 +55,13 @@ jobs:
         run: npx prisma generate
 
       - name: Run daily sync
+        env:
+          DB_READ_TELEMETRY: ${{ vars.DB_READ_TELEMETRY || 'false' }}
+          DB_READ_SAMPLE_RATE: ${{ vars.DB_READ_SAMPLE_RATE || '1' }}
+          DB_READ_MAX_EVENTS: ${{ vars.DB_READ_MAX_EVENTS || '60' }}
+          DB_READ_WINDOW_MS: ${{ vars.DB_READ_WINDOW_MS || '60000' }}
+          DB_READ_ENVIRONMENT: production
+          DB_READ_CONTEXT: ${{ github.event_name == 'schedule' && 'scheduled' || 'script' }}
         run: npm run sync:daily
 
       - name: Summary
