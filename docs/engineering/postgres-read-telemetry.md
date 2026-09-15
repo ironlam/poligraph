@@ -346,10 +346,17 @@ docker exec poligraph-read-test-pg pg_isready -U poligraph_test -p 55433
 docker run --rm --network container:poligraph-read-test-pg \
   -v "$PWD:/app" -w /app \
   -e DATABASE_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test \
+  -e DIRECT_URL=postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test \
+  -e DOTENV_CONFIG_PATH=/dev/null \
   -e DATABASE_SSL=false node:22-bookworm bash -lc \
   'npx prisma generate && npx prisma db push && npx vitest run src/lib/telemetry --no-file-parallelism'
 docker stop poligraph-read-test-pg
 ```
+
+`prisma.config.ts` privilégie `DIRECT_URL` et charge normalement `.env`.
+Les deux URL sont donc explicitement fixées sur la base jetable et
+`DOTENV_CONFIG_PATH=/dev/null` empêche le chargement du fichier du checkout.
+Conserver ces trois variables ensemble, y compris si un `.env` local existe.
 
 Le port 55433 est interne au réseau partagé par ces deux conteneurs, sans port
 hôte publié. Pour les suites de parité #881, reprendre la liste du job
