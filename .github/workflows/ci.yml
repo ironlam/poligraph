@@ -211,6 +211,7 @@ jobs:
       NODE_ENV: test
       DOTENV_CONFIG_PATH: /dev/null
       PERFORMANCE_METRICS_OUTPUT: presidential-measure-loads-metrics.json
+      SUBJECT_METRICS_OUTPUT: subject-read-metrics.json
 
     steps:
       - name: Checkout repository
@@ -243,6 +244,8 @@ jobs:
             "src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts"
             "src/lib/data/__tests__/presidential-reader-guides.integration.test.ts"
             "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts"
+            "src/lib/data/__tests__/subject-page.integration.test.ts"
+            "src/lib/data/__tests__/subject-reads.performance.integration.test.ts"
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
           )
           for expected_file in "${expected_files[@]}"; do test -f "$expected_file"; done
@@ -253,6 +256,8 @@ jobs:
             src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts \
             src/lib/data/__tests__/presidential-reader-guides.integration.test.ts \
             src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts \
+            src/lib/data/__tests__/subject-page.integration.test.ts \
+            src/lib/data/__tests__/subject-reads.performance.integration.test.ts \
             src/lib/telemetry/__tests__/pg-pool.integration.test.ts \
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
           npx tsx src/test/vitest-report-validator.ts \
@@ -263,6 +268,8 @@ jobs:
             "src/lib/data/__tests__/measure-stats-by-candidacy.integration.test.ts" \
             "src/lib/data/__tests__/presidential-reader-guides.integration.test.ts" \
             "src/lib/data/__tests__/presidential-measure-loads.performance.integration.test.ts" \
+            "src/lib/data/__tests__/subject-page.integration.test.ts" \
+            "src/lib/data/__tests__/subject-reads.performance.integration.test.ts" \
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
 
       - name: Publish presidential driver metrics
@@ -270,7 +277,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: presidential-driver-metrics
-          path: presidential-measure-loads-metrics.json
+          path: |
+            presidential-measure-loads-metrics.json
+            subject-read-metrics.json
           if-no-files-found: error
 
   sec-02-role-contract:
