@@ -1,7 +1,10 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { themeToSlug } from "@/lib/theme-utils";
+import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
+
+vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: vi.fn(), revalidateTag: vi.fn() }));
 
 // Deferred: these modules import @/lib/db as a value, which throws at module load without DATABASE_URL.
 let db: typeof import("@/lib/db").db;
@@ -345,5 +348,131 @@ describeIfDisposableDb("page sujet publique : agrégation des données", () => {
   it("au-dessus du seuil, ne propose aucun renvoi quand aucun autre thème n'est publiable", async () => {
     const data = await loadSubjectPageData(electionId, SLUG, THEME);
     expect(data.fallbackPublishableTheme).toBeNull();
+  });
+
+  it("le comparateur paginé conserve les règles éditoriales de la page sujet", async () => {
+    const { getPresidentialComparison } = await import("../presidential-comparison");
+    const subject = await loadSubjectPageData(electionId, SLUG, THEME);
+    const result = await getPresidentialComparison({
+      electionSlug: SLUG,
+      themeSlug: themeToSlug(THEME),
+      candidateSlugs: [`${SLUG}-chloe`, `${SLUG}-alix`, `${SLUG}-dora`],
+      candidatePages: { [`${SLUG}-alix`]: 999 },
+    });
+    expect(result?.candidateOptions.map((c) => c.name)).toEqual([
+      "Alix Test",
+      "Bruno Test",
+      "Chloe Test",
+    ]);
+    expect(result?.selectedCandidates.map((c) => c.name)).toEqual(["Alix Test", "Chloe Test"]);
+    const alixMeasures = subject.candidates[0]!.measures.map(({ measure }) => ({
+      id: measure.id,
+      slug: measure.slug,
+      text: measure.text,
+      sourceUrl: pickMeasureSourceUrl(measure.sources),
+      subtopics: measure.subtopics,
+      precision: measure.precision,
+      qualifications: measure.qualifications,
+      withdrawal: measure.withdrawal,
+    }));
+    expect(result?.selectedCandidates[0]).toMatchObject({
+      measures: alixMeasures,
+      totalMeasures: 2,
+      totalPages: 1,
+      page: 1,
+    });
+    expect(result?.selectedCandidates[1]).toMatchObject({
+      measures: [],
+      totalMeasures: 0,
+      totalPages: 1,
+      page: 1,
+    });
+    expect(result?.lastReviewedAt).toEqual(subject.lastReviewedAt);
+    expect(
+      await getPresidentialComparison({
+        electionSlug: SLUG,
+        themeSlug: themeToSlug(OTHER_THEME),
+        candidateSlugs: [`${SLUG}-alix`],
+      })
+    ).toBeNull();
+    expect(
+      await getPresidentialComparison({
+        electionSlug: `${SLUG}-absent`,
+        themeSlug: themeToSlug(THEME),
+        candidateSlugs: [],
+      })
+    ).toBeNull();
+  });
+
+  it("applique les mêmes exclusions aux totaux et aux pages SQL du comparateur", async () => {
+    const { getPublicComparisonMeasureCounts, getPublicComparisonMeasurePage } =
+      await import("../measures");
+    const revision = await db.measureRevision.findUniqueOrThrow({
+      where: { id: alix.defendedRevisionId },
+    });
+    async function expectHidden() {
+      const counts = await getPublicComparisonMeasureCounts(electionId, THEME);
+      const rows = await getPublicComparisonMeasurePage({
+        electionId,
+        candidacyId: alix.candidacyId,
+        theme: THEME,
+        skip: 0,
+        take: 6,
+      });
+      expect(counts.get(alix.candidacyId)).toBe(1);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.withdrawal).not.toBeNull();
+    }
+    for (const field of [
+      "reviewedAt",
+      "publishedAt",
+      "supersededAt",
+      "discardedAt",
+      "rejectedAt",
+    ] as const) {
+      await db.measureRevision.update({
+        where: { id: revision.id },
+        data: { [field]: field === "reviewedAt" || field === "publishedAt" ? null : new Date() },
+      });
+      try {
+        await expectHidden();
+      } finally {
+        await db.measureRevision.update({
+          where: { id: revision.id },
+          data: { [field]: revision[field] },
+        });
+      }
+    }
+    const sources = await db.measureSource.findMany({ where: { measureRevisionId: revision.id } });
+    await db.measureSource.deleteMany({ where: { measureRevisionId: revision.id } });
+    try {
+      await expectHidden();
+    } finally {
+      await db.measureSource.createMany({ data: sources });
+    }
+
+    await db.candidacyPresidential.update({
+      where: { candidacyId: alix.candidacyId },
+      data: { publicationStatus: "DRAFT" },
+    });
+    try {
+      expect(
+        (await getPublicComparisonMeasureCounts(electionId, THEME)).has(alix.candidacyId)
+      ).toBe(false);
+      expect(
+        await getPublicComparisonMeasurePage({
+          electionId,
+          candidacyId: alix.candidacyId,
+          theme: THEME,
+          skip: 0,
+          take: 6,
+        })
+      ).toEqual([]);
+    } finally {
+      await db.candidacyPresidential.update({
+        where: { candidacyId: alix.candidacyId },
+        data: { publicationStatus: "PUBLISHED" },
+      });
+    }
   });
 });
