@@ -189,18 +189,18 @@ describe("generateAffairSlug", () => {
     expect(generateAffairSlug("", "Emplois fictifs")).toBe("emplois-fictifs");
   });
 
-  // 728 politicians carry a disambiguation suffix ("alain-garnier-3") that a
-  // title never spells out. Detecting on the URL slug therefore misses the
-  // repetition for exactly the homonyms, and homonyms are concentrated among
-  // small-commune mayors, the population the web discovery pass targets.
-  it("detects the repetition through the canonical name, not the disambiguated slug", () => {
+  // A judicial URL travels away from the page that carries it, so the suffix
+  // telling two homonyms apart is kept even at the cost of writing the name
+  // twice. Appending it at the end instead would be indistinguishable from the
+  // collision counter generateUniqueSlug adds.
+  it("keeps the disambiguating prefix for a homonym, even if the title repeats the name", () => {
     expect(
       generateAffairSlug(
         "alain-garnier-3",
         "Condamnation de Alain Garnier pour favoritisme",
         "alain-garnier"
       )
-    ).toBe("condamnation-de-alain-garnier-pour-favoritisme");
+    ).toBe("alain-garnier-3-condamnation-de-alain-garnier-pour-favoritisme");
   });
 
   it("still prefixes a disambiguated slug when the title omits the name", () => {
@@ -218,7 +218,14 @@ describe("generateAffairSlug", () => {
   it("accepts a raw full name as the canonical argument", () => {
     expect(
       generateAffairSlug("alain-garnier-3", "Condamnation de Alain Garnier", "Alain Garnier")
-    ).toBe("condamnation-de-alain-garnier");
+    ).toBe("alain-garnier-3-condamnation-de-alain-garnier");
+  });
+
+  // The prefix is dropped only when it carries nothing the title does not.
+  it("drops the prefix only when the slug is the bare name", () => {
+    expect(
+      generateAffairSlug("gerard-spinelli", "Condamnation de Gérard Spinelli", "Gérard Spinelli")
+    ).toBe("condamnation-de-gerard-spinelli");
   });
 });
 

@@ -200,9 +200,10 @@ describe("discoverAffairsWeb", () => {
   });
 
   // Les homonymes se concentrent chez les maires de petites communes, soit la
-  // cible de cette passe : leur slug porte un suffixe ("-3") qu'aucun titre ne
-  // contient, d'où la détection sur le nom et non sur le slug d'URL.
-  it("ne répète pas le nom d'un homonyme dont le slug est désambiguïsé", async () => {
+  // cible de cette passe. Le suffixe est la seule chose qui distingue deux
+  // personnes : une URL d'affaire judiciaire circule hors de sa page, donc
+  // l'attribution prime sur la répétition du nom.
+  it("conserve le préfixe désambiguïsé d'un homonyme", async () => {
     h.selectSearchTargets.mockResolvedValue([{ ...target, slug: "joseph-afribo-3" }]);
     h.searchBrave.mockResolvedValue([hit]);
     h.extractToolUse.mockReturnValue({
@@ -217,7 +218,7 @@ describe("discoverAffairsWeb", () => {
     await discoverAffairsWeb({ limit: 1 });
 
     const data = h.createDraft.mock.calls[0]![0];
-    expect(data.baseSlug).toBe("mise-en-examen-de-joseph-afribo");
+    expect(data.baseSlug).toBe("joseph-afribo-3-mise-en-examen-de-joseph-afribo");
   });
 
   it("ne devine pas la catégorie ni le degré d'implication", async () => {

@@ -43,17 +43,19 @@ export function cleanAffairTitle(title: string): string {
  * nothing else), and prefixing them yielded
  * "gerard-spinelli-condamnation-de-gerard-spinelli-pour-...".
  *
- * `canonicalName` is the person's name, when the caller has it. It is NOT the
- * URL slug: 728 politicians carry a disambiguation suffix ("alain-garnier-3")
- * that no title ever spells out, so testing the URL slug misses the repetition
- * for exactly the homonyms. Those are concentrated among small-commune mayors,
- * which is the population the discovery pass searches. Deriving the name by
- * stripping a trailing "-<digits>" would be a guess: a canonical slug is free
- * to end in a digit, and nothing enforces that it does not.
+ * The prefix is kept for a homonym, even though the name is then written twice.
+ * 728 politicians carry a disambiguation suffix ("alain-garnier-3") that no
+ * title ever spells out, and it is the only thing telling two people apart. A
+ * judicial URL travels away from the page that carries it, so attributing it to
+ * the right person outranks removing a repetition. Appending the suffix at the
+ * end instead ("...-3") would be worse: nothing would distinguish it from the
+ * collision counter generateUniqueSlug adds.
  *
- * Dropping the prefix costs the disambiguating suffix in the URL. That is
- * deliberate: an affair slug identifies an affair, uniqueness is enforced by
- * generateUniqueSlug downstream, and the page itself names the person.
+ * `canonicalName` is the person's name, NOT the URL slug, so that "the slug adds
+ * nothing beyond the name" is tested directly rather than through the proxy
+ * "the title contains the slug". Today the two agree on every row, since a slug
+ * is the name plus an optional numeric suffix; the proxy holds by data accident,
+ * not by construction.
  */
 export function generateAffairSlug(
   politicianSlug: string,
@@ -62,7 +64,8 @@ export function generateAffairSlug(
 ): string {
   const titleSlug = generateSlug(cleanAffairTitle(title));
   const nameSlug = generateSlug(canonicalName);
-  if (nameSlug && titleSlug.includes(nameSlug)) return titleSlug;
+  // Drop the prefix only when it is the bare name and the title already says it.
+  if (nameSlug && politicianSlug === nameSlug && titleSlug.includes(nameSlug)) return titleSlug;
   return generateSlug(`${politicianSlug} ${titleSlug}`);
 }
 
