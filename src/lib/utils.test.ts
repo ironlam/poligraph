@@ -3,6 +3,7 @@ import {
   cn,
   generateSlug,
   generateAffairSlug,
+  generateUniqueSlug,
   generateDateSlug,
   formatDate,
   formatCurrency,
@@ -186,5 +187,64 @@ describe("generateAffairSlug", () => {
 
   it("is stable when the politician slug is empty", () => {
     expect(generateAffairSlug("", "Emplois fictifs")).toBe("emplois-fictifs");
+  });
+
+  // 728 politicians carry a disambiguation suffix ("alain-garnier-3") that a
+  // title never spells out. Detecting on the URL slug therefore misses the
+  // repetition for exactly the homonyms, and homonyms are concentrated among
+  // small-commune mayors, the population the web discovery pass targets.
+  it("detects the repetition through the canonical name, not the disambiguated slug", () => {
+    expect(
+      generateAffairSlug(
+        "alain-garnier-3",
+        "Condamnation de Alain Garnier pour favoritisme",
+        "alain-garnier"
+      )
+    ).toBe("condamnation-de-alain-garnier-pour-favoritisme");
+  });
+
+  it("still prefixes a disambiguated slug when the title omits the name", () => {
+    expect(
+      generateAffairSlug("alain-garnier-3", "Marché public du festival", "alain-garnier")
+    ).toBe("alain-garnier-3-marche-public-du-festival");
+  });
+
+  it("falls back to the URL slug when no canonical name is given", () => {
+    expect(generateAffairSlug("alain-garnier-3", "Condamnation de Alain Garnier")).toBe(
+      "alain-garnier-3-condamnation-de-alain-garnier"
+    );
+  });
+
+  it("accepts a raw full name as the canonical argument", () => {
+    expect(
+      generateAffairSlug("alain-garnier-3", "Condamnation de Alain Garnier", "Alain Garnier")
+    ).toBe("condamnation-de-alain-garnier");
+  });
+});
+
+describe("generateUniqueSlug", () => {
+  const free = async () => false;
+
+  it("truncates to maxLength even when the first candidate is free", async () => {
+    const base = "a".repeat(200);
+    const slug = await generateUniqueSlug(base, free, 120);
+    expect(slug).toHaveLength(120);
+  });
+
+  it("does not leave a dangling separator after truncating", async () => {
+    const slug = await generateUniqueSlug(`${"ab-".repeat(60)}fin`, free, 20);
+    expect(slug).not.toMatch(/-$/);
+    expect(slug.length).toBeLessThanOrEqual(20);
+  });
+
+  it("leaves a short base untouched", async () => {
+    expect(await generateUniqueSlug("emplois-fictifs", free, 120)).toBe("emplois-fictifs");
+  });
+
+  it("appends a counter on collision, within maxLength", async () => {
+    const taken = new Set([`${"a".repeat(120)}`]);
+    const slug = await generateUniqueSlug("a".repeat(200), async (c) => taken.has(c), 120);
+    expect(slug).toBe(`${"a".repeat(118)}-2`);
+    expect(slug).toHaveLength(120);
   });
 });

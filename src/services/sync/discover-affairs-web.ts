@@ -820,8 +820,11 @@ async function createDraftFromLead(
     politicianId: target.id,
     title,
     // Same helper as every other affair-creating surface, so a draft born here
-    // gets the same shape of URL as one created from the admin.
-    baseSlug: generateAffairSlug(target.slug, title),
+    // gets the same shape of URL as one created from the admin. fullName is
+    // passed separately from the slug: a homonym's slug carries a suffix the
+    // title never spells out, and this pass searches mayors, where homonyms
+    // concentrate.
+    baseSlug: generateAffairSlug(target.slug, title, target.fullName),
     description: `Piste détectée par recherche web le ${new Date().toISOString().slice(0, 10)}. ${lead.judgment.reasoning}`,
     status: lead.status,
     category: "AUTRE",

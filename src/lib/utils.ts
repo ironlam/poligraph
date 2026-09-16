@@ -42,10 +42,27 @@ export function cleanAffairTitle(title: string): string {
  * as "Condamnation de X pour Y" are common (the web discovery pass produces
  * nothing else), and prefixing them yielded
  * "gerard-spinelli-condamnation-de-gerard-spinelli-pour-...".
+ *
+ * `canonicalName` is the person's name, when the caller has it. It is NOT the
+ * URL slug: 728 politicians carry a disambiguation suffix ("alain-garnier-3")
+ * that no title ever spells out, so testing the URL slug misses the repetition
+ * for exactly the homonyms. Those are concentrated among small-commune mayors,
+ * which is the population the discovery pass searches. Deriving the name by
+ * stripping a trailing "-<digits>" would be a guess: a canonical slug is free
+ * to end in a digit, and nothing enforces that it does not.
+ *
+ * Dropping the prefix costs the disambiguating suffix in the URL. That is
+ * deliberate: an affair slug identifies an affair, uniqueness is enforced by
+ * generateUniqueSlug downstream, and the page itself names the person.
  */
-export function generateAffairSlug(politicianSlug: string, title: string): string {
+export function generateAffairSlug(
+  politicianSlug: string,
+  title: string,
+  canonicalName: string = politicianSlug
+): string {
   const titleSlug = generateSlug(cleanAffairTitle(title));
-  if (politicianSlug && titleSlug.includes(politicianSlug)) return titleSlug;
+  const nameSlug = generateSlug(canonicalName);
+  if (nameSlug && titleSlug.includes(nameSlug)) return titleSlug;
   return generateSlug(`${politicianSlug} ${titleSlug}`);
 }
 
@@ -169,19 +186,24 @@ export async function generateUniqueSlug(
   exists: (slug: string) => Promise<boolean>,
   maxLength: number = 80
 ): Promise<string> {
-  let slug = baseSlug;
+  // maxLength used to apply only once a collision had been found, so a free
+  // base of any length was returned whole and the limit held or not depending
+  // on whether someone else had taken the slug first.
+  const base = baseSlug.slice(0, maxLength).replace(/-$/, "");
+
+  let slug = base;
   if (!(await exists(slug))) return slug;
 
   let counter = 2;
   while (counter <= 100) {
     const suffix = `-${counter}`;
-    const truncatedBase = baseSlug.slice(0, maxLength - suffix.length).replace(/-$/, "");
+    const truncatedBase = base.slice(0, maxLength - suffix.length).replace(/-$/, "");
     slug = `${truncatedBase}${suffix}`;
     if (!(await exists(slug))) return slug;
     counter++;
   }
 
-  return `${baseSlug.slice(0, 60)}-${Date.now()}`;
+  return `${base.slice(0, 60)}-${Date.now()}`;
 }
 
 export function generateDateSlug(
