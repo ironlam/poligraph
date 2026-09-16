@@ -19,6 +19,7 @@
  * queue is where a human decides.
  */
 import { db } from "@/lib/db";
+import { generateAffairSlug } from "@/lib/utils";
 import type { AffairStatus } from "@/generated/prisma";
 import { searchBrave, isBraveQuotaError, type BraveSearchResult } from "@/lib/api/brave-search";
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
@@ -818,7 +819,9 @@ async function createDraftFromLead(
   await createDraftAffairFromDiscovery({
     politicianId: target.id,
     title,
-    baseSlug: `${target.lastName}-${title}`,
+    // Same helper as every other affair-creating surface, so a draft born here
+    // gets the same shape of URL as one created from the admin.
+    baseSlug: generateAffairSlug(target.slug, title),
     description: `Piste détectée par recherche web le ${new Date().toISOString().slice(0, 10)}. ${lead.judgment.reasoning}`,
     status: lead.status,
     category: "AUTRE",

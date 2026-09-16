@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { generateUniqueSlug } from "@/lib/utils";
+import { generateSlug, generateUniqueSlug } from "@/lib/utils";
 import type {
   AffairCategory,
   AffairStatus,
@@ -32,7 +32,7 @@ export interface DraftAffairSource {
 export interface CreateDraftAffairInput {
   politicianId: string;
   title: string;
-  /** Base slug; uniqueness is resolved here. */
+  /** Base slug; slugification and uniqueness are both resolved here. */
   baseSlug: string;
   description: string;
   status: AffairStatus;
@@ -69,8 +69,13 @@ export interface CreateDraftAffairInput {
 export async function createDraftAffairFromDiscovery(
   input: CreateDraftAffairInput
 ): Promise<{ id: string; slug: string }> {
+  // generateUniqueSlug only resolves collisions and documents its base as
+  // "already slugified". Slugifying here rather than trusting each importer:
+  // the discovery pass passed a raw "Nom-Titre avec espaces" and shipped five
+  // drafts whose slug carried spaces, capitals and accents. The call is a no-op
+  // on a base that is already clean.
   const slug = await generateUniqueSlug(
-    input.baseSlug,
+    generateSlug(input.baseSlug),
     (candidate) => db.affair.findUnique({ where: { slug: candidate } }).then(Boolean),
     SLUG_MAX_LENGTH
   );

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   cn,
   generateSlug,
+  generateAffairSlug,
   generateDateSlug,
   formatDate,
   formatCurrency,
@@ -156,5 +157,34 @@ describe("formatCurrency", () => {
     const result = formatCurrency(0);
     expect(result).toContain("0");
     expect(result).toContain("€");
+  });
+});
+
+describe("generateAffairSlug", () => {
+  it("prefixes the politician slug when the title does not carry the name", () => {
+    expect(
+      generateAffairSlug("serge-letchimy", "Concussion dans les conditions de sa réintégration")
+    ).toBe("serge-letchimy-concussion-dans-les-conditions-de-sa-reintegration");
+  });
+
+  // The discovery pipeline writes titles of the form "Condamnation de X pour Y",
+  // so prefixing the politician slug repeated the name inside the URL.
+  it("does not repeat the name when the title already carries it", () => {
+    expect(
+      generateAffairSlug(
+        "gerard-spinelli",
+        "Condamnation de Gérard Spinelli pour détournement de fonds publics"
+      )
+    ).toBe("condamnation-de-gerard-spinelli-pour-detournement-de-fonds-publics");
+  });
+
+  it("strips accents, punctuation and casing", () => {
+    expect(generateAffairSlug("jean-dupont", "Affaire des « emplois fictifs »")).toBe(
+      "jean-dupont-emplois-fictifs"
+    );
+  });
+
+  it("is stable when the politician slug is empty", () => {
+    expect(generateAffairSlug("", "Emplois fictifs")).toBe("emplois-fictifs");
   });
 });

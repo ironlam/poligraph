@@ -37,10 +37,16 @@ export function cleanAffairTitle(title: string): string {
 /**
  * Generate an affair slug with politician name prefix.
  * Example: "eric-zemmour-propos-trafiquants-crack-senegalais"
+ *
+ * The prefix is dropped when the title already carries the name. Titles written
+ * as "Condamnation de X pour Y" are common (the web discovery pass produces
+ * nothing else), and prefixing them yielded
+ * "gerard-spinelli-condamnation-de-gerard-spinelli-pour-...".
  */
 export function generateAffairSlug(politicianSlug: string, title: string): string {
-  const cleanTitle = cleanAffairTitle(title);
-  return generateSlug(`${politicianSlug} ${cleanTitle}`);
+  const titleSlug = generateSlug(cleanAffairTitle(title));
+  if (politicianSlug && titleSlug.includes(politicianSlug)) return titleSlug;
+  return generateSlug(`${politicianSlug} ${titleSlug}`);
 }
 
 /**
