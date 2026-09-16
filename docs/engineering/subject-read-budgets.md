@@ -68,7 +68,8 @@ variables : le budget ne promet pas de borner le nombre de sources ou de
 qualifications attachées au contenu effectivement affiché.
 
 Durées indicatives de la première passe, fixture 4 × 60 : thème 49,4 ms avant,
-34,1 ms après ; comparateur 42,3 ms avant, 12,3 ms après. Mesures locales uniques,
+34,1 ms après ; comparateur 42,3 ms avant, 12,3 ms après. Ces durées comprennent
+le coût de l'observateur de test, notamment sa sérialisation JSON. Mesures locales uniques,
 sensibles aux caches PostgreSQL, au démarrage et à la charge de la machine :
 aucun seuil temporel CI et aucune promesse de latence en production.
 

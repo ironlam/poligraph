@@ -21,6 +21,7 @@ et `scripts/`, puis vérification des imports et des appels :
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------- | ---------- |
 | `measures.integration.test.ts`                               | Parité de visibilité et retraits                                                | Test PostgreSQL jetable | Aucun      |
 | `presidential-measure-loads.performance.integration.test.ts` | Référence complète de #881, comparaison aux agrégations et oracle de télémétrie | Test PostgreSQL jetable | Aucun      |
+| `subject-reads.performance.integration.test.ts`              | Oracle du DTO public pour la projection réduite du thème                        | Test PostgreSQL jetable | Aucun      |
 | `hub.ts`                                                     | Référence dans un commentaire explicatif                                        | Aucun appel             | Sans objet |
 | `public-page-performance-guards.test.ts`                     | Interdit la réintroduction de cet appel dans le champ des candidatures          | Analyse statique        | Sans objet |
 
