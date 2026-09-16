@@ -4,13 +4,52 @@ const mocks = vi.hoisted(() => ({
   getCandidates: vi.fn(),
   getSubject: vi.fn(),
   getThemes: vi.fn(),
+  getPage: vi.fn(),
+  cacheTag: vi.fn(),
 }));
 
-vi.mock("../presidential-candidates-public", () => ({
-  getPublicPresidentialCandidates: mocks.getCandidates,
+vi.mock("@/lib/db", () => ({
+  db: { election: { findUnique: vi.fn().mockResolvedValue({ id: "election" }) } },
 }));
-vi.mock("../subject-page", () => ({ getSubjectPageData: mocks.getSubject }));
-vi.mock("../themes-index", () => ({ getThemesIndex: mocks.getThemes }));
+vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: mocks.cacheTag }));
+vi.mock("../presidential-candidates-public", () => ({
+  getPublicPresidentialCandidates: async () => {
+    const subject = await mocks.getSubject();
+    return (
+      subject?.candidates.map((entry: { candidate: unknown }) => entry.candidate) ??
+      mocks.getCandidates()
+    );
+  },
+}));
+vi.mock("../themes-index", () => ({
+  getThemesIndex: mocks.getThemes,
+  loadThemesIndex: async () => {
+    const subject = await mocks.getSubject();
+    return {
+      themes: [
+        {
+          theme: "SANTE",
+          slug: "sante",
+          label: "Santé",
+          publishable: subject.publishable,
+          lastReviewedAt: subject.lastReviewedAt,
+        },
+      ],
+    };
+  },
+}));
+vi.mock("../measures", () => ({
+  getPublicComparisonMeasureCounts: async () => {
+    const subject = await mocks.getSubject();
+    return new Map(
+      subject.candidates.map((entry: { candidate: { id: string }; measures: unknown[] }) => [
+        entry.candidate.id,
+        entry.measures.length,
+      ])
+    );
+  },
+  getPublicComparisonMeasurePage: mocks.getPage,
+}));
 
 const alice = {
   id: "c1",
@@ -30,6 +69,16 @@ const bruno = {
 describe("getPresidentialComparison", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getSubject.mockResolvedValue(undefined);
+    mocks.getPage.mockImplementation(async ({ candidacyId, skip, take }) => {
+      const subject = await mocks.getSubject();
+      const entry = subject.candidates.find(
+        (entry: { candidate: { id: string } }) => entry.candidate.id === candidacyId
+      );
+      return entry.measures
+        .slice(skip, skip + take)
+        .map((entry: { measure: unknown }) => entry.measure);
+    });
     mocks.getCandidates.mockResolvedValue([alice, bruno]);
     mocks.getThemes.mockResolvedValue({
       themes: [
@@ -165,6 +214,37 @@ describe("getPresidentialComparison", () => {
       "mesure-11",
       "mesure-12",
     ]);
+    expect(mocks.getPage).toHaveBeenCalledExactlyOnceWith({
+      electionId: "election",
+      candidacyId: "c1",
+      theme: "SANTE",
+      skip: 6,
+      take: 6,
+    });
+    for (const call of mocks.cacheTag.mock.calls) {
+      expect(call).toEqual(["election-measures:election", "election-candidacies:election"]);
+    }
+    for (const requestedPage of [0, -1, NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const normalized = await getPresidentialComparison({
+        electionSlug: "presidentielle-2027",
+        candidateSlugs: ["alice-martin"],
+        themeSlug: "sante",
+        candidatePages: { "alice-martin": requestedPage },
+      });
+      expect(normalized?.selectedCandidates[0]?.page).toBe(1);
+    }
+    const last = await getPresidentialComparison({
+      electionSlug: "presidentielle-2027",
+      candidateSlugs: ["alice-martin"],
+      themeSlug: "sante",
+      candidatePages: { "alice-martin": 999 },
+    });
+    expect(last?.selectedCandidates[0]).toMatchObject({
+      page: 3,
+      totalMeasures: 13,
+      totalPages: 3,
+    });
+    expect(last?.selectedCandidates[0]?.measures.map((m) => m.slug)).toEqual(["mesure-13"]);
   });
 
   it("ne compare pas un thème qui ne franchit pas le seuil de publication", async () => {

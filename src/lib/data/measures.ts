@@ -51,7 +51,31 @@ const PUBLIC_MEASURE_INCLUDE = {
   },
 } satisfies Prisma.MeasureInclude;
 
-type MeasureRow = Prisma.MeasureGetPayload<{ include: typeof PUBLIC_MEASURE_INCLUDE }>;
+// The subject renders the full public DTO, but never extraction/review evidence or internal state.
+const PUBLIC_SUBJECT_MEASURE_SELECT = {
+  id: true,
+  slug: true,
+  theme: true,
+  attribution: true,
+  politicianId: true,
+  candidacyId: true,
+  programEditionId: true,
+  withdrawnAt: true,
+  withdrawnSourceUrl: true,
+  withdrawnSourceLabel: true,
+  publishedRevision: {
+    select: {
+      id: true,
+      text: true,
+      details: true,
+      reviewedAt: true,
+      precision: true,
+      ...PUBLIC_MEASURE_INCLUDE.publishedRevision.include,
+    },
+  },
+} satisfies Prisma.MeasureSelect;
+
+type MeasureRow = Prisma.MeasureGetPayload<{ select: typeof PUBLIC_SUBJECT_MEASURE_SELECT }>;
 type PublishedRevision = NonNullable<MeasureRow["publishedRevision"]>;
 
 /**
@@ -438,10 +462,96 @@ export async function getPublicMeasuresByTheme(
 ): Promise<PublicMeasure[]> {
   const rows = await db.measure.findMany({
     where: { electionId, theme, ...PUBLIC_MEASURE_WHERE, ...withdrawalFilter(options) },
-    include: PUBLIC_MEASURE_INCLUDE,
-    orderBy: { createdAt: "asc" },
+    select: PUBLIC_SUBJECT_MEASURE_SELECT,
+    // createdAt defines the editorial order; id only stabilizes simultaneous imports for pagination.
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
   return rows.map(toPublicMeasure).filter((m): m is PublicMeasure => m !== null);
+}
+
+/** Counts include withdrawals, matching the subject columns and the comparison history. */
+export async function getPublicComparisonMeasureCounts(electionId: string, theme: ThemeCategory) {
+  const rows = await db.measure.groupBy({
+    by: ["candidacyId"],
+    where: {
+      electionId,
+      theme,
+      ...PUBLIC_MEASURE_WHERE,
+      candidacy: { is: { electionId, ...PUBLIC_CANDIDACY_WHERE } },
+    },
+    _count: { _all: true },
+  });
+  return new Map(rows.map((row) => [row.candidacyId!, row._count._all]));
+}
+
+/** Only the visible comparison page crosses the driver, with the same public authority. */
+export async function getPublicComparisonMeasurePage({
+  electionId,
+  candidacyId,
+  theme,
+  skip,
+  take,
+}: {
+  electionId: string;
+  candidacyId: string;
+  theme: ThemeCategory;
+  skip: number;
+  take: number;
+}) {
+  const rows = await db.measure.findMany({
+    where: {
+      electionId,
+      candidacyId,
+      theme,
+      ...PUBLIC_MEASURE_WHERE,
+      candidacy: { is: { electionId, ...PUBLIC_CANDIDACY_WHERE } },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    skip,
+    take,
+    select: {
+      id: true,
+      slug: true,
+      withdrawnAt: true,
+      withdrawnSourceUrl: true,
+      withdrawnSourceLabel: true,
+      publishedRevision: {
+        select: {
+          text: true,
+          precision: true,
+          sources: { select: { url: true, tier: true }, orderBy: { publishedAt: "asc" } },
+          qualifications: PUBLIC_MEASURE_INCLUDE.publishedRevision.include.qualifications,
+          subtopics: {
+            where: { status: "APPROVED", subtopic: { active: true } },
+            select: { subtopic: { select: { slug: true, label: true } } },
+            orderBy: { subtopic: { sortOrder: "asc" } },
+          },
+        },
+      },
+    },
+  });
+  return rows.flatMap((row) =>
+    row.publishedRevision
+      ? [
+          {
+            id: row.id,
+            slug: row.slug,
+            text: row.publishedRevision.text,
+            sources: row.publishedRevision.sources,
+            precision: row.publishedRevision.precision,
+            qualifications: row.publishedRevision.qualifications,
+            subtopics: row.publishedRevision.subtopics.map(({ subtopic }) => subtopic),
+            withdrawal: row.withdrawnAt
+              ? {
+                  withdrawnAt: row.withdrawnAt,
+                  sourceUrl: row.withdrawnSourceUrl,
+                  sourceLabel: row.withdrawnSourceLabel,
+                }
+              : null,
+          },
+        ]
+      : []
+  );
 }
 
 /**

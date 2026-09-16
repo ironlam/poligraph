@@ -7,6 +7,8 @@ export const READ_OPERATIONS = [
   "presidential.field.load",
   "presidential.themes.load",
   "presidential.subject.load",
+  "presidential.comparison.context.load",
+  "presidential.comparison.page.load",
   "presidential.priorities.load",
   "presidential.reader-guides.load",
   "elections.details.load",
