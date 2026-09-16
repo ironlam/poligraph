@@ -7,6 +7,11 @@ Cette PR ajoute une observation ciblée. Elle ne change ni les requêtes métier
 ni les règles de publication, ni les caches et leurs invalidations.
 Elle ne configure aucun service externe et reste désactivée par défaut.
 
+L'optimisation ultérieure des sujets et du comparateur est décrite dans
+[subject-read-budgets.md](subject-read-budgets.md). Elle ajoute deux opérations
+au registre et modifie le périmètre de `presidential.subject.load` : consulter
+les règles de comparaison entre releases de ce document avant d'agréger.
+
 ### Consommateurs de la lecture complète
 
 Recherche de toutes les références à `getPublicMeasuresByElection` dans `src/`
@@ -33,19 +38,21 @@ Ces lectures restent attribuables par les loaders qui les exécutent.
 Le registre fermé est `src/lib/telemetry/read-operations.ts`.
 Les arguments métier ne deviennent jamais des noms ou dimensions d'événement.
 
-| Opération                         | Fonction / finalité                                              | Frontière et contexte                                                    |
-| --------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `measures.election.full`          | `getPublicMeasuresByElection`, toutes les mesures avec relations | Non cachée ; tests aujourd'hui, contexte inconnu sans appelant explicite |
-| `presidential.hub.load`           | `loadHubMeasureContext`, agrégations du hub                      | Dans `getHubMeasureContextCached`, `use cache`, profil `synced`          |
-| `presidential.field.load`         | `getHubCandidacyField`, champ sourcé des candidatures            | Pas de cache propre ; appelé depuis le hub et les priorités              |
-| `presidential.themes.load`        | `loadThemesIndex`, compteurs par thème et sous-thème             | Cache de l'index ; appels directs depuis hub, priorités et sujet         |
-| `presidential.subject.load`       | `loadSubjectPageData`, comparaison d'un thème                    | Derrière le cache du sujet                                               |
-| `presidential.priorities.load`    | `loadPrioritesData`, distribution des mesures                    | Derrière le cache des priorités                                          |
-| `presidential.reader-guides.load` | `loadPresidentialReaderGuideSummaries`, résumés du hub           | Appel direct depuis le chargement du hub, sous son cache                 |
-| `elections.details.load`          | `getPublicElectionDetails`, page bornée de candidatures          | Pas de cache de données ; appelé par le handler                          |
-| `elections.details.http`          | Corps du handler GET `/api/elections/[slug]`                     | Exécution web ; CDN `s-maxage=300`, `stale-while-revalidate=120`         |
-| `presidential.snapshots.sync`     | Phase de lecture de `computePresidentialSnapshots`               | Script ; `scheduled` si `GITHUB_EVENT_NAME=schedule`                     |
-| `presidential.probity.load`       | `computeProbityCandidateCountLive`                               | Calcul du compteur pour le snapshot ou repli public si snapshot absent   |
+| Opération                              | Fonction / finalité                                              | Frontière et contexte                                                               |
+| -------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `measures.election.full`               | `getPublicMeasuresByElection`, toutes les mesures avec relations | Non cachée ; tests aujourd'hui, contexte inconnu sans appelant explicite            |
+| `presidential.hub.load`                | `loadHubMeasureContext`, agrégations du hub                      | Dans `getHubMeasureContextCached`, `use cache`, profil `synced`                     |
+| `presidential.field.load`              | `getHubCandidacyField`, champ sourcé des candidatures            | Pas de cache propre ; appelé depuis le hub et les priorités                         |
+| `presidential.themes.load`             | `loadThemesIndex`, compteurs par thème et sous-thème             | Cache de l'index ; appels directs depuis hub, priorités et sujet                    |
+| `presidential.subject.load`            | `loadSubjectPageData`, page complète d'un thème                  | Derrière le cache du sujet                                                          |
+| `presidential.comparison.context.load` | Candidatures, totaux et index du comparateur filtré              | Cache par élection et thème, profil `synced`                                        |
+| `presidential.comparison.page.load`    | Six mesures au plus pour une candidature sélectionnée            | Cache par élection, candidature publique, thème et page normalisée, profil `synced` |
+| `presidential.priorities.load`         | `loadPrioritesData`, distribution des mesures                    | Derrière le cache des priorités                                                     |
+| `presidential.reader-guides.load`      | `loadPresidentialReaderGuideSummaries`, résumés du hub           | Appel direct depuis le chargement du hub, sous son cache                            |
+| `elections.details.load`               | `getPublicElectionDetails`, page bornée de candidatures          | Pas de cache de données ; appelé par le handler                                     |
+| `elections.details.http`               | Corps du handler GET `/api/elections/[slug]`                     | Exécution web ; CDN `s-maxage=300`, `stale-while-revalidate=120`                    |
+| `presidential.snapshots.sync`          | Phase de lecture de `computePresidentialSnapshots`               | Script ; `scheduled` si `GITHUB_EVENT_NAME=schedule`                                |
+| `presidential.probity.load`            | `computeProbityCandidateCountLive`                               | Calcul du compteur pour le snapshot ou repli public si snapshot absent              |
 
 `presidential.snapshots.sync` couvre uniquement le calcul du compteur. L'upsert
 du snapshot s'exécute après la fermeture de cette observation : ses appels et
