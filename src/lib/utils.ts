@@ -44,7 +44,7 @@ export function cleanAffairTitle(title: string): string {
  * "gerard-spinelli-condamnation-de-gerard-spinelli-pour-...".
  *
  * The prefix is kept for a homonym, even though the name is then written twice.
- * 728 politicians carry a disambiguation suffix ("alain-garnier-3") that no
+ * A disambiguated politician slug carries a suffix ("alain-garnier-3") that no
  * title ever spells out, and it is the only thing telling two people apart. A
  * judicial URL travels away from the page that carries it, so attributing it to
  * the right person outranks removing a repetition. Appending the suffix at the
@@ -53,9 +53,10 @@ export function cleanAffairTitle(title: string): string {
  *
  * `canonicalName` is the person's name, NOT the URL slug, so that "the slug adds
  * nothing beyond the name" is tested directly rather than through the proxy
- * "the title contains the slug". Today the two agree on every row, since a slug
- * is the name plus an optional numeric suffix; the proxy holds by data accident,
- * not by construction.
+ * "the title contains the slug". The two agree as long as a slug is the name
+ * plus an optional numeric suffix, which is a property of the current slug
+ * generation, not of the schema: an alias, a manual rename or another
+ * disambiguation strategy would break the proxy and not the rule.
  */
 export function generateAffairSlug(
   politicianSlug: string,
