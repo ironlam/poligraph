@@ -29,6 +29,7 @@ export const NATIONAL_MANDATES: MandateType[] = [
 
 export interface SearchTarget {
   id: string;
+  slug: string;
   firstName: string;
   lastName: string;
   fullName: string;
@@ -59,6 +60,7 @@ export async function selectSearchTargets(
   const rows = await db.$queryRaw<
     {
       id: string;
+      slug: string;
       firstName: string;
       lastName: string;
       fullName: string;
@@ -67,7 +69,7 @@ export async function selectSearchTargets(
     }[]
   >`
     SELECT * FROM (
-    SELECT p.id, p."firstName", p."lastName", p."fullName",
+    SELECT p.id, p.slug, p."firstName", p."lastName", p."fullName",
       CASE
         WHEN EXISTS (
           SELECT 1 FROM "Mandate" m

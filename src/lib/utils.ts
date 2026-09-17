@@ -37,10 +37,37 @@ export function cleanAffairTitle(title: string): string {
 /**
  * Generate an affair slug with politician name prefix.
  * Example: "eric-zemmour-propos-trafiquants-crack-senegalais"
+ *
+ * The prefix is dropped when the title already carries the name. Titles written
+ * as "Condamnation de X pour Y" are common (the web discovery pass produces
+ * nothing else), and prefixing them yielded
+ * "gerard-spinelli-condamnation-de-gerard-spinelli-pour-...".
+ *
+ * The prefix is kept for a homonym, even though the name is then written twice.
+ * A disambiguated politician slug carries a suffix ("alain-garnier-3") that no
+ * title ever spells out, and it is the only thing telling two people apart. A
+ * judicial URL travels away from the page that carries it, so attributing it to
+ * the right person outranks removing a repetition. Appending the suffix at the
+ * end instead ("...-3") would be worse: nothing would distinguish it from the
+ * collision counter generateUniqueSlug adds.
+ *
+ * `canonicalName` is the person's name, NOT the URL slug, so that "the slug adds
+ * nothing beyond the name" is tested directly rather than through the proxy
+ * "the title contains the slug". The two agree as long as a slug is the name
+ * plus an optional numeric suffix, which is a property of the current slug
+ * generation, not of the schema: an alias, a manual rename or another
+ * disambiguation strategy would break the proxy and not the rule.
  */
-export function generateAffairSlug(politicianSlug: string, title: string): string {
-  const cleanTitle = cleanAffairTitle(title);
-  return generateSlug(`${politicianSlug} ${cleanTitle}`);
+export function generateAffairSlug(
+  politicianSlug: string,
+  title: string,
+  canonicalName: string = politicianSlug
+): string {
+  const titleSlug = generateSlug(cleanAffairTitle(title));
+  const nameSlug = generateSlug(canonicalName);
+  // Drop the prefix only when it is the bare name and the title already says it.
+  if (nameSlug && politicianSlug === nameSlug && titleSlug.includes(nameSlug)) return titleSlug;
+  return generateSlug(`${politicianSlug} ${titleSlug}`);
 }
 
 /**
@@ -163,19 +190,24 @@ export async function generateUniqueSlug(
   exists: (slug: string) => Promise<boolean>,
   maxLength: number = 80
 ): Promise<string> {
-  let slug = baseSlug;
+  // maxLength used to apply only once a collision had been found, so a free
+  // base of any length was returned whole and the limit held or not depending
+  // on whether someone else had taken the slug first.
+  const base = baseSlug.slice(0, maxLength).replace(/-$/, "");
+
+  let slug = base;
   if (!(await exists(slug))) return slug;
 
   let counter = 2;
   while (counter <= 100) {
     const suffix = `-${counter}`;
-    const truncatedBase = baseSlug.slice(0, maxLength - suffix.length).replace(/-$/, "");
+    const truncatedBase = base.slice(0, maxLength - suffix.length).replace(/-$/, "");
     slug = `${truncatedBase}${suffix}`;
     if (!(await exists(slug))) return slug;
     counter++;
   }
 
-  return `${baseSlug.slice(0, 60)}-${Date.now()}`;
+  return `${base.slice(0, 60)}-${Date.now()}`;
 }
 
 export function generateDateSlug(

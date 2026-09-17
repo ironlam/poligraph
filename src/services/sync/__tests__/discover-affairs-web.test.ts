@@ -58,9 +58,14 @@ vi.mock("@/services/affairs/matching", async (importOriginal) => ({
 vi.mock("@/config/rate-limits", () => ({ BRAVE_SEARCH_RATE_LIMIT_MS: 0 }));
 
 import { discoverAffairsWeb } from "../discover-affairs-web";
+import type { SearchTarget } from "@/lib/affair-discovery/search-priority";
 
-const target = {
+// Typée : les cibles arrivent par un mock, donc sans ce type une colonne
+// ajoutée à SearchTarget passerait en `undefined` jusque dans le slug sans
+// qu'aucun test ni le typecheck ne le voient.
+const target: SearchTarget = {
   id: "p1",
+  slug: "joseph-afribo",
   firstName: "Joseph",
   lastName: "Afribo",
   fullName: "Joseph Afribo",
@@ -172,6 +177,48 @@ describe("discoverAffairsWeb", () => {
     // donc aucune édition future de ce fichier ne peut publier par accident.
     expect(data.politicianId).toBe("p1");
     expect(data.sources[0].url).toBe("https://www.lemonde.fr/a");
+    // Le titre porte déjà le nom, donc pas de préfixe : c'est le défaut que
+    // cette passe produisait ("Afribo-Mise en examen de Joseph Afribo").
+    expect(data.baseSlug).toBe("mise-en-examen-de-joseph-afribo");
+  });
+
+  it("préfixe le slug du politicien quand le titre ne porte pas son nom", async () => {
+    h.searchBrave.mockResolvedValue([hit]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour détournement",
+      confidence: 85,
+      reasoning: "mis en examen",
+      suggested_title: "Détournement de fonds publics à Rethel",
+    });
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    const data = h.createDraft.mock.calls[0]![0];
+    expect(data.baseSlug).toBe("joseph-afribo-detournement-de-fonds-publics-a-rethel");
+  });
+
+  // Les homonymes se concentrent chez les maires de petites communes, soit la
+  // cible de cette passe. Le suffixe est la seule chose qui distingue deux
+  // personnes : une URL d'affaire judiciaire circule hors de sa page, donc
+  // l'attribution prime sur la répétition du nom.
+  it("conserve le préfixe désambiguïsé d'un homonyme", async () => {
+    h.selectSearchTargets.mockResolvedValue([{ ...target, slug: "joseph-afribo-3" }]);
+    h.searchBrave.mockResolvedValue([hit]);
+    h.extractToolUse.mockReturnValue({
+      is_subject: true,
+      judicial_status: "MISE_EN_EXAMEN",
+      status_evidence: "mis en examen pour détournement",
+      confidence: 85,
+      reasoning: "mis en examen",
+      suggested_title: "Mise en examen de Joseph Afribo",
+    });
+
+    await discoverAffairsWeb({ limit: 1 });
+
+    const data = h.createDraft.mock.calls[0]![0];
+    expect(data.baseSlug).toBe("joseph-afribo-3-mise-en-examen-de-joseph-afribo");
   });
 
   it("ne devine pas la catégorie ni le degré d'implication", async () => {
