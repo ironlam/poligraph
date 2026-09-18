@@ -131,6 +131,7 @@
     "test:visual:grep": "playwright test --grep",
     "visual": "tsx scripts/visual-test-runner.ts",
     "audit:affairs": "tsx scripts/audit-affairs.ts",
+    "audit:government-support": "tsx scripts/audit-government-support.ts",
     "audit:source-urls": "tsx scripts/audit-source-urls.ts",
     "audit:senateurs-series": "tsx scripts/audit-senateurs-series.ts",
     "audit:senate-participation": "tsx scripts/audit-senate-participation.ts",
