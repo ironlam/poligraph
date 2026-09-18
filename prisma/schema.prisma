@@ -1003,11 +1003,19 @@ model Scrutin {
   // Incremental sync: hash of vote data to detect changes
   votesHash String?
 
+  // Official AN voting procedure and independent historical group snapshot (#564).
+  codeTypeVote            String?
+  libelleTypeVote         String?
+  officialGroupsHash      String?
+  officialGroupsFetchedAt DateTime?
+  officialGroupsIssues    Json?
+
   // Relations
   votes                 Vote[]
   individualVotesImport ScrutinVoteImport?
+  officialGroupCounts   ScrutinOfficialGroupCount[]
   dossierLegislatifId   String?
-  dossierLegislatif     LegislativeDossier? @relation(fields: [dossierLegislatifId], references: [id])
+  dossierLegislatif     LegislativeDossier?         @relation(fields: [dossierLegislatifId], references: [id])
 
   // Parlement-riche reverse relations
   importance        ScrutinImportance?
@@ -1031,6 +1039,29 @@ model Scrutin {
   @@index([type, votingDate])
   @@index([result, votingDate]) // result filter + default date sort
   @@index([dossierLegislatifId])
+}
+
+/// Official source counts, not reconstructed from current parliamentary mandates.
+/// organeRef remains the historical AN identity even when no local group is mapped.
+model ScrutinOfficialGroupCount {
+  id                     String   @id @default(cuid())
+  scrutinId              String
+  scrutin                Scrutin  @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
+  organeRef              String
+  memberCount            Int?
+  forCount               Int?
+  againstCount           Int?
+  abstainCount           Int?
+  nonVoterCount          Int?
+  voluntaryNonVoterCount Int?
+  majorityPosition       String? // Source label only, not the future dominant-position rule.
+  issues                 Json     @default("[]")
+  sourceHash             String
+  sourceUrl              String
+  fetchedAt              DateTime
+
+  @@unique([scrutinId, organeRef])
+  @@index([organeRef])
 }
 
 model Vote {
@@ -1258,6 +1289,12 @@ enum PromiseExtractionStatus {
 // LEGISLATIVE DOSSIERS (Assemblée Nationale)
 // ============================================
 
+enum DossierOrigin {
+  GOUVERNEMENTALE
+  PARLEMENTAIRE
+  INDETERMINEE
+}
+
 model LegislativeDossier {
   id         String         @id @default(cuid())
   externalId String         @unique // DLR5L17N12345
@@ -1285,6 +1322,14 @@ model LegislativeDossier {
   exposeCheckedAt    DateTime? // last legislation-content sync attempt (success or not), for rotation
   documentExternalId String? // ex: PRJLANR5L17B1906
   timeline           Json? // Structured legislative acts (DossierTimelineEntry[])
+
+  origin            DossierOrigin @default(INDETERMINEE)
+  originDocumentRef String?
+  originReason      String?
+  originEvidence    Json?
+  originSourceHash  String?
+  originSourceUrl   String?
+  originFetchedAt   DateTime?
 
   amendments Amendment[]
   scrutins   Scrutin[]
