@@ -19,9 +19,11 @@ import { DataSource, DossierStatus, Prisma } from "../src/generated/prisma";
 import type { DossierTimelineEntry } from "../src/types/legislation";
 import * as fs from "fs";
 import * as path from "path";
+import { createHash } from "node:crypto";
 import { mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
 import { execSync } from "child_process";
 import { downloadFileWithRetry } from "../src/lib/download-file";
+import { classifyDossierOrigin } from "../src/lib/legislation/origine";
 
 // Configuration
 const DEFAULT_LEGISLATURE = 17;
@@ -137,7 +139,9 @@ function findAllCodes(actes: ANActe | ANActe[] | undefined | null): string[] {
 }
 
 /**
- * Recursively find the first texteAssocie reference in a dossier's actes
+ * Recursively find the first texteAssocie reference in a dossier's acts.
+ * Kept separate from origin provenance because legislation-content depends
+ * on the historical behavior of this field.
  */
 function findFirstDocumentRef(actes: ANActe | ANActe[] | undefined | null): string | null {
   if (!actes) return null;
@@ -417,17 +421,26 @@ async function syncLegislation(
   legislature: number = DEFAULT_LEGISLATURE,
   options: {
     dryRun?: boolean;
+    originOnly?: boolean;
     limit?: number;
     activeOnly?: boolean;
     todayOnly?: boolean;
     sinceDays?: number;
   } = {}
 ) {
-  const { dryRun = false, limit, activeOnly = false, todayOnly = false, sinceDays } = options;
+  const {
+    dryRun = false,
+    originOnly = false,
+    limit,
+    activeOnly = false,
+    todayOnly = false,
+    sinceDays,
+  } = options;
   const stats = {
     dossiersProcessed: 0,
     dossiersCreated: 0,
     dossiersUpdated: 0,
+    dossiersWouldUpdate: 0,
     dossiersSkipped: 0,
     dossiersActive: 0,
     byStatus: {
@@ -463,6 +476,7 @@ async function syncLegislation(
 
     let t = Date.now();
     await downloadFileWithRetry(zipUrl, zipPath);
+    const originFetchedAt = new Date();
     timings.download = Date.now() - t;
     console.log(`\n✓ Downloaded ZIP file (${timings.download}ms)`);
 
@@ -484,7 +498,9 @@ async function syncLegislation(
     totalJsonFiles = jsonFiles.length;
 
     // Filter by legislature if needed (some ZIPs contain multiple legislatures)
-    jsonFiles = jsonFiles.filter((f) => f.includes(`L${legislature}`));
+    if (!originOnly) {
+      jsonFiles = jsonFiles.filter((f) => f.includes(`L${legislature}`));
+    }
     legFilteredFiles = jsonFiles.length;
 
     if (limit) {
@@ -534,12 +550,15 @@ async function syncLegislation(
 
         const externalId = dp.uid;
         const title = dp.titreDossier?.titre || "Sans titre";
+        const origin = classifyDossierOrigin(dp);
+        const sourceHash = createHash("sha256").update(content).digest("hex");
         const shortTitle = generateShortTitle(title);
         const number = extractNumber(data);
         const procedure = dp.procedureParlementaire?.libelle || "";
         const category = getCategory(procedure);
 
-        // Find document reference for expose des motifs
+        // Preserve the legacy expose source independently of origin
+        // provenance. legislation-content still relies on this field.
         const documentExternalId = findFirstDocumentRef(dp.actesLegislatifs?.acteLegislatif);
 
         // Find all codes to determine status
@@ -554,7 +573,7 @@ async function syncLegislation(
           "EN_COURS",
           "CONSEIL_CONSTITUTIONNEL",
         ];
-        if (activeOnly && !activeStatuses.includes(status)) {
+        if (!originOnly && activeOnly && !activeStatuses.includes(status)) {
           stats.dossiersSkipped++;
           continue;
         }
@@ -567,7 +586,7 @@ async function syncLegislation(
         // Incremental window: skip dossiers whose most recent act date is older
         // than `sinceDays` days. Cheap, robust way to keep the daily run short
         // (only re-touch dossiers that actually moved recently).
-        if (sinceDays !== undefined && allDates.length > 0) {
+        if (!originOnly && sinceDays !== undefined && allDates.length > 0) {
           const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
           if (allDates[allDates.length - 1]!.getTime() < cutoff) {
             stats.dossiersSkipped++;
@@ -575,7 +594,7 @@ async function syncLegislation(
           }
         }
         // Filter by today: only process dossiers whose most recent date is today
-        if (todayOnly && allDates.length > 0) {
+        if (!originOnly && todayOnly && allDates.length > 0) {
           const today = new Date().toISOString().split("T")[0];
           const mostRecent = allDates[allDates.length - 1]!.toISOString().split("T")[0];
           if (mostRecent !== today) {
@@ -607,6 +626,44 @@ async function syncLegislation(
           stats.byCategory[category] = (stats.byCategory[category] || 0) + 1;
         }
 
+        if (originOnly) {
+          const existing = await db.legislativeDossier.findUnique({
+            where: { externalId },
+            select: { id: true },
+          });
+          if (!existing) {
+            stats.dossiersSkipped++;
+            continue;
+          }
+
+          const originEvidence =
+            origin.originEvidence || origin.candidateDocumentRefs.length > 0
+              ? ({
+                  initialDeposit: origin.originEvidence,
+                  candidateDocumentRefs: origin.candidateDocumentRefs,
+                } as Prisma.InputJsonValue)
+              : Prisma.DbNull;
+          if (dryRun) {
+            stats.dossiersWouldUpdate++;
+          } else {
+            await db.legislativeDossier.update({
+              where: { id: existing.id },
+              data: {
+                origin: origin.origin,
+                originDocumentRef: origin.originDocumentRef,
+                originReason: origin.originReason,
+                originEvidence,
+                originSourceHash: sourceHash,
+                originSourceUrl: zipUrl,
+                originFetchedAt,
+              },
+            });
+            stats.dossiersUpdated++;
+          }
+          stats.dossiersProcessed++;
+          continue;
+        }
+
         if (!dryRun) {
           // Upsert dossier
           const existing = await db.legislativeDossier.findUnique({
@@ -627,6 +684,19 @@ async function syncLegislation(
             documentExternalId,
             timeline:
               timeline.length > 0 ? (timeline as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+            origin: origin.origin,
+            originDocumentRef: origin.originDocumentRef,
+            originReason: origin.originReason,
+            originEvidence:
+              origin.originEvidence || origin.candidateDocumentRefs.length > 0
+                ? ({
+                    initialDeposit: origin.originEvidence,
+                    candidateDocumentRefs: origin.candidateDocumentRefs,
+                  } as Prisma.InputJsonValue)
+                : Prisma.DbNull,
+            originSourceHash: sourceHash,
+            originSourceUrl: zipUrl,
+            originFetchedAt,
           };
 
           let dossierId: string;
@@ -688,6 +758,7 @@ async function syncLegislation(
     `[legislation] counts: totalJson=${totalJsonFiles} legFiltered=${legFilteredFiles} ` +
       `active=${stats.dossiersActive} processed=${stats.dossiersProcessed} ` +
       `created=${stats.dossiersCreated} updated=${stats.dossiersUpdated} ` +
+      `wouldUpdate=${stats.dossiersWouldUpdate} ` +
       `skipped=${stats.dossiersSkipped} errors=${stats.errors.length}`
   );
 
@@ -708,6 +779,12 @@ const handler: SyncHandler = {
       name: "--active",
       type: "boolean",
       description: "Only sync active dossiers (excludes ADOPTE/REJETE/RETIRE/CADUQUE)",
+    },
+    {
+      name: "--origin-only",
+      type: "boolean",
+      description:
+        "Backfill origin fields on existing dossiers only, including historical dossiers in the archive",
     },
     {
       name: "--today",
@@ -788,6 +865,7 @@ Features:
   async sync(options): Promise<SyncResult> {
     const {
       dryRun = false,
+      originOnly = false,
       limit,
       leg,
       active = false,
@@ -795,6 +873,7 @@ Features:
       sinceDays,
     } = options as {
       dryRun?: boolean;
+      originOnly?: boolean;
       limit?: number;
       leg?: string;
       active?: boolean;
@@ -816,9 +895,12 @@ Features:
     if (active) console.log("Filter: Active dossiers only");
     if (today) console.log("Filter: Dossiers modified today only");
     if (sinceDays !== undefined) console.log(`Filter: Dossiers modified within ${sinceDays} days`);
+    if (originOnly) console.log("Mode: Origin fields only, existing dossiers only");
+    if (dryRun) console.log("Mode: Dry run, no database writes");
 
     const result = await syncLegislation(legislature, {
       dryRun,
+      originOnly,
       limit,
       activeOnly: active,
       todayOnly: today,
