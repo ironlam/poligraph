@@ -31,6 +31,11 @@ const handler: SyncHandler = {
       type: "boolean",
       description: "Only process scrutins from today's date",
     },
+    {
+      name: "--official-groups-only",
+      type: "boolean",
+      description: "Refresh official group counts for existing scrutins only",
+    },
   ],
 
   showHelp() {
@@ -43,6 +48,7 @@ Features:
   - Downloads official ZIP file with all scrutins
   - Matches deputies by their AN acteur ID (ExternalId)
   - Creates/updates Scrutin and Vote records
+  - --official-groups-only refreshes official group counts without touching votes
     `);
   },
 
@@ -69,11 +75,13 @@ Features:
       force = false,
       leg,
       today = false,
+      officialGroupsOnly = false,
     } = options as {
       dryRun?: boolean;
       force?: boolean;
       leg?: string;
       today?: boolean;
+      officialGroupsOnly?: boolean;
     };
 
     const legislature = leg ? parseInt(leg, 10) : DEFAULT_LEGISLATURE;
@@ -89,8 +97,9 @@ Features:
     console.log(`Legislature: ${legislature}e`);
     if (today) console.log("Filter: Today's scrutins only");
     if (force) console.log("Mode: Full sync (--force)");
+    if (officialGroupsOnly) console.log("Mode: Official group counts only");
 
-    const result = await syncScrutinsAN(legislature, dryRun, today, force);
+    const result = await syncScrutinsAN(legislature, dryRun, today, force, officialGroupsOnly);
 
     return {
       success: result.errors.length === 0,
