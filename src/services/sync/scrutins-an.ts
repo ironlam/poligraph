@@ -19,6 +19,11 @@ import * as https from "https";
 import { createWriteStream, mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
 import { extractZip } from "@/lib/parsing/unzip";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import { createHash } from "crypto";
+import {
+  hashOfficialGroupSnapshot,
+  parseOfficialGroupCountsDetailed,
+} from "@/lib/scrutins/official-group-counts";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -45,6 +50,10 @@ interface ANScrutin {
     legislature: string;
     dateScrutin: string;
     titre: string;
+    typeVote?: {
+      codeTypeVote?: string;
+      libelleTypeVote?: string;
+    } | null;
     sort: {
       code: string;
       libelle: string;
@@ -73,6 +82,14 @@ interface ANGroupeVote {
   organeRef: string;
   nombreMembresGroupe: string;
   vote: {
+    positionMajoritaire?: string;
+    decompteVoix?: {
+      pour?: string | number | null;
+      contre?: string | number | null;
+      abstentions?: string | number | null;
+      nonVotants?: string | number | null;
+      nonVotantsVolontaires?: string | number | null;
+    } | null;
     decompteNominatif: {
       pours?: { votant: ANVotant | ANVotant[] } | null;
       contres?: { votant: ANVotant | ANVotant[] } | null;
@@ -96,6 +113,27 @@ export interface ScrutinsANSyncStats {
   votesSkipped: number;
   errors: string[];
   politiciansNotFound: Set<string>;
+}
+
+export interface OfficialGroupSnapshotRow {
+  organeRef: string;
+  memberCount: number | null;
+  forCount: number | null;
+  againstCount: number | null;
+  abstainCount: number | null;
+  nonVoterCount: number | null;
+  voluntaryNonVoterCount: number | null;
+  majorityPosition: string | null;
+  issues: string[];
+  sourceHash: string;
+  sourceUrl: string;
+  fetchedAt: Date;
+}
+
+export interface OfficialGroupSnapshot {
+  hash: string;
+  rows: OfficialGroupSnapshotRow[];
+  issues: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +265,90 @@ async function generateUniqueScrutinSlug(date: Date, title: string): Promise<str
   );
 }
 
+/**
+ * Build the independent official group snapshot for one raw AN scrutin.
+ *
+ * `sourceHash` is the hash of the raw JSON file, while `hash` is a stable hash
+ * of the parsed official section. Keeping both lets the importer detect a
+ * source change without coupling it to the nominative `votesHash`.
+ */
+export function buildOfficialGroupSnapshot(
+  rawScrutin: unknown,
+  sourceHash: string,
+  sourceUrl: string,
+  fetchedAt: Date
+): OfficialGroupSnapshot {
+  const parsed = parseOfficialGroupCountsDetailed(rawScrutin);
+  const issues = [...parsed.issues];
+  const rows: OfficialGroupSnapshotRow[] = [];
+  const seenRefs = new Set<string>();
+
+  for (const count of parsed.counts) {
+    if (!count.organeRef) {
+      issues.push(...count.issues.map((issue) => `groupe sans organeRef: ${issue}`));
+      continue;
+    }
+    if (seenRefs.has(count.organeRef)) {
+      issues.push(`groupe ${count.organeRef}: doublon ignoré`);
+      continue;
+    }
+    seenRefs.add(count.organeRef);
+
+    rows.push({
+      organeRef: count.organeRef,
+      memberCount: count.memberCount,
+      forCount: count.forCount,
+      againstCount: count.againstCount,
+      abstainCount: count.abstainCount,
+      nonVoterCount: count.nonVoterCount,
+      voluntaryNonVoterCount: count.voluntaryNonVoterCount,
+      majorityPosition: count.majorityPosition,
+      issues: [...count.issues],
+      sourceHash,
+      sourceUrl,
+      fetchedAt,
+    });
+  }
+
+  return {
+    hash: hashOfficialGroupSnapshot(parsed.counts, issues),
+    rows,
+    issues,
+  };
+}
+
+/**
+ * Replace an official group snapshot only when its parsed hash changed.
+ * Children and the scrutin-level provenance are updated in one transaction so
+ * a public reader cannot observe half of a new official snapshot.
+ */
+async function persistOfficialGroupSnapshot(
+  scrutinId: string,
+  previousHash: string | null,
+  snapshot: OfficialGroupSnapshot
+): Promise<boolean> {
+  if (previousHash === snapshot.hash) return false;
+
+  await db.$transaction(async (tx) => {
+    await tx.scrutinOfficialGroupCount.deleteMany({ where: { scrutinId } });
+    if (snapshot.rows.length > 0) {
+      await tx.scrutinOfficialGroupCount.createMany({
+        data: snapshot.rows.map((row) => ({ scrutinId, ...row })),
+      });
+    }
+    await tx.scrutin.update({
+      where: { id: scrutinId },
+      data: {
+        officialGroupsHash: snapshot.hash,
+        officialGroupsFetchedAt: snapshot.rows[0]?.fetchedAt ?? new Date(),
+        officialGroupsIssues: snapshot.issues,
+      },
+    });
+  });
+
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -238,7 +360,8 @@ export async function syncScrutinsAN(
   legislature: number = LEGISLATURE,
   dryRun: boolean = false,
   todayOnly: boolean = false,
-  force: boolean = false
+  force: boolean = false,
+  officialGroupsOnly: boolean = false
 ): Promise<ScrutinsANSyncStats> {
   const stats: ScrutinsANSyncStats = {
     scrutinsProcessed: 0,
@@ -251,7 +374,12 @@ export async function syncScrutinsAN(
     politiciansNotFound: new Set<string>(),
   };
 
-  const SOURCE_KEY = `votes-an-zip:${legislature}`;
+  // Keep the additive metadata backfill independent from the regular vote
+  // archive state. Marking the latter from this mode could make a subsequent
+  // normal sync skip new nominative votes.
+  const SOURCE_KEY = officialGroupsOnly
+    ? `official-groups-an-zip:${legislature}`
+    : `votes-an-zip:${legislature}`;
 
   try {
     // Step 1: Download ZIP (with ETag for conditional download)
@@ -266,23 +394,35 @@ export async function syncScrutinsAN(
     mkdirSync(TEMP_DIR, { recursive: true });
 
     // Check ETag from previous sync
-    const prevState = force ? null : await syncMetadata.get(SOURCE_KEY);
-    const downloadResult = await downloadFile(zipUrl, zipPath, force ? null : prevState?.etag);
+    // The separate metadata-only source key prevents it from inheriting the
+    // regular vote sync's ETag/hash state. `--force` remains available when an
+    // already completed backfill must be replayed for newly imported rows.
+    const bypassArchiveCache = force;
+    const prevState = bypassArchiveCache ? null : await syncMetadata.get(SOURCE_KEY);
+    const downloadResult = await downloadFile(
+      zipUrl,
+      zipPath,
+      bypassArchiveCache ? null : prevState?.etag
+    );
 
     if (downloadResult.notModified) {
       console.log("✓ ZIP not modified (HTTP 304), skipping sync");
-      await syncMetadata.markCompleted(SOURCE_KEY, { etag: downloadResult.etag });
+      if (!dryRun) {
+        await syncMetadata.markCompleted(SOURCE_KEY, { etag: downloadResult.etag });
+      }
       return stats;
     }
 
     // Verify content hash (fallback if ETag not supported)
     const zipHash = await hashFile(zipPath);
-    if (!force && prevState?.contentHash === zipHash) {
+    if (!bypassArchiveCache && prevState?.contentHash === zipHash) {
       console.log("✓ ZIP content identical (hash match), skipping sync");
-      await syncMetadata.markCompleted(SOURCE_KEY, {
-        contentHash: zipHash,
-        etag: downloadResult.etag,
-      });
+      if (!dryRun) {
+        await syncMetadata.markCompleted(SOURCE_KEY, {
+          contentHash: zipHash,
+          etag: downloadResult.etag,
+        });
+      }
       rmSync(TEMP_DIR, { recursive: true });
       return stats;
     }
@@ -304,9 +444,14 @@ export async function syncScrutinsAN(
     );
 
     // Step 4: Build acteur map
-    console.log("Building acteur ID to politician map...");
-    const acteurToId = await buildActeurToIdMap();
-    console.log(`✓ Found ${acteurToId.size} deputies with AN IDs in database\n`);
+    const acteurToId = officialGroupsOnly
+      ? new Map<string, string>()
+      : await (async () => {
+          console.log("Building acteur ID to politician map...");
+          const map = await buildActeurToIdMap();
+          console.log(`✓ Found ${map.size} deputies with AN IDs in database\n`);
+          return map;
+        })();
 
     // Step 5: Process each scrutin
     const progress = new ProgressTracker({
@@ -323,6 +468,7 @@ export async function syncScrutinsAN(
         const content = readFileSync(filePath, "utf-8");
         const data = safeJsonParseOrThrow<ANScrutin>(content);
         const s = data.scrutin;
+        const sourceHash = createHash("sha256").update(content).digest("hex");
 
         // Filter by today's date if --today flag is set
         if (todayOnly) {
@@ -343,98 +489,151 @@ export async function syncScrutinsAN(
         // Extract scrutin number from UID (e.g., VTANR5L17V5283 -> 5283)
         const scrutinNumber = s.numero || s.uid.replace(/^VTANR5L\d+V/, "");
         const sourceUrl = `https://www.assemblee-nationale.fr/dyn/${legislature}/scrutins/${scrutinNumber}`;
+        const officialGroupSnapshot = buildOfficialGroupSnapshot(
+          data,
+          sourceHash,
+          sourceUrl,
+          new Date()
+        );
 
-        const individualVotes = extractVotes(data);
+        // A metadata-only backfill must never touch nominative votes. Avoid
+        // parsing that section entirely in this mode to make that contract
+        // explicit and keep the backfill cheap.
+        const individualVotes = officialGroupsOnly ? [] : extractVotes(data);
 
         if (!dryRun) {
-          // Upsert scrutin
+          // Metadata-only mode is intentionally limited to rows already in
+          // Poligraph. It fills the additive official snapshot and never
+          // creates a scrutin or rewrites its individual votes.
           const existing = await db.scrutin.findUnique({
             where: { externalId },
           });
 
-          const scrutinData = {
-            externalId,
-            title: s.titre,
-            description: null,
-            votingDate,
-            legislature: parseInt(s.legislature, 10),
-            votesFor,
-            votesAgainst,
-            votesAbstain,
-            result: parseVotingResult(s.sort?.code || "rejeté"),
-            sourceUrl,
-            type: classifyScrutinTitle(s.titre),
-          };
-
-          let scrutin;
-          if (existing) {
-            const updateData: typeof scrutinData & { slug?: string } = { ...scrutinData };
-            if (!existing.slug) {
-              updateData.slug = await generateUniqueScrutinSlug(votingDate, s.titre);
-            }
-            scrutin = await db.scrutin.update({
-              where: { id: existing.id },
-              data: updateData,
-            });
-            stats.scrutinsUpdated++;
-          } else {
-            const slug = await generateUniqueScrutinSlug(votingDate, s.titre);
-            scrutin = await db.scrutin.create({
-              data: { ...scrutinData, slug },
-            });
-            stats.scrutinsCreated++;
-          }
-
-          // Process votes
-          const votesToCreate: { politicianId: string; position: VotePosition }[] = [];
-
-          for (const vote of individualVotes) {
-            const politicianId = acteurToId.get(vote.acteurRef);
-            if (politicianId) {
-              votesToCreate.push({
-                politicianId,
-                position: vote.position,
-              });
+          if (officialGroupsOnly) {
+            if (!existing) {
+              stats.scrutinsSkipped++;
             } else {
-              stats.politiciansNotFound.add(vote.acteurRef);
-            }
-          }
-
-          // Check votes hash to skip unchanged scrutins
-          if (votesToCreate.length > 0) {
-            const newHash = hashVotes(votesToCreate);
-
-            if (scrutin.votesHash === newHash) {
-              stats.votesSkipped += votesToCreate.length;
-            } else {
-              await writeVotesForScrutin({
-                scrutinId: scrutin.id,
-                votingDate: scrutin.votingDate,
-                chamber: scrutin.chamber,
-                scrutinType: scrutin.type,
-                votes: votesToCreate,
-              });
-
+              const metadata = {
+                codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
+                libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
+              };
               await db.scrutin.update({
-                where: { id: scrutin.id },
-                data: { votesHash: newHash },
+                where: { id: existing.id },
+                data: metadata,
               });
+              await persistOfficialGroupSnapshot(
+                existing.id,
+                existing.officialGroupsHash,
+                officialGroupSnapshot
+              );
+              stats.scrutinsUpdated++;
+            }
+          } else {
+            // Upsert scrutin
 
-              await computeGroupPositionsForScrutin(scrutin.id);
-              stats.votesCreated += votesToCreate.length;
+            const scrutinData = {
+              externalId,
+              title: s.titre,
+              description: null,
+              votingDate,
+              legislature: parseInt(s.legislature, 10),
+              votesFor,
+              votesAgainst,
+              votesAbstain,
+              result: parseVotingResult(s.sort?.code || "rejeté"),
+              sourceUrl,
+              type: classifyScrutinTitle(s.titre),
+              codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
+              libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
+            };
+
+            let scrutin;
+            if (existing) {
+              const updateData: typeof scrutinData & { slug?: string } = { ...scrutinData };
+              if (!existing.slug) {
+                updateData.slug = await generateUniqueScrutinSlug(votingDate, s.titre);
+              }
+              scrutin = await db.scrutin.update({
+                where: { id: existing.id },
+                data: updateData,
+              });
+              stats.scrutinsUpdated++;
+            } else {
+              const slug = await generateUniqueScrutinSlug(votingDate, s.titre);
+              scrutin = await db.scrutin.create({
+                data: { ...scrutinData, slug },
+              });
+              stats.scrutinsCreated++;
+            }
+
+            // This update is independent of votesHash. Official metadata can
+            // change while the resolved actor list remains byte-for-byte the
+            // same, and it must still be refreshed.
+            await persistOfficialGroupSnapshot(
+              scrutin.id,
+              existing?.officialGroupsHash ?? null,
+              officialGroupSnapshot
+            );
+
+            // Process votes
+            const votesToCreate: { politicianId: string; position: VotePosition }[] = [];
+
+            for (const vote of individualVotes) {
+              const politicianId = acteurToId.get(vote.acteurRef);
+              if (politicianId) {
+                votesToCreate.push({
+                  politicianId,
+                  position: vote.position,
+                });
+              } else {
+                stats.politiciansNotFound.add(vote.acteurRef);
+              }
+            }
+
+            // Check votes hash to skip unchanged scrutins
+            if (votesToCreate.length > 0) {
+              const newHash = hashVotes(votesToCreate);
+
+              if (scrutin.votesHash === newHash) {
+                stats.votesSkipped += votesToCreate.length;
+              } else {
+                await writeVotesForScrutin({
+                  scrutinId: scrutin.id,
+                  votingDate: scrutin.votingDate,
+                  chamber: scrutin.chamber,
+                  scrutinType: scrutin.type,
+                  votes: votesToCreate,
+                });
+
+                await db.scrutin.update({
+                  where: { id: scrutin.id },
+                  data: { votesHash: newHash },
+                });
+
+                await computeGroupPositionsForScrutin(scrutin.id);
+                stats.votesCreated += votesToCreate.length;
+              }
             }
           }
         } else {
           // Dry run: just count
-          if (individualVotes.length > 0) {
-            for (const vote of individualVotes) {
-              if (!acteurToId.has(vote.acteurRef)) {
-                stats.politiciansNotFound.add(vote.acteurRef);
+          if (officialGroupsOnly) {
+            // Reads are allowed in dry-run mode so the report can state how
+            // many existing rows would be refreshed. No model is mutated.
+            const existing = await db.scrutin.findUnique({ where: { externalId } });
+            if (existing) stats.scrutinsUpdated++;
+            else stats.scrutinsSkipped++;
+          } else {
+            if (individualVotes.length > 0) {
+              for (const vote of individualVotes) {
+                if (!acteurToId.has(vote.acteurRef)) {
+                  stats.politiciansNotFound.add(vote.acteurRef);
+                }
               }
             }
+            stats.scrutinsCreated++;
+            stats.votesCreated += individualVotes.filter((v) => acteurToId.has(v.acteurRef)).length;
           }
-          stats.scrutinsCreated++;
-          stats.votesCreated += individualVotes.filter((v) => acteurToId.has(v.acteurRef)).length;
         }
 
         stats.scrutinsProcessed++;
@@ -457,7 +656,7 @@ export async function syncScrutinsAN(
     rmSync(TEMP_DIR, { recursive: true });
 
     // Track sync metadata
-    if (!dryRun) {
+    if (!dryRun && stats.errors.length === 0) {
       await syncMetadata.markCompleted(SOURCE_KEY, {
         etag: downloadResult.etag,
         contentHash: zipHash,
