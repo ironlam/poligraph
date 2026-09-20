@@ -15,6 +15,17 @@ const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 /** Rows are written in chunks so one failure does not roll back the whole file. */
 const UPSERT_BATCH_SIZE = 500;
 
+/** A commune code identifies a mandate location, not its holder. Keep writes suspended. */
+function assertRNEReadOnly(dryRun: unknown): void {
+  if (dryRun !== true) {
+    throw new Error(
+      "RNE_WRITES_SUSPENDED: mayor identity matching must be corrected before writes resume. " +
+        "Only syncRNEMaires({ dryRun: true }) and getRNEStats() are available; " +
+        "party resolution is also suspended."
+    );
+  }
+}
+
 /** Fetch and parse RNE maires CSV */
 async function fetchRNECSV(): Promise<MaireRNECSV[]> {
   // Résolue à chaque exécution : l'URL pinnée ici renvoyait 404, le nom du
@@ -420,6 +431,7 @@ export async function syncRNEMaires(
   } = {}
 ): Promise<RNESyncResult> {
   const { dryRun = false, limit, verbose = false } = options;
+  assertRNEReadOnly(dryRun);
 
   const { mandates: snapshot, knownCommuneIds } = await snapshotCurrentMayors();
 
@@ -520,6 +532,8 @@ export async function resolveParties(options: { verbose?: boolean } = {}): Promi
   fromPolitician: number;
   unmapped: string[];
 }> {
+  // This separate writer also associates people with a commune code, without checking identity.
+  assertRNEReadOnly(false);
   const { verbose = false } = options;
 
   // Step 1: Fetch enriched communes CSV and build inseeCode → nuanceCode map
