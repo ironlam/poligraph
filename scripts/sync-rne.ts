@@ -2,11 +2,12 @@
  * CLI script to sync RNE (Répertoire National des Élus) maires
  *
  * Usage:
- *   npm run sync:rne:maires              # Full sync
+ * Writes are suspended until mayor identity matching is corrected.
+ *   npm run sync:rne:maires              # Fails with RNE_WRITES_SUSPENDED
  *   npm run sync:rne:maires -- --stats   # Show current stats
  *   npm run sync:rne:maires -- --dry-run # Preview without saving
- *   npm run sync:rne:maires -- --limit=100 --verbose # Test with 100 rows
- *   npm run sync:rne:maires -- --resolve-parties --verbose # Resolve party affiliations
+ *   npm run sync:rne:maires -- --dry-run --limit=100 --verbose # Parse 100 rows
+ *   npm run sync:rne:maires -- --resolve-parties # Suspended, including with --dry-run
  */
 
 import "dotenv/config";
@@ -21,7 +22,7 @@ const handler: SyncHandler = {
     {
       name: "--resolve-parties",
       type: "boolean",
-      description: "Resolve party affiliations from enriched communes CSV",
+      description: "Suspended: party resolution requires verified mayor identities",
     },
   ],
 
@@ -32,6 +33,7 @@ Politic Tracker - RNE Maires Sync
 Data source: Répertoire National des Élus (data.gouv.fr)
 Imports: Maires de France (~35 000)
 Matching: Associates RNE data with existing politicians in our database
+Writes suspended: use --stats or --dry-run. Party resolution is unavailable.
     `);
   },
 
