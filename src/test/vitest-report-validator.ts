@@ -20,7 +20,11 @@ function matchesExpectedFile(testFilePath: string, expectedFile: string) {
   return normalizedPath === normalizedExpected || normalizedPath.endsWith(`/${normalizedExpected}`);
 }
 
-export function validateVitestReport(report: VitestReport, expectedFiles: string[]) {
+export function validateVitestReport(
+  report: VitestReport,
+  expectedFiles: string[],
+  exactTests?: number
+) {
   const results = report.testResults ?? [];
   const errors: string[] = [];
 
@@ -43,6 +47,14 @@ export function validateVitestReport(report: VitestReport, expectedFiles: string
       errors.push(`test file executed no tests: ${expectedFile}`);
     } else if (!passedTests || passedTests === 0) {
       errors.push(`test file executed no passing tests: ${expectedFile}`);
+    } else if (passedTests !== totalTests) {
+      errors.push(
+        `test file did not pass every test: ${expectedFile} (${passedTests}/${totalTests})`
+      );
+    } else if (exactTests !== undefined && totalTests !== exactTests) {
+      errors.push(
+        `test file executed ${totalTests} tests instead of ${exactTests}: ${expectedFile}`
+      );
     }
   }
 
@@ -51,12 +63,20 @@ export function validateVitestReport(report: VitestReport, expectedFiles: string
 }
 
 async function main() {
-  const [, , reportPath, ...expectedFiles] = process.argv;
+  const [, , reportPath, ...args] = process.argv;
+  const exactTestsArg = args.find((arg) => arg.startsWith("--exact-tests="));
+  const expectedFiles = args.filter((arg) => !arg.startsWith("--exact-tests="));
+  const exactTests = exactTestsArg ? Number(exactTestsArg.split("=")[1]) : undefined;
   if (!reportPath || expectedFiles.length === 0) {
-    throw new Error("Usage: tsx vitest-report-validator.ts <report.json> <test-file>...");
+    throw new Error(
+      "Usage: tsx vitest-report-validator.ts <report.json> [--exact-tests=N] <test-file>..."
+    );
+  }
+  if (exactTestsArg && (!Number.isInteger(exactTests) || exactTests! < 1)) {
+    throw new Error("--exact-tests must be a positive integer");
   }
   const report = JSON.parse(await readFile(reportPath, "utf8")) as VitestReport;
-  const errors = validateVitestReport(report, expectedFiles);
+  const errors = validateVitestReport(report, expectedFiles, exactTests);
   if (errors.length > 0) throw new Error(errors.join("\n"));
 }
 

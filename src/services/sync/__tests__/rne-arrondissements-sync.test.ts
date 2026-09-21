@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Prisma } from "@/generated/prisma";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const h = vi.hoisted(() => ({
   resolveUrl: vi.fn(),
@@ -9,19 +10,27 @@ const h = vi.hoisted(() => ({
   politicianFindMany: vi.fn(),
   politicianFindUnique: vi.fn(),
   politicianCreate: vi.fn(),
+  transaction: vi.fn(),
+  nextPublicId: vi.fn(),
+  outsideMutation: vi.fn(() => {
+    throw new Error("Mutation outside transaction");
+  }),
 }));
+
+vi.mock("@/lib/public-ids/generator", () => ({ nextPublicId: h.nextPublicId }));
 
 vi.mock("@/lib/db", () => ({
   db: {
+    $transaction: h.transaction,
     mandate: {
       findFirst: h.mandateFindFirst,
-      update: h.mandateUpdate,
-      create: h.mandateCreate,
+      update: h.outsideMutation,
+      create: h.outsideMutation,
     },
     politician: {
       findMany: h.politicianFindMany,
       findUnique: h.politicianFindUnique,
-      create: h.politicianCreate,
+      create: h.outsideMutation,
     },
   },
 }));
@@ -49,7 +58,14 @@ const CSV = [
 ].join("\n");
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  h.nextPublicId.mockImplementation(async (entity) => `${entity}-test-id`);
+  h.transaction.mockImplementation(async (callback) =>
+    callback({
+      mandate: { update: h.mandateUpdate, create: h.mandateCreate },
+      politician: { findUnique: h.politicianFindUnique, create: h.politicianCreate },
+    })
+  );
   h.resolveUrl.mockResolvedValue("https://example.test/ca.csv");
   h.getText.mockResolvedValue({ data: CSV });
   h.mandateFindFirst.mockResolvedValue(null);
@@ -60,7 +76,86 @@ beforeEach(() => {
   h.mandateUpdate.mockResolvedValue({ id: "old" });
 });
 
+afterEach(() => {
+  expect(h.outsideMutation).not.toHaveBeenCalled();
+});
+
 describe("alternance de maire d'arrondissement", () => {
+  it.each(["publicId", "slug"])(
+    "ne reprend la transaction que sur publicId (%s)",
+    async (field) => {
+      const collision = new Prisma.PrismaClientKnownRequestError("collision", {
+        code: "P2002",
+        clientVersion: "7",
+        meta: { target: [field] },
+      });
+      h.mandateFindFirst.mockResolvedValue({
+        id: "old",
+        politician: { firstName: "Benoît", lastName: "DUPONT" },
+      });
+      let sequence = 0;
+      h.nextPublicId.mockImplementation(async (entity) => `${entity}-${++sequence}`);
+      h.politicianCreate.mockRejectedValueOnce(collision);
+      const stats = await syncArrondissementMayors();
+      const attempts = field === "publicId" ? 2 : 1;
+      expect(h.transaction).toHaveBeenCalledTimes(attempts);
+      expect(h.mandateUpdate).toHaveBeenCalledTimes(attempts);
+      expect(h.nextPublicId).toHaveBeenCalledTimes(attempts * 2);
+      expect(stats.succeeded).toBe(field === "publicId" ? 1 : 0);
+      expect(stats.errors).toHaveLength(field === "publicId" ? 0 : 1);
+      if (field === "publicId") {
+        const first = h.politicianCreate.mock.calls[0]![0].data;
+        const second = h.politicianCreate.mock.calls[1]![0].data;
+        expect(second.publicId).not.toBe(first.publicId);
+        expect(second.mandates.create.publicId).not.toBe(first.mandates.create.publicId);
+      }
+    }
+  );
+
+  it("borne à six transactions et conserve la collision d'origine", async () => {
+    const collision = new Prisma.PrismaClientKnownRequestError("original publicId collision", {
+      code: "P2002",
+      clientVersion: "7",
+      meta: { target: ["publicId"] },
+    });
+    h.politicianCreate.mockRejectedValue(collision);
+    const stats = await syncArrondissementMayors();
+    expect(h.transaction).toHaveBeenCalledTimes(6);
+    expect(stats.createdAsDraft).toBe(0);
+    expect(stats.errors).toHaveLength(1);
+    expect(stats.errors[0]).toContain("original publicId collision");
+  });
+
+  it.each([false, true])(
+    "ne mute rien lors d'une succession en dry-run (fiche connue : %s)",
+    async (known) => {
+      h.mandateFindFirst.mockResolvedValue({
+        id: "old",
+        politician: { firstName: "Benoît", lastName: "DUPONT" },
+      });
+      if (known)
+        h.politicianFindMany.mockResolvedValue([
+          {
+            id: "alice",
+            firstName: "Alice",
+            lastName: "MARTIN",
+            birthDate: new Date("1970-04-02"),
+          },
+        ]);
+
+      const stats = await syncArrondissementMayors({ dryRun: true });
+
+      expect(stats.errors).toEqual([]);
+      expect(stats.succeeded).toBe(1);
+      expect(stats.linkedToExisting).toBe(known ? 1 : 0);
+      expect(stats.createdAsDraft).toBe(known ? 0 : 1);
+      expect(h.mandateUpdate).not.toHaveBeenCalled();
+      expect(h.mandateCreate).not.toHaveBeenCalled();
+      expect(h.politicianCreate).not.toHaveBeenCalled();
+      expect(h.transaction).not.toHaveBeenCalled();
+    }
+  );
+
   it("ne touche à rien quand le maire enregistré est le même", async () => {
     h.mandateFindFirst.mockResolvedValue({
       id: "old",
@@ -75,24 +170,98 @@ describe("alternance de maire d'arrondissement", () => {
     expect(h.mandateCreate).not.toHaveBeenCalled();
   });
 
-  it("clôt le prédécesseur et ouvre le successeur", async () => {
-    // Tester la seule existence du secteur rendait la passe non rejouable :
-    // un successeur nommé dans un export ultérieur restait ignoré.
+  it.each([false, true])(
+    "clôt le prédécesseur et ouvre le successeur (fiche connue : %s)",
+    async (known) => {
+      // Tester la seule existence du secteur rendait la passe non rejouable :
+      // un successeur nommé dans un export ultérieur restait ignoré.
+      h.mandateFindFirst.mockResolvedValue({
+        id: "old",
+        politician: { firstName: "Benoît", lastName: "DUPONT" },
+      });
+      if (known)
+        h.politicianFindMany.mockResolvedValue([
+          {
+            id: "alice",
+            firstName: "Alice",
+            lastName: "MARTIN",
+            birthDate: new Date("1970-04-02"),
+          },
+        ]);
+
+      const stats = await syncArrondissementMayors();
+
+      expect(stats.succeeded).toBe(1);
+      expect(h.mandateUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "old", isCurrent: true },
+          data: expect.objectContaining({ isCurrent: false }),
+        })
+      );
+      expect(h.politicianCreate).toHaveBeenCalledTimes(known ? 0 : 1);
+      expect(h.mandateCreate).toHaveBeenCalledTimes(known ? 1 : 0);
+      expect(stats.linkedToExisting).toBe(known ? 1 : 0);
+      expect(stats.createdAsDraft).toBe(known ? 0 : 1);
+      expect(h.transaction).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([false, true])(
+    "ne compte pas une succession dont la création échoue (fiche connue : %s)",
+    async (known) => {
+      h.mandateFindFirst.mockResolvedValue({
+        id: "old",
+        politician: { firstName: "Benoît", lastName: "DUPONT" },
+      });
+      if (known)
+        h.politicianFindMany.mockResolvedValue([
+          {
+            id: "alice",
+            firstName: "Alice",
+            lastName: "MARTIN",
+            birthDate: new Date("1970-04-02"),
+          },
+        ]);
+      const writer = known ? h.mandateCreate : h.politicianCreate;
+      writer.mockRejectedValue(new Error("creation failed"));
+
+      const stats = await syncArrondissementMayors();
+
+      expect(h.transaction).toHaveBeenCalledOnce();
+      await expect(h.transaction.mock.results[0]!.value).rejects.toThrow("creation failed");
+      expect(h.mandateUpdate).toHaveBeenCalledOnce();
+      expect(writer).toHaveBeenCalledOnce();
+      expect(stats.succeeded).toBe(0);
+      expect(stats.createdAsDraft).toBe(0);
+      expect(stats.linkedToExisting).toBe(0);
+      expect(stats.errors).toHaveLength(1);
+    }
+  );
+
+  it("ne clôt rien si la recherche d'identité échoue", async () => {
     h.mandateFindFirst.mockResolvedValue({
       id: "old",
       politician: { firstName: "Benoît", lastName: "DUPONT" },
     });
-
+    h.politicianFindMany.mockRejectedValue(new Error("lookup failed"));
     const stats = await syncArrondissementMayors();
+    expect(h.transaction).not.toHaveBeenCalled();
+    expect(h.mandateUpdate).not.toHaveBeenCalled();
+    expect(stats.succeeded).toBe(0);
+    expect(stats.errors).toHaveLength(1);
+  });
 
-    expect(stats.succeeded).toBe(1);
-    expect(h.mandateUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "old" },
-        data: expect.objectContaining({ isCurrent: false }),
-      })
-    );
-    expect(h.politicianCreate).toHaveBeenCalledTimes(1);
+  it("ne crée pas de successeur si la clôture échoue", async () => {
+    h.mandateFindFirst.mockResolvedValue({
+      id: "old",
+      politician: { firstName: "Benoît", lastName: "DUPONT" },
+    });
+    h.mandateUpdate.mockRejectedValue(new Error("mandate no longer current"));
+    const stats = await syncArrondissementMayors();
+    expect(h.politicianCreate).not.toHaveBeenCalled();
+    expect(h.mandateCreate).not.toHaveBeenCalled();
+    expect(stats.succeeded).toBe(0);
+    expect(stats.errors).toHaveLength(1);
   });
 
   it("date le mandat sur la prise de fonction, pas sur le mandat de conseiller", async () => {
