@@ -15,6 +15,7 @@ const COMPLETE: CandidacyCoverageInput = {
   measureCount: 40,
   programEditionCount: 1,
   publishedProgramEditionCount: 1,
+  partyProgramEditionCount: 0,
   synthesis: "Une synthèse.",
   synthesisGeneratedAt: new Date("2026-09-10T00:00:00.000Z"),
   firstMeasurePublishedAt: new Date("2026-09-01T00:00:00.000Z"),
@@ -48,10 +49,58 @@ describe("classifyCandidacyCoverage", () => {
     expect(result).toEqual(["AUCUNE_MESURE"]);
   });
 
-  it("signale des mesures publiées sans édition de programme rattachée", () => {
+  it("signale des mesures publiées sans aucune édition de programme, nulle part", () => {
     expect(kinds({ ...COMPLETE, programEditionCount: 0, publishedProgramEditionCount: 0 })).toEqual(
       ["PROGRAMME_ABSENT"]
     );
+  });
+
+  /**
+   * The distinction this file gained on the audit's first real run. All nine candidacies flagged
+   * PROGRAMME_ABSENT in production turned out to have editions filed under their party: the
+   * document was in the database, one join away. Sending a reviewer to search the web for it was
+   * the defect, not the count itself.
+   */
+  it("distingue une édition rattachée au parti d'un document réellement absent", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      programEditionCount: 0,
+      publishedProgramEditionCount: 0,
+      partyProgramEditionCount: 6,
+    });
+    expect(result.findings.map((f) => f.kind)).toEqual(["PROGRAMME_PARTI_NON_RATTACHE"]);
+    // The whole point: this one is settled by the database, so no search is worth running.
+    expect(result.webResearchWorthwhile).toBe(false);
+  });
+
+  it("garde PROGRAMME_ABSENT quand le parti n'a pas d'édition non plus", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      programEditionCount: 0,
+      publishedProgramEditionCount: 0,
+      partyProgramEditionCount: 0,
+    });
+    expect(result.findings.map((f) => f.kind)).toEqual(["PROGRAMME_ABSENT"]);
+    expect(result.webResearchWorthwhile).toBe(true);
+  });
+
+  it("ne signale rien côté programme quand la candidature porte sa propre édition", () => {
+    expect(kinds({ ...COMPLETE, partyProgramEditionCount: 6 })).toEqual([]);
+  });
+
+  it("ne réclame rien côté programme pour une candidature sans mesure, même sans édition de parti", () => {
+    expect(
+      kinds({
+        ...COMPLETE,
+        measureCount: 0,
+        programEditionCount: 0,
+        publishedProgramEditionCount: 0,
+        partyProgramEditionCount: 0,
+        firstMeasurePublishedAt: null,
+        themes: [],
+        storedThemeSyntheses: [],
+      })
+    ).toEqual(["AUCUNE_MESURE"]);
   });
 
   // A registered but unpublished edition is a different problem from a missing one: the document
@@ -205,6 +254,7 @@ describe("needsWebResearch", () => {
   it("ne vaut que pour les axes que la base ne peut pas trancher", () => {
     expect(needsWebResearch("PROGRAMME_ABSENT")).toBe(true);
     expect(needsWebResearch("AUCUNE_MESURE")).toBe(true);
+    expect(needsWebResearch("PROGRAMME_PARTI_NON_RATTACHE")).toBe(false);
     expect(needsWebResearch("SYNTHESE_ABSENTE")).toBe(false);
     expect(needsWebResearch("SYNTHESE_DEMENTIE")).toBe(false);
     expect(needsWebResearch("THEME_SYNTHESE_MANQUANTE")).toBe(false);

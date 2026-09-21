@@ -33,6 +33,7 @@ async function collect(): Promise<CandidacyCoverage[]> {
     select: {
       id: true,
       candidateName: true,
+      partyId: true,
       politician: { select: { slug: true } },
       // Scoped to the election, as the fiche scopes it. `ProgramEdition` carries its own
       // `electionId` beside its owner, so a row reachable through `candidacyId` is not necessarily
@@ -90,6 +91,18 @@ async function collect(): Promise<CandidacyCoverage[]> {
       byTheme.set(measure.theme, [...(byTheme.get(measure.theme) ?? []), measure]);
     }
 
+    // Editions filed under the candidacy's party, same election. `ProgramEdition` has one owner,
+    // party or candidacy, and the fiche reads only the candidacy side: without this second count
+    // an unlinked party programme is indistinguishable from a document we never found.
+    const partyProgramEditionCount = candidacy.partyId
+      ? await db.programEdition.count({
+          where: {
+            election: { slug: ELECTION_SLUG },
+            partyId: candidacy.partyId,
+          },
+        })
+      : 0;
+
     const stored = new Map(
       (candidacy.presidentialData?.themeSyntheses ?? []).map((synthesis) => [
         synthesis.theme,
@@ -121,6 +134,7 @@ async function collect(): Promise<CandidacyCoverage[]> {
         publishedProgramEditionCount: candidacy.programEditions.filter(
           (edition) => edition.publicationStatus === "PUBLISHED"
         ).length,
+        partyProgramEditionCount,
         synthesis: candidacy.presidentialData?.synthesis ?? null,
         synthesisGeneratedAt: candidacy.presidentialData?.synthesisGeneratedAt ?? null,
         firstMeasurePublishedAt,

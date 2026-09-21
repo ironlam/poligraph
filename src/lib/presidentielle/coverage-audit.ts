@@ -20,6 +20,7 @@ import type { ThemeSynthesisEditorialState } from "./candidacy-theme-synthesis";
 
 export type CoverageFindingKind =
   | "PROGRAMME_ABSENT"
+  | "PROGRAMME_PARTI_NON_RATTACHE"
   | "AUCUNE_MESURE"
   | "SYNTHESE_ABSENTE"
   | "SYNTHESE_DEMENTIE"
@@ -32,6 +33,7 @@ export type CoverageAxis = "PROGRAMMES" | "MESURES" | "SYNTHESE" | "SYNTHESES_TH
 
 const AXIS_BY_KIND: Record<CoverageFindingKind, CoverageAxis> = {
   PROGRAMME_ABSENT: "PROGRAMMES",
+  PROGRAMME_PARTI_NON_RATTACHE: "PROGRAMMES",
   AUCUNE_MESURE: "MESURES",
   SYNTHESE_ABSENTE: "SYNTHESE",
   SYNTHESE_DEMENTIE: "SYNTHESE",
@@ -49,6 +51,10 @@ const AXIS_BY_KIND: Record<CoverageFindingKind, CoverageAxis> = {
  */
 const WEB_RESEARCH_BY_KIND: Record<CoverageFindingKind, boolean> = {
   PROGRAMME_ABSENT: true,
+  // The document is already in the database, one join away. Searching the web for it was the
+  // defect this finding exists to name: on the audit's first real run, all nine candidacies
+  // reported as missing a programme had editions filed under their party.
+  PROGRAMME_PARTI_NON_RATTACHE: false,
   AUCUNE_MESURE: true,
   SYNTHESE_ABSENTE: false,
   SYNTHESE_DEMENTIE: false,
@@ -86,6 +92,13 @@ export type CandidacyCoverageInput = {
   measureCount: number;
   programEditionCount: number;
   publishedProgramEditionCount: number;
+  /**
+   * Editions filed under the candidacy's party for the same election, whatever their publication
+   * status. A `ProgramEdition` belongs either to a party or to a candidacy, and the fiche reads
+   * only the second, so a party edition leaves the fiche without a document while the document is
+   * very much held. Counting it separately is what tells a missing document from an unlinked one.
+   */
+  partyProgramEditionCount: number;
   synthesis: string | null;
   synthesisGeneratedAt: Date | null;
   /** Publication date of the oldest measure currently shown. Null when none is shown. */
@@ -152,10 +165,19 @@ export function classifyCandidacyCoverage(input: CandidacyCoverageInput): Candid
     // to miss and no corpus for a synthesis to fall behind.
     add("AUCUNE_MESURE", "candidature déclarée sans aucune mesure publiée");
   } else if (input.publishedProgramEditionCount === 0 && input.programEditionCount === 0) {
-    add(
-      "PROGRAMME_ABSENT",
-      `${input.measureCount} mesures publiées sans aucune édition de programme rattachée`
-    );
+    // A draft edition on either owner still means the document has been found, so neither branch
+    // filters on publication status: the question here is whether we hold the text at all.
+    if (input.partyProgramEditionCount > 0) {
+      add(
+        "PROGRAMME_PARTI_NON_RATTACHE",
+        `${input.partyProgramEditionCount} édition(s) de programme au nom du parti, aucune rattachée à la candidature`
+      );
+    } else {
+      add(
+        "PROGRAMME_ABSENT",
+        `${input.measureCount} mesures publiées et aucune édition de programme, ni pour la candidature ni pour son parti`
+      );
+    }
   }
 
   if (input.synthesis === null) {
