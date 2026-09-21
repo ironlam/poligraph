@@ -72,6 +72,11 @@ mandats en base après commit ou rollback. Le harness neutralise `.env` et
 détruit son conteneur et son volume à la sortie. Ne pas exécuter en parallèle
 d'autres tests sur ce même conteneur.
 
+Le job CI `RNE arrondissements PostgreSQL integration` reproduit ce dispositif
+sur PostgreSQL 17. Il analyse le rapport JSON de Vitest et exige exactement cinq
+tests réussis : un fichier absent, vide, partiellement ou entièrement ignoré
+fait échouer le job.
+
 Validation locale de cette révision : tests unitaires exécutés ; tests
 PostgreSQL non exécutés car Docker est indisponible. La validation complète
 reste conditionnée à leur réussite. Aucun import réel autorisé par ce résultat.

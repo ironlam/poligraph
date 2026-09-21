@@ -111,6 +111,70 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
+  rne-arrondissements-postgres:
+    name: RNE arrondissements PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # PostgreSQL 17 matches production. Port 55433 is required by
+    # describeIfDisposableDb, which refuses every other database.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: poligraph_test
+          POSTGRES_PASSWORD: poligraph_test
+          POSTGRES_DB: poligraph_test
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -h localhost -U poligraph_test -d poligraph_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
+      DIRECT_URL: postgresql://poligraph_test:poligraph_test@localhost:55433/poligraph_test
+      DATABASE_SSL: "false"
+      NODE_ENV: test
+      DOTENV_CONFIG_PATH: /dev/null
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Create extensions and publicId sequences
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/init-search.sql
+
+      - name: Apply the schema
+        run: npx prisma db push
+
+      - name: Run all five RNE arrondissement transaction scenarios
+        run: |
+          test_file="src/services/sync/__tests__/rne-arrondissements-public-id.integration.test.ts"
+          test -f "$test_file"
+          npx vitest run --no-file-parallelism \
+            --reporter=json \
+            --outputFile=rne-arrondissements-postgres-vitest.json \
+            "$test_file"
+          npx tsx src/test/vitest-report-validator.ts \
+            rne-arrondissements-postgres-vitest.json \
+            --exact-tests=5 \
+            "$test_file"
+
   election-api-postgres:
     name: Election API PostgreSQL integration
     runs-on: ubuntu-latest
