@@ -123,18 +123,12 @@ export async function syncArrondissementMayors(
           stats.alreadyCurrent++;
           continue;
         }
-        // Alternance : on clôt le mandat du prédécesseur avant d'ouvrir celui
-        // du successeur, sinon le secteur aurait deux maires courants.
-        await db.mandate.update({
-          where: { id: existingMandate.id },
-          data: { isCurrent: false, endDate: mandateStart(row) },
-        });
-        stats.succeeded++;
       }
 
       const politicianId = await findExactPolitician(row);
 
       if (dryRun) {
+        if (existingMandate) stats.succeeded++;
         if (politicianId) stats.linkedToExisting++;
         else stats.createdAsDraft++;
         continue;
@@ -158,34 +152,43 @@ export async function syncArrondissementMayors(
         },
       };
 
-      if (politicianId) {
-        await db.mandate.create({ data: { ...mandateData, politicianId } });
-        stats.linkedToExisting++;
-        continue;
-      }
+      // Une succession ne peut laisser le prédécesseur clos sans successeur.
+      await db.$transaction(async (tx) => {
+        if (existingMandate) {
+          await tx.mandate.update({
+            where: { id: existingMandate.id, isCurrent: true },
+            data: { isCurrent: false, endDate: mandateData.startDate },
+          });
+        }
 
-      // Inconnu au référentiel : fiche DRAFT, jamais publiée par un importeur.
-      const baseSlug = generateSlug(row.fullName);
-      const taken = await db.politician.findUnique({
-        where: { slug: baseSlug },
-        select: { id: true },
+        if (politicianId) {
+          await tx.mandate.create({ data: { ...mandateData, politicianId } });
+          return;
+        }
+
+        // Inconnu au référentiel : fiche DRAFT, jamais publiée par un importeur.
+        const baseSlug = generateSlug(row.fullName);
+        const taken = await tx.politician.findUnique({
+          where: { slug: baseSlug },
+          select: { id: true },
+        });
+        await tx.politician.create({
+          data: {
+            slug: taken ? `${baseSlug}-${row.communeId}` : baseSlug,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            fullName: row.fullName,
+            birthDate: row.birthDate,
+            source: DataSource.RNE,
+            publicationStatus: PublicationStatus.DRAFT,
+            mandates: { create: mandateData },
+          },
+        });
       });
-      await db.politician.create({
-        data: {
-          slug: taken ? `${baseSlug}-${row.communeId}` : baseSlug,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          fullName: row.fullName,
-          birthDate: row.birthDate,
-          source: DataSource.RNE,
-          publicationStatus: PublicationStatus.DRAFT,
-          mandates: { create: mandateData },
-        },
-      });
-      // Compté après l'écriture, jamais avant : une collision de publicId a
-      // fait annoncer 33 créations pour 32 réelles, et un compteur qui décrit
-      // l'intention plutôt que le résultat ment sans planter.
-      stats.createdAsDraft++;
+      // Les compteurs réels décrivent uniquement les transactions validées.
+      if (existingMandate) stats.succeeded++;
+      if (politicianId) stats.linkedToExisting++;
+      else stats.createdAsDraft++;
     } catch (error) {
       stats.errors.push(
         `${row.fullName} (${row.sectorLabel}) : ${error instanceof Error ? error.message : String(error)}`
