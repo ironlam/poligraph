@@ -14,6 +14,8 @@
  * d'arrondissement inventerait des mairies qui n'existent pas.
  */
 import { db } from "@/lib/db";
+import { nextPublicId } from "@/lib/public-ids/generator";
+import { ID_COLLISION_RETRIES, isPublicIdCollision } from "@/lib/public-ids/prisma-extension";
 import { DataSource, MandateType, PublicationStatus } from "@/generated/prisma";
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
@@ -153,38 +155,53 @@ export async function syncArrondissementMayors(
       };
 
       // Une succession ne peut laisser le prédécesseur clos sans successeur.
-      await db.$transaction(async (tx) => {
-        if (existingMandate) {
-          await tx.mandate.update({
-            where: { id: existingMandate.id, isCurrent: true },
-            data: { isCurrent: false, endDate: mandateData.startDate },
+      for (let attempt = 0; ; attempt++) {
+        // Fournir les IDs empêche le retry interne de l'extension dans une
+        // transaction PostgreSQL déjà en échec. nextval survit au rollback.
+        const mandatePublicId = await nextPublicId("mandate");
+        const politicianPublicId = politicianId ? undefined : await nextPublicId("politician");
+        try {
+          await db.$transaction(async (tx) => {
+            if (existingMandate) {
+              await tx.mandate.update({
+                where: { id: existingMandate.id, isCurrent: true },
+                data: { isCurrent: false, endDate: mandateData.startDate },
+              });
+            }
+
+            if (politicianId) {
+              await tx.mandate.create({
+                data: { ...mandateData, publicId: mandatePublicId, politicianId },
+              });
+              return;
+            }
+
+            // Inconnu au référentiel : fiche DRAFT, jamais publiée par un importeur.
+            const baseSlug = generateSlug(row.fullName);
+            const taken = await tx.politician.findUnique({
+              where: { slug: baseSlug },
+              select: { id: true },
+            });
+            await tx.politician.create({
+              data: {
+                publicId: politicianPublicId,
+                slug: taken ? `${baseSlug}-${row.communeId}` : baseSlug,
+                firstName: row.firstName,
+                lastName: row.lastName,
+                fullName: row.fullName,
+                birthDate: row.birthDate,
+                source: DataSource.RNE,
+                publicationStatus: PublicationStatus.DRAFT,
+                mandates: { create: { ...mandateData, publicId: mandatePublicId } },
+              },
+            });
           });
+          break;
+        } catch (error) {
+          // Seule une collision publicId autorise une nouvelle transaction.
+          if (!isPublicIdCollision(error) || attempt >= ID_COLLISION_RETRIES) throw error;
         }
-
-        if (politicianId) {
-          await tx.mandate.create({ data: { ...mandateData, politicianId } });
-          return;
-        }
-
-        // Inconnu au référentiel : fiche DRAFT, jamais publiée par un importeur.
-        const baseSlug = generateSlug(row.fullName);
-        const taken = await tx.politician.findUnique({
-          where: { slug: baseSlug },
-          select: { id: true },
-        });
-        await tx.politician.create({
-          data: {
-            slug: taken ? `${baseSlug}-${row.communeId}` : baseSlug,
-            firstName: row.firstName,
-            lastName: row.lastName,
-            fullName: row.fullName,
-            birthDate: row.birthDate,
-            source: DataSource.RNE,
-            publicationStatus: PublicationStatus.DRAFT,
-            mandates: { create: mandateData },
-          },
-        });
-      });
+      }
       // Les compteurs réels décrivent uniquement les transactions validées.
       if (existingMandate) stats.succeeded++;
       if (politicianId) stats.linkedToExisting++;

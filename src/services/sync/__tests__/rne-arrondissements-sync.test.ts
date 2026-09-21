@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const h = vi.hoisted(() => ({
@@ -10,10 +11,13 @@ const h = vi.hoisted(() => ({
   politicianFindUnique: vi.fn(),
   politicianCreate: vi.fn(),
   transaction: vi.fn(),
+  nextPublicId: vi.fn(),
   outsideMutation: vi.fn(() => {
     throw new Error("Mutation outside transaction");
   }),
 }));
+
+vi.mock("@/lib/public-ids/generator", () => ({ nextPublicId: h.nextPublicId }));
 
 vi.mock("@/lib/db", () => ({
   db: {
@@ -55,6 +59,7 @@ const CSV = [
 
 beforeEach(() => {
   vi.resetAllMocks();
+  h.nextPublicId.mockImplementation(async (entity) => `${entity}-test-id`);
   h.transaction.mockImplementation(async (callback) =>
     callback({
       mandate: { update: h.mandateUpdate, create: h.mandateCreate },
@@ -76,6 +81,51 @@ afterEach(() => {
 });
 
 describe("alternance de maire d'arrondissement", () => {
+  it.each(["publicId", "slug"])(
+    "ne reprend la transaction que sur publicId (%s)",
+    async (field) => {
+      const collision = new Prisma.PrismaClientKnownRequestError("collision", {
+        code: "P2002",
+        clientVersion: "7",
+        meta: { target: [field] },
+      });
+      h.mandateFindFirst.mockResolvedValue({
+        id: "old",
+        politician: { firstName: "Benoît", lastName: "DUPONT" },
+      });
+      let sequence = 0;
+      h.nextPublicId.mockImplementation(async (entity) => `${entity}-${++sequence}`);
+      h.politicianCreate.mockRejectedValueOnce(collision);
+      const stats = await syncArrondissementMayors();
+      const attempts = field === "publicId" ? 2 : 1;
+      expect(h.transaction).toHaveBeenCalledTimes(attempts);
+      expect(h.mandateUpdate).toHaveBeenCalledTimes(attempts);
+      expect(h.nextPublicId).toHaveBeenCalledTimes(attempts * 2);
+      expect(stats.succeeded).toBe(field === "publicId" ? 1 : 0);
+      expect(stats.errors).toHaveLength(field === "publicId" ? 0 : 1);
+      if (field === "publicId") {
+        const first = h.politicianCreate.mock.calls[0]![0].data;
+        const second = h.politicianCreate.mock.calls[1]![0].data;
+        expect(second.publicId).not.toBe(first.publicId);
+        expect(second.mandates.create.publicId).not.toBe(first.mandates.create.publicId);
+      }
+    }
+  );
+
+  it("borne à six transactions et conserve la collision d'origine", async () => {
+    const collision = new Prisma.PrismaClientKnownRequestError("original publicId collision", {
+      code: "P2002",
+      clientVersion: "7",
+      meta: { target: ["publicId"] },
+    });
+    h.politicianCreate.mockRejectedValue(collision);
+    const stats = await syncArrondissementMayors();
+    expect(h.transaction).toHaveBeenCalledTimes(6);
+    expect(stats.createdAsDraft).toBe(0);
+    expect(stats.errors).toHaveLength(1);
+    expect(stats.errors[0]).toContain("original publicId collision");
+  });
+
   it.each([false, true])(
     "ne mute rien lors d'une succession en dry-run (fiche connue : %s)",
     async (known) => {
