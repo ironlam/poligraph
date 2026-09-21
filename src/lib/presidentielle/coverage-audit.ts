@@ -15,6 +15,7 @@
 
 import type { ThemeCategory } from "@/generated/prisma";
 import { isSynthesisContradictedByMeasures } from "./candidate-synthesis";
+import { isPresidentialTheme } from "./themes";
 import type { ThemeSynthesisEditorialState } from "./candidacy-theme-synthesis";
 
 export type CoverageFindingKind =
@@ -76,7 +77,12 @@ export type CoverageFinding = {
 export type CandidacyCoverageInput = {
   candidateName: string;
   politicianSlug: string | null;
-  /** Published, reviewed, non-withdrawn measures: the ones the fiche actually shows. */
+  /**
+   * Measures matching the public measure predicate, counted whatever the extension's publication
+   * status. Not "what the fiche shows": a candidacy whose extension is still DRAFT shows nothing at
+   * all, and an audit that adopted the fiche's gate would report no work precisely where the work
+   * is. Read it as "what the fiche would show once opened".
+   */
   measureCount: number;
   programEditionCount: number;
   publishedProgramEditionCount: number;
@@ -168,8 +174,12 @@ export function classifyCandidacyCoverage(input: CandidacyCoverageInput): Candid
     );
   }
 
+  // Only the presidential catalogue counts. SOCIAL_TRAVAIL sits in the Prisma enum but is out of
+  // `THEMES_IN_ORDER` on purpose (it stays parliamentary), and no hub surface iterates outside that
+  // list. A finding on such a theme would name work nobody can publish and no reader would see.
+  const catalogueThemes = input.themes.filter((entry) => isPresidentialTheme(entry.theme));
   for (const { state, kind, detail } of REPORTED_THEME_STATES) {
-    const themes = input.themes.filter((entry) => entry.state === state).map((e) => e.theme);
+    const themes = catalogueThemes.filter((entry) => entry.state === state).map((e) => e.theme);
     if (themes.length > 0) add(kind, detail(themes.length), themes);
   }
 

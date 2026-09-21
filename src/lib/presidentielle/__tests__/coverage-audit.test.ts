@@ -132,6 +132,31 @@ describe("classifyCandidacyCoverage", () => {
   });
 
   /**
+   * SOCIAL_TRAVAIL is in the Prisma enum but deliberately out of the presidential catalogue
+   * (`THEMES_IN_ORDER`), so no hub surface ever renders it. Counting it would invent a synthesis
+   * nobody can publish and no reader would ever see.
+   */
+  it("ignore un thème absent du catalogue présidentiel", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      themes: [
+        { theme: "SOCIAL_TRAVAIL", state: "MISSING" },
+        { theme: "ECONOMIE_BUDGET", state: "MISSING" },
+      ],
+    });
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]!.themes).toEqual(["ECONOMIE_BUDGET"]);
+  });
+
+  it("ne produit aucun constat quand seuls des thèmes hors catalogue manquent", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      themes: [{ theme: "SOCIAL_TRAVAIL", state: "MISSING" }],
+    });
+    expect(result.findings).toEqual([]);
+  });
+
+  /**
    * The regression this file exists for.
    *
    * Stored prompt versions are composite editorial labels ("...-v4-editorial-v2"), not the plain

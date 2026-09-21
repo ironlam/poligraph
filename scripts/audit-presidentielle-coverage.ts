@@ -20,6 +20,7 @@ import {
   computeThemeCorpusFingerprint,
   getThemeSynthesisState,
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
+import { PUBLIC_CURRENT_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 import type { ThemeCategory } from "@/generated/prisma";
 
 const ELECTION_SLUG = "presidentielle-2027";
@@ -48,20 +49,25 @@ async function collect(): Promise<CandidacyCoverage[]> {
 
   const rows: CandidacyCoverage[] = [];
   for (const candidacy of candidacies) {
-    // The same population the public fiche shows, so a finding always describes what a reader sees.
+    // The canonical public measure predicate, imported and never restated. A looser one (say, only
+    // `reviewedAt`) also admits revisions that are superseded, discarded, rejected or sourceless,
+    // and the theme corpus fingerprint is a hash over exactly this set: a set that differs from the
+    // one the reader authority uses would report a synthesis obsolete when it is not.
+    //
+    // What is deliberately NOT applied here is the fiche's own gate on a published extension. The
+    // reader authority scopes on it because a closed fiche shows nothing; an audit that did the
+    // same would go silent on every DRAFT candidacy, which is where the work actually is. So these
+    // counts read as "what the fiche would show once opened", and the report says as much.
     const measures = await db.measure.findMany({
-      where: {
-        candidacyId: candidacy.id,
-        publicationStatus: "PUBLISHED",
-        withdrawnAt: null,
-        publishedRevision: { reviewedAt: { not: null } },
-      },
+      where: { candidacyId: candidacy.id, ...PUBLIC_CURRENT_MEASURE_WHERE },
       select: {
         id: true,
         theme: true,
         publishedRevisionId: true,
         publishedRevision: { select: { text: true, details: true, publishedAt: true } },
       },
+      // Same order as the theme synthesis reader, so both hash an identically built corpus.
+      orderBy: { id: "asc" },
     });
 
     let firstMeasurePublishedAt: Date | null = null;
@@ -129,7 +135,11 @@ function print(rows: CandidacyCoverage[]): void {
 
   console.log(
     `[presidentielle:coverage] ${rows.length} candidatures déclarées, ` +
-      `${withFindings.length} avec au moins un constat\n`
+      `${withFindings.length} avec au moins un constat`
+  );
+  console.log(
+    "Les décomptes portent sur ce que la fiche montrerait une fois ouverte, " +
+      "extension DRAFT comprise.\n"
   );
 
   for (const row of withFindings.sort((a, b) => b.findings.length - a.findings.length)) {
