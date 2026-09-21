@@ -34,7 +34,13 @@ async function collect(): Promise<CandidacyCoverage[]> {
       id: true,
       candidateName: true,
       politician: { select: { slug: true } },
-      programEditions: { select: { publicationStatus: true } },
+      // Scoped to the election, as the fiche scopes it. `ProgramEdition` carries its own
+      // `electionId` beside its owner, so a row reachable through `candidacyId` is not necessarily
+      // filed under this election; counting one would hide a missing presidential programme.
+      programEditions: {
+        where: { election: { slug: ELECTION_SLUG } },
+        select: { publicationStatus: true },
+      },
       presidentialData: {
         select: {
           synthesis: true,
