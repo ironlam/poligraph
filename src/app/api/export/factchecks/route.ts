@@ -6,7 +6,9 @@ import { FactCheckRating, Prisma } from "@/generated/prisma";
 import { parsePagination } from "@/lib/api/pagination";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { withCache } from "@/lib/cache";
 import { getPublicFactCheckWhere, isAllowedFactCheckSource } from "@/lib/api/public-contract";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -201,5 +203,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `factchecks-${new Date().toISOString().split("T")[0]}.csv`;
 
-  return createCSVResponse(csv, filename);
+  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
+  // hard-deletes the tag below, so an edited factcheck leaves the CSV at once.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.factchecks,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

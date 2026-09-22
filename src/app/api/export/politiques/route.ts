@@ -6,13 +6,19 @@ import { MandateType as MandateTypeEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { withCache } from "@/lib/cache";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import {
   getMandateStartDatePublicationStatus,
   getPublicFactCheckWhere,
 } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { parsePagination } from "@/lib/api/pagination";
 
 export const dynamic = "force-dynamic";
+
+/** Upper bound for this export. Reaching it means the CSV is silently truncated. */
+const EXPORT_CAP = 50000;
 
 /**
  * @openapi
@@ -43,6 +49,13 @@ export const dynamic = "force-dynamic";
  *         schema:
  *           type: boolean
  *           default: true
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50000
+ *           maximum: 50000
+ *         description: Nombre maximum de lignes retournées
  *     responses:
  *       200:
  *         description: Fichier CSV UTF-8 avec BOM
@@ -88,7 +101,15 @@ export const GET = withPublicRoute(async (request) => {
     where.affairs = { some: getPublishedAffairWhere() };
   }
 
+  // Cap the only unbounded export. Without it a single call scans every published
+  // politician, which is the most expensive query the public API can trigger.
+  const { limit } = parsePagination(searchParams, {
+    defaultLimit: EXPORT_CAP,
+    maxLimit: EXPORT_CAP,
+  });
+
   const politicians = await db.politician.findMany({
+    take: limit,
     where,
     include: {
       currentParty: {
@@ -127,6 +148,12 @@ export const GET = withPublicRoute(async (request) => {
     },
     orderBy: { lastName: "asc" },
   });
+
+  // Only the cap matters here: a caller-supplied smaller limit returning a full page is
+  // ordinary paging, not truncation, and warning on it would make this signal noise.
+  if (limit === EXPORT_CAP && politicians.length === limit) {
+    console.warn(`[export] plafond de ${limit} politiques atteint, l'export est tronqué`);
+  }
 
   const data = politicians.map((p) => {
     const mandate = p.mandates[0];
@@ -206,5 +233,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `politiques-${new Date().toISOString().split("T")[0]}.csv`;
 
-  return createCSVResponse(csv, filename);
+  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
+  // hard-deletes the tag below, so an edited politician leaves the CSV at once.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.politicians,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

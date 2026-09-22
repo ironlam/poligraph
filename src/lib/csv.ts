@@ -132,11 +132,12 @@ export function createCSVResponse(csv: string, filename: string): Response {
   const bom = "\ufeff";
   const csvWithBom = bom + csv;
 
+  // No Cache-Control here on purpose: formatting a CSV is not the place to decide
+  // a caching policy. Each export route declares its own via `withCache`.
   return new Response(csvWithBom, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-cache",
     },
   });
 }

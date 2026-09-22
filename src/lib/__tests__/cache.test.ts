@@ -9,7 +9,7 @@ vi.mock("next/cache", () => ({
   updateTag: (...args: unknown[]) => updateTag(...args),
 }));
 
-import { updateTags, invalidateAffectedPoliticians } from "@/lib/cache";
+import { updateTags, invalidateAffectedPoliticians, withCache } from "@/lib/cache";
 
 describe("updateTags", () => {
   beforeEach(() => updateTag.mockClear());
@@ -29,5 +29,36 @@ describe("invalidateAffectedPoliticians", () => {
       .map((c) => c[0])
       .filter((t) => String(t).startsWith("politician:"));
     expect(politicianTags).toEqual(["politician:a", "politician:b"]);
+  });
+});
+
+describe("withCache", () => {
+  it("serves the export tier for 24h and repeats it in the Vercel-authoritative header", () => {
+    const response = withCache(new Response("a,b"), "export");
+    const expected = "public, s-maxage=86400, stale-while-revalidate=604800";
+    expect(response.headers.get("Cache-Control")).toBe(expected);
+    expect(response.headers.get("Vercel-CDN-Cache-Control")).toBe(expected);
+  });
+
+  it("leaves the Vercel-authoritative header alone for the JSON tiers", () => {
+    const response = withCache(new Response("{}"), "daily");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, s-maxage=300, stale-while-revalidate=120"
+    );
+    expect(response.headers.get("Vercel-CDN-Cache-Control")).toBeNull();
+  });
+
+  it("joins tags with a comma, the separator Vercel expects", () => {
+    const response = withCache(new Response("a,b"), "export", ["export:affairs", "exports"]);
+    expect(response.headers.get("Vercel-Cache-Tag")).toBe("export:affairs,exports");
+  });
+
+  it("omits the tag header when no tag is given", () => {
+    const response = withCache(new Response("{}"), "daily");
+    expect(response.headers.get("Vercel-Cache-Tag")).toBeNull();
+  });
+
+  it("refuses a tag containing a comma, which Vercel would read as two tags", () => {
+    expect(() => withCache(new Response("a"), "export", ["bad,tag"])).toThrow(/virgule/);
   });
 });

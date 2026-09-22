@@ -7,6 +7,8 @@ import { Chamber as ChamberEnum, VotingResult as VotingResultEnum } from "@/gene
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { withCache } from "@/lib/cache";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -95,5 +97,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `votes-${chamber ? chamber.toLowerCase() + "-" : ""}${new Date().toISOString().split("T")[0]}.csv`;
 
-  return createCSVResponse(csv, filename);
+  // Cached 24h at the edge. Scrutins only change through the 04:00 daily sync,
+  // not through admin writes, so tag purge will come from post-sync revalidation.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.votes,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

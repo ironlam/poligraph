@@ -32,6 +32,7 @@ const PLATFORM_INJECTED = new Set([
   "NODE_ENV",
   "NEXT_RUNTIME",
   "NEXT_PHASE",
+  "VERCEL",
   "VERCEL_ENV",
   // Injected by Vercel as the deployment's own hostname, used as a fallback base URL. Surfaced
   // when this guard started seeing the `env.NAME` shape; nobody sets it by hand.

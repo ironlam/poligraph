@@ -220,6 +220,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.1",
     "@vercel/blob": "^2.3.0",
+    "@vercel/functions": "^3.9.9",
     "adm-zip": "^0.6.1",
     "ai": "^6.0.280",
     "cheerio": "^1.2.0",

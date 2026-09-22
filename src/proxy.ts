@@ -10,6 +10,7 @@ import {
   type RateLimitMode,
 } from "@/lib/ratelimit/degraded-mode";
 import { getUpstashCredentials } from "@/lib/ratelimit/upstash-credentials";
+import { recordApiCall } from "@/lib/api/usage-stats";
 import { buildVotesListingRedirect } from "@/lib/parlement-votes-redirect";
 import { ADMIN_COOKIE_NAME, verifySessionToken } from "@/lib/auth-token";
 import { getLegacyMeasureId } from "@/lib/presidentielle/measure-route";
@@ -271,6 +272,20 @@ async function applyApiRateLimit(
 
   if (!success) {
     return buildRateLimitExceededResponse(request, limit, reset);
+  }
+
+  // Post-response counter: same mechanism as the degraded-mode Sentry flush above,
+  // so it adds no latency. `recordApiCall` swallows its own errors.
+  const client = getRedis();
+  if (client) {
+    event.waitUntil(
+      recordApiCall(
+        client,
+        pathname,
+        request.headers.get("user-agent"),
+        request.nextUrl.searchParams
+      )
+    );
   }
 
   const response = NextResponse.next();
