@@ -20,7 +20,7 @@ describe("resolvePoolMax", () => {
   it("dimensionne le pool pour absorber des rendus à froid concurrents", () => {
     // Mesuré sur staging le 2026-09-22 : avec un rendu de 3 s immobilisant une connexion, un pool
     // de 2 commence à refuser à partir du 11e rendu concurrent, ce qui est la forme de POLIGRAPH-V.
-    // Un pool de 8 a servi 16 rendus concurrents sans un seul refus.
+    // Un pool de 4 a servi 16 rendus concurrents sans un seul refus ; à 3 il en restait un.
     expect(resolvePoolMax({})).toBe(DEFAULT_POOL_MAX);
     expect(DEFAULT_POOL_MAX).toBeGreaterThan(2);
   });
@@ -33,7 +33,8 @@ describe("resolvePoolMax", () => {
     // e6f26dc3 : à max=10, 5-6 requêtes concurrentes épuisaient les ~60 connexions du pooler.
     // Huit instances au défaut font 32, la moitié de ce budget.
     expect(DEFAULT_POOL_MAX * 8).toBeLessThan(60);
-    expect(MAX_POOL_MAX).toBeLessThan(10);
+    // Et le plafond aussi, sinon la sortie de secours annoncée peut rejouer l'incident.
+    expect(MAX_POOL_MAX * 8).toBeLessThan(60);
   });
 
   it("borne la surcharge pour qu'une faute de frappe n'ouvre pas des milliers de connexions", () => {

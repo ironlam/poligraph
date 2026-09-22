@@ -31,18 +31,24 @@ export const PRISMA_TRANSACTION_OPTIONS = {
  * broke first: commit e6f26dc3 (2026-02-27) cut the pool from 10 to 2 because "just 5-6 concurrent
  * requests exhaust Supabase's pooler limit (~60 connections), causing 'Max client connections
  * reached' errors site-wide". The failure is not local, it takes down everything sharing the
- * pooler, sync jobs included. Eight instances at four connections is 32, half that budget; fifteen
- * instances reach it. Raise this only against a measured pooler ceiling, never against a
- * single-instance benchmark.
+ * pooler, sync jobs included.
+ *
+ * Count the processes honestly: every request instance, but also each `next build` worker during a
+ * deploy, each Inngest job and each batch script under scripts/, since they all import the same
+ * module and all just went from 2 to 4. Eight request instances at four connections is 32, half the
+ * budget, and the deploy window stacks build workers on top of that. Raise this only against a
+ * measured pooler ceiling, never against a single-instance benchmark.
  */
 export const DEFAULT_POOL_MAX = 4;
 
 /**
- * A ceiling on the override. Sized against the pooler budget rather than against arithmetic
- * overflow: the danger is not thousands of connections from one process, it is roughly sixty
- * across all of them. Ten is what caused the 2026-02 incident, so the override stops below it.
+ * A ceiling on the override, sized against the pooler budget rather than against arithmetic
+ * overflow: the danger is not thousands of connections from one process, it is roughly sixty across
+ * all of them. Six keeps eight request instances at 48, still inside that budget. Eight would put
+ * them at 64, past it, which would make the advertised escape hatch able to reproduce the very
+ * outage this file documents.
  */
-export const MAX_POOL_MAX = 8;
+export const MAX_POOL_MAX = 6;
 
 /**
  * A floor of two, not one. `withAdvisoryLock` checks a client out for the whole callback and the

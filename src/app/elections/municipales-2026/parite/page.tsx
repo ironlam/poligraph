@@ -21,7 +21,7 @@ function parityColor(rate: number): string {
 }
 
 export default async function ParitePage() {
-  // Sequential queries to respect DB pool limit of 2
+  // Sequential queries: this page is not on a hot path and does not need to race for pool slots
   const stats = await getMunicipalesStats();
   const parityBySize = await getParityBySize();
   const outliers = await getParityOutliers();
