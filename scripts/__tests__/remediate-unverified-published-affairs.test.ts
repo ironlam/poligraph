@@ -70,7 +70,7 @@ describe("scripts/remediate-unverified-published-affairs", () => {
     expect(h.revalidateRemoteCache).not.toHaveBeenCalled();
   });
 
-  it("purges the affairs export tag once real affairs were depublished", async () => {
+  it("purges the affairs and politicians export tags once real affairs were depublished", async () => {
     process.argv.push("--confirm");
     h.db.affair.findMany.mockResolvedValue([UNVERIFIED_AFFAIR]);
     const { main } = await import("../remediate-unverified-published-affairs");
@@ -78,7 +78,7 @@ describe("scripts/remediate-unverified-published-affairs", () => {
     await main();
 
     expect(h.db.affair.update).toHaveBeenCalledTimes(1);
-    expect(h.revalidateRemoteCache).toHaveBeenCalledWith(["affairs"]);
+    expect(h.revalidateRemoteCache).toHaveBeenCalledWith(["affairs", "politicians"]);
     expect(h.revalidateRemoteCache).toHaveBeenCalledTimes(1);
   });
 

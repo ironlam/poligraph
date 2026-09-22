@@ -206,9 +206,11 @@ export async function main() {
   // The CSV exports are cached at the edge for 24h. A depublication that does not reach
   // the CDN leaves the affair downloadable, so the purge is part of the remediation, not
   // an optimisation. Only triggered when something was actually depublished.
+  // "politicians" too: /api/export/politiques carries an affairs count and an ?affairs=true
+  // filter, both computed over published affairs.
   if (updated > 0) {
     try {
-      await revalidateRemoteCache(["affairs"]);
+      await revalidateRemoteCache(["affairs", "politicians"]);
       console.log("Cache des exports purgé.");
     } catch (error) {
       console.error(
