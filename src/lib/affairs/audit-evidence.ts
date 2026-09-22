@@ -266,6 +266,25 @@ export interface SourceRow {
 }
 
 /**
+ * True when the verdict is later than every independent source, so none of them
+ * can attest it (#571). Shared by the audit and the publish guard so the two
+ * cannot drift.
+ *
+ * Encyclopedias are ignored: a Wikidata or Wikipedia row is stamped with its
+ * import date, which always postdates the verdict. With no independent source
+ * at all this returns false; « no source » is a different finding.
+ */
+export function verdictPostdatesAllSources(
+  verdictDate: Date,
+  sources: readonly Pick<SourceRow, "publishedAt" | "sourceType">[]
+): boolean {
+  const latest = sources
+    .filter((s) => !NOT_INDEPENDENT_TYPES.has(s.sourceType))
+    .reduce<number>((max, s) => Math.max(max, s.publishedAt.getTime()), 0);
+  return latest > 0 && latest < verdictDate.getTime();
+}
+
+/**
  * Stable identifiers for the coherence checks.
  *
  * The closure criteria of #566, #569, #571 and #580 used to quote the French
@@ -409,10 +428,7 @@ export function assess(affair: {
     // its import date and therefore always postdates the verdict. Jalkh carried
     // a 2024 verdict whose only press source was written in 2020, and nothing
     // fired.
-    const latest = affair.sources
-      .filter((s) => !NOT_INDEPENDENT_TYPES.has(s.sourceType))
-      .reduce<number>((max, s) => Math.max(max, s.publishedAt.getTime()), 0);
-    if (latest > 0 && latest < affair.verdictDate.getTime()) {
+    if (verdictPostdatesAllSources(affair.verdictDate, affair.sources)) {
       flag("SOURCES_ANTERIEURES_AU_VERDICT", "toutes les sources précèdent la date du verdict");
     }
   }

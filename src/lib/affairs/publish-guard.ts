@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma";
 import type { Involvement } from "@/types";
 import { isHumanReview } from "@/lib/affairs/review-provenance";
 import { involvementRequiresNote } from "@/lib/affairs/involvement-note";
+import { verdictPostdatesAllSources } from "@/lib/affairs/audit-evidence";
 
 /**
  * Garde de publication des affaires judiciaires (RGPD article 10,
@@ -42,6 +43,7 @@ export type PublishBlockReason =
     }
   | { code: "NO_SOURCE"; message: string }
   | { code: "MISSING_INVOLVEMENT_NOTE"; message: string }
+  | { code: "VERDICT_AFTER_ALL_SOURCES"; message: string }
   | {
       code: "UNREVIEWED_MATCHING_DECISION";
       message: string;
@@ -75,7 +77,8 @@ type GuardClient = {
       politicianId: string;
       involvement: Involvement;
       involvementNote: string | null;
-      sources: { url: string }[];
+      verdictDate: Date | null;
+      sources: { url: string; publishedAt: Date; sourceType: string }[];
     } | null>;
     update: (args: {
       where: Prisma.AffairWhereUniqueInput;
@@ -103,6 +106,8 @@ type GuardClient = {
  * blocage (vide = publiable). Règles :
  *
  * 1. Au moins une Source.
+ * 1bis. Si une date de verdict est renseignée, au moins une source indépendante
+ *    (hors Wikipedia/Wikidata) publiée à cette date ou après.
  * 2. Aucune décision de matching automatique (SAME ou UNDECIDED) non validée
  *    par un humain. Une décision est validée si et seulement si :
  *    reviewedAt non null, reviewAction confirmant (CONFIRMED, REASSIGNED,
@@ -133,7 +138,8 @@ export async function checkPublishable(
       politicianId: true,
       involvement: true,
       involvementNote: true,
-      sources: { select: { url: true } },
+      verdictDate: true,
+      sources: { select: { url: true, publishedAt: true, sourceType: true } },
     },
   });
 
@@ -156,6 +162,16 @@ export async function checkPublishable(
     reasons.push({
       code: "MISSING_INVOLVEMENT_NOTE",
       message: "note d'implication manquante (obligatoire pour une mention ou un lien indirect)",
+    });
+  }
+
+  // Same rule as the audit's SOURCES_ANTERIEURES_AU_VERDICT (#571): a verdict no
+  // independent source can have reported is not attested by the fiche.
+  if (affair.verdictDate && verdictPostdatesAllSources(affair.verdictDate, affair.sources)) {
+    reasons.push({
+      code: "VERDICT_AFTER_ALL_SOURCES",
+      message:
+        "la date du verdict est postérieure à toutes les sources : aucune ne peut l'attester",
     });
   }
 
