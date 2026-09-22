@@ -20,7 +20,11 @@ function dayKeys(days: number): string[] {
 function addInto(total: Record<string, number>, hash: Record<string, unknown> | null): void {
   if (!hash) return;
   for (const [field, value] of Object.entries(hash)) {
-    total[field] = (total[field] ?? 0) + Number(value ?? 0);
+    const count = Number(value);
+    // A non-numeric field must not poison the whole window: NaN is contagious and
+    // JSON.stringify turns it into null, which reads as "no traffic" instead of "bad data".
+    if (!Number.isFinite(count)) continue;
+    total[field] = (total[field] ?? 0) + count;
   }
 }
 
