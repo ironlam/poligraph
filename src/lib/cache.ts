@@ -123,12 +123,28 @@ function purgeExportTag(tag: string): void {
   }
 }
 
-/** Entities whose writes make a CSV export stale. Others have no export to purge. */
-const EXPORT_TAG_BY_ENTITY: Partial<Record<EntityType, string>> = {
-  affair: EXPORT_CACHE_TAGS.affairs,
-  politician: EXPORT_CACHE_TAGS.politicians,
-  factcheck: EXPORT_CACHE_TAGS.factchecks,
-  vote: EXPORT_CACHE_TAGS.votes,
+/**
+ * Entities whose writes make one or more CSV exports stale.
+ *
+ * Deliberately not one-to-one, because the exports embed each other. Verified against the
+ * route selects: the politiques export counts published affairs and public factcheck
+ * mentions and serializes `currentParty`; the affaires export serializes the politician,
+ * their `currentParty` and the `partyAtTime`; the factchecks export serializes the
+ * mentioned politician and their `currentParty`. Only the votes export stands alone.
+ *
+ * Mapping an entity to its same-named export only would leave a renamed party visible in
+ * three public CSV files for the whole 24h tier.
+ */
+const EXPORT_TAGS_BY_ENTITY: Partial<Record<EntityType, readonly string[]>> = {
+  affair: [EXPORT_CACHE_TAGS.affairs, EXPORT_CACHE_TAGS.politicians],
+  politician: [
+    EXPORT_CACHE_TAGS.politicians,
+    EXPORT_CACHE_TAGS.affairs,
+    EXPORT_CACHE_TAGS.factchecks,
+  ],
+  party: [EXPORT_CACHE_TAGS.politicians, EXPORT_CACHE_TAGS.affairs, EXPORT_CACHE_TAGS.factchecks],
+  factcheck: [EXPORT_CACHE_TAGS.factchecks, EXPORT_CACHE_TAGS.politicians],
+  vote: [EXPORT_CACHE_TAGS.votes],
 };
 
 /**
@@ -140,8 +156,9 @@ export function invalidateEntity(
   slug?: string,
   options: InvalidateOptions = {}
 ): void {
-  const exportTag = EXPORT_TAG_BY_ENTITY[type];
-  if (exportTag) purgeExportTag(exportTag);
+  for (const exportTag of EXPORT_TAGS_BY_ENTITY[type] ?? []) {
+    purgeExportTag(exportTag);
+  }
 
   switch (type) {
     case "politician":
@@ -256,12 +273,23 @@ export function revalidateAll(): void {
   purgeExportTag(EXPORT_ROLLUP_TAG);
 }
 
-/** Cache tags whose refresh also makes a CSV export stale. */
-const EXPORT_TAG_BY_CACHE_TAG: Record<string, string> = {
-  affairs: EXPORT_CACHE_TAGS.affairs,
-  politicians: EXPORT_CACHE_TAGS.politicians,
-  factchecks: EXPORT_CACHE_TAGS.factchecks,
-  votes: EXPORT_CACHE_TAGS.votes,
+/**
+ * Cache tags whose refresh also makes CSV exports stale.
+ *
+ * Same cross-entity dependencies as `EXPORT_TAGS_BY_ENTITY`, keyed by cache tag name
+ * instead of entity type. The two vocabularies differ (`parties` here, `party` there), so
+ * the tables stay separate; a test asserts they describe the same dependencies.
+ */
+const EXPORT_TAGS_BY_CACHE_TAG: Record<string, readonly string[]> = {
+  affairs: [EXPORT_CACHE_TAGS.affairs, EXPORT_CACHE_TAGS.politicians],
+  politicians: [
+    EXPORT_CACHE_TAGS.politicians,
+    EXPORT_CACHE_TAGS.affairs,
+    EXPORT_CACHE_TAGS.factchecks,
+  ],
+  parties: [EXPORT_CACHE_TAGS.politicians, EXPORT_CACHE_TAGS.affairs, EXPORT_CACHE_TAGS.factchecks],
+  factchecks: [EXPORT_CACHE_TAGS.factchecks, EXPORT_CACHE_TAGS.politicians],
+  votes: [EXPORT_CACHE_TAGS.votes],
 };
 
 /**
@@ -276,9 +304,10 @@ export function revalidateTags(tags: string[], profile: string = DEFAULT_PROFILE
   // The daily sync refreshes through this function, never through `invalidateEntity`
   // (scripts/sync-daily.ts posts tags to /api/cron/revalidate). Without this, an export
   // would stay cached for the full 24h tier after each sync.
-  for (const tag of tags) {
-    const exportTag = EXPORT_TAG_BY_CACHE_TAG[tag];
-    if (exportTag) purgeExportTag(exportTag);
+  // Deduplicated: a sync posting several tags that share an export must purge it once.
+  const exportTags = new Set(tags.flatMap((tag) => EXPORT_TAGS_BY_CACHE_TAG[tag] ?? []));
+  for (const exportTag of exportTags) {
+    purgeExportTag(exportTag);
   }
 }
 
