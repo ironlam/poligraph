@@ -7,8 +7,12 @@
  *   in `.env.example`, under the section that matches the feature.
  * - Forbidden: a variable that only exists in code. Before this guard the code read 88 names and
  *   `.env.example` declared 35, so a missing key surfaced as a runtime failure in a nightly job.
- * - Limit: only statically written `process.env.NAME` is seen; a name built at runtime is not
- *   guessed. Test files are excluded on purpose. Several guards feed themselves secret-shaped
+ * - Seen: `process.env.NAME`, and the env-bag form `env.NAME` used by a function that takes the
+ *   environment as a parameter so it stays testable (`resolvePoolMax` in src/config/database.ts).
+ *   Before that second shape was matched, a variable read through a parameter was invisible here
+ *   and could drift out of `.env.example` without any test failing.
+ * - Limit: a name built at runtime is not guessed, and neither is `process.env` destructuring,
+ *   which the codebase does not currently use. Test files are excluded on purpose. Several guards feed themselves secret-shaped
  *   names as fixtures (`NEXT_PUBLIC_PRIVATE_KEY`, `SUPABASE_URL`) precisely to prove those names
  *   are rejected; documenting them would advertise what the guards exist to forbid.
  *
@@ -29,6 +33,9 @@ const PLATFORM_INJECTED = new Set([
   "NEXT_RUNTIME",
   "NEXT_PHASE",
   "VERCEL_ENV",
+  // Injected by Vercel as the deployment's own hostname, used as a fallback base URL. Surfaced
+  // when this guard started seeing the `env.NAME` shape; nobody sets it by hand.
+  "VERCEL_URL",
   "VERCEL_GIT_COMMIT_SHA",
   "NEXT_PUBLIC_VERCEL_ENV",
   "NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA",
@@ -54,9 +61,22 @@ interface Reference {
   line: number;
 }
 
+/**
+ * Matches `process.env.NAME` and `env.NAME` alike: the leading `\b` sits between the dot and the
+ * `env` of `process.env`, so one pattern covers both the direct read and the bag passed as an
+ * argument.
+ *
+ * The trailing lookahead is what keeps `env.Foo` from reporting a variable called `F`: the
+ * uppercase class would otherwise stop at the first lowercase letter and hand back the prefix.
+ */
+const ENV_READ = /\benv\.([A-Z][A-Z0-9_]*)(?![A-Za-z0-9_])/g;
+
+export function envNamesIn(text: string): string[] {
+  return [...text.matchAll(ENV_READ)].map((match) => match[1]!);
+}
+
 function collectReferences(): Reference[] {
   const references: Reference[] = [];
-  const pattern = /process\.env\.([A-Z][A-Z0-9_]*)/g;
 
   const walk = (directory: string): void => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -78,8 +98,8 @@ function collectReferences(): Reference[] {
       fs.readFileSync(absolute, "utf8")
         .split(/\r?\n/)
         .forEach((text, index) => {
-          for (const match of text.matchAll(pattern)) {
-            references.push({ name: match[1]!, file: relative, line: index + 1 });
+          for (const name of envNamesIn(text)) {
+            references.push({ name, file: relative, line: index + 1 });
           }
         });
     }
@@ -109,6 +129,35 @@ const REFERENCES = collectReferences();
 const DECLARED = declaredNames();
 
 describe("L-02 environment documentation contract", () => {
+  describe("envNamesIn", () => {
+    it("sees the direct read", () => {
+      expect(envNamesIn("const a = process.env.DATABASE_URL;")).toEqual(["DATABASE_URL"]);
+    });
+
+    it("sees a variable read through an env bag passed as an argument", () => {
+      // The gap this guard had: `resolvePoolMax(env)` reads `env.DATABASE_POOL_MAX`, which the
+      // old `process.env.NAME` pattern could not see, so the name could drift out of
+      // .env.example with nothing failing.
+      expect(envNamesIn("return env.DATABASE_POOL_MAX?.trim();")).toEqual(["DATABASE_POOL_MAX"]);
+    });
+
+    it("counts a direct read once, not twice", () => {
+      expect(envNamesIn("process.env.CRON_SECRET")).toHaveLength(1);
+    });
+
+    it("finds every name on a line", () => {
+      expect(envNamesIn("env.A_ONE ?? process.env.B_TWO")).toEqual(["A_ONE", "B_TWO"]);
+    });
+
+    it("ignores a lowercase or mixed-case property, which is not an env name", () => {
+      expect(envNamesIn("env.databaseUrl + env.Foo")).toEqual([]);
+    });
+
+    it("does not treat an unrelated identifier ending in env as an environment read", () => {
+      expect(envNamesIn("testenv.DATABASE_URL")).toEqual([]);
+    });
+  });
+
   it("scans a meaningful number of references", () => {
     // A regex that stops matching would make this suite pass while checking nothing.
     expect(REFERENCES.length).toBeGreaterThan(100);
