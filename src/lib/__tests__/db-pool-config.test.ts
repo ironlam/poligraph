@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONNECTION_TIMEOUT_MS, DEFAULT_POOL_MAX } from "@/config/database";
+import {
+  BATCH_CONNECTION_TIMEOUT_MS,
+  WEB_CONNECTION_TIMEOUT_MS,
+  DEFAULT_POOL_MAX,
+} from "@/config/database";
 
 /**
  * `statement_timeout` in the pg.Pool config is silently ignored on this database, so declaring it
@@ -80,7 +84,8 @@ describe("configuration du pool Postgres", () => {
   it("garde les réglages qui, eux, sont appliqués", async () => {
     const config = await poolConfig();
     expect(config.max).toBe(DEFAULT_POOL_MAX);
-    expect(config.connectionTimeoutMillis).toBe(CONNECTION_TIMEOUT_MS);
+    // Le harnais tourne hors runtime Next, donc c'est le budget batch qui doit arriver ici.
+    expect(config.connectionTimeoutMillis).toBe(BATCH_CONNECTION_TIMEOUT_MS);
   });
 
   /**
@@ -89,13 +94,13 @@ describe("configuration du pool Postgres", () => {
    * when the pool is smaller than the concurrency it faces.
    */
   /**
-   * Quinze secondes n'est pas un budget qu'une requête web peut dépenser : le visiteur est parti
-   * avant, que la requête finisse en 500 ou en 200. Le test garde la borne supérieure, pas la
-   * valeur exacte, pour laisser régler sans réécrire l'assertion.
+   * Le budget qui arrive au pool suit la charge : court sous Next, généreux ailleurs. Sans cette
+   * assertion, une régression sur `resolveConnectionTimeout` passerait inaperçue puisque le
+   * harnais ne voit jamais le chemin web.
    */
-  it("ne laisse pas une requête attendre une connexion plus de quelques secondes", async () => {
-    expect(await poolConfig()).toHaveProperty("connectionTimeoutMillis");
-    expect(CONNECTION_TIMEOUT_MS).toBeLessThanOrEqual(8_000);
+  it("donne au runtime Next le budget court", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    expect((await poolConfig()).connectionTimeoutMillis).toBe(WEB_CONNECTION_TIMEOUT_MS);
   });
 
   it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {

@@ -1,11 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { monitorEventLoopDelay } from "node:perf_hooks";
 import { Client, Pool, type PoolConfig } from "pg";
 import { captureDriverRead, recordUnsupportedDriverRead } from "./read-operations";
 import {
   classifyAcquisition,
   describeAcquisition,
   isSlowAcquisition,
+  startLoopLagProbe,
   type AcquisitionSample,
 } from "./pool-acquisition";
 
@@ -68,12 +68,14 @@ export class ObservedPool extends Pool {
     // pool queues the caller, a pool with room opens a new connection.
     const poolMax = this.options.max ?? 10;
     const atCapacity = this.totalCount;
+    // One probe per acquisition, so the lag reported alongside a wait is the lag during that wait.
+    const lag = startLoopLagProbe();
     const callback = args[0];
 
     if (typeof callback === "function") {
       const invoke = callback as Invocation;
       const measured = function (this: unknown, ...callbackArgs: unknown[]) {
-        reportSlowAcquisition(Date.now() - startedAt, atCapacity, poolMax);
+        reportSlowAcquisition(Date.now() - startedAt, lag.stop(), atCapacity, poolMax);
         return invoke.apply(this, callbackArgs);
       };
       args[0] = AsyncLocalStorage.bind(measured);
@@ -83,37 +85,27 @@ export class ObservedPool extends Pool {
     const acquisition = (super.connect as Invocation)(...args) as Promise<unknown>;
     return acquisition.then(
       (client) => {
-        reportSlowAcquisition(Date.now() - startedAt, atCapacity, poolMax);
+        reportSlowAcquisition(Date.now() - startedAt, lag.stop(), atCapacity, poolMax);
         return client;
       },
       (error: unknown) => {
-        reportSlowAcquisition(Date.now() - startedAt, atCapacity, poolMax);
+        reportSlowAcquisition(Date.now() - startedAt, lag.stop(), atCapacity, poolMax);
         throw error;
       }
     );
   }) as Pool["connect"];
 }
 
-/**
- * Event loop lag, sampled continuously so a slow acquisition can be attributed. `max` covers the
- * window since the last report rather than the acquisition itself, which is the honest limit of a
- * process-wide histogram: a healthy figure proves the loop was never blocked over that window, a
- * high one only says it was blocked at some point in it.
- */
-const loopDelay = monitorEventLoopDelay({ resolution: 20 });
-loopDelay.enable();
-
 /** Exported so the threshold and the reported line can be asserted without a database. */
-export function reportSlowAcquisition(waitedMs: number, poolTotal: number, poolMax: number): void {
+export function reportSlowAcquisition(
+  waitedMs: number,
+  loopLagMs: number,
+  poolTotal: number,
+  poolMax: number
+): void {
   if (!isSlowAcquisition(waitedMs)) return;
 
-  const sample: AcquisitionSample = {
-    waitedMs,
-    loopLagMs: Math.round(loopDelay.max / 1e6),
-    poolTotal,
-    poolMax,
-  };
-  loopDelay.reset();
+  const sample: AcquisitionSample = { waitedMs, loopLagMs, poolTotal, poolMax };
 
   const detail = describeAcquisition(sample);
   // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs, Sentry breadcrumb)

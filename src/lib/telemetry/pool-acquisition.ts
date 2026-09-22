@@ -29,6 +29,52 @@ const LOOP_LAG_FLOOR_MS = 100;
 /** Above this share of the wait, the blocked loop is the wait. */
 const LOOP_LAG_SHARE = 0.5;
 
+/** How often the probe checks in. Short enough to catch a stall, cheap enough to run per acquisition. */
+const LOOP_LAG_TICK_MS = 50;
+
+export type LoopLagProbe = {
+  /** Largest delay observed since the probe started, in ms. Idempotent. */
+  stop: () => number;
+};
+
+/**
+ * Measures event loop lag over one acquisition and nothing else.
+ *
+ * A process-wide histogram cannot do this: its maximum covers everything since the last reset, so a
+ * stall from ten minutes ago gets blamed for this wait, and two slow acquisitions at once steal each
+ * other's reading by resetting it. Both defeat the point, which is to separate two causes.
+ *
+ * A self-scheduled timer answers exactly the right question: it asks to be woken in
+ * LOOP_LAG_TICK_MS, and however late it actually wakes is how blocked the loop was. The timer is
+ * unref'd so a probe still running can never keep a script alive, and an acquisition shorter than
+ * one tick clears it before it ever fires.
+ */
+export function startLoopLagProbe(): LoopLagProbe {
+  let maxLagMs = 0;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const tick = (): void => {
+    const askedAt = Date.now();
+    timer = setTimeout(() => {
+      if (stopped) return;
+      maxLagMs = Math.max(maxLagMs, Date.now() - askedAt - LOOP_LAG_TICK_MS);
+      tick();
+    }, LOOP_LAG_TICK_MS);
+    timer.unref?.();
+  };
+
+  tick();
+
+  return {
+    stop: () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      return maxLagMs;
+    },
+  };
+}
+
 export type AcquisitionSample = {
   waitedMs: number;
   loopLagMs: number;

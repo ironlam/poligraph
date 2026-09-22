@@ -1,7 +1,7 @@
 import { PrismaClient } from "@/generated/prisma";
 import {
-  CONNECTION_TIMEOUT_MS,
   PRISMA_TRANSACTION_OPTIONS,
+  resolveConnectionTimeout,
   resolvePoolMax,
 } from "@/config/database";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -37,7 +37,9 @@ function buildExtendedClient() {
     // rather than a safeguard. DATABASE_POOL_MAX is the lever if the pooler reports pressure.
     max: resolvePoolMax(process.env),
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
+    // Short on the request path, generous for jobs and scripts: the same pool serves both, and
+    // only one of them has a visitor waiting.
+    connectionTimeoutMillis: resolveConnectionTimeout(process.env),
     ssl: useSsl ? { rejectUnauthorized: false } : false,
     allowExitOnIdle: true, // Release idle connections faster in serverless
     // No statement_timeout here on purpose. It is silently ignored on this database, and declaring

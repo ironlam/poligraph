@@ -44,20 +44,38 @@ export const PRISMA_TRANSACTION_OPTIONS = {
  * as the claim it was, not as a measurement. Sizing this against the 15 is what holds.
  */
 /**
- * How long a caller may wait for a pooled connection, covering both of pg-pool's branches: waiting
+ * How long a caller may wait for a pooled connection, covering both of pg-pool's branches: queueing
  * for a busy slot, and opening a new connection.
  *
- * Fifteen seconds was the previous value, and it is not a budget a web request can spend: the
- * visitor has left long before, whether the request then fails or succeeds. Measured on staging on
- * 2026-09-22 with a pool of four and realistic short queries, acquisition takes 481 ms at eight
- * concurrent renders, 1.1 s at sixteen, 2.3 s at thirty-two, and only reaches 8.3 s at sixty-four,
- * a level at which the response is lost anyway. Establishing a fresh connection takes 126 to 159 ms.
+ * One budget used to serve three very different callers. Fifteen seconds is not something a web
+ * request can spend, since the visitor has left long before, whether the request then fails or
+ * succeeds. It is perfectly reasonable for a sync job, where nobody is watching a screen and
+ * failing early only loses the run.
  *
- * Five seconds therefore leaves an order of magnitude over ordinary load while freeing the slot
- * three times faster when something upstream is wrong, which under contention helps the requests
- * queued behind rather than making them wait too.
+ * Two measurement sets exist and they do not model the same thing, so they are kept apart here:
+ *
+ *   Synthetic, each render holding a connection 3s (the pessimum used to size the pool):
+ *     pool 4, 16 concurrent renders → longest acquisition 9.2s
+ *   Realistic, short queries, same pool of 4:
+ *     8 concurrent → 481ms, 16 → 1086ms, 32 → 2294ms, 64 → 8308ms
+ *
+ * Production sides with the second: on 2026-09-22, 55 concurrent cold renders of
+ * /politiques/[slug] all returned 200 in at most 2817ms end to end, queries included, so
+ * acquisition was well under that. Opening a fresh connection takes 126 to 159ms.
+ *
+ * Hence five seconds on the request path, an order of magnitude over ordinary load, and thirty for
+ * everything else, above the 9.2s worst case so a job absorbs a queue instead of failing on it.
  */
-export const CONNECTION_TIMEOUT_MS = 5_000;
+export const WEB_CONNECTION_TIMEOUT_MS = 5_000;
+export const BATCH_CONNECTION_TIMEOUT_MS = 30_000;
+
+/**
+ * `NEXT_RUNTIME` is set by Next for the server and edge runtimes and by nothing else, which is the
+ * same signal `src/instrumentation.ts` already uses to tell the two apart.
+ */
+export function resolveConnectionTimeout(env: Record<string, string | undefined>): number {
+  return env.NEXT_RUNTIME ? WEB_CONNECTION_TIMEOUT_MS : BATCH_CONNECTION_TIMEOUT_MS;
+}
 
 /**
  * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on

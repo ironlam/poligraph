@@ -4,16 +4,17 @@ import {
   classifyAcquisition,
   describeAcquisition,
   isSlowAcquisition,
+  startLoopLagProbe,
 } from "../pool-acquisition";
-import { CONNECTION_TIMEOUT_MS } from "@/config/database";
+import { WEB_CONNECTION_TIMEOUT_MS } from "@/config/database";
 
 describe("seuil de signalement", () => {
   /**
    * Le seuil doit rester sous le délai d'acquisition, sinon on n'observe que les échecs et jamais
    * les quasi-échecs qui les annoncent. C'est tout l'intérêt de la mesure.
    */
-  it("se déclenche avant que la connexion n'abandonne", () => {
-    expect(SLOW_ACQUISITION_MS).toBeLessThan(CONNECTION_TIMEOUT_MS);
+  it("se déclenche avant que la connexion n'abandonne, y compris sur le budget le plus court", () => {
+    expect(SLOW_ACQUISITION_MS).toBeLessThan(WEB_CONNECTION_TIMEOUT_MS);
   });
 
   it("reste au-dessus de ce qu'une charge normale produit", () => {
@@ -83,5 +84,59 @@ describe("describeAcquisition", () => {
     expect(
       describeAcquisition({ waitedMs: 4000, loopLagMs: 3800, poolTotal: 1, poolMax: 4 })
     ).toContain("event-loop");
+  });
+});
+
+function blockEventLoop(ms: number): void {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    /* blocage volontaire */
+  }
+}
+
+describe("startLoopLagProbe", () => {
+  /**
+   * Une sonde par acquisition, et non un histogramme de processus : un blocage survenu dix minutes
+   * plus tôt ne doit pas être imputé à cette attente-ci, et deux acquisitions lentes simultanées
+   * ne doivent pas se voler leur mesure.
+   */
+  it("ne rapporte rien quand la boucle n'a pas été bloquée", async () => {
+    const probe = startLoopLagProbe();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(probe.stop()).toBeLessThan(80);
+  });
+
+  it("rapporte un blocage survenu pendant l'acquisition", async () => {
+    const probe = startLoopLagProbe();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    blockEventLoop(300);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(probe.stop()).toBeGreaterThan(200);
+  });
+
+  it("n'impute pas à une sonde un blocage survenu avant son démarrage", async () => {
+    blockEventLoop(300);
+    const probe = startLoopLagProbe();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(probe.stop()).toBeLessThan(80);
+  });
+
+  it("ne mêle pas deux sondes concurrentes", async () => {
+    const calme = startLoopLagProbe();
+    const calmeResultat = new Promise<number>((resolve) => {
+      setTimeout(() => resolve(calme.stop()), 80);
+    });
+    const agitee = startLoopLagProbe();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    blockEventLoop(300);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    // La première sonde s'est arrêtée avant le blocage, il ne doit pas la contaminer.
+    expect(await calmeResultat).toBeLessThan(80);
+    expect(agitee.stop()).toBeGreaterThan(200);
+  });
+
+  it("se laisse arrêter deux fois sans se plaindre", () => {
+    const probe = startLoopLagProbe();
+    expect(probe.stop()).toBe(probe.stop());
   });
 });
