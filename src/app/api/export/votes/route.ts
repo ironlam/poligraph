@@ -96,7 +96,7 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `votes-${chamber ? chamber.toLowerCase() + "-" : ""}${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Data only moves after the 04:00 daily sync, so an hour of CDN staleness on a
-  // full-table CSV costs nothing and keeps the heaviest public route off the function.
+  // Scrutins only move with the 04:00 daily sync, so an hour of CDN staleness on a
+  // full-table CSV costs nothing and keeps a heavy public route off the function.
   return withCache(createCSVResponse(csv, filename), "static");
 });

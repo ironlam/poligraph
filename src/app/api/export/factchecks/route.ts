@@ -202,7 +202,9 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `factchecks-${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Data only moves after the 04:00 daily sync, so an hour of CDN staleness on a
-  // full-table CSV costs nothing and keeps the heaviest public route off the function.
+  // Full-table CSV: an hour of CDN staleness keeps the scan off the function.
+  // Caveat: the daily sync is not the only writer, admin routes edit factchecks
+  // too, and `invalidateEntity("factcheck")` names no `/api/export/*` path, so an
+  // edit can take the whole s-maxage + stale-while-revalidate window to show up.
   return withCache(createCSVResponse(csv, filename), "static");
 });
