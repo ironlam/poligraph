@@ -141,6 +141,7 @@
     "audit:affairs:urls": "tsx scripts/audit-affairs.ts --check-urls",
     "audit:affairs:export": "tsx scripts/audit-affairs.ts --export",
     "audit:presidentielle-coverage": "tsx --env-file=.env scripts/audit-presidentielle-coverage.ts",
+    "sentry": "tsx --env-file=.env scripts/sentry.ts",
     "audit:parties": "tsx scripts/audit-parties.ts",
     "audit:parties:clean": "tsx scripts/audit-parties.ts --clean --confirm",
     "audit:parties:stats": "tsx scripts/audit-parties.ts --stats",
