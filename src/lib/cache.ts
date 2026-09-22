@@ -1,5 +1,8 @@
 import { revalidatePath, revalidateTag, updateTag } from "next/cache";
+import { after } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { ALL_TAGS } from "@/lib/cache-tags";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 // ─── Cache tiers for API responses ────────────────────────────────
 
@@ -73,6 +76,49 @@ const DEFAULT_PROFILE = "minutes";
 const ELECTION_PROFILE = "hours";
 
 /**
+ * Purge one export tag at the edge.
+ *
+ * Hard delete, not invalidate: `invalidateByTag` keeps serving the stale entry once
+ * while it revalidates in the background, and serving a depublished affair one more
+ * time is exactly what this guards against (AGENTS.md, principe 9).
+ *
+ * Scheduled through `after()` so it never delays the response, and swallowed so a purge
+ * outage cannot fail the write it follows. It stays loud: an unreported failure means a
+ * depublication that never reached the CDN.
+ *
+ * `@vercel/functions` is imported dynamically: 38 route files import this module, and a
+ * top-level import would pull the package into every test that touches them.
+ */
+function purgeExportTag(tag: string): void {
+  // No VERCEL env: local dev, tests, one-off scripts. There is no edge to purge.
+  if (!process.env.VERCEL) return;
+
+  try {
+    after(async () => {
+      try {
+        const { dangerouslyDeleteByTag } = await import("@vercel/functions");
+        await dangerouslyDeleteByTag(tag, { revalidationDeadlineSeconds: 10 });
+      } catch (error) {
+        // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+        console.error(`[cache] purge du tag ${tag} échouée`, error);
+        Sentry.captureException(error, { tags: { purgeTag: tag } });
+      }
+    });
+  } catch {
+    // `after()` throws outside a request scope (a script, an offline job). Nothing to
+    // schedule there, and the caller's mutation must not fail because of it.
+  }
+}
+
+/** Entities whose writes make a CSV export stale. Others have no export to purge. */
+const EXPORT_TAG_BY_ENTITY: Partial<Record<EntityType, string>> = {
+  affair: EXPORT_CACHE_TAGS.affairs,
+  politician: EXPORT_CACHE_TAGS.politicians,
+  factcheck: EXPORT_CACHE_TAGS.factchecks,
+  vote: EXPORT_CACHE_TAGS.votes,
+};
+
+/**
  * Invalidate CDN cache and data cache for a given entity.
  * Call after admin mutations or sync operations.
  */
@@ -81,6 +127,9 @@ export function invalidateEntity(
   slug?: string,
   options: InvalidateOptions = {}
 ): void {
+  const exportTag = EXPORT_TAG_BY_ENTITY[type];
+  if (exportTag) purgeExportTag(exportTag);
+
   switch (type) {
     case "politician":
       revalidatePath("/api/politiques", "layout");
@@ -189,6 +238,9 @@ export function revalidateAll(): void {
   for (const tag of ALL_TAGS) {
     revalidateTag(tag, tag === "elections" ? ELECTION_PROFILE : DEFAULT_PROFILE);
   }
+  // The sync path never goes through `invalidateEntity`, so the exports would otherwise
+  // stay cached for the full 24h tier after each daily sync.
+  purgeExportTag(EXPORT_ROLLUP_TAG);
 }
 
 /**
