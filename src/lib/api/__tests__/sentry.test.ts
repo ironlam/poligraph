@@ -7,12 +7,16 @@ import {
   issueUrl,
   latestEventUrl,
   statusPayloadFor,
+  statusLabelFor,
+  clampLimit,
   maskQueryString,
   formatIssueLine,
   formatFrames,
   formatBreadcrumb,
+  breadcrumbsFrom,
   updateIssueStatus,
   lookupGroupId,
+  projectUrl,
   type SentryConfig,
   type SentryIssue,
 } from "../sentry";
@@ -74,6 +78,13 @@ describe("assertShortId", () => {
     expect(assertShortId("POLIGRAPH-1N")).toBe("POLIGRAPH-1N");
   });
 
+  it("accepts a short id from a hyphenated project slug", () => {
+    // Sentry's own example is PUMP-STATION-1, for the slug `pump-station`. Requiring exactly one
+    // dash rejected every such project while blaming the operator's input.
+    expect(assertShortId("PUMP-STATION-1")).toBe("PUMP-STATION-1");
+    expect(assertShortId("POLIGRAPH-WIKIBOT-2AB")).toBe("POLIGRAPH-WIKIBOT-2AB");
+  });
+
   it.each([
     ["a path traversal", "POLIGRAPH-1N/../../organizations"],
     ["a slash", "POLIGRAPH/1N"],
@@ -87,31 +98,73 @@ describe("assertShortId", () => {
 });
 
 describe("url building", () => {
+  const PROJECT_ID = "4511242598613073";
+
   it("targets sentry.io and nothing else", () => {
     for (const url of [
-      issueListUrl(CONFIG, {}),
+      issueListUrl(CONFIG, PROJECT_ID, {}),
       shortIdLookupUrl(CONFIG, "POLIGRAPH-1N"),
       issueUrl(CONFIG, "144680922"),
       latestEventUrl(CONFIG, "144680922"),
+      projectUrl(CONFIG),
     ]) {
       expect(new URL(url).origin).toBe("https://sentry.io");
     }
   });
 
-  it("defaults the listing to unresolved issues over 14 days", () => {
-    const url = new URL(issueListUrl(CONFIG, {}));
-    expect(url.pathname).toBe("/api/0/projects/poligraph/poligraph/issues/");
+  /**
+   * The org and project slugs come from the environment and land in a URL path. Before they were
+   * validated, a slug carrying `..` retargeted the request the PUT travels on.
+   */
+  it.each([
+    ["a path traversal", "../../organizations/evil"],
+    ["a slash", "poligraph/x"],
+    ["a query string", "poligraph?foo"],
+    ["a fragment", "poligraph#x"],
+    ["an empty slug", ""],
+  ])("refuses an org slug carrying %s", (_label, org) => {
+    expect(() => issueListUrl({ ...CONFIG, org }, PROJECT_ID, {})).toThrow(/SENTRY_ORG/);
+    expect(() => issueUrl({ ...CONFIG, org }, "1")).toThrow(/SENTRY_ORG/);
+  });
+
+  it("refuses a project slug carrying a path traversal", () => {
+    expect(() => projectUrl({ ...CONFIG, project: "../evil" })).toThrow(/SENTRY_PROJECT/);
+  });
+
+  /**
+   * The project endpoint accepts only "", "24h" and "14d" for statsPeriod and filters nothing with
+   * it; the organization one takes any period and actually narrows the window.
+   */
+  it("lists through the organization endpoint, where the period is a real filter", () => {
+    const url = new URL(issueListUrl(CONFIG, PROJECT_ID, {}));
+    expect(url.pathname).toBe("/api/0/organizations/poligraph/issues/");
+    expect(url.searchParams.get("project")).toBe(PROJECT_ID);
     expect(url.searchParams.get("query")).toBe("is:unresolved");
     expect(url.searchParams.get("statsPeriod")).toBe("14d");
   });
 
+  it("sorts by frequency, because the command promises the noisiest first", () => {
+    // Sentry's default is last-seen order, which put a 70-event issue above a 1422-event one.
+    expect(new URL(issueListUrl(CONFIG, PROJECT_ID, {})).searchParams.get("sort")).toBe("freq");
+  });
+
+  it("accepts a period the project endpoint would have rejected", () => {
+    expect(
+      new URL(issueListUrl(CONFIG, PROJECT_ID, { statsPeriod: "30d" })).searchParams.get(
+        "statsPeriod"
+      )
+    ).toBe("30d");
+  });
+
   it("passes an environment filter through, so prod and local dev do not get mixed", () => {
-    const url = new URL(issueListUrl(CONFIG, { environment: "production" }));
+    const url = new URL(issueListUrl(CONFIG, PROJECT_ID, { environment: "production" }));
     expect(url.searchParams.get("environment")).toBe("production");
   });
 
   it("omits the environment filter when none is asked for", () => {
-    expect(new URL(issueListUrl(CONFIG, {})).searchParams.has("environment")).toBe(false);
+    expect(new URL(issueListUrl(CONFIG, PROJECT_ID, {})).searchParams.has("environment")).toBe(
+      false
+    );
   });
 
   it("encodes the short id instead of splicing it into the path", () => {
@@ -124,6 +177,21 @@ describe("url building", () => {
     expect(issueUrl(CONFIG, "144680922")).toBe(
       "https://sentry.io/api/0/organizations/poligraph/issues/144680922/"
     );
+  });
+});
+
+describe("clampLimit", () => {
+  it("stops at the 100 Sentry serves, so the printed count is not a silent truncation", () => {
+    expect(clampLimit(500)).toBe(100);
+  });
+
+  it("falls back to the default on a value that is not a number", () => {
+    expect(clampLimit(Number.NaN)).toBe(25);
+    expect(clampLimit(undefined)).toBe(25);
+  });
+
+  it("refuses to ask for zero issues", () => {
+    expect(clampLimit(0)).toBe(1);
   });
 });
 
@@ -253,13 +321,11 @@ describe("network calls", () => {
   });
 
   it("resolves a short id to the numeric group id the mutation endpoint needs", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ shortId: "POLIGRAPH-1N", groupId: "145549331" }), {
-          status: 200,
-        })
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ shortId: "POLIGRAPH-1N", groupId: "145549331" }), {
+        status: 200,
+      })
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     expect(await lookupGroupId(CONFIG, "POLIGRAPH-1N")).toBe("145549331");
@@ -277,5 +343,112 @@ describe("network calls", () => {
     );
     expect(message).toContain("401");
     expect(message).not.toContain("sntryu_secret");
+  });
+});
+
+describe("maskQueryString on the shapes breadcrumbs actually carry", () => {
+  it("masks a query inside a sentence, not only a bare url", () => {
+    expect(maskQueryString("Navigated to https://poligraph.fr/recherche?q=secret")).toBe(
+      "Navigated to https://poligraph.fr/recherche?…"
+    );
+  });
+
+  it("masks a relative path, which is how a navigation breadcrumb is usually written", () => {
+    expect(maskQueryString("GET /recherche?q=secret [200]")).toBe("GET /recherche?… [200]");
+  });
+
+  it("masks a fragment, where a token travels after an oauth callback", () => {
+    expect(maskQueryString("https://poligraph.fr/callback#access_token=xyz")).toBe(
+      "https://poligraph.fr/callback#…"
+    );
+  });
+
+  it("leaves ordinary prose alone", () => {
+    expect(maskQueryString("Vraiment ? une phrase sans url")).toBe(
+      "Vraiment ? une phrase sans url"
+    );
+  });
+});
+
+describe("breadcrumbsFrom", () => {
+  it("reads the entries envelope, which is where Sentry puts them", () => {
+    // There is no top-level `breadcrumbs` key on an event: reading one returned undefined on every
+    // response, so the section rendered nothing while the command still advertised --raw.
+    const entries = [
+      { type: "exception", data: { values: [] } },
+      { type: "breadcrumbs", data: { values: [{ category: "navigation", message: "/a" }] } },
+    ];
+    expect(breadcrumbsFrom(entries)).toEqual([{ category: "navigation", message: "/a" }]);
+  });
+
+  it("returns an empty list when the event carries no breadcrumbs entry", () => {
+    expect(breadcrumbsFrom([{ type: "exception", data: { values: [] } }])).toEqual([]);
+  });
+});
+
+describe("statusLabelFor", () => {
+  it("prints the value that is actually sent, so the two cannot drift", () => {
+    expect(statusLabelFor("resolve")).toBe(statusPayloadFor("resolve").status);
+    expect(statusLabelFor("resolve")).toBe("resolvedInNextRelease");
+  });
+});
+
+describe("lookupGroupId project scoping", () => {
+  it("refuses a short id belonging to another project of the organization", async () => {
+    // The lookup is org-wide and the write endpoint is too, while the listing is project-scoped:
+    // nothing else stops a sibling project's issue from being closed by mistake.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ groupId: "9", projectSlug: "autre-projet" }), {
+          status: 200,
+        })
+      )
+    );
+
+    const message = await lookupGroupId(CONFIG, "AUTRE-1A").then(
+      () => "resolved, which it must not",
+      (error: Error) => error.message
+    );
+    expect(message).toContain("autre-projet");
+    expect(message).toContain("Rien n'a été écrit");
+  });
+
+  it("accepts a short id of the configured project", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ groupId: "9", projectSlug: "poligraph" }), { status: 200 })
+        )
+    );
+    expect(await lookupGroupId(CONFIG, "POLIGRAPH-1N")).toBe("9");
+  });
+});
+
+describe("fetchSentry robustness", () => {
+  it("names the endpoint when a 200 is not JSON, instead of a bare SyntaxError", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("<!doctype html><html>maintenance", { status: 200 }))
+    );
+
+    const message = await lookupGroupId(CONFIG, "POLIGRAPH-1N").then(
+      () => "resolved, which it must not",
+      (error: Error) => error.message
+    );
+    expect(message).toContain("non JSON");
+    expect(message).toContain("sentry.io");
+  });
+
+  it("gives every request a deadline so a stalled socket cannot pin the command", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ groupId: "9" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await lookupGroupId(CONFIG, "POLIGRAPH-1N");
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

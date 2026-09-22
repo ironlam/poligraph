@@ -25,6 +25,9 @@ import {
   formatIssueLine,
   formatFrames,
   formatBreadcrumb,
+  breadcrumbsFrom,
+  statusLabelFor,
+  clampLimit,
   maskQueryString,
   type SentryConfig,
   type StatusAction,
@@ -38,20 +41,37 @@ function flag(name: string): boolean {
   return argv.includes(`--${name}`);
 }
 
+/**
+ * Returns the value of `--name value` or `--name=value`. A following token that is itself a flag is
+ * not a value: without that check `--limit --json` sent `limit=NaN` to Sentry and swallowed the
+ * `--json` the operator also typed.
+ */
 function option(name: string): string | undefined {
   const inline = argv.find((arg) => arg.startsWith(`--${name}=`));
-  if (inline) return inline.slice(name.length + 3);
+  if (inline) return inline.slice(name.length + 3) || undefined;
   const index = argv.indexOf(`--${name}`);
-  return index >= 0 ? argv[index + 1] : undefined;
+  if (index < 0) return undefined;
+  const next = argv[index + 1];
+  return next && !next.startsWith("--") ? next : undefined;
+}
+
+function numericOption(name: string): number | undefined {
+  const raw = option(name);
+  if (raw === undefined) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`--${name} attend un nombre, reçu "${raw}".`);
+  }
+  return parsed;
 }
 
 const USAGE = `Usage : npm run sentry -- <commande> [options]
 
-  list                          issues non résolues, les plus bruyantes d'abord
+  list                          issues non résolues, les plus bruyantes d'abord (sort=freq)
     --env <environnement>       production, preview… (sans filtre, dev local et prod se mélangent)
-    --period <14d>              fenêtre statistique
+    --period <14d>              fenêtre réelle : 24h, 7d, 30d, 90d… le compte suit la fenêtre
     --query "<requête>"         requête Sentry brute, défaut is:unresolved
-    --limit <25>
+    --limit <25>                plafonné à 100 par Sentry
     --json                      sortie brute
 
   show <SHORT-ID>               métadonnées, tags, stacktrace et breadcrumbs du dernier event
@@ -63,22 +83,29 @@ const USAGE = `Usage : npm run sentry -- <commande> [options]
   reopen <SHORT-ID> --confirm   remet en unresolved`;
 
 async function runList(config: SentryConfig): Promise<void> {
-  const issues = await listIssues(config, {
+  // Resolved once, so the header states what was asked for instead of guessing it a second time.
+  const options = {
     query: option("query"),
     statsPeriod: option("period"),
-    limit: option("limit") ? Number(option("limit")) : undefined,
+    limit: clampLimit(numericOption("limit")),
     environment: option("env"),
-  });
+  };
+  const issues = await listIssues(config, options);
 
   if (flag("json")) {
     console.log(JSON.stringify(issues, null, 2));
     return;
   }
 
-  const scope = option("env") ?? "tous environnements";
+  const scope = options.environment ?? "tous environnements";
   console.log(
-    `${issues.length} issues · ${option("query") ?? "is:unresolved"} · ${option("period") ?? "14d"} · ${scope}\n`
+    `${issues.length} issues · ${options.query ?? "is:unresolved"} · ` +
+      `${options.statsPeriod ?? "14d"} · ${scope} · les plus bruyantes d'abord`
   );
+  if (issues.length === options.limit) {
+    console.log(`(page pleine à ${options.limit} : resserrez --query ou --period pour tout voir)`);
+  }
+  console.log("");
   for (const issue of issues) console.log(`${formatIssueLine(issue)}\n`);
 }
 
@@ -93,9 +120,9 @@ async function runShow(config: SentryConfig, shortId: string): Promise<void> {
 
   console.log(`${issue.shortId} · ${issue.level} · ${issue.status}`);
   console.log(issue.title);
-  console.log(`culprit  ${issue.culprit ?? "—"}`);
+  console.log(`culprit  ${issue.culprit ?? "sans culprit"}`);
   console.log(`volume   ${issue.count} events / ${issue.userCount} users`);
-  console.log(`vu       ${issue.firstSeen.slice(0, 10)} → ${issue.lastSeen.slice(0, 10)}`);
+  console.log(`vu       ${issue.firstSeen.slice(0, 10)} à ${issue.lastSeen.slice(0, 10)} (UTC)`);
   console.log(`lien     ${issue.permalink}`);
 
   const interesting = ["environment", "release", "url", "browser", "runtime", "server_name"];
@@ -117,9 +144,9 @@ async function runShow(config: SentryConfig, shortId: string): Promise<void> {
     for (const frame of frames.slice(0, 12)) console.log(`  ${frame}`);
   }
 
-  const crumbs = event.breadcrumbs?.values ?? [];
+  const crumbs = breadcrumbsFrom(event.entries ?? []);
   if (crumbs.length > 0) {
-    console.log(`\nBreadcrumbs (${raw ? "brut" : "query strings masquées"}, 15 derniers)`);
+    console.log(`\nBreadcrumbs en UTC (${raw ? "brut" : "query strings masquées"}, 15 derniers)`);
     for (const crumb of crumbs.slice(-15)) console.log(`  ${formatBreadcrumb(crumb, { raw })}`);
   }
 
@@ -133,15 +160,10 @@ async function runWrite(
   shortId: string,
   action: StatusAction
 ): Promise<void> {
-  const labels: Record<StatusAction, string> = {
-    resolve: "resolvedInNextRelease",
-    "resolve-now": "resolved",
-    ignore: "ignored",
-    reopen: "unresolved",
-  };
+  const label = statusLabelFor(action);
 
   if (!flag("confirm")) {
-    console.log(`À faire : passer ${shortId} en ${labels[action]}.`);
+    console.log(`À faire : passer ${shortId} en ${label}.`);
     console.log("Rien n'a été écrit. Relancez la même commande avec --confirm.");
     process.exitCode = 1;
     return;
@@ -149,7 +171,7 @@ async function runWrite(
 
   const groupId = await lookupGroupId(config, shortId);
   await updateIssueStatus(config, groupId, action);
-  console.log(`${shortId} (group ${groupId}) → ${labels[action]}`);
+  console.log(`${shortId} (group ${groupId}) → ${label}`);
 
   if (action === "resolve") {
     console.log(
