@@ -1,8 +1,8 @@
 /**
  * Gated catch-up tool for the scrutin -> amendment linker (recent-scrutin
  * backlog). User-accord-gated: report-only by default, `--apply` performs
- * real writes against the production database (see CLAUDE.local.md — .env
- * and .env.prod point at the same Supabase instance). Do NOT run in CI.
+ * real writes against the production database (.env and .env.prod point at
+ * the same Supabase instance). Do NOT run in CI.
  *
  * Reconciliation (given, not recomputed by this tool): the recent unlinked
  * votes since the default --since cutoff are 476 AMENDEMENT (all with a
