@@ -14,7 +14,10 @@ Procédures opérationnelles pour Poligraph. Ce document couvre l'observabilité
 - **Sampling** : `tracesSampleRate: 0.1` en production (10% des transactions). `replaysOnErrorSampleRate: 1.0` (replay uniquement quand une erreur se produit).
 - **Filtrage** : les erreurs de flow Next.js (`NEXT_REDIRECT`, `NEXT_NOT_FOUND`, `DYNAMIC_SERVER_USAGE`) et quelques bruits navigateur (`ResizeObserver`, `AbortError`, erreurs réseau) sont ignorées.
 - **Upload des source maps** : actif uniquement si `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` et `SENTRY_PROJECT` sont tous présents à la build. Sans eux, les stack traces restent minifiées mais Sentry fonctionne.
-- **Triage depuis le repo** : `npm run sentry -- list --env production` liste les issues non résolues les plus bruyantes, `show <SHORT-ID>` donne stack, tags et breadcrumbs, `resolve <SHORT-ID> --confirm` ferme en `resolvedInNextRelease`. Les trois commandes d'écriture exigent `--confirm`. Lire `.claude/commands/sentry.md` pour la doctrine de fermeture.
+- **Triage depuis le repo** : `npm run sentry -- list --env production` liste les issues non résolues les plus bruyantes, `show <SHORT-ID>` donne stack, tags et breadcrumbs. Les trois commandes d'écriture exigent `--confirm`.
+- **Quel statut de fermeture** : cela dépend de si le correctif est déjà en production, parce que la promotion Vercel est un geste manuel séparé du merge.
+  - Correctif mergé, **pas encore promu** : `resolve <SHORT-ID> --confirm` écrit `resolvedInNextRelease`. L'issue sort de la file et Sentry la rouvre seule si elle tire encore après la release suivante.
+  - Correctif **déjà en production** : `resolve <SHORT-ID> --now --confirm` écrit `resolved` sec. C'est le bon statut à ce moment-là, car `resolvedInNextRelease` ne rouvrirait que sur une release postérieure à la suivante et masquerait donc une récidive sur la release en cours.
 - **Deux tokens, deux usages** : un token d'organisation (`sntrys_`) suffit à la build pour l'upload. Lire et fermer des issues depuis `npm run sentry` demande un token portant les droits de lecture et d'écriture sur les issues du projet.
 
 ### 1.2 Workflows cron (GitHub Actions)
