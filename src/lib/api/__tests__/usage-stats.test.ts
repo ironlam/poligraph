@@ -54,8 +54,19 @@ describe("classifyClient", () => {
 });
 
 describe("recordApiCall", () => {
+  /** Minimal stand-in for `redis.pipeline()`: records the queued commands, one `exec`. */
+  function pipelineStub(exec: () => Promise<unknown> = () => Promise.resolve([])) {
+    const commands: unknown[][] = [];
+    const chain = {
+      hincrby: (...args: unknown[]) => (commands.push(["hincrby", ...args]), chain),
+      expire: (...args: unknown[]) => (commands.push(["expire", ...args]), chain),
+      exec: vi.fn(exec),
+    };
+    return { redis: { pipeline: vi.fn(() => chain) }, commands, chain };
+  }
+
   it("counts the route and the client, and expires the keys", async () => {
-    const redis = { hincrby: vi.fn().mockResolvedValue(1), expire: vi.fn().mockResolvedValue(1) };
+    const { redis, commands } = pipelineStub();
     await recordApiCall(
       redis as never,
       "/api/politiques/x-dupont/votes",
@@ -63,49 +74,35 @@ describe("recordApiCall", () => {
       new URLSearchParams()
     );
 
-    expect(redis.hincrby).toHaveBeenCalledWith(
+    expect(commands).toContainEqual([
+      "hincrby",
       expect.stringMatching(/^apistats:\d{4}-\d{2}-\d{2}$/),
       "/api/politiques/[slug]/votes",
-      1
-    );
-    expect(redis.hincrby).toHaveBeenCalledWith(
+      1,
+    ]);
+    expect(commands).toContainEqual([
+      "hincrby",
       expect.stringMatching(/^apistats:client:\d{4}-\d{2}-\d{2}$/),
       "script",
-      1
-    );
-    expect(redis.expire).toHaveBeenCalledTimes(2);
+      1,
+    ]);
+    expect(commands.filter(([name]) => name === "expire")).toHaveLength(2);
   });
 
-  it("issues the four Redis commands in one round-trip, not two sequential ones", async () => {
-    // IMPORTANT 6: `expire` used to wait on `hincrby` finishing first (two Promise.all
-    // calls, awaited in sequence). If `hincrby` never resolves, that old shape would
-    // never even call `expire`. A single merged Promise.all dispatches all four calls
-    // synchronously regardless of whether any of them has resolved yet.
-    let resolveHincrby!: (value: number) => void;
-    const pendingHincrby = new Promise<number>((resolve) => {
-      resolveHincrby = resolve;
-    });
-    const redis = {
-      hincrby: vi.fn().mockReturnValue(pendingHincrby),
-      expire: vi.fn().mockResolvedValue(1),
-    };
+  it("issues the four Redis commands in one round-trip", async () => {
+    // A pipeline is a single HTTP request to Upstash, and the commands run in the order
+    // they were queued: `expire` can never land before the `hincrby` that creates the key
+    // and silently leave the day hash without a TTL.
+    const { redis, commands, chain } = pipelineStub();
+    await recordApiCall(redis as never, "/api/stats", null, new URLSearchParams());
 
-    const call = recordApiCall(redis as never, "/api/stats", null, new URLSearchParams());
-    // Flush pending microtasks without ever resolving `hincrby`.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(redis.expire).toHaveBeenCalledTimes(2);
-
-    resolveHincrby(1);
-    await call;
+    expect(redis.pipeline).toHaveBeenCalledTimes(1);
+    expect(chain.exec).toHaveBeenCalledTimes(1);
+    expect(commands.map(([name]) => name)).toEqual(["hincrby", "hincrby", "expire", "expire"]);
   });
 
   it("never throws when Redis is down: a counter must not break a public route", async () => {
-    const redis = {
-      hincrby: vi.fn().mockRejectedValue(new Error("upstash down")),
-      expire: vi.fn(),
-    };
+    const { redis } = pipelineStub(() => Promise.reject(new Error("upstash down")));
     await expect(
       recordApiCall(redis as never, "/api/stats", null, new URLSearchParams())
     ).resolves.toBeUndefined();

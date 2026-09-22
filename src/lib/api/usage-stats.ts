@@ -119,15 +119,17 @@ export async function recordApiCall(
     const routeKey = `apistats:${day}`;
     const clientKey = `apistats:client:${day}`;
 
-    // One round-trip, not two sequential ones: the two `expire` calls reset the same
-    // 90-day TTL on every single API call, so there is no ordering dependency on the
-    // `hincrby` calls that would require waiting on them first.
-    await Promise.all([
-      redis.hincrby(routeKey, normalizeApiPath(pathname), 1),
-      redis.hincrby(clientKey, classifyClient(userAgent, searchParams), 1),
-      redis.expire(routeKey, RETENTION_SECONDS),
-      redis.expire(clientKey, RETENTION_SECONDS),
-    ]);
+    // A pipeline, so the four commands travel in one HTTP request and run in order.
+    // Four independent calls would be four round-trips on every public API call, and
+    // an `expire` reaching Redis before the `hincrby` that creates the key is a no-op:
+    // the day hash would then keep no TTL at all.
+    await redis
+      .pipeline()
+      .hincrby(routeKey, normalizeApiPath(pathname), 1)
+      .hincrby(clientKey, classifyClient(userAgent, searchParams), 1)
+      .expire(routeKey, RETENTION_SECONDS)
+      .expire(clientKey, RETENTION_SECONDS)
+      .exec();
   } catch {
     // A counter is never worth a failed request. Swallowed on purpose.
   }
