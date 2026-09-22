@@ -3,21 +3,41 @@ import { ALL_TAGS } from "@/lib/cache-tags";
 
 // ─── Cache tiers for API responses ────────────────────────────────
 
-export type CacheTier = "static" | "daily" | "stats" | "none";
+export type CacheTier = "static" | "daily" | "stats" | "export" | "none";
 
 const CACHE_HEADERS: Record<CacheTier, string> = {
   static: "public, s-maxage=3600, stale-while-revalidate=600",
   daily: "public, s-maxage=300, stale-while-revalidate=120",
   stats: "public, s-maxage=900, stale-while-revalidate=300",
+  // 24h fresh, 7d served stale while revalidating. Aligned on the 04:00 daily
+  // sync; admin writes do not wait for it, they purge by tag (see invalidateEntity).
+  export: "public, s-maxage=86400, stale-while-revalidate=604800",
   none: "no-store",
 };
 
 /**
  * Set Cache-Control headers on a NextResponse.
  * Only call on successful (2xx) responses.
+ *
+ * `tags` attaches a `Vercel-Cache-Tag` so the entry can be purged on demand.
  */
-export function withCache(response: Response, tier: CacheTier): Response {
+export function withCache(response: Response, tier: CacheTier, tags?: readonly string[]): Response {
   response.headers.set("Cache-Control", CACHE_HEADERS[tier]);
+
+  // The export routes are `force-dynamic`, where the client-facing Cache-Control
+  // is not what the Vercel edge reads. This header is the authoritative one.
+  if (tier === "export") {
+    response.headers.set("Vercel-CDN-Cache-Control", CACHE_HEADERS[tier]);
+  }
+
+  if (tags?.length) {
+    const offender = tags.find((tag) => tag.includes(","));
+    if (offender) {
+      throw new Error(`Tag de cache invalide (contient une virgule) : ${offender}`);
+    }
+    response.headers.set("Vercel-Cache-Tag", tags.join(","));
+  }
+
   return response;
 }
 
