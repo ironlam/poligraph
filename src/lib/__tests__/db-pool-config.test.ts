@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_POOL_MAX } from "@/config/database";
 
 /**
  * `statement_timeout` in the pg.Pool config is silently ignored on this database, so declaring it
@@ -61,6 +62,12 @@ async function poolConfig(): Promise<Record<string, unknown>> {
 }
 
 describe("configuration du pool Postgres", () => {
+  // In the body, a failing assertion would leave the stub behind and leak DATABASE_POOL_MAX into
+  // whatever else this worker runs, turning one real failure into a cascade.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("construit bien un pool à inspecter", async () => {
     // Guards the harness: capturing nothing would make the assertions below vacuously true.
     expect(Object.keys(await poolConfig())).toContain("connectionString");
@@ -72,7 +79,17 @@ describe("configuration du pool Postgres", () => {
 
   it("garde les réglages qui, eux, sont appliqués", async () => {
     const config = await poolConfig();
-    expect(config.max).toBe(2);
+    expect(config.max).toBe(DEFAULT_POOL_MAX);
     expect(config.connectionTimeoutMillis).toBe(15_000);
+  });
+
+  /**
+   * The pool size is the term that decides whether concurrent cold renders queue or fail, so the
+   * override has to reach pg rather than stop at the config module. POLIGRAPH-V is what happens
+   * when the pool is smaller than the concurrency it faces.
+   */
+  it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {
+    vi.stubEnv("DATABASE_POOL_MAX", "3");
+    expect((await poolConfig()).max).toBe(3);
   });
 });

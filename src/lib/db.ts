@@ -1,5 +1,5 @@
 import { PrismaClient } from "@/generated/prisma";
-import { PRISMA_TRANSACTION_OPTIONS } from "@/config/database";
+import { PRISMA_TRANSACTION_OPTIONS, resolvePoolMax } from "@/config/database";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { ObservedPool } from "@/lib/telemetry/pg-pool";
@@ -21,7 +21,6 @@ function buildExtendedClient() {
   }
 
   // Create a connection pool (SSL required by Supabase, rejectUnauthorized: false for pooler certs)
-  // Serverless-friendly: small pool per lambda, but enough to handle parallel queries within a request
   //
   // SSL: on by default (production/staging on Supabase are unchanged). Set
   // DATABASE_SSL=false ONLY for a local, non-TLS Postgres such as the disposable
@@ -29,13 +28,16 @@ function buildExtendedClient() {
   const useSsl = process.env.DATABASE_SSL !== "false";
   const pool = new ObservedPool({
     connectionString,
-    max: 2, // Serverless: each Vercel lambda gets its own pool — keep low to avoid exhausting Supabase pooler
+    // Sized in @/config/database, which records the measurements. It is not one request per
+    // instance: several cold renders share a pool, and a pool too small becomes their queue
+    // rather than a safeguard. DATABASE_POOL_MAX is the lever if the pooler reports pressure.
+    max: resolvePoolMax(process.env),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
     ssl: useSsl ? { rejectUnauthorized: false } : false,
     allowExitOnIdle: true, // Release idle connections faster in serverless
     // No statement_timeout here on purpose. It is silently ignored on this database, and declaring
-    // it claimed a cap that never existed: a runaway query holds one of the two pool slots for the
+    // it claimed a cap that never existed: a runaway query holds one of the pool's slots for the
     // server default (2 min), not for 30 s. Measured 2026-09-10 from a session opened by this pool,
     // where `SHOW statement_timeout` returns the server default with the option set, with the
     // PostgreSQL startup parameter `options=-c statement_timeout=...`, and with both.

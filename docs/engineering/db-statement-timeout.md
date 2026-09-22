@@ -1,7 +1,7 @@
 # Capping query duration on the request path
 
-A runaway query holds one of the two pool slots of its lambda until the server cancels it. With
-`max: 2` in `src/lib/db.ts`, two of them starve that lambda, and every other request it is handling
+A runaway query holds one of the pool slots of its lambda until the server cancels it. With the pool
+sized in `src/config/database.ts`, a few of them starve that lambda, and every other request it is handling
 fails with `timeout exceeded when trying to connect` once `connectionTimeoutMillis` elapses. That is
 the shape behind the connection-timeout issues tracked as POLIGRAPH-V and POLIGRAPH-1C.
 

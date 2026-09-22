@@ -247,7 +247,7 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
 
   if (!commune) return null;
 
-  // Get election for municipales 2026 (sequential to respect pool limit of 2)
+  // Get election for municipales 2026 (sequential: these reads do not need to race for pool slots)
   const election = await db.election.findUnique({
     where: { slug: "municipales-2026" },
     select: { id: true, round1Date: true, round2Date: true },
@@ -325,7 +325,7 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
     }
   }
 
-  // Fetch incumbent maire (sequential to respect pool limit of 2)
+  // Fetch incumbent maire (sequential: these reads do not need to race for pool slots)
   const incumbentMaire = await getIncumbentMaire(inseeCode, election.id);
 
   // Fetch municipal-election participation (T2 if available, otherwise T1).
