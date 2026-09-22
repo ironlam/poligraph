@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_POOL_MAX } from "@/config/database";
+import {
+  BATCH_CONNECTION_TIMEOUT_MS,
+  WEB_CONNECTION_TIMEOUT_MS,
+  DEFAULT_POOL_MAX,
+} from "@/config/database";
 
 /**
  * `statement_timeout` in the pg.Pool config is silently ignored on this database, so declaring it
@@ -80,7 +84,8 @@ describe("configuration du pool Postgres", () => {
   it("garde les réglages qui, eux, sont appliqués", async () => {
     const config = await poolConfig();
     expect(config.max).toBe(DEFAULT_POOL_MAX);
-    expect(config.connectionTimeoutMillis).toBe(15_000);
+    // Le harnais tourne hors runtime Next, donc c'est le budget batch qui doit arriver ici.
+    expect(config.connectionTimeoutMillis).toBe(BATCH_CONNECTION_TIMEOUT_MS);
   });
 
   /**
@@ -88,6 +93,16 @@ describe("configuration du pool Postgres", () => {
    * override has to reach pg rather than stop at the config module. POLIGRAPH-V is what happens
    * when the pool is smaller than the concurrency it faces.
    */
+  /**
+   * Le budget qui arrive au pool suit la charge : court sous Next, généreux ailleurs. Sans cette
+   * assertion, une régression sur `resolveConnectionTimeout` passerait inaperçue puisque le
+   * harnais ne voit jamais le chemin web.
+   */
+  it("donne au runtime Next le budget court", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    expect((await poolConfig()).connectionTimeoutMillis).toBe(WEB_CONNECTION_TIMEOUT_MS);
+  });
+
   it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {
     vi.stubEnv("DATABASE_POOL_MAX", "3");
     expect((await poolConfig()).max).toBe(3);

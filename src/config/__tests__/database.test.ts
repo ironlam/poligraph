@@ -6,6 +6,9 @@ import {
   MAX_POOL_MAX,
   MIN_POOL_MAX,
   SUPAVISOR_BACKENDS,
+  WEB_CONNECTION_TIMEOUT_MS,
+  BATCH_CONNECTION_TIMEOUT_MS,
+  resolveConnectionTimeout,
 } from "../database";
 
 describe("configuration des transactions Prisma", () => {
@@ -59,5 +62,34 @@ describe("resolvePoolMax", () => {
 
   it("tronque une valeur fractionnaire plutôt que de passer un non-entier à pg", () => {
     expect(resolvePoolMax({ DATABASE_POOL_MAX: "6.9" })).toBe(6);
+  });
+});
+
+describe("resolveConnectionTimeout", () => {
+  /**
+   * Un seul délai servait la requête d'un visiteur, un job Inngest et un script batch. Cinq
+   * secondes n'ont de sens que pour le premier : un sync a le droit d'attendre une connexion,
+   * personne ne regarde l'écran.
+   */
+  it("donne au runtime Next le budget d'un visiteur", () => {
+    expect(resolveConnectionTimeout({ NEXT_RUNTIME: "nodejs" })).toBe(WEB_CONNECTION_TIMEOUT_MS);
+    expect(resolveConnectionTimeout({ NEXT_RUNTIME: "edge" })).toBe(WEB_CONNECTION_TIMEOUT_MS);
+  });
+
+  it("laisse un script ou un job attendre, faute de visiteur derrière", () => {
+    expect(resolveConnectionTimeout({})).toBe(BATCH_CONNECTION_TIMEOUT_MS);
+  });
+
+  it("garde le budget web sous ce qu'un visiteur tolère", () => {
+    expect(WEB_CONNECTION_TIMEOUT_MS).toBeLessThanOrEqual(8_000);
+  });
+
+  /**
+   * La file la plus longue jamais mesurée est de 9,2 s (staging, pool de 4, 16 rendus tenant
+   * chacun une connexion 3 s). Un job doit l'absorber, sinon le budget transforme une attente
+   * connue en échec.
+   */
+  it("laisse le budget batch au-dessus de la file la plus longue mesurée", () => {
+    expect(BATCH_CONNECTION_TIMEOUT_MS).toBeGreaterThan(9_200);
   });
 });
