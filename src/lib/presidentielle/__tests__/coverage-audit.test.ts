@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyCandidacyCoverage,
+  isEditionCitedBySources,
   needsWebResearch,
   type CandidacyCoverageInput,
 } from "../coverage-audit";
@@ -15,6 +16,7 @@ const COMPLETE: CandidacyCoverageInput = {
   measureCount: 40,
   programEditionCount: 1,
   publishedProgramEditionCount: 1,
+  citedPartyProgramEditionCount: 0,
   synthesis: "Une synthèse.",
   synthesisGeneratedAt: new Date("2026-09-10T00:00:00.000Z"),
   firstMeasurePublishedAt: new Date("2026-09-01T00:00:00.000Z"),
@@ -48,10 +50,58 @@ describe("classifyCandidacyCoverage", () => {
     expect(result).toEqual(["AUCUNE_MESURE"]);
   });
 
-  it("signale des mesures publiées sans édition de programme rattachée", () => {
+  it("signale des mesures publiées sans aucune édition de programme, nulle part", () => {
     expect(kinds({ ...COMPLETE, programEditionCount: 0, publishedProgramEditionCount: 0 })).toEqual(
       ["PROGRAMME_ABSENT"]
     );
+  });
+
+  /**
+   * The distinction this file gained on the audit's first real run. All nine candidacies flagged
+   * PROGRAMME_ABSENT in production turned out to have editions filed under their party: the
+   * document was in the database, one join away. Sending a reviewer to search the web for it was
+   * the defect, not the count itself.
+   */
+  it("distingue une édition du parti citée par les mesures d'un document réellement absent", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      programEditionCount: 0,
+      publishedProgramEditionCount: 0,
+      citedPartyProgramEditionCount: 6,
+    });
+    expect(result.findings.map((f) => f.kind)).toEqual(["PROGRAMME_PARTI_NON_RATTACHE"]);
+    // The whole point: this one is settled by the database, so no search is worth running.
+    expect(result.webResearchWorthwhile).toBe(false);
+  });
+
+  it("garde PROGRAMME_ABSENT quand aucune édition du parti n'est citée", () => {
+    const result = classifyCandidacyCoverage({
+      ...COMPLETE,
+      programEditionCount: 0,
+      publishedProgramEditionCount: 0,
+      citedPartyProgramEditionCount: 0,
+    });
+    expect(result.findings.map((f) => f.kind)).toEqual(["PROGRAMME_ABSENT"]);
+    expect(result.webResearchWorthwhile).toBe(true);
+  });
+
+  it("ne signale rien côté programme quand la candidature porte sa propre édition", () => {
+    expect(kinds({ ...COMPLETE, citedPartyProgramEditionCount: 6 })).toEqual([]);
+  });
+
+  it("ne réclame rien côté programme pour une candidature sans mesure", () => {
+    expect(
+      kinds({
+        ...COMPLETE,
+        measureCount: 0,
+        programEditionCount: 0,
+        publishedProgramEditionCount: 0,
+        citedPartyProgramEditionCount: 0,
+        firstMeasurePublishedAt: null,
+        themes: [],
+        storedThemeSyntheses: [],
+      })
+    ).toEqual(["AUCUNE_MESURE"]);
   });
 
   // A registered but unpublished edition is a different problem from a missing one: the document
@@ -205,6 +255,7 @@ describe("needsWebResearch", () => {
   it("ne vaut que pour les axes que la base ne peut pas trancher", () => {
     expect(needsWebResearch("PROGRAMME_ABSENT")).toBe(true);
     expect(needsWebResearch("AUCUNE_MESURE")).toBe(true);
+    expect(needsWebResearch("PROGRAMME_PARTI_NON_RATTACHE")).toBe(false);
     expect(needsWebResearch("SYNTHESE_ABSENTE")).toBe(false);
     expect(needsWebResearch("SYNTHESE_DEMENTIE")).toBe(false);
     expect(needsWebResearch("THEME_SYNTHESE_MANQUANTE")).toBe(false);
@@ -223,5 +274,64 @@ describe("needsWebResearch", () => {
     const synthesisOnly = classifyCandidacyCoverage({ ...COMPLETE, synthesis: null });
     expect(synthesisOnly.findings).not.toHaveLength(0);
     expect(synthesisOnly.webResearchWorthwhile).toBe(false);
+  });
+});
+
+/**
+ * Attribution is evidenced, never inferred from a party name.
+ *
+ * `runV6ShadowImport` refuses to attribute a party platform to a candidacy without an explicit
+ * `partyProgramCandidacyId` ("Plateforme de parti non attribuable automatiquement"). Matching on
+ * `partyId` alone would contradict that: a party fielding two contenders, or holding only a past
+ * legislative platform, would silently vouch for a programme nobody has. A document cited by the
+ * candidacy's own reviewed measure sources is a different thing: it is proof, not a guess.
+ */
+describe("isEditionCitedBySources", () => {
+  it("reconnaît une citation exacte", () => {
+    expect(isEditionCitedBySources("https://parti.fr/doc.pdf", ["https://parti.fr/doc.pdf"])).toBe(
+      true
+    );
+  });
+
+  it("reconnaît une section plus profonde du même document", () => {
+    expect(
+      isEditionCitedBySources("https://parti.fr/programme/livre/", [
+        "https://parti.fr/programme/livre/chapitre5/s3/",
+      ])
+    ).toBe(true);
+  });
+
+  it("tolère la barre oblique finale absente", () => {
+    expect(
+      isEditionCitedBySources("https://parti.fr/programme/livre", [
+        "https://parti.fr/programme/livre/chapitre1/",
+      ])
+    ).toBe(true);
+  });
+
+  // A bare domain would otherwise vouch for every page of the site, which is the loose match this
+  // whole function exists to avoid.
+  it("refuse de faire d'une racine de domaine une preuve pour tout le site", () => {
+    expect(isEditionCitedBySources("https://parti.fr/", ["https://parti.fr/autre-chose/"])).toBe(
+      false
+    );
+  });
+
+  it("accepte une racine de domaine citée telle quelle", () => {
+    expect(isEditionCitedBySources("https://parti.fr/", ["https://parti.fr/"])).toBe(true);
+  });
+
+  it("ne confond pas deux hôtes", () => {
+    expect(isEditionCitedBySources("https://parti.fr/doc/", ["https://autre.fr/doc/"])).toBe(false);
+  });
+
+  it("ne se laisse pas prendre par un préfixe de segment", () => {
+    expect(
+      isEditionCitedBySources("https://parti.fr/doc/", ["https://parti.fr/document-bis/"])
+    ).toBe(false);
+  });
+
+  it("répond faux sans aucune source", () => {
+    expect(isEditionCitedBySources("https://parti.fr/doc/", [])).toBe(false);
   });
 });

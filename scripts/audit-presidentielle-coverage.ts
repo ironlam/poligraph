@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import {
   classifyCandidacyCoverage,
   coverageAxis,
+  isEditionCitedBySources,
   needsWebResearch,
   type CandidacyCoverage,
 } from "@/lib/presidentielle/coverage-audit";
@@ -33,6 +34,7 @@ async function collect(): Promise<CandidacyCoverage[]> {
     select: {
       id: true,
       candidateName: true,
+      partyId: true,
       politician: { select: { slug: true } },
       // Scoped to the election, as the fiche scopes it. `ProgramEdition` carries its own
       // `electionId` beside its owner, so a row reachable through `candidacyId` is not necessarily
@@ -90,6 +92,29 @@ async function collect(): Promise<CandidacyCoverage[]> {
       byTheme.set(measure.theme, [...(byTheme.get(measure.theme) ?? []), measure]);
     }
 
+    // Party editions this candidacy's own measures cite, not merely editions of its party.
+    // Attribution by `partyId` alone would let one document vouch for every contender of a party,
+    // and a past legislative platform stand in for a presidential programme; `runV6ShadowImport`
+    // refuses that inference for the same reason. Citation is evidence we already hold.
+    const partyEditions = candidacy.partyId
+      ? await db.programEdition.findMany({
+          where: { election: { slug: ELECTION_SLUG }, partyId: candidacy.partyId },
+          select: { documentUrl: true },
+        })
+      : [];
+    const sourceUrls = partyEditions.length
+      ? (
+          await db.measureSource.findMany({
+            where: { measureRevision: { measure: { candidacyId: candidacy.id } } },
+            select: { url: true },
+            distinct: ["url"],
+          })
+        ).map((source) => source.url)
+      : [];
+    const citedPartyProgramEditionCount = partyEditions.filter((edition) =>
+      isEditionCitedBySources(edition.documentUrl, sourceUrls)
+    ).length;
+
     const stored = new Map(
       (candidacy.presidentialData?.themeSyntheses ?? []).map((synthesis) => [
         synthesis.theme,
@@ -121,6 +146,7 @@ async function collect(): Promise<CandidacyCoverage[]> {
         publishedProgramEditionCount: candidacy.programEditions.filter(
           (edition) => edition.publicationStatus === "PUBLISHED"
         ).length,
+        citedPartyProgramEditionCount,
         synthesis: candidacy.presidentialData?.synthesis ?? null,
         synthesisGeneratedAt: candidacy.presidentialData?.synthesisGeneratedAt ?? null,
         firstMeasurePublishedAt,

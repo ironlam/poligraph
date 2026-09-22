@@ -20,6 +20,7 @@ import type { ThemeSynthesisEditorialState } from "./candidacy-theme-synthesis";
 
 export type CoverageFindingKind =
   | "PROGRAMME_ABSENT"
+  | "PROGRAMME_PARTI_NON_RATTACHE"
   | "AUCUNE_MESURE"
   | "SYNTHESE_ABSENTE"
   | "SYNTHESE_DEMENTIE"
@@ -32,6 +33,7 @@ export type CoverageAxis = "PROGRAMMES" | "MESURES" | "SYNTHESE" | "SYNTHESES_TH
 
 const AXIS_BY_KIND: Record<CoverageFindingKind, CoverageAxis> = {
   PROGRAMME_ABSENT: "PROGRAMMES",
+  PROGRAMME_PARTI_NON_RATTACHE: "PROGRAMMES",
   AUCUNE_MESURE: "MESURES",
   SYNTHESE_ABSENTE: "SYNTHESE",
   SYNTHESE_DEMENTIE: "SYNTHESE",
@@ -49,6 +51,10 @@ const AXIS_BY_KIND: Record<CoverageFindingKind, CoverageAxis> = {
  */
 const WEB_RESEARCH_BY_KIND: Record<CoverageFindingKind, boolean> = {
   PROGRAMME_ABSENT: true,
+  // The document is already in the database, one join away. Searching the web for it was the
+  // defect this finding exists to name: on the audit's first real run, all nine candidacies
+  // reported as missing a programme had editions filed under their party.
+  PROGRAMME_PARTI_NON_RATTACHE: false,
   AUCUNE_MESURE: true,
   SYNTHESE_ABSENTE: false,
   SYNTHESE_DEMENTIE: false,
@@ -86,6 +92,18 @@ export type CandidacyCoverageInput = {
   measureCount: number;
   programEditionCount: number;
   publishedProgramEditionCount: number;
+  /**
+   * Party-owned editions of the same election that this candidacy's own measures actually cite.
+   *
+   * Not "editions of the party": matching on `partyId` alone would make one document vouch for
+   * every contender of that party, and would let a past legislative platform stand in for a
+   * presidential programme. `runV6ShadowImport` refuses that same inference, requiring an explicit
+   * `partyProgramCandidacyId` and reporting anything else as "plateforme de parti non attribuable
+   * automatiquement". A document cited by this candidacy's reviewed measure sources is evidence,
+   * not an inference, which is why the count is built from citations. See
+   * {@link isEditionCitedBySources}.
+   */
+  citedPartyProgramEditionCount: number;
   synthesis: string | null;
   synthesisGeneratedAt: Date | null;
   /** Publication date of the oldest measure currently shown. Null when none is shown. */
@@ -140,6 +158,33 @@ const REPORTED_THEME_STATES: Array<{
   },
 ];
 
+/**
+ * Whether a programme document is cited by a candidacy's own measure sources.
+ *
+ * Prefix matching on a segment boundary, so `/doc/` never vouches for `/document-bis/`, and a bare
+ * domain root only counts when cited verbatim: a site root would otherwise stand as evidence for
+ * every page it hosts, which is exactly the loose match this function exists to prevent.
+ */
+export function isEditionCitedBySources(
+  documentUrl: string,
+  sourceUrls: readonly string[]
+): boolean {
+  const normalize = (url: string) => url.replace(/\/+$/, "");
+  const document = normalize(documentUrl);
+  let path: string;
+  try {
+    path = new URL(documentUrl).pathname;
+  } catch {
+    return false;
+  }
+  const isBareRoot = path === "" || path === "/";
+  return sourceUrls.some((source) => {
+    const candidate = normalize(source);
+    if (candidate === document) return true;
+    return isBareRoot ? false : candidate.startsWith(`${document}/`);
+  });
+}
+
 export function classifyCandidacyCoverage(input: CandidacyCoverageInput): CandidacyCoverage {
   const findings: CoverageFinding[] = [];
 
@@ -152,10 +197,19 @@ export function classifyCandidacyCoverage(input: CandidacyCoverageInput): Candid
     // to miss and no corpus for a synthesis to fall behind.
     add("AUCUNE_MESURE", "candidature déclarée sans aucune mesure publiée");
   } else if (input.publishedProgramEditionCount === 0 && input.programEditionCount === 0) {
-    add(
-      "PROGRAMME_ABSENT",
-      `${input.measureCount} mesures publiées sans aucune édition de programme rattachée`
-    );
+    // A draft edition on either owner still means the document has been found, so neither branch
+    // filters on publication status: the question here is whether we hold the text at all.
+    if (input.citedPartyProgramEditionCount > 0) {
+      add(
+        "PROGRAMME_PARTI_NON_RATTACHE",
+        `${input.citedPartyProgramEditionCount} édition(s) du parti citée(s) par ses mesures, aucune rattachée à la candidature`
+      );
+    } else {
+      add(
+        "PROGRAMME_ABSENT",
+        `${input.measureCount} mesures publiées et aucune édition de programme, ni pour la candidature ni pour son parti`
+      );
+    }
   }
 
   if (input.synthesis === null) {
