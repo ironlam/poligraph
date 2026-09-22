@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripMarkdownForCSV } from "../csv";
+import { createCSVResponse, stripMarkdownForCSV } from "../csv";
 
 describe("stripMarkdownForCSV", () => {
   it("returns empty string for empty or nullish input", () => {
@@ -84,5 +84,25 @@ Les déclarations incriminées portent sur les trafiquants de crack et établiss
   it("leaves plain text with no markdown unchanged", () => {
     const input = "Affaire classée sans suite le 15 mars 2024.";
     expect(stripMarkdownForCSV(input)).toBe(input);
+  });
+});
+
+describe("createCSVResponse", () => {
+  it("leaves the caching policy to the route instead of pinning no-cache", () => {
+    const response = createCSVResponse("a,b\n1,2", "export.csv");
+    expect(response.headers.get("Cache-Control")).toBeNull();
+  });
+
+  it("still carries the CSV content type, the download filename and the Excel BOM", async () => {
+    const response = createCSVResponse("a,b\n1,2", "affaires-2026-09-22.csv");
+    expect(response.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
+    expect(response.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="affaires-2026-09-22.csv"'
+    );
+    // `Response.text()` strips a leading BOM while decoding, so assert on the raw
+    // bytes: the BOM is what makes Excel open the file as UTF-8.
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+    expect(new TextDecoder().decode(bytes.slice(3))).toBe("a,b\n1,2");
   });
 });

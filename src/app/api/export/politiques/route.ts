@@ -6,6 +6,7 @@ import { MandateType as MandateTypeEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { withCache } from "@/lib/cache";
 import {
   getMandateStartDatePublicationStatus,
   getPublicFactCheckWhere,
@@ -206,5 +207,7 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `politiques-${new Date().toISOString().split("T")[0]}.csv`;
 
-  return createCSVResponse(csv, filename);
+  // Data only moves after the 04:00 daily sync, so an hour of CDN staleness on a
+  // full-table CSV costs nothing and keeps the heaviest public route off the function.
+  return withCache(createCSVResponse(csv, filename), "static");
 });

@@ -18,6 +18,7 @@ import { AffairStatus, AffairCategory, Prisma } from "@/generated/prisma";
 import { parsePagination } from "@/lib/api/pagination";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { withCache } from "@/lib/cache";
 import { resolveDecisionField } from "@/lib/affairs/decision-fields";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
@@ -194,5 +195,7 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `affaires-${new Date().toISOString().split("T")[0]}.csv`;
 
-  return createCSVResponse(csv, filename);
+  // Data only moves after the 04:00 daily sync, so an hour of CDN staleness on a
+  // full-table CSV costs nothing and keeps the heaviest public route off the function.
+  return withCache(createCSVResponse(csv, filename), "static");
 });
