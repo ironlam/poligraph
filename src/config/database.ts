@@ -44,6 +44,22 @@ export const PRISMA_TRANSACTION_OPTIONS = {
  * as the claim it was, not as a measurement. Sizing this against the 15 is what holds.
  */
 /**
+ * How long a caller may wait for a pooled connection, covering both of pg-pool's branches: waiting
+ * for a busy slot, and opening a new connection.
+ *
+ * Fifteen seconds was the previous value, and it is not a budget a web request can spend: the
+ * visitor has left long before, whether the request then fails or succeeds. Measured on staging on
+ * 2026-09-22 with a pool of four and realistic short queries, acquisition takes 481 ms at eight
+ * concurrent renders, 1.1 s at sixteen, 2.3 s at thirty-two, and only reaches 8.3 s at sixty-four,
+ * a level at which the response is lost anyway. Establishing a fresh connection takes 126 to 159 ms.
+ *
+ * Five seconds therefore leaves an order of magnitude over ordinary load while freeing the slot
+ * three times faster when something upstream is wrong, which under contention helps the requests
+ * queued behind rather than making them wait too.
+ */
+export const CONNECTION_TIMEOUT_MS = 5_000;
+
+/**
  * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on
  * 2026-09-22 (Small compute). Shared by every process, so it is the ceiling that actually binds.
  */

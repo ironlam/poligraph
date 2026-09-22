@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_POOL_MAX } from "@/config/database";
+import { CONNECTION_TIMEOUT_MS, DEFAULT_POOL_MAX } from "@/config/database";
 
 /**
  * `statement_timeout` in the pg.Pool config is silently ignored on this database, so declaring it
@@ -80,7 +80,7 @@ describe("configuration du pool Postgres", () => {
   it("garde les réglages qui, eux, sont appliqués", async () => {
     const config = await poolConfig();
     expect(config.max).toBe(DEFAULT_POOL_MAX);
-    expect(config.connectionTimeoutMillis).toBe(15_000);
+    expect(config.connectionTimeoutMillis).toBe(CONNECTION_TIMEOUT_MS);
   });
 
   /**
@@ -88,6 +88,16 @@ describe("configuration du pool Postgres", () => {
    * override has to reach pg rather than stop at the config module. POLIGRAPH-V is what happens
    * when the pool is smaller than the concurrency it faces.
    */
+  /**
+   * Quinze secondes n'est pas un budget qu'une requête web peut dépenser : le visiteur est parti
+   * avant, que la requête finisse en 500 ou en 200. Le test garde la borne supérieure, pas la
+   * valeur exacte, pour laisser régler sans réécrire l'assertion.
+   */
+  it("ne laisse pas une requête attendre une connexion plus de quelques secondes", async () => {
+    expect(await poolConfig()).toHaveProperty("connectionTimeoutMillis");
+    expect(CONNECTION_TIMEOUT_MS).toBeLessThanOrEqual(8_000);
+  });
+
   it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {
     vi.stubEnv("DATABASE_POOL_MAX", "3");
     expect((await poolConfig()).max).toBe(3);
