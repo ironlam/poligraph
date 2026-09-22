@@ -17,6 +17,18 @@ describe("normalizeApiPath", () => {
     expect(normalizeApiPath("/api/does/not/exist/at/all")).toBe("other");
     expect(normalizeApiPath("/api/" + "x".repeat(500))).toBe("other");
   });
+
+  it("labels the election routes instead of dropping them into the catch-all", () => {
+    expect(normalizeApiPath("/api/elections/municipales-2026")).toBe("/api/elections/[slug]");
+    expect(normalizeApiPath("/api/elections/municipales-2026/candidacies")).toBe(
+      "/api/elections/[slug]/candidacies"
+    );
+  });
+
+  it("keeps a static path that a dynamic pattern would otherwise swallow", () => {
+    expect(normalizeApiPath("/api/elections/calendar")).toBe("/api/elections/calendar");
+    expect(normalizeApiPath("/api/v1/elus/search")).toBe("/api/v1/elus/search");
+  });
 });
 
 describe("classifyClient", () => {
@@ -24,10 +36,8 @@ describe("classifyClient", () => {
     expect(classifyClient("PoligraphCompanion/1.2", new URLSearchParams())).toBe("companion");
   });
 
-  it("recognises it by query parameter too", () => {
-    expect(classifyClient("Mozilla/5.0", new URLSearchParams("client=companion"))).toBe(
-      "companion"
-    );
+  it("does not trust a query parameter to override user agent classification", () => {
+    expect(classifyClient("curl/8.5.0", new URLSearchParams("client=companion"))).toBe("script");
   });
 
   it("separates bots, scripts and browsers", () => {

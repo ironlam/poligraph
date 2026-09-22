@@ -1,5 +1,10 @@
 import type { Redis } from "@upstash/redis";
 
+/**
+ * Client buckets, based on self-declared User-Agent headers.
+ * These are not verified facts, only labels. An attacker can forge
+ * any User-Agent, so treat these metrics as indicators, not proofs.
+ */
 export type ClientKind = "companion" | "bot" | "script" | "browser" | "other";
 
 const RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -10,40 +15,76 @@ const RETENTION_SECONDS = 90 * 24 * 60 * 60;
  * path would otherwise grow it without bound.
  */
 const STATIC_PATHS = new Set([
+  "/api/activity/batch",
   "/api/affaires",
-  "/api/politiques",
-  "/api/partis",
-  "/api/mandats",
-  "/api/votes",
-  "/api/factchecks",
-  "/api/stats",
+  "/api/affaires/neighbors",
+  "/api/carte",
+  "/api/chat",
+  "/api/compare/search-index",
+  "/api/compare/suggestions",
+  "/api/deputies/by-commune",
+  "/api/deputies/by-department",
+  "/api/docs",
+  "/api/elections",
+  "/api/elections/calendar",
+  "/api/elections/municipales-2014/communes",
+  "/api/elections/municipales-2020/communes",
+  "/api/elections/municipales-2026/communes",
+  "/api/elections/presidentielle-2027/recherche",
+  "/api/elections/senatoriales-2026/commune",
   "/api/export/affaires",
-  "/api/export/politiques",
   "/api/export/factchecks",
+  "/api/export/politiques",
   "/api/export/votes",
-  "/api/search/global",
-  "/api/search/advanced",
+  "/api/factchecks",
+  "/api/factchecks/stats",
+  "/api/mandats",
+  "/api/newsletter/subscribe",
+  "/api/partis",
+  "/api/politiques",
+  "/api/reconcile",
   "/api/rss/affaires.xml",
-  "/api/rss/votes.xml",
   "/api/rss/factchecks.xml",
+  "/api/rss/votes.xml",
+  "/api/search/advanced",
+  "/api/search/filters",
+  "/api/search/global",
+  "/api/search/parties",
+  "/api/search/politicians",
+  "/api/search/watchlist",
+  "/api/stats",
+  "/api/stats/departments",
+  "/api/v1/elus",
+  "/api/v1/elus/search",
+  "/api/votes",
+  "/api/votes/stats",
 ]);
 
-/** `/api/<collection>/<slug>` and `/api/politiques/<slug>/<sub>` patterns we keep. */
-const DYNAMIC_PATTERNS: Array<{ re: RegExp; label: string }> = [
-  { re: /^\/api\/politiques\/[^/]+\/(votes|affaires|relations|factchecks)$/, label: "" },
-  { re: /^\/api\/politiques\/[^/]+$/, label: "/api/politiques/[slug]" },
-  { re: /^\/api\/partis\/[^/]+$/, label: "/api/partis/[slug]" },
-  { re: /^\/api\/v1\/elus\/[^/]+$/, label: "/api/v1/elus/[id]" },
+/** Dynamic routes, collapsed onto a fixed label so the hash stays bounded. */
+const DYNAMIC_PATTERNS: Array<{ re: RegExp; toLabel: (match: RegExpExecArray) => string }> = [
+  {
+    re: /^\/api\/politiques\/[^/]+\/(votes|affaires|relations|factchecks)$/,
+    toLabel: (m) => `/api/politiques/[slug]/${m[1]}`,
+  },
+  { re: /^\/api\/politiques\/[^/]+$/, toLabel: () => "/api/politiques/[slug]" },
+  { re: /^\/api\/partis\/[^/]+$/, toLabel: () => "/api/partis/[slug]" },
+  {
+    re: /^\/api\/elections\/[^/]+\/(candidacies|measures)$/,
+    toLabel: (m) => `/api/elections/[slug]/${m[1]}`,
+  },
+  { re: /^\/api\/elections\/[^/]+$/, toLabel: () => "/api/elections/[slug]" },
+  { re: /^\/api\/dossiers\/[^/]+\/amendments$/, toLabel: () => "/api/dossiers/[id]/amendments" },
+  { re: /^\/api\/v1\/elus\/[^/]+$/, toLabel: () => "/api/v1/elus/[id]" },
+  { re: /^\/api\/v1\/communes\/[^/]+$/, toLabel: () => "/api/v1/communes/[codeInsee]" },
+  { re: /^\/api\/images\/[^/]+$/, toLabel: () => "/api/images/[id]" },
 ];
 
 export function normalizeApiPath(pathname: string): string {
   if (STATIC_PATHS.has(pathname)) return pathname;
 
-  for (const { re, label } of DYNAMIC_PATTERNS) {
+  for (const { re, toLabel } of DYNAMIC_PATTERNS) {
     const match = re.exec(pathname);
-    if (!match) continue;
-    // The first pattern keeps its sub-resource, so it builds its label from the match.
-    return label || `/api/politiques/[slug]/${match[1]}`;
+    if (match) return toLabel(match);
   }
 
   return "other";
@@ -51,9 +92,8 @@ export function normalizeApiPath(pathname: string): string {
 
 export function classifyClient(
   userAgent: string | null,
-  searchParams: URLSearchParams
+  _searchParams: URLSearchParams
 ): ClientKind {
-  if (searchParams.get("client") === "companion") return "companion";
   if (!userAgent) return "other";
 
   if (userAgent.includes("PoligraphCompanion")) return "companion";
