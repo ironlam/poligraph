@@ -29,6 +29,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { db } from "../src/lib/db";
 import { checkPublishable, type PublishBlockReason } from "../src/lib/affairs/publish-guard";
+import { revalidateRemoteCache } from "./lib/revalidate-cache";
 
 interface Candidate {
   id: string;
@@ -46,7 +47,7 @@ function parseArg(name: string): string | undefined {
   return hit ? hit.slice(name.length + 3) : undefined;
 }
 
-async function main() {
+export async function main() {
   const confirm = process.argv.includes("--confirm");
   const limitRaw = parseArg("limit");
   const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
@@ -202,11 +203,31 @@ async function main() {
   console.log(`\n✓ ${updated} affaire(s) dépubliée(s) vers DRAFT, tracées dans AuditLog.`);
   console.log("  Elles sont désormais dans la file de modération pour revue humaine.");
 
+  // The CSV exports are cached at the edge for 24h. A depublication that does not reach
+  // the CDN leaves the affair downloadable, so the purge is part of the remediation, not
+  // an optimisation. Only triggered when something was actually depublished.
+  if (updated > 0) {
+    try {
+      await revalidateRemoteCache(["affairs"]);
+      console.log("Cache des exports purgé.");
+    } catch (error) {
+      console.error(
+        "ATTENTION : la purge du cache a échoué. Les affaires dépubliées peuvent rester dans " +
+          "/api/export/affaires jusqu'à 24 h. Purger le tag « exports » depuis le dashboard Vercel.",
+        error
+      );
+    }
+  }
+
   await db.$disconnect();
 }
 
-main().catch(async (err) => {
-  console.error(err);
-  await db.$disconnect();
-  process.exit(1);
-});
+// Guarded so importing this module (e.g. from the unit test) never runs the remediation:
+// main() only runs when this file is the process entry point, not on import.
+if (require.main === module) {
+  main().catch(async (err) => {
+    console.error(err);
+    await db.$disconnect();
+    process.exit(1);
+  });
+}

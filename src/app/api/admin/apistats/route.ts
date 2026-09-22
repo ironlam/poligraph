@@ -44,9 +44,18 @@ export const GET = withAdminAuth(async (request) => {
   const routes: Record<string, number> = {};
   const clients: Record<string, number> = {};
 
-  for (const day of dayKeys(days)) {
-    addInto(routes, await redis.hgetall(`apistats:${day}`));
-    addInto(clients, await redis.hgetall(`apistats:client:${day}`));
+  // Fired in parallel: `days` is clamped to 90 but that maximum is reachable from the
+  // URL, and 180 sequential Upstash round-trips (50-100ms each) land in the same range
+  // as the function timeout. The sum is order-independent, so aggregating after the
+  // fact costs nothing.
+  const dayResults = await Promise.all(
+    dayKeys(days).map((day) =>
+      Promise.all([redis.hgetall(`apistats:${day}`), redis.hgetall(`apistats:client:${day}`)])
+    )
+  );
+  for (const [route, client] of dayResults) {
+    addInto(routes, route);
+    addInto(clients, client);
   }
 
   return NextResponse.json({ days, routes, clients });

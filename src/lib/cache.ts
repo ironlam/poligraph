@@ -78,15 +78,22 @@ const ELECTION_PROFILE = "hours";
 /**
  * Purge one export tag at the edge.
  *
- * Hard delete, not invalidate: `invalidateByTag` keeps serving the stale entry once
- * while it revalidates in the background, and serving a depublished affair one more
- * time is exactly what this guards against (AGENTS.md, principe 9).
+ * Hard delete, not invalidate: called with no options, `dangerouslyDeleteByTag` defaults
+ * `revalidationDeadlineSeconds` to 0 (immediate delete). `invalidateByTag`, and
+ * `dangerouslyDeleteByTag` given a non-zero deadline, both keep serving the stale entry
+ * for that window while revalidating in the background, and serving a depublished affair
+ * one more time is exactly what this guards against (AGENTS.md, principe 9).
  *
  * Scheduled through `after()` so it never delays the response, and swallowed so a purge
  * outage cannot fail the write it follows. A failed purge call stays loud (console +
  * Sentry): an unreported one means a depublication that never reached the CDN. `after()`
  * itself throwing outside a request scope (a script, an offline job) is a normal case
  * with no edge to purge, and is swallowed silently on purpose, not reported.
+ *
+ * A successful purge is also logged, on purpose: `dangerouslyDeleteByTag` resolves
+ * silently when the platform exposes no purge API (see `node_modules/@vercel/functions/
+ * purge/index.js`), so an absence of errors here proves nothing happened. Only the
+ * positive trace below lets a runbook tell "purged" apart from "never ran".
  *
  * `@vercel/functions` is imported dynamically: 38 route files import this module, and a
  * top-level import would pull the package into every test that touches them.
@@ -99,7 +106,11 @@ function purgeExportTag(tag: string): void {
     after(async () => {
       try {
         const { dangerouslyDeleteByTag } = await import("@vercel/functions");
-        await dangerouslyDeleteByTag(tag, { revalidationDeadlineSeconds: 10 });
+        await dangerouslyDeleteByTag(tag);
+        // Positive trace on purpose: the helper resolves silently when the platform does not
+        // expose its purge API, so an absence of errors proves nothing. Only this line does.
+        // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+        console.log(`[cache] purge du tag ${tag} demandée`);
       } catch (error) {
         // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
         console.error(`[cache] purge du tag ${tag} échouée`, error);
@@ -272,7 +283,12 @@ export function revalidateTags(tags: string[], profile: string = DEFAULT_PROFILE
 }
 
 /** Immediate, read-your-write tag refresh. Server-Action context only.
- *  updateTag takes ONLY a tag (no cacheLife profile), unlike revalidateTag. */
+ *  updateTag takes ONLY a tag (no cacheLife profile), unlike revalidateTag.
+ *
+ *  Does not purge any export: none of this function's callers (the policy-titles Server
+ *  Actions) write a field a CSV export currently exposes. Harmless today, but it will need
+ *  wiring into `purgeExportTag` the day a CSV export exposes a field written through this
+ *  path (e.g. votes.csv exposing the editorialised policy title instead of the raw one). */
 export function updateTags(tags: string[]): void {
   for (const tag of tags) updateTag(tag);
 }

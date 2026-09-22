@@ -38,8 +38,13 @@ describe("GET /api/admin/apistats", () => {
 
   it("clamps an absurd window instead of reading a year of keys", async () => {
     hgetall.mockResolvedValue({});
-    const body = await (await call("https://poligraph.fr/api/admin/apistats?days=9999")).json();
+    const response = await call("https://poligraph.fr/api/admin/apistats?days=9999");
+    const body = await response.json();
     expect(body.days).toBe(90);
+    // The real bounded quantity is the number of Upstash round-trips (2 per day),
+    // not the echoed `days` value, which a clamping bug could report correctly
+    // while still reading far more keys than it claims.
+    expect(hgetall).toHaveBeenCalledTimes(180);
   });
 
   it("treats a missing day as zero rather than failing", async () => {

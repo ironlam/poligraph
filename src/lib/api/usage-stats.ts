@@ -119,11 +119,12 @@ export async function recordApiCall(
     const routeKey = `apistats:${day}`;
     const clientKey = `apistats:client:${day}`;
 
+    // One round-trip, not two sequential ones: the two `expire` calls reset the same
+    // 90-day TTL on every single API call, so there is no ordering dependency on the
+    // `hincrby` calls that would require waiting on them first.
     await Promise.all([
       redis.hincrby(routeKey, normalizeApiPath(pathname), 1),
       redis.hincrby(clientKey, classifyClient(userAgent, searchParams), 1),
-    ]);
-    await Promise.all([
       redis.expire(routeKey, RETENTION_SECONDS),
       redis.expire(clientKey, RETENTION_SECONDS),
     ]);

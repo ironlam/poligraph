@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const dangerouslyDeleteByTag = vi.fn().mockResolvedValue(undefined);
 const captureException = vi.fn();
+const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 let afterThrows = false;
 const scheduled: Array<() => Promise<void>> = [];
 
@@ -35,11 +36,12 @@ async function flushAfter() {
   for (const callback of callbacks) await callback();
 }
 
-describe("purge des exports depuis invalidateEntity", () => {
+describe("purge des exports depuis invalidateEntity, revalidateAll et revalidateTags", () => {
   beforeEach(() => {
     vi.stubEnv("VERCEL", "1");
     dangerouslyDeleteByTag.mockClear();
     captureException.mockClear();
+    consoleLog.mockClear();
     scheduled.length = 0;
     afterThrows = false;
   });
@@ -48,9 +50,17 @@ describe("purge des exports depuis invalidateEntity", () => {
   it("hard-deletes the affairs export when an affair is written", async () => {
     invalidateEntity("affair", "une-affaire");
     await flushAfter();
-    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("export:affairs", {
-      revalidationDeadlineSeconds: 10,
-    });
+    // No options: the default `revalidationDeadlineSeconds` is 0, immediate delete.
+    // Passing 10 here would serve the stale (possibly depublished) content for 10s.
+    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("export:affairs");
+  });
+
+  it("emits a positive trace when a purge succeeds, since a silent no-op purge and a real one both resolve without error", async () => {
+    invalidateEntity("affair", "une-affaire");
+    await flushAfter();
+    expect(consoleLog).toHaveBeenCalledWith(
+      expect.stringContaining("purge du tag export:affairs demandée")
+    );
   });
 
   it.each([
@@ -60,9 +70,7 @@ describe("purge des exports depuis invalidateEntity", () => {
   ] as const)("hard-deletes %s exports", async (type, tag) => {
     invalidateEntity(type);
     await flushAfter();
-    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith(tag, {
-      revalidationDeadlineSeconds: 10,
-    });
+    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith(tag);
   });
 
   it("purges nothing for an entity that has no CSV export", async () => {
@@ -94,9 +102,7 @@ describe("purge des exports depuis invalidateEntity", () => {
   it("hard-deletes every export at once after a full sync", async () => {
     revalidateAll();
     await flushAfter();
-    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("exports", {
-      revalidationDeadlineSeconds: 10,
-    });
+    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("exports");
   });
 
   it("purges the rollup tag once, not once per tag in ALL_TAGS", async () => {
@@ -108,9 +114,7 @@ describe("purge des exports depuis invalidateEntity", () => {
   it("hard-deletes the votes export on the tag the daily sync actually posts", async () => {
     revalidateTags(["votes"]);
     await flushAfter();
-    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("export:votes", {
-      revalidationDeadlineSeconds: 10,
-    });
+    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("export:votes");
   });
 
   it("purges every export the second sync batch touches, and only those", async () => {

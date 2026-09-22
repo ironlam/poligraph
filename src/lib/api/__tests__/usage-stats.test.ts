@@ -76,6 +76,31 @@ describe("recordApiCall", () => {
     expect(redis.expire).toHaveBeenCalledTimes(2);
   });
 
+  it("issues the four Redis commands in one round-trip, not two sequential ones", async () => {
+    // IMPORTANT 6: `expire` used to wait on `hincrby` finishing first (two Promise.all
+    // calls, awaited in sequence). If `hincrby` never resolves, that old shape would
+    // never even call `expire`. A single merged Promise.all dispatches all four calls
+    // synchronously regardless of whether any of them has resolved yet.
+    let resolveHincrby!: (value: number) => void;
+    const pendingHincrby = new Promise<number>((resolve) => {
+      resolveHincrby = resolve;
+    });
+    const redis = {
+      hincrby: vi.fn().mockReturnValue(pendingHincrby),
+      expire: vi.fn().mockResolvedValue(1),
+    };
+
+    const call = recordApiCall(redis as never, "/api/stats", null, new URLSearchParams());
+    // Flush pending microtasks without ever resolving `hincrby`.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(redis.expire).toHaveBeenCalledTimes(2);
+
+    resolveHincrby(1);
+    await call;
+  });
+
   it("never throws when Redis is down: a counter must not break a public route", async () => {
     const redis = {
       hincrby: vi.fn().mockRejectedValue(new Error("upstash down")),
