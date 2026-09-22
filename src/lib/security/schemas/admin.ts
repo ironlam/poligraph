@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 import { SELECTABLE_TAGS } from "@/lib/cache-tags";
 
+// The cap only bounds what reaches verifyPassword; it says nothing about password policy.
+export const loginSchema = z.object({
+  password: z.string().min(1).max(1024),
+});
+
 export const revalidateCacheSchema = z.union([
   z.object({ all: z.literal(true) }),
   z.object({ tags: z.array(z.enum(SELECTABLE_TAGS)).min(1) }),

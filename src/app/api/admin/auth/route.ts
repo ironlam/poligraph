@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyPassword, createSession, destroySession } from "@/lib/auth";
 import { clearLoginRateLimit, reserveLoginAttempt } from "@/lib/rate-limit";
 import { resolveTrustedClientIdentity } from "@/lib/trusted-client-identity";
+import { loginSchema } from "@/lib/security/schemas/admin";
 
 export async function POST(request: NextRequest) {
   let identity: string;
@@ -28,13 +29,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Parsing happens after the reservation so malformed bodies still consume an attempt.
+  let raw: unknown;
   try {
-    const { password } = await request.json();
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Requête invalide" }, { status: 400 });
+  }
 
-    if (!password) {
-      return NextResponse.json({ error: "Mot de passe requis" }, { status: 400 });
-    }
+  const parsed = loginSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Mot de passe requis",
+        issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })),
+      },
+      { status: 400 }
+    );
+  }
+  const { password } = parsed.data;
 
+  try {
     const isValid = await verifyPassword(password);
 
     if (!isValid) {

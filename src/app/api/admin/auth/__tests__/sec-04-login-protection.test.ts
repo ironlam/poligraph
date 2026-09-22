@@ -30,6 +30,14 @@ function request(password = "test-credential"): NextRequest {
   });
 }
 
+function rawRequest(body: string): NextRequest {
+  return new NextRequest("http://localhost/api/admin/auth", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+  });
+}
+
 describe("SEC-04 distributed login protection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,6 +143,30 @@ describe("SEC-04 distributed login protection", () => {
     expect(response.status).toBe(500);
     expect(limiter.reserveLoginAttempt).toHaveBeenCalledOnce();
     expect(limiter.clearLoginRateLimit).not.toHaveBeenCalled();
+    expect(auth.createSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a missing password", JSON.stringify({})],
+    ["an empty password", JSON.stringify({ password: "" })],
+    ["a non-string password", JSON.stringify({ password: 12345 })],
+    ["an oversized password", JSON.stringify({ password: "x".repeat(1025) })],
+  ])("rejects %s with 400 after reserving an attempt", async (_label, body) => {
+    const response = await POST(rawRequest(body));
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe("Mot de passe requis");
+    expect(data.issues.length).toBeGreaterThan(0);
+    expect(limiter.reserveLoginAttempt).toHaveBeenCalledOnce();
+    expect(auth.verifyPassword).not.toHaveBeenCalled();
+    expect(auth.createSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed JSON with 400 after reserving an attempt", async () => {
+    const response = await POST(rawRequest("{not json"));
+    expect(response.status).toBe(400);
+    expect(limiter.reserveLoginAttempt).toHaveBeenCalledOnce();
+    expect(auth.verifyPassword).not.toHaveBeenCalled();
     expect(auth.createSession).not.toHaveBeenCalled();
   });
 });
