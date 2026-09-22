@@ -83,8 +83,10 @@ const ELECTION_PROFILE = "hours";
  * time is exactly what this guards against (AGENTS.md, principe 9).
  *
  * Scheduled through `after()` so it never delays the response, and swallowed so a purge
- * outage cannot fail the write it follows. It stays loud: an unreported failure means a
- * depublication that never reached the CDN.
+ * outage cannot fail the write it follows. A failed purge call stays loud (console +
+ * Sentry): an unreported one means a depublication that never reached the CDN. `after()`
+ * itself throwing outside a request scope (a script, an offline job) is a normal case
+ * with no edge to purge, and is swallowed silently on purpose, not reported.
  *
  * `@vercel/functions` is imported dynamically: 38 route files import this module, and a
  * top-level import would pull the package into every test that touches them.
@@ -243,6 +245,14 @@ export function revalidateAll(): void {
   purgeExportTag(EXPORT_ROLLUP_TAG);
 }
 
+/** Cache tags whose refresh also makes a CSV export stale. */
+const EXPORT_TAG_BY_CACHE_TAG: Record<string, string> = {
+  affairs: EXPORT_CACHE_TAGS.affairs,
+  politicians: EXPORT_CACHE_TAGS.politicians,
+  factchecks: EXPORT_CACHE_TAGS.factchecks,
+  votes: EXPORT_CACHE_TAGS.votes,
+};
+
 /**
  * Revalidate specific tags by name. Defaults to the "minutes" cacheLife
  * profile; pass `profile` to override for slow-changing data.
@@ -250,6 +260,14 @@ export function revalidateAll(): void {
 export function revalidateTags(tags: string[], profile: string = DEFAULT_PROFILE): void {
   for (const tag of tags) {
     revalidateTag(tag, profile);
+  }
+
+  // The daily sync refreshes through this function, never through `invalidateEntity`
+  // (scripts/sync-daily.ts posts tags to /api/cron/revalidate). Without this, an export
+  // would stay cached for the full 24h tier after each sync.
+  for (const tag of tags) {
+    const exportTag = EXPORT_TAG_BY_CACHE_TAG[tag];
+    if (exportTag) purgeExportTag(exportTag);
   }
 }
 

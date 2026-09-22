@@ -27,7 +27,7 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: (...args: unknown[]) => captureException(...args),
 }));
 
-import { invalidateEntity, revalidateAll } from "@/lib/cache";
+import { invalidateEntity, revalidateAll, revalidateTags } from "@/lib/cache";
 
 /** Run what `after()` collected, the way the platform would after the response. */
 async function flushAfter() {
@@ -103,5 +103,26 @@ describe("purge des exports depuis invalidateEntity", () => {
     revalidateAll();
     await flushAfter();
     expect(dangerouslyDeleteByTag).toHaveBeenCalledTimes(1);
+  });
+
+  it("hard-deletes the votes export on the tag the daily sync actually posts", async () => {
+    revalidateTags(["votes"]);
+    await flushAfter();
+    expect(dangerouslyDeleteByTag).toHaveBeenCalledWith("export:votes", {
+      revalidationDeadlineSeconds: 10,
+    });
+  });
+
+  it("purges every export the second sync batch touches, and only those", async () => {
+    revalidateTags(["dossiers", "stats", "politicians", "factchecks"]);
+    await flushAfter();
+    const purged = dangerouslyDeleteByTag.mock.calls.map((call) => call[0]).sort();
+    expect(purged).toEqual(["export:factchecks", "export:politicians"]);
+  });
+
+  it("purges nothing for a tag with no export behind it", async () => {
+    revalidateTags(["parties", "elections"]);
+    await flushAfter();
+    expect(dangerouslyDeleteByTag).not.toHaveBeenCalled();
   });
 });

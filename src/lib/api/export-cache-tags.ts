@@ -12,7 +12,12 @@ export const EXPORT_CACHE_TAGS = {
   votes: "export:votes",
 } as const;
 
-/** Roll-up tag, to purge every export at once (full sync, manual dashboard purge). */
+/**
+ * Roll-up tag, to purge every export at once after a full sync (the deprecated
+ * `{ all: true }` path through `revalidateAll()`), or manually from the Vercel
+ * dashboard. Not selectable from the admin: it is absent from `SELECTABLE_TAGS`,
+ * so no admin/cron endpoint can purge it on request.
+ */
 export const EXPORT_ROLLUP_TAG = "exports";
 
 export type ExportCacheKey = keyof typeof EXPORT_CACHE_TAGS;
