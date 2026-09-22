@@ -93,12 +93,17 @@ export type CandidacyCoverageInput = {
   programEditionCount: number;
   publishedProgramEditionCount: number;
   /**
-   * Editions filed under the candidacy's party for the same election, whatever their publication
-   * status. A `ProgramEdition` belongs either to a party or to a candidacy, and the fiche reads
-   * only the second, so a party edition leaves the fiche without a document while the document is
-   * very much held. Counting it separately is what tells a missing document from an unlinked one.
+   * Party-owned editions of the same election that this candidacy's own measures actually cite.
+   *
+   * Not "editions of the party": matching on `partyId` alone would make one document vouch for
+   * every contender of that party, and would let a past legislative platform stand in for a
+   * presidential programme. `runV6ShadowImport` refuses that same inference, requiring an explicit
+   * `partyProgramCandidacyId` and reporting anything else as "plateforme de parti non attribuable
+   * automatiquement". A document cited by this candidacy's reviewed measure sources is evidence,
+   * not an inference, which is why the count is built from citations. See
+   * {@link isEditionCitedBySources}.
    */
-  partyProgramEditionCount: number;
+  citedPartyProgramEditionCount: number;
   synthesis: string | null;
   synthesisGeneratedAt: Date | null;
   /** Publication date of the oldest measure currently shown. Null when none is shown. */
@@ -153,6 +158,33 @@ const REPORTED_THEME_STATES: Array<{
   },
 ];
 
+/**
+ * Whether a programme document is cited by a candidacy's own measure sources.
+ *
+ * Prefix matching on a segment boundary, so `/doc/` never vouches for `/document-bis/`, and a bare
+ * domain root only counts when cited verbatim: a site root would otherwise stand as evidence for
+ * every page it hosts, which is exactly the loose match this function exists to prevent.
+ */
+export function isEditionCitedBySources(
+  documentUrl: string,
+  sourceUrls: readonly string[]
+): boolean {
+  const normalize = (url: string) => url.replace(/\/+$/, "");
+  const document = normalize(documentUrl);
+  let path: string;
+  try {
+    path = new URL(documentUrl).pathname;
+  } catch {
+    return false;
+  }
+  const isBareRoot = path === "" || path === "/";
+  return sourceUrls.some((source) => {
+    const candidate = normalize(source);
+    if (candidate === document) return true;
+    return isBareRoot ? false : candidate.startsWith(`${document}/`);
+  });
+}
+
 export function classifyCandidacyCoverage(input: CandidacyCoverageInput): CandidacyCoverage {
   const findings: CoverageFinding[] = [];
 
@@ -167,10 +199,10 @@ export function classifyCandidacyCoverage(input: CandidacyCoverageInput): Candid
   } else if (input.publishedProgramEditionCount === 0 && input.programEditionCount === 0) {
     // A draft edition on either owner still means the document has been found, so neither branch
     // filters on publication status: the question here is whether we hold the text at all.
-    if (input.partyProgramEditionCount > 0) {
+    if (input.citedPartyProgramEditionCount > 0) {
       add(
         "PROGRAMME_PARTI_NON_RATTACHE",
-        `${input.partyProgramEditionCount} édition(s) de programme au nom du parti, aucune rattachée à la candidature`
+        `${input.citedPartyProgramEditionCount} édition(s) du parti citée(s) par ses mesures, aucune rattachée à la candidature`
       );
     } else {
       add(
