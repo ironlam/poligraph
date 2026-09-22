@@ -33,7 +33,14 @@ const AFFAIR = {
   politicianId: "pol_1",
   involvement: "DIRECT",
   involvementNote: null,
-  sources: [{ url: "https://presse.example/article" }],
+  verdictDate: null,
+  sources: [
+    {
+      url: "https://presse.example/article",
+      publishedAt: new Date("2024-08-30"),
+      sourceType: "PRESSE",
+    },
+  ],
 };
 
 const VALID_DECISION = {
@@ -190,6 +197,86 @@ describe("checkPublishable — note d'implication (I3, I5)", () => {
       assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
     ).rejects.toBeInstanceOf(PublishGuardError);
     expect(tx.affair.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkPublishable — verdict postérieur à toutes les sources (#571)", () => {
+  const press = (publishedAt: string) => ({
+    url: `https://presse.example/${publishedAt}`,
+    publishedAt: new Date(publishedAt),
+    sourceType: "PRESSE",
+  });
+
+  it("refuse un verdict postérieur à toutes les sources indépendantes", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      verdictDate: new Date("2025-02-13"),
+      sources: [press("2024-08-30"), press("2024-09-02")],
+    });
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).toContain("VERDICT_AFTER_ALL_SOURCES");
+  });
+
+  it("publie si une source indépendante est datée du jour du verdict ou après", async () => {
+    for (const date of ["2025-02-13", "2025-03-01"]) {
+      tx.affair.findUnique.mockResolvedValue({
+        ...AFFAIR,
+        verdictDate: new Date("2025-02-13"),
+        sources: [press("2024-08-30"), press(date)],
+      });
+      const reasons = await checkPublishable("aff_1");
+      expect(reasons.map((r) => r.code)).not.toContain("VERDICT_AFTER_ALL_SOURCES");
+    }
+  });
+
+  it("une ligne Wikidata ou Wikipedia plus récente ne débloque pas", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      verdictDate: new Date("2025-02-13"),
+      sources: [
+        press("2024-08-30"),
+        {
+          url: "https://www.wikidata.org/wiki/Q1",
+          publishedAt: new Date("2026-01-01"),
+          sourceType: "WIKIDATA",
+        },
+        {
+          url: "https://fr.wikipedia.org/wiki/X",
+          publishedAt: new Date("2026-01-01"),
+          sourceType: "WIKIPEDIA",
+        },
+      ],
+    });
+    const reasons = await checkPublishable("aff_1");
+    expect(reasons.map((r) => r.code)).toContain("VERDICT_AFTER_ALL_SOURCES");
+  });
+
+  it("sans date de verdict, ne bloque pas", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      verdictDate: null,
+      sources: [press("2020-01-01")],
+    });
+    expect(await checkPublishable("aff_1")).toEqual([]);
+  });
+
+  it("assertPublishable refuse et n'écrit rien", async () => {
+    tx.affair.findUnique.mockResolvedValue({
+      ...AFFAIR,
+      verdictDate: new Date("2025-02-13"),
+      sources: [press("2024-08-30")],
+    });
+    await expect(
+      assertPublishable("aff_1", { verifiedBy: VERIFIED_BY_MODERATION })
+    ).rejects.toBeInstanceOf(PublishGuardError);
+    expect(tx.affair.update).not.toHaveBeenCalled();
+  });
+
+  it("sélectionne la date du verdict et la date et le type des sources", async () => {
+    await checkPublishable("aff_1");
+    const select = tx.affair.findUnique.mock.calls[0]![0].select;
+    expect(select.verdictDate).toBe(true);
+    expect(select.sources.select).toMatchObject({ publishedAt: true, sourceType: true });
   });
 });
 

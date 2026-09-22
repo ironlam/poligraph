@@ -6,6 +6,7 @@ import {
   parseLedger,
   recordReview,
   splitsByTarget,
+  verdictPostdatesAllSources,
   type Baseline,
   type ContradictionKind,
   type Ledger,
@@ -703,5 +704,36 @@ describe("la file éditoriale ne réclame pas la peine d'un tiers (#576)", () =>
     });
 
     expect(a.editorialSignals.map((s) => s.kind)).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+  });
+});
+
+describe("verdictPostdatesAllSources (#571, partagé avec le garde de publication)", () => {
+  it("vrai quand toutes les sources indépendantes précèdent le verdict", () => {
+    expect(
+      verdictPostdatesAllSources(VERDICT, [source({ publishedAt: new Date("2023-01-01") })])
+    ).toBe(true);
+  });
+
+  it("faux quand une source indépendante est du jour du verdict", () => {
+    expect(verdictPostdatesAllSources(VERDICT, [source({ publishedAt: VERDICT })])).toBe(false);
+  });
+
+  it("ignore les encyclopédies, même datées après le verdict", () => {
+    expect(
+      verdictPostdatesAllSources(VERDICT, [
+        source({ publishedAt: new Date("2023-01-01") }),
+        source({ publishedAt: AFTER_VERDICT, sourceType: "WIKIDATA" }),
+        source({ publishedAt: AFTER_VERDICT, sourceType: "WIKIPEDIA" }),
+      ])
+    ).toBe(true);
+  });
+
+  it("faux sans aucune source indépendante : ce n'est pas le même constat", () => {
+    expect(verdictPostdatesAllSources(VERDICT, [])).toBe(false);
+    expect(
+      verdictPostdatesAllSources(VERDICT, [
+        source({ sourceType: "WIKIDATA", publishedAt: new Date("2020-01-01") }),
+      ])
+    ).toBe(false);
   });
 });
