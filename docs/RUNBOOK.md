@@ -13,7 +13,12 @@ Procédures opérationnelles pour Poligraph. Ce document couvre l'observabilité
 - **Activation** : Sentry ne démarre que si `NEXT_PUBLIC_SENTRY_DSN` (ou `SENTRY_DSN`) est défini. Mettre `NEXT_PUBLIC_SENTRY_ENABLED=false` pour désactiver explicitement.
 - **Sampling** : `tracesSampleRate: 0.1` en production (10% des transactions). `replaysOnErrorSampleRate: 1.0` (replay uniquement quand une erreur se produit).
 - **Filtrage** : les erreurs de flow Next.js (`NEXT_REDIRECT`, `NEXT_NOT_FOUND`, `DYNAMIC_SERVER_USAGE`) et quelques bruits navigateur (`ResizeObserver`, `AbortError`, erreurs réseau) sont ignorées.
-- **Upload des source maps** : actif uniquement si `SENTRY_AUTH_TOKEN` est présent à la build. Sans token, les stack traces restent minifiées mais Sentry fonctionne.
+- **Upload des source maps** : actif uniquement si `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` et `SENTRY_PROJECT` sont tous présents à la build. Sans eux, les stack traces restent minifiées mais Sentry fonctionne.
+- **Triage depuis le repo** : `npm run sentry -- list --env production` liste les issues non résolues les plus bruyantes, `show <SHORT-ID>` donne stack, tags et breadcrumbs. Les trois commandes d'écriture exigent `--confirm`.
+- **Quel statut de fermeture** : cela dépend de si le correctif est déjà en production, parce que la promotion Vercel est un geste manuel séparé du merge.
+  - Correctif mergé, **pas encore promu** : `resolve <SHORT-ID> --confirm` écrit `resolvedInNextRelease`. L'issue sort de la file et Sentry la rouvre seule si elle tire encore après la release suivante.
+  - Correctif **déjà en production** : `resolve <SHORT-ID> --now --confirm` écrit `resolved` sec. C'est le bon statut à ce moment-là, car `resolvedInNextRelease` ne rouvrirait que sur une release postérieure à la suivante et masquerait donc une récidive sur la release en cours.
+- **Deux tokens, deux usages** : un token d'organisation (`sntrys_`) suffit à la build pour l'upload. Lire et fermer des issues depuis `npm run sentry` demande un token portant les droits de lecture et d'écriture sur les issues du projet.
 
 ### 1.2 Workflows cron (GitHub Actions)
 
@@ -90,13 +95,13 @@ Sentry reste totalement désactivé tant que `NEXT_PUBLIC_SENTRY_DSN` n'est pas 
 
 ### 2.1 Variables à ajouter côté Vercel
 
-| Variable                     | Scope            | Usage                                                     | Obligatoire                                            |
-| ---------------------------- | ---------------- | --------------------------------------------------------- | ------------------------------------------------------ |
-| `NEXT_PUBLIC_SENTRY_DSN`     | All environments | DSN public du projet Sentry, inclus dans le bundle client | Oui, pour activer Sentry                               |
-| `SENTRY_ORG`                 | Build only       | Slug de l'organisation Sentry                             | Oui, pour l'upload de source maps                      |
-| `SENTRY_PROJECT`             | Build only       | Slug du projet Sentry                                     | Oui, pour l'upload de source maps                      |
-| `SENTRY_AUTH_TOKEN`          | Build only       | Token d'upload (scope `project:releases`)                 | Optionnel, sans lui les stack traces restent minifiées |
-| `NEXT_PUBLIC_SENTRY_ENABLED` | All environments | `false` pour désactiver explicitement en prod             | Optionnel                                              |
+| Variable                     | Scope            | Usage                                                                                   | Obligatoire                                            |
+| ---------------------------- | ---------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `NEXT_PUBLIC_SENTRY_DSN`     | All environments | DSN public du projet Sentry, inclus dans le bundle client                               | Oui, pour activer Sentry                               |
+| `SENTRY_ORG`                 | Build + local    | Slug de l'organisation Sentry                                                           | Oui, pour l'upload de source maps et `npm run sentry`  |
+| `SENTRY_PROJECT`             | Build + local    | Slug du projet Sentry                                                                   | Oui, pour l'upload de source maps et `npm run sentry`  |
+| `SENTRY_AUTH_TOKEN`          | Build + local    | Upload des source maps à la build, lecture et fermeture des issues via `npm run sentry` | Optionnel, sans lui les stack traces restent minifiées |
+| `NEXT_PUBLIC_SENTRY_ENABLED` | All environments | `false` pour désactiver explicitement en prod                                           | Optionnel                                              |
 
 Le DSN est public par nature : il peut figurer en `NEXT_PUBLIC_*` sans risque (voir https://docs.sentry.io/concepts/key-terms/dsn-explainer/). L'auth token, lui, ne doit **jamais** partir côté client.
 

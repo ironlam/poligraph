@@ -5,6 +5,7 @@ import {
   DEFAULT_POOL_MAX,
   MAX_POOL_MAX,
   MIN_POOL_MAX,
+  SUPAVISOR_BACKENDS,
 } from "../database";
 
 describe("configuration des transactions Prisma", () => {
@@ -29,12 +30,12 @@ describe("resolvePoolMax", () => {
     expect(resolvePoolMax({ DATABASE_POOL_MAX: "3" })).toBe(3);
   });
 
-  it("reste sous le budget du pooler, qu'aucune mesure mono-processus ne borne", () => {
-    // e6f26dc3 : à max=10, 5-6 requêtes concurrentes épuisaient les ~60 connexions du pooler.
-    // Huit instances au défaut font 32, la moitié de ce budget.
-    expect(DEFAULT_POOL_MAX * 8).toBeLessThan(60);
-    // Et le plafond aussi, sinon la sortie de secours annoncée peut rejouer l'incident.
-    expect(MAX_POOL_MAX * 8).toBeLessThan(60);
+  it("laisse un seul processus incapable de monopoliser les backends partagés", () => {
+    // Les 15 backends de Supavisor sont partagés par le site, les workers de build, Inngest et les
+    // scripts batch. Un pool aussi large que ce chiffre laisserait un seul processus les prendre
+    // tous, et les autres attendraient dans la file du pooler sans jamais voir d'erreur franche.
+    expect(DEFAULT_POOL_MAX).toBeLessThan(SUPAVISOR_BACKENDS);
+    expect(MAX_POOL_MAX).toBeLessThan(SUPAVISOR_BACKENDS);
   });
 
   it("borne la surcharge pour qu'une faute de frappe n'ouvre pas des milliers de connexions", () => {
