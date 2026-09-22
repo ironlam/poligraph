@@ -3,8 +3,8 @@
  *
  * Fail-closed by design:
  * - Defaults to dry-run (read-only). Writing requires BOTH --apply and
- *   --confirm-production, because .env / .env.prod point at the same database
- *   (see CLAUDE.local.md): there is no separate dev DB to rehearse against.
+ *   --confirm-production, because .env / .env.prod point at the same database:
+ *   there is no separate dev DB to rehearse against.
  * - reconcileScrutinDossier is plan-only: it computes transitions but writes
  *   nothing itself. Phase A (repairScrutinDossier) is the only thing that
  *   performs the dossierLegislatifId write, atomically with the title STALE

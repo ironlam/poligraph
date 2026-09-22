@@ -19,8 +19,7 @@ import { db } from "../src/lib/db";
 import { enrichAffair } from "../src/services/affair-enrichment";
 import { syncFactchecks } from "../src/services/sync/factchecks";
 import { syncPressAnalysis } from "../src/services/sync/press-analysis";
-// syncJudilibre import removed 2026-05-15 (Option C, audit:
-// docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
+// syncJudilibre import removed 2026-05-15 (Option C).
 // runJudilibre below is now a no-op stub.
 import { BRAVE_SEARCH_RATE_LIMIT_MS } from "../src/config/rate-limits";
 
@@ -336,8 +335,7 @@ async function runPress(politician: PoliticianTarget): Promise<SyncTypeResult> {
 }
 
 async function runJudilibre(_politician: PoliticianTarget): Promise<SyncTypeResult> {
-  // Judilibre pipeline disabled 2026-05-15 (Option C, audit:
-  // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
+  // Judilibre pipeline disabled 2026-05-15 (Option C).
   // The Cassation chambre criminelle corpus is structurally anonymized;
   // pipeline produced 0 affairs over 156 decisions. Re-enabling tracked
   // as Option D (enrichment for existing affairs) in follow-up issue.
@@ -346,7 +344,7 @@ async function runJudilibre(_politician: PoliticianTarget): Promise<SyncTypeResu
     success: true,
     stats: {},
     errors: [
-      "Pipeline désactivé 2026-05-15 (Option C). Voir docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md",
+      "Pipeline désactivé 2026-05-15 (Option C) : corpus anonymisé, aucune affaire produite.",
     ],
   };
 }

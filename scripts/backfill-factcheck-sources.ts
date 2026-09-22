@@ -23,8 +23,8 @@
  * Rows already PUBLISHED are only renamed, never touched otherwise.
  *
  * User-accord-gated: report-only by default, `--apply` performs real writes
- * against the production database (see CLAUDE.local.md — .env and .env.prod
- * point at the same Supabase instance). Do NOT run in CI.
+ * against the production database (.env and .env.prod point at the same
+ * Supabase instance). Do NOT run in CI.
  *
  * Usage:
  *   npx dotenv -e .env -- npx tsx scripts/backfill-factcheck-sources.ts

@@ -43,8 +43,7 @@ export const POST = withAdminAuth(
           break;
         }
         case "judilibre": {
-          // Judilibre pipeline disabled 2026-05-15 (Option C, audit:
-          // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
+          // Judilibre pipeline disabled 2026-05-15 (Option C).
           // The Cassation chambre criminelle corpus is structurally
           // anonymized; pipeline produced 0 affairs over 156 decisions.
           // Re-enabling tracked as Option D (enrichment for existing
@@ -52,8 +51,8 @@ export const POST = withAdminAuth(
           return NextResponse.json(
             {
               error:
-                "Le pipeline Judilibre est désactivé depuis le 2026-05-15. " +
-                "Voir docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md.",
+                "Le pipeline Judilibre est désactivé depuis le 2026-05-15 : le corpus " +
+                "de la chambre criminelle est anonymisé, aucune affaire n'en ressortait.",
               type,
             },
             { status: 410 }

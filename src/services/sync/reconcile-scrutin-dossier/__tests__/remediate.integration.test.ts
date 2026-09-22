@@ -537,9 +537,9 @@ describeIfLocalDb("requeueLinklessTitlesWithLinks", () => {
  * a real (mocked-LLM) generation pass, and the `limit`/`orderBy: updatedAt asc`
  * tests below assume no OTHER STALE ∧ queued ∧ has-links rows exist yet in the
  * target database. That is true for an empty or dedicated test database, but
- * NOT for a database already holding the real #477 remediation backlog (per
- * CLAUDE.local.md, `.env`/`.env.prod` are the same production database). Do
- * not run this file with DATABASE_URL pointed at that database.
+ * NOT for a database already holding the real #477 remediation backlog
+ * (`.env` and `.env.prod` are the same production database). Do not run this
+ * file with DATABASE_URL pointed at that database.
  */
 describeIfLocalDb("drainDossierRepointRegen (Phase B)", () => {
   const PFX3 = "TEST_RMD_DRAIN_";

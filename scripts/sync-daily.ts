@@ -99,8 +99,7 @@ const steps: SyncStep[] = [
     name: "Analyse presse IA (limit 100)",
     command: `npx tsx scripts/sync-press-analysis.ts --limit=100 --force${dryRunFlag}`,
   },
-  // Judilibre step disabled 2026-05-15 (Option C, audit:
-  // docs/superpowers/audits/2026-05-15-judilibre-no-match-audit.md).
+  // Judilibre step disabled 2026-05-15 (Option C).
   // The Cassation chambre criminelle corpus is structurally anonymized;
   // pipeline produced 0 affairs over 156 decisions. Re-enabling tracked
   // as Option D (enrichment for existing affairs) in follow-up issue.
@@ -168,8 +167,7 @@ const steps: SyncStep[] = [
   ...(!DRY_RUN
     ? [
         {
-          // Scoped tags only — never use { all: true }. See Phase 4 of
-          // docs/superpowers/plans/2026-04-07-supabase-perf-improvements.md.
+          // Scoped tags only — never use { all: true }.
           // The four tags below match the remaining data domains touched by
           // the daily sync. Votes are invalidated immediately after both vote
           // syncs, before the longer steps below can time out the workflow.
