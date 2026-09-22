@@ -62,4 +62,36 @@ describe("plafond de l'export politiques", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("plafond"));
     warn.mockRestore();
   });
+
+  it("stays quiet when a caller-supplied limit is simply filled", async () => {
+    findMany.mockResolvedValue(
+      Array.from({ length: 50 }, () => ({
+        mandates: [],
+        party: null,
+        _count: { affairs: 0, factCheckMentions: 0 },
+        externalIds: [],
+        publicId: "id",
+        slug: "slug",
+        civility: "M.",
+        firstName: "First",
+        lastName: "Last",
+        fullName: "First Last",
+        birthDate: null,
+        birthPlace: null,
+        deathDate: null,
+        currentParty: null,
+        currentPartyId: null,
+        prominenceScore: 0,
+        blobPhotoUrl: null,
+        photoUrl: null,
+        publicationStatus: "PUBLISHED",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await call("https://poligraph.fr/api/export/politiques?limit=50");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });

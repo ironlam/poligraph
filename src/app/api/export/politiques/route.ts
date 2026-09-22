@@ -17,6 +17,9 @@ import { parsePagination } from "@/lib/api/pagination";
 
 export const dynamic = "force-dynamic";
 
+/** Upper bound for this export. Reaching it means the CSV is silently truncated. */
+const EXPORT_CAP = 50000;
+
 /**
  * @openapi
  * /api/export/politiques:
@@ -100,7 +103,10 @@ export const GET = withPublicRoute(async (request) => {
 
   // Cap the only unbounded export. Without it a single call scans every published
   // politician, which is the most expensive query the public API can trigger.
-  const { limit } = parsePagination(searchParams, { defaultLimit: 50000, maxLimit: 50000 });
+  const { limit } = parsePagination(searchParams, {
+    defaultLimit: EXPORT_CAP,
+    maxLimit: EXPORT_CAP,
+  });
 
   const politicians = await db.politician.findMany({
     take: limit,
@@ -143,7 +149,9 @@ export const GET = withPublicRoute(async (request) => {
     orderBy: { lastName: "asc" },
   });
 
-  if (politicians.length === limit) {
+  // Only the cap matters here: a caller-supplied smaller limit returning a full page is
+  // ordinary paging, not truncation, and warning on it would make this signal noise.
+  if (limit === EXPORT_CAP && politicians.length === limit) {
     console.warn(`[export] plafond de ${limit} politiques atteint, l'export est tronqué`);
   }
 
