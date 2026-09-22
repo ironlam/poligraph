@@ -13,6 +13,7 @@ import {
   getPublicFactCheckWhere,
 } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { parsePagination } from "@/lib/api/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,13 @@ export const dynamic = "force-dynamic";
  *         schema:
  *           type: boolean
  *           default: true
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50000
+ *           maximum: 50000
+ *         description: Nombre maximum de lignes retournées
  *     responses:
  *       200:
  *         description: Fichier CSV UTF-8 avec BOM
@@ -90,7 +98,12 @@ export const GET = withPublicRoute(async (request) => {
     where.affairs = { some: getPublishedAffairWhere() };
   }
 
+  // Cap the only unbounded export. Without it a single call scans every published
+  // politician, which is the most expensive query the public API can trigger.
+  const { limit } = parsePagination(searchParams, { defaultLimit: 50000, maxLimit: 50000 });
+
   const politicians = await db.politician.findMany({
+    take: limit,
     where,
     include: {
       currentParty: {
@@ -129,6 +142,10 @@ export const GET = withPublicRoute(async (request) => {
     },
     orderBy: { lastName: "asc" },
   });
+
+  if (politicians.length === limit) {
+    console.warn(`[export] plafond de ${limit} politiques atteint, l'export est tronqué`);
+  }
 
   const data = politicians.map((p) => {
     const mandate = p.mandates[0];
