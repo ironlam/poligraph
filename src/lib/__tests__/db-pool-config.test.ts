@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_POOL_MAX } from "@/config/database";
 
 /**
@@ -62,6 +62,12 @@ async function poolConfig(): Promise<Record<string, unknown>> {
 }
 
 describe("configuration du pool Postgres", () => {
+  // In the body, a failing assertion would leave the stub behind and leak DATABASE_POOL_MAX into
+  // whatever else this worker runs, turning one real failure into a cascade.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("construit bien un pool à inspecter", async () => {
     // Guards the harness: capturing nothing would make the assertions below vacuously true.
     expect(Object.keys(await poolConfig())).toContain("connectionString");
@@ -85,6 +91,5 @@ describe("configuration du pool Postgres", () => {
   it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {
     vi.stubEnv("DATABASE_POOL_MAX", "3");
     expect((await poolConfig()).max).toBe(3);
-    vi.unstubAllEnvs();
   });
 });

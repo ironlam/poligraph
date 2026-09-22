@@ -4,6 +4,7 @@ import {
   resolvePoolMax,
   DEFAULT_POOL_MAX,
   MAX_POOL_MAX,
+  MIN_POOL_MAX,
 } from "../database";
 
 describe("configuration des transactions Prisma", () => {
@@ -24,17 +25,27 @@ describe("resolvePoolMax", () => {
     expect(DEFAULT_POOL_MAX).toBeGreaterThan(2);
   });
 
-  it("se laisse surcharger sans redéploiement", () => {
-    expect(resolvePoolMax({ DATABASE_POOL_MAX: "4" })).toBe(4);
+  it("se laisse surcharger", () => {
+    expect(resolvePoolMax({ DATABASE_POOL_MAX: "3" })).toBe(3);
+  });
+
+  it("reste sous le budget du pooler, qu'aucune mesure mono-processus ne borne", () => {
+    // e6f26dc3 : à max=10, 5-6 requêtes concurrentes épuisaient les ~60 connexions du pooler.
+    // Huit instances au défaut font 32, la moitié de ce budget.
+    expect(DEFAULT_POOL_MAX * 8).toBeLessThan(60);
+    expect(MAX_POOL_MAX).toBeLessThan(10);
   });
 
   it("borne la surcharge pour qu'une faute de frappe n'ouvre pas des milliers de connexions", () => {
     expect(resolvePoolMax({ DATABASE_POOL_MAX: "800" })).toBe(MAX_POOL_MAX);
   });
 
-  it("refuse un pool plus petit qu'une connexion", () => {
-    expect(resolvePoolMax({ DATABASE_POOL_MAX: "0" })).toBe(1);
-    expect(resolvePoolMax({ DATABASE_POOL_MAX: "-5" })).toBe(1);
+  it("ne descend jamais sous deux, sinon withAdvisoryLock se bloque lui-même", () => {
+    // Le verrou garde un client pour tout son callback, et le callback requête le même pool.
+    for (const value of ["1", "0", "-5"]) {
+      expect(resolvePoolMax({ DATABASE_POOL_MAX: value })).toBe(MIN_POOL_MAX);
+    }
+    expect(MIN_POOL_MAX).toBe(2);
   });
 
   it.each(["", "   ", "huit", "8.5.1", "NaN"])(

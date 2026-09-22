@@ -313,7 +313,8 @@ export async function syncCandidaturesMunicipales(
   // ─── Phase A: Pre-load reference data ───────────────────────────────
   console.log("\nPhase A: Pre-loading reference data...");
 
-  // Sequential to avoid pool starvation (pool max: 2, these are 4 queries)
+  // Sequential on purpose: four heavy pre-loads in parallel would hold the whole pool while the
+  // rest of the sync waits. The pool size is set in @/config/database and is not a fixed 2.
   const communeSet = await loadCommuneMap();
   const existingCandidacyMap = await loadExistingCandidacies(electionRecord.id);
   const partyCache = await preWarmPartyCache();

@@ -86,8 +86,9 @@ describeIfDisposableDb("publishMeasureRevision concurrency", () => {
       },
     });
 
-    // Exactly two concurrent transactions, which is exactly the pool limit (max: 2). A
-    // third would deadlock on connection acquisition rather than on the row.
+    // Exactly two concurrent transactions: the race this asserts is on the row lock, and a third
+    // would only add noise. It is not a statement about the pool size, which lives in
+    // @/config/database and has changed since this test was written.
     const results = await Promise.allSettled([
       publishMeasureRevision({ measureId, revisionId: first }),
       publishMeasureRevision({ measureId, revisionId: second.id }),
@@ -118,8 +119,8 @@ describeIfDisposableDb("publishMeasureRevision concurrency", () => {
     let settled = false;
     let attempt: Promise<void> | undefined;
 
-    // The pool is max: 2 per process. This holds one connection and waits for a second,
-    // which is exactly the limit, so it must never open a third transaction.
+    // This holds one connection and waits for a second. Keep it to two: the assertion is about the
+    // row lock blocking the publication, not about exhausting the pool.
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Measure" WHERE id = ${measureId} FOR UPDATE`;
 

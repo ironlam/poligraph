@@ -30,7 +30,7 @@ function buildExtendedClient() {
     connectionString,
     // Sized in @/config/database, which records the measurements. It is not one request per
     // instance: several cold renders share a pool, and a pool too small becomes their queue
-    // rather than a safeguard. DATABASE_POOL_MAX lowers it without a deploy if the pooler says so.
+    // rather than a safeguard. DATABASE_POOL_MAX is the lever if the pooler reports pressure.
     max: resolvePoolMax(process.env),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
