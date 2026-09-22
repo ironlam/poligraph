@@ -76,7 +76,8 @@ Prisma indépendants et pools `pg` construits ailleurs ne sont pas couverts.
 
 ### Infrastructure observée
 
-- `db.ts` construit un seul pool partagé (max 2), un `PrismaPg`, puis le client
+- `db.ts` construit un seul pool partagé (taille dans `src/config/database.ts`,
+  surchargeable par `DATABASE_POOL_MAX`), un `PrismaPg`, puis le client
   étendu avec `createPoligraphIdExtension`. L'extension alloue les identifiants
   via le client brut. L'observation est en dessous des deux clients.
 - Les options SSL, timeouts, `allowExitOnIdle`, options de transaction et arrêt

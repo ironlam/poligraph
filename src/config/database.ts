@@ -27,26 +27,36 @@ export const PRISMA_TRANSACTION_OPTIONS = {
  * Waiting time follows hold × floor((n - 1) / max). Four is the smallest size that absorbs the 16
  * concurrent renders per instance observed during the 2026-09-20 burst.
  *
- * Across instances. This is the term a single-process measurement never bounds, and the one that
- * broke first: commit e6f26dc3 (2026-02-27) cut the pool from 10 to 2 because "just 5-6 concurrent
- * requests exhaust Supabase's pooler limit (~60 connections), causing 'Max client connections
- * reached' errors site-wide". The failure is not local, it takes down everything sharing the
- * pooler, sync jobs included.
+ * Across processes. This is the term a single-process measurement never bounds. Read from the
+ * Supabase dashboard on 2026-09-22, for the Small compute this project runs on:
  *
- * Count the processes honestly: every request instance, but also each `next build` worker during a
- * deploy, each Inngest job and each batch script under scripts/, since they all import the same
- * module and all just went from 2 to 4. Eight request instances at four connections is 32, half the
- * budget, and the deploy window stacks build workers on top of that. Raise this only against a
- * measured pooler ceiling, never against a single-instance benchmark.
+ *   Max client connections     400, fixed   ← what a `pg.Pool` opens toward Supavisor
+ *   Connection pool size        15, per user+db ← what Supavisor opens toward Postgres
+ *
+ * The 400 is not the binding constraint: eight instances at four connections is 32. The 15 is. In
+ * transaction mode a backend is held for the duration of a query, not of a connection, so those 15
+ * are shared by every process that imports this module: request instances, each `next build` worker
+ * during a deploy, each Inngest job and each batch script under scripts/. Past 15 queries in flight
+ * Supavisor queues rather than refusing, so the symptom becomes latency, not an error.
+ *
+ * Commit e6f26dc3 (2026-02-27) cut the pool from 10 to 2 citing "Supabase's pooler limit (~60
+ * connections)". That number does not match anything the dashboard reports, so it is recorded here
+ * as the claim it was, not as a measurement. Sizing this against the 15 is what holds.
  */
+/**
+ * Backends Supavisor opens toward Postgres for this user+db, read from the Supabase dashboard on
+ * 2026-09-22 (Small compute). Shared by every process, so it is the ceiling that actually binds.
+ */
+export const SUPAVISOR_BACKENDS = 15;
+
 export const DEFAULT_POOL_MAX = 4;
 
 /**
- * A ceiling on the override, sized against the pooler budget rather than against arithmetic
- * overflow: the danger is not thousands of connections from one process, it is roughly sixty across
- * all of them. Six keeps eight request instances at 48, still inside that budget. Eight would put
- * them at 64, past it, which would make the advertised escape hatch able to reproduce the very
- * outage this file documents.
+ * A ceiling on the override, sized against the 15 backends rather than against arithmetic overflow.
+ * Raising the client pool past that point buys no throughput: the extra connections queue at
+ * Supavisor instead of at pg-pool, which moves the wait rather than removing it. Six leaves room to
+ * step up once if pool waits reappear, and stops well before the point where the override would
+ * only be trading one queue for another.
  */
 export const MAX_POOL_MAX = 6;
 
