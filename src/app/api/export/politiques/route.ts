@@ -7,6 +7,7 @@ import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import {
   getMandateStartDatePublicationStatus,
   getPublicFactCheckWhere,
@@ -207,9 +208,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `politiques-${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Full-table CSV: an hour of CDN staleness keeps the scan off the function.
-  // Caveat: the 04:00 sync is not the only writer, admin routes edit politicians
-  // too, and `invalidateEntity("politician")` names no `/api/export/*` path, so an
-  // edit can take the whole s-maxage + stale-while-revalidate window to show up.
-  return withCache(createCSVResponse(csv, filename), "static");
+  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
+  // hard-deletes the tag below, so an edited politician leaves the CSV at once.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.politicians,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

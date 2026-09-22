@@ -8,6 +8,7 @@ import { pickEnumValue } from "@/lib/data/enum-guards";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `votes-${chamber ? chamber.toLowerCase() + "-" : ""}${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Scrutins only move with the 04:00 daily sync, so an hour of CDN staleness on a
-  // full-table CSV costs nothing and keeps a heavy public route off the function.
-  return withCache(createCSVResponse(csv, filename), "static");
+  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
+  // hard-deletes the tag below, so a depublished scrutin leaves the CSV at once.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.votes,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

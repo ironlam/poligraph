@@ -8,6 +8,7 @@ import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { getPublicFactCheckWhere, isAllowedFactCheckSource } from "@/lib/api/public-contract";
+import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -202,9 +203,10 @@ export const GET = withPublicRoute(async (request) => {
   const csv = toCSV(data, columns);
   const filename = `factchecks-${new Date().toISOString().split("T")[0]}.csv`;
 
-  // Full-table CSV: an hour of CDN staleness keeps the scan off the function.
-  // Caveat: the daily sync is not the only writer, admin routes edit factchecks
-  // too, and `invalidateEntity("factcheck")` names no `/api/export/*` path, so an
-  // edit can take the whole s-maxage + stale-while-revalidate window to show up.
-  return withCache(createCSVResponse(csv, filename), "static");
+  // Cached 24h at the edge. Admin writes do not wait for expiry: `invalidateEntity`
+  // hard-deletes the tag below, so an edited factcheck leaves the CSV at once.
+  return withCache(createCSVResponse(csv, filename), "export", [
+    EXPORT_CACHE_TAGS.factchecks,
+    EXPORT_ROLLUP_TAG,
+  ]);
 });

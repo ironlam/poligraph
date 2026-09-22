@@ -27,8 +27,15 @@ const ROUTES = [
   ["factchecks", () => import("@/app/api/export/factchecks/route")],
 ] as const;
 
+const EXPECTED_TAG: Record<string, string> = {
+  affaires: "export:affairs",
+  votes: "export:votes",
+  politiques: "export:politicians",
+  factchecks: "export:factchecks",
+};
+
 describe("politique de cache CDN des exports CSV", () => {
-  it.each(ROUTES)("/api/export/%s serves a cacheable CSV", async (name, load) => {
+  it.each(ROUTES)("/api/export/%s serves a cacheable, purgeable CSV", async (name, load) => {
     const { GET } = await load();
     const response = await GET(new NextRequest(`https://poligraph.fr/api/export/${name}`), {
       params: Promise.resolve({}),
@@ -37,10 +44,14 @@ describe("politique de cache CDN des exports CSV", () => {
     // Asserted first so a broken mock reads as a broken mock, not as a cache bug.
     expect(response.status).toBe(200);
 
-    const cacheControl = response.headers.get("Cache-Control");
-    expect(cacheControl).toContain("public");
-    expect(cacheControl).toContain("s-maxage=3600");
-    expect(cacheControl).not.toContain("no-cache");
-    expect(cacheControl).not.toContain("no-store");
+    const expected = "public, s-maxage=86400, stale-while-revalidate=604800";
+    expect(response.headers.get("Cache-Control")).toBe(expected);
+    // The authoritative header for the edge on a `force-dynamic` route.
+    expect(response.headers.get("Vercel-CDN-Cache-Control")).toBe(expected);
+
+    // Without a tag the entry cannot be purged, which is the whole point here.
+    const tags = response.headers.get("Vercel-Cache-Tag")?.split(",") ?? [];
+    expect(tags).toContain(EXPECTED_TAG[name]);
+    expect(tags).toContain("exports");
   });
 });
