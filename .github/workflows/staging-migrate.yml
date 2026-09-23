@@ -6,6 +6,9 @@ on:
     paths:
       - "prisma/**"
 
+permissions:
+  contents: read
+
 jobs:
   migrate:
     name: Apply Prisma migrations

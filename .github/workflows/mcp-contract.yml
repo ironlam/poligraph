@@ -7,6 +7,9 @@ on:
     paths:
       - "src/app/api/**"
 
+permissions:
+  contents: read
+
 jobs:
   notify-mcp:
     runs-on: ubuntu-latest

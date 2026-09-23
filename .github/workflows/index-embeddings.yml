@@ -19,6 +19,9 @@ on:
     workflows: ["Sync Content (Legislation + AI)"]
     types: [completed]
 
+permissions:
+  contents: read
+
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
