@@ -29,6 +29,21 @@ describe("matchesHost", () => {
     expect(matchesHost("https://FR.Wikipedia.ORG/wiki/Test", "wikipedia.org")).toBe(true);
   });
 
+  /**
+   * Un nom d'hôte pleinement qualifié peut se terminer par un point, et `URL.hostname` le
+   * conserve. Sans normalisation, `fr.wikipedia.org.` ne ressemble plus à Wikipedia alors que
+   * la requête y arrive.
+   */
+  it("ignore le point terminal du nom d'hôte", () => {
+    expect(matchesHost("https://fr.wikipedia.org./wiki/Test", "wikipedia.org")).toBe(true);
+    expect(matchesHost("https://wikipedia.org./wiki/Test", "wikipedia.org")).toBe(true);
+  });
+
+  it("ne se laisse pas tromper par un point terminal sur un autre hôte", () => {
+    expect(matchesHost("https://evil.com./?ref=wikipedia.org", "wikipedia.org")).toBe(false);
+    expect(matchesHost("https://notwikipedia.org./a", "wikipedia.org")).toBe(false);
+  });
+
   /** Les chaînes de connexion Postgres sont des URL : c'est ce qui sert côté scripts. */
   it("lit l'hôte d'une chaîne de connexion Postgres", () => {
     expect(
