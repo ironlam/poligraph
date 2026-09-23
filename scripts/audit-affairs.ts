@@ -22,6 +22,7 @@ import { AffairCategory, AffairStatus } from "../src/generated/prisma";
 import { db } from "../src/lib/db.js";
 import * as fs from "fs";
 import { HTTPClient, HTTPError } from "@/lib/api/http-client";
+import { matchesHost } from "@/lib/url-host";
 
 // Sensitive categories that require manual verification
 const SENSITIVE_CATEGORIES: AffairCategory[] = ["AGRESSION_SEXUELLE", "HARCELEMENT_SEXUEL"];
@@ -220,7 +221,10 @@ async function runAudit(checkUrls: boolean): Promise<AuditResult> {
     }
 
     // Check: all sources are Wikipedia
-    if (affair.sources.length > 0 && affair.sources.every((s) => s.url.includes("wikipedia.org"))) {
+    if (
+      affair.sources.length > 0 &&
+      affair.sources.every((s) => matchesHost(s.url, "wikipedia.org"))
+    ) {
       result.wikipediaOnlySources.push(affairInfo);
       result.summary.wikipediaOnlyCount++;
     }

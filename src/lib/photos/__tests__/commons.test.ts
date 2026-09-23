@@ -123,3 +123,26 @@ describe("rewriteCommonsThumbnailWidth", () => {
     expect(rewriteCommonsThumbnailWidth(once, 500)).toBe(once);
   });
 });
+
+/**
+ * `upload.wikimedia.org` appearing anywhere in the string used to be enough. A URL served by
+ * another host can carry it in its path, and `rewriteCommonsThumbnailWidth` then edited a URL
+ * that is not a Commons thumbnail before writing it back to `Politician.photoUrl`.
+ */
+describe("hôtes qui imitent Commons", () => {
+  const imposteur = "https://evil.com/upload.wikimedia.org/thumb/a/ab/x/500px-x.jpg";
+
+  it("ne reconnaît pas un hôte tiers qui cite Commons dans son chemin", () => {
+    expect(isCommonsThumbnailUrl(imposteur)).toBe(false);
+  });
+
+  it("laisse une telle URL intacte au lieu d'en réécrire la largeur", () => {
+    expect(rewriteCommonsThumbnailWidth(imposteur, 960)).toBe(imposteur);
+  });
+
+  it("ne se laisse pas convaincre par /thumb/ placé dans la query", () => {
+    expect(
+      isCommonsThumbnailUrl("https://upload.wikimedia.org/wikipedia/commons/9/9e/a.jpg?x=/thumb/")
+    ).toBe(false);
+  });
+});

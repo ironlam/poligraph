@@ -33,7 +33,10 @@ async function main() {
   const pool = new Pool({
     connectionString,
     max: 1,
-    ssl: connectionString.includes("supabase.com") ? { rejectUnauthorized: false } : undefined,
+    // Same rule as src/lib/db.ts: SSL on unless DATABASE_SSL is exactly "false", which is how a
+    // local non-TLS Postgres is addressed. The previous condition looked for "supabase.com"
+    // anywhere in the string, so it read the password and the database name as well as the host.
+    ssl: process.env.DATABASE_SSL !== "false" ? { rejectUnauthorized: false } : false,
   });
 
   try {

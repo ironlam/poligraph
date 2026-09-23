@@ -1,3 +1,5 @@
+import { matchesHost } from "@/lib/url-host";
+
 /**
  * Extract publication date from a news article URL.
  *
@@ -13,8 +15,10 @@
  *  - /DDMMYY/              (mediapart old)
  */
 export function extractDateFromUrl(url: string): Date | null {
-  // Skip Wikipedia URLs
-  if (url.includes("wikipedia.org")) return null;
+  // Skip Wikipedia URLs. On the host, not on the string: a press URL citing wikipedia.org in a
+  // query parameter was skipped too, and the caller then fell back to today instead of the
+  // publication date.
+  if (matchesHost(url, "wikipedia.org")) return null;
 
   // Pattern: /article/YYYY/MM/DD/ (lemonde, huffpost)
   let match = url.match(/\/article\/(\d{4})\/(\d{2})\/(\d{2})\//);
