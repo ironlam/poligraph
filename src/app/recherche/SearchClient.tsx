@@ -17,6 +17,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
+import { useTrackEmptySearch } from "./use-track-empty-search";
 import {
   MANDATE_TYPE_LABELS,
   CHAMBER_SHORT_LABELS,
@@ -269,6 +270,10 @@ export function SearchClient() {
 
   const hasResults = counts !== null && counts.all > 0;
   const noResults = results !== null && counts !== null && counts.all === 0 && query.length >= 2;
+
+  // A search that found nothing names a gap in the database, which is editorial input the
+  // page cannot surface on its own.
+  useTrackEmptySearch(query, noResults);
 
   function clearSearch() {
     setQuery("");
