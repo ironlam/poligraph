@@ -6,6 +6,9 @@ on:
   # Run locally: npm run sync:rne:maires
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
