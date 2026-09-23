@@ -29,6 +29,10 @@ vi.mock("pg", () => ({
       capturedConfigs.push(config);
     }
     on() {}
+    // `db.ts` registers a `beforeExit` handler that calls `pool.end()`. Without it here, the worker
+    // exiting turned this mock into an unhandled rejection that failed the whole suite at random:
+    // `beforeExit` only fires when the event loop empties on its own, so it depended on scheduling.
+    async end() {}
   },
 }));
 vi.mock("@prisma/adapter-pg", () => ({ PrismaPg: class {} }));
