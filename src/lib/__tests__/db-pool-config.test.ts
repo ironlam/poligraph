@@ -98,9 +98,13 @@ describe("configuration du pool Postgres", () => {
    * when the pool is smaller than the concurrency it faces.
    */
   /**
-   * Le budget qui arrive au pool suit la charge : court sous Next, généreux ailleurs. Sans cette
-   * assertion, une régression sur `resolveConnectionTimeout` passerait inaperçue puisque le
-   * harnais ne voit jamais le chemin web.
+   * Le budget qui arrive au pool suit la charge : court sous Next, généreux ailleurs.
+   *
+   * Ce que cette assertion ne couvre pas, et qui a coûté un incident : elle tourne non bundlée,
+   * donc `process.env.NEXT_RUNTIME` y est une vraie variable que `stubEnv` renseigne. En
+   * production, Next en substitue le texte à la compilation, et une lecture indirecte échappait à
+   * la substitution sans que rien ici ne bronche. Ce cas-là relève du contrôle sur le texte source,
+   * dans `src/config/__tests__/database.test.ts`.
    */
   it("donne au runtime Next le budget court", async () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");

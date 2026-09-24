@@ -39,7 +39,7 @@ function buildExtendedClient() {
     idleTimeoutMillis: 10_000,
     // Short on the request path, generous for jobs and scripts: the same pool serves both, and
     // only one of them has a visitor waiting.
-    connectionTimeoutMillis: resolveConnectionTimeout(process.env),
+    connectionTimeoutMillis: resolveConnectionTimeout(Boolean(process.env.NEXT_RUNTIME)),
     ssl: useSsl ? { rejectUnauthorized: false } : false,
     allowExitOnIdle: true, // Release idle connections faster in serverless
     // No statement_timeout here on purpose. It is silently ignored on this database, and declaring

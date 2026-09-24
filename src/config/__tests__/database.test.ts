@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   PRISMA_TRANSACTION_OPTIONS,
@@ -72,16 +74,23 @@ describe("resolveConnectionTimeout", () => {
    * personne ne regarde l'écran.
    */
   it("donne au runtime Next le budget d'un visiteur", () => {
-    expect(resolveConnectionTimeout({ NEXT_RUNTIME: "nodejs" })).toBe(WEB_CONNECTION_TIMEOUT_MS);
-    expect(resolveConnectionTimeout({ NEXT_RUNTIME: "edge" })).toBe(WEB_CONNECTION_TIMEOUT_MS);
+    expect(resolveConnectionTimeout(true)).toBe(WEB_CONNECTION_TIMEOUT_MS);
   });
 
   it("laisse un script ou un job attendre, faute de visiteur derrière", () => {
-    expect(resolveConnectionTimeout({})).toBe(BATCH_CONNECTION_TIMEOUT_MS);
+    expect(resolveConnectionTimeout(false)).toBe(BATCH_CONNECTION_TIMEOUT_MS);
   });
 
-  it("garde le budget web sous ce qu'un visiteur tolère", () => {
-    expect(WEB_CONNECTION_TIMEOUT_MS).toBeLessThanOrEqual(8_000);
+  /**
+   * L'ancien seuil de 8 s disait « ce qu'un visiteur tolère », mais il n'a jamais été appliqué :
+   * la production tournait à 30 s. La production a donc mesuré ce que l'assertion supposait, et
+   * POLIGRAPH-2X rapporte des attentes réelles de 5648 ms. Un plafond en dessous transformerait
+   * ces rendus en erreurs, ce qui est pire qu'une page lente. L'assertion borne maintenant ce
+   * qu'on sait : au-dessus du pire cas observé, en dessous du budget d'un job.
+   */
+  it("garde le budget web au-dessus du pire cas observé et sous celui d'un job", () => {
+    expect(WEB_CONNECTION_TIMEOUT_MS).toBeGreaterThan(5_648);
+    expect(WEB_CONNECTION_TIMEOUT_MS).toBeLessThan(BATCH_CONNECTION_TIMEOUT_MS);
   });
 
   /**
@@ -91,5 +100,50 @@ describe("resolveConnectionTimeout", () => {
    */
   it("laisse le budget batch au-dessus de la file la plus longue mesurée", () => {
     expect(BATCH_CONNECTION_TIMEOUT_MS).toBeGreaterThan(9_200);
+  });
+});
+
+/**
+ * Le bug que cette suite n'a pas vu, et ne pouvait pas voir.
+ *
+ * Next remplace le texte littéral `process.env.NEXT_RUNTIME` à la compilation
+ * (`next/dist/build/define-env.js`). Une lecture indirecte, `env.NEXT_RUNTIME` avec `env` reçu en
+ * paramètre, échappe à cette substitution, et sur Vercel rien d'autre ne pose la variable : seul
+ * le binaire `next` le fait. Le budget web n'a donc jamais été appliqué en production, pendant que
+ * chaque test, lui, tournait non bundlé contre un vrai `process.env` et passait.
+ *
+ * Aucune assertion d'exécution ne peut rattraper ça, puisque l'écart naît du bundler. D'où un
+ * contrôle sur le texte source.
+ */
+describe("lecture de NEXT_RUNTIME", () => {
+  const SOURCES = [
+    "src/lib/db.ts",
+    "src/config/database.ts",
+    "src/lib/telemetry/pg-pool.ts",
+    "src/instrumentation.ts",
+  ];
+
+  /** Retire commentaires de bloc et de ligne, où la variable est citée en prose. */
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+
+  it.each(SOURCES)("%s ne lit NEXT_RUNTIME que par le littéral que le build substitue", (file) => {
+    const code = withoutComments(fs.readFileSync(path.join(process.cwd(), file), "utf8"));
+    const lectures = [...code.matchAll(/[\w.[\]"'`]*NEXT_RUNTIME/g)].map((m) => m[0]);
+    for (const lecture of lectures) {
+      expect(lecture, `${file} lit NEXT_RUNTIME autrement que par process.env`).toBe(
+        "process.env.NEXT_RUNTIME"
+      );
+    }
+  });
+
+  /** Le contrôle ci-dessus ne vaut que s'il voit quelque chose. */
+  it("voit bien des lectures à contrôler", () => {
+    const total = SOURCES.reduce((n, file) => {
+      const code = withoutComments(fs.readFileSync(path.join(process.cwd(), file), "utf8"));
+      return n + [...code.matchAll(/NEXT_RUNTIME/g)].length;
+    }, 0);
+    expect(total).toBeGreaterThanOrEqual(4);
   });
 });

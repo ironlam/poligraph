@@ -63,18 +63,31 @@ export const PRISMA_TRANSACTION_OPTIONS = {
  * /politiques/[slug] all returned 200 in at most 2817ms end to end, queries included, so
  * acquisition was well under that. Opening a fresh connection takes 126 to 159ms.
  *
- * Hence five seconds on the request path, an order of magnitude over ordinary load, and thirty for
- * everything else, above the 9.2s worst case so a job absorbs a queue instead of failing on it.
+ * The web budget was five seconds until 2026-09-24, on the strength of those numbers. It was never
+ * applied: the runtime test below read NEXT_RUNTIME through a parameter, which Next's build-time
+ * substitution cannot reach, so production ran the thirty-second budget instead. What that accident
+ * measured is worth keeping: POLIGRAPH-2X reports real acquisitions of 5639ms and 5648ms on
+ * /politiques/[slug], above the five seconds the request path was supposed to allow. Enforcing five
+ * would have turned those renders into errors rather than slow pages.
+ *
+ * So twelve seconds, deliberately above the worst wait observed in production and well under the
+ * thirty a job may spend. It is a ceiling that finally exists, not a target: the pool saturating at
+ * 4/4 on /politiques/[slug] is the thing to fix, and this comes back down once it is.
  */
-export const WEB_CONNECTION_TIMEOUT_MS = 5_000;
+export const WEB_CONNECTION_TIMEOUT_MS = 12_000;
 export const BATCH_CONNECTION_TIMEOUT_MS = 30_000;
 
 /**
- * `NEXT_RUNTIME` is set by Next for the server and edge runtimes and by nothing else, which is the
- * same signal `src/instrumentation.ts` already uses to tell the two apart.
+ * Takes the answer rather than the environment, and that signature is the point.
+ *
+ * Next replaces the literal text `process.env.NEXT_RUNTIME` at build time (see
+ * `next/dist/build/define-env.js`). A parameter named `env` defeats that substitution, and on
+ * Vercel nothing else sets the variable, since only the `next` CLI binary does. Reading it here
+ * therefore answered "not a web runtime" in production while every test, running unbundled against
+ * a real `process.env`, answered correctly. The literal has to stay at the call site.
  */
-export function resolveConnectionTimeout(env: Record<string, string | undefined>): number {
-  return env.NEXT_RUNTIME ? WEB_CONNECTION_TIMEOUT_MS : BATCH_CONNECTION_TIMEOUT_MS;
+export function resolveConnectionTimeout(isWebRuntime: boolean): number {
+  return isWebRuntime ? WEB_CONNECTION_TIMEOUT_MS : BATCH_CONNECTION_TIMEOUT_MS;
 }
 
 /**
