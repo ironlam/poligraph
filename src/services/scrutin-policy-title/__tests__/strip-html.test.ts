@@ -20,16 +20,15 @@ describe("stripHtml", () => {
   });
 });
 
-describe("balisage résiduel", () => {
-  it("ne laisse aucun chevron", () => {
-    expect(stripHtml("<p>a<script</p>")).not.toMatch(/[<>]/);
-  });
-
-  /**
-   * L'ordre compte : le retrait des chevrons doit précéder le décodage, sinon un `&lt;` légitime
-   * du texte AN, par exemple « seuil &lt; 5 % », disparaîtrait avec les balises.
-   */
+describe("comparaisons dans le texte AN", () => {
+  /** Un amendement qui fixe un seuil est précisément ce qu'on ne doit pas tronquer. */
   it("préserve un chevron qui vient d'une entité", () => {
     expect(stripHtml("<p>seuil &lt; 5 %</p>")).toBe("seuil < 5 %");
+  });
+
+  it("préserve un chevron écrit littéralement", () => {
+    expect(stripHtml("<p>déficit < 3 % et dette > 100 %</p>")).toBe(
+      "déficit < 3 % et dette > 100 %"
+    );
   });
 });

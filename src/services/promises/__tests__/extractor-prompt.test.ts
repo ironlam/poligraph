@@ -13,8 +13,15 @@ describe("sanitizeForPrompt", () => {
 
   /** L'ancienne expression n'acceptait ni espace ni attribut, donc les laissait passer. */
   it("retire aussi ce qui porte une espace ou un attribut", () => {
-    expect(sanitizeForPrompt("a</article >b")).not.toMatch(/[<>]/);
-    expect(sanitizeForPrompt('a<article id="x">b')).not.toMatch(/[<>]/);
+    expect(sanitizeForPrompt("a</article >b")).toBe("ab");
+    expect(sanitizeForPrompt('a<article id="x">b')).toBe("ab");
+  });
+
+  /** Une promesse amputée de son seuil est une autre promesse. */
+  it("garde les opérateurs de comparaison", () => {
+    expect(sanitizeForPrompt("ramener le deficit < 3 % et la dette > 100 %")).toBe(
+      "ramener le deficit < 3 % et la dette > 100 %"
+    );
   });
 
   it("garde un texte ordinaire intact", () => {

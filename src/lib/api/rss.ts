@@ -8,6 +8,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { HTTPClient, HTTPError } from "./http-client";
 import { RSS_RATE_LIMIT_MS } from "@/config/rate-limits";
+import { removeTags } from "@/lib/parsing/html-utils";
 
 // ============================================
 // TYPES
@@ -227,12 +228,9 @@ function decodeHtmlEntities(text: string): string {
  * Exported so the extraction can be asserted without fetching a feed.
  */
 export function stripHtmlTags(html: string): string {
-  // The blanket strip cannot remove an unterminated `<script`, and this output is stored, then
-  // rendered, then handed to a model. It is meant to be text, so no angle bracket survives it.
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/[<>]/g, "")
-    .trim();
+  // Shared pattern: a press title reading "deficit < 3 %" keeps its operator, which the previous
+  // `<[^>]*>` deleted along with everything up to the next `>`.
+  return removeTags(html).trim();
 }
 
 /**

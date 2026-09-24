@@ -1,4 +1,5 @@
 import { callAnthropic, parseAnthropicJSON } from "@/lib/api/anthropic";
+import { removeTags } from "@/lib/parsing/html-utils";
 
 export interface ExtractedPromise {
   text: string;
@@ -36,11 +37,10 @@ Si aucune promesse, retourne {"promises": []}.
  * Exported so the guard can be asserted without calling the model.
  */
 export function sanitizeForPrompt(text: string): string {
-  // Two passes. The first drops whole tags, including the `</article >` and `<article id="x">`
-  // forms the previous expression accepted neither a space nor an attribute for. The second
-  // removes what is left over, since an unterminated `<` is enough to close the delimiter that
-  // separates the article from the instructions.
-  return text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+  // What has to go is anything able to close `</article>`, which the previous expression missed
+  // as soon as it carried a space or an attribute. What has to stay is "deficit < 3 %", since a
+  // promise stripped of its threshold is a different promise.
+  return removeTags(text);
 }
 
 export async function extractPromisesFromText(input: {

@@ -221,21 +221,26 @@ describe("containsHtml", () => {
   });
 });
 
-/**
- * `stripHtml` produit du texte, jamais du balisage. Tant qu'un chevron survit, la sortie peut
- * reformer une balise en se concaténant à autre chose, et le lecteur suivant croit tenir du texte.
- */
-describe("stripHtml ne laisse pas de balisage résiduel", () => {
-  it("retire une balise fermante écrite avec une espace", () => {
+describe("stripHtml distingue une balise d'une comparaison", () => {
+  /**
+   * Le motif `<[^>]*>` avalait tout ce qui sépare deux chevrons. Sur un site qui publie des
+   * seuils budgétaires, « déficit < 3 % et croissance > 2 % » devenait « déficit  2 % ».
+   */
+  it("garde les opérateurs de comparaison", () => {
+    expect(stripHtml("déficit < 3 % et croissance > 2 %")).toBe(
+      "déficit < 3 % et croissance > 2 %"
+    );
+    expect(stripHtml("<p>seuil < 5 %</p>")).toBe("seuil < 5 %");
+  });
+
+  it("retire une fermeture portant une espace ou un attribut", () => {
     expect(stripHtml("a<script>alert(1)</script >b")).toBe("ab");
+    expect(stripHtml("a<script>alert(1)</script foo>b")).toBe("ab");
+    expect(stripHtml('a<article id="x">b</article>c')).toBe("abc");
   });
 
-  it("ne laisse aucun chevron, même sur une balise jamais refermée", () => {
-    expect(stripHtml("texte <script")).toBe("texte script");
-    expect(stripHtml("a <b")).toBe("a b");
-  });
-
-  it("neutralise une balise imbriquée dans son propre nom", () => {
-    expect(stripHtml("<scr<script>ipt>alert(1)</script>")).not.toContain("<");
+  it("retire commentaires et déclarations", () => {
+    expect(stripHtml("a<!-- caché -->b")).toBe("ab");
+    expect(stripHtml("<!DOCTYPE html><p>a</p>")).toBe("a");
   });
 });

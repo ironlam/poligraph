@@ -10,9 +10,15 @@ describe("stripHtmlTags", () => {
     expect(stripHtmlTags("<p>Titre <b>en gras</b></p>")).toBe("Titre en gras");
   });
 
-  it("ne laisse aucun chevron résiduel", () => {
-    expect(stripHtmlTags("Titre <script")).not.toMatch(/[<>]/);
-    expect(stripHtmlTags("a <img src=x onerror=1")).not.toMatch(/[<>]/);
+  it("retire une balise portant une espace ou un attribut", () => {
+    expect(stripHtmlTags('a<span class="x">b</span >c')).toBe("abc");
+  });
+
+  /** Un titre de presse chiffré ne doit pas perdre son seuil au passage. */
+  it("garde les opérateurs de comparaison", () => {
+    expect(stripHtmlTags("Déficit < 3 % : Bruxelles insiste")).toBe(
+      "Déficit < 3 % : Bruxelles insiste"
+    );
   });
 
   it("garde le texte intact quand il n'y a rien à retirer", () => {

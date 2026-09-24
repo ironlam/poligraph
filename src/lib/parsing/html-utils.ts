@@ -110,22 +110,35 @@ export function decodeHtmlEntities(html: string): string {
  * stripHtml("<p>Hello <b>World</b></p>") // "Hello World"
  * stripHtml("<a href='url'>Link</a>") // "Link"
  */
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+const MARKUP_DECLARATION = /<[!?][^>]*>/g;
+/**
+ * A `<` followed by a letter is what starts a tag. `< 3 %` is arithmetic and must survive.
+ *
+ * The blanket `<[^>]*>` this replaces could not tell them apart: on "déficit < 3 % et croissance
+ * > 2 %" it treated the whole span between the two operators as one tag and deleted it, leaving
+ * "déficit  2 %". On a site that publishes budget thresholds, that is a silent loss of meaning.
+ *
+ * `[^>]*` after the tag name keeps the attribute and trailing-space forms, `</script >` and
+ * `<article id="x">`, which a stricter name-only pattern would let through.
+ */
+const HTML_TAG = /<\/?[a-zA-Z][^>]*>/g;
+
+/** Remove markup from a string, leaving comparison operators and other literal text alone. */
+export function removeTags(text: string): string {
+  return text.replace(HTML_COMMENT, "").replace(MARKUP_DECLARATION, "").replace(HTML_TAG, "");
+}
+
 export function stripHtml(html: string): string {
   if (!html) return "";
 
-  return (
+  return removeTags(
     html
-      // `\s*` before the closing bracket: HTML allows `</script >`, and a closing tag that does not
-      // match leaves the script body behind as text.
-      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, "")
-      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, "")
-      .replace(/<[^>]+>/g, "")
-      // What is left cannot be a tag, since a tag needs its closing bracket, but it can still be
-      // half of one. This function returns text, so no angle bracket belongs in the result: a
-      // surviving `<script` becomes markup again the moment the text is concatenated.
-      .replace(/[<>]/g, "")
-      .trim()
-  );
+      // `[^>]*` before the closing bracket: HTML accepts `</script >` and `</script foo>`, and a
+      // closing tag that does not match leaves the script body behind as text.
+      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, "")
+  ).trim();
 }
 
 /**

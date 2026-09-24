@@ -1,3 +1,5 @@
+import { removeTags } from "@/lib/parsing/html-utils";
+
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
   lt: "<",
@@ -35,10 +37,7 @@ export function stripHtml(html: string): string {
   if (!html) return "";
   let text = html.replace(/<\/(p|div|li|tr|h[1-6]|br|ul|ol|blockquote)\s*>/gi, " ");
   text = text.replace(/<br\s*\/?>/gi, " ");
-  text = text.replace(/<[^>]+>/g, "");
-  // Before decoding, not after: an unterminated `<` left by the strip has to go, while a `&lt;`
-  // that the AN text genuinely meant, as in "seuil &lt; 5 %", still becomes a `<` below.
-  text = text.replace(/[<>]/g, "");
+  text = removeTags(text);
   text = decodeEntities(text);
   text = text.replace(/\s+/g, " ").trim();
   return text;
