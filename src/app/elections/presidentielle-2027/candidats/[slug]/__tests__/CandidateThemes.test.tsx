@@ -82,6 +82,21 @@ describe("CandidateSynthesis", () => {
 
     expect(container.textContent).toContain(expected);
   });
+
+  it("énonce l'absence de résumé au lieu de retirer le bloc", () => {
+    // `null` recouvre deux cas que le loader confond : aucune génération encore passée, et résumé
+    // retiré par `isSynthesisContradictedByMeasures`. La phrase doit rester vraie des deux, donc
+    // elle ne promet ni délai ni travail en cours.
+    const { container } = render(
+      <CandidateSynthesis synthesis={null} generatedAt={null} measureCount={70} />
+    );
+
+    expect(screen.getByRole("region")).toBeInTheDocument();
+    expect(container.textContent).toContain("Aucun résumé à jour n'est disponible");
+    // La légende de provenance daterait un texte qui n'existe pas.
+    expect(container.textContent).not.toContain("Texte généré à partir");
+    expect(screen.getByRole("link", { name: /Vérifier dans les mesures/ })).toBeInTheDocument();
+  });
 });
 
 describe("CandidateThemes", () => {
