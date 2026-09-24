@@ -1,5 +1,7 @@
 import { createHash } from "crypto";
 
+import { matchesHost } from "@/lib/url-host";
+
 /**
  * Wikimedia restricts the thumbnail widths that upload.wikimedia.org will
  * serve. Any other width is answered with:
@@ -81,10 +83,17 @@ export function commonsThumbnailUrl(filename: string, width: number): string {
   );
 }
 
-/** True when `url` is a Commons thumbnail (not an original-file URL). */
+/**
+ * True when `url` is a Commons thumbnail (not an original-file URL).
+ *
+ * Both halves read the parsed URL rather than the raw string: another host can carry
+ * `upload.wikimedia.org` in its path, and a query parameter can carry `/thumb/`. Callers write
+ * the result back to `Politician.photoUrl`, so a URL wrongly recognised here comes back edited.
+ */
 export function isCommonsThumbnailUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-  return url.includes(UPLOAD_HOST) && url.includes(THUMB_SEGMENT);
+  if (!url || !matchesHost(url, UPLOAD_HOST)) return false;
+  // `matchesHost` already parsed it, so this cannot throw.
+  return new URL(url).pathname.includes(THUMB_SEGMENT);
 }
 
 /**

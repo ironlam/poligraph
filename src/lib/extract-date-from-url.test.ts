@@ -75,3 +75,19 @@ describe("extractDateFromUrl", () => {
     });
   });
 });
+
+/**
+ * Le garde Wikipedia testait la chaîne entière. Un article de presse dont l'URL cite
+ * wikipedia.org dans un paramètre était donc ignoré, et `affair-enrichment` retombait sur
+ * `new Date()`, c'est-à-dire la date du jour à la place de la date de publication.
+ */
+describe("garde Wikipedia", () => {
+  it("date un article de presse qui cite wikipedia.org en paramètre", () => {
+    const url = "https://www.lemonde.fr/article/2024/03/15/titre_123.html?ref=wikipedia.org";
+    expect(toDateStr(extractDateFromUrl(url))).toBe("2024-03-15");
+  });
+
+  it("ignore toujours un vrai article Wikipedia", () => {
+    expect(extractDateFromUrl("https://fr.wikipedia.org/wiki/2024/03/15/x/")).toBeNull();
+  });
+});
