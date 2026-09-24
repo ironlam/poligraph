@@ -124,9 +124,17 @@ const MARKUP_DECLARATION = /<[!?][^>]*>/g;
  */
 const HTML_TAG = /<\/?[a-zA-Z][^>]*>/g;
 
-/** Remove markup from a string, leaving comparison operators and other literal text alone. */
-export function removeTags(text: string): string {
-  return text.replace(HTML_COMMENT, "").replace(MARKUP_DECLARATION, "").replace(HTML_TAG, "");
+/**
+ * Remove markup from a string, leaving comparison operators and other literal text alone.
+ *
+ * `replacement` is a space for callers that tokenise afterwards, where dropping a tag outright
+ * would weld two words together.
+ */
+export function removeTags(text: string, replacement = ""): string {
+  return text
+    .replace(HTML_COMMENT, replacement)
+    .replace(MARKUP_DECLARATION, replacement)
+    .replace(HTML_TAG, replacement);
 }
 
 export function stripHtml(html: string): string {

@@ -12,6 +12,7 @@ import { computeGroupPositionsForScrutin } from "@/services/sync/compute-group-p
 import { writeVotesForScrutin } from "@/services/sync/scrutins-vote-writer";
 import { HTTPClient } from "@/lib/api/http-client";
 import { decodeHtmlEntities, parseFrenchDate } from "@/lib/parsing";
+import { removeTags } from "@/lib/parsing/html-utils";
 import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
 import { VotePosition, VotingResult, DataSource, Chamber } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
@@ -145,7 +146,7 @@ export function parseScrutinMetadata(
 ): ScrutinMetadata | null {
   try {
     const decodedHtml = decodeHtmlEntities(html);
-    const textContent = decodedHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const textContent = removeTags(decodedHtml, " ").replace(/\s+/g, " ");
 
     // Extract title — prefer <p class="page-lead"> (descriptive) over h1 (generic "Scrutin n°X")
     const pageLeadMatch = decodedHtml.match(/<p\s+class="page-lead">([\s\S]*?)<\/p>/i);
@@ -153,16 +154,12 @@ export function parseScrutinMetadata(
 
     let title = `Scrutin n°${number}`;
     if (pageLeadMatch) {
-      const leadText = pageLeadMatch[1]!
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const leadText = removeTags(pageLeadMatch[1]!, " ").replace(/\s+/g, " ").trim();
       if (leadText.length > 5) {
         title = leadText;
       }
     } else if (h1Match) {
-      const h1Text = h1Match[1]!
-        .replace(/<[^>]+>/g, " ")
+      const h1Text = removeTags(h1Match[1]!, " ")
         .replace(/\s*En savoir plus\s*/gi, " ")
         .replace(/\s+/g, " ")
         .trim();
