@@ -19,3 +19,17 @@ describe("stripHtml", () => {
     expect(stripHtml("   ")).toBe("");
   });
 });
+
+describe("balisage résiduel", () => {
+  it("ne laisse aucun chevron", () => {
+    expect(stripHtml("<p>a<script</p>")).not.toMatch(/[<>]/);
+  });
+
+  /**
+   * L'ordre compte : le retrait des chevrons doit précéder le décodage, sinon un `&lt;` légitime
+   * du texte AN, par exemple « seuil &lt; 5 % », disparaîtrait avec les balises.
+   */
+  it("préserve un chevron qui vient d'une entité", () => {
+    expect(stripHtml("<p>seuil &lt; 5 %</p>")).toBe("seuil < 5 %");
+  });
+});

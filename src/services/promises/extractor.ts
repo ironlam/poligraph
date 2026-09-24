@@ -30,11 +30,24 @@ Si aucune promesse, retourne {"promises": []}.
 <politicien>{{POLITICIAN}}</politicien>
 <article>{{TEXT}}</article>`;
 
+/**
+ * Strip what could close or open one of the prompt's XML delimiters.
+ *
+ * Exported so the guard can be asserted without calling the model.
+ */
+export function sanitizeForPrompt(text: string): string {
+  // Two passes. The first drops whole tags, including the `</article >` and `<article id="x">`
+  // forms the previous expression accepted neither a space nor an attribute for. The second
+  // removes what is left over, since an unterminated `<` is enough to close the delimiter that
+  // separates the article from the instructions.
+  return text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+}
+
 export async function extractPromisesFromText(input: {
   text: string;
   politicianName: string;
 }): Promise<ExtractedPromise[]> {
-  const safeText = input.text.replace(/<\/?[a-z]+>/gi, "").slice(0, 4000);
+  const safeText = sanitizeForPrompt(input.text).slice(0, 4000);
   const safeName = input.politicianName.replace(/[<>]/g, "").slice(0, 100);
   const prompt = EXTRACTION_PROMPT.replace("{{POLITICIAN}}", safeName).replace(
     "{{TEXT}}",

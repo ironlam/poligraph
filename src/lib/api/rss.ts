@@ -222,10 +222,17 @@ function decodeHtmlEntities(text: string): string {
 }
 
 /**
- * Strip HTML tags from a string
+ * Strip HTML tags from a string.
+ *
+ * Exported so the extraction can be asserted without fetching a feed.
  */
-function stripHtmlTags(html: string): string {
-  return html.replace(/<[^>]*>/g, "").trim();
+export function stripHtmlTags(html: string): string {
+  // The blanket strip cannot remove an unterminated `<script`, and this output is stored, then
+  // rendered, then handed to a model. It is meant to be text, so no angle bracket survives it.
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/[<>]/g, "")
+    .trim();
 }
 
 /**

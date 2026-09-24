@@ -60,13 +60,18 @@ export function parseSeanceOrder(numSeanceJour: string | null | undefined): numb
 }
 
 function stripTags(xml: string): string {
-  return xml
-    .replace(/<italique>/g, "")
-    .replace(/<\/italique>/g, "")
-    .replace(/<br\/>/g, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    xml
+      .replace(/<italique>/g, "")
+      .replace(/<\/italique>/g, "")
+      .replace(/<br\/>/g, " ")
+      .replace(/<[^>]+>/g, "")
+      // An unterminated `<` survives the strip above. This content goes to the database and into a
+      // prompt, where a stray angle bracket is markup nobody wrote.
+      .replace(/[<>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /** Extract a full séance record from one compte-rendu XML document. */

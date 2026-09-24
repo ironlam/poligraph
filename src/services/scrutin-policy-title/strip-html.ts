@@ -36,6 +36,9 @@ export function stripHtml(html: string): string {
   let text = html.replace(/<\/(p|div|li|tr|h[1-6]|br|ul|ol|blockquote)\s*>/gi, " ");
   text = text.replace(/<br\s*\/?>/gi, " ");
   text = text.replace(/<[^>]+>/g, "");
+  // Before decoding, not after: an unterminated `<` left by the strip has to go, while a `&lt;`
+  // that the AN text genuinely meant, as in "seuil &lt; 5 %", still becomes a `<` below.
+  text = text.replace(/[<>]/g, "");
   text = decodeEntities(text);
   text = text.replace(/\s+/g, " ").trim();
   return text;

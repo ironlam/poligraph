@@ -220,3 +220,22 @@ describe("containsHtml", () => {
     expect(containsHtml(undefined as unknown as string)).toBe(false);
   });
 });
+
+/**
+ * `stripHtml` produit du texte, jamais du balisage. Tant qu'un chevron survit, la sortie peut
+ * reformer une balise en se concaténant à autre chose, et le lecteur suivant croit tenir du texte.
+ */
+describe("stripHtml ne laisse pas de balisage résiduel", () => {
+  it("retire une balise fermante écrite avec une espace", () => {
+    expect(stripHtml("a<script>alert(1)</script >b")).toBe("ab");
+  });
+
+  it("ne laisse aucun chevron, même sur une balise jamais refermée", () => {
+    expect(stripHtml("texte <script")).toBe("texte script");
+    expect(stripHtml("a <b")).toBe("a b");
+  });
+
+  it("neutralise une balise imbriquée dans son propre nom", () => {
+    expect(stripHtml("<scr<script>ipt>alert(1)</script>")).not.toContain("<");
+  });
+});

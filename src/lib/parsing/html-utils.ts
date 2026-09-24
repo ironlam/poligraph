@@ -113,11 +113,19 @@ export function decodeHtmlEntities(html: string): string {
 export function stripHtml(html: string): string {
   if (!html) return "";
 
-  return html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // Remove scripts
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // Remove styles
-    .replace(/<[^>]+>/g, "") // Remove all tags
-    .trim();
+  return (
+    html
+      // `\s*` before the closing bracket: HTML allows `</script >`, and a closing tag that does not
+      // match leaves the script body behind as text.
+      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      // What is left cannot be a tag, since a tag needs its closing bracket, but it can still be
+      // half of one. This function returns text, so no angle bracket belongs in the result: a
+      // surviving `<script` becomes markup again the moment the text is concatenated.
+      .replace(/[<>]/g, "")
+      .trim()
+  );
 }
 
 /**
