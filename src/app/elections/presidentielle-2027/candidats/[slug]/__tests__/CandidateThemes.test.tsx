@@ -38,11 +38,29 @@ describe("CandidateSynthesis", () => {
       />
     );
 
-    const section = screen.getByRole("region", { name: "En résumé" });
+    const section = screen.getByRole("region", { name: "Parcours et programme proposé" });
     expect(section.firstElementChild).toHaveClass("max-w-[78ch]");
     expect(screen.getByText("Parcours documenté.").tagName).toBe("P");
     expect(screen.getByText("Principaux thèmes du programme.").tagName).toBe("P");
     expect(container.querySelector("[class*='whitespace-pre-line']")).not.toBeInTheDocument();
+  });
+
+  it("annonce dans son titre que le programme est proposé", () => {
+    // Le titre porte seul la modalité du bloc. La prose générée écrit les mesures au présent de
+    // l'indicatif (« les premières consommations sont rendues gratuites »), donc un retour à un
+    // titre neutre comme « En résumé » laisserait le lecteur prendre un programme pour un état
+    // du pays, sans que rien d'autre sur la page ne le rattrape.
+    render(
+      <CandidateSynthesis
+        synthesis={"Parcours documenté.\n\nLes consommations sont rendues gratuites."}
+        generatedAt={null}
+        measureCount={70}
+      />
+    );
+
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      "Parcours et programme proposé"
+    );
   });
 });
 

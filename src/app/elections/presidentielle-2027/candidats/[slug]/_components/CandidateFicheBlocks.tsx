@@ -30,6 +30,13 @@ import { cn, formatDate } from "@/lib/utils";
  * as real paragraphs so the synthesis remains readable and keeps a meaningful HTML
  * structure. The card follows the page grid, while its text column stays at a comfortable
  * reading width on large screens.
+ *
+ * The heading names the two registers the card mixes instead of summarising it, because the
+ * generated prose states programme measures in the present indicative and reads as a description
+ * of the country. "proposé" agrees with "programme" alone, so one word carries the distinction
+ * without a sentence of framing. It labels the card as a whole on purpose: the generator writes
+ * the career first, but a manually reviewed synthesis is free text, so no paragraph position here
+ * can be trusted to hold one register or the other.
  */
 export function CandidateSynthesis({
   synthesis,
@@ -55,7 +62,7 @@ export function CandidateSynthesis({
     >
       <div className="max-w-[78ch]">
         <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
-          En résumé
+          Parcours et programme proposé
         </h2>
         <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
           Texte généré à partir des mandats, des votes et des{" "}
