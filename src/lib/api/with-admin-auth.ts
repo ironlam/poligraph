@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
+import { describeRequest } from "./with-public-route";
 
 type RouteContext = { params: Promise<Record<string, string>> };
 
@@ -17,7 +18,8 @@ export function withAdminAuth(handler: RouteHandler): RouteHandler {
     try {
       return await handler(request, context);
     } catch (error) {
-      console.error(`[API Error] ${request.method} ${request.url}:`, error);
+      // Same split as the public wrapper: an URL carrying `%s` must not consume `error`.
+      console.error("[API Error]", `${describeRequest(request)}:`, error);
       return NextResponse.json({ error: "Erreur interne" }, { status: 500 });
     }
   };

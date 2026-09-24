@@ -28,6 +28,6 @@ export function invalidateMeasureTags(measureId: string, electionId: string): vo
     // The only trace of a lost invalidation, which leaves a page stale until its
     // cacheLife profile expires.
     // eslint-disable-next-line no-console -- deliberate ops signal
-    console.error(`[measures] cache invalidation failed for ${measureId}`, error);
+    console.error("[measures] cache invalidation failed for", measureId, error);
   }
 }

@@ -1,3 +1,4 @@
+import { format } from "node:util";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { NextRequest } from "next/server";
 import { withPublicRoute } from "../with-public-route";
@@ -21,6 +22,11 @@ function ordinaryRequest(): NextRequest {
     method: "GET",
     url: "https://poligraph.fr/api/rss/factchecks.xml",
   } as unknown as NextRequest;
+}
+
+/** Ce que la ligne donnerait une fois écrite, quelle que soit la façon dont elle est découpée. */
+function rendered(spy: { mock: { calls: unknown[][] } }): string {
+  return format(...(spy.mock.calls[0] as [unknown, ...unknown[]]));
 }
 
 afterEach(() => {
@@ -50,7 +56,8 @@ describe("withPublicRoute", () => {
       throw new Error("échec");
     });
     await handler(ordinaryRequest(), CONTEXT);
-    expect(String(error.mock.calls[0]?.[0])).toContain("/api/rss/factchecks.xml");
+    // Sur le rendu, pas sur le découpage des arguments : c'est la ligne lue en production.
+    expect(rendered(error)).toContain("/api/rss/factchecks.xml");
   });
 
   /**
@@ -70,8 +77,8 @@ describe("withPublicRoute", () => {
     expect(res.status).toBe(500);
     // L'erreur d'origine doit avoir été journalisée, pas celle de la lecture d'URL.
     expect(error).toHaveBeenCalledTimes(1);
-    expect(error.mock.calls[0]?.[1]).toBe(vraieCause);
-    expect(String(error.mock.calls[0]?.[0])).not.toContain("Dynamic server usage");
+    expect(error.mock.calls[0]).toContain(vraieCause);
+    expect(rendered(error)).not.toContain("Dynamic server usage");
   });
 
   it("ne propage pas l'échec de lecture de l'URL à l'appelant", async () => {
@@ -88,6 +95,34 @@ describe("withPublicRoute", () => {
       throw new Error("échec");
     });
     await handler(prerenderingRequest(), CONTEXT);
-    expect(String(error.mock.calls[0]?.[0])).toMatch(/indisponible/i);
+    expect(rendered(error)).toMatch(/indisponible/i);
+  });
+});
+
+/**
+ * Suite de #911, autre mécanisme, même conséquence : le log perd l'erreur qu'il rapporte.
+ *
+ * Le premier argument de `console.error` est une chaîne de format. En y interpolant l'URL, un
+ * `%s` venu du visiteur y devient un emplacement, que Node remplit avec l'argument suivant,
+ * c'est-à-dire l'erreur. Elle est alors recollée dans l'URL au lieu d'être journalisée.
+ */
+describe("URL portant un spécificateur de format", () => {
+  function requestWithFormatSpecifier(): NextRequest {
+    return {
+      method: "GET",
+      url: "https://poligraph.fr/api/politiques/%s",
+    } as unknown as NextRequest;
+  }
+
+  it("journalise l'erreur et l'URL telles quelles", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("la vraie erreur");
+    await withPublicRoute(async () => {
+      throw cause;
+    })(requestWithFormatSpecifier(), CONTEXT);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(rendered(spy)).toContain("la vraie erreur");
+    expect(rendered(spy)).toContain("/api/politiques/%s");
   });
 });
