@@ -38,11 +38,64 @@ describe("CandidateSynthesis", () => {
       />
     );
 
-    const section = screen.getByRole("region", { name: "En résumé" });
+    // Ciblé sans passer par son nom accessible : `aria-labelledby` pointe sur le titre, donc
+    // nommer la région ici ferait dépendre ce test de mise en page du libellé éditorial, que le
+    // test suivant possède déjà.
+    const section = screen.getByRole("region");
     expect(section.firstElementChild).toHaveClass("max-w-[78ch]");
     expect(screen.getByText("Parcours documenté.").tagName).toBe("P");
     expect(screen.getByText("Principaux thèmes du programme.").tagName).toBe("P");
     expect(container.querySelector("[class*='whitespace-pre-line']")).not.toBeInTheDocument();
+  });
+
+  it("annonce dans son titre que le programme est proposé", () => {
+    // Le titre porte seul la modalité du bloc. La prose générée écrit les mesures au présent de
+    // l'indicatif (« les premières consommations sont rendues gratuites »), donc un retour à un
+    // titre neutre comme « En résumé » laisserait le lecteur prendre un programme pour un état
+    // du pays, sans que rien d'autre sur la page ne le rattrape.
+    render(
+      <CandidateSynthesis
+        synthesis={"Parcours documenté.\n\nLes consommations sont rendues gratuites."}
+        generatedAt={null}
+        measureCount={70}
+      />
+    );
+
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      "Parcours et programme proposé"
+    );
+  });
+
+  it.each([
+    { measureCount: 1, expected: "et de la mesure publiée ci-dessous" },
+    { measureCount: 70, expected: "et des 70 mesures publiées ci-dessous" },
+  ])("accorde la légende sur $measureCount mesure(s)", ({ measureCount, expected }) => {
+    // La branche du singulier laissait tomber le nombre au lieu de l'accord, et la légende
+    // annonçait « et des mesures publiées » pour une candidature qui n'en a qu'une.
+    const { container } = render(
+      <CandidateSynthesis
+        synthesis={"Parcours documenté.\n\nUn axe de programme."}
+        generatedAt={null}
+        measureCount={measureCount}
+      />
+    );
+
+    expect(container.textContent).toContain(expected);
+  });
+
+  it("énonce l'absence de résumé au lieu de retirer le bloc", () => {
+    // `null` recouvre deux cas que le loader confond : aucune génération encore passée, et résumé
+    // retiré par `isSynthesisContradictedByMeasures`. La phrase doit rester vraie des deux, donc
+    // elle ne promet ni délai ni travail en cours.
+    const { container } = render(
+      <CandidateSynthesis synthesis={null} generatedAt={null} measureCount={70} />
+    );
+
+    expect(screen.getByRole("region")).toBeInTheDocument();
+    expect(container.textContent).toContain("Aucun résumé à jour n'est disponible");
+    // La légende de provenance daterait un texte qui n'existe pas.
+    expect(container.textContent).not.toContain("Texte généré à partir");
+    expect(screen.getByRole("link", { name: /Vérifier dans les mesures/ })).toBeInTheDocument();
   });
 });
 

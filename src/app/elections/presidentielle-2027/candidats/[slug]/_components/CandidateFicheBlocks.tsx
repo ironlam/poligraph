@@ -18,7 +18,7 @@ import { cn, formatDate } from "@/lib/utils";
  */
 
 /**
- * The generated synthesis, when there is one.
+ * The generated synthesis, or a stated absence when there is none.
  *
  * It renders above everything it summarises, and says so in the same breath: the
  * reader is told the text is generated, from what, and when, before reading a word
@@ -30,6 +30,21 @@ import { cn, formatDate } from "@/lib/utils";
  * as real paragraphs so the synthesis remains readable and keeps a meaningful HTML
  * structure. The card follows the page grid, while its text column stays at a comfortable
  * reading width on large screens.
+ *
+ * The heading names the two registers the card mixes instead of summarising it, because the
+ * generated prose states programme measures in the present indicative and reads as a description
+ * of the country. "proposé" agrees with "programme" alone, so one word carries the distinction
+ * without a sentence of framing. It labels the card as a whole on purpose: the generator writes
+ * the career first, but a manually reviewed synthesis is free text, so no paragraph position here
+ * can be trusted to hold one register or the other.
+ *
+ * A null synthesis states its absence rather than removing the card, the same way this page states
+ * the two D3 blocks it cannot render. `null` covers two situations the loader collapses into one:
+ * no generation pass has run yet, and `isSynthesisContradictedByMeasures` withdrew a summary that
+ * measures published since have outdated. The sentence is worded to be true of both, which is what
+ * keeps the distinction out of the loader. It promises no deadline and claims no work in progress:
+ * regeneration is a script someone runs (`scripts/generate-candidate-syntheses.ts`), so "en cours
+ * de synthèse" would announce an activity that is not happening.
  */
 export function CandidateSynthesis({
   synthesis,
@@ -40,13 +55,12 @@ export function CandidateSynthesis({
   generatedAt: Date | null;
   measureCount: number;
 }) {
-  if (synthesis === null) return null;
-
-  const paragraphs = synthesis
-    .trim()
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
-    .filter(Boolean);
+  const paragraphs =
+    synthesis
+      ?.trim()
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
+      .filter(Boolean) ?? [];
 
   return (
     <section
@@ -55,19 +69,32 @@ export function CandidateSynthesis({
     >
       <div className="max-w-[78ch]">
         <h2 id="synthese-titre" className="font-display text-lg font-extrabold">
-          En résumé
+          Parcours et programme proposé
         </h2>
-        <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
-          Texte généré à partir des mandats, des votes et des{" "}
-          {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
-          {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
-          information qui ne figure sur cette page.
-        </p>
-        <div className="mt-4 space-y-4 text-base leading-7">
-          {paragraphs.map((paragraph, index) => (
-            <p key={`${index}-${paragraph.slice(0, 32)}`}>{paragraph}</p>
-          ))}
-        </div>
+        {synthesis === null ? (
+          <p className="mt-2 max-w-[70ch] text-base leading-7">
+            Aucun résumé à jour n&apos;est disponible pour cette candidature. Son programme complet
+            est publié ci-dessous, avec ses sources.
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
+              {/* The singular branch carries its own article and participle: the count sits inside
+                  it, so "des" cannot be factored out of the sentence. The branch that dropped the
+                  number read "des mandats, des votes et des mesures publiées" for one. */}
+              Texte généré à partir des mandats, des votes et{" "}
+              {measureCount === 1 ? "de la mesure publiée" : `des ${measureCount} mesures publiées`}{" "}
+              ci-dessous
+              {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
+              information qui ne figure sur cette page.
+            </p>
+            <div className="mt-4 space-y-4 text-base leading-7">
+              {paragraphs.map((paragraph, index) => (
+                <p key={`${index}-${paragraph.slice(0, 32)}`}>{paragraph}</p>
+              ))}
+            </div>
+          </>
+        )}
         {measureCount > 0 && (
           <a
             href="#mesures"
