@@ -90,3 +90,28 @@ describe("extractSeanceFromXml", () => {
     expect(extractSeanceFromXml(empty)).toBeNull();
   });
 });
+
+/**
+ * Le contenu d'une séance part en base puis dans un prompt. Les chiffres qu'un orateur cite y
+ * survivent ou la citation change de sens.
+ */
+describe("comparaisons dans le contenu extrait", () => {
+  const xml = `<?xml version='1.0' encoding='UTF-8'?>
+<compteRendu>
+  <uid>CRSANR5L17S2026O1N999</uid>
+  <metadonnees><dateSeance>20260530150000000</dateSeance></metadonnees>
+  <contenu>
+    <paragraphe roledebat="orateur">
+      <orateurs><orateur><nom>Mme Test</nom></orateur></orateurs>
+      <texte>Nous refusons un <italique>deficit</italique> superieur a 3 % quand la dette > 100 %.</texte>
+    </paragraphe>
+  </contenu>
+</compteRendu>`;
+
+  it("retire les balises sans toucher aux comparaisons", () => {
+    const r = extractSeanceFromXml(xml);
+    expect(r).not.toBeNull();
+    expect(r!.content).toContain("dette > 100 %");
+    expect(r!.content).not.toContain("italique");
+  });
+});

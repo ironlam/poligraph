@@ -16,6 +16,8 @@
 
 const LEGISLATURE = 17;
 
+import { removeTags } from "@/lib/parsing/html-utils";
+
 export interface ParsedSeance {
   seanceRef: string;
   /** UTC midnight of the séance calendar day (matches Scrutin.votingDate). */
@@ -60,11 +62,7 @@ export function parseSeanceOrder(numSeanceJour: string | null | undefined): numb
 }
 
 function stripTags(xml: string): string {
-  return xml
-    .replace(/<italique>/g, "")
-    .replace(/<\/italique>/g, "")
-    .replace(/<br\/>/g, " ")
-    .replace(/<[^>]+>/g, "")
+  return removeTags(xml.replace(/<br\/>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }

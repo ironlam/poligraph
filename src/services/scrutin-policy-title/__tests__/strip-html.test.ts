@@ -19,3 +19,16 @@ describe("stripHtml", () => {
     expect(stripHtml("   ")).toBe("");
   });
 });
+
+describe("comparaisons dans le texte AN", () => {
+  /** Un amendement qui fixe un seuil est précisément ce qu'on ne doit pas tronquer. */
+  it("préserve un chevron qui vient d'une entité", () => {
+    expect(stripHtml("<p>seuil &lt; 5 %</p>")).toBe("seuil < 5 %");
+  });
+
+  it("préserve un chevron écrit littéralement", () => {
+    expect(stripHtml("<p>déficit < 3 % et dette > 100 %</p>")).toBe(
+      "déficit < 3 % et dette > 100 %"
+    );
+  });
+});

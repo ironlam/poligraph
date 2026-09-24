@@ -7,10 +7,11 @@ const STOPWORDS = new Set(
   ).split(" ")
 );
 
+import { removeTags } from "@/lib/parsing/html-utils";
+
 /** Lowercase, strip accents, replace non-alphanumerics with spaces, collapse. */
 export function normalizeTitle(s: string): string {
-  return (s || "")
-    .replace(/<[^>]+>/g, " ")
+  return removeTags(s || "", " ")
     .replace(/&#?\w+;/g, " ")
     .toLowerCase()
     .normalize("NFD")

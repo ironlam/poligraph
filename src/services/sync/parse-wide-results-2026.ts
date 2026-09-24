@@ -53,7 +53,9 @@ export interface CommuneResult2026 {
 /** Parse a French percentage string: "55,08%" → 55.08, "100,00%" → 100 */
 export function parseFrenchPct(s: string): number {
   if (!s || s.trim() === "") return 0;
-  return parseFloat(s.replace("%", "").replace(",", ".").trim()) || 0;
+  // Every percent sign, not the first: a leading one left in place makes `parseFloat` return NaN,
+  // which the `|| 0` then turns into a participation rate of zero without a word.
+  return parseFloat(s.replace(/%/g, "").replace(",", ".").trim()) || 0;
 }
 
 /** Strip surrounding quotes from a CSV field. */

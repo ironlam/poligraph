@@ -16,6 +16,17 @@ import { join } from "path";
 
 const TEMPLATE_DIR = join(__dirname, "../src/lib/email/templates");
 
+/**
+ * Escape a compiled template for embedding in a backtick literal.
+ *
+ * Backslashes are escaped first, and the order is the whole point: doing them last would also
+ * double the escape characters this function has just written, so an escaped backtick would decay
+ * back into a literal one and close the string early.
+ */
+function escapeForTemplateLiteral(html: string): string {
+  return html.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
+}
+
 interface TemplateConfig {
   input: string;
   output: string;
@@ -84,8 +95,7 @@ async function main() {
     // a matcher that tolerates both.
     processed = processed.replace(/\{\{\s*(\w+)\s*\}\}/g, "{{$1}}");
 
-    // Escape backticks for template literal
-    const escaped = processed.replace(/`/g, "\\`").replace(/\$/g, "\\$");
+    const escaped = escapeForTemplateLiteral(processed);
 
     const output =
       `// Auto-generated from ${tpl.input} — do not edit manually\n` +

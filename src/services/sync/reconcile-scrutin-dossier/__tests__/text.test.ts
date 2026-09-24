@@ -31,3 +31,20 @@ describe("text helpers", () => {
     expect(jaccard(new Set(["a", "b"]), new Set(["a", "b"]))).toBe(1);
   });
 });
+
+/**
+ * `normalizeTitle` alimente le score de rapprochement scrutin/dossier. Le motif aveugle
+ * `<[^>]+>` supprimait tout ce qui sépare deux opérateurs, donc les mots du milieu ne
+ * parvenaient jamais à `tokenize` et le lien se perdait sans bruit.
+ */
+describe("normalizeTitle et les comparaisons chiffrées", () => {
+  it("garde les mots situés entre deux opérateurs", () => {
+    const tokens = tokenize(normalizeTitle("Seuil de déficit < 3 % et dette > 100 %"));
+    expect(tokens).toContain("deficit");
+    expect(tokens).toContain("dette");
+  });
+
+  it("retire toujours les balises", () => {
+    expect(normalizeTitle("<p>Loi de <b>finances</b></p>")).toBe("loi de finances");
+  });
+});
