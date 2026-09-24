@@ -38,7 +38,10 @@ describe("CandidateSynthesis", () => {
       />
     );
 
-    const section = screen.getByRole("region", { name: "Parcours et programme proposé" });
+    // Ciblé sans passer par son nom accessible : `aria-labelledby` pointe sur le titre, donc
+    // nommer la région ici ferait dépendre ce test de mise en page du libellé éditorial, que le
+    // test suivant possède déjà.
+    const section = screen.getByRole("region");
     expect(section.firstElementChild).toHaveClass("max-w-[78ch]");
     expect(screen.getByText("Parcours documenté.").tagName).toBe("P");
     expect(screen.getByText("Principaux thèmes du programme.").tagName).toBe("P");
@@ -61,6 +64,23 @@ describe("CandidateSynthesis", () => {
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
       "Parcours et programme proposé"
     );
+  });
+
+  it.each([
+    { measureCount: 1, expected: "et de la mesure publiée ci-dessous" },
+    { measureCount: 70, expected: "et des 70 mesures publiées ci-dessous" },
+  ])("accorde la légende sur $measureCount mesure(s)", ({ measureCount, expected }) => {
+    // La branche du singulier laissait tomber le nombre au lieu de l'accord, et la légende
+    // annonçait « et des mesures publiées » pour une candidature qui n'en a qu'une.
+    const { container } = render(
+      <CandidateSynthesis
+        synthesis={"Parcours documenté.\n\nUn axe de programme."}
+        generatedAt={null}
+        measureCount={measureCount}
+      />
+    );
+
+    expect(container.textContent).toContain(expected);
   });
 });
 

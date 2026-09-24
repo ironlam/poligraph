@@ -65,8 +65,12 @@ export function CandidateSynthesis({
           Parcours et programme proposé
         </h2>
         <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
-          Texte généré à partir des mandats, des votes et des{" "}
-          {measureCount === 1 ? "mesures" : `${measureCount} mesures`} publiées ci-dessous
+          {/* The singular branch carries its own article and participle: the count sits inside it,
+              so "des" cannot be factored out of the sentence. The branch that dropped the number
+              read "des mandats, des votes et des mesures publiées" for a candidacy with one. */}
+          Texte généré à partir des mandats, des votes et{" "}
+          {measureCount === 1 ? "de la mesure publiée" : `des ${measureCount} mesures publiées`}{" "}
+          ci-dessous
           {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
           information qui ne figure sur cette page.
         </p>
