@@ -117,25 +117,36 @@ function openReport() {
   logSection("Opening HTML Report...");
 
   try {
-    // Try to open in browser
-    const openCommand =
-      process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-
-    // The path is passed as an argument, not built into a command line: `process.cwd()` is
+    // The path travels as an argument rather than inside a command line: `process.cwd()` is
     // whatever directory the script was started from, and a space or a quote in it would split
     // the command or let the rest of the path be read as shell syntax.
     //
-    // On Windows `start` is a cmd builtin rather than an executable, so this throws there and the
-    // Playwright fallback below opens the report instead.
-    execFileSync(openCommand, [reportPath], { stdio: "ignore" });
+    // Windows needs `cmd /c start` because `start` is a cmd builtin, not an executable. The empty
+    // string is the window title that `start` expects before a quoted path.
+    const [opener, args] =
+      process.platform === "darwin"
+        ? ["open", [reportPath]]
+        : process.platform === "win32"
+          ? ["cmd", ["/c", "start", "", reportPath]]
+          : ["xdg-open", [reportPath]];
+
+    execFileSync(opener, args, { stdio: "ignore" });
     log(`  Report opened in browser`, colors.green);
   } catch {
     // Fallback to playwright show-report
     log(`  Opening report with Playwright...`, colors.blue);
-    spawn("npx", ["playwright", "show-report", REPORT_DIR], {
+    // An `error` listener, because a ChildProcess that fails to spawn emits one, and an unheard
+    // `error` event takes the whole script down. `npx` is `npx.cmd` on Windows, which a native
+    // spawn does not resolve, so that failure is reachable rather than theoretical.
+    const viewer = spawn("npx", ["playwright", "show-report", REPORT_DIR], {
       stdio: "inherit",
       detached: true,
-    }).unref();
+    });
+    viewer.on("error", (err) => {
+      log(`  Could not open the report: ${err.message}`, colors.yellow);
+      log(`  Open ${join(REPORT_DIR, "index.html")} by hand.`, colors.yellow);
+    });
+    viewer.unref();
   }
 }
 
