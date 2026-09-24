@@ -15,7 +15,6 @@ export const DOSSIER_ORIGIN_REASONS = [
   "INITIAL_DEPOSIT_CONFLICT",
   "INITIAL_DEPOSIT_MISSING_DOCUMENT",
   "INITIAL_DEPOSIT_UNKNOWN_DOCUMENT_PREFIX",
-  "INITIAL_DEPOSIT_TITLE_CONFLICT",
   "NO_INITIAL_DEPOSIT",
 ] as const;
 export type DossierOriginReason = (typeof DOSSIER_ORIGIN_REASONS)[number];
@@ -132,22 +131,6 @@ function classifyDocumentRef(documentRef: string): DossierOrigin | null {
   return null;
 }
 
-function hasExplicitTitleConflict(input: unknown, origin: DossierOrigin): boolean {
-  if (origin === "INDETERMINEE" || !isRecord(input)) return false;
-
-  const dossier = isRecord(input.dossierParlementaire) ? input.dossierParlementaire : input;
-  const titreDossier = isRecord(dossier.titreDossier) ? dossier.titreDossier : null;
-  const title = asString(titreDossier?.titre)?.toLocaleLowerCase("fr-FR");
-  if (!title) return false;
-
-  const startsWithProjet = /^projet\s+de\s+loi\b/u.test(title);
-  const startsWithProposition = /^proposition\s+de\s+loi\b/u.test(title);
-  return (
-    (origin === "GOUVERNEMENTALE" && startsWithProposition) ||
-    (origin === "PARLEMENTAIRE" && startsWithProjet)
-  );
-}
-
 function result(
   origin: DossierOrigin,
   reason: DossierOriginReason,
@@ -204,15 +187,6 @@ export function classifyDossierOrigin(input: unknown): DossierOriginResult {
       origins.some((origin) => origin === null)
         ? "INITIAL_DEPOSIT_UNKNOWN_DOCUMENT_PREFIX"
         : "INITIAL_DEPOSIT_CONFLICT",
-      initialDeposits[0]?.evidence ?? null,
-      candidateDocumentRefs
-    );
-  }
-
-  if (hasExplicitTitleConflict(input, firstOrigin)) {
-    return result(
-      "INDETERMINEE",
-      "INITIAL_DEPOSIT_TITLE_CONFLICT",
       initialDeposits[0]?.evidence ?? null,
       candidateDocumentRefs
     );

@@ -9,11 +9,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const records: Record<string, unknown> = {
+  "DLR5L16N0.json": {
+    dossierParlementaire: {
+      "@xsi:type": "DossierLegislatif_Type",
+      uid: "DLR5L16N0",
+      legislature: "16",
+      titreDossier: { titre: "Projet de loi de la précédente législature" },
+      actesLegislatifs: { acteLegislatif: [] },
+    },
+  },
+  "DLR5L17N-missing-leg.json": {
+    dossierParlementaire: {
+      "@xsi:type": "DossierLegislatif_Type",
+      uid: "DLR5L17N-missing-leg",
+      legislature: "",
+      titreDossier: { titre: "Projet de loi sans législature" },
+      actesLegislatifs: { acteLegislatif: [] },
+    },
+  },
   "DLR5L16N1.json": {
     dossierParlementaire: {
       "@xsi:type": "DossierLegislatif_Type",
       uid: "DLR5L16N1",
-      legislature: "16",
+      legislature: "17",
       titreDossier: { titre: "Projet de loi test ancien", titreChemin: "test-ancien" },
       procedureParlementaire: { code: "PJL", libelle: "Projet de loi ordinaire" },
       actesLegislatifs: {
@@ -80,14 +98,29 @@ describe("origin-only legislative backfill", () => {
     mocks.update.mockResolvedValue({});
   });
 
-  it("simulates historical and current dossiers without writes", async () => {
+  it("filters on the payload legislature, not on the dossier UID", async () => {
     const result = await syncLegislation({ legislature: 17, originOnly: true, dryRun: true });
     expect(result.errors).toEqual([]);
     expect(result.dossiersProcessed).toBe(2);
     expect(result.dossiersWouldUpdate).toBe(2);
+    expect(result.dossiersSkipped).toBe(2);
+    expect(mocks.findUnique).not.toHaveBeenCalledWith({ where: { externalId: "DLR5L16N0" } });
     expect(mocks.findUnique).toHaveBeenCalledWith({ where: { externalId: "DLR5L16N1" } });
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("applies limit after filtering the payload legislature", async () => {
+    const result = await syncLegislation({
+      legislature: 17,
+      originOnly: true,
+      dryRun: true,
+      limit: 1,
+    });
+
+    expect(result.dossiersProcessed).toBe(1);
+    expect(result.dossiersWouldUpdate).toBe(1);
+    expect(mocks.findUnique).toHaveBeenCalledWith({ where: { externalId: "DLR5L16N1" } });
   });
 
   it("updates only provenance fields and does not create missing dossiers", async () => {
@@ -97,7 +130,7 @@ describe("origin-only legislative backfill", () => {
     const result = await syncLegislation({ legislature: 17, originOnly: true });
     expect(result.errors).toEqual([]);
     expect(result.dossiersUpdated).toBe(1);
-    expect(result.dossiersSkipped).toBe(1);
+    expect(result.dossiersSkipped).toBe(3);
     expect(mocks.update).toHaveBeenCalledTimes(1);
     const update = mocks.update.mock.calls[0]![0];
     expect(Object.keys(update.data).sort()).toEqual(
@@ -112,6 +145,34 @@ describe("origin-only legislative backfill", () => {
       ].sort()
     );
     expect(update.data.origin).toBe("GOUVERNEMENTALE");
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite origin fields during the normal nightly update", async () => {
+    mocks.findUnique.mockResolvedValue({ id: "DLR5L17N2", slug: "test" });
+
+    const result = await syncLegislation({ legislature: 17 });
+
+    expect(result.errors).toEqual([]);
+    const currentUpdate = mocks.update.mock.calls.find(
+      ([call]) => call.where.id === "DLR5L17N2"
+    )?.[0];
+    expect(currentUpdate).toBeDefined();
+    expect(currentUpdate.data).not.toHaveProperty("origin");
+    expect(currentUpdate.data).not.toHaveProperty("originReason");
+    expect(currentUpdate.data).not.toHaveProperty("originEvidence");
+  });
+
+  it("keeps a normal dry-run read-only", async () => {
+    mocks.findUnique.mockResolvedValue({ id: "existing", slug: "test" });
+
+    const result = await syncLegislation({ legislature: 17, dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.dossiersProcessed).toBe(2);
+    expect(result.dossiersUpdated).toBe(2);
+    expect(result.dossiersSkipped).toBe(2);
+    expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
   });
 });

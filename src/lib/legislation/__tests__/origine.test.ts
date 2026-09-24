@@ -137,7 +137,7 @@ describe("classifyDossierOrigin", () => {
     expect(result.candidateDocumentRefs).toEqual(["PRJLANR5L17B0001", "PIONSNR5S419B0001"]);
   });
 
-  it("fails closed when the title contradicts the initial document prefix", () => {
+  it("does not treat the non-standardized dossier title as a second origin signal", () => {
     const result = classifyDossierOrigin({
       dossierParlementaire: {
         titreDossier: { titre: "Proposition de loi contredite par le document" },
@@ -151,8 +151,8 @@ describe("classifyDossierOrigin", () => {
       },
     });
 
-    expect(result.origin).toBe("INDETERMINEE");
-    expect(result.originReason).toBe("INITIAL_DEPOSIT_TITLE_CONFLICT");
+    expect(result.origin).toBe("GOUVERNEMENTALE");
+    expect(result.originReason).toBe("INITIAL_DEPOSIT_PRJL");
     expect(result.originDocumentRef).toBe("PRJLANR5L17B0001");
   });
 

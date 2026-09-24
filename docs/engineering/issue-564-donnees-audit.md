@@ -1,6 +1,7 @@
 # #564 : données, import et audit comparatif (brouillon de PR 1)
 
-État du 17 septembre 2026. Ce document accompagne la première PR demandée par
+Archives du 17 septembre 2026, corrections vérifiées le 24 septembre 2026. Ce
+document accompagne la première PR demandée par
 [Lamine](https://github.com/ironlam/poligraph/issues/564#issuecomment-5666062880).
 Il ne fixe pas le périmètre définitif et n'active aucun indicateur public.
 
@@ -11,8 +12,10 @@ Il ne fixe pas le périmètre définitif et n'active aucun indicateur public.
 - Origine des dossiers issue des actes de dépôt initial, avec référence, règle,
   empreinte et provenance. Les contradictions et informations absentes restent
   `INDETERMINEE`. Le libellé de procédure mixte n'est pas une preuve d'origine.
-- Décomptes officiels par `organeRef` à la date du scrutin, dans une table séparée
-  des anciennes positions de groupe. Les valeurs manquantes restent nulles.
+- Chaque bloc de décompte officiel à la date du scrutin, identifié par sa position
+  dans la source et conservé dans une table séparée des anciennes positions de
+  groupe. `organeRef` peut être absent ou dupliqué sans perte de ligne ; ces cas
+  restent signalés. Les valeurs manquantes restent nulles.
 - Modes de rattrapage des métadonnées des enregistrements existants, sans
   réécriture des votes individuels, avec simulation sans écriture en base.
 - Audit reproductible hors base, comparaison avec/sans `SPS` et liste des exclusions.
@@ -40,26 +43,27 @@ des votes sur l'ensemble d'un projet par le seul fait d'être SPS.
 ## Résultat sur les archives téléchargées le 17 septembre 2026
 
 Les fichiers contiennent 8 434 scrutins de la XVIIe législature et 3 129 dossiers.
-L'archive des dossiers inclut aussi des dossiers initiés sous une législature
-précédente. L'audit les conserve pour les rattachements.
+L'audit lit l'archive complète pour analyser les rattachements. L'import, lui,
+retient la législature déclarée dans le contenu du dossier et non celle suggérée
+par le nom du fichier ou son identifiant.
 
-| Population                                                | Sans filtre SPS | Avec filtre SPS |
-| --------------------------------------------------------- | --------------: | --------------: |
-| Titres candidats : vote sur l'ensemble d'un projet        |              42 |              32 |
-| Origine confirmée et rattachement direct `voteRef` unique |              35 |              29 |
-| Candidats dont le lien dossier doit encore être vérifié   |               7 |               3 |
+| Population                                              | Sans filtre SPS | Avec filtre SPS |
+| ------------------------------------------------------- | --------------: | --------------: |
+| Titres candidats : vote sur l'ensemble d'un projet      |              42 |              32 |
+| Origine confirmée et rattachement officiel ou direct    |              38 |              31 |
+| Candidats dont le lien dossier doit encore être vérifié |               4 |               1 |
 
-Les 35 scrutins confirmés portent sur 24 dossiers distincts. Chaque lecture compte
+Les 38 scrutins confirmés portent sur 25 dossiers distincts. Chaque lecture compte
 séparément : on compare des scrutins, pas des lois dédupliquées. Les décomptes
-par groupe de ces 35 scrutins sont complets et leurs sommes correspondent aux
+par groupe de ces 38 scrutins sont complets et leurs sommes correspondent aux
 totaux officiels POUR/CONTRE/ABSTENTION. Cela ne valide pas encore une
 correspondance avec les groupes internes de Poligraph.
 
 Ces chiffres décrivent les archives sources, **pas l'état de la base de production**.
-Le corpus confirmé est conservateur : les sept rapprochements par séance ou titre
+Le corpus confirmé est conservateur : les quatre rapprochements par séance ou titre
 ne sont pas déclarés faux, mais leur vérification reste une étape explicite.
 
-### Six scrutins confirmés écartés par le seul filtre SPS
+### Sept scrutins confirmés écartés par le seul filtre SPS
 
 | Scrutin officiel                                                | Objet abrégé pour repérage                             | Lecture          |
 | --------------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
@@ -68,13 +72,14 @@ ne sont pas déclarés faux, mais leur vérification reste une étape explicite.
 | [2104](https://www.assemblee-nationale.fr/dyn/17/scrutins/2104) | Transfert à l'État des enseignants de Wallis-et-Futuna | Première lecture |
 | [3055](https://www.assemblee-nationale.fr/dyn/17/scrutins/3055) | Emploi des salariés expérimentés et dialogue social    | CMP              |
 | [6180](https://www.assemblee-nationale.fr/dyn/17/scrutins/6180) | Restitution de biens culturels                         | Première lecture |
+| [6346](https://www.assemblee-nationale.fr/dyn/17/scrutins/6346) | Restitution de biens culturels                         | Lecture suivante |
 | [7401](https://www.assemblee-nationale.fr/dyn/17/scrutins/7401) | Habilitation de l'assemblée de Martinique              | Première lecture |
 
-L'export fournit les intitulés officiels intégraux. Les quatre autres candidats
-ordinaires, n°2900, 2935, 3936 et 6346, figurent dans la liste des liens à vérifier,
-pas dans ces six scrutins confirmés.
+L'export fournit les intitulés officiels intégraux. Les trois références officielles
+présentes dans `objet.dossierLegislatif.dossierRef` confirment les n°6180, 6346 et
+7401 sans rapprochement de titre.
 
-### Sept liens à vérifier avant un calcul définitif
+### Quatre liens à vérifier avant un calcul définitif
 
 | Scrutin | Type | Dossier proposé par le résolveur | Preuve actuellement disponible |
 | ------- | ---- | -------------------------------- | ------------------------------ |
@@ -82,13 +87,15 @@ pas dans ces six scrutins confirmés.
 | 2900    | SPO  | DLR5L17N52002                    | Séance unique                  |
 | 2935    | SPO  | DLR5L17N52040                    | Séance unique                  |
 | 3936    | SPO  | DLR5L17N53135                    | Rapprochement de titre         |
-| 6346    | SPO  | DLR5L17N52635                    | Rapprochement de titre         |
-| 6736    | SPS  | DLR5L17N54083                    | Rapprochement de titre         |
-| 7454    | SPS  | DLR5L17N54218                    | Rapprochement de titre         |
 
-Le cas n°844 explique pourquoi le rattrapage des origines ne doit pas filtrer les
-dossiers sur `L17` dans leur identifiant. Un scrutin de la XVIIe législature peut
-concerner un dossier initié sous la XVIe.
+Le n°844 pointe vers un dossier dont le contenu officiel déclare la XVIe
+législature. Il reste dans l'audit de rapprochement, mais le rattrapage demandé
+pour la XVIIe législature ne l'importe pas.
+
+L'archive contient aussi douze scrutins, entre les n°489 et 501, où les douze
+blocs de groupes portent tous `organeRef = PO0`. L'import conserve maintenant les
+144 blocs grâce à `sourceIndex` ; il n'en réduit plus chaque scrutin à une seule
+ligne. Le doublon de référence reste visible dans les diagnostics.
 
 ## Reproduire l'audit sans base de données
 
@@ -98,7 +105,7 @@ Télécharger et conserver les deux archives officielles, sans les ajouter au d�
 - [Dossiers](https://data.assemblee-nationale.fr/static/openData/repository/17/loi/dossiers_legislatifs/Dossiers_Legislatifs.json.zip)
 
 ```sh
-npm run audit:government-support -- --scrutins=.tmp/issue-564/scrutins.zip --dossiers=.tmp/issue-564/dossiers.zip
+npm run audit:government-support -- --scrutins .tmp/issue-564/scrutins.zip --dossiers .tmp/issue-564/dossiers.zip
 ```
 
 Sous PowerShell, utiliser `npm.cmd` pour transmettre correctement les options.
@@ -129,11 +136,13 @@ chiffres : il faut conserver les archives correspondant aux empreintes.
 1. **Préparation.** Sauvegarder la base. Geler les synchronisations concurrentes.
    Conserver les archives et empreintes. Refaire l'audit ci-dessus. Sur une copie
    de la base, inventorier les identifiants présents/absents et tester la migration.
-2. **Migration additive.** Examiner puis appliquer
-   `20260917100000_add_government_support_sources`. Pas de suppression de colonne,
-   pas de réécriture de `Vote`. La nouvelle table de décomptes est interne, RLS
-   activée et accès direct `PUBLIC/anon/authenticated` retiré. Aucun taux à zéro
-   n'est initialisé. Régénérer Prisma et redémarrer les processus.
+2. **Migration additive.** Examiner puis appliquer la migration SQL versionnée
+   `20260917100000_add_government_support_sources`, et pas seulement `db:push`.
+   Prisma ne représente ni la contrainte `CHECK` de non-négativité, ni la RLS,
+   ni les retraits de droits. La CI exécute donc le SQL sur PostgreSQL 17 et vérifie
+   ces trois garanties, ainsi que la conservation de plusieurs blocs `PO0`. Pas de
+   suppression de colonne, pas de réécriture de `Vote`. Aucun taux à zéro n'est
+   initialisé. Régénérer Prisma et redémarrer les processus.
 3. **Simulation des métadonnées.** Exécuter les deux modes ci-dessous sur la copie
    de base, puis en production uniquement sur décision du mainteneur. Ils lisent
    la base pour identifier les enregistrements existants, mais n'écrivent pas en
@@ -146,19 +155,22 @@ chiffres : il faut conserver les archives correspondant aux empreintes.
 
 4. **Application contrôlée.** Après comparaison des simulations, reprendre les
    mêmes commandes sans `--dry-run`. Ne pas lancer la synchronisation générale
-   pour ce rattrapage. Les dossiers terminés et les dossiers antérieurs présents
-   dans l'archive restent concernés. Les enregistrements absents de la base sont
-   comptés et ignorés, pas créés implicitement.
+   pour ce rattrapage. Les dossiers terminés restent concernés, ainsi que ceux dont
+   l'identifiant historique contient `L16` mais dont le contenu déclare la XVIIe
+   législature. Les enregistrements absents de la base sont comptés et ignorés,
+   pas créés implicitement.
 5. **Reprise et contrôles.** Le traitement est séquentiel, un dossier ou scrutin
    à la fois. Une relance reprend par identifiant officiel et produit les mêmes
-   valeurs métier ; les horodatages d'observation peuvent changer. Le snapshot
-   de décomptes est remplacé atomiquement par scrutin, indépendamment du hash des
-   votes individuels. Le mode groupes force la relecture de l'archive et ne doit
-   pas marquer l'import nominatif comme terminé. En cas d'erreur, corriger et
-   relancer avant toute exploitation publique.
+   valeurs métier. Le hash de la section interprétée évite toute réécriture si
+   elle n'a pas changé ; le hash SHA-256 du JSON brut, l'URL et la date de lecture
+   de l'archive restent sur le scrutin parent. Le snapshot de décomptes est remplacé
+   atomiquement par scrutin, indépendamment du hash des votes individuels. Le
+   mode groupes force la relecture de l'archive et ne marque jamais l'import
+   nominatif comme terminé. En cas d'erreur, corriger et relancer avant toute
+   exploitation publique.
 6. **Réconciliation.** Comparer les données importées aux archives : valeurs et
    sommes des décomptes, doublons, groupes inconnus, origines et rattachements.
-   Vérifier les sept liens ci-dessus. Aucun résultat partiel n'est mis en service
+   Vérifier les quatre liens ci-dessus. Aucun résultat partiel n'est mis en service
    par cette PR. Réactiver les synchronisations seulement après contrôle.
 7. **Retour arrière.** Avant tout consommateur public, désactiver les nouvelles
    écritures en revenant au code précédent, mais laisser les colonnes additives
@@ -169,8 +181,9 @@ chiffres : il faut conserver les archives correspondant aux empreintes.
 
 Les commandes de synchronisation téléchargent les archives courantes : le
 mainteneur doit vérifier leur empreinte au moment du rattrapage et refaire l'audit
-si la version diffère. Ce brouillon ne prétend pas avoir testé une migration sur
-PostgreSQL ni vérifié le contenu de la base distante.
+si la version diffère. La migration est testée par la CI sur une base PostgreSQL
+17 jetable. Ce brouillon ne prétend pas l'avoir appliquée ni avoir vérifié le
+contenu de la base distante.
 
 ## Décisions et travaux pour la deuxième PR
 
