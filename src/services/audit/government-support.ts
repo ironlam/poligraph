@@ -13,6 +13,16 @@ const scrutinSchema = z.object({
     titre: z.string().min(1),
     dateScrutin: z.iso.date(),
     seanceRef: z.string().nullable().optional(),
+    objet: z
+      .object({
+        dossierLegislatif: z
+          .object({
+            dossierRef: z.string().min(1),
+          })
+          .nullable()
+          .optional(),
+      })
+      .optional(),
     typeVote: z.object({ codeTypeVote: z.string().optional() }).optional(),
     syntheseVote: z
       .object({
@@ -43,10 +53,18 @@ export function auditGovernmentSupport(rawScrutins: unknown[], rawDossiers: unkn
       const { scrutin: s } = scrutinSchema.parse(raw);
       if (seen.has(s.uid)) throw new Error(`Scrutin dupliqué : ${s.uid}`);
       seen.add(s.uid);
-      const link = resolveScrutinDossier(
+      const resolvedLink = resolveScrutinDossier(
         { uid: s.uid, seanceRef: s.seanceRef ?? null, title: s.titre },
         maps
       );
+      const officialDossierRef = s.objet?.dossierLegislatif?.dossierRef?.trim() ?? null;
+      const link = officialDossierRef
+        ? {
+            resolvedDossierExternalId: byId.has(officialDossierRef) ? officialDossierRef : null,
+            resolution: "OFFICIAL_DOSSIER_REF",
+            candidateExternalIds: [officialDossierRef],
+          }
+        : resolvedLink;
       const dossier = byId.get(link.resolvedDossierExternalId ?? "");
       const exclusion = getGovernmentScopeExclusion(s.titre, link, dossier?.origin.origin);
       const groups = parseOfficialGroupCountsDetailed(raw);

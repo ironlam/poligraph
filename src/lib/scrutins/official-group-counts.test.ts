@@ -26,6 +26,7 @@ describe("parseOfficialGroupCount", () => {
     });
 
     expect(result).toEqual({
+      sourceIndex: 0,
       organeRef: "PO845401",
       memberCount: 125,
       forCount: 72,
@@ -119,6 +120,51 @@ describe("parseOfficialGroupCounts", () => {
     expect(absent.issues).toContain("ventilationVotes.organe.groupes.groupe: liste absente");
     expect(empty).toEqual({ counts: [], issues: [] });
   });
+
+  it("preserves duplicate organeRef blocks with their source index", () => {
+    const result = parseOfficialGroupCountsDetailed({
+      scrutin: {
+        ventilationVotes: {
+          organe: {
+            groupes: {
+              groupe: [
+                {
+                  organeRef: "PO0",
+                  nombreMembresGroupe: "2",
+                  vote: {
+                    positionMajoritaire: "pour",
+                    decompteVoix: {
+                      pour: "2",
+                      contre: "0",
+                      abstentions: "0",
+                      nonVotants: "0",
+                    },
+                  },
+                },
+                {
+                  organeRef: "PO0",
+                  nombreMembresGroupe: "3",
+                  vote: {
+                    positionMajoritaire: "contre",
+                    decompteVoix: {
+                      pour: "0",
+                      contre: "3",
+                      abstentions: "0",
+                      nonVotants: "0",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.counts).toHaveLength(2);
+    expect(result.counts.map((count) => count.sourceIndex)).toEqual([0, 1]);
+    expect(result.counts[1]?.issues).toContain("organeRef: doublon à l'index 1");
+  });
 });
 
 describe("serializeOfficialGroupCounts", () => {
@@ -137,9 +183,18 @@ describe("serializeOfficialGroupCounts", () => {
         },
       },
     });
-    const reordered = { ...base, issues: [...base.issues].reverse() };
+    const reordered = {
+      ...base,
+      issues: ["z-diagnostic", "a-diagnostic"],
+    };
+    const differentlyOrdered = {
+      ...base,
+      issues: ["a-diagnostic", "z-diagnostic"],
+    };
 
-    expect(serializeOfficialGroupCounts([base])).toBe(serializeOfficialGroupCounts([reordered]));
+    expect(serializeOfficialGroupCounts([reordered])).toBe(
+      serializeOfficialGroupCounts([differentlyOrdered])
+    );
   });
 
   it("does not depend on the source order of groups", () => {

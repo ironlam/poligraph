@@ -39,6 +39,15 @@ describe("government whole-bill audit scope (synthetic fixtures)", () => {
       );
     }
   });
+  it("accepts the dossier reference carried by the official scrutin payload", () => {
+    expect(
+      getGovernmentScopeExclusion(
+        title,
+        { resolvedDossierExternalId: "DLR5L17N1", resolution: "OFFICIAL_DOSSIER_REF" },
+        "GOUVERNEMENTALE"
+      )
+    ).toBeNull();
+  });
   it("distinguishes missing, conflicting and confirmed origin", () => {
     expect(getGovernmentScopeExclusion(title, link, undefined)).toBe("ORIGIN_UNDETERMINED");
     expect(getGovernmentScopeExclusion(title, link, "PARLEMENTAIRE")).toBe("ORIGIN_CONFLICT");

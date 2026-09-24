@@ -21,6 +21,8 @@ export type OfficialGroupCountField =
   | "voluntaryNonVoterCount";
 
 export interface OfficialGroupCount {
+  /** Zero-based position of the block in the official ventilation. */
+  sourceIndex: number;
   /** AN's stable organ identifier for the group at the time of the vote. */
   organeRef: string | null;
   memberCount: number | null;
@@ -115,7 +117,10 @@ function parseMajorityPosition(
  * for audit output: zero is an official count, whereas null means that the
  * source could not be read safely.
  */
-export function parseOfficialGroupCount(value: unknown): OfficialGroupCount {
+export function parseOfficialGroupCount(
+  value: unknown,
+  sourceIndex: number = 0
+): OfficialGroupCount {
   const group = asRecord(value);
   const issues: string[] = [];
   const rawRef = group?.organeRef;
@@ -128,6 +133,7 @@ export function parseOfficialGroupCount(value: unknown): OfficialGroupCount {
   if (!rawCounts) issues.push("decompteVoix: objet absent");
 
   const result: OfficialGroupCount = {
+    sourceIndex,
     organeRef,
     memberCount: null,
     forCount: null,
@@ -186,7 +192,9 @@ export function parseOfficialGroupCountsDetailed(scrutin: unknown): OfficialGrou
   }
 
   const rawGroupList = asOneOrMany(groups?.groupe);
-  const counts = rawGroupList.map(parseOfficialGroupCount);
+  const counts = rawGroupList.map((group, sourceIndex) =>
+    parseOfficialGroupCount(group, sourceIndex)
+  );
   const seenRefs = new Set<string>();
   for (const [index, count] of counts.entries()) {
     if (!count.organeRef) continue;
@@ -206,8 +214,12 @@ export function parseOfficialGroupCountsDetailed(scrutin: unknown): OfficialGrou
  */
 function canonicalGroupCounts(counts: OfficialGroupCount[]) {
   return [...counts]
-    .sort((a, b) => (a.organeRef ?? "").localeCompare(b.organeRef ?? ""))
+    .sort(
+      (a, b) =>
+        (a.organeRef ?? "").localeCompare(b.organeRef ?? "") || a.sourceIndex - b.sourceIndex
+    )
     .map((count) => ({
+      sourceIndex: count.sourceIndex,
       organeRef: count.organeRef,
       memberCount: count.memberCount,
       forCount: count.forCount,

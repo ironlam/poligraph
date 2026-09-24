@@ -1,4 +1,5 @@
 import { Readable } from "stream";
+import { createHash } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,7 +39,7 @@ vi.mock("@/services/sync/scrutins-vote-writer", () => ({
 vi.mock("@/lib/parsing/unzip", () => ({ extractZip: extractZipMock }));
 vi.mock("https", () => httpsMock);
 
-import { syncScrutinsAN } from "@/services/sync/scrutins-an";
+import { buildOfficialGroupSnapshot, syncScrutinsAN } from "@/services/sync/scrutins-an";
 
 const rawScrutin = {
   scrutin: {
@@ -140,7 +141,7 @@ describe("syncScrutinsAN official group metadata", () => {
     configureArchiveFixture();
   });
 
-  it("refreshes official counts when votesHash is unchanged", async () => {
+  it("keeps the regular sync free of official-group backfill transactions", async () => {
     const existing = {
       id: "scrutin-1",
       slug: "scrutin-1",
@@ -149,6 +150,10 @@ describe("syncScrutinsAN official group metadata", () => {
       votingDate: new Date("2025-01-01"),
       votesHash: "same-votes-hash",
       officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: null,
+      libelleTypeVote: null,
     };
     dbMock.scrutin.findUnique.mockResolvedValue(existing);
     dbMock.scrutin.update.mockResolvedValue(existing);
@@ -158,13 +163,36 @@ describe("syncScrutinsAN official group metadata", () => {
     expect(result.errors).toEqual([]);
     expect(writeVotesMock).not.toHaveBeenCalled();
     expect(computeGroupPositionsMock).not.toHaveBeenCalled();
+    expect(transactionMock.scrutinOfficialGroupCount.createMany).not.toHaveBeenCalled();
+    expect(transactionMock.scrutin.update).not.toHaveBeenCalled();
+  });
+
+  it("imports official counts atomically in official-groups-only mode", async () => {
+    const existing = {
+      id: "scrutin-1",
+      slug: "scrutin-1",
+      chamber: "AN",
+      type: null,
+      votingDate: new Date("2025-01-01"),
+      votesHash: "same-votes-hash",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: null,
+      libelleTypeVote: null,
+    };
+    dbMock.scrutin.findUnique.mockResolvedValue(existing);
+
+    const result = await syncScrutinsAN(17, false, false, false, true);
+
+    expect(result.errors).toEqual([]);
     expect(transactionMock.scrutinOfficialGroupCount.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
           scrutinId: "scrutin-1",
+          sourceIndex: 0,
           organeRef: "PO845401",
           forCount: 1,
-          sourceHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         }),
       ],
     });
@@ -172,9 +200,220 @@ describe("syncScrutinsAN official group metadata", () => {
       where: { id: "scrutin-1" },
       data: expect.objectContaining({
         officialGroupsHash: expect.any(String),
+        officialGroupsSourceHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        officialGroupsSourceUrl:
+          "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+        codeTypeVote: "SPS",
+        libelleTypeVote: "scrutin public solennel",
         officialGroupsIssues: [],
       }),
     });
+  });
+
+  it("preserves every source block when organeRef is duplicated", async () => {
+    const duplicateRef = structuredClone(rawScrutin);
+    duplicateRef.scrutin.ventilationVotes.organe.groupes.groupe.push({
+      ...structuredClone(duplicateRef.scrutin.ventilationVotes.organe.groupes.groupe[0]!),
+      nombreMembresGroupe: "2",
+      vote: {
+        ...structuredClone(duplicateRef.scrutin.ventilationVotes.organe.groupes.groupe[0]!.vote),
+        decompteVoix: {
+          pour: "0",
+          contre: "2",
+          abstentions: "0",
+          nonVotants: "0",
+          nonVotantsVolontaires: "0",
+        },
+      },
+    });
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(duplicateRef));
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: null,
+      libelleTypeVote: null,
+    });
+
+    const result = await syncScrutinsAN(17, false, false, false, true);
+
+    expect(result.errors).toEqual([]);
+    const rows = transactionMock.scrutinOfficialGroupCount.createMany.mock.calls[0]![0].data;
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row: { sourceIndex: number }) => row.sourceIndex)).toEqual([0, 1]);
+    expect(rows.every((row: { organeRef: string }) => row.organeRef === "PO845401")).toBe(true);
+  });
+
+  it("propagates force to rebuild rows even when both hashes match", async () => {
+    const content = JSON.stringify(rawScrutin);
+    const sourceHash = createHash("sha256").update(content).digest("hex");
+    const snapshot = buildOfficialGroupSnapshot(rawScrutin, sourceHash, "source", new Date());
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialGroupsHash: snapshot.hash,
+      officialGroupsSourceHash: sourceHash,
+      officialGroupsSourceUrl:
+        "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      codeTypeVote: "SPS",
+      libelleTypeVote: "scrutin public solennel",
+    });
+
+    await syncScrutinsAN(17, false, false, true, true);
+
+    expect(transactionMock.scrutinOfficialGroupCount.deleteMany).toHaveBeenCalled();
+    expect(transactionMock.scrutinOfficialGroupCount.createMany).toHaveBeenCalled();
+  });
+
+  it("does not write a stable snapshot when force is false", async () => {
+    const content = JSON.stringify(rawScrutin);
+    const sourceHash = createHash("sha256").update(content).digest("hex");
+    const snapshot = buildOfficialGroupSnapshot(rawScrutin, sourceHash, "source", new Date());
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialGroupsHash: snapshot.hash,
+      officialGroupsSourceHash: sourceHash,
+      officialGroupsSourceUrl:
+        "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      codeTypeVote: "SPS",
+      libelleTypeVote: "scrutin public solennel",
+    });
+
+    const result = await syncScrutinsAN(17, false, false, false, true);
+
+    expect(result.errors).toEqual([]);
+    expect(result.scrutinsSkipped).toBe(1);
+    expect(dbMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("updates source provenance without rebuilding unchanged rows", async () => {
+    const content = JSON.stringify(rawScrutin);
+    const sourceHash = createHash("sha256").update(content).digest("hex");
+    const snapshot = buildOfficialGroupSnapshot(rawScrutin, sourceHash, "source", new Date());
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialGroupsHash: snapshot.hash,
+      officialGroupsSourceHash: "older-source-hash",
+      officialGroupsSourceUrl:
+        "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      codeTypeVote: "SPS",
+      libelleTypeVote: "scrutin public solennel",
+    });
+
+    const result = await syncScrutinsAN(17, false, false, false, true);
+
+    expect(result.errors).toEqual([]);
+    expect(transactionMock.scrutinOfficialGroupCount.deleteMany).not.toHaveBeenCalled();
+    expect(transactionMock.scrutinOfficialGroupCount.createMany).not.toHaveBeenCalled();
+    expect(transactionMock.scrutin.update).toHaveBeenCalledWith({
+      where: { id: "scrutin-1" },
+      data: expect.objectContaining({
+        officialGroupsHash: snapshot.hash,
+        officialGroupsSourceHash: sourceHash,
+        officialGroupsSourceFetchedAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it("checkpoints a regular archive even when one file is rejected", async () => {
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(rawScrutin));
+      writeFileSync(join(jsonDir, "broken.json"), "{");
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      slug: "scrutin-1",
+      chamber: "AN",
+      type: null,
+      votingDate: new Date("2025-01-01"),
+      votesHash: "same-votes-hash",
+    });
+    dbMock.scrutin.update.mockImplementation(async ({ data }: { data: unknown }) => ({
+      id: "scrutin-1",
+      slug: "scrutin-1",
+      chamber: "AN",
+      type: null,
+      votingDate: new Date("2025-01-01"),
+      votesHash: "same-votes-hash",
+      ...(data as object),
+    }));
+
+    const result = await syncScrutinsAN(17, false, false, true);
+
+    expect(result.errors).toHaveLength(1);
+    expect(syncMock.syncMetadata.markCompleted).toHaveBeenCalledWith(
+      "votes-an-zip:17",
+      expect.objectContaining({ contentHash: "archive-hash", itemCount: 1 })
+    );
+  });
+
+  it("does not checkpoint a partial official-groups backfill", async () => {
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(rawScrutin));
+      writeFileSync(join(jsonDir, "broken.json"), "{");
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: null,
+      libelleTypeVote: null,
+    });
+
+    const result = await syncScrutinsAN(17, false, false, false, true);
+
+    expect(result.errors).toHaveLength(1);
+    expect(syncMock.syncMetadata.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { dryRun: false, checkpoints: true },
+    { dryRun: true, checkpoints: false },
+  ])("handles an HTTP 304 with dryRun=$dryRun", async ({ dryRun, checkpoints }) => {
+    httpsMock.get.mockImplementation(
+      (
+        _options: unknown,
+        callback: (
+          response: Readable & { statusCode: number; headers: Record<string, string> }
+        ) => void
+      ) => {
+        const response = Object.assign(Readable.from([]), {
+          statusCode: 304,
+          headers: { etag: "archive-etag" },
+        });
+        callback(response);
+        return { on: vi.fn().mockReturnThis() };
+      }
+    );
+    syncMock.syncMetadata.get.mockResolvedValue({ etag: "archive-etag" });
+
+    const result = await syncScrutinsAN(17, dryRun);
+
+    expect(result.errors).toEqual([]);
+    expect(syncMock.syncMetadata.markCompleted).toHaveBeenCalledTimes(checkpoints ? 1 : 0);
+    expect(extractZipMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { dryRun: false, checkpoints: true },
+    { dryRun: true, checkpoints: false },
+  ])("handles an unchanged archive hash with dryRun=$dryRun", async ({ dryRun, checkpoints }) => {
+    syncMock.syncMetadata.get.mockResolvedValue({ contentHash: "archive-hash" });
+
+    const result = await syncScrutinsAN(17, dryRun);
+
+    expect(result.errors).toEqual([]);
+    expect(syncMock.syncMetadata.markCompleted).toHaveBeenCalledTimes(checkpoints ? 1 : 0);
+    expect(extractZipMock).not.toHaveBeenCalled();
   });
 
   it("keeps official-groups-only dry-run read-only", async () => {

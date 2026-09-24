@@ -116,7 +116,8 @@ export interface ScrutinsANSyncStats {
 }
 
 export interface OfficialGroupSnapshotRow {
-  organeRef: string;
+  sourceIndex: number;
+  organeRef: string | null;
   memberCount: number | null;
   forCount: number | null;
   againstCount: number | null;
@@ -125,15 +126,29 @@ export interface OfficialGroupSnapshotRow {
   voluntaryNonVoterCount: number | null;
   majorityPosition: string | null;
   issues: string[];
-  sourceHash: string;
-  sourceUrl: string;
-  fetchedAt: Date;
 }
 
 export interface OfficialGroupSnapshot {
   hash: string;
+  sourceHash: string;
+  sourceUrl: string;
+  fetchedAt: Date;
   rows: OfficialGroupSnapshotRow[];
   issues: string[];
+}
+
+interface OfficialVoteMetadata {
+  codeTypeVote: string | null;
+  libelleTypeVote: string | null;
+}
+
+interface ExistingOfficialGroupSnapshot {
+  id: string;
+  officialGroupsHash: string | null;
+  officialGroupsSourceHash: string | null;
+  officialGroupsSourceUrl: string | null;
+  codeTypeVote: string | null;
+  libelleTypeVote: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,20 +296,10 @@ export function buildOfficialGroupSnapshot(
   const parsed = parseOfficialGroupCountsDetailed(rawScrutin);
   const issues = [...parsed.issues];
   const rows: OfficialGroupSnapshotRow[] = [];
-  const seenRefs = new Set<string>();
 
   for (const count of parsed.counts) {
-    if (!count.organeRef) {
-      issues.push(...count.issues.map((issue) => `groupe sans organeRef: ${issue}`));
-      continue;
-    }
-    if (seenRefs.has(count.organeRef)) {
-      issues.push(`groupe ${count.organeRef}: doublon ignoré`);
-      continue;
-    }
-    seenRefs.add(count.organeRef);
-
     rows.push({
+      sourceIndex: count.sourceIndex,
       organeRef: count.organeRef,
       memberCount: count.memberCount,
       forCount: count.forCount,
@@ -304,14 +309,14 @@ export function buildOfficialGroupSnapshot(
       voluntaryNonVoterCount: count.voluntaryNonVoterCount,
       majorityPosition: count.majorityPosition,
       issues: [...count.issues],
-      sourceHash,
-      sourceUrl,
-      fetchedAt,
     });
   }
 
   return {
     hash: hashOfficialGroupSnapshot(parsed.counts, issues),
+    sourceHash,
+    sourceUrl,
+    fetchedAt,
     rows,
     issues,
   };
@@ -323,25 +328,42 @@ export function buildOfficialGroupSnapshot(
  * a public reader cannot observe half of a new official snapshot.
  */
 async function persistOfficialGroupSnapshot(
-  scrutinId: string,
-  previousHash: string | null,
-  snapshot: OfficialGroupSnapshot
+  existing: ExistingOfficialGroupSnapshot,
+  snapshot: OfficialGroupSnapshot,
+  metadata: OfficialVoteMetadata,
+  force: boolean
 ): Promise<boolean> {
-  if (previousHash === snapshot.hash) return false;
+  const countsChanged = force || existing.officialGroupsHash !== snapshot.hash;
+  const sourceChanged =
+    existing.officialGroupsSourceHash !== snapshot.sourceHash ||
+    existing.officialGroupsSourceUrl !== snapshot.sourceUrl;
+  const metadataChanged =
+    existing.codeTypeVote !== metadata.codeTypeVote ||
+    existing.libelleTypeVote !== metadata.libelleTypeVote;
+  if (!countsChanged && !sourceChanged && !metadataChanged) return false;
 
   await db.$transaction(async (tx) => {
-    await tx.scrutinOfficialGroupCount.deleteMany({ where: { scrutinId } });
-    if (snapshot.rows.length > 0) {
-      await tx.scrutinOfficialGroupCount.createMany({
-        data: snapshot.rows.map((row) => ({ scrutinId, ...row })),
-      });
+    if (countsChanged) {
+      await tx.scrutinOfficialGroupCount.deleteMany({ where: { scrutinId: existing.id } });
+      if (snapshot.rows.length > 0) {
+        await tx.scrutinOfficialGroupCount.createMany({
+          data: snapshot.rows.map((row) => ({ scrutinId: existing.id, ...row })),
+        });
+      }
     }
     await tx.scrutin.update({
-      where: { id: scrutinId },
+      where: { id: existing.id },
       data: {
-        officialGroupsHash: snapshot.hash,
-        officialGroupsFetchedAt: snapshot.rows[0]?.fetchedAt ?? new Date(),
-        officialGroupsIssues: snapshot.issues,
+        ...metadata,
+        ...(countsChanged || sourceChanged
+          ? {
+              officialGroupsHash: snapshot.hash,
+              officialGroupsSourceHash: snapshot.sourceHash,
+              officialGroupsSourceUrl: snapshot.sourceUrl,
+              officialGroupsSourceFetchedAt: snapshot.fetchedAt,
+              officialGroupsIssues: snapshot.issues,
+            }
+          : {}),
       },
     });
   });
@@ -397,7 +419,9 @@ export async function syncScrutinsAN(
     // The separate metadata-only source key prevents it from inheriting the
     // regular vote sync's ETag/hash state. `--force` remains available when an
     // already completed backfill must be replayed for newly imported rows.
-    const bypassArchiveCache = force;
+    // The operator-only metadata mode always reads the archive: a prior run
+    // may have filled the archive cache while some database rows were absent.
+    const bypassArchiveCache = force || officialGroupsOnly;
     const prevState = bypassArchiveCache ? null : await syncMetadata.get(SOURCE_KEY);
     const downloadResult = await downloadFile(
       zipUrl,
@@ -428,6 +452,7 @@ export async function syncScrutinsAN(
     }
 
     console.log("✓ Downloaded ZIP file");
+    const sourceFetchedAt = new Date();
 
     // Step 2: Extract ZIP
     console.log("Extracting ZIP...");
@@ -468,7 +493,6 @@ export async function syncScrutinsAN(
         const content = readFileSync(filePath, "utf-8");
         const data = safeJsonParseOrThrow<ANScrutin>(content);
         const s = data.scrutin;
-        const sourceHash = createHash("sha256").update(content).digest("hex");
 
         // Filter by today's date if --today flag is set
         if (todayOnly) {
@@ -489,13 +513,6 @@ export async function syncScrutinsAN(
         // Extract scrutin number from UID (e.g., VTANR5L17V5283 -> 5283)
         const scrutinNumber = s.numero || s.uid.replace(/^VTANR5L\d+V/, "");
         const sourceUrl = `https://www.assemblee-nationale.fr/dyn/${legislature}/scrutins/${scrutinNumber}`;
-        const officialGroupSnapshot = buildOfficialGroupSnapshot(
-          data,
-          sourceHash,
-          sourceUrl,
-          new Date()
-        );
-
         // A metadata-only backfill must never touch nominative votes. Avoid
         // parsing that section entirely in this mode to make that contract
         // explicit and keep the backfill cheap.
@@ -517,16 +534,20 @@ export async function syncScrutinsAN(
                 codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
                 libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
               };
-              await db.scrutin.update({
-                where: { id: existing.id },
-                data: metadata,
-              });
-              await persistOfficialGroupSnapshot(
-                existing.id,
-                existing.officialGroupsHash,
-                officialGroupSnapshot
+              const officialGroupSnapshot = buildOfficialGroupSnapshot(
+                data,
+                createHash("sha256").update(content).digest("hex"),
+                zipUrl,
+                sourceFetchedAt
               );
-              stats.scrutinsUpdated++;
+              const changed = await persistOfficialGroupSnapshot(
+                existing,
+                officialGroupSnapshot,
+                metadata,
+                force
+              );
+              if (changed) stats.scrutinsUpdated++;
+              else stats.scrutinsSkipped++;
             }
           } else {
             // Upsert scrutin
@@ -565,15 +586,6 @@ export async function syncScrutinsAN(
               });
               stats.scrutinsCreated++;
             }
-
-            // This update is independent of votesHash. Official metadata can
-            // change while the resolved actor list remains byte-for-byte the
-            // same, and it must still be refreshed.
-            await persistOfficialGroupSnapshot(
-              scrutin.id,
-              existing?.officialGroupsHash ?? null,
-              officialGroupSnapshot
-            );
 
             // Process votes
             const votesToCreate: { politicianId: string; position: VotePosition }[] = [];
@@ -656,7 +668,7 @@ export async function syncScrutinsAN(
     rmSync(TEMP_DIR, { recursive: true });
 
     // Track sync metadata
-    if (!dryRun && stats.errors.length === 0) {
+    if (!dryRun && (!officialGroupsOnly || stats.errors.length === 0)) {
       await syncMetadata.markCompleted(SOURCE_KEY, {
         etag: downloadResult.etag,
         contentHash: zipHash,

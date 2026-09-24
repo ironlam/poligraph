@@ -1,4 +1,6 @@
 -- Additive source preservation for #564. No public indicator is activated here.
+-- Apply this committed migration, not only `prisma db push`: CHECK constraints,
+-- RLS and role revocations are not represented by the Prisma datamodel.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
@@ -17,13 +19,16 @@ ALTER TABLE "Scrutin"
   ADD COLUMN "codeTypeVote" TEXT,
   ADD COLUMN "libelleTypeVote" TEXT,
   ADD COLUMN "officialGroupsHash" TEXT,
-  ADD COLUMN "officialGroupsFetchedAt" TIMESTAMP(3),
+  ADD COLUMN "officialGroupsSourceHash" TEXT,
+  ADD COLUMN "officialGroupsSourceUrl" TEXT,
+  ADD COLUMN "officialGroupsSourceFetchedAt" TIMESTAMP(3),
   ADD COLUMN "officialGroupsIssues" JSONB;
 
 CREATE TABLE "ScrutinOfficialGroupCount" (
   "id" TEXT NOT NULL,
   "scrutinId" TEXT NOT NULL,
-  "organeRef" TEXT NOT NULL,
+  "sourceIndex" INTEGER NOT NULL,
+  "organeRef" TEXT,
   "memberCount" INTEGER,
   "forCount" INTEGER,
   "againstCount" INTEGER,
@@ -32,9 +37,6 @@ CREATE TABLE "ScrutinOfficialGroupCount" (
   "voluntaryNonVoterCount" INTEGER,
   "majorityPosition" TEXT,
   "issues" JSONB NOT NULL DEFAULT '[]',
-  "sourceHash" TEXT NOT NULL,
-  "sourceUrl" TEXT NOT NULL,
-  "fetchedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "ScrutinOfficialGroupCount_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "ScrutinOfficialGroupCount_nonnegative" CHECK (
     "memberCount" >= 0 AND "forCount" >= 0 AND "againstCount" >= 0
@@ -44,9 +46,10 @@ CREATE TABLE "ScrutinOfficialGroupCount" (
     FOREIGN KEY ("scrutinId") REFERENCES "Scrutin"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- The composite unique index also covers the foreign key for cascading deletes.
-CREATE UNIQUE INDEX "ScrutinOfficialGroupCount_scrutinId_organeRef_key"
-  ON "ScrutinOfficialGroupCount" ("scrutinId", "organeRef");
+-- The source order preserves every official block, including malformed archives
+-- where several distinct groups share the same organeRef (notably PO0).
+CREATE UNIQUE INDEX "ScrutinOfficialGroupCount_scrutinId_sourceIndex_key"
+  ON "ScrutinOfficialGroupCount" ("scrutinId", "sourceIndex");
 CREATE INDEX "ScrutinOfficialGroupCount_organeRef_idx"
   ON "ScrutinOfficialGroupCount" ("organeRef");
 

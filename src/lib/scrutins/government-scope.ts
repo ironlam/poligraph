@@ -29,7 +29,9 @@ export function getGovernmentScopeExclusion(
   if (!kind) return "NOT_WHOLE_BILL";
   if (kind === "proposition") return "PARLIAMENTARY_BILL";
   if (!link.resolvedDossierExternalId) return "DOSSIER_UNRESOLVED";
-  if (link.resolution !== "VOTE_REF") return "DOSSIER_LINK_REQUIRES_REVIEW";
+  if (link.resolution !== "VOTE_REF" && link.resolution !== "OFFICIAL_DOSSIER_REF") {
+    return "DOSSIER_LINK_REQUIRES_REVIEW";
+  }
   if (origin === "PARLEMENTAIRE") return "ORIGIN_CONFLICT";
   if (origin !== "GOUVERNEMENTALE") return "ORIGIN_UNDETERMINED";
   return null;

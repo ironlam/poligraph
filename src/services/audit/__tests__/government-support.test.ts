@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { auditGovernmentSupport } from "../government-support";
 
 // Synthetic AN-shaped sources. No DB state or current group memberships enter this audit.
-function vote(numero: string, codeTypeVote: string, title = "l'ensemble du projet de loi test.") {
+function vote(
+  numero: string,
+  codeTypeVote: string,
+  title = "l'ensemble du projet de loi test.",
+  dossierRef?: string
+) {
   return {
     scrutin: {
       uid: `VTANR5L17V${numero}`,
@@ -11,6 +16,7 @@ function vote(numero: string, codeTypeVote: string, title = "l'ensemble du proje
       titre: title,
       dateScrutin: "2026-01-01",
       typeVote: { codeTypeVote },
+      ...(dossierRef ? { objet: { dossierLegislatif: { dossierRef } } } : {}),
     },
   };
 }
@@ -64,6 +70,13 @@ describe("source comparison audit", () => {
     expect(audit.summary.confirmedAll).toBe(0);
     expect(audit.rows[0]?.exclusion).toBe("DOSSIER_UNRESOLVED");
   });
+  it("uses the official dossierRef before heuristic reconciliation", () => {
+    const audit = auditGovernmentSupport([vote("4", "SPS", undefined, "DLR5L17N1")], [dossier]);
+
+    expect(audit.summary.confirmedAll).toBe(1);
+    expect(audit.rows[0]?.resolution).toBe("OFFICIAL_DOSSIER_REF");
+    expect(audit.rows[0]?.dossierId).toBe("DLR5L17N1");
+  });
   it("reports discrepant group totals without changing the common scrutiny population", () => {
     const scrutin = {
       ...vote("1", "SPS").scrutin,
@@ -94,5 +107,35 @@ describe("source comparison audit", () => {
     expect(audit.summary.confirmedAll).toBe(1);
     expect(audit.summary.confirmedScrutinsWithGroupAnomalies).toBe(1);
     expect(audit.summary.groupSourceCoverage[0]?.completeAll).toBe(0);
+  });
+
+  it("sums all twelve source blocks when the archive repeats PO0", () => {
+    const groups = Array.from({ length: 12 }, (_, sourceIndex) => ({
+      organeRef: "PO0",
+      nombreMembresGroupe: "1",
+      vote: {
+        positionMajoritaire: "pour",
+        decompteVoix: {
+          pour: sourceIndex < 10 ? "1" : "0",
+          contre: sourceIndex === 10 ? "2" : "0",
+          abstentions: sourceIndex === 11 ? "3" : "0",
+          nonVotants: "0",
+          nonVotantsVolontaires: "0",
+        },
+      },
+    }));
+    const scrutin = {
+      ...vote("1", "SPS").scrutin,
+      syntheseVote: { decompte: { pour: "10", contre: "2", abstentions: "3" } },
+      ventilationVotes: { organe: { groupes: { groupe: groups } } },
+    };
+
+    const audit = auditGovernmentSupport([{ scrutin }], [dossier]);
+
+    expect(audit.rows[0]?.groups.counts).toHaveLength(12);
+    expect(audit.rows[0]?.groupConsistencyIssues).toEqual([]);
+    expect(audit.rows[0]?.groups.counts.map((group) => group.sourceIndex)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index)
+    );
   });
 });
