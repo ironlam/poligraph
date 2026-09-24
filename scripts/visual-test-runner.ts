@@ -10,7 +10,7 @@
  *   npm run visual -- --compare       # Show comparison of changed screenshots
  */
 
-import { execSync, spawn } from "child_process";
+import { execFileSync, execSync, spawn } from "child_process";
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
@@ -121,7 +121,13 @@ function openReport() {
     const openCommand =
       process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
 
-    execSync(`${openCommand} ${reportPath}`, { stdio: "ignore" });
+    // The path is passed as an argument, not built into a command line: `process.cwd()` is
+    // whatever directory the script was started from, and a space or a quote in it would split
+    // the command or let the rest of the path be read as shell syntax.
+    //
+    // On Windows `start` is a cmd builtin rather than an executable, so this throws there and the
+    // Playwright fallback below opens the report instead.
+    execFileSync(openCommand, [reportPath], { stdio: "ignore" });
     log(`  Report opened in browser`, colors.green);
   } catch {
     // Fallback to playwright show-report

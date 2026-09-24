@@ -12,7 +12,7 @@ type RouteHandler = (request: NextRequest, context: RouteContext) => Promise<Res
  * failure we actually wanted to see disappears behind a misleading "Dynamic server usage" message.
  * Observed as POLIGRAPH-2T on /api/rss/factchecks.xml, whose stack runs through this wrapper.
  */
-function describeRequest(request: NextRequest): string {
+export function describeRequest(request: NextRequest): string {
   try {
     return `${request.method} ${request.url}`;
   } catch {
@@ -29,7 +29,11 @@ export function withPublicRoute(handler: RouteHandler): RouteHandler {
     try {
       return await handler(request, context);
     } catch (error) {
-      console.error(`[API Error] ${describeRequest(request)}:`, error);
+      // The message is split across arguments instead of interpolated into one. A visitor can put
+      // `%s` in the URL, and `console.error` reads its first argument as a format string: the
+      // specifier would then swallow `error` as its substitution, and the failure being reported
+      // would vanish from the log into the middle of the URL.
+      console.error("[API Error]", `${describeRequest(request)}:`, error);
       return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
     }
   };

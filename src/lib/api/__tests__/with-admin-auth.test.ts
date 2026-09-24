@@ -1,3 +1,4 @@
+import { format } from "node:util";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -46,5 +47,28 @@ describe("withAdminAuth", () => {
     const body = await result.json();
     expect(result.status).toBe(500);
     expect(body.error).toBe("Erreur interne");
+  });
+});
+
+/**
+ * Même défaut que sur le wrapper public : l'URL interpolée dans la chaîne de format fait
+ * consommer l'erreur par un `%s` venu de la requête.
+ */
+describe("URL portant un spécificateur de format", () => {
+  it("journalise l'erreur et l'URL telles quelles", async () => {
+    vi.mocked(isAuthenticated).mockResolvedValue(true);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("la vraie erreur");
+    const request = new NextRequest("http://localhost/api/admin/%s");
+
+    await withAdminAuth(async () => {
+      throw cause;
+    })(request, { params: Promise.resolve({}) });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const rendu = format(...(spy.mock.calls[0] as [unknown, ...unknown[]]));
+    expect(rendu).toContain("la vraie erreur");
+    expect(rendu).toContain("/api/admin/%s");
+    spy.mockRestore();
   });
 });
