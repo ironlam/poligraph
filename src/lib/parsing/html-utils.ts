@@ -129,6 +129,17 @@ const HTML_TAG = /<\/?[a-zA-Z][^>]*>/g;
  *
  * `replacement` is a space for callers that tokenise afterwards, where dropping a tag outright
  * would weld two words together.
+ *
+ * CodeQL flags this function under `js/incomplete-multi-character-sanitization`, and those alerts
+ * are dismissed as false positives rather than fixed. The rule reads a single pass as an attempt
+ * at sanitising HTML, and wants a loop until the string stops changing. This is an extractor over
+ * markup we fetch ourselves, and its output never goes back into HTML: `dangerouslySetInnerHTML`
+ * exists only in `src/components/seo/JsonLd.tsx`, behind `safeJsonLd`, and a CI guard in
+ * `ci-critical-guards.test.ts` keeps it there. A surviving `<script` is text that React escapes.
+ *
+ * The loop the rule asks for was tried, in the first version of #915, and it cost data: removing
+ * every angle bracket turned "seuil < 5 %" into "seuil  5 %". Satisfying the pattern is not worth
+ * a threshold disappearing from a published amendment.
  */
 export function removeTags(text: string, replacement = ""): string {
   return text
