@@ -23,15 +23,24 @@
  * The optional complement must itself open with a preposition. Allowing any short run of
  * characters before the comma was a hole: "L'eau devient gratuite, le programme le prévoit"
  * would have passed on the strength of its second clause while its first one asserted exactly
- * what this rejects. A complement is "Sur l'énergie," or "En matière de logement,", never a
- * finite clause.
+ * what this rejects. The complement is therefore a preposition plus at most five words, the
+ * length of "Sur l'accès aux soins de proximité," and well short of a clause.
  *
- * This checks the OPENING, not the whole sentence. "Le programme prévoit X, et la transition
- * écologique s'appuie sur Y" passes. The leading attribution governs the sentence grammatically
- * and both prompts ask for a single sentence per axis, but this is a cheap structural guard, not
- * a semantic proof, and it must not be described as one.
+ * TWO holes remain, and neither is closed by making the pattern longer:
+ *
+ * - A finite clause SHORT enough still fits: "Dans l'accès progresse, le programme le prévoit"
+ *   passes. Telling a noun phrase from a clause needs French conjugation, not a regex, and a
+ *   longer pattern here would look like protection without being any.
+ * - This checks the OPENING, not the whole sentence. "Le programme prévoit X, et la transition
+ *   écologique s'appuie sur Y" passes. The leading attribution governs the sentence grammatically
+ *   and both prompts ask for a single sentence per axis.
+ *
+ * So this is a cheap structural guard against the drift a model actually produces, which is the
+ * theme in subject position, and it must not be described as a semantic proof. What stands behind
+ * it is the grounding pass, the three generation attempts, and a human reading the text before it
+ * is published.
  */
-const COMPLEMENT = /(?:sur|en|pour|dans|face à|au sujet de|côté)\b[^,]{0,60},\s*/;
+const COMPLEMENT = /(?:sur|en|pour|dans|face à|au sujet de|côté)\b(?:\s+[^\s,]+){0,5}\s*,\s*/;
 const SUBJECT =
   /(?:le programme|les mesures|les engagements|les propositions|la candidature|le projet)\b/;
 const ATTRIBUTED_OPENING = new RegExp(`^(?:${COMPLEMENT.source})?${SUBJECT.source}`, "iu");

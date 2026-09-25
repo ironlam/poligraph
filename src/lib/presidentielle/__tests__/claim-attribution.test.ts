@@ -38,6 +38,23 @@ describe("isAttributedClaim", () => {
     expect(isAttributedClaim(claim)).toBe(false);
   });
 
+  it("refuse une proposition conjuguée glissée dans le complément", () => {
+    // Signalé en revue sur #918 : la préposition seule ne suffisait pas, le complément avalait
+    // « les zones rurales l'accès aux soins progresse » puis se rachetait sur « le programme ».
+    // Le complément est désormais borné à cinq mots, la longueur d'un vrai groupe prépositionnel.
+    expect(
+      isAttributedClaim(
+        "Dans les zones rurales l'accès aux soins progresse, le programme le prévoit."
+      )
+    ).toBe(false);
+  });
+
+  it("garde le complément prépositionnel le plus long qu'on veuille écrire", () => {
+    expect(
+      isAttributedClaim("Sur l'accès aux soins de proximité, les mesures rouvrent des maternités.")
+    ).toBe(true);
+  });
+
   it("tolère une espace de tête, que le fournisseur ajoute parfois", () => {
     expect(isAttributedClaim("  Le programme encadre les loyers.")).toBe(true);
   });
