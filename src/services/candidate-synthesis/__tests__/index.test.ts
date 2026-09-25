@@ -255,9 +255,9 @@ describe("generateCandidateSynthesis", () => {
 
   it("conserve en dernier recours les axes effectivement étayés", async () => {
     const supported =
-      "La réouverture de maternités vise à rapprocher les soins des habitants dans les territoires concernés par leur fermeture.";
+      "Le programme rouvre des maternités pour rapprocher les soins des habitants dans les territoires concernés par leur fermeture.";
     const unsupported =
-      "Les trains de nuit seraient rétablis afin de supprimer toutes les difficultés de déplacement sur le territoire.";
+      "Les mesures rétabliraient les trains de nuit afin de supprimer toutes les difficultés de déplacement sur le territoire.";
     const generated = JSON.stringify({
       career: `${CAREER}.`,
       programmeClaims: [

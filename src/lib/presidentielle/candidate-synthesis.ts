@@ -15,6 +15,7 @@
 import { z } from "zod";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import { isAttributedClaim, UNATTRIBUTED_CLAIM_DETAIL } from "./claim-attribution";
 
 /** Longest a short identity field may be before it goes into the prompt. */
 const FIELD_LIMIT = 240;
@@ -401,7 +402,9 @@ Règles absolues :
 - Place les codes M1, M2 et suivants uniquement dans measureRefs, jamais dans le texte public.
 - Pour un axe regroupé, sélectionne de 2 à 4 mesures réellement utilisées. N'ajoute aucune référence dont le texte ne reprend pas un élément concret.
 - Ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre.
-- Pour regrouper, préfère une formulation descriptive comme « Sur l'énergie, les mesures associent... ». N'invente pas un effet global avec « renforcer », « consolider », « refondre » ou « garantir » si cet effet n'est pas écrit dans les mesures.
+- Chaque axe commence par « Le programme », « Les mesures », « Les engagements », « Les propositions », « La candidature » ou « Le projet », éventuellement après un complément : « Sur l'énergie, les mesures associent... ». Tu décris ce qu'une candidature propose, jamais l'état du pays : « La transition écologique s'appuie sur un pôle public de l'énergie » affirme que c'est déjà le cas, « Le programme fonde la transition écologique sur un pôle public de l'énergie » dit ce qu'il faut dire.
+- Varie ces ouvertures d'un axe à l'autre plutôt que de répéter la même.
+- N'invente pas un effet global avec « renforcer », « consolider », « refondre » ou « garantir » si cet effet n'est pas écrit dans les mesures.
 
 Forme :
 - Français, avec tous les accents.
@@ -702,6 +705,16 @@ export function screenCandidateSynthesis(
         ok: false,
         reason: "catalogue",
         detail: "un axe recopie une mesure au lieu de la synthétiser",
+      };
+    }
+    // Last of the per-claim checks on purpose. A fabricated citation or an invented quantity is
+    // both graver and more actionable than a missing attribution, so those reasons must reach the
+    // moderator first when a claim carries several defects at once.
+    if (!claimFailure && !isAttributedClaim(normalizedText)) {
+      claimFailure = {
+        ok: false,
+        reason: "modalite",
+        detail: UNATTRIBUTED_CLAIM_DETAIL,
       };
     }
     if (claimFailure) {

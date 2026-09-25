@@ -331,6 +331,40 @@ describe("screenCandidateSynthesis", () => {
     expect(result.ok && result.text).not.toContain("thèmes suivants");
   });
 
+  it("refuse un axe qui décrit l'état du pays au lieu du programme", () => {
+    // La phrase exacte publiée sur la fiche Mélenchon avant ce garde-fou. Au présent de
+    // l'indicatif et sans sujet attributif, elle se lit comme une description de la France.
+    const raw = output([
+      {
+        text: "La transition écologique s’appuie sur la réouverture des maternités de proximité et la prise en charge intégrale des soins prescrits.",
+        measureRefs: ["M1", "M2"],
+      },
+      { text: transportAxis, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: false, reason: "modalite" });
+  });
+
+  it("laisse une quantité inventée primer sur le défaut de modalité", () => {
+    // Le contrôle de modalité est volontairement le dernier de la chaîne. Ce cas le pin :
+    // l'axe cumule les deux défauts, et c'est le chiffre inventé qu'un modérateur doit lire,
+    // parce qu'il se corrige alors qu'une tournure se réécrit. Remonter la modalité avant le
+    // contrôle des quantités fait échouer ce test.
+    const raw = output([
+      {
+        text: "La transition écologique rembourse 90 % des soins prescrits dans les maternités de proximité.",
+        measureRefs: ["M1", "M2"],
+      },
+      { text: transportAxis, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: false, reason: "quantite" });
+  });
+
   it("retire les espaces laissés devant la ponctuation par les marqueurs de preuve", () => {
     const raw = output([
       {
