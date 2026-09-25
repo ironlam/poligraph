@@ -423,13 +423,33 @@ describe("synthèse thématique d'une candidature", () => {
     });
   });
 
+  it("refuse un axe qui décrit l'état du pays au lieu du programme", () => {
+    // Ce prompt interdisait « propose », « prévoit », « souhaite » et « envisage » pour empêcher
+    // un catalogue, et supprimait du même coup les seuls marqueurs de modalité disponibles. La
+    // règle vise désormais l'énumération, et le filtre exige le sujet attributif.
+    const result = screenThemeSynthesis(
+      {
+        theme: "SANTE",
+        claims: [
+          {
+            text: "L’accès aux soins s’appuie sur la réouverture de maternités et la création de centres de santé publics, sans avance de frais.",
+            measureRefs: ["M1", "M2"],
+          },
+        ],
+      },
+      input()
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "modalite" });
+  });
+
   it("autorise deux axes distincts lorsque deux mesures ne peuvent pas être regroupées", () => {
     const result = screenThemeSynthesis(
       {
         theme: "SANTE",
         claims: [
-          { text: "La première mesure porte sur les maternités.", measureRefs: ["M1"] },
-          { text: "La seconde prévoit 100 centres de santé publics.", measureRefs: ["M2"] },
+          { text: "Les mesures portent sur les maternités.", measureRefs: ["M1"] },
+          { text: "Le programme prévoit 100 centres de santé publics.", measureRefs: ["M2"] },
         ],
       },
       input()
@@ -449,7 +469,7 @@ describe("synthèse thématique d'une candidature", () => {
       {
         theme: "SANTE",
         claims: Array.from({ length: 4 }, (_, index) => ({
-          text: `Cette orientation reprend la mesure publiée numéro ${index + 1} avec une formulation suffisamment développée pour le contrôle.`,
+          text: `Le programme reprend la mesure publiée numéro ${index + 1} avec une formulation suffisamment développée pour le contrôle.`,
           measureRefs: [`M${index + 1}`],
         })),
       },

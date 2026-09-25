@@ -121,7 +121,7 @@ describe("generateCandidacyThemeSynthesis", () => {
           status: "PENDING_REVIEW",
           evidence: expect.objectContaining({ claims: expect.any(Array) }),
           corpusFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-          promptVersion: "candidacy-theme-synthesis-v4",
+          promptVersion: "candidacy-theme-synthesis-v5",
         }),
         update: expect.objectContaining({
           status: "PENDING_REVIEW",

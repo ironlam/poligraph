@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
+import { isAttributedClaim, UNATTRIBUTED_CLAIM_DETAIL } from "./claim-attribution";
 
 const PROMPT_FIELD_LIMIT = 2_000;
 export const THEME_SYNTHESIS_HARD_MAX_WORDS = 260;
-export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v4";
+export const THEME_SYNTHESIS_PROMPT_VERSION = "candidacy-theme-synthesis-v5";
 
 export type ThemeSynthesisMeasure = {
   id: string;
@@ -172,7 +173,9 @@ Règles absolues :
 - ne transfère jamais la cible, la condition ou la modalité d'une mesure vers une autre mesure, même lorsqu'elles portent sur un axe proche ;
 - retiens les orientations principales et organise-les en ${maxAxes} axes cohérents au maximum ;
 - chaque axe doit tenir dans une seule phrase grammaticale avec un verbe conjugué ;
-- ne commence pas un axe par un infinitif et n'enchaîne pas « propose », « prévoit », « souhaite » ou « envisage » pour énumérer les mesures ;
+- ne commence pas un axe par un infinitif ;
+- chaque axe commence par « Le programme », « Les mesures », « Les engagements », « Les propositions », « La candidature » ou « Le projet », éventuellement après un complément : « Sur l'énergie, les mesures associent... ». Tu décris ce qu'une candidature propose, jamais l'état du pays : « La transition écologique s'appuie sur un pôle public de l'énergie » affirme que c'est déjà le cas, « Le programme fonde la transition écologique sur un pôle public de l'énergie » dit ce qu'il faut dire ;
+- varie ces ouvertures d'un axe à l'autre. Ce qui est proscrit est d'écrire une phrase par mesure, pas d'employer un verbe de proposition ;
 - une suite de reformulations n'est pas une synthèse, ne rédige pas une phrase pour chaque mesure ;
 - regroupe seulement les mesures qui expriment réellement une orientation commune. Une mesure peut former un axe à elle seule si aucun regroupement fidèle n'est possible ;
 - conserve les conditions, limites et nuances importantes ;
@@ -444,6 +447,9 @@ export function screenThemeSynthesis(
     }
     if (isComparativeClaim(claim.text)) {
       return { ok: false, reason: "comparaison", detail: "La synthèse compare des candidatures." };
+    }
+    if (!isAttributedClaim(claim.text)) {
+      return { ok: false, reason: "modalite", detail: UNATTRIBUTED_CLAIM_DETAIL };
     }
     if (/[—–]/u.test(claim.text)) {
       return { ok: false, reason: "style", detail: "La synthèse contient un tiret long." };
