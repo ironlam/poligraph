@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { isAttributedClaim, UNATTRIBUTED_CLAIM_DETAIL } from "./claim-attribution";
+import { isTruncatedClaim, TRUNCATED_CLAIM_DETAIL } from "./claim-integrity";
 
 const PROMPT_FIELD_LIMIT = 2_000;
 export const THEME_SYNTHESIS_HARD_MAX_WORDS = 260;
@@ -450,6 +451,9 @@ export function screenThemeSynthesis(
     }
     if (!isAttributedClaim(claim.text)) {
       return { ok: false, reason: "modalite", detail: UNATTRIBUTED_CLAIM_DETAIL };
+    }
+    if (isTruncatedClaim(claim.text)) {
+      return { ok: false, reason: "tronque", detail: TRUNCATED_CLAIM_DETAIL };
     }
     if (/[—–]/u.test(claim.text)) {
       return { ok: false, reason: "style", detail: "La synthèse contient un tiret long." };
