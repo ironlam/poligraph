@@ -667,20 +667,22 @@ export interface PoliticianParliamentaryCardData {
   dissidenceTotal: number | null;
 }
 
-/** Compute the individual card from the live, chamber-bounded publication policy. */
-export async function getPoliticianParliamentaryCard(
-  politicianId: string,
-  mandateType: "DEPUTE" | "SENATEUR"
-): Promise<PoliticianParliamentaryCardData | null> {
-  const chamber: Chamber = mandateType === "DEPUTE" ? "AN" : "SENAT";
-
-  const [stats, dissidence] = await Promise.all([
-    getPoliticianVotingStats(politicianId, mandateType),
-    getPoliticianDissidence(politicianId),
-  ]);
-
+/**
+ * Assemble the individual card from the chamber-bounded publication policy.
+ *
+ * Pure: the caller fetches `stats` (with the same `mandateType`) and `dissidence`, and owns how
+ * fresh they are. The profile now reads both inside one cache boundary, so dissidence is served
+ * from that window instead of being recomputed on every render. The profile
+ * already reads those stats for its vote summary, and fetching them a second time here doubled the
+ * queries a render holds open at once, which is what saturates the pool (POLIGRAPH-2X).
+ */
+export function buildPoliticianParliamentaryCard(
+  mandateType: "DEPUTE" | "SENATEUR",
+  stats: PoliticianVotingStats,
+  dissidence: { count: number; total: number; rate: number } | null
+): PoliticianParliamentaryCardData {
   return {
-    chamber,
+    chamber: mandateType === "DEPUTE" ? "AN" : "SENAT",
     mandateType,
     votesCount: stats.pour + stats.contre + stats.abstention,
     eligibleScrutins: stats.eligibleScrutins,
@@ -858,7 +860,6 @@ export const voteStatsService = {
   getParticipationRanking,
   getPartyParticipationStats,
   getGroupParticipationStats,
-  getPoliticianParliamentaryCard,
   getLegislativeStats,
   getPoliticianThemeDistribution,
   getGroupDissidenceStats,
