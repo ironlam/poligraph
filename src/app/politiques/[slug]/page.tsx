@@ -22,8 +22,9 @@ import { CareerTimeline } from "@/components/politicians/CareerTimeline";
 import { AffairsSection } from "@/components/politicians/AffairsSection";
 import { VotesSection } from "@/components/politicians/VotesSection";
 import {
+  buildPoliticianParliamentaryCard,
+  getPoliticianDissidence,
   getPoliticianVotingStats,
-  getPoliticianParliamentaryCard,
   voteStatsService,
 } from "@/services/voteStats";
 import { getPolitician } from "@/lib/data/politicians";
@@ -58,13 +59,16 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-async function getVoteStats(politicianId: string) {
+// One boundary, four reads in flight at most: the pool holds four connections (@/config/database)
+// and a render wider than that queues behind itself (POLIGRAPH-2X). The card reuses these stats
+// rather than computing them again, and its dissidence query is cached here with them.
+async function getVoteStats(politicianId: string, mandateType: "DEPUTE" | "SENATEUR") {
   "use cache";
   cacheTag("votes", "politicians");
   cacheLife("synced");
 
-  const [stats, recentVotes, themeDistribution] = await Promise.all([
-    getPoliticianVotingStats(politicianId),
+  const [stats, recentVotes, themeDistribution, dissidence] = await Promise.all([
+    getPoliticianVotingStats(politicianId, mandateType),
     db.vote.findMany({
       where: { politicianId },
       include: {
@@ -95,9 +99,13 @@ async function getVoteStats(politicianId: string) {
       take: 5,
     }),
     voteStatsService.getPoliticianThemeDistribution(politicianId),
+    getPoliticianDissidence(politicianId),
   ]);
 
-  return { stats, recentVotes, themeDistribution };
+  return {
+    voteData: { stats, recentVotes, themeDistribution },
+    parliamentaryCard: buildPoliticianParliamentaryCard(mandateType, stats, dissidence),
+  };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -200,30 +208,34 @@ export default async function PoliticianPage({ params }: PageProps) {
       : null;
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
+  // Mandates arrive sorted by startDate desc, so the headline mandate of a sitting
+  // parliamentarian who also holds a local one is the local mandate. The votes tab, the card,
+  // the group badge and the comparison link read this one instead, or they serve an empty votes
+  // tab to 42 people. The header, the metadata and the JSON-LD still headline `currentMandate`.
+  const currentParliamentaryMandate = politician.mandates.find(
+    (m) => m.isCurrent && (m.type === "DEPUTE" || m.type === "SENATEUR")
+  );
   const currentGroup = (
-    currentMandate as typeof currentMandate & {
+    currentParliamentaryMandate as typeof currentParliamentaryMandate & {
       parliamentaryData?: {
         parliamentaryGroup?: { code: string; name: string; color: string | null } | null;
       } | null;
     }
   )?.parliamentaryData?.parliamentaryGroup;
-  const isActiveParliamentarian = politician.mandates.some(
-    (m) => m.isCurrent && (m.type === "DEPUTE" || m.type === "SENATEUR")
-  );
+  const isActiveParliamentarian = currentParliamentaryMandate !== undefined;
   const isChamberPresident = politician.mandates.some(
     (m) => m.isCurrent && m.role != null && /^Président /.test(m.role)
   );
 
   // Get vote stats (for deputies and senators - both have votes tracked)
-  const isParliamentarian =
-    currentMandate?.type === "DEPUTE" || currentMandate?.type === "SENATEUR";
-  const mandateType = currentMandate?.type as "DEPUTE" | "SENATEUR" | undefined;
-  const [voteData, parliamentaryCard] = await Promise.all([
-    isParliamentarian ? getVoteStats(politician.id) : null,
-    isParliamentarian && mandateType
-      ? getPoliticianParliamentaryCard(politician.id, mandateType)
-      : null,
-  ]);
+  const mandateType =
+    currentParliamentaryMandate?.type === "DEPUTE" ||
+    currentParliamentaryMandate?.type === "SENATEUR"
+      ? currentParliamentaryMandate.type
+      : null;
+  const { voteData, parliamentaryCard } = mandateType
+    ? await getVoteStats(politician.id, mandateType)
+    : { voteData: null, parliamentaryCard: null };
 
   // directAffairs still feeds the Carrière timeline.
   const directAffairs = politician.affairs.filter((a) => a.involvement === "DIRECT");
@@ -465,11 +477,11 @@ export default async function PoliticianPage({ params }: PageProps) {
                     voteData={voteData!}
                     parliamentaryCard={parliamentaryCard}
                     currentMandate={
-                      currentMandate
+                      currentParliamentaryMandate
                         ? {
-                            type: currentMandate.type,
-                            title: currentMandate.title,
-                            constituency: currentMandate.constituency,
+                            type: currentParliamentaryMandate.type,
+                            title: currentParliamentaryMandate.title,
+                            constituency: currentParliamentaryMandate.constituency,
                           }
                         : null
                     }
@@ -545,8 +557,8 @@ export default async function PoliticianPage({ params }: PageProps) {
         </div>
 
         {(() => {
-          const isDepute = currentMandate?.type === "DEPUTE";
-          const isSenateur = currentMandate?.type === "SENATEUR";
+          const isDepute = currentParliamentaryMandate?.type === "DEPUTE";
+          const isSenateur = currentParliamentaryMandate?.type === "SENATEUR";
           const statsUrl = isDepute
             ? statsHref("participation", { chamber: "AN" })
             : isSenateur
