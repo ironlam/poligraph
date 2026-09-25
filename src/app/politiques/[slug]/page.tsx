@@ -208,24 +208,30 @@ export default async function PoliticianPage({ params }: PageProps) {
       : null;
 
   const currentMandate = politician.mandates.find((m) => m.isCurrent);
+  // Mandates arrive sorted by startDate desc, so the headline mandate of a sitting
+  // parliamentarian who also holds a local one is the local mandate. The votes tab, the card,
+  // the group badge and the comparison link read this one instead, or they serve an empty votes
+  // tab to 42 people. The header, the metadata and the JSON-LD still headline `currentMandate`.
+  const currentParliamentaryMandate = politician.mandates.find(
+    (m) => m.isCurrent && (m.type === "DEPUTE" || m.type === "SENATEUR")
+  );
   const currentGroup = (
-    currentMandate as typeof currentMandate & {
+    currentParliamentaryMandate as typeof currentParliamentaryMandate & {
       parliamentaryData?: {
         parliamentaryGroup?: { code: string; name: string; color: string | null } | null;
       } | null;
     }
   )?.parliamentaryData?.parliamentaryGroup;
-  const isActiveParliamentarian = politician.mandates.some(
-    (m) => m.isCurrent && (m.type === "DEPUTE" || m.type === "SENATEUR")
-  );
+  const isActiveParliamentarian = currentParliamentaryMandate !== undefined;
   const isChamberPresident = politician.mandates.some(
     (m) => m.isCurrent && m.role != null && /^Président /.test(m.role)
   );
 
   // Get vote stats (for deputies and senators - both have votes tracked)
   const mandateType =
-    currentMandate?.type === "DEPUTE" || currentMandate?.type === "SENATEUR"
-      ? currentMandate.type
+    currentParliamentaryMandate?.type === "DEPUTE" ||
+    currentParliamentaryMandate?.type === "SENATEUR"
+      ? currentParliamentaryMandate.type
       : null;
   const { voteData, parliamentaryCard } = mandateType
     ? await getVoteStats(politician.id, mandateType)
@@ -471,11 +477,11 @@ export default async function PoliticianPage({ params }: PageProps) {
                     voteData={voteData!}
                     parliamentaryCard={parliamentaryCard}
                     currentMandate={
-                      currentMandate
+                      currentParliamentaryMandate
                         ? {
-                            type: currentMandate.type,
-                            title: currentMandate.title,
-                            constituency: currentMandate.constituency,
+                            type: currentParliamentaryMandate.type,
+                            title: currentParliamentaryMandate.title,
+                            constituency: currentParliamentaryMandate.constituency,
                           }
                         : null
                     }
@@ -551,8 +557,8 @@ export default async function PoliticianPage({ params }: PageProps) {
         </div>
 
         {(() => {
-          const isDepute = currentMandate?.type === "DEPUTE";
-          const isSenateur = currentMandate?.type === "SENATEUR";
+          const isDepute = currentParliamentaryMandate?.type === "DEPUTE";
+          const isSenateur = currentParliamentaryMandate?.type === "SENATEUR";
           const statsUrl = isDepute
             ? statsHref("participation", { chamber: "AN" })
             : isSenateur

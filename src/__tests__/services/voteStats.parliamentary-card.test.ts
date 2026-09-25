@@ -60,6 +60,16 @@ describe("fiche politicien : une seule lecture des statistiques par rendu", () =
     expect(source).not.toContain("getPoliticianParliamentaryCard");
   });
 
+  it("résout le parlementaire même quand un mandat local est plus récent", () => {
+    // Mandates arrive sorted by startDate desc, so a deputy who became mayor has the mayoral
+    // mandate first. Reading the headline mandate served an empty votes tab to 42 people.
+    const flat = source.replace(/\s+/g, " ");
+
+    expect(flat).not.toMatch(/const mandateType =[^;]*\bcurrentMandate\b/);
+    expect(flat).not.toMatch(/const isDepute =[^;]*\bcurrentMandate\b/);
+    expect(flat).toMatch(/currentMandate=\{\s*currentParliamentaryMandate/);
+  });
+
   it("garde la dissidence dans la frontière de cache des votes", () => {
     const boundary = source.slice(
       source.indexOf("async function getVoteStats"),
