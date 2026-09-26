@@ -37,7 +37,20 @@ export const GET = withPublicRoute(async (_req, { params }) => {
       return new NextResponse(null, { status: 404 });
     }
 
-    const contentType = sourceResponse.headers.get("content-type") || "image/jpeg";
+    const contentType = sourceResponse.headers.get("content-type") ?? "";
+
+    // A 200 does not mean an image. Public French institutional sites answer an interstitial or a
+    // blocking page with a 200 and an HTML body, and this route used to store that body verbatim,
+    // copying `text/html` into the blob's own content type. Once written, the cache-hit branch
+    // above redirects to it forever without ever looking again, so the fiche served an 8 KB web
+    // page as a portrait and `/_next/image` answered 400. Measured on production before this
+    // guard: 136 of 1428 cached photos were HTML.
+    //
+    // No default content type either. `|| "image/jpeg"` was the other half of the hole: a source
+    // that sends no header at all would have had its body labelled as a JPEG on our side.
+    if (!contentType.startsWith("image/")) {
+      return new NextResponse(null, { status: 404 });
+    }
 
     const blob = await put(`politicians/${id}`, sourceResponse.body, {
       access: "public",
