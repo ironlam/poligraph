@@ -3,6 +3,7 @@ import type { SyncHandler } from "@/lib/sync";
 
 const h = vi.hoisted(() => ({
   findMandates: vi.fn(),
+  findMandateLocals: vi.fn(),
   findCommunes: vi.fn(),
   countMandates: vi.fn(),
   unexpectedDBAccess: vi.fn(),
@@ -25,6 +26,9 @@ vi.mock("@/lib/db", () => ({
             get: (_model, operation: string) => {
               const reads: Record<string, unknown> = {
                 "mandate.findMany": h.findMandates,
+                // Phase 1 now judges each row before deciding what to do with it, so a dry
+                // run reads the mandates we hold and the mayors already in place.
+                "mandateLocal.findMany": h.findMandateLocals,
                 "commune.findMany": h.findCommunes,
                 "mandate.count": h.countMandates,
               };
@@ -47,7 +51,12 @@ vi.mock("../rne-resource", () => ({
   resolveRneResourceUrl: h.resolveUrl,
   RNE_MAIRES_FRAGMENTS: ["maires"],
 }));
-vi.mock("@/lib/identity", () => ({ resolveBatch: h.resolveBatch }));
+// Only the batch resolver is stubbed: Phase 1 judges each row with the real scorer, and a
+// fake one would let this test pass while the decision logic was wrong.
+vi.mock("@/lib/identity", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/identity")>()),
+  resolveBatch: h.resolveBatch,
+}));
 vi.mock("@/lib/sync", () => ({ createCLI: h.createCLI }));
 
 import { getRNEStats, resolveParties, syncRNEMaires } from "../rne";
@@ -67,6 +76,7 @@ beforeEach(() => {
       localData: { communeId: "01001", rneExternalId: "01001" },
     },
   ]);
+  h.findMandateLocals.mockResolvedValue([]);
   h.findCommunes.mockResolvedValue([{ id: "01001" }]);
   h.countMandates.mockResolvedValue(1);
   h.resolveUrl.mockResolvedValue("https://example.test/maires.csv");
@@ -81,6 +91,7 @@ afterEach(() => {
 
 function expectNoIO() {
   expect(h.findMandates).not.toHaveBeenCalled();
+  expect(h.findMandateLocals).not.toHaveBeenCalled();
   expect(h.findCommunes).not.toHaveBeenCalled();
   expect(h.countMandates).not.toHaveBeenCalled();
   expect(h.resolveUrl).not.toHaveBeenCalled();
@@ -111,6 +122,62 @@ describe("RNE write suspension", () => {
     expect(h.findMandates).toHaveBeenCalledOnce();
     expect(h.findCommunes).toHaveBeenCalledOnce();
     expect(h.getText).toHaveBeenCalledOnce();
+  });
+
+  it("juge une succession sans rien écrire", async () => {
+    // Le registre donne MARTIN Alice, nous détenons DURAND Bob sur la même commune. Avant le
+    // correctif, cette ligne réécrivait l'état civil de DURAND avec celui de MARTIN.
+    h.findMandateLocals.mockResolvedValue([
+      {
+        id: "local-1",
+        rneExternalId: "01001",
+        communeId: "01001",
+        mandate: {
+          id: "old-mandate",
+          politicianId: "predecessor",
+          startDate: new Date("2020-05-24"),
+          politician: {
+            firstName: "Bob",
+            lastName: "DURAND",
+            birthDate: new Date("1955-01-01"),
+          },
+        },
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.officialsCreated).toBe(1);
+    expect(result.mandatesClosed).toBe(1);
+  });
+
+  it("confirme le même titulaire sans rien écrire", async () => {
+    h.findMandateLocals.mockResolvedValue([
+      {
+        id: "local-1",
+        rneExternalId: "01001",
+        communeId: "01001",
+        mandate: {
+          id: "old-mandate",
+          politicianId: "same-person",
+          startDate: new Date("2020-05-24"),
+          politician: {
+            firstName: "Alice",
+            lastName: "MARTIN",
+            birthDate: new Date("1970-04-02"),
+          },
+        },
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsUpdated).toBe(1);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
   });
 
   it("keeps statistics available without external requests", async () => {
