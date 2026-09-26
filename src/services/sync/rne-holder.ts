@@ -73,6 +73,18 @@ export function isChronologicallyClosable(startDate: Date, endDate: Date): boole
   return endDate.getTime() >= startDate.getTime();
 }
 
+/**
+ * Whether the stale sweep may run for this invocation.
+ *
+ * Phase 3 closes a mandate whose commune is absent from the file. Under `--limit` the file it
+ * compares against is a truncated slice, so "absent from the file" silently means "past the
+ * limit": a 100-row preview reported 21 592 closures against a 34 687-row register. The sweep
+ * only means anything when the whole file was read.
+ */
+export function shouldRunStaleSweep(options: { limit?: number }): boolean {
+  return options.limit === undefined;
+}
+
 /** What Phase 1 does with one register row. Nothing here writes; the caller executes. */
 export type Phase1Action =
   | "update"

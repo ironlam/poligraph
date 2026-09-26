@@ -8,6 +8,7 @@ import {
   compareHolder,
   decidePhase1Action,
   isChronologicallyClosable,
+  shouldRunStaleSweep,
   type HolderVerdict,
   type Phase1Action,
 } from "@/services/sync/rne-holder";
@@ -271,5 +272,20 @@ describe("decidePhase1Action", () => {
 
     expect(doubts.length).toBeGreaterThan(0);
     for (const [, input] of doubts) expect(decidePhase1Action(input)).toBe("skip");
+  });
+});
+
+describe("shouldRunStaleSweep", () => {
+  it("ne balaie pas sur un aperçu limité", () => {
+    // Phase 3 ferme les mandats dont la commune a quitté le fichier. Avec `--limit`, le
+    // fichier lu est tronqué, donc « absent du fichier » veut dire « au-delà de la limite » :
+    // mesuré le 2026-09-27, `--dry-run --limit=100` annonçait 21 592 fermetures.
+    expect(shouldRunStaleSweep({ limit: 100 })).toBe(false);
+    expect(shouldRunStaleSweep({ limit: 0 })).toBe(false);
+  });
+
+  it("balaie sur un fichier entier", () => {
+    expect(shouldRunStaleSweep({})).toBe(true);
+    expect(shouldRunStaleSweep({ limit: undefined })).toBe(true);
   });
 });

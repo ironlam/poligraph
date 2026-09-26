@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, type DbTransactionClient } from "@/lib/db";
 import { DataSource, Judgement, MandateType, PublicationStatus } from "@/generated/prisma";
 import { parse } from "csv-parse/sync";
 import type { MaireRNECSV, RNESyncResult } from "./types";
@@ -12,6 +12,7 @@ import {
   compareHolder,
   decidePhase1Action,
   isChronologicallyClosable,
+  shouldRunStaleSweep,
   type HolderFacts,
 } from "./rne-holder";
 import { resolveRneResourceUrl, RNE_MAIRES_FRAGMENTS } from "./rne-resource";
@@ -265,18 +266,27 @@ async function updateExistingMaire(
   });
 }
 
-async function createMaire(row: ParsedMaireRow, verbose: boolean): Promise<void> {
+/**
+ * `client` lets a caller run this inside its own transaction. A succession closes the
+ * predecessor before creating the successor, and a slug collision or a dropped connection
+ * between the two would leave the commune with no mayor at all.
+ */
+async function createMaire(
+  row: ParsedMaireRow,
+  verbose: boolean,
+  client: DbTransactionClient = db
+): Promise<void> {
   const { title, constituency } = mandateLabels(row);
 
   // Two mayors can share a name. The INSEE suffix keeps the second slug unique.
   const baseSlug = generateSlug(`${row.firstName} ${row.lastName}`);
-  const taken = await db.politician.findUnique({
+  const taken = await client.politician.findUnique({
     where: { slug: baseSlug },
     select: { id: true },
   });
   const slug = taken ? `${baseSlug}-${row.inseeCode}` : baseSlug;
 
-  const created = await db.politician.create({
+  const created = await client.politician.create({
     data: {
       slug,
       civility: row.civility,
@@ -399,11 +409,14 @@ async function upsertMaires(
 
           case "close-and-create":
             if (!dryRun) {
-              await db.mandate.update({
-                where: { id: existingMandate!.mandateId },
-                data: { isCurrent: false, endDate },
+              // One unit: a failed creation must not leave the commune without a mayor.
+              await db.$transaction(async (tx) => {
+                await tx.mandate.update({
+                  where: { id: existingMandate!.mandateId },
+                  data: { isCurrent: false, endDate },
+                });
+                await createMaire(row, verbose, tx);
               });
-              await createMaire(row, verbose);
             }
             counts.handledInPhase1.add(existingMandate!.mandateId);
             counts.different++;
@@ -430,11 +443,13 @@ async function upsertMaires(
             // The register is authoritative on who is mayor. Leaving this mandate current
             // would publish two mayors for one commune.
             if (!dryRun) {
-              await db.mandate.update({
-                where: { id: incumbent!.mandateId },
-                data: { isCurrent: false, endDate },
+              await db.$transaction(async (tx) => {
+                await tx.mandate.update({
+                  where: { id: incumbent!.mandateId },
+                  data: { isCurrent: false, endDate },
+                });
+                await createMaire(row, verbose, tx);
               });
-              await createMaire(row, verbose);
             }
             counts.handledInPhase1.add(incumbent!.mandateId);
             counts.created++;
@@ -725,13 +740,16 @@ export async function syncRNEMaires(
     : await reconcileRNEStubs(parsed.communeNameByInsee, verbose);
   errors.push(...reconciled.errors);
 
-  const closed = await closeStaleMandates(
-    snapshot,
-    parsed.seenCommuneIds,
-    upserted.handledInPhase1,
-    dryRun
-  );
+  // A limited run has only read a slice of the register, so it cannot tell a commune that left
+  // the file from one that sits past the limit.
+  const closed = shouldRunStaleSweep({ limit })
+    ? await closeStaleMandates(snapshot, parsed.seenCommuneIds, upserted.handledInPhase1, dryRun)
+    : { closed: 0, errors: [] as string[] };
   errors.push(...closed.errors);
+
+  if (!shouldRunStaleSweep({ limit })) {
+    console.log("\n--- Phase 3 ignorée : aperçu limité, le fichier lu est tronqué ---");
+  }
 
   console.log(`\n${"=".repeat(50)}`);
   console.log(dryRun ? "Results (DRY-RUN, aucune écriture) :" : "Results:");
