@@ -1,4 +1,5 @@
 import { db, type DbTransactionClient } from "@/lib/db";
+import { writeFileSync } from "node:fs";
 import { DataSource, Judgement, MandateType, PublicationStatus } from "@/generated/prisma";
 import { parse } from "csv-parse/sync";
 import type { MaireRNECSV, RNESyncResult } from "./types";
@@ -109,16 +110,27 @@ interface UpsertCounts {
   adopted: number;
   /** A row the evidence does not let us decide. Nothing was written. */
   undecided: number;
-  /** New mandates, whether the commune was empty or its previous holder was closed. */
+  /** Brand-new profiles: nobody we hold matches this register row. */
   created: number;
+  /** Further terms opened on a profile we already hold. No new person is published. */
+  newTerms: number;
   /** Mandates Phase 1 closed, so the final report does not have to infer the number. */
   closed: number;
-  /** Closed mandates reopened because the register names their holder again. */
-  reopened: number;
   /** Mandates Phase 1 already ruled on, which Phase 3 must not judge again. */
   handledInPhase1: Set<string>;
+  /** One row per undecided commune, for the human who arbitrates them. */
+  undecidedRows: UndecidedRow[];
   errors: string[];
 }
+
+/** What a human needs to arbitrate one undecided row, without opening a database client. */
+type UndecidedRow = {
+  inseeCode: string;
+  commune: string;
+  registre: string;
+  base: string;
+  raison: string;
+};
 
 type ExistingMaire = {
   mandateId: string;
@@ -324,6 +336,42 @@ async function createMaire(
 }
 
 /**
+ * A further term for someone we already hold, on their existing profile.
+ *
+ * A mayor re-elected in March 2026 has a closed 2020 mandate on file. Reopening that mandate
+ * would overwrite its start date and erase the six years it records; creating a profile would
+ * publish them twice. Measured on the register: 1 600 mayors of exactly this shape.
+ */
+async function createMaireTerm(
+  row: ParsedMaireRow,
+  politicianId: string,
+  client: DbTransactionClient = db
+): Promise<void> {
+  const { title, constituency } = mandateLabels(row);
+
+  await client.mandate.create({
+    data: {
+      politicianId,
+      type: MandateType.MAIRE,
+      title,
+      institution: "Commune",
+      constituency,
+      departmentCode: row.deptCode,
+      startDate: mandateStartDate(row),
+      isCurrent: true,
+      source: DataSource.RNE,
+      localData: {
+        create: {
+          communeId: row.communeId,
+          functionStart: row.functionStart,
+          rneExternalId: row.inseeCode,
+        },
+      },
+    },
+  });
+}
+
+/**
  * Write the parsed rows, one commune at a time, collecting failures instead of throwing.
  *
  * The decision of what to do with a row is `decidePhase1Action`, which writes nothing: this
@@ -337,16 +385,16 @@ async function upsertMaires(
   const existingByInsee = await loadByInsee(true);
   const closedByInsee = await loadByInsee(false);
   const incumbentByCommune = await loadCurrentMayorsByCommune();
-  let reopened = 0;
   const counts: UpsertCounts = {
     same: 0,
     different: 0,
     adopted: 0,
     undecided: 0,
     created: 0,
+    newTerms: 0,
     closed: 0,
-    reopened: 0,
     handledInPhase1: new Set<string>(),
+    undecidedRows: [],
     errors: [],
   };
 
@@ -360,21 +408,30 @@ async function upsertMaires(
         };
         const endDate = row.functionStart ?? mandateStartDate(row);
 
-        let existingMandate = existingByInsee.get(row.inseeCode) ?? null;
-        let existingVerdict = existingMandate
+        const existingMandate = existingByInsee.get(row.inseeCode) ?? null;
+        const existingVerdict = existingMandate
           ? compareHolder(incoming, existingMandate.holder)
           : null;
 
-        if (!existingMandate) {
-          // We hold this commune's mandate but it is closed. If the register names the same
-          // person again, reopen it rather than publish a second profile for them.
-          const closedMandate = closedByInsee.get(row.inseeCode) ?? null;
-          if (closedMandate && compareHolder(incoming, closedMandate.holder) === "SAME") {
-            existingMandate = closedMandate;
-            existingVerdict = "SAME";
-            reopened++;
-          }
-        }
+        // A closed mandate for this commune held by the person the register names. It never
+        // decides WHETHER we write, only HOW we create: assigning it to `existingMandate`
+        // would null out the incumbent lookup below and let an out-of-date register revive a
+        // former mayor beside the sitting one.
+        const priorTerm = closedByInsee.get(row.inseeCode) ?? null;
+        const knownPersonId =
+          priorTerm && compareHolder(incoming, priorTerm.holder) === "SAME"
+            ? priorTerm.politicianId
+            : null;
+
+        /** A new profile, or a further term on the profile we already hold. */
+        const publish = async (tx: DbTransactionClient = db): Promise<void> => {
+          if (knownPersonId) await createMaireTerm(row, knownPersonId, tx);
+          else await createMaire(row, verbose, tx);
+        };
+        const countPublication = (): void => {
+          if (knownPersonId) counts.newTerms++;
+          else counts.created++;
+        };
 
         // Only consulted when Phase 1 holds no register mandate and the commune resolved:
         // a lookup keyed on a null commune would match any mayor without one, and adopt a
@@ -415,10 +472,11 @@ async function upsertMaires(
                   where: { id: existingMandate!.mandateId },
                   data: { isCurrent: false, endDate },
                 });
-                await createMaire(row, verbose, tx);
+                await publish(tx);
               });
             }
             counts.handledInPhase1.add(existingMandate!.mandateId);
+            countPublication();
             counts.different++;
             counts.closed++;
             break;
@@ -448,27 +506,36 @@ async function upsertMaires(
                   where: { id: incumbent!.mandateId },
                   data: { isCurrent: false, endDate },
                 });
-                await createMaire(row, verbose, tx);
+                await publish(tx);
               });
             }
             counts.handledInPhase1.add(incumbent!.mandateId);
-            counts.created++;
+            countPublication();
             counts.closed++;
             break;
 
           case "create":
-            if (!dryRun) await createMaire(row, verbose);
-            counts.created++;
+            if (!dryRun) await publish();
+            countPublication();
             break;
 
-          case "skip":
+          case "skip": {
             // Every doubt lands here and writes nothing. The mandate we hold, if any, is
             // marked as handled so Phase 3 does not judge it again under another rule.
             if (existingMandate) counts.handledInPhase1.add(existingMandate.mandateId);
             if (incumbent) counts.handledInPhase1.add(incumbent.mandateId);
+            const held = existingMandate?.holder ?? incumbent?.holder ?? null;
+            counts.undecidedRows.push({
+              inseeCode: row.inseeCode,
+              commune: row.communeLabel ?? "",
+              registre: `${row.firstName} ${row.lastName}`,
+              base: held ? `${held.firstName ?? ""} ${held.lastName ?? ""}`.trim() : "",
+              raison: existingMandate ? "mandat du registre" : "maire en place",
+            });
             if (verbose) console.log(`  Indécis ${row.inseeCode}: ${row.lastName}`);
             counts.undecided++;
             break;
+          }
         }
       } catch (err) {
         counts.errors.push(`Upsert failed for ${row.fullName} (${row.inseeCode}): ${err}`);
@@ -480,8 +547,29 @@ async function upsertMaires(
     }
   }
 
-  counts.reopened = reopened;
   return counts;
+}
+
+/** Where the undecided rows are written, so the human stop has a file and not a scrollback. */
+const UNDECIDED_CSV_PATH = "data/rne-undecided.csv";
+
+/** Write the undecided rows so they can be sorted, filtered and shared. */
+function writeUndecidedCsv(rows: UndecidedRow[]): void {
+  const escape = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+  const lines = [
+    "code_insee,commune,nom_au_registre,nom_en_base,raison",
+    ...rows.map((row) =>
+      [row.inseeCode, row.commune, row.registre, row.base, row.raison].map(escape).join(",")
+    ),
+  ];
+
+  try {
+    writeFileSync(UNDECIDED_CSV_PATH, `${lines.join("\n")}\n`, "utf8");
+    console.log(`  ${rows.length} indécis écrits dans ${UNDECIDED_CSV_PATH}`);
+  } catch (error) {
+    // A read-only filesystem is not a reason to fail a sync.
+    console.error(`  Impossible d'écrire ${UNDECIDED_CSV_PATH}: ${error}`);
+  }
 }
 
 /** The numbers Phase 1 reports, in the order a human reads them. */
@@ -491,9 +579,8 @@ function logPhase1Counts(counts: UpsertCounts, dryRun: boolean): void {
   console.log(`${prefix} Succession (DIFFERENT):    ${counts.different}`);
   console.log(`${prefix} Indécis (UNDECIDED):       ${counts.undecided}`);
   console.log(`${prefix} Adoptions:                 ${counts.adopted}`);
-  console.log(`${prefix} Réouvertures:              ${counts.reopened}`);
-  // A succession creates a profile too, so the display would undercount by `different`.
-  console.log(`${prefix} Créations:                 ${counts.created + counts.different}`);
+  console.log(`${prefix} Fiches créées:             ${counts.created}`);
+  console.log(`${prefix} Mandats sur fiche connue:  ${counts.newTerms}`);
   console.log(`${prefix} Erreurs:                   ${counts.errors.length}`);
 }
 
@@ -731,6 +818,7 @@ export async function syncRNEMaires(
   const upserted = await upsertMaires(parsed.rows, verbose, dryRun);
   errors.push(...upserted.errors);
   logPhase1Counts(upserted, dryRun);
+  if (upserted.undecidedRows.length > 0) writeUndecidedCsv(upserted.undecidedRows);
 
   // Phase 2 folds the stubs Phase 1 just created into the politicians we already knew. A dry
   // run created none, so there is nothing to fold and the resolver would run on the previous
@@ -757,22 +845,26 @@ export async function syncRNEMaires(
   console.log(`  Maires different:  ${upserted.different}`);
   console.log(`  Maires undecided:  ${upserted.undecided}`);
   console.log(`  Maires adopted:    ${upserted.adopted}`);
-  console.log(`  Maires created:    ${upserted.created}`);
+  console.log(`  Fiches créées:     ${upserted.created}`);
+  console.log(`  Mandats sur fiche connue: ${upserted.newTerms}`);
   console.log(`  Mandates closed:   ${upserted.closed + closed.closed}`);
   console.log(`  Politicians matched: ${reconciled.matched}`);
   console.log(`  Politicians not found: ${reconciled.notFound}`);
   console.log(`  Errors: ${errors.length}`);
 
   if (!dryRun) {
-    await recordPlatformUpdate(upserted.created + upserted.different + upserted.same);
+    // What actually changed. Counting `same` too would announce 21 000 untouched mayors as an
+    // update on every run.
+    await recordPlatformUpdate(upserted.created + upserted.newTerms + upserted.adopted);
   }
 
   return {
     success: errors.length === 0,
-    officialsCreated: upserted.created + upserted.different,
+    // People, not mandates: a further term on a profile we already hold creates nobody.
+    officialsCreated: upserted.created,
     officialsUpdated: upserted.same + upserted.adopted,
     officialsClosed: upserted.closed + closed.closed,
-    mandatesCreated: upserted.created + upserted.different,
+    mandatesCreated: upserted.created + upserted.newTerms,
     mandatesUpdated: upserted.same + upserted.adopted,
     mandatesClosed: upserted.closed + closed.closed,
     politiciansMatched: reconciled.matched,

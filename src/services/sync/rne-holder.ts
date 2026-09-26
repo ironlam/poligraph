@@ -14,7 +14,7 @@ export type HolderVerdict = "SAME" | "DIFFERENT" | "UNDECIDED";
 function nameWords(value: string | null): string[] {
   return (value ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z]+/g, " ")
     .trim()

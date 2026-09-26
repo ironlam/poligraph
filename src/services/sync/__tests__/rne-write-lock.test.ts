@@ -180,9 +180,11 @@ describe("RNE write suspension", () => {
     expect(result.mandatesClosed).toBe(0);
   });
 
-  it("rouvre un mandat fermé plutôt que de republier son titulaire", async () => {
-    // Nous détenons le mandat de MARTIN Alice sur 01001, mais fermé. Le registre la nomme à
-    // nouveau. Créer une fiche produirait un doublon publié ; il faut rouvrir.
+  it("ouvre un nouveau mandat sur une fiche connue au lieu de la republier", async () => {
+    // Nous détenons un mandat de MARTIN Alice sur 01001, clos. Le registre la nomme à nouveau :
+    // c'est une réélection. Créer une fiche produirait un doublon publié ; rouvrir l'ancien
+    // mandat écraserait sa date de début et effacerait le mandat précédent. Il faut un second
+    // mandat sur la fiche existante.
     h.findMandateLocals.mockImplementation(
       async (args: { where: { mandate: { isCurrent: boolean } } }) =>
         args.where.mandate.isCurrent
@@ -209,8 +211,64 @@ describe("RNE write suspension", () => {
     const result = await syncRNEMaires({ dryRun: true });
 
     expect(result.errors).toEqual([]);
-    expect(result.officialsUpdated).toBe(1);
+    // Aucune fiche créée, aucune fiche mise à jour : un mandat de plus, c'est tout.
     expect(result.officialsCreated).toBe(0);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.mandatesCreated).toBe(1);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
+  it("ne ressuscite pas un ancien maire à côté de celui en place", async () => {
+    // Le registre est en retard et nomme encore MARTIN Alice, dont nous détenons le mandat
+    // clos. Mais la commune a un maire en exercice, issu des municipales. Traiter le mandat
+    // clos en premier mettrait deux maires courants sur une commune.
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? [
+              {
+                id: "local-incumbent",
+                rneExternalId: null,
+                communeId: "01001",
+                mandate: {
+                  id: "incumbent-mandate",
+                  politicianId: "elected-in-march",
+                  startDate: new Date("2026-03-26"),
+                  politician: {
+                    firstName: "Bob",
+                    lastName: "DURAND",
+                    birthDate: new Date("1955-01-01"),
+                  },
+                },
+              },
+            ]
+          : [
+              {
+                id: "local-closed",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "former-mayor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    // Le maire en place est jugé, pas contourné : une fermeture, et un mandat pour la personne
+    // que nous connaissons déjà.
+    expect(result.mandatesClosed).toBe(1);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesCreated).toBe(1);
   });
 
   it("ne rouvre pas le mandat fermé de quelqu'un d'autre", async () => {

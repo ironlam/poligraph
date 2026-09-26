@@ -50,6 +50,7 @@ data/affairs-compliance-audit.json
 
 # Conviction audit ledger (#566), regenerated locally
 data/audit-convictions.json
+data/rne-undecided.csv
 
 # Portrait pass report (repair-portraits.ts) — holds the from/to URL pairs a
 # rollback would need, regenerated on each run

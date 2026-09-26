@@ -20,7 +20,10 @@
  *
  * Usage:
  *   NEXT_PUBLIC_SENTRY_ENABLED=false npx tsx --env-file=.env scripts/repair-rne-overwritten-identities.ts
- *   NEXT_PUBLIC_SENTRY_ENABLED=false npx tsx --env-file=.env scripts/repair-rne-overwritten-identities.ts --apply
+ *   NEXT_PUBLIC_SENTRY_ENABLED=false npx tsx --env-file=.env scripts/repair-rne-overwritten-identities.ts --only=slug-a,slug-b --apply
+ *
+ * `--apply` requires `--only`. Erasing a civil status is irreversible and the list is meant to
+ * be arbitrated row by row, so there is no way to wipe every row with one flag.
  */
 
 import { parse } from "csv-parse/sync";
@@ -35,6 +38,21 @@ import type { MaireRNECSV } from "@/services/sync/types";
 
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
+  const onlyArg = process.argv.find((arg) => arg.startsWith("--only="));
+  const only = new Set(
+    (onlyArg?.slice("--only=".length) ?? "")
+      .split(",")
+      .map((slug) => slug.trim())
+      .filter(Boolean)
+  );
+
+  if (apply && only.size === 0) {
+    console.error(
+      "--apply exige --only=<slug,…> : ces effacements sont irréversibles et s'arbitrent ligne par ligne."
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   const url = await resolveRneResourceUrl(RNE_MAIRES_FRAGMENTS);
   console.log(`Registre : ${url}`);
@@ -195,14 +213,24 @@ async function main(): Promise<void> {
     return;
   }
 
-  for (const s of suspects) {
+  const unknown = [...only].filter((slug) => !suspects.some((s) => s.slug === slug));
+  if (unknown.length > 0) {
+    console.error(`Slugs absents de la liste à effacer : ${unknown.join(", ")}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  let erased = 0;
+  for (const entry of suspects) {
+    if (!only.has(entry.slug)) continue;
     await db.politician.update({
-      where: { id: s.politicianId },
+      where: { id: entry.politicianId },
       data: { birthDate: null, civility: null },
     });
-    console.log(`  Effacé : ${s.slug}`);
+    console.log(`  Effacé : ${entry.slug}`);
+    erased++;
   }
-  console.log(`\n${suspects.length} fiche(s) remises à null.`);
+  console.log(`\n${erased} fiche(s) remises à null.`);
 
   await db.$disconnect();
 }
