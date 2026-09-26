@@ -1,5 +1,6 @@
 import { IDENTITY_THRESHOLDS, scoreCandidate } from "@/lib/identity";
 import type { CachedPolitician, ScoringInput } from "@/lib/identity";
+import { sameCalendarDay } from "./rne-parse";
 
 export interface HolderFacts {
   firstName: string | null;
@@ -22,7 +23,10 @@ function nameWords(value: string | null): string[] {
 }
 
 /**
- * Last names must agree before anything else is scored.
+ * Whether two name parts agree, disagree, or cannot be told apart.
+ *
+ * Written for surnames, which must agree before anything else is scored, and reused on first
+ * names to recognise a name of use against a birth name.
  *
  * `resolveBatch` looks candidates up by normalized last name first (resolver.ts) and only
  * then calls `scoreCandidate` to rank them, so the scorer assumes the last name already
@@ -41,7 +45,7 @@ function nameWords(value: string | null): string[] {
  *    "MARTINEZ" without being the same name, so this is a question, not an answer.
  * 3. Nothing in common: a real succession.
  */
-function lastNameVerdict(a: string | null, b: string | null): HolderVerdict {
+function nameVerdict(a: string | null, b: string | null): HolderVerdict {
   const left = nameWords(a);
   const right = nameWords(b);
   if (left.length === 0 || right.length === 0) return "UNDECIDED";
@@ -112,19 +116,39 @@ export function decidePhase1Action(input: {
 /**
  * Whether the register row and the current holder of a mandate are the same person.
  *
- * Goes through the identity resolver rather than comparing strings: a name alone is not an
- * identity (two different people shared a birth date in La Bourboule) and an exact match is
- * not a requirement either (the register carries civil names, our base often carries usage
- * names). Three verdicts, per the project rule that only a score above AUTO_MATCH links
- * automatically and anything in between needs a human.
+ * Both verdicts need positive evidence, because both are acted on. SAME refreshes a profile's
+ * civil status; DIFFERENT closes a sitting mayor's mandate and publishes a second profile for
+ * the commune. Anything short of evidence is UNDECIDED, and UNDECIDED writes nothing.
  *
- * Without a birth date on either side the comparison has no discriminating signal, so the
- * answer is UNDECIDED and the caller leaves the row alone.
+ * Evidence of the same person: the surnames agree and the resolver scores above AUTO_MATCH.
+ * Evidence of a different person: two known birth dates that disagree, or two surnames with
+ * nothing in common while both birth dates are known.
+ *
+ * What is deliberately NOT evidence of a different person:
+ *
+ * - A missing birth date on either side. The register lags the March 2026 municipal results,
+ *   and mayors elected then often have no birth date on file: closing their mandate on a name
+ *   comparison alone would let a stale register overrule an election.
+ * - A low resolver score while the birth dates agree. The first-name signal knows only exact
+ *   and substring, no edit distance, so "Franck" against "Frank" scores 0.36. A spelling
+ *   variant is a question, not a succession.
  */
 export function compareHolder(incoming: HolderFacts, current: HolderFacts): HolderVerdict {
-  const byName = lastNameVerdict(incoming.lastName, current.lastName);
-  if (byName !== "SAME") return byName;
+  // First, because every verdict below rests on it. A comparison with an unknown birth date
+  // on one side has no discriminating signal in either direction.
   if (incoming.birthDate === null || current.birthDate === null) return "UNDECIDED";
+
+  const byName = nameVerdict(incoming.lastName, current.lastName);
+  if (byName === "UNDECIDED") return "UNDECIDED";
+  if (byName === "DIFFERENT") {
+    // A name of use against a birth name. Two unrelated surnames on the same first name and
+    // the same birth date is a woman who married or divorced, not a succession: measured on
+    // the register, every single row of this shape is one. Calling it a succession would close
+    // her mandate and publish her twice, once under each surname.
+    const byFirstName = nameVerdict(incoming.firstName, current.firstName);
+    const sameBirth = sameCalendarDay(incoming.birthDate, current.birthDate);
+    return byFirstName === "SAME" && sameBirth ? "UNDECIDED" : "DIFFERENT";
+  }
 
   const input: ScoringInput = {
     firstName: incoming.firstName ?? "",
@@ -146,8 +170,10 @@ export function compareHolder(incoming: HolderFacts, current: HolderFacts): Hold
   // `fellegiSunter` block that does carry one is only populated when a name-frequency cache is
   // passed in, which would mean a database read per row.
   const { score } = scoreCandidate(input, candidate, new Set<string>());
-
   if (score >= IDENTITY_THRESHOLDS.AUTO_MATCH) return "SAME";
-  if (score < IDENTITY_THRESHOLDS.REVIEW) return "DIFFERENT";
-  return "UNDECIDED";
+
+  // Paris calendar day, not UTC: a birth date stored as Paris midnight sits at 23:00Z the day
+  // before, while the register is parsed at noon UTC. Comparing UTC days would call two
+  // identical dates different, and turn a spelling variant into a succession.
+  return sameCalendarDay(incoming.birthDate, current.birthDate) ? "UNDECIDED" : "DIFFERENT";
 }

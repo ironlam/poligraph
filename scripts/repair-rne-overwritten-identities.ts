@@ -6,10 +6,16 @@
  * When a commune changed mayor, the successor's civil status landed on the predecessor's
  * profile.
  *
- * The signature of such a row is a name that no longer matches the register while the birth
- * date matches it exactly: the birth date could only have come from the register.
+ * The signature of such a row is a birth date that matches the register exactly while the
+ * holder is demonstrably someone else.
  *
- * Under `--apply` the affected profiles have `birthDate` and `civility` set back to `null`.
+ * "Demonstrably" is the whole difficulty. A name that merely fails to match is not enough: the
+ * register writes civil names where we often hold usage names, so a widened surname or an
+ * extra given name looks like a mismatch and is not one. Only a `DIFFERENT` verdict, which
+ * requires two unrelated surnames, is acted on. `UNDECIDED` rows are listed for a human and
+ * never touched: erasing them would destroy correct data on the strength of a spelling.
+ *
+ * Under `--apply` the acted-on profiles have `birthDate` and `civility` set back to `null`.
  * They belong to someone else, and no source gives us the original holder's own.
  *
  * Usage:
@@ -22,16 +28,10 @@ import { parse } from "csv-parse/sync";
 import { HTTPClient } from "@/lib/api/http-client";
 import { db } from "@/lib/db";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
-import { parseMaireRows } from "@/services/sync/rne-parse";
+import { parisCalendarDay, parseMaireRows } from "@/services/sync/rne-parse";
 import { compareHolder } from "@/services/sync/rne-holder";
 import { RNE_MAIRES_FRAGMENTS, resolveRneResourceUrl } from "@/services/sync/rne-resource";
 import type { MaireRNECSV } from "@/services/sync/types";
-
-/** Same calendar day, whatever the time component each source stored. */
-function sameDay(a: Date | null, b: Date | null): boolean {
-  if (a === null || b === null) return false;
-  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
-}
 
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
@@ -80,7 +80,22 @@ async function main(): Promise<void> {
   });
   console.log(`  ${held.length} mandats issus du registre en base\n`);
 
-  const suspects = [];
+  type Suspect = {
+    inseeCode: string;
+    commune: string;
+    politicianId: string;
+    slug: string;
+    base: string;
+    registre: string;
+    birthDate: string;
+    civility: string;
+    verdict: string;
+    isCurrent: boolean;
+  };
+
+  const suspects: Suspect[] = [];
+  const review: Suspect[] = [];
+  const offByOne: Suspect[] = [];
   const seen = new Set<string>();
   for (const local of held) {
     const row = byInsee.get(local.rneExternalId!);
@@ -88,8 +103,41 @@ async function main(): Promise<void> {
 
     const holder = local.mandate.politician;
     if (seen.has(local.mandate.politicianId)) continue;
-    // The birth date is the tell: it matches the register exactly while the name does not.
-    if (!sameDay(holder.birthDate, row.birthDate)) continue;
+    if (holder.birthDate === null || row.birthDate === null) continue;
+
+    // Paris calendar day, never UTC: 34 664 of these birth dates are stored at Paris midnight,
+    // which is 22:00Z or 23:00Z the day before. Reading them as UTC shifts every one of them
+    // by a day, which both hides real matches and invents false ones.
+    const day = parisCalendarDay(holder.birthDate);
+    const registerDay = parisCalendarDay(row.birthDate);
+    if (day !== registerDay) {
+      // One day apart is the exact artefact a UTC reading produces on a Paris-midnight value.
+      // Reported separately so a human can tell a genuine day of difference from a legacy
+      // timezone bug, rather than have the distinction made silently here.
+      const apart = Math.abs(holder.birthDate.getTime() - row.birthDate.getTime());
+      if (apart > 36 * 3_600_000) continue;
+
+      const near = compareHolder(
+        { firstName: row.firstName, lastName: row.lastName, birthDate: row.birthDate },
+        { firstName: holder.firstName, lastName: holder.lastName, birthDate: row.birthDate }
+      );
+      if (near !== "SAME") {
+        offByOne.push({
+          inseeCode: local.rneExternalId!,
+          commune: row.communeLabel ?? "",
+          politicianId: local.mandate.politicianId,
+          slug: holder.slug,
+          base: `${holder.firstName} ${holder.lastName}`,
+          registre: `${row.firstName} ${row.lastName}`,
+          birthDate: `${day} en base, ${registerDay} au registre`,
+          civility: holder.civility ?? "",
+          verdict: near,
+          isCurrent: local.mandate.isCurrent,
+        });
+        seen.add(local.mandate.politicianId);
+      }
+      continue;
+    }
 
     const verdict = compareHolder(
       { firstName: row.firstName, lastName: row.lastName, birthDate: row.birthDate },
@@ -97,7 +145,7 @@ async function main(): Promise<void> {
     );
     if (verdict === "SAME") continue;
 
-    suspects.push({
+    const entry: Suspect = {
       inseeCode: local.rneExternalId!,
       commune: row.communeLabel ?? "",
       politicianId: local.mandate.politicianId,
@@ -108,25 +156,37 @@ async function main(): Promise<void> {
       civility: holder.civility ?? "",
       verdict,
       isCurrent: local.mandate.isCurrent,
-    });
+    };
+    // UNDECIDED is a question, not a finding. Acting on it would erase the civil status of
+    // people whose only fault is a name written two ways.
+    if (verdict === "DIFFERENT") suspects.push(entry);
+    else review.push(entry);
     seen.add(local.mandate.politicianId);
   }
 
-  if (suspects.length === 0) {
-    console.log("Aucune fiche suspecte.");
-    await db.$disconnect();
-    return;
+  function show(entry: Suspect): void {
+    console.log(`  ${entry.inseeCode}  ${entry.commune}`);
+    console.log(`    base     : ${entry.base} (${entry.slug})`);
+    console.log(`    registre : ${entry.registre}`);
+    console.log(`    naissance écrite : ${entry.birthDate}   civilité : ${entry.civility}`);
+    console.log(`    mandat courant : ${entry.isCurrent ? "oui" : "non"}\n`);
   }
 
   console.log(
-    `${suspects.length} fiche(s) dont la naissance vient du registre mais pas le nom :\n`
+    `${offByOne.length} fiche(s) à un jour d'écart, INTOUCHÉES (ambiguïté de fuseau héritée) :\n`
   );
-  for (const s of suspects) {
-    console.log(`  ${s.inseeCode}  ${s.commune}`);
-    console.log(`    base     : ${s.base} (${s.slug})`);
-    console.log(`    registre : ${s.registre}`);
-    console.log(`    naissance écrite : ${s.birthDate}   civilité : ${s.civility}`);
-    console.log(`    verdict  : ${s.verdict}   mandat courant : ${s.isCurrent ? "oui" : "non"}\n`);
+  for (const entry of offByOne) show(entry);
+
+  console.log(`${review.length} fiche(s) à arbitrer, INTOUCHÉES (verdict indécis) :\n`);
+  for (const entry of review) show(entry);
+
+  console.log(`${suspects.length} fiche(s) à effacer (deux noms sans rapport) :\n`);
+  for (const entry of suspects) show(entry);
+
+  if (suspects.length === 0) {
+    console.log("Rien à effacer.");
+    await db.$disconnect();
+    return;
   }
 
   if (!apply) {

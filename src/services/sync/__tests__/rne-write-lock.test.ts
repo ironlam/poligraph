@@ -180,6 +180,71 @@ describe("RNE write suspension", () => {
     expect(result.mandatesClosed).toBe(0);
   });
 
+  it("rouvre un mandat fermé plutôt que de republier son titulaire", async () => {
+    // Nous détenons le mandat de MARTIN Alice sur 01001, mais fermé. Le registre la nomme à
+    // nouveau. Créer une fiche produirait un doublon publié ; il faut rouvrir.
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-1",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "same-person",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsUpdated).toBe(1);
+    expect(result.officialsCreated).toBe(0);
+  });
+
+  it("ne rouvre pas le mandat fermé de quelqu'un d'autre", async () => {
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-1",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "predecessor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Bob",
+                    lastName: "DURAND",
+                    birthDate: new Date("1955-01-01"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsCreated).toBe(1);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
   it("keeps statistics available without external requests", async () => {
     expect(await getRNEStats()).toEqual({
       totalMaires: 1,

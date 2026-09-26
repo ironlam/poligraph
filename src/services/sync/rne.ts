@@ -112,6 +112,8 @@ interface UpsertCounts {
   created: number;
   /** Mandates Phase 1 closed, so the final report does not have to infer the number. */
   closed: number;
+  /** Closed mandates reopened because the register names their holder again. */
+  reopened: number;
   /** Mandates Phase 1 already ruled on, which Phase 3 must not judge again. */
   handledInPhase1: Set<string>;
   errors: string[];
@@ -125,16 +127,25 @@ type ExistingMaire = {
   holder: HolderFacts;
 };
 
-/** Existing MandateLocal rows keyed by the INSEE code they were imported under. */
-async function loadExistingByInsee(): Promise<Map<string, ExistingMaire>> {
+/**
+ * MandateLocal rows keyed by the INSEE code they were imported under.
+ *
+ * Split by `isCurrent` on purpose. Only a running occupancy can be the current holder: mixing
+ * closed predecessors into that map lets one of them win and triggers an endless chain of
+ * successions, a mayor more per run. But the closed ones are not noise either, so they get
+ * their own map: 14 396 of our register-sourced mandates are closed, and when the register
+ * names that same person again, reopening the mandate is the answer. Creating a profile
+ * instead would publish the same mayor twice.
+ */
+async function loadByInsee(isCurrent: boolean): Promise<Map<string, ExistingMaire>> {
   const existing = new Map<string, ExistingMaire>();
 
   const rows = await db.mandateLocal.findMany({
     where: {
       rneExternalId: { not: null },
-      // Only a running occupancy can be the current holder. Without this, a closed
-      // predecessor could win the map and trigger an endless chain of successions.
-      mandate: { isCurrent: true },
+      // MAIRE only: the day another importer stamps an `rneExternalId` on a deputy-mayor's
+      // local mandate, this would retitle it "Maire de X" and mark it current.
+      mandate: { isCurrent, type: MandateType.MAIRE },
     },
     orderBy: { mandate: { startDate: "desc" } },
     select: {
@@ -166,7 +177,9 @@ async function loadExistingByInsee(): Promise<Map<string, ExistingMaire>> {
     });
   }
 
-  console.log(`  Loaded ${existing.size} existing MandateLocal records by INSEE code`);
+  console.log(
+    `  Loaded ${existing.size} ${isCurrent ? "current" : "closed"} MandateLocal records by INSEE code`
+  );
   return existing;
 }
 
@@ -311,8 +324,10 @@ async function upsertMaires(
   verbose: boolean,
   dryRun: boolean
 ): Promise<UpsertCounts> {
-  const existingByInsee = await loadExistingByInsee();
+  const existingByInsee = await loadByInsee(true);
+  const closedByInsee = await loadByInsee(false);
   const incumbentByCommune = await loadCurrentMayorsByCommune();
+  let reopened = 0;
   const counts: UpsertCounts = {
     same: 0,
     different: 0,
@@ -320,6 +335,7 @@ async function upsertMaires(
     undecided: 0,
     created: 0,
     closed: 0,
+    reopened: 0,
     handledInPhase1: new Set<string>(),
     errors: [],
   };
@@ -333,7 +349,22 @@ async function upsertMaires(
           birthDate: row.birthDate,
         };
         const endDate = row.functionStart ?? mandateStartDate(row);
-        const existingMandate = existingByInsee.get(row.inseeCode) ?? null;
+
+        let existingMandate = existingByInsee.get(row.inseeCode) ?? null;
+        let existingVerdict = existingMandate
+          ? compareHolder(incoming, existingMandate.holder)
+          : null;
+
+        if (!existingMandate) {
+          // We hold this commune's mandate but it is closed. If the register names the same
+          // person again, reopen it rather than publish a second profile for them.
+          const closedMandate = closedByInsee.get(row.inseeCode) ?? null;
+          if (closedMandate && compareHolder(incoming, closedMandate.holder) === "SAME") {
+            existingMandate = closedMandate;
+            existingVerdict = "SAME";
+            reopened++;
+          }
+        }
 
         // Only consulted when Phase 1 holds no register mandate and the commune resolved:
         // a lookup keyed on a null commune would match any mayor without one, and adopt a
@@ -344,12 +375,13 @@ async function upsertMaires(
             : null;
 
         const action = decidePhase1Action({
-          existing: existingMandate
-            ? {
-                verdict: compareHolder(incoming, existingMandate.holder),
-                closable: isChronologicallyClosable(existingMandate.startDate, endDate),
-              }
-            : null,
+          existing:
+            existingMandate && existingVerdict
+              ? {
+                  verdict: existingVerdict,
+                  closable: isChronologicallyClosable(existingMandate.startDate, endDate),
+                }
+              : null,
           hasCommuneId: row.communeId !== null,
           incumbent: incumbent
             ? {
@@ -433,17 +465,20 @@ async function upsertMaires(
     }
   }
 
+  counts.reopened = reopened;
   return counts;
 }
 
-/** The five numbers Phase 1 reports, in the order a human reads them. */
+/** The numbers Phase 1 reports, in the order a human reads them. */
 function logPhase1Counts(counts: UpsertCounts, dryRun: boolean): void {
   const prefix = dryRun ? "  [DRY-RUN]" : " ";
   console.log(`${prefix} Même titulaire (SAME):     ${counts.same}`);
   console.log(`${prefix} Succession (DIFFERENT):    ${counts.different}`);
   console.log(`${prefix} Indécis (UNDECIDED):       ${counts.undecided}`);
   console.log(`${prefix} Adoptions:                 ${counts.adopted}`);
-  console.log(`${prefix} Créations:                 ${counts.created}`);
+  console.log(`${prefix} Réouvertures:              ${counts.reopened}`);
+  // A succession creates a profile too, so the display would undercount by `different`.
+  console.log(`${prefix} Créations:                 ${counts.created + counts.different}`);
   console.log(`${prefix} Erreurs:                   ${counts.errors.length}`);
 }
 
@@ -584,8 +619,10 @@ async function closeStaleMandates(
   console.log("\n--- Phase 3: Close stale mandates ---");
 
   const stale = snapshot.filter((mandate) => {
-    // Phase 1 already ruled on this mandate, doubts included. Judging it again here would
-    // apply a second rule to a decision that was taken with more evidence.
+    // Phase 1 already ruled on this mandate, doubts included. Redundant today, since a
+    // mandate Phase 1 judged has its identifier in `seenCommuneIds` and the next line already
+    // excludes it. Kept as a belt: the two exclusions rest on different facts, and the day
+    // Phase 3 stops keying on the commune this is the one that still holds.
     if (handledInPhase1.has(mandate.id)) return false;
     const identifier = mandate.localData?.rneExternalId || mandate.localData?.communeId;
     return identifier && !seenCommuneIds.has(identifier);
