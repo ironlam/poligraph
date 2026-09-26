@@ -20,11 +20,16 @@ import { GET } from "./route";
 const context = { params: Promise.resolve({ id: "politician-1" }) };
 const request = new NextRequest("https://poligraph.fr/api/images/politician-1");
 
+/**
+ * Corps en octets et non en chaîne : le constructeur `Response` ajoute de lui-même
+ * `text/plain;charset=UTF-8` sur une chaîne sans en-tête, si bien que le cas « aucun en-tête »
+ * testait en réalité `text/plain`. Avec des octets, l'en-tête reste bien absent.
+ */
 function sourceRepond(contentType: string | null) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
-      new Response("corps", {
+      new Response(new Uint8Array([1, 2, 3]), {
         status: 200,
         headers: contentType === null ? {} : { "content-type": contentType },
       })
@@ -47,12 +52,17 @@ describe("GET /api/images/[id]", () => {
     mocks.put.mockResolvedValue({ url: "https://blob.example/politicians/politician-1" });
   });
 
-  it("met en cache une vraie image", async () => {
-    sourceRepond("image/jpeg");
+  it.each([
+    { envoye: "image/jpeg", cas: "le cas nominal" },
+    { envoye: "IMAGE/JPEG", cas: "un type en capitales, légal car insensible à la casse" },
+    { envoye: " image/jpeg ; charset=binary", cas: "un paramètre et des espaces" },
+  ])("met en cache une vraie image annoncée $envoye ($cas)", async ({ envoye }) => {
+    sourceRepond(envoye);
 
     const response = await GET(request, context);
 
     expect(mocks.put).toHaveBeenCalledOnce();
+    // Le type stocké est normalisé, pas recopié tel quel.
     expect(mocks.put.mock.calls[0]![2]).toMatchObject({ contentType: "image/jpeg" });
     expect(mocks.update).toHaveBeenCalledOnce();
     expect(response.status).toBe(302);

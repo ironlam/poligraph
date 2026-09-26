@@ -37,7 +37,12 @@ export const GET = withPublicRoute(async (_req, { params }) => {
       return new NextResponse(null, { status: 404 });
     }
 
-    const contentType = sourceResponse.headers.get("content-type") ?? "";
+    // Media types are case-insensitive and may carry parameters, so the header is normalised
+    // before it decides anything and before it is stored. Same shape as `loadOgPortrait`.
+    const contentType = (sourceResponse.headers.get("content-type") ?? "")
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase();
 
     // A 200 does not mean an image. Public French institutional sites answer an interstitial or a
     // blocking page with a 200 and an HTML body, and this route used to store that body verbatim,
@@ -48,7 +53,7 @@ export const GET = withPublicRoute(async (_req, { params }) => {
     //
     // No default content type either. `|| "image/jpeg"` was the other half of the hole: a source
     // that sends no header at all would have had its body labelled as a JPEG on our side.
-    if (!contentType.startsWith("image/")) {
+    if (!contentType || !contentType.startsWith("image/")) {
       return new NextResponse(null, { status: 404 });
     }
 
