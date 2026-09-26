@@ -347,6 +347,23 @@ describe("screenCandidateSynthesis", () => {
     expect(result).toMatchObject({ ok: false, reason: "modalite" });
   });
 
+  it("refuse un axe coupé sur une parenthèse orpheline", () => {
+    // Observé en production sur la fiche Ruffin : la réponse s'est arrêtée dans un marqueur de
+    // preuve, `stripEvidenceMarkers` a retiré le « M12 » résiduel, et la parenthèse restée seule
+    // a traversé tous les filtres jusqu'au texte publiable.
+    const raw = output([
+      {
+        text: "Le programme encadre les échanges entre acteurs publics et privés et crée une autorité de contrôle ( M1",
+        measureRefs: ["M1", "M2"],
+      },
+      { text: transportAxis, measureRefs: ["M3"] },
+    ]);
+
+    const result = screenCandidateSynthesis(raw, BASE);
+
+    expect(result).toMatchObject({ ok: false, reason: "tronque" });
+  });
+
   it("laisse une quantité inventée primer sur le défaut de modalité", () => {
     // Le contrôle de modalité est volontairement le dernier de la chaîne. Ce cas le pin :
     // l'axe cumule les deux défauts, et c'est le chiffre inventé qu'un modérateur doit lire,

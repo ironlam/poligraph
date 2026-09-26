@@ -16,6 +16,7 @@ import { z } from "zod";
 import type { ThemeCategory } from "@/generated/prisma";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { isAttributedClaim, UNATTRIBUTED_CLAIM_DETAIL } from "./claim-attribution";
+import { isTruncatedClaim, TRUNCATED_CLAIM_DETAIL } from "./claim-integrity";
 
 /** Longest a short identity field may be before it goes into the prompt. */
 const FIELD_LIMIT = 240;
@@ -684,6 +685,15 @@ export function screenCandidateSynthesis(
         ok: false,
         reason: "style",
         detail: "les références de preuves doivent rester dans measureRefs",
+      };
+    }
+    // Checked on the text AFTER the evidence markers are stripped, because stripping is what
+    // leaves the orphan bracket behind when the provider was cut off inside one.
+    if (!claimFailure && isTruncatedClaim(publicText)) {
+      claimFailure = {
+        ok: false,
+        reason: "tronque",
+        detail: TRUNCATED_CLAIM_DETAIL,
       };
     }
     const evidence = cited.map((measure) => measure.text).join(" ");
