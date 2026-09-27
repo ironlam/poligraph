@@ -39,6 +39,33 @@ function isReactStreamingScriptError(event: Sentry.ErrorEvent): boolean {
   );
 }
 
+// Our own browser code is always served from a chunk, so every frame of a real application error
+// names one. A stack whose frames all point at a page URL instead belongs to a script the browser
+// injected into the document: an in-app WebView, an extension, a reader mode. Observed so far:
+// `__firefox__` on /statistiques, `window.webkit.messageHandlers` on /recherche, a MetaMask probe
+// on /statistiques, and a `RangeError` recursion from the Google iOS app.
+//
+// Those arrive as SEVERAL issues for one cause. An injected script keeps the URL of the document
+// it was injected into while the SPA navigates away, so the same bug groups once per landing page
+// and a burst of five looks like five regressions. Collapsing the family under one fingerprint
+// turns that into a single issue that can be muted once, and keeps it visible rather than dropping
+// it: this code cannot be fixed here, but a change in its shape is still worth seeing.
+//
+// Deliberately not a drop, and deliberately narrow. An exception with no frames at all (the
+// cross-origin "Script error.") is left alone, because absence of frames proves nothing about
+// whose code threw.
+const INJECTED_SCRIPT_FINGERPRINT = "third-party-injected-script";
+const APP_CHUNK_PATH = "_next/static";
+
+function isInjectedScriptError(event: Sentry.ErrorEvent): boolean {
+  const values = event.exception?.values ?? [];
+  const frames = values.flatMap((value) => value.stacktrace?.frames ?? []);
+  if (frames.length === 0) return false;
+  return frames.every(
+    (frame) => !(frame.filename ?? frame.abs_path ?? "").includes(APP_CHUNK_PATH)
+  );
+}
+
 if (SENTRY_ENABLED) {
   Sentry.init({
     dsn: SENTRY_DSN,
@@ -60,10 +87,17 @@ if (SENTRY_ENABLED) {
           }),
         ],
     beforeSend(event) {
-      if (!isReactStreamingScriptError(event)) return event;
-      if (reactStreamingReported) return null;
-      reactStreamingReported = true;
-      return { ...event, fingerprint: [REACT_STREAMING_FINGERPRINT] };
+      if (isReactStreamingScriptError(event)) {
+        if (reactStreamingReported) return null;
+        reactStreamingReported = true;
+        return { ...event, fingerprint: [REACT_STREAMING_FINGERPRINT] };
+      }
+      // Checked after the React family, which is inline in the document and would otherwise match
+      // the injected-script shape too.
+      if (isInjectedScriptError(event)) {
+        return { ...event, fingerprint: [INJECTED_SCRIPT_FINGERPRINT] };
+      }
+      return event;
     },
     ignoreErrors: [
       "ResizeObserver loop limit exceeded",
