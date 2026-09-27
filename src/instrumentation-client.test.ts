@@ -162,3 +162,68 @@ describe("Scripts de streaming React : bruit non actionnable", () => {
     expect(beforeSend!(hydration)).toBe(hydration);
   });
 });
+
+/** An event whose frames all sit in the document, the shape a browser-injected script produces. */
+function injectedScriptEvent(frames: { function?: string; filename: string }[]): SentryEvent {
+  return {
+    exception: {
+      values: [
+        { type: "TypeError", value: "peu importe", stacktrace: { frames: frames as unknown[] } },
+      ],
+    },
+  };
+}
+
+describe("Scripts injectés par le navigateur : une cause, une issue", () => {
+  it("regroupe sous une empreinte unique quand aucune frame ne vient d'un chunk", async () => {
+    const { beforeSend } = await bootAt("/");
+    const event = injectedScriptEvent([
+      { function: "Qk", filename: "app:///programmes" },
+      { function: "Ok", filename: "app:///programmes" },
+    ]);
+
+    expect(beforeSend!(event)?.fingerprint).toEqual(["third-party-injected-script"]);
+  });
+
+  it("donne la même empreinte quelle que soit la page d'atterrissage", async () => {
+    const { beforeSend } = await bootAt("/");
+    // C'est tout l'intérêt : un script injecté garde l'URL du document où il a été injecté, donc
+    // la même cause produisait cinq issues distinctes (POLIGRAPH-31 à 35).
+    const depuisProgrammes = beforeSend!(
+      injectedScriptEvent([{ function: "Qk", filename: "app:///programmes" }])
+    );
+    const depuisCandidats = beforeSend!(
+      injectedScriptEvent([
+        { function: "Qk", filename: "app:///elections/presidentielle-2027/candidats" },
+      ])
+    );
+
+    expect(depuisProgrammes?.fingerprint).toEqual(depuisCandidats?.fingerprint);
+  });
+
+  it("laisse passer une vraie erreur applicative, qui vient toujours d'un chunk", async () => {
+    const { beforeSend } = await bootAt("/");
+    const applicative = injectedScriptEvent([
+      { function: "onClick", filename: "app:///_next/static/chunks/app/page-abc123.js" },
+      { function: "handler", filename: "app:///affaires/condamnations" },
+    ]);
+
+    expect(beforeSend!(applicative)).toBe(applicative);
+  });
+
+  it("ne touche pas à une exception sans frame", async () => {
+    const { beforeSend } = await bootAt("/");
+    // « Script error. » cross-origin : l'absence de frames ne prouve rien sur l'auteur du throw.
+    const sansFrame = injectedScriptEvent([]);
+
+    expect(beforeSend!(sansFrame)).toBe(sansFrame);
+  });
+
+  it("laisse la famille React de streaming à son propre traitement", async () => {
+    const { beforeSend } = await bootAt("/");
+    // Ses frames sont inline dans le document, donc elle matcherait aussi la forme « injectée ».
+    const streaming = reactStreamingEvent("$RS", "parentNode est null");
+
+    expect(beforeSend!(streaming)?.fingerprint).toEqual(["react-streaming-reveal-script"]);
+  });
+});
