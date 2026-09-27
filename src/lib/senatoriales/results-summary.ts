@@ -18,6 +18,8 @@ export interface ElectedRow {
   round2Votes: number | null;
   politicianId: string | null;
   politicianSlug: string | null;
+  /** Only a published record gets a link: a draft or excluded one answers 404. */
+  politicianPublished: boolean;
   gender: string | null;
   updatedAt: Date;
 }
@@ -60,7 +62,7 @@ export function summariseResults(
       nuanceLabel: r.partyLabel,
       round: r.round2Votes !== null ? (2 as const) : (1 as const),
       politicianId: r.politicianId,
-      politicianSlug: r.politicianId ? r.politicianSlug : null,
+      politicianSlug: r.politicianId && r.politicianPublished ? r.politicianSlug : null,
       status:
         r.politicianId === null
           ? ("unresolved" as const)

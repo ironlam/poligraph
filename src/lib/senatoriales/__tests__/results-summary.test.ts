@@ -9,6 +9,7 @@ const row = (over: Partial<ElectedRow> = {}): ElectedRow => ({
   round2Votes: null,
   politicianId: null,
   politicianSlug: null,
+  politicianPublished: true,
   gender: "F",
   updatedAt: new Date("2026-09-27T20:00:00Z"),
   ...over,
@@ -31,6 +32,22 @@ describe("summariseResults", () => {
     const s = summariseResults([row()], new Set(["p1"]));
     expect(s.elected[0]?.status).toBe("unresolved");
     expect(s).toMatchObject({ reelected: 0, newcomers: 0, unresolved: 1 });
+  });
+
+  it("ne donne pas de lien vers une fiche non publique, sans changer le statut", () => {
+    const s = summariseResults(
+      [row({ politicianId: "p1", politicianSlug: "brouillon", politicianPublished: false })],
+      new Set(["p1"])
+    );
+    expect(s.elected[0]).toMatchObject({ politicianSlug: null, status: "reelected" });
+  });
+
+  it("donne le lien vers une fiche publique", () => {
+    const s = summariseResults(
+      [row({ politicianId: "p1", politicianSlug: "publique", politicianPublished: true })],
+      new Set(["p1"])
+    );
+    expect(s.elected[0]?.politicianSlug).toBe("publique");
   });
 
   it("calcule la part de femmes", () => {
