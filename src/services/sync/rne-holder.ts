@@ -125,6 +125,20 @@ function isExactName(a: string | null, b: string | null): boolean {
 }
 
 /**
+ * How two name parts relate, in one word, for the file a human arbitrates.
+ *
+ * Four words and not three, because two different rules read these names: `compareHolder`
+ * accepts inclusion ("Philippe" inside "Philippe Pierre"), `canAdoptByName` demands equality.
+ * Calling both "concorde" tells the reader a rule should have applied where it could not.
+ */
+export function describeNameRelation(a: string | null, b: string | null): string {
+  if (isExactName(a, b)) return "identique";
+  const verdict = nameVerdict(a, b);
+  if (verdict === "SAME") return "compatible";
+  return verdict === "DIFFERENT" ? "diffère" : "incertain";
+}
+
+/**
  * Whether a commune's sitting mayor can be adopted on the strength of the name alone.
  *
  * This is the one place where an identity is settled without a birth date, so it is written as
@@ -260,8 +274,10 @@ export function decidePhase1Action(input: {
  * civil status; DIFFERENT closes a sitting mayor's mandate and publishes a second profile for
  * the commune. Anything short of evidence is UNDECIDED, and UNDECIDED writes nothing.
  *
- * Evidence of the same person: the surnames agree, and either the resolver scores above
- * AUTO_MATCH or the birth dates are the same day.
+ * Evidence of the same person: the birth dates are the same day, and either the surnames
+ * agree or the first names do. One commune has one mayor at a time, so an exact birth date
+ * plus agreement on either half of the name settles it; names vary between civil and usage
+ * forms, and between a birth name and a married one, while the date does not.
  * Evidence of a different person: two known birth dates that disagree, or two surnames with
  * nothing in common while both birth dates are known.
  *
@@ -284,12 +300,17 @@ export function compareHolder(incoming: HolderFacts, current: HolderFacts): Hold
   if (byName === "UNDECIDED") return "UNDECIDED";
   if (byName === "DIFFERENT") {
     // A name of use against a birth name. Two unrelated surnames on the same first name and
-    // the same birth date is a woman who married or divorced, not a succession: measured on
-    // the register, every single row of this shape is one. Calling it a succession would close
-    // her mandate and publish her twice, once under each surname.
+    // the same birth date, in the same commune, is someone who married or divorced, not a
+    // succession: measured on the register, every row of this shape is one, and 59 of them
+    // remained. Calling it a succession would close her mandate and publish her twice, once
+    // under each surname; calling it a doubt froze her mandate without ever deciding.
+    //
+    // This settles who the mandate belongs to. It does NOT settle which name she goes by: the
+    // profile keeps the one we already hold and stays unfindable under the other, because
+    // `Politician` has a single name and no alias field.
     const byFirstName = nameVerdict(incoming.firstName, current.firstName);
     const sameBirth = sameCalendarDay(incoming.birthDate, current.birthDate);
-    return byFirstName === "SAME" && sameBirth ? "UNDECIDED" : "DIFFERENT";
+    return byFirstName === "SAME" && sameBirth ? "SAME" : "DIFFERENT";
   }
 
   const input: ScoringInput = {

@@ -11,6 +11,7 @@ import {
   canAdoptByName,
   decidePhase2Action,
   decidePhase1Action,
+  describeNameRelation,
   isChronologicallyClosable,
   isFurtherTerm,
   shouldRunStaleSweep,
@@ -126,29 +127,32 @@ describe("compareHolder", () => {
     ).toBe("SAME");
   });
 
-  it("ne confirme pas deux patronymes sans rapport, même prénom et naissance identiques", () => {
+  it("ne confirme pas deux patronymes sans rapport quand les naissances divergent", () => {
     // `scoreCandidate` ne compare PAS les noms de famille : resolveBatch pré-filtre les
-    // candidats dessus avant de l'appeler. Sans porte explicite, ces deux-là sortiraient SAME
-    // et l'ancien maire serait confirmé à tort, le successeur jamais créé.
+    // candidats dessus avant de l'appeler. La porte explicite reste indispensable : sans elle,
+    // ce couple sortirait SAME à 0.98 sur le seul prénom, alors que rien ne les rapproche.
     expect(
       compareHolder(
         { firstName: "Jean", lastName: "Martin", birthDate: new Date("1960-05-03") },
-        { firstName: "Jean", lastName: "Bernard", birthDate: new Date("1960-05-03") }
+        { firstName: "Jean", lastName: "Bernard", birthDate: new Date("1975-11-20") }
       )
-    ).not.toBe("SAME");
+    ).toBe("DIFFERENT");
   });
 
-  it("ne voit pas une succession dans un nom d'usage contre un nom de naissance", () => {
-    // Même prénom, même jour de naissance, patronyme sans rapport : c'est un nom marital, pas
-    // deux personnes. Mesuré le 2026-09-27 : 60 lignes de cette forme sur le registre, toutes
-    // des femmes. Conclure à une succession fermerait leur mandat et publierait la même
-    // personne deux fois, sous chacun de ses deux noms.
+  it("reconnaît un nom d'usage contre un nom de naissance", () => {
+    // Même prénom, même jour de naissance, patronyme sans rapport, même commune : c'est un nom
+    // marital, pas deux personnes. Mesuré le 2026-09-27 : 59 lignes de cette forme. Les tenir
+    // pour indécises gelait leur mandat sans jamais rien trancher ; conclure à une succession
+    // aurait fermé leur mandat et publié la même personne sous chacun de ses deux noms.
+    //
+    // Ce que ce verdict NE règle PAS : la fiche garde le nom que nous détenons déjà, et reste
+    // introuvable sous l'autre. `Politician` n'a pas de champ d'alias.
     expect(
       compareHolder(
         { firstName: "Karine", lastName: "Palle", birthDate: new Date("1972-07-26") },
         { firstName: "Karine", lastName: "Paret", birthDate: new Date("1972-07-26") }
       )
-    ).toBe("UNDECIDED");
+    ).toBe("SAME");
   });
 
   it("voit une succession quand le prénom et le patronyme diffèrent", () => {
@@ -478,5 +482,25 @@ describe("canAdoptByName", () => {
   it("refuse sur un nom vide d'un côté", () => {
     expect(adopt({ current: { firstName: "", lastName: "Martin", birthDate: null } })).toBe(false);
     expect(adopt({ current: { firstName: "Alice", lastName: null, birthDate: null } })).toBe(false);
+  });
+});
+
+describe("describeNameRelation", () => {
+  it("distingue l'égalité stricte de la simple compatibilité", () => {
+    // `canAdoptByName` exige l'égalité, `compareHolder` se contente de l'inclusion. Un seul
+    // mot pour les deux ferait dire au CSV que la règle aurait dû s'appliquer alors qu'elle
+    // ne le pouvait pas : 4 communes sont dans ce cas.
+    expect(describeNameRelation("Philippe", "Philippe")).toBe("identique");
+    expect(describeNameRelation("Philippe", "Philippe Pierre")).toBe("compatible");
+  });
+
+  it("nomme aussi le doute et le désaccord", () => {
+    expect(describeNameRelation("Martin", "Martinez")).toBe("incertain");
+    expect(describeNameRelation("Martin", "Bernard")).toBe("diffère");
+  });
+
+  it("ignore ponctuation et accents, qui ne changent pas un nom", () => {
+    expect(describeNameRelation("Dupont-Aignan", "Dupont Aignan")).toBe("identique");
+    expect(describeNameRelation("ERIC", "Éric")).toBe("identique");
   });
 });
