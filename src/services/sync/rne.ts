@@ -23,6 +23,7 @@ import { normalizeText } from "@/lib/name-matching";
 import { generateSlug } from "@/lib/utils";
 import { mandateLabels, mandateStartDate, parseMaireRows, type ParsedMaireRow } from "./rne-parse";
 import {
+  canAdoptByName,
   compareHolder,
   decidePhase1Action,
   decidePhase2Action,
@@ -123,6 +124,8 @@ interface UpsertCounts {
   different: number;
   /** A mayor we already held under another source, now confirmed by the register. */
   adopted: number;
+  /** Of those, the ones settled on an exact name because our profile had no birth date. */
+  adoptedByName: number;
   /** A row the evidence does not let us decide. Nothing was written. */
   undecided: number;
   /** Brand-new profiles: nobody we hold matches this register row. */
@@ -397,7 +400,8 @@ async function createMaireTerm(
 async function upsertMaires(
   rows: ParsedMaireRow[],
   verbose: boolean,
-  dryRun: boolean
+  dryRun: boolean,
+  duplicateCommuneIds: ReadonlySet<string>
 ): Promise<UpsertCounts> {
   const existingByInsee = await loadByInsee(true);
   const closedByInsee = await loadByInsee(false);
@@ -406,6 +410,7 @@ async function upsertMaires(
     same: 0,
     different: 0,
     adopted: 0,
+    adoptedByName: 0,
     undecided: 0,
     created: 0,
     newTerms: 0,
@@ -465,6 +470,24 @@ async function upsertMaires(
             ? (incumbentByCommune.get(row.communeId) ?? null)
             : null;
 
+        // The sitting mayor's verdict, with the one rule that settles an identity without a
+        // birth date. Counted apart, because it is a rule and not a measurement.
+        let incumbentVerdict = incumbent ? compareHolder(incoming, incumbent.holder) : null;
+        let adoptedByName = false;
+        if (
+          incumbent &&
+          incumbentVerdict &&
+          canAdoptByName({
+            verdict: incumbentVerdict,
+            incoming,
+            current: incumbent.holder,
+            uniqueRegisterRow: !duplicateCommuneIds.has(row.inseeCode),
+          })
+        ) {
+          incumbentVerdict = "SAME";
+          adoptedByName = true;
+        }
+
         const action = decidePhase1Action({
           existing:
             existingMandate && existingVerdict
@@ -476,7 +499,7 @@ async function upsertMaires(
           hasCommuneId: row.communeId !== null,
           incumbent: incumbent
             ? {
-                verdict: compareHolder(incoming, incumbent.holder),
+                verdict: incumbentVerdict!,
                 closable: isChronologicallyClosable(incumbent.startDate, endDate),
               }
             : null,
@@ -526,6 +549,7 @@ async function upsertMaires(
             }
             counts.handledInPhase1.add(incumbent!.mandateId);
             counts.adopted++;
+            if (adoptedByName) counts.adoptedByName++;
             break;
 
           case "close-incumbent-and-create":
@@ -622,6 +646,7 @@ function logPhase1Counts(counts: UpsertCounts, dryRun: boolean): void {
   console.log(`${prefix} Succession (DIFFERENT):    ${counts.different}`);
   console.log(`${prefix} Indécis (UNDECIDED):       ${counts.undecided}`);
   console.log(`${prefix} Adoptions:                 ${counts.adopted}`);
+  console.log(`${prefix}   dont sur nom exact:      ${counts.adoptedByName}`);
   console.log(`${prefix} Fiches créées:             ${counts.created}`);
   console.log(`${prefix} Mandats sur fiche connue:  ${counts.newTerms}`);
   console.log(`${prefix} Erreurs:                   ${counts.errors.length}`);
@@ -1039,7 +1064,7 @@ export async function syncRNEMaires(
   // Phase 1 reads the same evidence and takes the same decisions in both modes; only the
   // writes are suppressed. A dry run whose branching differed from the real one would not
   // measure anything.
-  const upserted = await upsertMaires(parsed.rows, verbose, dryRun);
+  const upserted = await upsertMaires(parsed.rows, verbose, dryRun, parsed.duplicateCommuneIds);
   errors.push(...upserted.errors);
   logPhase1Counts(upserted, dryRun);
   if (upserted.undecidedRows.length > 0) writeUndecidedCsv(upserted.undecidedRows);

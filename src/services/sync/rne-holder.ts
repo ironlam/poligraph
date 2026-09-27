@@ -114,6 +114,60 @@ export function isFurtherTerm(priorStart: Date, registerStart: Date): boolean {
   return registerStart.getTime() - priorStart.getTime() > TERM_SEPARATION_MS;
 }
 
+/** Same name, allowing only for case, accents and punctuation. Inclusion is not equality. */
+function isExactName(a: string | null, b: string | null): boolean {
+  const left = nameWords(a);
+  const right = nameWords(b);
+  if (left.length === 0 || right.length === 0) return false;
+  if (left.length === right.length && left.every((word, i) => word === right[i])) return true;
+  // "Dupont-Aignan" against "Dupont Aignan": the separator is not part of the name.
+  return left.join("") === right.join("");
+}
+
+/**
+ * Whether a commune's sitting mayor can be adopted on the strength of the name alone.
+ *
+ * This is the one place where an identity is settled without a birth date, so it is written as
+ * a rule and not hidden inside a scorer. 1 177 mayors published from the 2026 municipal
+ * results carry no birth date, so `compareHolder` has no discriminating signal and answers
+ * UNDECIDED for every one of them, including the ones whose name matches the register
+ * character for character.
+ *
+ * Copying the register's birth date onto those profiles would settle it too, and worse: the
+ * date would become indistinguishable from a sourced one, and every later comparison would
+ * return SAME by construction, having compared that date with itself. The decision belongs in
+ * the code, where it is visible, counted and revocable.
+ *
+ * What makes the name enough here is the commune. One commune has one mayor at a time, so an
+ * exact full name inside it is an identity, where the same name across France is not.
+ *
+ * Four conditions, and all of them are needed:
+ *
+ * 1. `compareHolder` returned UNDECIDED. A verdict reached on evidence is never overridden.
+ * 2. Our profile carries no birth date. With one, the comparison had a signal and used it.
+ * 3. Both first name and last name are equal, not merely included in one another. "Guy"
+ *    against "Guy Raoul" is probably the same person, and probably is not enough to write.
+ * 4. The register names this commune once. A file that contradicts itself about a commune
+ *    cannot have a name identify anyone in it.
+ *
+ * The caller guarantees the mandate belongs to this commune: it was looked up by commune id.
+ */
+export function canAdoptByName(input: {
+  verdict: HolderVerdict;
+  incoming: HolderFacts;
+  current: HolderFacts;
+  uniqueRegisterRow: boolean;
+}): boolean {
+  if (input.verdict !== "UNDECIDED") return false;
+  if (!input.uniqueRegisterRow) return false;
+  if (input.current.birthDate !== null) return false;
+
+  return (
+    isExactName(input.incoming.firstName, input.current.firstName) &&
+    isExactName(input.incoming.lastName, input.current.lastName)
+  );
+}
+
 /** What Phase 2 does with a profile Phase 1 just created. */
 export type Phase2Action = "merge" | "draft" | "keep";
 

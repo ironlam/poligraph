@@ -145,6 +145,22 @@ describe("parseMaireRows", () => {
     expect(duplicatesDropped).toBe(1);
   });
 
+  it("nomme les communes décrites deux fois, et pas seulement leur nombre", () => {
+    // L'adoption sur nom exact tranche une identité sans date de naissance. Elle ne peut pas
+    // le faire sur une commune où le fichier lui-même se contredit, donc il faut savoir
+    // lesquelles, pas combien.
+    const { duplicateCommuneIds } = parseMaireRows(
+      [
+        csvRow({ "Nom de l'élu": "ANCIEN" }),
+        csvRow({ "Nom de l'élu": "NOUVEAU" }),
+        csvRow({ "Code de la commune": "34172", "Nom de l'élu": "SEUL" }),
+      ],
+      new Set()
+    );
+
+    expect([...duplicateCommuneIds]).toEqual([csvRow({})["Code de la commune"]]);
+  });
+
   it("remembers every INSEE code seen, including deduplicated ones", () => {
     // Phase 3 closes mandates whose commune vanished from the file, so this set must be
     // the file's full reach and not just the surviving rows.
