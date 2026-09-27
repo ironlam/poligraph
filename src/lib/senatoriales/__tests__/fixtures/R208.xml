@@ -1,0 +1,214 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Election>
+  <Scrutin>
+    <Type>Sénatoriales</Type>
+    <Annee>2026</Annee>
+  </Scrutin>
+  <EnsembleGeo>
+    <CodEnsGeo>FE</CodEnsGeo>
+    <LibEnsGeo>France entière</LibEnsGeo>
+    <Region>
+      <CodReg>44</CodReg>
+      <LibReg>Grand Est</LibReg>
+      <Circonscription>
+        <CodCirElec>08</CodCirElec>
+        <LibCirElec>Ardennes</LibCirElec>
+        <NbSap>2</NbSap>
+        <NbSiePourvus>2</NbSiePourvus>
+        <Tours>
+          <Tour>
+            <NumTour>1</NumTour>
+            <Mentions>
+              <Inscrits>
+                <Nombre>964</Nombre>
+              </Inscrits>
+              <Abstentions>
+                <Nombre>34</Nombre>
+                <RapportInscrits>3,53</RapportInscrits>
+              </Abstentions>
+              <Votants>
+                <Nombre>930</Nombre>
+                <RapportInscrits>96,47</RapportInscrits>
+              </Votants>
+              <Blancs>
+                <Nombre>6</Nombre>
+                <RapportInscrits>0,62</RapportInscrits>
+                <RapportVotants>0,65</RapportVotants>
+              </Blancs>
+              <Nuls>
+                <Nombre>2</Nombre>
+                <RapportInscrits>0,21</RapportInscrits>
+                <RapportVotants>0,22</RapportVotants>
+              </Nuls>
+              <Exprimes>
+                <Nombre>922</Nombre>
+                <RapportInscrits>95,64</RapportInscrits>
+                <RapportVotants>99,14</RapportVotants>
+              </Exprimes>
+            </Mentions>
+            <Resultats>
+              <Candidats>
+                <Candidat>
+                  <NomPsn>BACHY</NomPsn>
+                  <PrenomPsn>Jean-Paul</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>DVG</CodNuaCand>
+                  <LibNuaCand>Divers gauche</LibNuaCand>
+                  <NbVoix>196</NbVoix>
+                  <RapportExprimes>21,26</RapportExprimes>
+                  <RapportInscrits>20,33</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>DUMAY</NomPsn>
+                  <PrenomPsn>Anne</PrenomPsn>
+                  <CivilitePsn>Mme</CivilitePsn>
+                  <CodNuaCand>DVD</CodNuaCand>
+                  <LibNuaCand>Divers droite</LibNuaCand>
+                  <NbVoix>170</NbVoix>
+                  <RapportExprimes>18,44</RapportExprimes>
+                  <RapportInscrits>17,63</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>GERARD</NomPsn>
+                  <PrenomPsn>Corentin</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>FI</CodNuaCand>
+                  <LibNuaCand>La France insoumise</LibNuaCand>
+                  <NbVoix>32</NbVoix>
+                  <RapportExprimes>3,47</RapportExprimes>
+                  <RapportInscrits>3,32</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>JOSEPH</NomPsn>
+                  <PrenomPsn>Else</PrenomPsn>
+                  <CivilitePsn>Mme</CivilitePsn>
+                  <CodNuaCand>LR</CodNuaCand>
+                  <LibNuaCand>Les Républicains</LibNuaCand>
+                  <NbVoix>477</NbVoix>
+                  <RapportExprimes>51,74</RapportExprimes>
+                  <RapportInscrits>49,48</RapportInscrits>
+                  <Elu>OUI</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>LAMÉNIE</NomPsn>
+                  <PrenomPsn>Marc</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>HOR</CodNuaCand>
+                  <LibNuaCand>Horizons</LibNuaCand>
+                  <NbVoix>284</NbVoix>
+                  <RapportExprimes>30,80</RapportExprimes>
+                  <RapportInscrits>29,46</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>LANGRENEZ</NomPsn>
+                  <PrenomPsn>Lucas</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>RN</CodNuaCand>
+                  <LibNuaCand>Rassemblement National</LibNuaCand>
+                  <NbVoix>116</NbVoix>
+                  <RapportExprimes>12,58</RapportExprimes>
+                  <RapportInscrits>12,03</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>VILLENET</NomPsn>
+                  <PrenomPsn>Nicolas</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>DVD</CodNuaCand>
+                  <LibNuaCand>Divers droite</LibNuaCand>
+                  <NbVoix>242</NbVoix>
+                  <RapportExprimes>26,25</RapportExprimes>
+                  <RapportInscrits>25,10</RapportInscrits>
+                  <Elu>QUALIFIE(E) AU T2</Elu>
+                </Candidat>
+              </Candidats>
+            </Resultats>
+          </Tour>
+          <Tour>
+            <NumTour>2</NumTour>
+            <Mentions>
+              <Inscrits>
+                <Nombre>964</Nombre>
+              </Inscrits>
+              <Abstentions>
+                <Nombre>32</Nombre>
+                <RapportInscrits>3,32</RapportInscrits>
+              </Abstentions>
+              <Votants>
+                <Nombre>932</Nombre>
+                <RapportInscrits>96,68</RapportInscrits>
+              </Votants>
+              <Blancs>
+                <Nombre>17</Nombre>
+                <RapportInscrits>1,76</RapportInscrits>
+                <RapportVotants>1,82</RapportVotants>
+              </Blancs>
+              <Nuls>
+                <Nombre>21</Nombre>
+                <RapportInscrits>2,18</RapportInscrits>
+                <RapportVotants>2,25</RapportVotants>
+              </Nuls>
+              <Exprimes>
+                <Nombre>894</Nombre>
+                <RapportInscrits>92,74</RapportInscrits>
+                <RapportVotants>95,92</RapportVotants>
+              </Exprimes>
+            </Mentions>
+            <Resultats>
+              <Candidats>
+                <Candidat>
+                  <NomPsn>GERARD</NomPsn>
+                  <PrenomPsn>Corentin</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>FI</CodNuaCand>
+                  <LibNuaCand>La France insoumise</LibNuaCand>
+                  <NbVoix>28</NbVoix>
+                  <RapportExprimes>3,13</RapportExprimes>
+                  <RapportInscrits>2,90</RapportInscrits>
+                  <Elu>NON</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>LAMÉNIE</NomPsn>
+                  <PrenomPsn>Marc</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>HOR</CodNuaCand>
+                  <LibNuaCand>Horizons</LibNuaCand>
+                  <NbVoix>466</NbVoix>
+                  <RapportExprimes>52,13</RapportExprimes>
+                  <RapportInscrits>48,34</RapportInscrits>
+                  <Elu>OUI</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>LANGRENEZ</NomPsn>
+                  <PrenomPsn>Lucas</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>RN</CodNuaCand>
+                  <LibNuaCand>Rassemblement National</LibNuaCand>
+                  <NbVoix>108</NbVoix>
+                  <RapportExprimes>12,08</RapportExprimes>
+                  <RapportInscrits>11,20</RapportInscrits>
+                  <Elu>NON</Elu>
+                </Candidat>
+                <Candidat>
+                  <NomPsn>VILLENET</NomPsn>
+                  <PrenomPsn>Nicolas</PrenomPsn>
+                  <CivilitePsn>M.</CivilitePsn>
+                  <CodNuaCand>DVD</CodNuaCand>
+                  <LibNuaCand>Divers droite</LibNuaCand>
+                  <NbVoix>292</NbVoix>
+                  <RapportExprimes>32,66</RapportExprimes>
+                  <RapportInscrits>30,29</RapportInscrits>
+                  <Elu>NON</Elu>
+                </Candidat>
+              </Candidats>
+            </Resultats>
+          </Tour>
+        </Tours>
+      </Circonscription>
+    </Region>
+  </EnsembleGeo>
+</Election>
