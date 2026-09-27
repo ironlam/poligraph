@@ -486,7 +486,7 @@ export const SOURCE_LO_135_1 = {
 
 export const RESULTS_HEADING = "Le Sénat au lendemain du scrutin";
 export const RESULTS_LEDE_COMPLETE =
-  "178 sièges pourvus le 27 septembre. Les 170 autres restent inchangés jusqu'en 2029.";
+  "178 sièges pourvus le 27 septembre. Les 170 autres ne sont pas renouvelés avant 2029.";
 export function resultsLedePartial(constituencies: number, seats: number): string {
   return (
     `Résultats publiés pour ${constituencies} circonscriptions sur 64, soit ${seats} sièges ` +

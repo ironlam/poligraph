@@ -73,8 +73,13 @@ describe("ElectedByConstituency", () => {
     expect(screen.getAllByText(/^(Réélue?|Nouveau|Nouvelle)$/)).toHaveLength(2);
   });
 
-  it("indique un élu au second tour", () => {
-    render(<ElectedByConstituency elected={[elected({ round: 2 })]} />);
-    expect(screen.getByText(/second tour/)).toBeInTheDocument();
+  it("accorde « élue au second tour » pour une sénatrice", () => {
+    render(<ElectedByConstituency elected={[elected({ round: 2, gender: "F" })]} />);
+    expect(screen.getByText(/élue au second tour/)).toBeInTheDocument();
+  });
+
+  it("garde « élu au second tour » pour un sénateur", () => {
+    render(<ElectedByConstituency elected={[elected({ round: 2, gender: "M" })]} />);
+    expect(screen.getByText(/élu au second tour/)).toBeInTheDocument();
   });
 });

@@ -31,6 +31,9 @@ describe("ResultsOverview : l'état 4 du hub", () => {
       <ResultsOverview summary={summary({ seatsFilled: 178, proclaimedConstituencies: 64 })} />
     );
     expect(screen.getByText(/178 sièges pourvus le 27 septembre/)).toBeInTheDocument();
+    // A resignation or a death changes a seat before 2029: "inchangés" would be false.
+    expect(screen.queryByText(/inchangés/)).not.toBeInTheDocument();
+    expect(screen.getByText(/ne sont pas renouvelés avant 2029/)).toBeInTheDocument();
   });
 
   it("ne transforme pas une part de femmes inconnue en zéro", () => {

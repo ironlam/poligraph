@@ -65,7 +65,11 @@ export function ElectedByConstituency({
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {person.nuanceLabel ?? "Nuance non renseignée"}
-                    {person.round === 2 ? " · élu au second tour" : ""}
+                    {person.round === 2
+                      ? person.gender === "F"
+                        ? " · élue au second tour"
+                        : " · élu au second tour"
+                      : ""}
                   </p>
                 </li>
               );
