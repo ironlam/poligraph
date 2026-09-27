@@ -31,6 +31,7 @@ import {
 import {
   canAdoptByName,
   compareHolder,
+  couldDuplicate,
   describeNameRelation,
   decidePhase1Action,
   decidePhase2Action,
@@ -778,15 +779,39 @@ async function reconcileRNEStubs(
     `  Phase 2 complete: ${batchResult.stats.matched} matched, ${batchResult.stats.review} review, ${batchResult.stats.notFound} not found, ${batchResult.stats.blocked} blocked`
   );
 
+  // The identity facts of every candidate the resolver picked, so each decision gets a second
+  // opinion from `compareHolder` instead of resting on the score alone.
+  const candidateIds = [
+    ...new Set(batchResult.results.map((r) => r.politicianId).filter((id): id is string => !!id)),
+  ];
+  const candidateFacts = new Map<string, HolderFacts>(
+    (
+      await db.politician.findMany({
+        where: { id: { in: candidateIds } },
+        select: { id: true, firstName: true, lastName: true, birthDate: true },
+      })
+    ).map((p) => [p.id, { firstName: p.firstName, lastName: p.lastName, birthDate: p.birthDate }])
+  );
+
   const errors: string[] = [];
   let matched = 0;
   let drafted = 0;
+  let namesakes = 0;
 
   for (const result of batchResult.results) {
     const stub = politicianBySourceId.get(result.sourceId);
     if (!stub) continue;
 
-    const action = decidePhase2Action(result.decision ?? null);
+    const candidate = result.politicianId ? candidateFacts.get(result.politicianId) : undefined;
+    const action = decidePhase2Action(
+      result.decision ?? null,
+      candidate
+        ? couldDuplicate(
+            { firstName: stub.firstName, lastName: stub.lastName, birthDate: stub.birthDate },
+            candidate
+          )
+        : true
+    );
 
     if (action === "draft") {
       // The resolver sees a possible duplicate of someone we already hold. Publishing anyway
@@ -809,7 +834,10 @@ async function reconcileRNEStubs(
       continue;
     }
 
-    if (action !== "merge") continue;
+    if (action !== "merge") {
+      if (result.decision === Judgement.UNDECIDED) namesakes++;
+      continue;
+    }
 
     const existingPoliticianId = result.politicianId;
     if (!existingPoliticianId) continue;
@@ -836,6 +864,7 @@ async function reconcileRNEStubs(
 
   console.log(`  Fusionnées puis supprimées : ${matched}`);
   console.log(`  Mises en brouillon         : ${drafted}`);
+  console.log(`  Homonymes publiés          : ${namesakes}`);
 
   return {
     matched,
@@ -983,8 +1012,14 @@ async function simulatePhase2(
       judgement =
         best.score >= IDENTITY_THRESHOLDS.AUTO_MATCH ? Judgement.SAME : Judgement.UNDECIDED;
 
-    // Same predicate as the real Phase 2, so the measure cannot drift from the behaviour.
-    const action = decidePhase2Action(judgement);
+    // Same predicate as the real Phase 2, second opinion compris, sinon la mesure dérive.
+    const action = decidePhase2Action(
+      judgement,
+      couldDuplicate(
+        { firstName: row.firstName, lastName: row.lastName, birthDate: row.birthDate },
+        { firstName: best.firstName, lastName: best.lastName, birthDate: best.birthDate }
+      )
+    );
     if (action === "merge") stats.matched++;
     else if (action === "draft") stats.review++;
     else stats.notFound++;

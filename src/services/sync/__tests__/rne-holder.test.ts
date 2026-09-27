@@ -9,6 +9,7 @@ import { Judgement } from "@/generated/prisma";
 import {
   compareHolder,
   canAdoptByName,
+  couldDuplicate,
   decidePhase2Action,
   decidePhase1Action,
   describeNameRelation,
@@ -399,23 +400,28 @@ describe("isFurtherTerm", () => {
 });
 
 describe("decidePhase2Action", () => {
-  it("fusionne quand l'identité est confirmée", () => {
-    expect(decidePhase2Action(Judgement.SAME)).toBe("merge");
+  it("fusionne quand le doublon est plausible et l'identité confirmée", () => {
+    expect(decidePhase2Action(Judgement.SAME, true)).toBe("merge");
   });
 
-  it("met en brouillon sur un doute plutôt que de publier un doublon", () => {
-    // Mesuré le 2026-09-27 : 2 647 fiches sur 12 004. Le résolveur dit qu'elles pourraient
-    // doubler quelqu'un que nous détenons déjà, et rien ne le signalait : la Phase 2 les
-    // laissait publiées et ne les comptait même pas dans son rapport.
-    expect(decidePhase2Action(Judgement.UNDECIDED)).toBe("draft");
+  it("ne fusionne jamais quand le doublon est exclu", () => {
+    // La fusion supprime la fiche, c'est irréversible. Le score du résolveur ne suffit pas.
+    expect(decidePhase2Action(Judgement.SAME, false)).toBe("keep");
+  });
+
+  it("publie un homonyme au lieu de le mettre en brouillon", () => {
+    expect(decidePhase2Action(Judgement.UNDECIDED, false)).toBe("keep");
+  });
+
+  it("met en brouillon quand le doublon reste plausible", () => {
+    expect(decidePhase2Action(Judgement.UNDECIDED, true)).toBe("draft");
   });
 
   it("laisse publiée une fiche que rien ne rapproche d'une autre", () => {
-    // 9 262 maires sans homonyme en base. Ce sont de nouvelles personnes, pas des doutes.
-    expect(decidePhase2Action(null)).toBe("keep");
-    expect(decidePhase2Action(Judgement.NOT_SAME)).toBe("keep");
+    expect(decidePhase2Action(null, true)).toBe("keep");
+    expect(decidePhase2Action(Judgement.NOT_SAME, true)).toBe("keep");
     // `ResolveResult.decision` porte un quatrième état hors de l'enum Prisma.
-    expect(decidePhase2Action("NEW")).toBe("keep");
+    expect(decidePhase2Action("NEW", true)).toBe("keep");
   });
 });
 
@@ -502,5 +508,40 @@ describe("describeNameRelation", () => {
   it("ignore ponctuation et accents, qui ne changent pas un nom", () => {
     expect(describeNameRelation("Dupont-Aignan", "Dupont Aignan")).toBe("identique");
     expect(describeNameRelation("ERIC", "Éric")).toBe("identique");
+  });
+});
+
+describe("couldDuplicate", () => {
+  const MAIRE = { firstName: "Catherine", lastName: "Hervieu", birthDate: new Date("1975-06-01") };
+
+  it("exclut le doublon quand les naissances divergent", () => {
+    // Mesuré le 2026-09-28 : 1 536 des 2 647 brouillons sont dans ce cas. « Catherine Hervieu »
+    // maire et « Catherine Hervieu » députée sont deux personnes.
+    expect(couldDuplicate(MAIRE, { ...MAIRE, birthDate: new Date("1956-02-11") })).toBe(false);
+  });
+
+  it("exclut le doublon sur un prénom différent quand aucune naissance ne départage", () => {
+    // 1 096 autres. Sans naissance comparable, le prénom est le seul signal, et un prénom
+    // différent est une preuve CONTRE le doublon. Mettre en brouillon retirerait du site un
+    // maire réellement élu : ici c'est le brouillon qui doit se justifier, pas la publication.
+    expect(
+      couldDuplicate(
+        { firstName: "Bernard", lastName: "Maillard", birthDate: null },
+        { firstName: "Patrick", lastName: "Maillard", birthDate: null }
+      )
+    ).toBe(false);
+  });
+
+  it("retient le doublon sur le même prénom sans naissance", () => {
+    expect(
+      couldDuplicate(
+        { firstName: "Alain", lastName: "Sanz", birthDate: null },
+        { firstName: "Alain", lastName: "Sanz", birthDate: null }
+      )
+    ).toBe(true);
+  });
+
+  it("retient le doublon quand la naissance concorde", () => {
+    expect(couldDuplicate(MAIRE, { ...MAIRE, firstName: "Cathy" })).toBe(true);
   });
 });
