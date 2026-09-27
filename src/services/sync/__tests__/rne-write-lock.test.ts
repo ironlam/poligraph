@@ -4,6 +4,9 @@ import type { SyncHandler } from "@/lib/sync";
 const h = vi.hoisted(() => ({
   findMandates: vi.fn(),
   findMandateLocals: vi.fn(),
+  findPoliticians: vi.fn(),
+  findDecisions: vi.fn(),
+  queryRaw: vi.fn(),
   findCommunes: vi.fn(),
   countMandates: vi.fn(),
   unexpectedDBAccess: vi.fn(),
@@ -19,8 +22,11 @@ vi.mock("@/lib/db", () => ({
   db: new Proxy(
     {},
     {
-      get: (_target, model: string) =>
-        new Proxy(
+      get: (_target, model: string) => {
+        // `NameFrequencyCache.loadFromDb` reads through `db.$queryRaw`, which is a method on
+        // the client itself and not a model.
+        if (model === "$queryRaw") return h.queryRaw;
+        return new Proxy(
           {},
           {
             get: (_model, operation: string) => {
@@ -30,6 +36,10 @@ vi.mock("@/lib/db", () => ({
                 // run reads the mandates we hold and the mayors already in place.
                 "mandateLocal.findMany": h.findMandateLocals,
                 "commune.findMany": h.findCommunes,
+                // La simulation de la Phase 2 rejoue les phases A et B du résolveur. Ce sont
+                // des lectures : si l'une d'elles devenait une écriture, ce proxy le dirait.
+                "politician.findMany": h.findPoliticians,
+                "identityDecision.findMany": h.findDecisions,
                 "mandate.count": h.countMandates,
               };
               const key = `${model}.${operation}`;
@@ -38,7 +48,8 @@ vi.mock("@/lib/db", () => ({
               throw new Error(`Unexpected DB access: ${key}`);
             },
           }
-        ),
+        );
+      },
     }
   ),
 }));
@@ -77,6 +88,9 @@ beforeEach(() => {
     },
   ]);
   h.findMandateLocals.mockResolvedValue([]);
+  h.findPoliticians.mockResolvedValue([]);
+  h.findDecisions.mockResolvedValue([]);
+  h.queryRaw.mockResolvedValue([]);
   h.findCommunes.mockResolvedValue([{ id: "01001" }]);
   h.countMandates.mockResolvedValue(1);
   h.resolveUrl.mockResolvedValue("https://example.test/maires.csv");
@@ -92,6 +106,7 @@ afterEach(() => {
 function expectNoIO() {
   expect(h.findMandates).not.toHaveBeenCalled();
   expect(h.findMandateLocals).not.toHaveBeenCalled();
+  expect(h.findPoliticians).not.toHaveBeenCalled();
   expect(h.findCommunes).not.toHaveBeenCalled();
   expect(h.countMandates).not.toHaveBeenCalled();
   expect(h.resolveUrl).not.toHaveBeenCalled();
@@ -343,6 +358,48 @@ describe("RNE write suspension", () => {
     expect(result.officialsCreated).toBe(1);
     expect(result.officialsUpdated).toBe(0);
     expect(result.mandatesClosed).toBe(0);
+  });
+
+  it("chiffre la Phase 2 sans écrire une seule décision", async () => {
+    // La vraie Phase 2 fusionne puis SUPPRIME la fiche créée par l'import. Le dry-run doit
+    // rendre ce nombre avant qu'on déverrouille les écritures, et `resolveBatch` ne peut pas
+    // servir : sa phase C persiste une IdentityDecision par entrée.
+    h.findPoliticians.mockResolvedValue([
+      {
+        id: "national-alice",
+        firstName: "Alice",
+        lastName: "MARTIN",
+        birthDate: new Date("1970-04-02"),
+        civility: "Mme",
+        prominenceScore: 0,
+        mandates: [],
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    // La ligne aurait créé une fiche, que la Phase 2 aurait aussitôt fusionnée et supprimée.
+    expect(result.officialsCreated).toBe(1);
+    expect(result.phase2Simulation).toEqual({ matched: 1, review: 0, notFound: 0, blocked: 0 });
+  });
+
+  it("ne compte aucune fusion quand personne ne correspond", async () => {
+    h.findPoliticians.mockResolvedValue([
+      {
+        id: "national-bob",
+        firstName: "Bob",
+        lastName: "DURAND",
+        birthDate: new Date("1955-01-01"),
+        civility: "M.",
+        prominenceScore: 0,
+        mandates: [],
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.phase2Simulation).toEqual({ matched: 0, review: 0, notFound: 1, blocked: 0 });
   });
 
   it("keeps statistics available without external requests", async () => {
