@@ -34,6 +34,8 @@ export interface ParsedMaires {
   communeNameByInsee: Map<string, string>;
   /** Rows the file could not describe, reported rather than thrown. */
   errors: string[];
+  /** Communes the file described more than once, where the last row silently won. */
+  duplicateCommuneIds: Set<string>;
   /** How many rows were dropped as duplicates of another. */
   duplicatesDropped: number;
 }
@@ -191,12 +193,19 @@ export function parseMaireRows(
   });
 
   // One mayor per commune. The file can repeat a commune; the last occurrence is the current one.
+  // Which communes those are is reported, not just how many: a commune the register describes
+  // twice is one where a name alone cannot identify anybody.
   const deduped = new Map<string, ParsedMaireRow>();
-  for (const row of rows) deduped.set(row.inseeCode, row);
+  const duplicateCommuneIds = new Set<string>();
+  for (const row of rows) {
+    if (deduped.has(row.inseeCode)) duplicateCommuneIds.add(row.inseeCode);
+    deduped.set(row.inseeCode, row);
+  }
 
   return {
     rows: [...deduped.values()],
     seenCommuneIds,
+    duplicateCommuneIds,
     communeNameByInsee,
     errors,
     duplicatesDropped: rows.length - deduped.size,

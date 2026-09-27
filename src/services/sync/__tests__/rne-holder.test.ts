@@ -8,6 +8,7 @@ import { Judgement } from "@/generated/prisma";
 
 import {
   compareHolder,
+  canAdoptByName,
   decidePhase2Action,
   decidePhase1Action,
   isChronologicallyClosable,
@@ -410,5 +411,71 @@ describe("decidePhase2Action", () => {
     expect(decidePhase2Action(Judgement.NOT_SAME)).toBe("keep");
     // `ResolveResult.decision` porte un quatrième état hors de l'enum Prisma.
     expect(decidePhase2Action("NEW")).toBe("keep");
+  });
+});
+
+describe("canAdoptByName", () => {
+  const SANS_NAISSANCE = { firstName: "Alice", lastName: "Martin", birthDate: null };
+  const REGISTRE = { firstName: "Alice", lastName: "MARTIN", birthDate: new Date("1970-04-02") };
+
+  function adopt(over: Partial<Parameters<typeof canAdoptByName>[0]> = {}): boolean {
+    return canAdoptByName({
+      verdict: "UNDECIDED",
+      incoming: REGISTRE,
+      current: SANS_NAISSANCE,
+      uniqueRegisterRow: true,
+      ...over,
+    });
+  }
+
+  it("adopte sur un nom complet identique quand notre fiche n'a pas de naissance", () => {
+    // 1 177 maires issus des municipales 2026 sont dans ce cas. Dans une commune donnée, à un
+    // instant donné, un nom complet exact identifie une personne.
+    expect(adopt()).toBe(true);
+  });
+
+  it("ne s'applique pas quand notre fiche porte une naissance", () => {
+    // Là, `compareHolder` a des preuves et son verdict fait foi, dans un sens comme dans l'autre.
+    expect(adopt({ current: { ...SANS_NAISSANCE, birthDate: new Date("1970-04-02") } })).toBe(
+      false
+    );
+  });
+
+  it("n'écrase jamais un verdict rendu sur preuves", () => {
+    expect(adopt({ verdict: "DIFFERENT" })).toBe(false);
+    expect(adopt({ verdict: "SAME" })).toBe(false);
+  });
+
+  it("exige l'égalité, pas l'inclusion", () => {
+    // "Guy" contre "Guy Raoul", "D'harambure" contre "De La Poëze D'harambure" : c'est
+    // probablement la même personne, mais « probablement » ne suffit pas pour écrire.
+    expect(adopt({ incoming: { ...REGISTRE, firstName: "Alice Marie" } })).toBe(false);
+    expect(adopt({ incoming: { ...REGISTRE, lastName: "De La Martin" } })).toBe(false);
+  });
+
+  it("tolère la ponctuation et les accents, qui ne changent pas l'identité", () => {
+    expect(
+      adopt({
+        incoming: { ...REGISTRE, firstName: "ALICE", lastName: "Martin" },
+        current: { firstName: "Alice", lastName: "MARTIN", birthDate: null },
+      })
+    ).toBe(true);
+    expect(
+      adopt({
+        incoming: { ...REGISTRE, lastName: "Dupont-Aignan" },
+        current: { firstName: "Alice", lastName: "Dupont Aignan", birthDate: null },
+      })
+    ).toBe(true);
+  });
+
+  it("refuse quand le registre décrit la commune deux fois", () => {
+    // Le parseur garde la dernière ligne et jette l'autre. Un nom ne peut plus désigner
+    // personne quand la source elle-même se contredit sur la commune.
+    expect(adopt({ uniqueRegisterRow: false })).toBe(false);
+  });
+
+  it("refuse sur un nom vide d'un côté", () => {
+    expect(adopt({ current: { firstName: "", lastName: "Martin", birthDate: null } })).toBe(false);
+    expect(adopt({ current: { firstName: "Alice", lastName: null, birthDate: null } })).toBe(false);
   });
 });
