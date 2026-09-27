@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { FileText } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
@@ -64,11 +65,15 @@ export async function PoliticianProfileBody({
   const dossier = await getPoliticianDossier(politician.slug);
   const voteStats = mandateType ? await getProfileVoteStats(politician.id, mandateType) : null;
 
-  // The identity read already proved the profile is public; a null here would mean the row vanished
-  // between the two reads, which is not a 404 for a page whose header has already been streamed.
-  const affairs = dossier?.affairs ?? [];
-  const factCheckMentions = dossier?.factCheckMentions ?? [];
-  const dossierAuthors = dossier?.dossierAuthors ?? [];
+  // Not an empty fallback. A null here means the row stopped being public between the two reads,
+  // and treating that as "no affairs, no fact-checks" would serve a clean profile for someone who
+  // has a record: the Affaires tab loses its badge, the Fact-checks tab disappears from the bar,
+  // and `generateMetadata` still counts N affairs off the identity read, so the page stays
+  // indexable while asserting the opposite. It would then sit in the ISR cache for 24h. The read
+  // was single before the split and this case was a 404; it stays one.
+  if (!dossier) notFound();
+
+  const { affairs, factCheckMentions, dossierAuthors } = dossier;
 
   const voteData = voteStats?.voteData ?? null;
   const parliamentaryCard = voteStats?.parliamentaryCard ?? null;
