@@ -3,6 +3,7 @@ import type { SyncHandler } from "@/lib/sync";
 
 const h = vi.hoisted(() => ({
   findMandates: vi.fn(),
+  findMandateLocals: vi.fn(),
   findCommunes: vi.fn(),
   countMandates: vi.fn(),
   unexpectedDBAccess: vi.fn(),
@@ -25,6 +26,9 @@ vi.mock("@/lib/db", () => ({
             get: (_model, operation: string) => {
               const reads: Record<string, unknown> = {
                 "mandate.findMany": h.findMandates,
+                // Phase 1 now judges each row before deciding what to do with it, so a dry
+                // run reads the mandates we hold and the mayors already in place.
+                "mandateLocal.findMany": h.findMandateLocals,
                 "commune.findMany": h.findCommunes,
                 "mandate.count": h.countMandates,
               };
@@ -47,7 +51,12 @@ vi.mock("../rne-resource", () => ({
   resolveRneResourceUrl: h.resolveUrl,
   RNE_MAIRES_FRAGMENTS: ["maires"],
 }));
-vi.mock("@/lib/identity", () => ({ resolveBatch: h.resolveBatch }));
+// Only the batch resolver is stubbed: Phase 1 judges each row with the real scorer, and a
+// fake one would let this test pass while the decision logic was wrong.
+vi.mock("@/lib/identity", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/identity")>()),
+  resolveBatch: h.resolveBatch,
+}));
 vi.mock("@/lib/sync", () => ({ createCLI: h.createCLI }));
 
 import { getRNEStats, resolveParties, syncRNEMaires } from "../rne";
@@ -67,6 +76,7 @@ beforeEach(() => {
       localData: { communeId: "01001", rneExternalId: "01001" },
     },
   ]);
+  h.findMandateLocals.mockResolvedValue([]);
   h.findCommunes.mockResolvedValue([{ id: "01001" }]);
   h.countMandates.mockResolvedValue(1);
   h.resolveUrl.mockResolvedValue("https://example.test/maires.csv");
@@ -81,6 +91,7 @@ afterEach(() => {
 
 function expectNoIO() {
   expect(h.findMandates).not.toHaveBeenCalled();
+  expect(h.findMandateLocals).not.toHaveBeenCalled();
   expect(h.findCommunes).not.toHaveBeenCalled();
   expect(h.countMandates).not.toHaveBeenCalled();
   expect(h.resolveUrl).not.toHaveBeenCalled();
@@ -111,6 +122,227 @@ describe("RNE write suspension", () => {
     expect(h.findMandates).toHaveBeenCalledOnce();
     expect(h.findCommunes).toHaveBeenCalledOnce();
     expect(h.getText).toHaveBeenCalledOnce();
+  });
+
+  it("juge une succession sans rien écrire", async () => {
+    // Le registre donne MARTIN Alice, nous détenons DURAND Bob sur la même commune. Avant le
+    // correctif, cette ligne réécrivait l'état civil de DURAND avec celui de MARTIN.
+    h.findMandateLocals.mockResolvedValue([
+      {
+        id: "local-1",
+        rneExternalId: "01001",
+        communeId: "01001",
+        mandate: {
+          id: "old-mandate",
+          politicianId: "predecessor",
+          startDate: new Date("2020-05-24"),
+          politician: {
+            firstName: "Bob",
+            lastName: "DURAND",
+            birthDate: new Date("1955-01-01"),
+          },
+        },
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.officialsCreated).toBe(1);
+    expect(result.mandatesClosed).toBe(1);
+  });
+
+  it("confirme le même titulaire sans rien écrire", async () => {
+    h.findMandateLocals.mockResolvedValue([
+      {
+        id: "local-1",
+        rneExternalId: "01001",
+        communeId: "01001",
+        mandate: {
+          id: "old-mandate",
+          politicianId: "same-person",
+          startDate: new Date("2020-05-24"),
+          politician: {
+            firstName: "Alice",
+            lastName: "MARTIN",
+            birthDate: new Date("1970-04-02"),
+          },
+        },
+      },
+    ]);
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsUpdated).toBe(1);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
+  it("ouvre un nouveau mandat sur une fiche connue au lieu de la republier", async () => {
+    // Nous détenons un mandat de MARTIN Alice sur 01001, clos. Le registre la nomme à nouveau :
+    // c'est une réélection. Créer une fiche produirait un doublon publié ; rouvrir l'ancien
+    // mandat écraserait sa date de début et effacerait le mandat précédent. Il faut un second
+    // mandat sur la fiche existante.
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-1",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "same-person",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    // Aucune fiche créée, aucune fiche mise à jour : un mandat de plus, c'est tout.
+    expect(result.officialsCreated).toBe(0);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.mandatesCreated).toBe(1);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
+  it("ne ressuscite pas un ancien maire à côté de celui en place", async () => {
+    // Le registre est en retard et nomme encore MARTIN Alice, dont nous détenons le mandat
+    // clos. Mais la commune a un maire en exercice, issu des municipales. Traiter le mandat
+    // clos en premier mettrait deux maires courants sur une commune.
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? [
+              {
+                id: "local-incumbent",
+                rneExternalId: null,
+                communeId: "01001",
+                mandate: {
+                  id: "incumbent-mandate",
+                  politicianId: "elected-in-march",
+                  startDate: new Date("2026-03-26"),
+                  politician: {
+                    firstName: "Bob",
+                    lastName: "DURAND",
+                    birthDate: new Date("1955-01-01"),
+                  },
+                },
+              },
+            ]
+          : [
+              {
+                id: "local-closed",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "former-mayor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    // Le maire en place est jugé, pas contourné : une fermeture, et un mandat pour la personne
+    // que nous connaissons déjà.
+    expect(result.mandatesClosed).toBe(1);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesCreated).toBe(1);
+  });
+
+  it("ne ressuscite pas un ancien maire quand le registre est en retard", async () => {
+    // Commune de moins de 1 000 habitants : `reconcile-municipales` a fermé l'ancien maire en
+    // mars 2026 sans créer de successeur, donc personne n'est en place. Le registre d'août
+    // nomme encore cet ancien maire, avec sa prise de fonction de 2020. Lui ouvrir un mandat
+    // courant qui démarre en 2020 chevaucherait celui qu'on vient de fermer.
+    h.getText.mockResolvedValue({
+      data: [
+        "Code du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Date de début du mandat;Date de début de la fonction",
+        "01;01001;Commune test;MARTIN;Alice;F;1970-04-02;2020-05-24;2020-05-24",
+      ].join("\n"),
+    });
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-closed",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "former-mayor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesCreated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
+  it("ne rouvre pas le mandat fermé de quelqu'un d'autre", async () => {
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-1",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "predecessor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Bob",
+                    lastName: "DURAND",
+                    birthDate: new Date("1955-01-01"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsCreated).toBe(1);
+    expect(result.officialsUpdated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
   });
 
   it("keeps statistics available without external requests", async () => {
