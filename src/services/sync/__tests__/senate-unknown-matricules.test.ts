@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertNoUnknownSenateMatricules,
   mapUnknownMatricule,
+  keepExistingStartDate,
   pickSenateMandateToUpdate,
   findUnknownMatricules,
   UnknownSenateMatriculesError,
@@ -104,21 +105,44 @@ describe("pickSenateMandateToUpdate", () => {
     externalId,
   });
 
-  it("préfère le mandat courant à un ancien mandat fermé du même identifiant", () => {
-    const picked = pickSenateMandateToUpdate(
-      [m("ancien", false, "senat-1"), m("courant", true, null)],
-      "senat-1"
-    );
-    expect(picked?.id).toBe("courant");
+  it("met à jour le mandat courant, même si un ancien mandat fermé porte l'identifiant", () => {
+    expect(
+      pickSenateMandateToUpdate(
+        [m("ancien", false, "senat-1"), m("courant", true, null)],
+        "senat-1"
+      )
+    ).toEqual({ kind: "update", mandate: expect.objectContaining({ id: "courant" }) });
   });
 
-  it("retombe sur l'identifiant quand aucun mandat n'est courant", () => {
-    expect(pickSenateMandateToUpdate([m("ancien", false, "senat-1")], "senat-1")?.id).toBe(
-      "ancien"
-    );
+  it("ne rouvre jamais un mandat fermé : le sénateur est sauté", () => {
+    expect(pickSenateMandateToUpdate([m("ancien", false, "senat-1")], "senat-1")).toEqual({
+      kind: "skip",
+    });
   });
 
-  it("ignore un mandat courant d'un autre type", () => {
-    expect(pickSenateMandateToUpdate([m("maire", true, null, "MAIRE")], "senat-1")).toBeUndefined();
+  it("crée un mandat quand la personne n'en a jamais eu au Sénat", () => {
+    expect(pickSenateMandateToUpdate([m("maire", true, null, "MAIRE")], "senat-1")).toEqual({
+      kind: "create",
+    });
+  });
+});
+
+describe("keepExistingStartDate", () => {
+  const d = (iso: string) => new Date(iso);
+
+  it("garde la date existante quand l'API n'en donne pas", () => {
+    expect(keepExistingStartDate(d("2020-10-01T00:00:00Z"), null)).toBe(true);
+  });
+
+  it("laisse l'API corriger une date antérieure à 2026", () => {
+    expect(keepExistingStartDate(d("2020-10-01T00:00:00Z"), d("2014-10-01T00:00:00Z"))).toBe(false);
+  });
+
+  it("protège un mandat 2026 contre la date d'un mandat précédent", () => {
+    expect(keepExistingStartDate(d("2026-10-01T00:00:00Z"), d("2014-10-01T00:00:00Z"))).toBe(true);
+  });
+
+  it("accepte pour un mandat 2026 une date API du même mandat", () => {
+    expect(keepExistingStartDate(d("2026-10-01T00:00:00Z"), d("2026-10-02T00:00:00Z"))).toBe(false);
   });
 });

@@ -78,18 +78,39 @@ export function mapUnknownMatricule(
 }
 
 /**
- * Which existing mandate a Senate sync updates for one senator.
+ * What a Senate sync does with one senator's mandates.
  *
- * The current Senate mandate first. Looking the `externalId` up first would pick a closed
- * mandate that carries the same `senat-{matricule}`, such as the 2020 term of a senator
- * re-elected in 2026, or the old term of someone returning to the Senate, and the update
- * (`isCurrent: true`) would reopen it next to the current one.
+ * It updates the current Senate mandate, or creates one for someone who never held a seat.
+ * It never reopens a closed Senate mandate: after the switch of 1 October, the 2020 terms of
+ * the outgoing senators are closed, and a sync run while `senateurs.json` still lists them
+ * would otherwise set them current again (and the same for someone returning to the Senate,
+ * whose old term carries the same `senat-{matricule}`). Such a senator is skipped and reported.
  */
+export type SenateMandateDecision<M> =
+  | { kind: "update"; mandate: M }
+  | { kind: "create" }
+  | { kind: "skip" };
+
 export function pickSenateMandateToUpdate<
   M extends { type: string; isCurrent: boolean; externalId: string | null },
->(mandates: M[], externalId: string): M | undefined {
-  return (
-    mandates.find((m) => m.type === "SENATEUR" && m.isCurrent) ??
-    mandates.find((m) => m.externalId === externalId)
-  );
+>(mandates: M[], externalId: string): SenateMandateDecision<M> {
+  const current = mandates.find((m) => m.type === "SENATEUR" && m.isCurrent);
+  if (current) return { kind: "update", mandate: current };
+  const closed = mandates.some((m) => m.type === "SENATEUR" || m.externalId === externalId);
+  return closed ? { kind: "skip" } : { kind: "create" };
+}
+
+/** First day of the 2026 to 2032 term, as written by `senatoriales:apply-mandates`. */
+export const SENATE_TERM_2026_START = new Date("2026-10-01T00:00:00Z");
+
+/**
+ * Whether a sync keeps the start date already stored on a mandate.
+ *
+ * Without an API date, always. With one, the API may correct a pre-2026 date (the series
+ * fallback it was meant to replace), but not move a 2026 term back: `mandat_debut` comes from
+ * a frozen archive and, for a re-elected senator, holds the start of an earlier term.
+ */
+export function keepExistingStartDate(existingStart: Date, apiStart: Date | null): boolean {
+  if (apiStart === null) return true;
+  return existingStart >= SENATE_TERM_2026_START && apiStart < existingStart;
 }

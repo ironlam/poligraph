@@ -13,7 +13,9 @@ import { shouldUpdatePhoto } from "@/config/photos";
 import {
   findUnknownMatricules,
   mapUnknownMatricule,
+  keepExistingStartDate,
   pickSenateMandateToUpdate,
+  SENATE_TERM_2026_START,
   UnknownSenateMatriculesError,
   type Elected2026,
 } from "./senate-unknown-matricules";
@@ -164,7 +166,7 @@ async function syncSenator(
   groupMap: Map<string, string>,
   partyMap: Map<string, string | null>,
   nosSenateursData: Map<string, NosSenateursAPI>
-): Promise<"created" | "updated" | "error"> {
+): Promise<"created" | "updated" | "skipped" | "error"> {
   try {
     const slug = generateSlug(`${sen.prenom}-${sen.nom}`);
     const fullName = `${sen.prenom} ${sen.nom}`;
@@ -255,6 +257,13 @@ async function syncSenator(
       externalId: `senat-${sen.matricule}`,
     };
 
+    // Decided before any write: a senator whose only Senate mandate is closed is left
+    // untouched, so neither the mandate nor the record (party, photo) moves.
+    const mandateDecision = existing
+      ? pickSenateMandateToUpdate(existing.mandates, `senat-${sen.matricule}`)
+      : null;
+    if (mandateDecision?.kind === "skip") return "skipped";
+
     if (existing) {
       // Update politician (preserve existing data if new data is empty)
       await db.politician.update({
@@ -280,14 +289,15 @@ async function syncSenator(
       // Upsert external ID
       await upsertExternalIds(existing.id, sen.matricule, slug);
 
-      // Update or create mandate: the current Senate mandate first, then by externalId
-      const existingMandate = pickSenateMandateToUpdate(existing.mandates, mandateData.externalId);
-
-      if (existingMandate) {
-        // If API didn't provide mandat_debut, preserve existing startDate
-        // (avoids overwriting accurate dates with series fallback for remplaçants)
+      if (mandateDecision?.kind === "update") {
+        const existingMandate = mandateDecision.mandate;
+        // Keep the stored start date without an API date (the series fallback would
+        // overwrite a remplaçant's accurate one), and never move a 2026 term back.
         const updateData = { ...mandateData };
-        if (!hasApiDate && existingMandate.startDate) {
+        if (
+          existingMandate.startDate &&
+          keepExistingStartDate(existingMandate.startDate, hasApiDate ? mandateStart : null)
+        ) {
           updateData.startDate = existingMandate.startDate;
         }
         await db.mandate.update({
@@ -406,7 +416,7 @@ async function mapUnknownSenators(
             where: {
               type: MandateType.SENATEUR,
               isCurrent: true,
-              startDate: { gte: TERM_2026_START },
+              startDate: { gte: SENATE_TERM_2026_START },
             },
             select: { id: true },
           },
@@ -446,9 +456,6 @@ async function mapUnknownSenators(
   }
   return unresolved;
 }
-
-/** First day of the 2026 to 2032 term, as written by `senatoriales:apply-mandates`. */
-const TERM_2026_START = new Date("2026-10-01T00:00:00Z");
 
 /**
  * Main sync function - imports/updates all senators
@@ -493,6 +500,10 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
       const status = await syncSenator(sen, codeToGroupId, codeToPartyId, nosSenateursData);
       if (status === "created") result.senatorsCreated++;
       else if (status === "updated") result.senatorsUpdated++;
+      else if (status === "skipped")
+        result.errors.push(
+          `${sen.prenom} ${sen.nom} : mandat sénatorial fermé, non rouvert (senateurs.json pas encore à jour ?)`
+        );
       else result.errors.push(`${sen.prenom} ${sen.nom}`);
     }
 
