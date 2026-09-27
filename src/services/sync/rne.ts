@@ -31,6 +31,7 @@ import {
 import {
   canAdoptByName,
   compareHolder,
+  describeNameRelation,
   decidePhase1Action,
   decidePhase2Action,
   isChronologicallyClosable,
@@ -635,20 +636,6 @@ async function upsertMaires(
   }
 
   return counts;
-}
-
-/**
- * How two name parts relate, in one word, so the CSV can be sorted and batched.
- *
- * A human cannot read 361 rows of prose, but they can sort a column and decide a whole shape
- * at once. The words match the vocabulary of `compareHolder`, which is what produced the row.
- */
-function describeNameRelation(a: string | null, b: string | null): string {
-  const verdict = compareHolder(
-    { firstName: null, lastName: a, birthDate: new Date(0) },
-    { firstName: null, lastName: b, birthDate: new Date(0) }
-  );
-  return verdict === "SAME" ? "concorde" : verdict === "DIFFERENT" ? "diffère" : "incertain";
 }
 
 /** Where the undecided rows are written, so the human stop has a file and not a scrollback. */
