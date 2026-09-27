@@ -47,6 +47,7 @@
     "sync:assemblee": "tsx scripts/sync-assemblee.ts",
     "sync:senat": "tsx scripts/sync-senat.ts",
     "senatoriales:import-results": "tsx scripts/import-senatoriales-results.ts",
+    "senatoriales:apply-mandates": "tsx scripts/apply-senatoriales-2026-mandates.ts",
     "sync:gouvernement": "tsx scripts/sync-gouvernement.ts",
     "sync:president": "tsx scripts/sync-president.ts",
     "sync:hatvp": "tsx scripts/sync-hatvp.ts",
