@@ -151,3 +151,27 @@ describe("renouvellement : transfert de l'identifiant Sénat", () => {
     });
   });
 });
+
+describe("planMandates : relance après une première bascule", () => {
+  it("ne renouvelle ni n'ouvre deux fois pour qui a déjà son mandat 2026", () => {
+    const actions = planMandates({
+      elected: [elected("reelu"), elected("nouvelle")],
+      outgoing: [seat("reelu")],
+      currentSeries2Mandates: [],
+      alreadyOpened: new Set(["reelu", "nouvelle"]),
+    });
+    expect(actions).toEqual([]);
+  });
+
+  it("ouvre seulement l'élu rattaché depuis la première bascule", () => {
+    const actions = planMandates({
+      elected: [elected("nouvelle"), elected("rattache-ensuite", "69")],
+      outgoing: [],
+      currentSeries2Mandates: [],
+      alreadyOpened: new Set(["nouvelle"]),
+    });
+    expect(actions).toEqual([
+      { kind: "open", politicianId: "rattache-ensuite", departmentCode: "69" },
+    ]);
+  });
+});

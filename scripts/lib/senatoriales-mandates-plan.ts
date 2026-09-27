@@ -31,7 +31,10 @@ export function planMandates(input: {
   elected: ElectedSenator[];
   outgoing: OutgoingSenateSeat[];
   currentSeries2Mandates: Array<{ id: string; politicianId: string }>;
+  /** People who already hold a 2026 term: a second run leaves them alone. */
+  alreadyOpened?: Set<string>;
 }): MandateAction[] {
+  const alreadyOpened = input.alreadyOpened ?? new Set<string>();
   const mandateOf = new Map(input.currentSeries2Mandates.map((m) => [m.politicianId, m.id]));
   const electedById = new Map(
     input.elected.filter((e) => e.politicianId).map((e) => [e.politicianId!, e])
@@ -40,6 +43,7 @@ export function planMandates(input: {
   const actions: MandateAction[] = [];
 
   for (const seat of input.outgoing) {
+    if (alreadyOpened.has(seat.politicianId)) continue;
     const mandateId = mandateOf.get(seat.politicianId);
     const reelected = electedById.get(seat.politicianId);
     if (reelected) {
@@ -62,7 +66,7 @@ export function planMandates(input: {
   for (const e of input.elected) {
     if (e.politicianId === null) {
       actions.push({ kind: "manual", name: e.name, constituencyCode: e.constituencyCode });
-    } else if (!outgoingIds.has(e.politicianId)) {
+    } else if (!outgoingIds.has(e.politicianId) && !alreadyOpened.has(e.politicianId)) {
       actions.push({
         kind: "open",
         politicianId: e.politicianId,
