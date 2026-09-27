@@ -1,5 +1,7 @@
 import { Judgement } from "@/generated/prisma";
 
+import { JaroWinklerComparator } from "@/lib/identity";
+
 import { IDENTITY_THRESHOLDS, scoreCandidate } from "@/lib/identity";
 import type { CachedPolitician, ScoringInput } from "@/lib/identity";
 import { sameCalendarDay } from "./rne-parse";
@@ -62,6 +64,37 @@ function nameVerdict(a: string | null, b: string | null): HolderVerdict {
   if (leftGlued.includes(rightGlued) || rightGlued.includes(leftGlued)) return "UNDECIDED";
 
   return "DIFFERENT";
+}
+
+const firstNameComparator = new JaroWinklerComparator();
+
+/**
+ * How close two first names are, above which a difference is a spelling and not another person.
+ *
+ * Measured on the pairs this sync actually meets: the spellings and civil-name variants score
+ * 0.880 and above ("Frank" against "Franck" 0.967, "Ann" against "Anne" 0.942, "Christophe
+ * Gilbert Robert" against "Christophe" 0.880), while genuinely different first names score
+ * 0.456 and below ("Bernard" against "Patrick" 0.429, "Yohann" against "Cédric" 0.000). The gap
+ * is wide and the threshold sits in the middle of it.
+ */
+const FIRST_NAME_SIMILARITY = 0.8;
+
+/**
+ * Whether a difference between two first names is a way of writing the same one.
+ *
+ * A matching birth date confirms a holder only if the first name agrees too. Without this,
+ * Yohann Perrin, mayor of Champagne in Ardèche, born the same day as senator Cédric Perrin, had
+ * his mandate attached to the senator's profile. A shared surname and a shared birth date are
+ * not rare enough, on 34 687 communes, to stand alone.
+ */
+function firstNamesAgree(a: string | null, b: string | null): boolean {
+  const verdict = nameVerdict(a, b);
+  if (verdict === "SAME") return true;
+  if (verdict === "UNDECIDED") return true;
+  return (
+    firstNameComparator.compare(nameWords(a).join(" "), nameWords(b).join(" ")) >=
+    FIRST_NAME_SIMILARITY
+  );
 }
 
 /**
@@ -379,5 +412,9 @@ export function compareHolder(incoming: HolderFacts, current: HolderFacts): Hold
   // AUTO_MATCH is the resolver's rule for ranking candidates across the country, where a name
   // is all there is. Here the commune and an exact birth date are already given, so holding
   // these at UNDECIDED reports 253 communes forever rather than deciding anything.
-  return sameCalendarDay(incoming.birthDate, current.birthDate) ? "SAME" : "DIFFERENT";
+  if (!sameCalendarDay(incoming.birthDate, current.birthDate)) return "DIFFERENT";
+
+  // The birth date matches, but that alone is not an identity: it has to be the same first name,
+  // however it is spelled. Two namesakes born the same day exist across 34 687 communes.
+  return firstNamesAgree(incoming.firstName, current.firstName) ? "SAME" : "UNDECIDED";
 }
