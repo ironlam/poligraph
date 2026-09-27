@@ -46,15 +46,19 @@ const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 /** Rows are written in chunks so one failure does not roll back the whole file. */
 const UPSERT_BATCH_SIZE = 500;
 
-/** A commune code identifies a mandate location, not its holder. Keep writes suspended. */
-function assertRNEReadOnly(dryRun: unknown): void {
-  if (dryRun !== true) {
-    throw new Error(
-      "RNE_WRITES_SUSPENDED: mayor identity matching must be corrected before writes resume. " +
-        "Only syncRNEMaires({ dryRun: true }) and getRNEStats() are available; " +
-        "party resolution is also suspended."
-    );
-  }
+/**
+ * Party resolution stays suspended, and for its own reason.
+ *
+ * The mayor import regained the right to write once identity was settled on evidence: a
+ * matching birth date, or an exact name inside one commune. `resolveParties` never made that
+ * journey. It joins a party to a person through a commune code alone, with no notion of who
+ * holds the mandate, which is exactly the shape of the bug the mayor import was cured of.
+ */
+function assertPartyResolutionSuspended(): void {
+  throw new Error(
+    "RNE_PARTY_WRITES_SUSPENDED: party resolution matches on a commune code with no identity " +
+      "check. The mayor sync was corrected; this writer was not."
+  );
 }
 
 /** Fetch and parse RNE maires CSV */
@@ -1069,7 +1073,6 @@ export async function syncRNEMaires(
   } = {}
 ): Promise<RNESyncResult> {
   const { dryRun = false, limit, verbose = false } = options;
-  assertRNEReadOnly(dryRun);
 
   const { mandates: snapshot, knownCommuneIds } = await snapshotCurrentMayors();
 
@@ -1178,8 +1181,7 @@ export async function resolveParties(options: { verbose?: boolean } = {}): Promi
   fromPolitician: number;
   unmapped: string[];
 }> {
-  // This separate writer also associates people with a commune code, without checking identity.
-  assertRNEReadOnly(false);
+  assertPartyResolutionSuspended();
   const { verbose = false } = options;
 
   // Step 1: Fetch enriched communes CSV and build inseeCode → nuanceCode map

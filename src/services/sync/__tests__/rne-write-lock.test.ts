@@ -113,22 +113,7 @@ function expectNoIO() {
   expect(h.getText).not.toHaveBeenCalled();
 }
 
-describe("RNE write suspension", () => {
-  it("rejects the default invocation before any I/O", async () => {
-    await expect(syncRNEMaires()).rejects.toThrow("RNE_WRITES_SUSPENDED");
-    expectNoIO();
-  });
-
-  it.each([undefined, false, "false", "true", 1, null])(
-    "rejects dryRun=%j, including untyped callers",
-    async (dryRun) => {
-      await expect(
-        syncRNEMaires({ dryRun: dryRun as boolean, limit: 1, verbose: true })
-      ).rejects.toThrow("RNE_WRITES_SUSPENDED");
-      expectNoIO();
-    }
-  );
-
+describe("RNE : le dry-run ne doit jamais écrire", () => {
   it.each([{}, { limit: 1, verbose: true }])("keeps dry-run read-only with %j", async (options) => {
     const result = await syncRNEMaires({ ...options, dryRun: true });
     expect(result.success).toBe(true);
@@ -412,21 +397,19 @@ describe("RNE write suspension", () => {
     expect(h.getText).not.toHaveBeenCalled();
   });
 
-  it("rejects the independent party writer before any I/O", async () => {
-    await expect(resolveParties()).rejects.toThrow("RNE_WRITES_SUSPENDED");
+  it("laisse la résolution des partis verrouillée", async () => {
+    // Ce writer rattache un parti à une personne par le seul code commune, sans contrôle
+    // d'identité : c'est la forme exacte du bug dont le sync des maires a été guéri, et lui
+    // ne l'a pas été.
+    await expect(resolveParties()).rejects.toThrow("RNE_PARTY_WRITES_SUSPENDED");
     expectNoIO();
   });
 
-  it("propagates the suspension through the CLI handler, including party dry-run", async () => {
+  it("propage le verrou des partis à travers le CLI", async () => {
     await import("../../../../scripts/sync-rne");
     const handler = h.createCLI.mock.calls[0]![0] as SyncHandler;
-    for (const options of [
-      {},
-      { force: true },
-      { resolveParties: true },
-      { resolveParties: true, dryRun: true },
-    ]) {
-      await expect(handler.sync(options)).rejects.toThrow("RNE_WRITES_SUSPENDED");
+    for (const options of [{ resolveParties: true }, { resolveParties: true, dryRun: true }]) {
+      await expect(handler.sync(options)).rejects.toThrow("RNE_PARTY_WRITES_SUSPENDED");
     }
     expectNoIO();
   });
