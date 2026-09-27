@@ -28,7 +28,7 @@ describe("parseIndex", () => {
   it("date la dernière mise à jour à l'heure de Paris", () => {
     const ain = parseIndex(read("INDEX1FE.xml")).find((c) => c.code === "01");
     // 27/09/2026 19:16:41 Paris (UTC+2) = 17:16:41 UTC
-    expect(ain?.updatedAt.toISOString()).toBe("2026-09-27T17:16:41.000Z");
+    expect(ain?.updatedAt?.toISOString()).toBe("2026-09-27T17:16:41.000Z");
   });
 
   it("laisse la date vide pour une circonscription sans résultats", () => {
