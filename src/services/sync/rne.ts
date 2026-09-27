@@ -25,6 +25,7 @@ import { mandateLabels, mandateStartDate, parseMaireRows, type ParsedMaireRow } 
 import {
   compareHolder,
   decidePhase1Action,
+  decidePhase2Action,
   isChronologicallyClosable,
   isFurtherTerm,
   shouldRunStaleSweep,
@@ -639,7 +640,7 @@ function logPhase1Counts(counts: UpsertCounts, dryRun: boolean): void {
 async function reconcileRNEStubs(
   communeNameByInsee: Map<string, string>,
   verbose: boolean
-): Promise<{ matched: number; notFound: number; errors: string[] }> {
+): Promise<{ matched: number; drafted: number; notFound: number; errors: string[] }> {
   console.log(
     "\n--- Phase 2: Reconcile new RNE Politicians with existing national Politicians ---"
   );
@@ -674,7 +675,7 @@ async function reconcileRNEStubs(
   });
 
   console.log(`  Found ${rneOnlyPoliticians.length} RNE-only Politicians to reconcile`);
-  if (rneOnlyPoliticians.length === 0) return { matched: 0, notFound: 0, errors: [] };
+  if (rneOnlyPoliticians.length === 0) return { matched: 0, drafted: 0, notFound: 0, errors: [] };
 
   const politicianBySourceId = new Map<string, (typeof rneOnlyPoliticians)[number]>();
   const inputs = rneOnlyPoliticians.map((politician) => {
@@ -713,14 +714,39 @@ async function reconcileRNEStubs(
 
   const errors: string[] = [];
   let matched = 0;
+  let drafted = 0;
 
   for (const result of batchResult.results) {
-    const existingPoliticianId = result.politicianId;
-    if (!existingPoliticianId) continue;
-    if (result.decision !== Judgement.SAME) continue;
-
     const stub = politicianBySourceId.get(result.sourceId);
     if (!stub) continue;
+
+    const action = decidePhase2Action(result.decision ?? null);
+
+    if (action === "draft") {
+      // The resolver sees a possible duplicate of someone we already hold. Publishing anyway
+      // would put a second profile of a real person on the site, and nothing downstream
+      // flags it. Unpublished, it waits for a human instead.
+      try {
+        await db.politician.update({
+          where: { id: stub.id },
+          data: { publicationStatus: PublicationStatus.DRAFT },
+        });
+        drafted++;
+        if (verbose) {
+          console.log(
+            `  Brouillon: ${stub.firstName} ${stub.lastName} ressemble à ${result.politicianId} [confiance=${result.confidence}]`
+          );
+        }
+      } catch (err) {
+        errors.push(`Draft failed for ${stub.firstName} ${stub.lastName}: ${err}`);
+      }
+      continue;
+    }
+
+    if (action !== "merge") continue;
+
+    const existingPoliticianId = result.politicianId;
+    if (!existingPoliticianId) continue;
     if (stub.id === existingPoliticianId) continue; // already the same record
 
     matched++;
@@ -742,8 +768,12 @@ async function reconcileRNEStubs(
     }
   }
 
+  console.log(`  Fusionnées puis supprimées : ${matched}`);
+  console.log(`  Mises en brouillon         : ${drafted}`);
+
   return {
     matched,
+    drafted,
     notFound: batchResult.stats.notFound + batchResult.stats.blocked,
     errors,
   };
@@ -879,17 +909,25 @@ async function simulatePhase2(
     }
 
     const fsJudgement = best.fellegiSunter?.judgement;
-    if (fsJudgement === Judgement.SAME) stats.matched++;
-    else if (fsJudgement === Judgement.NOT_SAME) stats.notFound++;
-    else if (fsJudgement === Judgement.UNDECIDED) stats.review++;
-    else if (best.score >= IDENTITY_THRESHOLDS.AUTO_MATCH) stats.matched++;
-    else stats.review++;
+    let judgement: Judgement | null;
+    if (fsJudgement === Judgement.SAME) judgement = Judgement.SAME;
+    else if (fsJudgement === Judgement.NOT_SAME) judgement = Judgement.NOT_SAME;
+    else if (fsJudgement === Judgement.UNDECIDED) judgement = Judgement.UNDECIDED;
+    else
+      judgement =
+        best.score >= IDENTITY_THRESHOLDS.AUTO_MATCH ? Judgement.SAME : Judgement.UNDECIDED;
+
+    // Same predicate as the real Phase 2, so the measure cannot drift from the behaviour.
+    const action = decidePhase2Action(judgement);
+    if (action === "merge") stats.matched++;
+    else if (action === "draft") stats.review++;
+    else stats.notFound++;
   }
 
   console.log(`  Fiches qui seraient fusionnées puis SUPPRIMÉES : ${stats.matched}`);
-  console.log(`  En revue (aucune action)                      : ${stats.review}`);
-  console.log(`  Sans correspondance, la fiche reste           : ${stats.notFound}`);
-  console.log(`  Bloquées par une décision NOT_SAME            : ${stats.blocked}`);
+  console.log(`  Fiches qui seraient mises en BROUILLON         : ${stats.review}`);
+  console.log(`  Publiées, sans correspondance                  : ${stats.notFound}`);
+  console.log(`  Bloquées par une décision NOT_SAME             : ${stats.blocked}`);
   return stats;
 }
 
@@ -1013,7 +1051,7 @@ export async function syncRNEMaires(
   // the resolver over the previous import's leftovers. It is simulated instead: the number of
   // merges is the one that needs validating, since a merge deletes the created profile.
   const reconciled = dryRun
-    ? { matched: 0, notFound: 0, errors: [] as string[] }
+    ? { matched: 0, drafted: 0, notFound: 0, errors: [] as string[] }
     : await reconcileRNEStubs(parsed.communeNameByInsee, verbose);
   const phase2Simulation = dryRun
     ? await simulatePhase2(upserted.wouldCreate, parsed.communeNameByInsee)

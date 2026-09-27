@@ -1,3 +1,5 @@
+import { Judgement } from "@/generated/prisma";
+
 import { IDENTITY_THRESHOLDS, scoreCandidate } from "@/lib/identity";
 import type { CachedPolitician, ScoringInput } from "@/lib/identity";
 import { sameCalendarDay } from "./rne-parse";
@@ -110,6 +112,30 @@ const TERM_SEPARATION_MS = 31 * 86_400_000;
  */
 export function isFurtherTerm(priorStart: Date, registerStart: Date): boolean {
   return registerStart.getTime() - priorStart.getTime() > TERM_SEPARATION_MS;
+}
+
+/** What Phase 2 does with a profile Phase 1 just created. */
+export type Phase2Action = "merge" | "draft" | "keep";
+
+/**
+ * What to do with a freshly imported profile once the resolver has judged it.
+ *
+ * `merge` moves its mandates onto the existing profile and DELETES it, which cannot be undone.
+ * It needs a confirmed identity, and nothing less.
+ *
+ * `draft` is the answer to a doubt. The resolver says this mayor may be someone we already
+ * hold, without being sure. Publishing them anyway puts a second profile of a real person on a
+ * transparency site, and nothing downstream would flag it: the merge step skipped these rows
+ * and its report did not even count them. Measured on the register, 2 647 of the 12 004
+ * profiles an import would create land here.
+ *
+ * `keep` is for a mayor with no namesake at all, 9 262 of them. A new person, not a doubt.
+ * The resolver spells that one `"NEW"`, which is a fourth state next to the three judgements.
+ */
+export function decidePhase2Action(judgement: Judgement | "NEW" | null): Phase2Action {
+  if (judgement === Judgement.SAME) return "merge";
+  if (judgement === Judgement.UNDECIDED) return "draft";
+  return "keep";
 }
 
 /** What Phase 1 does with one register row. Nothing here writes; the caller executes. */
