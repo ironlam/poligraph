@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getPolitician: vi.fn(),
+  getPoliticianIdentity: vi.fn(),
   getCandidacy: vi.fn(),
   getElection: vi.fn(),
   listMeasures: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock("next/navigation", () => ({
   notFound: mocks.notFound,
 }));
 vi.mock("@/lib/data/politicians", () => ({
-  getPolitician: mocks.getPolitician,
+  getPoliticianIdentity: mocks.getPoliticianIdentity,
 }));
 vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: mocks.getCandidacy,
@@ -38,7 +38,7 @@ const params = Promise.resolve({ slug: "camille-riviere" });
 describe("page des mesures d'une candidature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getPolitician.mockResolvedValue({
+    mocks.getPoliticianIdentity.mockResolvedValue({
       id: "politician-1",
       fullName: "Camille Rivière",
     });
