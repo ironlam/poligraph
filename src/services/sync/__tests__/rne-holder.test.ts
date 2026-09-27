@@ -298,6 +298,16 @@ describe("decidePhase1Action", () => {
       "create",
     ],
     [
+      "mandat clos, identité incertaine",
+      {
+        existing: null,
+        hasCommuneId: true,
+        incumbent: null,
+        priorTerm: { verdict: "UNDECIDED" as HolderVerdict, furtherTerm: true },
+      },
+      "skip",
+    ],
+    [
       "maire en place prioritaire sur le mandat clos",
       {
         existing: null,
@@ -328,7 +338,12 @@ describe("decidePhase1Action", () => {
     // révisions successives ont cassé trois fois.
     const doubts = CASES.filter(
       ([, input]) =>
-        input.existing?.verdict === "UNDECIDED" || input.incumbent?.verdict === "UNDECIDED"
+        input.existing?.verdict === "UNDECIDED" ||
+        input.incumbent?.verdict === "UNDECIDED" ||
+        // Un mandat clos dont on ne sait pas s'il est de la même personne : créer publierait
+        // une seconde fiche d'une personne réelle, et la Phase 2 ne la rattraperait pas
+        // puisqu'elle pré-filtre par nom de famille, qui est justement ce qui diffère.
+        input.priorTerm?.verdict === "UNDECIDED"
     );
 
     expect(doubts.length).toBeGreaterThan(0);

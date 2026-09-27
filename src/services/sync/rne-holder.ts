@@ -164,6 +164,12 @@ export function decidePhase1Action(input: {
     return input.priorTerm.furtherTerm ? "new-term" : "skip";
   }
 
+  // We cannot tell whether the closed mandate is the same person. Creating would publish a
+  // second profile for someone real, and Phase 2 would not merge it: `resolveBatch` looks
+  // candidates up by normalized last name, which is exactly what differs in these rows
+  // (a married name, or a typo in either name).
+  if (input.priorTerm?.verdict === "UNDECIDED") return "skip";
+
   return "create";
 }
 

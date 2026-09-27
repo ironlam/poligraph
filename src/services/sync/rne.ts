@@ -549,7 +549,9 @@ async function upsertMaires(
                 ? "mandat du registre"
                 : incumbent
                   ? "maire en place"
-                  : "registre en retard",
+                  : priorVerdict === "SAME"
+                    ? "registre en retard"
+                    : "ancien mandat, identité incertaine",
             });
             if (verbose) console.log(`  Indécis ${row.inseeCode}: ${row.lastName}`);
             counts.undecided++;
