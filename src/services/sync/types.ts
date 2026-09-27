@@ -402,7 +402,7 @@ export interface MaireRNECSV {
 export interface Phase2Simulation {
   /** Profiles that would be merged into an existing one, then DELETED. Irreversible. */
   matched: number;
-  /** Left for a human; nothing happens to them. */
+  /** Possible duplicates: created, then set to DRAFT for a human to arbitrate. */
   review: number;
   /** No candidate: the created profile stays. */
   notFound: number;

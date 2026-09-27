@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 // Nothing under test touches the database; the unit CI job has no DATABASE_URL.
 vi.mock("@/lib/db", () => ({ db: {} }));
 
+import { Judgement } from "@/generated/prisma";
+
 import {
   compareHolder,
+  decidePhase2Action,
   decidePhase1Action,
   isChronologicallyClosable,
   isFurtherTerm,
@@ -386,5 +389,26 @@ describe("isFurtherTerm", () => {
     expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-05-24"))).toBe(false);
     expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-05-26"))).toBe(false);
     expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-03-01"))).toBe(false);
+  });
+});
+
+describe("decidePhase2Action", () => {
+  it("fusionne quand l'identité est confirmée", () => {
+    expect(decidePhase2Action(Judgement.SAME)).toBe("merge");
+  });
+
+  it("met en brouillon sur un doute plutôt que de publier un doublon", () => {
+    // Mesuré le 2026-09-27 : 2 647 fiches sur 12 004. Le résolveur dit qu'elles pourraient
+    // doubler quelqu'un que nous détenons déjà, et rien ne le signalait : la Phase 2 les
+    // laissait publiées et ne les comptait même pas dans son rapport.
+    expect(decidePhase2Action(Judgement.UNDECIDED)).toBe("draft");
+  });
+
+  it("laisse publiée une fiche que rien ne rapproche d'une autre", () => {
+    // 9 262 maires sans homonyme en base. Ce sont de nouvelles personnes, pas des doutes.
+    expect(decidePhase2Action(null)).toBe("keep");
+    expect(decidePhase2Action(Judgement.NOT_SAME)).toBe("keep");
+    // `ResolveResult.decision` porte un quatrième état hors de l'enum Prisma.
+    expect(decidePhase2Action("NEW")).toBe("keep");
   });
 });
