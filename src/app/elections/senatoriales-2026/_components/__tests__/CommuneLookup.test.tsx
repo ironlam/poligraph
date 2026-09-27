@@ -331,7 +331,7 @@ describe("CommuneLookup : formulation selon la phase du scrutin", () => {
    * le 27 partout. « ce 27 septembre » est présent sans rien affirmer sur le jour local.
    */
   it("le jour du scrutin : au présent, sans terme relatif au lecteur", async () => {
-    render(<CommuneLookup phase="polling-day" />);
+    render(<CommuneLookup phase="polling-day" isBallotDay />);
     await search("33430");
     await screen.findByText(/6 sièges sont à pourvoir en Gironde ce 27 septembre/);
     expect(screen.getByText(/votent ce 27 septembre/)).toBeInTheDocument();
@@ -341,11 +341,11 @@ describe("CommuneLookup : formulation selon la phase du scrutin", () => {
   it("après le scrutin : au passé, et aucun résultat annoncé", async () => {
     render(<CommuneLookup phase="after" />);
     await search("33430");
-    await screen.findByText(/faisait partie du renouvellement du 27 septembre/);
-    expect(screen.getByText(/y ont pris part/)).toBeInTheDocument();
+    await screen.findByText(/a fait partie du renouvellement du 27 septembre/);
+    expect(screen.getByText(/étaient appelés à y voter/)).toBeInTheDocument();
     expect(screen.queryByText(/à pourvoir/)).toBeNull();
     expect(screen.queryByText(/voteront|votent ce 27 septembre/)).toBeNull();
-    // Rien ne doit ressembler à une proclamation tant que l'état 4 n'existe pas.
+    // Rien ne doit ressembler à une proclamation tant qu'aucun élu n'est publié.
     expect(screen.queryByText(/élu|réélu|résultat/i)).toBeNull();
   });
 });
@@ -416,5 +416,78 @@ describe("CommuneLookup : provenance statutaire", () => {
       expect.stringContaining("LEGISCTA000006148536")
     );
     expect(screen.queryByRole("link", { name: /tableau n° 6/ })).toBeNull();
+  });
+});
+
+describe("CommuneLookup : après le scrutin", () => {
+  const ELECTED_33 = {
+    "33": [
+      {
+        constituencyCode: "33",
+        constituencyName: "Gironde",
+        name: "Florence LASSARADE",
+        nuanceLabel: "Liste des Républicains",
+        round: 1 as const,
+        politicianId: "p1",
+        politicianSlug: "florence-lassarade",
+        status: "reelected" as const,
+        gender: "F" as const,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "cp=33430": { postalCode: "33430", communes: [BAZAS] },
+        "insee=33036": BAZAS_ANSWER,
+      })
+    );
+  });
+
+  it("passe au passé le 28 entre minuit et 2 h, quand ce n'est plus le jour du scrutin", async () => {
+    const { container } = render(<CommuneLookup phase="polling-day" isBallotDay={false} />);
+    await search("33430");
+    await screen.findByText(/a fait partie du renouvellement du 27 septembre/);
+    expect(container.textContent).not.toMatch(/votent ce 27 septembre/);
+  });
+
+  it("garde le présent le jour du scrutin", async () => {
+    render(<CommuneLookup phase="polling-day" isBallotDay />);
+    await search("33430");
+    await screen.findByText(/votent ce 27 septembre/);
+  });
+
+  it("ne dit pas que les grands électeurs ont tous voté", async () => {
+    const { container } = render(<CommuneLookup phase="after" />);
+    await search("33430");
+    await screen.findByText(/étaient appelés à y voter/);
+    expect(container.textContent).not.toMatch(/y ont pris part/);
+  });
+
+  it("retire le badge « Siège en jeu » une fois le scrutin passé", async () => {
+    render(<CommuneLookup phase="after" />);
+    await search("33430");
+    await screen.findByText(/a fait partie du renouvellement/);
+    expect(screen.queryByText("Siège en jeu")).toBeNull();
+  });
+
+  it("nomme les élus de la circonscription quand ils sont publiés", async () => {
+    render(<CommuneLookup phase="after" electedByCode={ELECTED_33} />);
+    await search("33430");
+    expect(
+      await screen.findByRole("heading", { name: "Élus le 27 septembre en Gironde" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Réélue")).toBeInTheDocument();
+  });
+
+  it("passe au passé dès que des élus sont publiés, même le jour du scrutin", async () => {
+    const { container } = render(
+      <CommuneLookup phase="polling-day" isBallotDay electedByCode={ELECTED_33} />
+    );
+    await search("33430");
+    await screen.findByText(/a fait partie du renouvellement/);
+    expect(container.textContent).not.toMatch(/votent ce 27 septembre/);
   });
 });

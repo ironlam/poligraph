@@ -11,9 +11,18 @@ import {
   SUPPLEMENTARY_DELEGATE_STEP,
 } from "@/config/senatoriales";
 import { COMMUNE_POPULATION_SOURCE } from "@/config/communes";
-import { getCommuneCollege, getCommuneDataFetchedAt } from "@/lib/data/senatoriales";
+import {
+  getCommuneCollege,
+  getCommuneDataFetchedAt,
+  getSenatorialesElection,
+} from "@/lib/data/senatoriales";
 import { inhabitantsPerDelegate } from "@/lib/senatoriales/college";
-import { ELECTORAL_CODE_URL, GRANDS_ELECTEURS_TOTAL, SOURCE_ELECTORAL_CODE } from "../_content";
+import {
+  ELECTORAL_CODE_URL,
+  SOURCE_ELECTORAL_CODE,
+  collegeVotersLine,
+  getBallotPhase,
+} from "../_content";
 
 export const revalidate = 300;
 
@@ -38,11 +47,16 @@ function formatInt(value: number): string {
 }
 
 export default async function CollegeElectoralPage() {
-  const [city, village, fetchedAt] = await Promise.all([
+  const [city, village, fetchedAt, election] = await Promise.all([
     getCommuneCollege(CITY_INSEE),
     getCommuneCollege(VILLAGE_INSEE),
     getCommuneDataFetchedAt(),
+    getSenatorialesElection(),
   ]);
+  // Same rule as the hub: past once the phase is over, or once the ballot's own Paris day
+  // has ended while the phase still reads "polling-day".
+  const phase = election ? getBallotPhase(election.status) : "before";
+  const isPast = phase === "after" || (phase === "polling-day" && !election?.isBallotDay);
 
   const cityLocative = getDepartmentLocative(city?.departmentCode);
   const populationSource = {
@@ -174,9 +188,8 @@ export default async function CollegeElectoralPage() {
                     {city.name} envoie {formatInt(city.college.total)} grands électeurs
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                    Sur les {formatInt(GRANDS_ELECTEURS_TOTAL)} qui votent le 27 septembre. Le vote
-                    est obligatoire : un grand électeur qui s{"'"}abstient sans excuse encourt une
-                    amende.
+                    {collegeVotersLine(isPast)} Le vote est obligatoire : un grand électeur qui s
+                    {"'"}abstient sans excuse encourt une amende.
                   </p>
                 </div>
                 <p className="shrink-0 font-display text-xl font-extrabold tabular-nums">

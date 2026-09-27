@@ -169,3 +169,10 @@ describe("CandidacyDeposit : les absences assumées", () => {
     }
   });
 });
+
+describe("CandidacyDeposit : après le scrutin", () => {
+  it("ne rend plus l'avis sur les listes de candidats", () => {
+    render(<CandidacyDeposit phase="closed" ballotPhase="after" />);
+    expect(screen.queryByText(/Nous ne publions aucune liste de candidats/)).toBeNull();
+  });
+});

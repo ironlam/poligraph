@@ -11,8 +11,11 @@ import { SourceLine } from "@/components/ui/SourceLine";
 import { getDepartmentLocative } from "@/config/department-prepositions";
 import type { CommuneCollege } from "@/lib/senatoriales/college";
 import type { DepartmentRenewal, SittingSenator } from "@/lib/data/senatoriales";
+import type { ElectedSenator } from "@/lib/senatoriales/results-summary";
+import { ElectedByConstituency } from "./ElectedByConstituency";
 import {
   SOURCE_ELECTORAL_CODE,
+  SOURCE_INTERIOR_RESULTS,
   SOURCE_MAYOTTE_SEATS,
   SOURCE_SENAT,
   SOURCE_TABLEAU_5,
@@ -52,17 +55,26 @@ function formatInt(value: number): string {
 /**
  * The block's tense follows the resolved phase, not a date compared here.
  *
- * Once the ballot is held it says the department took part, and stops there: no
- * result is announced while nothing feeds one. A page that still reads "à pourvoir le
- * 27 septembre" on 28 September is not merely stale, it asserts something false.
+ * Once the ballot is held it says the department took part. A page that still reads
+ * "à pourvoir le 27 septembre" on 28 September is not merely stale, it asserts something
+ * false. Two cases turn it past before the phase does: the resolved phase stays
+ * "polling-day" until about 02:00 Paris on the 28th while the ballot's own day is over,
+ * and a constituency whose elected people are published is decided whatever the hour.
  */
-function renewedHeadline(phase: BallotPhase, seats: number | null, where: string): string {
+type Tense = "future" | "present" | "past";
+
+function tenseOf(phase: BallotPhase, isBallotDay: boolean, hasElected: boolean): Tense {
+  if (phase === "after" || hasElected) return "past";
+  if (phase === "polling-day") return isBallotDay ? "present" : "past";
+  return "future";
+}
+function renewedHeadline(tense: Tense, seats: number | null, where: string): string {
   const count = seats !== null && seats > 0 ? seats : null;
   const seatWord = count !== null && count > 1 ? "sièges" : "siège";
-  if (phase === "after") {
-    return `Ce département faisait partie du renouvellement du 27 septembre`;
+  if (tense === "past") {
+    return `Ce département a fait partie du renouvellement du 27 septembre`;
   }
-  if (phase === "polling-day") {
+  if (tense === "present") {
     return count !== null
       ? `${count} ${seatWord} sont à pourvoir ${where} ce 27 septembre`
       : `Des sièges sont à pourvoir ${where} ce 27 septembre`;
@@ -72,11 +84,11 @@ function renewedHeadline(phase: BallotPhase, seats: number | null, where: string
     : `Des sièges sont à pourvoir ${where} le 27 septembre`;
 }
 
-function renewedDetail(phase: BallotPhase, delegates: number, communeName: string): string {
-  if (phase === "after") {
-    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} y ont pris part.`;
+function renewedDetail(tense: Tense, delegates: number, communeName: string): string {
+  if (tense === "past") {
+    return `Les ${formatInt(delegates)} grands électeurs de ${communeName} étaient appelés à y voter.`;
   }
-  if (phase === "polling-day") {
+  if (tense === "present") {
     return `Les ${formatInt(delegates)} grands électeurs de ${communeName} votent ce 27 septembre.`;
   }
   return `Les ${formatInt(delegates)} grands électeurs de ${communeName} voteront ce jour-là.`;
@@ -99,7 +111,17 @@ function renewedDetail(phase: BallotPhase, delegates: number, communeName: strin
  * are in that case, so the block shows their delegates and says they will vote at the
  * next renewal, rather than turning into a dead end.
  */
-export function CommuneLookup({ phase }: { phase: BallotPhase }) {
+export function CommuneLookup({
+  phase,
+  isBallotDay = false,
+  electedByCode = {},
+}: {
+  phase: BallotPhase;
+  /** The ballot's own Paris calendar day, narrower than the "polling-day" phase. */
+  isBallotDay?: boolean;
+  /** People elected on 27 September, by constituency code, once published. */
+  electedByCode?: Record<string, ElectedSenator[]>;
+}) {
   const inputId = useId();
   const errorId = useId();
   const [postalCode, setPostalCode] = useState("");
@@ -215,13 +237,31 @@ export function CommuneLookup({ phase }: { phase: BallotPhase }) {
           </div>
         )}
 
-        {state.kind === "answer" && <CommuneAnswerPanel answer={state.answer} phase={phase} />}
+        {state.kind === "answer" && (
+          <CommuneAnswerPanel
+            answer={state.answer}
+            elected={electedByCode[state.answer.commune.departmentCode] ?? []}
+            tense={tenseOf(
+              phase,
+              isBallotDay,
+              (electedByCode[state.answer.commune.departmentCode]?.length ?? 0) > 0
+            )}
+          />
+        )}
       </div>
     </section>
   );
 }
 
-function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: BallotPhase }) {
+function CommuneAnswerPanel({
+  answer,
+  elected,
+  tense,
+}: {
+  answer: CommuneAnswer;
+  elected: ElectedSenator[];
+  tense: Tense;
+}) {
   const { commune, college, inhabitantsPerDelegate, renewal, seatsAtStake, senators } = answer;
   const locative = getDepartmentLocative(commune.departmentCode);
   const where = locative ?? `dans le département ${commune.departmentName}`;
@@ -276,10 +316,10 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
         <div className="mt-3 rounded-lg border border-border p-3">
           {renewal === "renewed" && (
             <>
-              <p className="font-semibold">{renewedHeadline(phase, seatsAtStake, where)}</p>
+              <p className="font-semibold">{renewedHeadline(tense, seatsAtStake, where)}</p>
               {college !== null && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {renewedDetail(phase, college.total, commune.name)}
+                  {renewedDetail(tense, college.total, commune.name)}
                 </p>
               )}
             </>
@@ -316,10 +356,22 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
         </Link>
       </div>
 
-      <SenatorsList senators={senators} where={where} />
+      {elected.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold">Élus le 27 septembre {where}</h3>
+          <ElectedByConstituency elected={elected} grouped={false} />
+        </div>
+      )}
+
+      <SenatorsList senators={senators} where={where} past={tense === "past"} />
 
       <SourceLine
-        sources={[...statutorySources, SOURCE_SENAT, SOURCE_ELECTORAL_CODE]}
+        sources={[
+          ...statutorySources,
+          SOURCE_SENAT,
+          SOURCE_ELECTORAL_CODE,
+          ...(elected.length > 0 ? [SOURCE_INTERIOR_RESULTS] : []),
+        ]}
         note={
           commune.departmentCode === "976"
             ? "Mayotte : 2 sièges selon LO473, renouvelés avec la série 1 selon L474 ; titulaires issus du Sénat ; barème appliqué à la population municipale et à l'effectif du conseil"
@@ -330,7 +382,16 @@ function CommuneAnswerPanel({ answer, phase }: { answer: CommuneAnswer; phase: B
   );
 }
 
-function SenatorsList({ senators, where }: { senators: SittingSenator[]; where: string }) {
+function SenatorsList({
+  senators,
+  where,
+  past,
+}: {
+  senators: SittingSenator[];
+  where: string;
+  /** Once the ballot is held, a series-2 seat is no longer "en jeu". */
+  past: boolean;
+}) {
   if (senators.length === 0) {
     return (
       <MissingData title="Aucun sénateur rattaché à ce département">
@@ -355,7 +416,7 @@ function SenatorsList({ senators, where }: { senators: SittingSenator[]; where: 
               >
                 {senator.fullName}
               </Link>
-              {senator.series !== null && (
+              {senator.series !== null && !(past && senator.series === 2) && (
                 <Badge variant="outline" className="text-xs">
                   {senator.series === 2 ? "Siège en jeu" : "Jusqu'en 2029"}
                 </Badge>

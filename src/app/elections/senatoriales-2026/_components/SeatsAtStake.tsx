@@ -57,11 +57,12 @@ export function SeatsAtStake({
           Ce qui était remis en jeu
         </h2>
         <MissingData title="Comparaison avant et après non encore publiée">
-          Le scrutin a eu lieu. La répartition par groupe que nous calculons décrit désormais le
-          Sénat renouvelé, pas celui qui se présentait devant les grands électeurs, et nous
-          préférons ne rien afficher plutôt que de présenter l{"'"}une pour l{"'"}autre. La
-          composition sortante a été relevée avant le scrutin ; nous ne la republions pas tant que
-          la comparaison n{"'"}est pas en place.
+          Le scrutin a eu lieu. À partir du 1er octobre, début du mandat des élus, la répartition
+          par groupe que nous calculons décrira le Sénat renouvelé et plus celui qui se présentait
+          devant les grands électeurs, et les groupes des nouveaux sénateurs se constituent après le
+          renouvellement. Nous préférons ne rien afficher plutôt que de présenter l{"'"}une pour l
+          {"'"}autre. La composition sortante a été relevée avant le scrutin ; nous ne la republions
+          pas tant que la comparaison n{"'"}est pas en place.
         </MissingData>
         <SourceLine sources={[SOURCE_SENAT]} reportHref={null} />
       </section>

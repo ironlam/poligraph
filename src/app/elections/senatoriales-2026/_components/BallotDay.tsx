@@ -5,6 +5,8 @@ import {
   BALLOT_DAY_LEDE,
   BALLOT_DAY_NO_RESULTS_BODY,
   BALLOT_DAY_NO_RESULTS_TITLE,
+  BALLOT_DAY_RESULTS_BODY,
+  BALLOT_DAY_RESULTS_TITLE,
   SOURCE_DECREE,
 } from "../_content";
 
@@ -22,7 +24,7 @@ import {
  * merely omitting it, because on the evening of a ballot an empty space reads as a
  * result that has not loaded yet.
  */
-export function BallotDay() {
+export function BallotDay({ resultsPublished = false }: { resultsPublished?: boolean }) {
   return (
     <section aria-labelledby="jour-scrutin-heading" className="space-y-4">
       <div className="space-y-2">
@@ -35,7 +37,16 @@ export function BallotDay() {
         <p className="max-w-3xl text-sm text-muted-foreground md:text-base">{BALLOT_DAY_LEDE}</p>
       </div>
 
-      <MissingData title={BALLOT_DAY_NO_RESULTS_TITLE}>{BALLOT_DAY_NO_RESULTS_BODY}</MissingData>
+      {resultsPublished ? (
+        <div className="rounded-xl border border-border p-4">
+          <p className="font-semibold">{BALLOT_DAY_RESULTS_TITLE}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {BALLOT_DAY_RESULTS_BODY}
+          </p>
+        </div>
+      ) : (
+        <MissingData title={BALLOT_DAY_NO_RESULTS_TITLE}>{BALLOT_DAY_NO_RESULTS_BODY}</MissingData>
+      )}
 
       <SourceLine
         sources={[SOURCE_DECREE]}

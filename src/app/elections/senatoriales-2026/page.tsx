@@ -7,15 +7,19 @@ import { SourceLine } from "@/components/ui/SourceLine";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { EventJsonLd } from "@/components/seo/JsonLd";
 import { formatDate } from "@/lib/utils";
+import type { ElectedSenator } from "@/lib/senatoriales/results-summary";
 import { SITE_URL } from "@/config/site";
 import {
   getGroupExposure,
   getSenatorialesElection,
+  getSenatorialesResults,
   SENATORIALES_2026_SLUG,
 } from "@/lib/data/senatoriales";
 import { BallotDay } from "./_components/BallotDay";
 import { CandidacyDeposit } from "./_components/CandidacyDeposit";
 import { CommuneLookup } from "./_components/CommuneLookup";
+import { ElectedByConstituency } from "./_components/ElectedByConstituency";
+import { ResultsOverview } from "./_components/ResultsOverview";
 import { MunicipalBridge } from "./_components/MunicipalBridge";
 import { ScrutinRules } from "./_components/ScrutinRules";
 import { SeatsAtStake } from "./_components/SeatsAtStake";
@@ -26,6 +30,9 @@ import {
   HUB_LEDE_PAST,
   HUB_TITLE,
   HUB_TITLE_PAST,
+  RESULTS_ELECTED_HEADING,
+  RESULTS_NUANCE_NOTE,
+  SOURCE_INTERIOR_RESULTS,
   SENATE_SEATS_AT_STAKE,
   SENATE_SEATS_TOTAL,
   SOURCE_DECREE,
@@ -49,11 +56,17 @@ export async function generateMetadata(): Promise<Metadata> {
   if (!election) {
     return { title: "Sénatoriales 2026", robots: { index: false, follow: true } };
   }
+  const isOver = getBallotPhase(election.status) === "after";
   return {
-    title: "Sénatoriales 2026 : la composition du Sénat se joue dans les conseils municipaux",
-    description:
-      "Le 27 septembre 2026, 178 sièges du Sénat sont renouvelés par 93 469 grands électeurs. " +
-      "Le calendrier par série, le barème du collège et les sénateurs sortants par département.",
+    title: isOver
+      ? "Sénatoriales 2026 : la composition du Sénat s'est jouée dans les conseils municipaux"
+      : "Sénatoriales 2026 : la composition du Sénat se joue dans les conseils municipaux",
+    description: isOver
+      ? "Le 27 septembre 2026, 178 sièges du Sénat ont été renouvelés par 93 469 grands " +
+        "électeurs. Les élus par circonscription, le barème du collège et les sénateurs par " +
+        "département."
+      : "Le 27 septembre 2026, 178 sièges du Sénat sont renouvelés par 93 469 grands électeurs. " +
+        "Le calendrier par série, le barème du collège et les sénateurs sortants par département.",
     alternates: { canonical: `/elections/${SENATORIALES_2026_SLUG}` },
   };
 }
@@ -73,6 +86,14 @@ export default async function SenatorialesHubPage() {
   // Narrower than the phase on purpose: `isBallotDay` is the ballot's own Paris day, so
   // the "aujourd'hui" wording cannot outlive it by the two hours the UTC window adds.
   const isBallotDay = phase === "polling-day" && election.isBallotDay;
+  // Results are read from the ballot's day on, so the constituencies imported on the
+  // evening of the 27th show before the phase turns "after" at about 02:00 Paris.
+  const results = phase === "before" ? null : await getSenatorialesResults();
+  const hasResults = results !== null && results.seatsFilled > 0;
+  const electedByCode: Record<string, ElectedSenator[]> = {};
+  for (const person of results?.elected ?? []) {
+    (electedByCode[person.constituencyCode] ??= []).push(person);
+  }
   const now = new Date();
   const daysUntil =
     election.round1Date && !isOver
@@ -202,9 +223,35 @@ export default async function SenatorialesHubPage() {
 
           {/* État 3, on the ballot's own day only. Placed after the bridge so the
               "why this concerns you" block stays the first content of the page. */}
-          {isBallotDay && <BallotDay />}
+          {isBallotDay && <BallotDay resultsPublished={hasResults} />}
 
-          <CommuneLookup phase={phase} />
+          {/* État 4, as soon as one constituency is published. */}
+          {hasResults && results && (
+            <>
+              <ResultsOverview summary={results} />
+              <section aria-labelledby="elus-heading" className="space-y-4">
+                <h2
+                  id="elus-heading"
+                  className="font-display text-xl font-bold tracking-tight md:text-2xl"
+                >
+                  {RESULTS_ELECTED_HEADING}
+                </h2>
+                <ElectedByConstituency elected={results.elected} />
+                <SourceLine
+                  sources={[SOURCE_INTERIOR_RESULTS]}
+                  consultedAt={results.lastImportedAt}
+                  note={RESULTS_NUANCE_NOTE}
+                  reportHref={null}
+                />
+              </section>
+            </>
+          )}
+
+          <CommuneLookup
+            phase={phase}
+            isBallotDay={isBallotDay}
+            electedByCode={hasResults ? electedByCode : undefined}
+          />
 
           <SeatsAtStake exposure={groupExposure} phase={phase} />
 

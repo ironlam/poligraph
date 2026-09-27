@@ -79,7 +79,11 @@ export function CandidacyDeposit({
         <p className="text-sm leading-relaxed text-muted-foreground">{CANDIDACY_FEHF_NOTE}</p>
       )}
 
-      <MissingData title={CANDIDACY_MISSING_TITLE}>{CANDIDACY_MISSING_BODY}</MissingData>
+      {/* Why no candidate is listed stops mattering once the ballot is over: the elected
+          people are published above, and a notice about lists would read as a gap. */}
+      {ballotPhase !== "after" && (
+        <MissingData title={CANDIDACY_MISSING_TITLE}>{CANDIDACY_MISSING_BODY}</MissingData>
+      )}
 
       <SourceLine
         sources={[SOURCE_DECREE, SOURCE_FEHF_CANDIDACY]}
