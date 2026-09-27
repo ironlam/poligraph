@@ -19,6 +19,8 @@ interface InfoTooltipProps {
   className?: string;
   /** Side of the tooltip */
   side?: "top" | "bottom" | "left" | "right";
+  /** Readable name for screen readers; without it the glossary key is read out. */
+  label?: string;
 }
 
 /**
@@ -38,6 +40,7 @@ export function InfoTooltip({
   size = "sm",
   className,
   side = "top",
+  label,
 }: InfoTooltipProps) {
   /* A tap fires, in this order, `pointerdown`, `focus`, then `click`. Radix opens the
      tooltip on focus and closes it on click, so on mobile the definition appeared and
@@ -101,8 +104,8 @@ export function InfoTooltip({
             size === "sm" ? "p-0.5" : "p-1",
             className
           )}
-          aria-label={`Aide : ${term || "information"}`}
-          title={`Aide : ${term || "information"}`}
+          aria-label={`Aide : ${label ?? (term || "information")}`}
+          title={`Aide : ${label ?? (term || "information")}`}
         >
           <Info className={iconSize} aria-hidden="true" />
         </button>

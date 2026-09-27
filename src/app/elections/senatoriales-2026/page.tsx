@@ -112,7 +112,7 @@ export default async function SenatorialesHubPage() {
         />
       )}
 
-      <main id="main-content" className="container mx-auto max-w-5xl px-4 pt-4 pb-12">
+      <div className="container mx-auto max-w-5xl px-4 pt-4 pb-12">
         <Breadcrumb
           items={[{ label: "Élections", href: "/elections" }, { label: "Sénatoriales 2026" }]}
         />
@@ -152,7 +152,11 @@ export default async function SenatorialesHubPage() {
                         control. */}
                     <p className="flex items-center gap-1 text-sm font-semibold leading-tight">
                       Renouvellement de la série 2
-                      <InfoTooltip term="serieSenatoriale" className="-my-3 min-h-11 min-w-11" />
+                      <InfoTooltip
+                        term="serieSenatoriale"
+                        label="série sénatoriale"
+                        className="-my-3 min-h-11 min-w-11"
+                      />
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       {/* "Jour du scrutin", not "Aujourd'hui": `isBallotDay` is the Paris
@@ -264,7 +268,7 @@ export default async function SenatorialesHubPage() {
 
           <SenateMilestones />
         </div>
-      </main>
+      </div>
     </>
   );
 }

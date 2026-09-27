@@ -65,7 +65,7 @@ export default async function CollegeElectoralPage() {
   };
 
   return (
-    <main id="main-content" className="container mx-auto max-w-3xl px-4 pt-4 pb-12">
+    <div className="container mx-auto max-w-3xl px-4 pt-4 pb-12">
       <Breadcrumb
         items={[
           { label: "Élections", href: "/elections" },
@@ -326,6 +326,6 @@ export default async function CollegeElectoralPage() {
           Retour aux sénatoriales 2026
         </Link>
       </div>
-    </main>
+    </div>
   );
 }

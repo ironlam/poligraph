@@ -491,3 +491,34 @@ describe("CommuneLookup : après le scrutin", () => {
     expect(container.textContent).not.toMatch(/votent ce 27 septembre/);
   });
 });
+
+describe("CommuneLookup : accessibilité", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        "cp=33430": { postalCode: "33430", communes: [BAZAS, BERNOS] },
+        "insee=33036": BAZAS_ANSWER,
+      })
+    );
+  });
+
+  it("place le focus sur le nom de la commune choisie", async () => {
+    render(<CommuneLookup phase="before" />);
+    const user = await search("33430");
+    await user.click(await screen.findByRole("button", { name: "Bazas" }));
+    const heading = await screen.findByRole("heading", { level: 3, name: "Bazas" });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it("annonce une phrase courte, pas tout le panneau", async () => {
+    const { container } = render(<CommuneLookup phase="before" />);
+    const user = await search("33430");
+    await user.click(await screen.findByRole("button", { name: "Bazas" }));
+    await screen.findByRole("heading", { level: 3, name: "Bazas" });
+    const live = container.querySelector('[aria-live="polite"]');
+    expect(live?.textContent?.length ?? 0).toBeLessThan(200);
+    expect(live?.textContent).toMatch(/Bazas/);
+    expect(live?.textContent).toMatch(/15 grands électeurs/);
+  });
+});

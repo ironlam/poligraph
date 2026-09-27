@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type Ref } from "react";
 import Link from "next/link";
 import { Scale } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -126,6 +126,13 @@ export function CommuneLookup({
   const errorId = useId();
   const [postalCode, setPostalCode] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
+  const answerHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  // A chosen commune replaces the buttons the focus was on, which dropped it to <body>
+  // (measured in production): move it to the answer's heading instead.
+  useEffect(() => {
+    if (state.kind === "answer") answerHeadingRef.current?.focus();
+  }, [state]);
 
   async function lookupPostalCode(code: string) {
     setState({ kind: "loading" });
@@ -208,6 +215,12 @@ export function CommuneLookup({
         </Button>
       </form>
 
+      {/* One short sentence is announced. The whole panel used to sit in the live region,
+          so a screen reader read out about 2,000 characters for Paris. */}
+      <p aria-live="polite" className="sr-only">
+        {announcementFor(state)}
+      </p>
+
       <div aria-live="polite" className="space-y-4">
         {state.kind === "error" && (
           <p id={errorId} className="text-sm text-destructive">
@@ -236,9 +249,12 @@ export function CommuneLookup({
             </ul>
           </div>
         )}
+      </div>
 
+      <div>
         {state.kind === "answer" && (
           <CommuneAnswerPanel
+            headingRef={answerHeadingRef}
             answer={state.answer}
             elected={electedByCode[state.answer.commune.departmentCode] ?? []}
             tense={tenseOf(
@@ -254,10 +270,12 @@ export function CommuneLookup({
 }
 
 function CommuneAnswerPanel({
+  headingRef,
   answer,
   elected,
   tense,
 }: {
+  headingRef: Ref<HTMLHeadingElement>;
   answer: CommuneAnswer;
   elected: ElectedSenator[];
   tense: Tense;
@@ -276,7 +294,13 @@ function CommuneAnswerPanel({
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {commune.departmentName} ({commune.departmentCode})
         </p>
-        <p className="font-display text-2xl font-extrabold tracking-tight">{commune.name}</p>
+        <h3
+          ref={headingRef}
+          tabIndex={-1}
+          className="font-display text-2xl font-extrabold tracking-tight focus:outline-none"
+        >
+          {commune.name}
+        </h3>
 
         {college === null ? (
           <MissingData className="mt-3" title="Nombre de délégués inconnu">
@@ -380,6 +404,24 @@ function CommuneAnswerPanel({
       />
     </div>
   );
+}
+
+function announcementFor(state: State): string {
+  switch (state.kind) {
+    case "answer": {
+      const { commune, college, renewal } = state.answer;
+      const delegates = college === null ? "" : `, ${formatInt(college.total)} grands électeurs`;
+      const seats =
+        renewal === "renewed"
+          ? ", sièges remis en jeu en 2026"
+          : renewal === "not-renewed"
+            ? ", aucun siège cette année"
+            : "";
+      return `${commune.name}${delegates}${seats}.`;
+    }
+    default:
+      return "";
+  }
 }
 
 function SenatorsList({
