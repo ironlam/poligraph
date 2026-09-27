@@ -130,7 +130,9 @@ Full list in `package.json` under `scripts`. Most have a `:stats` dry-run varian
 
 ```bash
 npx tsx scripts/my-script.ts
-npx dotenv -e .env -- npx tsx scripts/x.ts   # When env loading is needed
+npx tsx --env-file=.env scripts/x.ts   # When env loading is needed. There is no `dotenv` binary
+                                       # here: `npx dotenv` fails with "could not determine
+                                       # executable to run".
 ```
 
 ### What belongs in `scripts/`
@@ -178,7 +180,7 @@ The sentence above leaves one box unnamed, and the codebase filled it in three d
 | Talking to something outside?           | `src/lib/api/`             | The only outbound network clients under `src/lib/`. |
 | A pipeline, a sync, a bulk write?       | `src/services/<domain>/`   | Orchestration. External I/O belongs here.           |
 
-Read it as a decision, not a taxonomy: `publish-guard.ts` writes to the DB and is an invariant, so it is `src/lib/affairs/`. `discover-affairs.ts` calls the press, resolves, and writes in bulk, so it is `src/services/sync/`. `getPolitician()` renders a page, so it is `src/lib/data/`.
+Read it as a decision, not a taxonomy: `publish-guard.ts` writes to the DB and is an invariant, so it is `src/lib/affairs/`. `discover-affairs.ts` calls the press, resolves, and writes in bulk, so it is `src/services/sync/`. `getPoliticianIdentity()` renders a page, so it is `src/lib/data/`.
 
 Two ratchets carry the debt that predates the rule, both frozen lists in the guard file: `NETWORK_EXCEPTIONS` (four `src/lib/` modules that fetch) and `PAGE_DB_DEBT` (nineteen public pages importing `@/lib/db` instead of reading through `src/lib/data/`). Entries come off the lists as code migrates. Adding one fails review.
 
@@ -428,7 +430,23 @@ These are scar-tissue lessons. Reading them costs thirty seconds; rediscovering 
 
 ## 9. CI pipeline
 
-On push to `main` or `staging`, four parallel jobs run: **lint**, **typecheck**, **format-check**, **unit-tests**. Node 22. Prisma generate runs first in every job.
+On push to `main` or `staging`, and on every pull request, around twenty checks run in parallel.
+Node 22. Prisma generate runs first in every job. Listed by family, because the individual job
+names move:
+
+- **Static**: ESLint, Prettier, TypeScript.
+- **Unit Tests**: the full Vitest run.
+- **Build**: a real `next build`. This is the only job that exercises the production compilation
+  path, so a change that typechecks cleanly can still fail here.
+- **Architecture guards**: `Architecture` and `React Patterns` run the suites under
+  `src/__tests__/architecture/`.
+- **PostgreSQL integration**: four suites against a disposable database (dossier aliases and audit
+  rollback, election API, presidential measure load reductions, RNE arrondissements).
+- **Security**: `Security`, CodeQL, and the `SEC-02` / `SEC-03` / `SEC-06` role, least-privilege
+  and function-privilege contracts.
+- **Header responsive**: a Playwright check that boots the app. It needs Google Fonts to resolve,
+  so a network hiccup fails it with a Turbopack `next/font/google` module-not-found followed by a
+  300 s webServer timeout. Re-run it before investigating your own diff.
 
 **Code Quality Guards** (`.github/workflows/code-quality.yml`): grep-based security checks (no npm install, ~6 s). They block:
 
