@@ -186,21 +186,52 @@ export function canAdoptByName(input: {
 export type Phase2Action = "merge" | "draft" | "keep";
 
 /**
+ * Whether a freshly imported profile could plausibly duplicate the candidate the resolver picked.
+ *
+ * Phase 2 asks a narrower question than the rest of this file, and the burden of proof runs the
+ * other way. Everywhere else the destructive act is closing a mandate, so a doubt protects.
+ * Here the destructive act is holding a profile back: an unpublished mayor is an elected mayor
+ * missing from the site. So it is the holding back that has to be justified.
+ *
+ * Evidence AGAINST a duplicate, and either one is enough:
+ *
+ * - Two known birth dates that diverge. 1 536 of the 2 647 profiles the first full run held
+ *   back are this: "Catherine Hervieu" the mayor scored 1.00 against "Catherine Hervieu" the
+ *   deputy, born on another day. The resolver's score is built to screen a name against the
+ *   whole country and does not penalise that.
+ * - A different first name when no birth date can be compared. 1 096 more. The surname is
+ *   shared by definition, the resolver having looked candidates up by it, so the first name is
+ *   the only signal left and a different one argues against.
+ *
+ * Not one of those 2 647 had a matching birth date.
+ */
+export function couldDuplicate(incoming: HolderFacts, candidate: HolderFacts): boolean {
+  const verdict = compareHolder(incoming, candidate);
+  if (verdict === "DIFFERENT") return false;
+  if (verdict === "SAME") return true;
+  return nameVerdict(incoming.firstName, candidate.firstName) !== "DIFFERENT";
+}
+
+/**
  * What to do with a freshly imported profile once the resolver has judged it.
  *
- * `merge` moves its mandates onto the existing profile and DELETES it, which cannot be undone.
- * It needs a confirmed identity, and nothing less.
+ * Two opinions, not one. The resolver ranks candidates by a score built for screening a name
+ * against the whole country; `couldDuplicate` asks whether the evidence leaves room for a
+ * duplicate at all. The score alone is not enough in either direction.
  *
- * `draft` is the answer to a doubt. The resolver says this mayor may be someone we already
- * hold, without being sure. Publishing them anyway puts a second profile of a real person on a
- * transparency site, and nothing downstream would flag it: the merge step skipped these rows
- * and its report did not even count them. Measured on the register, 2 647 of the 12 004
- * profiles an import would create land here.
+ * `merge` moves the mandates onto the existing profile and DELETES this one, which cannot be
+ * undone, so evidence of two people vetoes it whatever the score says.
  *
- * `keep` is for a mayor with no namesake at all, 9 262 of them. A new person, not a doubt.
- * The resolver spells that one `"NEW"`, which is a fourth state next to the three judgements.
+ * `draft` is the answer to a doubt that survives both opinions, and it costs a real mayor
+ * their page until a human looks.
+ *
+ * `keep` publishes: a mayor with no namesake at all, or a namesake the evidence separates.
  */
-export function decidePhase2Action(judgement: Judgement | "NEW" | null): Phase2Action {
+export function decidePhase2Action(
+  judgement: Judgement | "NEW" | null,
+  couldBeDuplicate: boolean
+): Phase2Action {
+  if (!couldBeDuplicate) return "keep";
   if (judgement === Judgement.SAME) return "merge";
   if (judgement === Judgement.UNDECIDED) return "draft";
   return "keep";
