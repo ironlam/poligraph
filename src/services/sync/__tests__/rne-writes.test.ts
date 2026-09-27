@@ -222,6 +222,32 @@ describe("écritures du sync RNE", () => {
     expect(h.op("mandate.create").mock.calls[0]![0].data.politicianId).toBe("holder-1");
   });
 
+  it("exclut les fiches qu'il vient de créer des candidats de la Phase 2", async () => {
+    // Sans ça, chaque fiche neuve est son propre meilleur candidat et la Phase 2 ne fusionne
+    // ni ne met en brouillon quoi que ce soit.
+    h.op("politician.findMany").mockResolvedValue([
+      {
+        id: "stub-1",
+        firstName: "Alice",
+        lastName: "Martin",
+        birthDate: new Date("1970-04-02"),
+        mandates: [
+          {
+            id: "m1",
+            departmentCode: "01",
+            localData: { rneExternalId: "01001", communeId: "01001" },
+          },
+        ],
+      },
+    ]);
+
+    await syncRNEMaires();
+
+    expect(h.resolveBatch).toHaveBeenCalledOnce();
+    const passed = h.resolveBatch.mock.calls[0]![0].excludePoliticianIds;
+    expect([...passed]).toEqual(["stub-1"]);
+  });
+
   it("n'écrit rien du tout sur un doute", async () => {
     // "Martinez" contre "Martin" : ni la même personne, ni deux personnes. Rien ne bouge.
     h.op("mandateLocal.findMany").mockImplementation(

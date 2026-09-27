@@ -95,6 +95,15 @@ export interface BatchResolveInput {
   inputs: ResolveInput[];
   sourceType: DataSource;
   onProgress?: (processed: number, total: number) => void;
+  /**
+   * Politicians that must not be offered as candidates, nor trusted in a prior decision.
+   *
+   * For a caller that persists its records before resolving them: the RNE sync creates a
+   * profile in phase 1, then asks in phase 2 whether it duplicates someone. Without this, the
+   * record screens against itself, wins on an exact match, and the true duplicate is never
+   * seen. Measured 2026-09-27: 77 of 78 decisions pointed at the record being resolved.
+   */
+  excludePoliticianIds?: ReadonlySet<string>;
 }
 
 export interface BatchResolveResult {

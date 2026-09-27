@@ -151,7 +151,8 @@ export function scoreCandidate(
  * Use for syncs with 1000+ records. Same scoring logic as resolve().
  */
 export async function resolveBatch(batchInput: BatchResolveInput): Promise<BatchResolveResult> {
-  const { inputs, sourceType, onProgress } = batchInput;
+  const { inputs, sourceType, onProgress, excludePoliticianIds } = batchInput;
+  const excluded: ReadonlySet<string> = excludePoliticianIds ?? new Set<string>();
 
   if (inputs.length === 0) {
     return {
@@ -201,6 +202,8 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
   // Build politician lookup: normalizedLastName → CachedPolitician[]
   const politicianMap = new Map<string, CachedPolitician[]>();
   for (const p of allPoliticians) {
+    // A record cannot be its own candidate, and neither can its siblings from the same batch.
+    if (excluded.has(p.id)) continue;
     const key = normalizeText(p.lastName);
     const cached: CachedPolitician = {
       id: p.id,
@@ -219,6 +222,9 @@ export async function resolveBatch(batchInput: BatchResolveInput): Promise<Batch
   // Build decision lookup: sourceId → Decision[]
   const decisionMap = new Map<string, typeof allDecisions>();
   for (const d of allDecisions) {
+    // A decision pointing at an excluded politician is the previous run's self-match. Trusting
+    // it would short-circuit resolution and carry the defect past its own fix.
+    if (excluded.has(d.politicianId)) continue;
     const existing = decisionMap.get(d.sourceId);
     if (existing) existing.push(d);
     else decisionMap.set(d.sourceId, [d]);
