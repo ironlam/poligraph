@@ -17,6 +17,7 @@
 
 import "dotenv/config";
 import { db } from "../src/lib/db";
+import { USER_AGENT } from "@/config/site";
 import { DataSource, Judgement, MandateType } from "../src/generated/prisma";
 import { resolveBatch } from "../src/lib/identity";
 import {
@@ -58,7 +59,7 @@ const only = args
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchText(url: string): Promise<string | null> {
-  const res = await fetch(url, { headers: { "User-Agent": "Poligraph (poligraph.fr)" } });
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
   if (!res.ok) return null;
   return res.text();
 }

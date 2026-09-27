@@ -187,9 +187,6 @@ export const getGroupExposure = cache(
 
 // ─── Results of 27 September ────────────────────────────────────────
 
-/** 178 territorial and abroad seats; the bound leaves room without being unbounded. */
-const RESULTS_ROW_LIMIT = 200;
-
 /**
  * The people elected on 27 September, as imported from the Ministry feed, compared with
  * the outgoing composition captured before the ballot.
@@ -203,7 +200,8 @@ export const getSenatorialesResults = cache(
     const [rows, snapshot] = await Promise.all([
       db.candidacy.findMany({
         where: { election: { slug: SENATORIALES_2026_SLUG }, isElected: true },
-        take: RESULTS_ROW_LIMIT,
+        // 178 seats at stake; a literal, so the Candidacy read-bounds guard can prove it.
+        take: 200,
         select: {
           candidateName: true,
           constituencyCode: true,
