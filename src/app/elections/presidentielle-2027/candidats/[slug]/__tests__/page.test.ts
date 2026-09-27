@@ -19,9 +19,9 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
   getCandidateFicheDetail: (candidacyId: string, politicianId: string) =>
     mockGetDetail(candidacyId, politicianId),
 }));
-const mockGetPolitician = vi.fn();
+const mockGetPoliticianIdentity = vi.fn();
 vi.mock("@/lib/data/politicians", () => ({
-  getPolitician: (slug: string) => mockGetPolitician(slug),
+  getPoliticianIdentity: (slug: string) => mockGetPoliticianIdentity(slug),
 }));
 
 const candidacy = (overrides: Record<string, unknown> = {}) => ({
@@ -52,7 +52,7 @@ const candidacy = (overrides: Record<string, unknown> = {}) => ({
 describe("page présidentielle d'une personne", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetPolitician.mockResolvedValue({
+    mockGetPoliticianIdentity.mockResolvedValue({
       id: "p1",
       slug: "camille-riviere",
       fullName: "Camille Rivière",

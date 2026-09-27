@@ -11,8 +11,10 @@ import { isFicheCandidatPublishable } from "@/config/publication-gates";
 import { SITE_URL } from "@/config/site";
 import { cn } from "@/lib/utils";
 // Reuses the established politician authority rather than adding a second, lighter read for three
-// fields. It loads more than this page needs, but it is already cached under `politician:<slug>`.
-import { getPolitician } from "@/lib/data/politicians";
+// fields: it is cached under `politician:<slug>`, warmed by /politiques/[slug]. That authority is
+// now the identity half of the profile read, which still carries every field this page uses and no
+// longer drags the affairs tree along with them.
+import { getPoliticianIdentity } from "@/lib/data/politicians";
 import {
   getCandidateFicheDetail,
   getPoliticianPresidentialCandidacy,
@@ -68,7 +70,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const politician = await getPolitician(slug);
+  const politician = await getPoliticianIdentity(slug);
   if (!politician) return { robots: { index: false, follow: true } };
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
@@ -105,7 +107,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CandidateFichePage({ params }: PageProps) {
   const { slug } = await params;
-  const politician = await getPolitician(slug);
+  const politician = await getPoliticianIdentity(slug);
   if (!politician) notFound();
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);

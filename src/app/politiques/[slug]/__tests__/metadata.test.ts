@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // generateMetadata only reads the politician row. Stub Prisma so the module
 // imports with no DATABASE_URL, and the cache primitives so nothing runs
 // outside a Next request.
-const getPolitician = vi.fn();
+const getPoliticianIdentity = vi.fn();
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/data/politicians", () => ({
-  getPolitician: (slug: string) => getPolitician(slug),
+  getPoliticianIdentity: (slug: string) => getPoliticianIdentity(slug),
 }));
 vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: vi.fn(async () => null),
@@ -17,11 +17,11 @@ import { generateMetadata } from "@/app/politiques/[slug]/page";
 
 const metadataFor = (slug: string) => generateMetadata({ params: Promise.resolve({ slug }) });
 
-beforeEach(() => getPolitician.mockReset());
+beforeEach(() => getPoliticianIdentity.mockReset());
 
 describe("/politiques/[slug] metadata", () => {
   it("noindex un profil inexistant au lieu de l'offrir à l'indexation", async () => {
-    getPolitician.mockResolvedValue(null);
+    getPoliticianIdentity.mockResolvedValue(null);
 
     const m = await metadataFor("x-bidon");
 
@@ -30,15 +30,16 @@ describe("/politiques/[slug] metadata", () => {
   });
 
   it("laisse intacte la metadata d'un profil existant", async () => {
-    getPolitician.mockResolvedValue({
+    getPoliticianIdentity.mockResolvedValue({
       fullName: "Jean Dupont",
       photoUrl: null,
       biography: "Une biographie substantielle.",
       currentParty: { shortName: "XX" },
       mandates: [{ type: "DEPUTE", isCurrent: true, localData: null }],
       declarations: [{ type: "INTERETS", details: null }],
-      affairs: [{ id: "a1" }],
-      factCheckMentions: [{ id: "f1" }],
+      // The robots predicate reads these as counters now, not as lists: the identity read counts
+      // the affairs and fact-checks instead of loading them onto the critical path.
+      _count: { affairs: 1, factCheckMentions: 1 },
     });
 
     const m = await metadataFor("jean-dupont");

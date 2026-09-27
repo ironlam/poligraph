@@ -22,7 +22,7 @@ import {
   listPublicPresidentialMeasures,
 } from "@/lib/data/measures";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
-import { getPolitician } from "@/lib/data/politicians";
+import { getPoliticianIdentity } from "@/lib/data/politicians";
 import { parseThemeSlug, THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
 import { cn } from "@/lib/utils";
 import { PresidentialSubtopicLink } from "../../../_components/PresidentialSubtopicLink";
@@ -64,7 +64,7 @@ function buildMeasuresUrl(
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ slug }, rawSearchParams] = await Promise.all([params, searchParams]);
-  const politician = await getPolitician(slug);
+  const politician = await getPoliticianIdentity(slug);
   if (!politician) return { robots: { index: false, follow: true } };
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
 
@@ -84,7 +84,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 export default async function CandidateMeasuresPage({ params, searchParams }: PageProps) {
   const [{ slug }, rawSearchParams] = await Promise.all([params, searchParams]);
   const [politician, election] = await Promise.all([
-    getPolitician(slug),
+    getPoliticianIdentity(slug),
     getPublicElectionIdentity(ELECTION_SLUG),
   ]);
   if (!politician || !election) notFound();
