@@ -21,7 +21,13 @@ import {
 import type { CachedPolitician, CandidateMatch } from "@/lib/identity";
 import { normalizeText } from "@/lib/name-matching";
 import { generateSlug } from "@/lib/utils";
-import { mandateLabels, mandateStartDate, parseMaireRows, type ParsedMaireRow } from "./rne-parse";
+import {
+  mandateLabels,
+  mandateStartDate,
+  parseMaireRows,
+  sameCalendarDay,
+  type ParsedMaireRow,
+} from "./rne-parse";
 import {
   canAdoptByName,
   compareHolder,
@@ -150,6 +156,12 @@ type UndecidedRow = {
   registre: string;
   base: string;
   raison: string;
+  /** How the two surnames relate, so the file can be sorted instead of read. */
+  nom: string;
+  /** How the two first names relate. */
+  prenom: string;
+  /** Whether the birth dates agree, differ, or are missing on our side. */
+  naissance: string;
 };
 
 type ExistingMaire = {
@@ -591,6 +603,14 @@ async function upsertMaires(
               commune: row.communeLabel ?? "",
               registre: `${row.firstName} ${row.lastName}`,
               base: held ? `${held.firstName ?? ""} ${held.lastName ?? ""}`.trim() : "",
+              nom: describeNameRelation(row.lastName, held?.lastName ?? null),
+              prenom: describeNameRelation(row.firstName, held?.firstName ?? null),
+              naissance:
+                held?.birthDate == null
+                  ? "absente"
+                  : sameCalendarDay(row.birthDate, held.birthDate)
+                    ? "identique"
+                    : "différente",
               raison: existingMandate
                 ? "mandat du registre"
                 : incumbent
@@ -617,6 +637,20 @@ async function upsertMaires(
   return counts;
 }
 
+/**
+ * How two name parts relate, in one word, so the CSV can be sorted and batched.
+ *
+ * A human cannot read 361 rows of prose, but they can sort a column and decide a whole shape
+ * at once. The words match the vocabulary of `compareHolder`, which is what produced the row.
+ */
+function describeNameRelation(a: string | null, b: string | null): string {
+  const verdict = compareHolder(
+    { firstName: null, lastName: a, birthDate: new Date(0) },
+    { firstName: null, lastName: b, birthDate: new Date(0) }
+  );
+  return verdict === "SAME" ? "concorde" : verdict === "DIFFERENT" ? "diffère" : "incertain";
+}
+
 /** Where the undecided rows are written, so the human stop has a file and not a scrollback. */
 const UNDECIDED_CSV_PATH = "data/rne-undecided.csv";
 
@@ -624,9 +658,20 @@ const UNDECIDED_CSV_PATH = "data/rne-undecided.csv";
 function writeUndecidedCsv(rows: UndecidedRow[]): void {
   const escape = (value: string): string => `"${value.replace(/"/g, '""')}"`;
   const lines = [
-    "code_insee,commune,nom_au_registre,nom_en_base,raison",
+    "code_insee,commune,nom_au_registre,nom_en_base,raison,nom,prenom,naissance",
     ...rows.map((row) =>
-      [row.inseeCode, row.commune, row.registre, row.base, row.raison].map(escape).join(",")
+      [
+        row.inseeCode,
+        row.commune,
+        row.registre,
+        row.base,
+        row.raison,
+        row.nom,
+        row.prenom,
+        row.naissance,
+      ]
+        .map(escape)
+        .join(",")
     ),
   ];
 
