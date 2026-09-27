@@ -10,6 +10,10 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
 import { shouldUpdatePhoto } from "@/config/photos";
+import {
+  assertNoUnknownSenateMatricules,
+  findUnknownMatricules,
+} from "./senate-unknown-matricules";
 
 const client = new HTTPClient({ rateLimitMs: SENAT_RATE_LIMIT_MS });
 
@@ -405,6 +409,29 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
       fetchSenatAPI(),
       fetchNosSenateursAPI(),
     ]);
+
+    // 1b. Refuse to write anything while the API lists a senator we cannot map by
+    // matricule: after a renewal, the name fallback of syncSenator() would attach the
+    // incoming senator to a homonym.
+    const knownMatricules = new Set(
+      (
+        await db.externalId.findMany({
+          where: { source: DataSource.SENAT },
+          select: { externalId: true },
+        })
+      ).map((e) => e.externalId)
+    );
+    const unknownMatricules = new Set(
+      findUnknownMatricules(
+        senators.map((s) => s.matricule),
+        knownMatricules
+      )
+    );
+    assertNoUnknownSenateMatricules(
+      senators
+        .filter((s) => unknownMatricules.has(s.matricule))
+        .map((s) => ({ matricule: s.matricule, name: `${s.prenom} ${s.nom}` }))
+    );
 
     // 2. Sync parliamentary groups and resolve real parties
     console.log("Syncing senate parliamentary groups...");
