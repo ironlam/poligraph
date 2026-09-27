@@ -454,6 +454,79 @@ export const BALLOT_DAY_NO_RESULTS_BODY =
   "sièges sont attribués par la proclamation officielle des résultats, et c'est elle que " +
   "nous attendons pour mettre à jour les mandats.";
 
+/** Shown instead of the no-results notice once the first constituencies are published. */
+export const BALLOT_DAY_RESULTS_TITLE = "Résultats publiés circonscription par circonscription";
+export const BALLOT_DAY_RESULTS_BODY =
+  "Nous publions chaque circonscription une fois tous ses sièges attribués dans les " +
+  "résultats officiels du ministère de l'Intérieur, sans estimation ni tendance intermédiaire.";
+
+/** The dated sentence of the college page, which must not outlive the ballot. */
+export function collegeVotersLine(past: boolean): string {
+  return past
+    ? `Sur les ${GRANDS_ELECTEURS_TOTAL.toLocaleString("fr-FR")} qui étaient appelés à voter le 27 septembre.`
+    : `Sur les ${GRANDS_ELECTEURS_TOTAL.toLocaleString("fr-FR")} qui votent le 27 septembre.`;
+}
+
+// ─── Results (état 4) ───────────────────────────────────────────────
+
+export const RESULTS_FEED_URL =
+  "https://www.resultats-elections.interieur.gouv.fr/Senatoriales2026/index.html";
+export const SOURCE_INTERIOR_RESULTS = {
+  label: "Ministère de l'Intérieur, résultats des sénatoriales 2026",
+  url: RESULTS_FEED_URL,
+};
+export const SOURCE_SENATORIALES_SITE = {
+  label: "Sénat, élections sénatoriales 2026",
+  url: "https://senatoriales2026.senat.fr/",
+};
+export const SOURCE_LO_135_1 = {
+  label: "Code électoral, art. LO 135-1",
+  url: "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000035586109",
+};
+
+export const RESULTS_HEADING = "Le Sénat au lendemain du scrutin";
+export const RESULTS_LEDE_COMPLETE =
+  "178 sièges pourvus le 27 septembre. Les 170 autres ne sont pas renouvelés avant 2029.";
+export function resultsLedePartial(constituencies: number, seats: number): string {
+  return (
+    `Résultats publiés pour ${constituencies} circonscriptions sur 64, soit ${seats} sièges ` +
+    "sur 178. Les autres suivront à mesure des résultats officiels."
+  );
+}
+export const RESULTS_LABEL_REELECTED = "sortants réélus";
+export const RESULTS_LABEL_NEWCOMERS = "nouveaux sénateurs";
+export const RESULTS_LABEL_WOMEN = "de femmes parmi les élus publiés";
+export const RESULTS_LABEL_CONSTITUENCIES = "circonscriptions publiées sur 64";
+export const RESULTS_UNRESOLVED_TITLE = "Réélus et nouveaux : décompte en cours";
+export function resultsUnresolvedBody(count: number): string {
+  return (
+    `${count} élus ne sont pas encore reliés avec certitude à une fiche Poligraph. Tant que ` +
+    "ce rapprochement n'est pas fait, nous ne les comptons ni parmi les sortants réélus, ni " +
+    "parmi les nouveaux sénateurs."
+  );
+}
+export const RESULTS_WOMEN_MISSING_TITLE = "Part de femmes non calculée";
+export const RESULTS_WOMEN_MISSING_BODY =
+  "La civilité manque pour au moins un élu publié. Nous ne calculons pas la part sur un " +
+  "effectif incomplet.";
+export const RESULTS_NUANCE_NOTE =
+  "Nuances attribuées par le ministère de l'Intérieur, et non groupes politiques du Sénat : " +
+  "les groupes se reconstituent après le renouvellement.";
+
+export const RESULTS_ELECTED_HEADING = "Les élus du 27 septembre";
+
+export const RESULTS_PRESIDENCY_TITLE = "La présidence remise en jeu";
+export const RESULTS_PRESIDENCY_BODY =
+  "Après chaque renouvellement, le Sénat élit à nouveau son président, son bureau et les " +
+  "présidents de commission. Selon le Sénat, l'assemblée est reconstituée environ deux " +
+  "semaines après le scrutin : c'est là que le nouvel équilibre se lit vraiment.";
+
+export const RESULTS_FOLLOW_UP_TITLE = "Ce que nous suivrons ensuite";
+export const RESULTS_FOLLOW_UP_BODY =
+  "Le mandat commence le 1er octobre. Chaque élu dispose alors de deux mois pour déposer " +
+  "ses déclarations de patrimoine et d'intérêts auprès de la HATVP, et ses premiers votes " +
+  "rejoindront sa fiche.";
+
 // ─── Milestones ─────────────────────────────────────────────────────
 
 export interface Milestone {

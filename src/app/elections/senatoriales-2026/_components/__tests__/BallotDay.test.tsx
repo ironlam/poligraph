@@ -174,3 +174,18 @@ describe("ScrutinRules : les horaires du décret", () => {
     expect(screen.getByText(/ne dépend pas du sénateur qui l'occupe/)).toBeInTheDocument();
   });
 });
+
+describe("BallotDay : résultats publiés", () => {
+  it("remplace l'avis « aucun résultat » dès que des circonscriptions sont publiées", () => {
+    render(<BallotDay resultsPublished />);
+    expect(screen.queryByText(/Aucun résultat avant la proclamation/)).toBeNull();
+    expect(
+      screen.getByText(/Résultats publiés circonscription par circonscription/)
+    ).toBeInTheDocument();
+  });
+
+  it("garde l'avis tant que rien n'est publié", () => {
+    render(<BallotDay resultsPublished={false} />);
+    expect(screen.getByText(/Aucun résultat avant la proclamation/)).toBeInTheDocument();
+  });
+});

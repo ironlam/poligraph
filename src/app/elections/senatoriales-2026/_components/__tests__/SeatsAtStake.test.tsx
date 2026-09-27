@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SeatsAtStake } from "../SeatsAtStake";
-import { getBallotPhase } from "../../_content";
+import { collegeVotersLine, getBallotPhase } from "../../_content";
 
 const GROUPS = [
   { groupName: "Les Républicains", shortName: "LR", color: "#0066CC", held: 131, atStake: 77 },
@@ -113,6 +113,12 @@ describe("SeatsAtStake après le scrutin", () => {
     expect(text).toMatch(/relevée avant le scrutin/i);
   });
 
+  it("ne prétend pas décrire déjà le Sénat renouvelé", () => {
+    const { container } = render(<SeatsAtStake exposure={EXPOSURE} phase="after" />);
+    expect(container.textContent).not.toMatch(/décrit désormais/);
+    expect(container.textContent).toMatch(/1er octobre/);
+  });
+
   it("emploie le passé dans son titre", () => {
     render(<SeatsAtStake exposure={EXPOSURE} phase="after" />);
     expect(screen.getByText("Ce qui était remis en jeu")).toBeInTheDocument();
@@ -133,5 +139,17 @@ describe("getBallotPhase", () => {
   it("passe au passé dès que le scrutin est derrière", () => {
     expect(getBallotPhase("BETWEEN_ROUNDS")).toBe("after");
     expect(getBallotPhase("COMPLETED")).toBe("after");
+  });
+});
+
+describe("collegeVotersLine : la phrase datée de la sous-page collège", () => {
+  it("dit que les grands électeurs votent avant ou pendant le scrutin", () => {
+    expect(collegeVotersLine(false)).toMatch(/qui votent le 27 septembre/);
+  });
+
+  it("passe au passé sans affirmer que tous ont voté", () => {
+    const line = collegeVotersLine(true);
+    expect(line).toMatch(/étaient appelés à voter le 27 septembre/);
+    expect(line).not.toMatch(/ont voté/);
   });
 });

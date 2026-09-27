@@ -20,3 +20,6 @@ backups/
 tests/visual/snapshots/
 tests/visual/test-results/
 tests/visual/playwright-report/
+
+# Real Ministry feed files, kept byte for byte as fetched
+src/lib/senatoriales/__tests__/fixtures/

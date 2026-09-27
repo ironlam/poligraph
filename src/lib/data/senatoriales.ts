@@ -36,6 +36,14 @@ import {
 } from "@/lib/senatoriales/timing";
 import { getGroupAttributionCoverage } from "@/lib/senatoriales/group-exposure";
 import type { ElectionStatus } from "@/types";
+import {
+  OutgoingSenateCompositionSchema,
+  SENATE_OUTGOING_COMPOSITION_KEY,
+} from "@/types/stats-snapshots";
+import {
+  summariseResults,
+  type SenatorialesResultsSummary,
+} from "@/lib/senatoriales/results-summary";
 
 export const SENATORIALES_2026_SLUG = "senatoriales-2026";
 
@@ -174,6 +182,61 @@ export const getGroupExposure = cache(
       // mandate, a null series or a missing parliamentary group; none licenses inventing one.
       ...coverage,
     };
+  }
+);
+
+// ─── Results of 27 September ────────────────────────────────────────
+
+/**
+ * The people elected on 27 September, as imported from the Ministry feed, compared with
+ * the outgoing composition captured before the ballot.
+ *
+ * Without the snapshot nobody can be called re-elected or new, so every linked person
+ * would fall under "newcomer": the snapshot is required, and its absence is an error
+ * rather than a silent empty set.
+ */
+export const getSenatorialesResults = cache(
+  async function getSenatorialesResults(): Promise<SenatorialesResultsSummary> {
+    const [rows, snapshot] = await Promise.all([
+      db.candidacy.findMany({
+        where: { election: { slug: SENATORIALES_2026_SLUG }, isElected: true },
+        // 178 seats at stake; a literal, so the Candidacy read-bounds guard can prove it.
+        take: 200,
+        select: {
+          candidateName: true,
+          constituencyCode: true,
+          constituencyName: true,
+          partyLabel: true,
+          round2Votes: true,
+          politicianId: true,
+          updatedAt: true,
+          politician: { select: { slug: true, publicationStatus: true } },
+          candidate: { select: { gender: true } },
+        },
+      }),
+      db.statsSnapshot.findUnique({
+        where: { key: SENATE_OUTGOING_COMPOSITION_KEY },
+        select: { data: true },
+      }),
+    ]);
+    if (!snapshot) throw new Error(`Snapshot ${SENATE_OUTGOING_COMPOSITION_KEY} absent`);
+    const outgoing = OutgoingSenateCompositionSchema.parse(snapshot.data).seats;
+
+    return summariseResults(
+      rows.map((r) => ({
+        candidateName: r.candidateName,
+        constituencyCode: r.constituencyCode ?? "",
+        constituencyName: r.constituencyName ?? "",
+        partyLabel: r.partyLabel,
+        round2Votes: r.round2Votes,
+        politicianId: r.politicianId,
+        politicianSlug: r.politician?.slug ?? null,
+        politicianPublished: r.politician?.publicationStatus === "PUBLISHED",
+        gender: r.candidate?.gender ?? null,
+        updatedAt: r.updatedAt,
+      })),
+      new Set(outgoing.map((seat) => seat.politicianId))
+    );
   }
 );
 
