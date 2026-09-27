@@ -8,6 +8,7 @@ import {
   compareHolder,
   decidePhase1Action,
   isChronologicallyClosable,
+  isFurtherTerm,
   shouldRunStaleSweep,
   type HolderVerdict,
   type Phase1Action,
@@ -205,56 +206,116 @@ const DIFFERENT_STALE = { verdict: "DIFFERENT" as HolderVerdict, closable: false
 describe("decidePhase1Action", () => {
   const CASES: [string, Parameters<typeof decidePhase1Action>[0], Phase1Action][] = [
     // Un mandat RNE existe : c'est lui qui décide, l'incumbent n'est même pas consulté.
-    ["RNE même titulaire", { existing: SAME, hasCommuneId: true, incumbent: null }, "update"],
+    [
+      "RNE même titulaire",
+      { existing: SAME, hasCommuneId: true, incumbent: null, priorTerm: null },
+      "update",
+    ],
     [
       "RNE succession",
-      { existing: DIFFERENT, hasCommuneId: true, incumbent: null },
+      { existing: DIFFERENT, hasCommuneId: true, incumbent: null, priorTerm: null },
       "close-and-create",
     ],
     [
       "RNE succession, registre en retard",
-      { existing: DIFFERENT_STALE, hasCommuneId: true, incumbent: null },
+      { existing: DIFFERENT_STALE, hasCommuneId: true, incumbent: null, priorTerm: null },
       "skip",
     ],
-    ["RNE indécis", { existing: UNDECIDED, hasCommuneId: true, incumbent: null }, "skip"],
+    [
+      "RNE indécis",
+      { existing: UNDECIDED, hasCommuneId: true, incumbent: null, priorTerm: null },
+      "skip",
+    ],
 
     // Pas de mandat RNE : on regarde qui tient la commune sous une autre source.
     [
       "aucun mandat, aucune commune résolue",
-      { existing: null, hasCommuneId: false, incumbent: null },
+      { existing: null, hasCommuneId: false, incumbent: null, priorTerm: null },
       "create",
     ],
     [
       "aucun mandat, commune résolue, personne en place",
-      { existing: null, hasCommuneId: true, incumbent: null },
+      { existing: null, hasCommuneId: true, incumbent: null, priorTerm: null },
       "create",
     ],
     [
       "titulaire MUNICIPALES, même personne",
-      { existing: null, hasCommuneId: true, incumbent: SAME },
+      { existing: null, hasCommuneId: true, incumbent: SAME, priorTerm: null },
       "adopt",
     ],
     [
       "titulaire MUNICIPALES, personne différente",
-      { existing: null, hasCommuneId: true, incumbent: DIFFERENT },
+      { existing: null, hasCommuneId: true, incumbent: DIFFERENT, priorTerm: null },
       "close-incumbent-and-create",
     ],
     [
       "titulaire MUNICIPALES, registre en retard",
-      { existing: null, hasCommuneId: true, incumbent: DIFFERENT_STALE },
+      { existing: null, hasCommuneId: true, incumbent: DIFFERENT_STALE, priorTerm: null },
       "skip",
     ],
     [
       "titulaire MUNICIPALES, indécis",
-      { existing: null, hasCommuneId: true, incumbent: UNDECIDED },
+      { existing: null, hasCommuneId: true, incumbent: UNDECIDED, priorTerm: null },
       "skip",
     ],
 
     // Commune non résolue : aucune recherche de titulaire n'est sûre, donc on crée.
     [
       "commune non résolue malgré un titulaire",
-      { existing: null, hasCommuneId: false, incumbent: SAME },
+      { existing: null, hasCommuneId: false, incumbent: SAME, priorTerm: null },
       "create",
+    ],
+
+    // Personne en place : un mandat clos peut nous dire que nous détenons déjà la personne.
+    [
+      "mandat clos, même personne, mandat postérieur",
+      {
+        existing: null,
+        hasCommuneId: true,
+        incumbent: null,
+        priorTerm: { verdict: "SAME" as HolderVerdict, furtherTerm: true },
+      },
+      "new-term",
+    ],
+    [
+      "mandat clos, même personne, registre en retard",
+      {
+        existing: null,
+        hasCommuneId: true,
+        incumbent: null,
+        priorTerm: { verdict: "SAME" as HolderVerdict, furtherTerm: false },
+      },
+      "skip",
+    ],
+    [
+      "mandat clos, autre personne",
+      {
+        existing: null,
+        hasCommuneId: true,
+        incumbent: null,
+        priorTerm: { verdict: "DIFFERENT" as HolderVerdict, furtherTerm: true },
+      },
+      "create",
+    ],
+    [
+      "maire en place prioritaire sur le mandat clos",
+      {
+        existing: null,
+        hasCommuneId: true,
+        incumbent: SAME,
+        priorTerm: { verdict: "SAME" as HolderVerdict, furtherTerm: true },
+      },
+      "adopt",
+    ],
+    [
+      "commune non résolue, mandat clos de la même personne",
+      {
+        existing: null,
+        hasCommuneId: false,
+        incumbent: null,
+        priorTerm: { verdict: "SAME" as HolderVerdict, furtherTerm: true },
+      },
+      "new-term",
     ],
   ];
 
@@ -287,5 +348,28 @@ describe("shouldRunStaleSweep", () => {
   it("balaie sur un fichier entier", () => {
     expect(shouldRunStaleSweep({})).toBe(true);
     expect(shouldRunStaleSweep({ limit: undefined })).toBe(true);
+  });
+});
+
+describe("isFurtherTerm", () => {
+  it("reconnaît une réélection", () => {
+    // Mandat 2020 clos en mars 2026, le registre ouvre au 20 mars 2026. La fermeture est
+    // datée du 26 : les intervalles se chevauchent de six jours, donc comparer à la date de
+    // fin rejetterait 1 526 réélections sur 1 607. C'est le DÉBUT qui discrimine.
+    expect(isFurtherTerm(new Date("2020-05-24"), new Date("2026-03-20"))).toBe(true);
+  });
+
+  it("reconnaît une prise de fonction en cours de mandat suivie d'une réélection", () => {
+    // Le cas réel le plus serré mesuré : 130 jours (03214, Sébastien Arnaud).
+    expect(isFurtherTerm(new Date("2025-11-13"), new Date("2026-03-23"))).toBe(true);
+  });
+
+  it("refuse un registre qui répète le mandat que nous avons déjà clos", () => {
+    // `reconcile-municipales` ne crée un successeur qu'au-dessus de 1 000 habitants. En
+    // dessous, la commune se retrouve sans maire, et un registre en retard nommant encore
+    // l'ancien ressusciterait son mandat, chevauchant celui qu'on vient de fermer.
+    expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-05-24"))).toBe(false);
+    expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-05-26"))).toBe(false);
+    expect(isFurtherTerm(new Date("2020-05-24"), new Date("2020-03-01"))).toBe(false);
   });
 });

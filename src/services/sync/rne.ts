@@ -13,6 +13,7 @@ import {
   compareHolder,
   decidePhase1Action,
   isChronologicallyClosable,
+  isFurtherTerm,
   shouldRunStaleSweep,
   type HolderFacts,
 } from "./rne-holder";
@@ -413,13 +414,15 @@ async function upsertMaires(
           ? compareHolder(incoming, existingMandate.holder)
           : null;
 
-        // A closed mandate for this commune held by the person the register names. It never
-        // decides WHETHER we write, only HOW we create: assigning it to `existingMandate`
+        // A closed mandate for this commune. It never becomes `existingMandate`: assigning it
         // would null out the incumbent lookup below and let an out-of-date register revive a
         // former mayor beside the sitting one.
         const priorTerm = closedByInsee.get(row.inseeCode) ?? null;
+        const priorVerdict = priorTerm ? compareHolder(incoming, priorTerm.holder) : null;
         const knownPersonId =
-          priorTerm && compareHolder(incoming, priorTerm.holder) === "SAME"
+          priorTerm &&
+          priorVerdict === "SAME" &&
+          isFurtherTerm(priorTerm.startDate, mandateStartDate(row))
             ? priorTerm.politicianId
             : null;
 
@@ -456,6 +459,13 @@ async function upsertMaires(
                 closable: isChronologicallyClosable(incumbent.startDate, endDate),
               }
             : null,
+          priorTerm:
+            priorTerm && priorVerdict
+              ? {
+                  verdict: priorVerdict,
+                  furtherTerm: isFurtherTerm(priorTerm.startDate, mandateStartDate(row)),
+                }
+              : null,
         });
 
         switch (action) {
@@ -514,9 +524,14 @@ async function upsertMaires(
             counts.closed++;
             break;
 
+          case "new-term":
+            if (!dryRun) await createMaireTerm(row, priorTerm!.politicianId);
+            counts.newTerms++;
+            break;
+
           case "create":
-            if (!dryRun) await publish();
-            countPublication();
+            if (!dryRun) await createMaire(row, verbose);
+            counts.created++;
             break;
 
           case "skip": {
@@ -524,13 +539,17 @@ async function upsertMaires(
             // marked as handled so Phase 3 does not judge it again under another rule.
             if (existingMandate) counts.handledInPhase1.add(existingMandate.mandateId);
             if (incumbent) counts.handledInPhase1.add(incumbent.mandateId);
-            const held = existingMandate?.holder ?? incumbent?.holder ?? null;
+            const held = existingMandate?.holder ?? incumbent?.holder ?? priorTerm?.holder ?? null;
             counts.undecidedRows.push({
               inseeCode: row.inseeCode,
               commune: row.communeLabel ?? "",
               registre: `${row.firstName} ${row.lastName}`,
               base: held ? `${held.firstName ?? ""} ${held.lastName ?? ""}`.trim() : "",
-              raison: existingMandate ? "mandat du registre" : "maire en place",
+              raison: existingMandate
+                ? "mandat du registre"
+                : incumbent
+                  ? "maire en place"
+                  : "registre en retard",
             });
             if (verbose) console.log(`  Indécis ${row.inseeCode}: ${row.lastName}`);
             counts.undecided++;

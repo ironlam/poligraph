@@ -85,12 +85,40 @@ export function shouldRunStaleSweep(options: { limit?: number }): boolean {
   return options.limit === undefined;
 }
 
+/**
+ * How far apart two terms of the same person must start to be two terms.
+ *
+ * A register that has not caught up repeats the start date of the term we already closed,
+ * give or take how each source rounds it. A genuine re-election is years later: the closest
+ * real pair measured on the register starts 130 days apart, a mayor who took office mid-term
+ * in November 2025 and was re-elected in March 2026. A month leaves that untouched and still
+ * catches a repeat.
+ */
+const TERM_SEPARATION_MS = 31 * 86_400_000;
+
+/**
+ * Whether the register is opening a later term, or repeating one we already hold.
+ *
+ * Compared on the START date, never on the end. `reconcile-municipales` closed the 2020 terms
+ * on 26 March 2026 while the register opens the new ones on the 20th, so every legitimate
+ * re-election overlaps its own predecessor by six days: 1 526 of 1 607 would be rejected by an
+ * end-date comparison. 69 of those closed mandates have no end date at all.
+ *
+ * Getting this wrong revives a former mayor. `reconcile-municipales` only creates successors
+ * above 1 000 inhabitants, so a smaller commune can sit with no mayor at all, and an
+ * out-of-date register naming its former one would reopen a term overlapping the closed one.
+ */
+export function isFurtherTerm(priorStart: Date, registerStart: Date): boolean {
+  return registerStart.getTime() - priorStart.getTime() > TERM_SEPARATION_MS;
+}
+
 /** What Phase 1 does with one register row. Nothing here writes; the caller executes. */
 export type Phase1Action =
   | "update"
   | "close-and-create"
   | "adopt"
   | "close-incumbent-and-create"
+  | "new-term"
   | "create"
   | "skip";
 
@@ -112,6 +140,11 @@ export function decidePhase1Action(input: {
   hasCommuneId: boolean;
   /** A current mayor for the same commune under any other source. */
   incumbent: { verdict: HolderVerdict; closable: boolean } | null;
+  /**
+   * A closed mandate for this commune. It answers "do we already hold this person", never
+   * "who is mayor": a closed mandate makes no claim about the present.
+   */
+  priorTerm: { verdict: HolderVerdict; furtherTerm: boolean } | null;
 }): Phase1Action {
   if (input.existing) {
     if (input.existing.verdict === "SAME") return "update";
@@ -119,10 +152,19 @@ export function decidePhase1Action(input: {
     return input.existing.closable ? "close-and-create" : "skip";
   }
 
-  if (!input.hasCommuneId || !input.incumbent) return "create";
-  if (input.incumbent.verdict === "SAME") return "adopt";
-  if (input.incumbent.verdict === "UNDECIDED") return "skip";
-  return input.incumbent.closable ? "close-incumbent-and-create" : "skip";
+  if (input.hasCommuneId && input.incumbent) {
+    if (input.incumbent.verdict === "SAME") return "adopt";
+    if (input.incumbent.verdict === "UNDECIDED") return "skip";
+    return input.incumbent.closable ? "close-incumbent-and-create" : "skip";
+  }
+
+  // Nobody is in place. A closed mandate held by the person the register names means either a
+  // further term for them, or a register still describing the term we closed.
+  if (input.priorTerm?.verdict === "SAME") {
+    return input.priorTerm.furtherTerm ? "new-term" : "skip";
+  }
+
+  return "create";
 }
 
 /**

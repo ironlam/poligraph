@@ -271,6 +271,48 @@ describe("RNE write suspension", () => {
     expect(result.mandatesCreated).toBe(1);
   });
 
+  it("ne ressuscite pas un ancien maire quand le registre est en retard", async () => {
+    // Commune de moins de 1 000 habitants : `reconcile-municipales` a fermé l'ancien maire en
+    // mars 2026 sans créer de successeur, donc personne n'est en place. Le registre d'août
+    // nomme encore cet ancien maire, avec sa prise de fonction de 2020. Lui ouvrir un mandat
+    // courant qui démarre en 2020 chevaucherait celui qu'on vient de fermer.
+    h.getText.mockResolvedValue({
+      data: [
+        "Code du département;Code de la commune;Libellé de la commune;Nom de l'élu;Prénom de l'élu;Code sexe;Date de naissance;Date de début du mandat;Date de début de la fonction",
+        "01;01001;Commune test;MARTIN;Alice;F;1970-04-02;2020-05-24;2020-05-24",
+      ].join("\n"),
+    });
+    h.findMandateLocals.mockImplementation(
+      async (args: { where: { mandate: { isCurrent: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              {
+                id: "local-closed",
+                rneExternalId: "01001",
+                communeId: "01001",
+                mandate: {
+                  id: "closed-mandate",
+                  politicianId: "former-mayor",
+                  startDate: new Date("2020-05-24"),
+                  politician: {
+                    firstName: "Alice",
+                    lastName: "MARTIN",
+                    birthDate: new Date("1970-04-02"),
+                  },
+                },
+              },
+            ]
+    );
+
+    const result = await syncRNEMaires({ dryRun: true });
+
+    expect(result.errors).toEqual([]);
+    expect(result.officialsCreated).toBe(0);
+    expect(result.mandatesCreated).toBe(0);
+    expect(result.mandatesClosed).toBe(0);
+  });
+
   it("ne rouvre pas le mandat fermé de quelqu'un d'autre", async () => {
     h.findMandateLocals.mockImplementation(
       async (args: { where: { mandate: { isCurrent: boolean } } }) =>
