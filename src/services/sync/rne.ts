@@ -762,6 +762,11 @@ async function reconcileRNEStubs(
   const batchResult = await resolveBatch({
     sourceType: DataSource.RNE,
     inputs,
+    // Phase 1 has already written these profiles, so they are in the table the resolver
+    // screens against. Without this they match themselves at 0.98 and outrank the national
+    // politician they exist to be folded into: measured on the first real run, 77 of 78
+    // decisions pointed at the record being resolved, and nothing was ever merged or drafted.
+    excludePoliticianIds: new Set(rneOnlyPoliticians.map((politician) => politician.id)),
     onProgress: (processed, total) => {
       if (processed % 5000 === 0 || processed === total) {
         console.log(`  Phase 2 progress: ${processed}/${total}`);
