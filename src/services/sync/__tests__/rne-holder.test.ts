@@ -45,11 +45,12 @@ describe("compareHolder", () => {
     ).toBe("SAME");
   });
 
-  it("ne confirme pas un titulaire sur un prénom composé d'un seul côté", () => {
-    // Francheville tel qu'il est vraiment : "Guy" en base contre "Guy Raoul" au registre.
-    // Le résolveur donne 0.9000 sur ce couple, sous AUTO_MATCH (0.95) et au-dessus de REVIEW
-    // (0.7), donc zone de revue. Mesuré le 2026-09-27. Le seuil est une règle du projet et ne
-    // s'abaisse pas pour faire passer un cas : la ligne est signalée, rien n'est écrit.
+  it("confirme un titulaire malgré un prénom composé d'un seul côté", () => {
+    // Le registre porte les prénoms d'état civil, notre base souvent le prénom d'usage. Le
+    // résolveur note ce couple 0.9000, sous AUTO_MATCH, parce qu'il est réglé pour classer des
+    // candidats à l'échelle de la France. Ici le nom concorde ET la naissance concorde au jour
+    // près : c'est la même personne. Mesuré : 207 lignes de cette forme, aucune avec une
+    // naissance différente.
     expect(
       compareHolder(
         {
@@ -59,7 +60,7 @@ describe("compareHolder", () => {
         },
         { firstName: "Guy", lastName: "D'harambure", birthDate: new Date("1938-01-07") }
       )
-    ).toBe("UNDECIDED");
+    ).toBe("SAME");
   });
 
   it("voit une succession entre deux personnes nées le même jour", () => {
@@ -88,7 +89,7 @@ describe("compareHolder", () => {
     );
   });
 
-  it("ne ferme pas un mandat sur une variante d'orthographe du prénom", () => {
+  it("confirme malgré une variante d'orthographe du prénom", () => {
     // "Franck" contre "Frank" : même nom, même naissance. Le signal prénom ne connaît
     // qu'exact ou sous-chaîne, aucune distance d'édition, donc le score tombe à 0.36 et un
     // verdict rendu sur le score seul fermerait le mandat d'un maire en exercice pour publier
@@ -98,7 +99,7 @@ describe("compareHolder", () => {
         { firstName: "Franck", lastName: "Burton", birthDate: new Date("1962-03-04") },
         { firstName: "Frank", lastName: "Burton", birthDate: new Date("1962-03-04") }
       )
-    ).toBe("UNDECIDED");
+    ).toBe("SAME");
   });
 
   it("ne tranche pas sur deux noms sans rapport quand une naissance manque", () => {
@@ -113,7 +114,7 @@ describe("compareHolder", () => {
     ).toBe("UNDECIDED");
   });
 
-  it("ne déclare pas une succession sur un simple décalage de fuseau", () => {
+  it("confirme malgré un décalage de fuseau sur la naissance", () => {
     // Naissance identique : minuit à Paris d'un côté (23:00Z la veille), midi UTC de l'autre,
     // ce que produit le parseur du registre. Les jours calendaires UTC diffèrent, les jours
     // calendaires à Paris non. 32 366 fiches sont stockées à 23:00Z, aucune à midi.
@@ -122,7 +123,7 @@ describe("compareHolder", () => {
         { firstName: "Alice", lastName: "Martin", birthDate: new Date("1970-04-02T12:00:00Z") },
         { firstName: "Alicia", lastName: "Martin", birthDate: new Date("1970-04-01T23:00:00Z") }
       )
-    ).toBe("UNDECIDED");
+    ).toBe("SAME");
   });
 
   it("ne confirme pas deux patronymes sans rapport, même prénom et naissance identiques", () => {

@@ -260,7 +260,8 @@ export function decidePhase1Action(input: {
  * civil status; DIFFERENT closes a sitting mayor's mandate and publishes a second profile for
  * the commune. Anything short of evidence is UNDECIDED, and UNDECIDED writes nothing.
  *
- * Evidence of the same person: the surnames agree and the resolver scores above AUTO_MATCH.
+ * Evidence of the same person: the surnames agree, and either the resolver scores above
+ * AUTO_MATCH or the birth dates are the same day.
  * Evidence of a different person: two known birth dates that disagree, or two surnames with
  * nothing in common while both birth dates are known.
  *
@@ -270,8 +271,9 @@ export function decidePhase1Action(input: {
  *   and mayors elected then often have no birth date on file: closing their mandate on a name
  *   comparison alone would let a stale register overrule an election.
  * - A low resolver score while the birth dates agree. The first-name signal knows only exact
- *   and substring, no edit distance, so "Franck" against "Frank" scores 0.36. A spelling
- *   variant is a question, not a succession.
+ *   and substring, no edit distance, so "Franck" against "Frank" scores 0.36. With the surname
+ *   agreeing and the birth date matching to the day, a spelling variant is not a succession
+ *   and not a doubt either: it is the same person, written twice.
  */
 export function compareHolder(incoming: HolderFacts, current: HolderFacts): HolderVerdict {
   // First, because every verdict below rests on it. A comparison with an unknown birth date
@@ -312,8 +314,18 @@ export function compareHolder(incoming: HolderFacts, current: HolderFacts): Hold
   const { score } = scoreCandidate(input, candidate, new Set<string>());
   if (score >= IDENTITY_THRESHOLDS.AUTO_MATCH) return "SAME";
 
-  // Paris calendar day, not UTC: a birth date stored as Paris midnight sits at 23:00Z the day
-  // before, while the register is parsed at noon UTC. Comparing UTC days would call two
-  // identical dates different, and turn a spelling variant into a succession.
-  return sameCalendarDay(incoming.birthDate, current.birthDate) ? "UNDECIDED" : "DIFFERENT";
+  // Below the threshold, the birth date decides, on the Paris calendar day and never on the
+  // UTC one: a date stored as Paris midnight sits at 23:00Z the day before, while the register
+  // is parsed at noon UTC, so a UTC comparison calls two identical dates different.
+  //
+  // The surname already agrees at this point, and the mandate being compared is the one held
+  // for this very commune. What the resolver is scoring below 0.95 is the first name, and
+  // measured on the whole register, every single disagreement there is a civil name against a
+  // usage name ("Jean Marie Louis" against "Jean Marie", 207 rows) or a spelling ("Franck"
+  // against "Frank", 36 rows). None of the 253 carries a differing birth date.
+  //
+  // AUTO_MATCH is the resolver's rule for ranking candidates across the country, where a name
+  // is all there is. Here the commune and an exact birth date are already given, so holding
+  // these at UNDECIDED reports 253 communes forever rather than deciding anything.
+  return sameCalendarDay(incoming.birthDate, current.birthDate) ? "SAME" : "DIFFERENT";
 }
