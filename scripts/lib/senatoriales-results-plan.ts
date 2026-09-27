@@ -97,3 +97,33 @@ export function linkElected(
     return { ...e, politicianId: null, link: "none" as const };
   });
 }
+
+/** Key of an elected person already written: `constituencyCode|candidateName`. */
+export function priorImportKey(
+  e: Pick<FeedElected, "constituencyCode" | "firstName" | "lastName">
+) {
+  return `${e.constituencyCode}|${e.firstName} ${e.lastName}`;
+}
+
+/**
+ * Keep what an earlier import decided. The resolver records a decision on every call, and an
+ * unresolved person would get a new UNDECIDED row in the review queue at each run: anyone
+ * already written is reused as is (linked or not), and only people never imported are resolved.
+ */
+export function splitByPriorImport(
+  elected: FeedElected[],
+  prior: Map<string, string | null>
+): { toResolve: FeedElected[]; priorMatches: Map<string, string> } {
+  const toResolve: FeedElected[] = [];
+  const priorMatches = new Map<string, string>();
+  for (const e of elected) {
+    const key = priorImportKey(e);
+    if (!prior.has(key)) {
+      toResolve.push(e);
+      continue;
+    }
+    const politicianId = prior.get(key);
+    if (politicianId) priorMatches.set(resolverSourceId(e), politicianId);
+  }
+  return { toResolve, priorMatches };
+}

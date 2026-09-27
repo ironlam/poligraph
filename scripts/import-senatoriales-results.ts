@@ -7,8 +7,9 @@
  *   npm run senatoriales:import-results -- --only=01,08
  *
  * A constituency is written as a whole or not at all (see `planConstituency`), inside a
- * transaction that replaces its elected candidacies, so running the import again after
- * new results come in is safe. The script creates no `Politician` and touches no
+ * transaction that replaces its elected candidacies. Running it again after new results
+ * come in keeps the links already written (by the resolver or by hand) and only sends people
+ * never imported to the resolver. The script creates no `Politician` and touches no
  * `Mandate`: the switch of mandates is a separate step once terms begin on 1 October.
  *
  * The identity resolver records its decisions in the database, so it only runs with
@@ -39,6 +40,7 @@ import {
   mergeIndexes,
   planConstituency,
   resolverSourceId,
+  splitByPriorImport,
   type ConstituencyDecision,
   type PlannedElected,
 } from "./lib/senatoriales-results-plan";
@@ -116,8 +118,21 @@ async function main() {
   const allElected = toReplace.flatMap((d) => d.elected);
 
   // 2. Link: outgoing seats first, then the resolver (apply only, it writes decisions).
-  const needResolver = allElected.filter((e) => matchOutgoing(e, outgoing) === null);
-  const resolverMatches = new Map<string, string>();
+  // Anyone already imported keeps the link written then, including a link set by hand; only
+  // people never imported go to the resolver, which records a decision on every call.
+  const priorRows = await db.candidacy.findMany({
+    where: { electionId: election.id, isElected: true },
+    take: 200,
+    select: { constituencyCode: true, candidateName: true, politicianId: true },
+  });
+  const prior = new Map(
+    priorRows.map((r) => [`${r.constituencyCode}|${r.candidateName}`, r.politicianId])
+  );
+  const { toResolve: needResolver, priorMatches } = splitByPriorImport(
+    allElected.filter((e) => matchOutgoing(e, outgoing) === null),
+    prior
+  );
+  const resolverMatches = new Map<string, string>(priorMatches);
   if (apply && needResolver.length > 0) {
     const batch = await resolveBatch({
       sourceType: DataSource.SENAT,
@@ -162,7 +177,7 @@ async function main() {
   const skipped = decisions.length - toReplace.length;
   console.log(
     `\n${toReplace.length} circonscription(s) à publier, ${allElected.length} élu(s), ` +
-      `${skipped} ignorée(s), ${needResolver.length} hors sortants.`
+      `${skipped} ignorée(s), ${needResolver.length} à passer au résolveur.`
   );
 
   if (!apply) {

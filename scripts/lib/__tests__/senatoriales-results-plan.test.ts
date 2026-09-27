@@ -12,6 +12,7 @@ import {
   linkElected,
   mergeIndexes,
   planConstituency,
+  splitByPriorImport,
   statutorySeatsFor,
 } from "../senatoriales-results-plan";
 
@@ -132,5 +133,24 @@ describe("mergeIndexes", () => {
       round: 1,
       status: { filled: "NON" },
     });
+  });
+});
+
+describe("splitByPriorImport", () => {
+  const ardennes = parseResults(read("R208.xml")).elected;
+
+  it("ne repasse au résolveur aucun élu déjà importé, rattaché ou non", () => {
+    const prior = new Map<string, string | null>([
+      ["08|Else JOSEPH", "p-joseph"],
+      ["08|Marc LAMÉNIE", null],
+    ]);
+    const { toResolve, priorMatches } = splitByPriorImport(ardennes, prior);
+    expect(toResolve).toEqual([]);
+    expect([...priorMatches.entries()]).toEqual([["SN2026-08-JOSEPH-Else", "p-joseph"]]);
+  });
+
+  it("résout un élu jamais importé", () => {
+    const { toResolve } = splitByPriorImport(ardennes, new Map());
+    expect(toResolve.map((e) => e.lastName)).toEqual(["JOSEPH", "LAMÉNIE"]);
   });
 });
