@@ -1,12 +1,25 @@
 import { db, type DbTransactionClient } from "@/lib/db";
 import { writeFileSync } from "node:fs";
-import { DataSource, Judgement, MandateType, PublicationStatus } from "@/generated/prisma";
+import {
+  DataSource,
+  Judgement,
+  MandateType,
+  MatchMethod,
+  PublicationStatus,
+} from "@/generated/prisma";
 import { parse } from "csv-parse/sync";
-import type { MaireRNECSV, RNESyncResult } from "./types";
+import type { MaireRNECSV, Phase2Simulation, RNESyncResult } from "./types";
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
-import { resolveBatch } from "@/lib/identity";
+import {
+  IDENTITY_THRESHOLDS,
+  NameFrequencyCache,
+  resolveBatch,
+  scoreCandidate,
+} from "@/lib/identity";
+import type { CachedPolitician, CandidateMatch } from "@/lib/identity";
+import { normalizeText } from "@/lib/name-matching";
 import { generateSlug } from "@/lib/utils";
 import { mandateLabels, mandateStartDate, parseMaireRows, type ParsedMaireRow } from "./rne-parse";
 import {
@@ -121,6 +134,8 @@ interface UpsertCounts {
   handledInPhase1: Set<string>;
   /** One row per undecided commune, for the human who arbitrates them. */
   undecidedRows: UndecidedRow[];
+  /** The rows that would become a brand-new profile, which Phase 2 then judges. */
+  wouldCreate: ParsedMaireRow[];
   errors: string[];
 }
 
@@ -396,6 +411,7 @@ async function upsertMaires(
     closed: 0,
     handledInPhase1: new Set<string>(),
     undecidedRows: [],
+    wouldCreate: [],
     errors: [],
   };
 
@@ -432,8 +448,12 @@ async function upsertMaires(
           else await createMaire(row, verbose, tx);
         };
         const countPublication = (): void => {
-          if (knownPersonId) counts.newTerms++;
-          else counts.created++;
+          if (knownPersonId) {
+            counts.newTerms++;
+          } else {
+            counts.created++;
+            counts.wouldCreate.push(row);
+          }
         };
 
         // Only consulted when Phase 1 holds no register mandate and the commune resolved:
@@ -532,6 +552,7 @@ async function upsertMaires(
           case "create":
             if (!dryRun) await createMaire(row, verbose);
             counts.created++;
+            counts.wouldCreate.push(row);
             break;
 
           case "skip": {
@@ -728,6 +749,150 @@ async function reconcileRNEStubs(
   };
 }
 
+/**
+ * What Phase 2 would decide about the profiles Phase 1 is about to create, without writing.
+ *
+ * `resolveBatch` cannot be used for this: its Phase C persists an `IdentityDecision` per input
+ * (resolver.ts), and those rows are read back by later resolutions as a blocklist. A dry run
+ * built on it would write thousands of decisions into production and pollute the very ledger
+ * it set out to observe.
+ *
+ * So this replicates its Phase A and Phase B, and stops before Phase C. It is a copy, and a
+ * copy drifts: if the screening, the sole-candidate boost or the thresholds move in
+ * `resolver.ts`, this number stops describing the real run. It exists to answer one question
+ * before writes are unlocked, namely how many freshly created profiles Phase 2 would merge
+ * and then DELETE, which is irreversible.
+ */
+async function simulatePhase2(
+  rows: ParsedMaireRow[],
+  communeNameByInsee: Map<string, string>
+): Promise<Phase2Simulation> {
+  console.log("\n--- Phase 2 (simulation, aucune écriture) ---");
+  const stats: Phase2Simulation = { matched: 0, review: 0, notFound: 0, blocked: 0 };
+  if (rows.length === 0) return stats;
+
+  const [allPoliticians, allDecisions] = await Promise.all([
+    db.politician.findMany({
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        birthDate: true,
+        civility: true,
+        prominenceScore: true,
+        mandates: {
+          where: { departmentCode: { not: null } },
+          select: { departmentCode: true },
+        },
+      },
+    }),
+    db.identityDecision.findMany({
+      where: { sourceType: DataSource.RNE, supersededBy: null },
+      orderBy: { decidedAt: "desc" },
+    }),
+  ]);
+
+  let frequency: NameFrequencyCache | undefined;
+  try {
+    frequency = await NameFrequencyCache.loadFromDb();
+  } catch (error) {
+    console.error(`  Cache de fréquences indisponible, scoring hérité: ${error}`);
+  }
+  const fsContext = frequency
+    ? {
+        nameFrequency: frequency,
+        totalRecords: frequency.totalRecords,
+        uniqueNames: frequency.uniqueNames,
+      }
+    : undefined;
+
+  const politicianMap = new Map<string, CachedPolitician[]>();
+  for (const p of allPoliticians) {
+    const key = normalizeText(p.lastName);
+    const cached: CachedPolitician = {
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      birthDate: p.birthDate,
+      departments: p.mandates.map((m) => m.departmentCode).filter((d): d is string => d !== null),
+      gender: p.civility === "Mme" ? "F" : p.civility === "M." ? "M" : null,
+      prominenceScore: p.prominenceScore,
+    };
+    const existing = politicianMap.get(key);
+    if (existing) existing.push(cached);
+    else politicianMap.set(key, [cached]);
+  }
+
+  const decisionMap = new Map<string, typeof allDecisions>();
+  for (const d of allDecisions) {
+    const existing = decisionMap.get(d.sourceId);
+    if (existing) existing.push(d);
+    else decisionMap.set(d.sourceId, [d]);
+  }
+
+  for (const row of rows) {
+    const input = {
+      firstName: row.firstName,
+      lastName: row.lastName,
+      birthDate: row.birthDate,
+      department: row.deptCode || undefined,
+      context: { commune: communeNameByInsee.get(row.inseeCode) ?? null },
+    };
+
+    const candidates = politicianMap.get(normalizeText(row.lastName));
+    if (!candidates || candidates.length === 0) {
+      stats.notFound++;
+      continue;
+    }
+
+    const priorDecisions = decisionMap.get(row.inseeCode) ?? [];
+    const blockedIds = new Set(
+      priorDecisions.filter((d) => d.judgement === Judgement.NOT_SAME).map((d) => d.politicianId)
+    );
+    const confirmedSame = priorDecisions.find(
+      (d) => d.judgement === Judgement.SAME && d.confidence >= IDENTITY_THRESHOLDS.AUTO_MATCH
+    );
+    if (confirmedSame) {
+      stats.matched++;
+      continue;
+    }
+
+    const scored: CandidateMatch[] = candidates.map((c) =>
+      scoreCandidate(input, c, blockedIds, fsContext)
+    );
+    const active = scored.filter((c) => !c.blocked).sort((a, b) => b.score - a.score);
+
+    // Sole-candidate boost, as in resolveBatch: a single namesake is itself a signal.
+    if (active.length === 1 && active[0]!.method === MatchMethod.NAME_ONLY) {
+      active[0]!.score = Math.min(active[0]!.score + 0.05, 0.94);
+    }
+
+    if (scored.length > 0 && active.length === 0) {
+      stats.blocked++;
+      continue;
+    }
+
+    const best = active[0];
+    if (!best || best.score < IDENTITY_THRESHOLDS.REVIEW) {
+      stats.notFound++;
+      continue;
+    }
+
+    const fsJudgement = best.fellegiSunter?.judgement;
+    if (fsJudgement === Judgement.SAME) stats.matched++;
+    else if (fsJudgement === Judgement.NOT_SAME) stats.notFound++;
+    else if (fsJudgement === Judgement.UNDECIDED) stats.review++;
+    else if (best.score >= IDENTITY_THRESHOLDS.AUTO_MATCH) stats.matched++;
+    else stats.review++;
+  }
+
+  console.log(`  Fiches qui seraient fusionnées puis SUPPRIMÉES : ${stats.matched}`);
+  console.log(`  En revue (aucune action)                      : ${stats.review}`);
+  console.log(`  Sans correspondance, la fiche reste           : ${stats.notFound}`);
+  console.log(`  Bloquées par une décision NOT_SAME            : ${stats.blocked}`);
+  return stats;
+}
+
 // ============================================
 // Phase 3: close what left the file
 // ============================================
@@ -844,9 +1009,15 @@ export async function syncRNEMaires(
   // Phase 2 folds the stubs Phase 1 just created into the politicians we already knew. A dry
   // run created none, so there is nothing to fold and the resolver would run on the previous
   // import's leftovers.
+  // A dry run created no stub, so the real Phase 2 would have nothing to fold and would run
+  // the resolver over the previous import's leftovers. It is simulated instead: the number of
+  // merges is the one that needs validating, since a merge deletes the created profile.
   const reconciled = dryRun
     ? { matched: 0, notFound: 0, errors: [] as string[] }
     : await reconcileRNEStubs(parsed.communeNameByInsee, verbose);
+  const phase2Simulation = dryRun
+    ? await simulatePhase2(upserted.wouldCreate, parsed.communeNameByInsee)
+    : undefined;
   errors.push(...reconciled.errors);
 
   // A limited run has only read a slice of the register, so it cannot tell a commune that left
@@ -891,6 +1062,7 @@ export async function syncRNEMaires(
     politiciansMatched: reconciled.matched,
     politiciansNotFound: reconciled.notFound,
     errors,
+    phase2Simulation,
   };
 }
 

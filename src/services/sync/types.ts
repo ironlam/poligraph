@@ -398,6 +398,18 @@ export interface MaireRNECSV {
   "Date de début de la fonction": string; // DD/MM/YYYY
 }
 
+/** What Phase 2 would decide about the profiles a dry run would have created. */
+export interface Phase2Simulation {
+  /** Profiles that would be merged into an existing one, then DELETED. Irreversible. */
+  matched: number;
+  /** Left for a human; nothing happens to them. */
+  review: number;
+  /** No candidate: the created profile stays. */
+  notFound: number;
+  /** Every candidate carries a NOT_SAME decision. */
+  blocked: number;
+}
+
 export interface RNESyncResult {
   success: boolean;
   officialsCreated: number;
@@ -409,6 +421,8 @@ export interface RNESyncResult {
   politiciansMatched: number;
   politiciansNotFound: number;
   errors: string[];
+  /** Dry run only: what Phase 2 would do, measured without writing. */
+  phase2Simulation?: Phase2Simulation;
 }
 
 // ============================================
