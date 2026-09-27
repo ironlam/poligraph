@@ -11,8 +11,11 @@ import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
 import { shouldUpdatePhoto } from "@/config/photos";
 import {
-  assertNoUnknownSenateMatricules,
   findUnknownMatricules,
+  mapUnknownMatricule,
+  pickSenateMandateToUpdate,
+  UnknownSenateMatriculesError,
+  type Elected2026,
 } from "./senate-unknown-matricules";
 
 const client = new HTTPClient({ rateLimitMs: SENAT_RATE_LIMIT_MS });
@@ -205,7 +208,7 @@ async function syncSenator(
     const rawAvatar = sen.urlAvatar || `/senateur/${sen.matricule}/photo.jpg`;
     const photoUrl = rawAvatar.startsWith("http") ? rawAvatar : `https://www.senat.fr${rawAvatar}`;
 
-    // Check if politician exists (by external ID or slug)
+    // Senator by Senate matricule only; unknown matricules were mapped or skipped upstream
     const existingByExtId = await db.externalId.findUnique({
       where: {
         source_externalId: {
@@ -216,26 +219,7 @@ async function syncSenator(
       include: { politician: { include: { mandates: true } } },
     });
 
-    let existing = existingByExtId?.politician;
-
-    // Fallback: try to find by slug
-    if (!existing) {
-      existing = await db.politician.findUnique({
-        where: { slug },
-        include: { mandates: true },
-      });
-    }
-
-    // Fallback: try to find by similar name
-    if (!existing) {
-      existing = await db.politician.findFirst({
-        where: {
-          firstName: { equals: sen.prenom, mode: "insensitive" },
-          lastName: { equals: sen.nom, mode: "insensitive" },
-        },
-        include: { mandates: true },
-      });
-    }
+    const existing = existingByExtId?.politician;
 
     const politicianData = {
       slug,
@@ -296,10 +280,8 @@ async function syncSenator(
       // Upsert external ID
       await upsertExternalIds(existing.id, sen.matricule, slug);
 
-      // Update or create mandate — prefer matching by externalId, then by current SENATEUR
-      const existingMandate =
-        existing.mandates.find((m) => m.externalId === mandateData.externalId) ||
-        existing.mandates.find((m) => m.type === MandateType.SENATEUR && m.isCurrent);
+      // Update or create mandate: the current Senate mandate first, then by externalId
+      const existingMandate = pickSenateMandateToUpdate(existing.mandates, mandateData.externalId);
 
       if (existingMandate) {
         // If API didn't provide mandat_debut, preserve existing startDate
@@ -389,6 +371,86 @@ async function upsertExternalIds(
 }
 
 /**
+ * Attach each matricule unknown to the base to its person elected in 2026, by creating the
+ * SENAT external id, and return those that could not be attached.
+ */
+async function mapUnknownSenators(
+  senators: SenateurAPI[]
+): Promise<Array<{ matricule: string; name: string }>> {
+  const known = new Set(
+    (
+      await db.externalId.findMany({
+        where: { source: DataSource.SENAT },
+        select: { externalId: true },
+      })
+    ).map((e) => e.externalId)
+  );
+  const unknown = new Set(
+    findUnknownMatricules(
+      senators.map((s) => s.matricule),
+      known
+    )
+  );
+  if (unknown.size === 0) return [];
+
+  const candidacies = await db.candidacy.findMany({
+    where: { election: { slug: "senatoriales-2026" }, isElected: true },
+    take: 200,
+    select: {
+      politicianId: true,
+      candidateName: true,
+      constituencyCode: true,
+      politician: {
+        select: {
+          mandates: {
+            where: {
+              type: MandateType.SENATEUR,
+              isCurrent: true,
+              startDate: { gte: TERM_2026_START },
+            },
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+  const elected2026: Elected2026[] = candidacies.map((c) => ({
+    politicianId: c.politicianId,
+    name: c.candidateName,
+    constituencyCode: c.constituencyCode ?? "",
+    hasOpenedTerm: (c.politician?.mandates.length ?? 0) > 0,
+  }));
+
+  const unresolved: Array<{ matricule: string; name: string }> = [];
+  for (const sen of senators.filter((s) => unknown.has(s.matricule))) {
+    const departmentCode = sen.circonscription?.libelle
+      ? findDepartmentCode(sen.circonscription.libelle)
+      : null;
+    const mapping = mapUnknownMatricule(
+      { matricule: sen.matricule, prenom: sen.prenom, nom: sen.nom, departmentCode },
+      elected2026
+    );
+    if ("politicianId" in mapping) {
+      await upsertPoliticianExternalId(
+        mapping.politicianId,
+        DataSource.SENAT,
+        sen.matricule,
+        `https://www.senat.fr/senateur/${sen.matricule}/`
+      );
+    } else {
+      unresolved.push({
+        matricule: sen.matricule,
+        name: `${sen.prenom} ${sen.nom} (${mapping.reason})`,
+      });
+    }
+  }
+  return unresolved;
+}
+
+/** First day of the 2026 to 2032 term, as written by `senatoriales:apply-mandates`. */
+const TERM_2026_START = new Date("2026-10-01T00:00:00Z");
+
+/**
  * Main sync function - imports/updates all senators
  */
 export async function syncSenateurs(): Promise<SenatSyncResult> {
@@ -410,28 +472,12 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
       fetchNosSenateursAPI(),
     ]);
 
-    // 1b. Refuse to write anything while the API lists a senator we cannot map by
-    // matricule: after a renewal, the name fallback of syncSenator() would attach the
-    // incoming senator to a homonym.
-    const knownMatricules = new Set(
-      (
-        await db.externalId.findMany({
-          where: { source: DataSource.SENAT },
-          select: { externalId: true },
-        })
-      ).map((e) => e.externalId)
-    );
-    const unknownMatricules = new Set(
-      findUnknownMatricules(
-        senators.map((s) => s.matricule),
-        knownMatricules
-      )
-    );
-    assertNoUnknownSenateMatricules(
-      senators
-        .filter((s) => unknownMatricules.has(s.matricule))
-        .map((s) => ({ matricule: s.matricule, name: `${s.prenom} ${s.nom}` }))
-    );
+    // 1b. Map every matricule we do not know to a person elected on 27 September 2026,
+    // never by name alone across the base: syncSenator() no longer has a name fallback, and a
+    // homonym elsewhere (a mayor, a former MP) must not receive the mandate. A senator that
+    // cannot be mapped is left out of this run and reported, the others are synced.
+    const unresolved = await mapUnknownSenators(senators);
+    const skipped = new Set(unresolved.map((u) => u.matricule));
 
     // 2. Sync parliamentary groups and resolve real parties
     console.log("Syncing senate parliamentary groups...");
@@ -443,10 +489,19 @@ export async function syncSenateurs(): Promise<SenatSyncResult> {
     // 3. Sync senators (with real party ID, not group ID)
     console.log("Syncing senators...");
     for (const sen of senators) {
+      if (skipped.has(sen.matricule)) continue;
       const status = await syncSenator(sen, codeToGroupId, codeToPartyId, nosSenateursData);
       if (status === "created") result.senatorsCreated++;
       else if (status === "updated") result.senatorsUpdated++;
       else result.errors.push(`${sen.prenom} ${sen.nom}`);
+    }
+
+    if (unresolved.length > 0) {
+      // An incomplete run closes nothing: before the switch of mandates, closing here would
+      // end the outgoing senators on the sync date instead of 30 September.
+      result.errors.push(new UnknownSenateMatriculesError(unresolved).message);
+      console.error(new UnknownSenateMatriculesError(unresolved).message);
+      return result;
     }
 
     // 4. Close mandates for senators no longer in the API
