@@ -154,7 +154,11 @@ export function parseMaireRows(
     const nom = row["Nom de l'élu"];
     const prenom = row["Prénom de l'élu"];
     const codeCommune = row["Code de la commune"];
-    const deptCode = row["Code du département"];
+    // Les collectivités à statut particulier (Martinique 972, Guyane 973...) laissent
+    // « Code du département » vide et portent leur code dans une colonne à elles. Leur code
+    // commune est déjà l'INSEE complet, donc seule cette lecture manquait.
+    const deptCode =
+      row["Code du département"] || row["Code de la collectivité à statut particulier"];
 
     if (!nom || !prenom) {
       errors.push(`Row ${index + 1}: missing name`);

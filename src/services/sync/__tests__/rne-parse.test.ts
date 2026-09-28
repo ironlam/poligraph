@@ -145,6 +145,50 @@ describe("parseMaireRows", () => {
     expect(duplicatesDropped).toBe(1);
   });
 
+  it("lit les collectivités à statut particulier, dont le département est vide", () => {
+    // Martinique, Guyane et les autres collectivités à statut particulier laissent la colonne
+    // « Code du département » VIDE et portent leur code ailleurs. Les rejeter a eu une
+    // conséquence directe : la Phase 3 a ensuite fermé les mandats de leurs maires, parce
+    // qu'elle conclut d'une commune absente du fichier que le mandat a pris fin. Fort-de-France,
+    // Le Lamentin et Schœlcher ont été fermés parce que nous ne savions pas lire leurs lignes.
+    const { rows, errors } = parseMaireRows(
+      [
+        csvRow({
+          "Code du département": "",
+          "Libellé du département": "",
+          "Code de la collectivité à statut particulier": "972",
+          "Libellé de la collectivité à statut particulier": "Martinique",
+          "Code de la commune": "97209",
+          "Libellé de la commune": "Fort-de-France",
+          "Nom de l'élu": "LAGUERRE",
+          "Prénom de l'élu": "Didier",
+        }),
+      ],
+      new Set(["97209"])
+    );
+
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.inseeCode).toBe("97209");
+    expect(rows[0]?.deptCode).toBe("972");
+    expect(rows[0]?.communeId).toBe("97209");
+  });
+
+  it("refuse toujours une ligne sans aucun code territorial", () => {
+    const { rows, errors } = parseMaireRows(
+      [
+        csvRow({
+          "Code du département": "",
+          "Code de la collectivité à statut particulier": "",
+        }),
+      ],
+      new Set()
+    );
+
+    expect(rows).toHaveLength(0);
+    expect(errors[0]).toContain("missing department or commune code");
+  });
+
   it("nomme les communes décrites deux fois, et pas seulement leur nombre", () => {
     // L'adoption sur nom exact tranche une identité sans date de naissance. Elle ne peut pas
     // le faire sur une commune où le fichier lui-même se contredit, donc il faut savoir
