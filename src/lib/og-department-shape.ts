@@ -144,3 +144,53 @@ export function getDepartmentShapeWithDot(
   const base64 = Buffer.from(svg).toString("base64");
   return `data:image/svg+xml;base64,${base64}`;
 }
+
+type Point = { x: number; y: number };
+
+/** Ramer-Douglas-Peucker: drops every point closer than `tolerance` to the simplified line. */
+function simplify(points: Point[], tolerance: number): Point[] {
+  if (points.length < 3) return points;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  const dx = last.x - first.x;
+  const dy = last.y - first.y;
+  const length = Math.hypot(dx, dy);
+  let farthest = 0;
+  let farthestIndex = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i]!;
+    const distance =
+      length === 0
+        ? Math.hypot(p.x - first.x, p.y - first.y)
+        : Math.abs(dy * p.x - dx * p.y + last.x * first.y - last.y * first.x) / length;
+    if (distance > farthest) {
+      farthest = distance;
+      farthestIndex = i;
+    }
+  }
+  if (farthest <= tolerance) return [first, last];
+  return [
+    ...simplify(points.slice(0, farthestIndex + 1), tolerance).slice(0, -1),
+    ...simplify(points.slice(farthestIndex), tolerance),
+  ];
+}
+
+/**
+ * Outline for an on-page decoration, where the OG path is too heavy to ship 60 times.
+ * Simplifying below a pixel, then rounding to whole pixels inside a small box, keeps the
+ * silhouette and loses most of the byte weight.
+ */
+export function getDepartmentOutlinePath(code: string, size: number = 120): string | null {
+  const feature = geojson.features.find((f) => f.properties.code === code);
+  if (!feature) return null;
+
+  const ring = getLargestRing(feature);
+  const { project } = projectToSvg(ring, size, size, 2);
+  const projected = ring.map(([lon, lat]) => project(lon, lat));
+  const points: string[] = [];
+  for (const { x, y } of simplify(projected, 1)) {
+    const point = `${Math.round(x)} ${Math.round(y)}`;
+    if (point !== points[points.length - 1]) points.push(point);
+  }
+  return `M${points.join("L")}Z`;
+}

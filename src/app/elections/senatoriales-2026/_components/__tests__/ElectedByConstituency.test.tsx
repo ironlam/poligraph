@@ -82,4 +82,38 @@ describe("ElectedByConstituency", () => {
     render(<ElectedByConstituency elected={[elected({ round: 2, gender: "M" })]} />);
     expect(screen.getByText(/élu au second tour/)).toBeInTheDocument();
   });
+
+  it("affiche le numéro du département, sauf pour les Français de l'étranger", () => {
+    const { container } = render(
+      <ElectedByConstituency
+        elected={[
+          elected(),
+          elected({
+            constituencyCode: "ZZ",
+            constituencyName: "Français établis hors de France",
+            name: "Jean ÉTRANGER",
+          }),
+        ]}
+      />
+    );
+    expect(screen.getByText("01")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("ZZ");
+    // The number stays out of the heading's accessible name.
+    expect(screen.getByRole("heading", { level: 3, name: "Ain" })).toBeInTheDocument();
+  });
+
+  it("dessine la forme seulement pour une circonscription qui en a une", () => {
+    render(
+      <ElectedByConstituency
+        elected={[
+          elected(),
+          elected({ constituencyCode: "973", constituencyName: "Guyane", name: "Marie X" }),
+        ]}
+        outlines={{ "01": "M0 0L10 10Z" }}
+      />
+    );
+    const outlines = screen.getAllByTestId("department-outline");
+    expect(outlines).toHaveLength(1);
+    expect(outlines[0]!.querySelector("path")).toHaveAttribute("d", "M0 0L10 10Z");
+  });
 });
