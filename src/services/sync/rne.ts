@@ -1036,14 +1036,29 @@ async function simulatePhase2(
 // Phase 3: close what left the file
 // ============================================
 
-/** A mandate whose commune is no longer in the file has ended, so close it. */
-async function closeStaleMandates(
+/**
+ * Report the mandates whose commune left the file. Nothing is written.
+ *
+ * This used to close them, stamped with `new Date()`. Two things were wrong with that, and both
+ * are the same mistake the rest of this sync was corrected for.
+ *
+ * A commune missing from the register is a hole in the source, not the end of a mandate.
+ * Batzendorf (67023) is absent from the August 2026 file and is a perfectly real commune: its
+ * mayor was closed on 2026-09-27 for no reason but our own reading gap.
+ *
+ * And the end date was the millisecond the script ran. That is a fact about the script, not
+ * about the mandate. Where a real end date exists, as with an option deadline, it is the one to
+ * use; where none exists, there is nothing to write.
+ *
+ * The third state this wants is `UNCONFIRMED`, which the schema does not have yet. Until then
+ * the honest behaviour is to count them and say so.
+ */
+async function reportStaleMandates(
   snapshot: MayorSnapshot[],
   seenCommuneIds: Set<string>,
-  handledInPhase1: Set<string>,
-  dryRun: boolean
+  handledInPhase1: Set<string>
 ): Promise<{ closed: number; errors: string[] }> {
-  console.log("\n--- Phase 3: Close stale mandates ---");
+  console.log("\n--- Phase 3: mandats absents du registre (signalés, non fermés) ---");
 
   const stale = snapshot.filter((mandate) => {
     // Phase 1 already ruled on this mandate, doubts included. Redundant today, since a
@@ -1055,27 +1070,9 @@ async function closeStaleMandates(
     return identifier && !seenCommuneIds.has(identifier);
   });
 
-  console.log(`  Found ${stale.length} stale mandates to close`);
-
-  const errors: string[] = [];
-  let closed = 0;
-
-  for (const mandate of stale) {
-    try {
-      if (!dryRun) {
-        await db.mandate.update({
-          where: { id: mandate.id },
-          data: { isCurrent: false, endDate: new Date() },
-        });
-      }
-      closed++;
-    } catch (error) {
-      errors.push(`Close stale mandate ${mandate.id}: ${error}`);
-    }
-  }
-
-  console.log(`  Phase 3 complete: ${closed} mandates closed`);
-  return { closed, errors };
+  console.log(`  ${stale.length} mandats dont la commune manque au registre`);
+  console.log("  Aucune écriture : une absence de la source n'est pas une fin de mandat.");
+  return { closed: 0, errors: [] };
 }
 
 /** Announce a large import on the platform feed. Never let this break the sync. */
@@ -1161,7 +1158,7 @@ export async function syncRNEMaires(
   // A limited run has only read a slice of the register, so it cannot tell a commune that left
   // the file from one that sits past the limit.
   const closed = shouldRunStaleSweep({ limit })
-    ? await closeStaleMandates(snapshot, parsed.seenCommuneIds, upserted.handledInPhase1, dryRun)
+    ? await reportStaleMandates(snapshot, parsed.seenCommuneIds, upserted.handledInPhase1)
     : { closed: 0, errors: [] as string[] };
   errors.push(...closed.errors);
 

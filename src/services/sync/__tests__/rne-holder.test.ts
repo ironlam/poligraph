@@ -91,6 +91,19 @@ describe("compareHolder", () => {
     );
   });
 
+  it("ne confirme pas deux prénoms sans rapport, même sur une naissance identique", () => {
+    // LE CAS QUI A COÛTÉ UNE ERREUR. Yohann Perrin, maire de Champagne en Ardèche, est né le
+    // même jour que le sénateur Cédric Perrin : son mandat a été rattaché à la fiche du
+    // sénateur. Une naissance identique confirme un titulaire quand le prénom est une variante
+    // ou une faute de frappe, jamais quand c'est un autre prénom.
+    expect(
+      compareHolder(
+        { firstName: "Yohann", lastName: "Perrin", birthDate: new Date("1970-03-05") },
+        { firstName: "Cédric", lastName: "Perrin", birthDate: new Date("1970-03-05") }
+      )
+    ).toBe("UNDECIDED");
+  });
+
   it("confirme malgré une variante d'orthographe du prénom", () => {
     // "Franck" contre "Frank" : même nom, même naissance. Le signal prénom ne connaît
     // qu'exact ou sous-chaîne, aucune distance d'édition, donc le score tombe à 0.36 et un

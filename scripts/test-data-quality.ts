@@ -51,6 +51,38 @@ const CHECKS: QualityCheck[] = [
     },
   },
   {
+    name: "parliamentary-mayor-cumul",
+    description: "Cumul parlementaire + maire (illégal, arbitrage humain requis)",
+    // Pas bloquant, et c'est un choix. Le registre publié en août confirme ces mandats de maire
+    // APRÈS le délai d'option, pendant que les votes prouvent que les sièges sont occupés : deux
+    // sources récentes se contredisent et aucune règle ne les départage. Bloquer la CI tous les
+    // jours sur une contradiction que personne ne peut résoudre par le code ferait exactement ce
+    // que le plan redoutait, une alarme rouge permanente donc ignorée.
+    //
+    // Le jour où `Mandate.lastConfirmedAt` existera, par source, `decideCumul` pourra peser
+    // laquelle est la plus fraîche, et ce contrôle pourra redevenir bloquant.
+    critical: false,
+    check: async () => {
+      const parliamentary = await db.mandate.findMany({
+        where: { type: { in: [MandateType.DEPUTE, MandateType.SENATEUR] }, isCurrent: true },
+        select: { politicianId: true },
+      });
+      const ids = [...new Set(parliamentary.map((m) => m.politicianId))];
+      if (ids.length === 0) return { passed: true, count: 0 };
+
+      const local = await db.mandate.findMany({
+        where: { type: MandateType.MAIRE, isCurrent: true, politicianId: { in: ids } },
+        select: { politician: { select: { fullName: true } } },
+      });
+
+      return {
+        passed: local.length === 0,
+        count: local.length,
+        details: local.slice(0, 10).map((m) => m.politician.fullName),
+      };
+    },
+  },
+  {
     name: "current-mandates-without-start",
     description: "Mandats actuels sans date de début",
     critical: false,
