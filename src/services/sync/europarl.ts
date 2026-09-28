@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, PoliticalPosition } from "@/generated/prisma";
 import { EuroparlDepute, EuroparlSyncResult } from "./types";
@@ -258,6 +259,7 @@ async function syncMEP(
           constituency,
           startDate,
           isCurrent: true,
+          lastConfirmedAt: confirmedNow(),
           source: DataSource.PARLEMENT_EUROPEEN,
           externalId: europarlId,
           sourceUrl: `https://www.europarl.europa.eu/meps/fr/${europarlId}`,

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
 import { SenateurAPI, NosSenateursAPI, SenatSyncResult } from "./types";
@@ -247,6 +248,7 @@ async function syncSenator(
       senateSeries,
       startDate: mandateStart || new Date(),
       isCurrent: true,
+      lastConfirmedAt: confirmedNow(),
       source: DataSource.SENAT,
       sourceUrl: sen.url
         ? `https://www.senat.fr${sen.url}`

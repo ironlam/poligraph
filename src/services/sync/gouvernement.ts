@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource } from "@/generated/prisma";
 import { parse } from "csv-parse/sync";
@@ -489,6 +490,7 @@ async function applyLocalCorrections(): Promise<{ applied: number; errors: strin
               institution: `Gouvernement ${newMember.mandate.government}`,
               startDate,
               isCurrent: true,
+              lastConfirmedAt: confirmedNow(),
               source: DataSource.GOUVERNEMENT,
               sourceUrl: "https://www.info.gouv.fr/composition-du-gouvernement",
               officialUrl: "https://www.info.gouv.fr/composition-du-gouvernement",
@@ -500,7 +502,7 @@ async function applyLocalCorrections(): Promise<{ applied: number; errors: strin
         } else if (!existingMandate.isCurrent) {
           await db.mandate.update({
             where: { id: existingMandate.id },
-            data: { isCurrent: true, endDate: null },
+            data: { isCurrent: true, endDate: null, lastConfirmedAt: confirmedNow() },
           });
           console.log(`   ✓ Restored mandate: ${newMember.fullName} - ${newMember.mandate.title}`);
           result.applied++;

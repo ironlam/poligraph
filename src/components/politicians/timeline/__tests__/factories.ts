@@ -9,6 +9,7 @@ export function mandate(over: Partial<TimelineMandate> & { type: MandateType }):
     title: "",
     institution: "",
     role: null,
+    lastConfirmedAt: null,
     constituency: null,
     departmentCode: null,
     senateSeries: null,
