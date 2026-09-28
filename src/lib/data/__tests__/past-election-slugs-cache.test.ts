@@ -4,7 +4,7 @@ import { resolve } from "path";
 
 /**
  * `getPastElectionSlugs` answers a question the clock can change on its own: an election flips from
- * "À venir" to "Passée" on polling day, with no database write behind it. Nothing purges the
+ * "À venir" to "Résultats" on polling day, with no database write behind it. Nothing purges the
  * "elections" tag that day either, since the daily sync revalidates "votes" alone.
  *
  * So its cache profile is load-bearing. Under `synced` (revalidate 86 400 s) the mobile menu would
