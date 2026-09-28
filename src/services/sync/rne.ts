@@ -1,4 +1,5 @@
 import { db, type DbTransactionClient } from "@/lib/db";
+import { nextAliases } from "@/lib/mandates/aliases";
 import { confirmedFromResourceUrl } from "@/lib/mandates/confirmation";
 import { writeFileSync } from "node:fs";
 import {
@@ -177,6 +178,8 @@ type ExistingMaire = {
   mandateLocalId: string;
   startDate: Date;
   holder: HolderFacts;
+  /** Le nom que porte la fiche et ceux qu'elle retient déjà, pour n'écrire qu'en cas de nouveauté. */
+  names: { fullName: string; aliases: string[] };
 };
 
 /**
@@ -208,7 +211,15 @@ async function loadByInsee(isCurrent: boolean): Promise<Map<string, ExistingMair
           id: true,
           politicianId: true,
           startDate: true,
-          politician: { select: { firstName: true, lastName: true, birthDate: true } },
+          politician: {
+            select: {
+              firstName: true,
+              lastName: true,
+              birthDate: true,
+              fullName: true,
+              aliases: true,
+            },
+          },
         },
       },
     },
@@ -226,6 +237,10 @@ async function loadByInsee(isCurrent: boolean): Promise<Map<string, ExistingMair
       // start would be corrupt data.
       startDate: local.mandate.startDate,
       holder: local.mandate.politician,
+      names: {
+        fullName: local.mandate.politician.fullName,
+        aliases: local.mandate.politician.aliases,
+      },
     });
   }
 
@@ -288,7 +303,12 @@ async function loadCurrentMayorsByCommune(): Promise<Map<string, CommuneIncumben
 
 async function updateExistingMaire(
   row: ParsedMaireRow,
-  existing: { mandateId: string; politicianId: string; mandateLocalId: string },
+  existing: {
+    mandateId: string;
+    politicianId: string;
+    mandateLocalId: string;
+    names: { fullName: string; aliases: string[] };
+  },
   confirmedAt: Date | null
 ): Promise<void> {
   const { title, constituency } = mandateLabels(row);
@@ -311,11 +331,20 @@ async function updateExistingMaire(
     data: { communeId: row.communeId, functionStart: row.functionStart },
   });
 
+  // The register's rendering of the name, when it is not the one the profile carries. Same
+  // person, other name: a married name, a regional form, a usage first name. Added, never
+  // substituted, so the profile keeps its own name and becomes findable under both.
+  const aliases = nextAliases(existing.names, row.fullName);
+
   // Safe now: this branch only runs when the holder was judged SAME. It used to run on every
   // row matched by INSEE code alone, which wrote the new mayor's civil status onto the old one.
   await db.politician.update({
     where: { id: existing.politicianId },
-    data: { civility: row.civility, birthDate: row.birthDate },
+    data: {
+      civility: row.civility,
+      birthDate: row.birthDate,
+      ...(aliases ? { aliases } : {}),
+    },
   });
 }
 
