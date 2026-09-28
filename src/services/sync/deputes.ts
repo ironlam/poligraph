@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { confirmedNow } from "@/lib/mandates/confirmation";
 import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
 import { DeputeCSV, SyncResult } from "./types";
@@ -215,6 +216,7 @@ async function syncDeputy(
       departmentCode: dep.departementCode || null,
       startDate: mandateStart,
       isCurrent: true,
+      lastConfirmedAt: confirmedNow(),
       source: DataSource.ASSEMBLEE_NATIONALE,
       sourceUrl: `https://www.assemblee-nationale.fr/dyn/deputes/${dep.id}`,
       officialUrl: `https://www.assemblee-nationale.fr/dyn/deputes/${dep.id}`,

@@ -361,6 +361,11 @@ model Mandate {
   startDate DateTime
   endDate   DateTime?
   isCurrent Boolean   @default(true)
+  // Date à laquelle la source de ce mandat a affirmé pour la dernière fois qu'il était détenu.
+  // Pour une API (Assemblée, Sénat), c'est la date du sync : elle répond au présent. Pour un
+  // fichier publié comme le RNE, c'est la date de PUBLICATION du fichier et non celle du run :
+  // « l'instant où j'ai regardé » n'est pas un fait sur le mandat.
+  lastConfirmedAt DateTime?
 
   // Data origin tracking
   source DataSource?

@@ -1,4 +1,5 @@
 import { db, type DbTransactionClient } from "@/lib/db";
+import { confirmedFromResourceUrl } from "@/lib/mandates/confirmation";
 import { writeFileSync } from "node:fs";
 import {
   DataSource,
@@ -63,7 +64,7 @@ function assertPartyResolutionSuspended(): void {
 }
 
 /** Fetch and parse RNE maires CSV */
-async function fetchRNECSV(): Promise<MaireRNECSV[]> {
+async function fetchRNECSV(): Promise<{ records: MaireRNECSV[]; url: string }> {
   // Résolue à chaque exécution : l'URL pinnée ici renvoyait 404, le nom du
   // fichier ayant perdu une lettre en plus de changer d'horodatage.
   const url = await resolveRneResourceUrl(RNE_MAIRES_FRAGMENTS);
@@ -79,7 +80,7 @@ async function fetchRNECSV(): Promise<MaireRNECSV[]> {
   }) as MaireRNECSV[];
 
   console.log(`Parsed ${records.length} maire records`);
-  return records;
+  return { records, url };
 }
 
 // ============================================
@@ -287,7 +288,8 @@ async function loadCurrentMayorsByCommune(): Promise<Map<string, CommuneIncumben
 
 async function updateExistingMaire(
   row: ParsedMaireRow,
-  existing: { mandateId: string; politicianId: string; mandateLocalId: string }
+  existing: { mandateId: string; politicianId: string; mandateLocalId: string },
+  confirmedAt: Date | null
 ): Promise<void> {
   const { title, constituency } = mandateLabels(row);
 
@@ -300,6 +302,7 @@ async function updateExistingMaire(
       startDate: mandateStartDate(row),
       isCurrent: true,
       endDate: null,
+      lastConfirmedAt: confirmedAt,
     },
   });
 
@@ -324,6 +327,7 @@ async function updateExistingMaire(
 async function createMaire(
   row: ParsedMaireRow,
   verbose: boolean,
+  confirmedAt: Date | null,
   client: DbTransactionClient = db
 ): Promise<void> {
   const { title, constituency } = mandateLabels(row);
@@ -355,6 +359,7 @@ async function createMaire(
           departmentCode: row.deptCode,
           startDate: mandateStartDate(row),
           isCurrent: true,
+          lastConfirmedAt: confirmedAt,
           source: DataSource.RNE,
           localData: {
             create: {
@@ -383,6 +388,7 @@ async function createMaire(
 async function createMaireTerm(
   row: ParsedMaireRow,
   politicianId: string,
+  confirmedAt: Date | null,
   client: DbTransactionClient = db
 ): Promise<void> {
   const { title, constituency } = mandateLabels(row);
@@ -397,6 +403,7 @@ async function createMaireTerm(
       departmentCode: row.deptCode,
       startDate: mandateStartDate(row),
       isCurrent: true,
+      lastConfirmedAt: confirmedAt,
       source: DataSource.RNE,
       localData: {
         create: {
@@ -419,7 +426,8 @@ async function upsertMaires(
   rows: ParsedMaireRow[],
   verbose: boolean,
   dryRun: boolean,
-  duplicateCommuneIds: ReadonlySet<string>
+  duplicateCommuneIds: ReadonlySet<string>,
+  confirmedAt: Date | null
 ): Promise<UpsertCounts> {
   const existingByInsee = await loadByInsee(true);
   const closedByInsee = await loadByInsee(false);
@@ -468,8 +476,8 @@ async function upsertMaires(
 
         /** A new profile, or a further term on the profile we already hold. */
         const publish = async (tx: DbTransactionClient = db): Promise<void> => {
-          if (knownPersonId) await createMaireTerm(row, knownPersonId, tx);
-          else await createMaire(row, verbose, tx);
+          if (knownPersonId) await createMaireTerm(row, knownPersonId, confirmedAt, tx);
+          else await createMaire(row, verbose, confirmedAt, tx);
         };
         const countPublication = (): void => {
           if (knownPersonId) {
@@ -532,7 +540,7 @@ async function upsertMaires(
 
         switch (action) {
           case "update":
-            if (!dryRun) await updateExistingMaire(row, existingMandate!);
+            if (!dryRun) await updateExistingMaire(row, existingMandate!, confirmedAt);
             counts.same++;
             break;
 
@@ -558,7 +566,7 @@ async function upsertMaires(
             if (!dryRun) {
               await db.mandate.update({
                 where: { id: incumbent!.mandateId },
-                data: { isCurrent: true, endDate: null },
+                data: { isCurrent: true, endDate: null, lastConfirmedAt: confirmedAt },
               });
               await db.mandateLocal.update({
                 where: { id: incumbent!.mandateLocalId },
@@ -588,12 +596,12 @@ async function upsertMaires(
             break;
 
           case "new-term":
-            if (!dryRun) await createMaireTerm(row, priorTerm!.politicianId);
+            if (!dryRun) await createMaireTerm(row, priorTerm!.politicianId, confirmedAt);
             counts.newTerms++;
             break;
 
           case "create":
-            if (!dryRun) await createMaire(row, verbose);
+            if (!dryRun) await createMaire(row, verbose, confirmedAt);
             counts.created++;
             counts.wouldCreate.push(row);
             break;
@@ -1114,7 +1122,14 @@ export async function syncRNEMaires(
   const { mandates: snapshot, knownCommuneIds } = await snapshotCurrentMayors();
 
   console.log("\n--- Phase 1: Parse CSV + upsert Politician + Mandate + MandateLocal ---");
-  const records = await fetchRNECSV();
+  const { records, url: registerUrl } = await fetchRNECSV();
+  // La date à laquelle le registre a AFFIRMÉ, pas celle où nous l'avons lu. Un fichier d'août
+  // lu en septembre parle toujours d'août, et c'est sur cette date que se compare la fraîcheur
+  // des sources.
+  const registerConfirmedAt = confirmedFromResourceUrl(registerUrl);
+  console.log(
+    `  Registre publié le ${registerConfirmedAt ? registerConfirmedAt.toISOString().slice(0, 10) : "date illisible"}`
+  );
   const toProcess = limit ? records.slice(0, limit) : records;
   console.log(`Processing ${toProcess.length} maires...`);
 
@@ -1136,7 +1151,13 @@ export async function syncRNEMaires(
   // Phase 1 reads the same evidence and takes the same decisions in both modes; only the
   // writes are suppressed. A dry run whose branching differed from the real one would not
   // measure anything.
-  const upserted = await upsertMaires(parsed.rows, verbose, dryRun, parsed.duplicateCommuneIds);
+  const upserted = await upsertMaires(
+    parsed.rows,
+    verbose,
+    dryRun,
+    parsed.duplicateCommuneIds,
+    registerConfirmedAt
+  );
   errors.push(...upserted.errors);
   logPhase1Counts(upserted, dryRun);
   if (upserted.undecidedRows.length > 0) writeUndecidedCsv(upserted.undecidedRows);
