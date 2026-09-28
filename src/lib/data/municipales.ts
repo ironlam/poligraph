@@ -392,6 +392,14 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
       return (b.round1Pct ?? -1) - (a.round1Pct ?? -1);
     });
 
+  // "Sans liste" above is a display bucket, not a list. Under 1000 inhabitants the ballot is
+  // plurinominal: candidates stand individually and there is no list to count. Counting only
+  // named lists is also what every SQL path already does, COUNT(DISTINCT "listName") skipping
+  // NULL, so the fiche, its OG card, the listing badge and the snapshots now answer the same
+  // question. filter(Boolean) mirrors that skip exactly on the data we hold: no listName is an
+  // empty string, and the two blank ones in 2020 count as named on both sides.
+  const namedListCount = new Set(candidacies.map((c) => c.listName).filter(Boolean)).size;
+
   const totalCandidates = candidacies.length;
   const femaleCount = candidacies.filter((c) => c.candidate?.gender === "F").length;
   const femaleRate = totalCandidates > 0 ? femaleCount / totalCandidates : 0;
@@ -425,7 +433,7 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
         }
       : null,
     stats: {
-      listCount: lists.length,
+      listCount: namedListCount,
       candidateCount: totalCandidates,
       femaleRate,
       nationalPoliticiansCount,

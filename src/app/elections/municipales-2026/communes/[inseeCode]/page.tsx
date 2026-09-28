@@ -45,7 +45,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const { stats } = commune;
   const title = `Municipales 2026 à ${commune.name} — Candidats et listes | Poligraph`;
-  const description = `Découvrez les ${stats.listCount} listes et ${stats.candidateCount} candidats aux élections municipales 2026 à ${commune.name} (${commune.departmentName}).`;
+  // Under 1000 inhabitants the ballot is plurinominal: candidates can declare no list at all and
+  // stats.listCount is then 0, which "les 0 listes" would render as a mistake rather than as a
+  // fact. Drop the clause instead. Agreement is spelled out for the same reason: most communes
+  // field a single list, and "les 1 listes" was shipping on every one of them.
+  const plural = (n: number) => (n > 1 ? "s" : "");
+  const candidatesPart = `${stats.candidateCount} candidat${plural(stats.candidateCount)}`;
+  const description =
+    stats.listCount > 0
+      ? `Découvrez les ${stats.listCount} liste${plural(stats.listCount)} et ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${commune.departmentName}).`
+      : `Découvrez les ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${commune.departmentName}).`;
 
   return {
     title,

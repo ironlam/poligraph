@@ -54,16 +54,14 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
     // One aggregate row rather than one row per list: the former groupBy shipped rows back to
     // Node only to read its length, the same bug fixed in getMunicipales2020Stats.
     //
-    // The null-listName group counts as one list: getCommune (src/lib/data/municipales.ts:348)
-    // buckets candidacies without a listName under "Sans liste", the canonical fiche commune
-    // definition this card illustrates, so a candidacy count on its own without that group would
-    // silently change a public number.
+    // Named lists only, so this card matches the fiche it illustrates. getCommune buckets
+    // candidacies without a listName under "Sans liste" for display, but does not count that
+    // bucket as a list: under 1000 inhabitants the ballot is plurinominal and no list exists.
+    // COUNT(DISTINCT) skipping NULL is exactly that rule.
     const [row] = await db.$queryRaw<Array<{ candidateCount: number; listCount: number }>>(
       Prisma.sql`
         SELECT COUNT(*)::int AS "candidateCount",
-               (COUNT(DISTINCT "listName")
-                 + (CASE WHEN COUNT(*) FILTER (WHERE "listName" IS NULL) > 0 THEN 1 ELSE 0 END)
-               )::int AS "listCount"
+               COUNT(DISTINCT "listName")::int AS "listCount"
         FROM "Candidacy"
         WHERE "electionId" = ${election.id} AND "communeId" = ${inseeCode}
       `
