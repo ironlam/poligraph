@@ -86,6 +86,8 @@ function localRow(over: {
         firstName: over.firstName,
         lastName: over.lastName,
         birthDate: over.birthDate,
+        fullName: `${over.firstName} ${over.lastName}`,
+        aliases: [],
       },
     },
   };
@@ -148,6 +150,7 @@ describe("écritures du sync RNE", () => {
       where: { id: "holder-1" },
       // `parseFrenchDate` construit midi UTC, pour que le jour calendaire à Paris soit
       // celui qu'on a lu quel que soit le fuseau du process.
+      // Le registre écrit "Martin", la fiche porte "MARTIN" : même nom, aucun alias à retenir.
       data: { civility: "Mme", birthDate: new Date("1970-04-02T12:00:00Z") },
     });
   });
