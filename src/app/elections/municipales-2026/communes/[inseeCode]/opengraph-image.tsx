@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
-import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
+import { OgLayout, OgCategoryLabel, OG_SIZE, OgEmoji } from "@/lib/og-utils";
 import { getDepartmentShapeWithDot } from "@/lib/og-department-shape";
 
 export const alt = "Municipales 2026 sur Poligraph";
@@ -115,7 +115,7 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
                 marginBottom: 12,
               }}
             >
-              <span>📋</span>
+              <OgEmoji emoji="📋" size={22} />
               <span>
                 {`${listCount} liste${listCount > 1 ? "s" : ""} · ${candidateCount} candidat${candidateCount > 1 ? "s" : ""}`}
               </span>
@@ -131,7 +131,7 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
                 color: "#94a3b8",
               }}
             >
-              <span>👥</span>
+              <OgEmoji emoji="👥" size={22} />
               <span>{populationFormatted} habitants</span>
             </div>
           )}

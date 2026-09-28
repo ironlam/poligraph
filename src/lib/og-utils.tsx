@@ -8,6 +8,7 @@
  */
 
 import { BRAND_NAVY, BRAND_PAGE, BRAND_RED } from "@/config/brand";
+import { ogEmojiSrc } from "@/lib/og/emoji";
 
 // Owl SVG as base64 data URI (from public/logo-inverse.svg)
 const OWL_BASE64 =
@@ -94,12 +95,28 @@ export function OgLayout({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * An emoji, drawn from vendored artwork instead of a text glyph.
+ *
+ * Handing satori the character would make it fetch the picture from cdn.jsdelivr.net at render
+ * time, and that fetch failing throws rather than degrading. See src/lib/og/emoji.ts.
+ *
+ * `size` is what the font-size was before: satori lays an emoji out at roughly one em, so passing
+ * the old font-size keeps the card unchanged.
+ */
+export function OgEmoji({ emoji, size = 28 }: { emoji: string; size?: number }) {
+  const src = ogEmojiSrc(emoji);
+  if (!src) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} width={size} height={size} alt="" />;
+}
+
+/**
  * Category label (e.g. "FACT-CHECK", "VOTE", "AFFAIRE")
  */
 export function OgCategoryLabel({ emoji, label }: { emoji: string; label: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-      <span style={{ fontSize: 28 }}>{emoji}</span>
+      <OgEmoji emoji={emoji} size={28} />
       <span
         style={{
           fontSize: 18,

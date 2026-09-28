@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { OgLayout, OG_SIZE, OgCategoryLabel } from "@/lib/og-utils";
+import { OgLayout, OG_SIZE, OgCategoryLabel, OgEmoji } from "@/lib/og-utils";
 
 export const alt = "Parlement - Votes, dossiers législatifs et groupes parlementaires";
 export const size = OG_SIZE;
@@ -71,7 +71,7 @@ export default async function Image() {
                 color: "#cbd5e1",
               }}
             >
-              <span>{item.emoji}</span>
+              <OgEmoji emoji={item.emoji} size={20} />
               <span>{item.label}</span>
             </div>
           ))}

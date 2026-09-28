@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { db } from "@/lib/db";
 import { getDepartmentBySlug } from "@/config/departments";
-import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
+import { OgLayout, OgCategoryLabel, OG_SIZE, OgEmoji } from "@/lib/og-utils";
 import { getDepartmentShapeDataUri } from "@/lib/og-department-shape";
 
 export const alt = "Département sur Poligraph";
@@ -96,7 +96,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
       <div style={{ display: "flex", gap: 40, fontSize: 22, color: "#94a3b8" }}>
         {deputyCount > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 26 }}>🏛️</span>
+            <OgEmoji emoji="🏛️" size={26} />
             <span>
               {deputyCount} député{deputyCount > 1 ? "s" : ""}
             </span>
@@ -104,7 +104,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         )}
         {senatorCount > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 26 }}>🏛️</span>
+            <OgEmoji emoji="🏛️" size={26} />
             <span>
               {senatorCount} sénateur{senatorCount > 1 ? "s" : ""}
             </span>

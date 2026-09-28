@@ -15,15 +15,15 @@ import { readFileSync } from "node:fs";
  * Hosts the build cannot do without today, each with the reason it is there. Adding a
  * line to this list is a deliberate act: it says the production build now depends on
  * one more third party being up.
+ *
+ * Empty since issue #641 was closed, and that is the point: the production build now
+ * reaches nothing. Fonts live in src/fonts and Twemoji artwork in src/lib/og, so a
+ * Google Fonts or jsdelivr outage can no longer fail a deploy. The jsdelivr one was not
+ * only a build concern: satori resolved emoji at RENDER time too, and an unreachable
+ * host made the render throw rather than drop the glyph, so on-demand OG routes failed
+ * in production. Re-adding an entry here means giving that back.
  */
-const ALLOWED_HOSTS = new Map([
-  [
-    "fonts.googleapis.com",
-    "next/font/google, the stylesheets for Outfit and Atkinson Hyperlegible",
-  ],
-  ["fonts.gstatic.com", "next/font/google, the font files themselves"],
-  ["cdn.jsdelivr.net", "next/og, the Twemoji SVGs used by the opengraph-image routes"],
-]);
+const ALLOWED_HOSTS = new Map<string, string>([]);
 
 const logPath = process.env.BUILD_NET_LOG;
 if (!logPath) {

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
+import { OgLayout, OgCategoryLabel, OG_SIZE, OgEmoji } from "@/lib/og-utils";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 
 export const alt = "Parti politique sur Poligraph";
@@ -111,7 +111,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
 
           {/* Members count */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 28 }}>👥</span>
+            <OgEmoji emoji="👥" size={28} />
             <span style={{ fontSize: 28, color: "#94a3b8" }}>
               {memberCount} membre{memberCount > 1 ? "s" : ""}
             </span>

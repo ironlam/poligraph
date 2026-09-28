@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Outfit, Atkinson_Hyperlegible } from "next/font/google";
+import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -17,18 +17,30 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { SITE_URL } from "@/config/site";
 import "./globals.css";
 
-const outfit = Outfit({
+// Fonts are served from the repository rather than fetched from Google Fonts during the build.
+// `next/font/google` is a build-time loader: it downloaded these same files and self-hosted them
+// with the assets, so visitors never called Google either way. What it also did was make every
+// production build depend on fonts.googleapis.com being reachable, and an outage there failed the
+// deploy. See src/fonts/README.md for provenance and how to refresh the files.
+//
+// Outfit ships as a variable font: Google serves one file for the whole weight axis and declares
+// it twice, at 700 and at 800. Hence a single file with a weight range here, where Atkinson
+// Hyperlegible needs one file per weight.
+const outfit = localFont({
+  src: [{ path: "../fonts/Outfit-latin-variable.woff2", weight: "700 800", style: "normal" }],
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["700", "800"],
   display: "swap",
+  adjustFontFallback: "Arial",
 });
 
-const atkinson = Atkinson_Hyperlegible({
+const atkinson = localFont({
+  src: [
+    { path: "../fonts/AtkinsonHyperlegible-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/AtkinsonHyperlegible-latin-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "700"],
   display: "swap",
+  adjustFontFallback: "Arial",
 });
 
 export const metadata: Metadata = {
