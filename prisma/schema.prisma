@@ -42,6 +42,11 @@ model Politician {
   firstName    String
   lastName     String
   fullName     String // Computed: "firstName lastName" for search
+  // Autres noms sous lesquels la personne est connue : nom de naissance contre nom marital,
+  // forme régionale ("Peio" pour "Pierre"), nom d'usage contre nom d'état civil. Le RNE et les
+  // résultats d'élection ne donnent pas toujours le même, et une fiche n'en porte qu'un : sans
+  // ce champ, une maire reconnue sous son nom marital reste introuvable sous l'autre.
+  aliases      String[]  @default([])
   birthDate    DateTime?
   deathDate    DateTime? // Date of death (if deceased)
   birthPlace   String?

@@ -10,6 +10,7 @@ const mockPolitician = {
   firstName: "Jean",
   lastName: "Dupont",
   fullName: "Jean Dupont",
+  aliases: [],
   birthDate: new Date("1970-01-15"),
   deathDate: null,
   birthPlace: "Paris",
