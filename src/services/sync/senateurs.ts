@@ -3,6 +3,7 @@ import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, Chamber } from "@/generated/prisma";
 import { SenateurAPI, NosSenateursAPI, SenatSyncResult } from "./types";
 import { politicianService } from "@/services/politician";
+import { shouldApplyGroupParty } from "./group-party";
 import { SENATE_GROUPS, type ParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import { findDepartmentCode } from "@/config/departments";
 import { parseSenateSeries, getSeriesTermStart } from "@/config/senatoriales";
@@ -280,9 +281,7 @@ async function syncSenator(
         },
       });
 
-      // Update party affiliation via service (real party, not group)
-      // Skip if group is transpartisan (partyId null) and politician already has a party
-      if (partyId || !existing.currentPartyId) {
+      if (shouldApplyGroupParty(existing.currentPartyId, partyId)) {
         await politicianService.setCurrentParty(existing.id, partyId);
       }
 

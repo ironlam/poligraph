@@ -4,6 +4,7 @@ import { MandateType, DataSource, Chamber } from "@/generated/prisma";
 import { DeputeCSV, SyncResult } from "./types";
 import { parse } from "csv-parse/sync";
 import { politicianService } from "@/services/politician";
+import { shouldApplyGroupParty } from "./group-party";
 import { ASSEMBLY_GROUPS, type ParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
@@ -231,8 +232,9 @@ async function syncDeputy(
         },
       });
 
-      // Update party affiliation via service (real party, not group)
-      await politicianService.setCurrentParty(existing.id, partyId);
+      if (shouldApplyGroupParty(existing.currentPartyId, partyId)) {
+        await politicianService.setCurrentParty(existing.id, partyId);
+      }
 
       // Upsert external IDs
       await upsertExternalIds(existing.id, dep.id, slug);

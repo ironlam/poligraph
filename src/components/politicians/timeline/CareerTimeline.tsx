@@ -8,17 +8,23 @@ import { AFFAIR_STATUS_MARKER_COLORS, getMandateRow, MANDATE_ROW_LABELS } from "
 import { formatDate } from "@/lib/utils";
 import type { CareerTimelineProps, TooltipData, TimelineAffair } from "./types";
 import { LEFT_MARGIN, RIGHT_MARGIN } from "./types";
-import { computeDuration, computeOverlapOffsets, mandateAffiliation } from "./utils";
+import {
+  computeDuration,
+  computeOverlapOffsets,
+  mandateAffiliation,
+  mergePartyStints,
+} from "./utils";
 import { DesktopTimeline } from "./DesktopTimeline";
 import { MobileTimeline } from "./MobileTimeline";
 
 export function CareerTimeline({
   mandates,
-  partyHistory,
+  partyHistory: rawPartyHistory,
   affairs,
   birthDate: _birthDate,
   deathDate,
 }: CareerTimelineProps) {
+  const partyHistory = useMemo(() => mergePartyStints(rawPartyHistory), [rawPartyHistory]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(900);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);

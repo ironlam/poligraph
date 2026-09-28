@@ -1,6 +1,6 @@
 import type { SerializedMandate } from "@/types";
 import { MANDATE_TYPE_LABELS } from "@/config/labels";
-import type { TimelineMandate } from "./types";
+import type { CareerTimelineProps, TimelineMandate } from "./types";
 
 /**
  * Who the person sat with during a mandate, or what they were actually in
@@ -41,6 +41,48 @@ export function mandateAffiliation(mandate: TimelineMandate): string | null {
     default:
       return null;
   }
+}
+
+type PartyStint = CareerTimelineProps["partyHistory"][number];
+
+/**
+ * Longest break between two memberships of the same party still read as one stint.
+ *
+ * The party syncs hand `currentPartyId` back and forth, and each hand-off closes the
+ * membership and opens a new one dated the day of the run. Measured on 2026-09-28: 890 breaks
+ * under 90 days, every one written by a sync since February 2026. Breaks beyond that are real
+ * departures and stay visible.
+ */
+export const PARTY_STINT_MAX_GAP_DAYS = 90;
+
+/**
+ * Collapse consecutive memberships of the same party into one stint, so the timeline says
+ * "Rejoint PS" once instead of once per sync run. The role is ignored: the timeline does not
+ * show it. Undated memberships cannot be placed and are kept as they are.
+ */
+export function mergePartyStints(history: PartyStint[]): PartyStint[] {
+  const maxGapMs = PARTY_STINT_MAX_GAP_DAYS * 86_400_000;
+  const partyKey = (s: PartyStint) => s.party.slug ?? s.party.name;
+  const time = (d: Date | null) => (d ? new Date(d).getTime() : Infinity);
+
+  const dated = history
+    .filter((s) => s.startDate)
+    .sort((a, b) => time(a.startDate) - time(b.startDate));
+
+  const openByParty = new Map<string, PartyStint>();
+  const merged: PartyStint[] = [];
+  for (const stint of dated) {
+    const previous = openByParty.get(partyKey(stint));
+    if (previous && time(stint.startDate) - time(previous.endDate) <= maxGapMs) {
+      if (time(stint.endDate) > time(previous.endDate)) previous.endDate = stint.endDate;
+      continue;
+    }
+    const copy = { ...stint };
+    merged.push(copy);
+    openByParty.set(partyKey(stint), copy);
+  }
+
+  return [...merged, ...history.filter((s) => !s.startDate)];
 }
 
 export function computeDuration(startDate: string | Date, endDate: string | Date | null): string {
