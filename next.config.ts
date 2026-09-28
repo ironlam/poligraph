@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingIncludes: {
     "/departements/[slug]/opengraph-image": ["./public/data/departements.geojson"],
+    "/elections/senatoriales-2026": ["./public/data/departements.geojson"],
     "/elections/municipales-2026/communes/[inseeCode]/opengraph-image": [
       "./public/data/departements.geojson",
     ],

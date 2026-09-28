@@ -97,13 +97,12 @@ export const NAV_SECONDARY: NavItem[] = [
     icon: "shieldAlert",
     description: "Catalogue documenté des procédures-bâillons (SLAPP) en France",
   },
+  // No Boussole here: the mobile menu already shows it next to the theme toggle.
   {
-    href: "https://boussole.poligraph.fr",
-    label: "Boussole",
-    icon: "compass",
-    description: "Quiz politique pour situer vos positions",
-    external: true,
-    featureFlag: "BOUSSOLE_ENABLED",
+    href: "/factchecks",
+    label: "Fact-checks",
+    icon: "searchCheck",
+    description: "Déclarations vérifiées par les fact-checkeurs",
   },
 ];
 

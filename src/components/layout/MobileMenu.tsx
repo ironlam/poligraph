@@ -24,6 +24,7 @@ import {
   BookOpen,
   Compass,
   ShieldAlert,
+  SearchCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "./Logo";
@@ -41,6 +42,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   bookOpen: BookOpen,
   compass: Compass,
   shieldAlert: ShieldAlert,
+  searchCheck: SearchCheck,
 };
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
@@ -222,23 +224,25 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                             aria-current={isActive ? "page" : undefined}
                             className={`flex items-center justify-between gap-2 px-4 py-3.5 rounded-xl text-lg font-display font-semibold transition-colors ${
                               isPast
-                                ? "text-foreground/60 hover:bg-muted hover:text-foreground"
+                                ? "text-foreground hover:bg-muted"
                                 : "border border-primary/40 text-primary hover:bg-primary/5"
                             }`}
                           >
                             <span className="flex items-center gap-3 min-w-0">
                               {Icon && <Icon className="h-5 w-5 shrink-0" />}
                               {item.label}
-                              {/* `muted-foreground-strong`: at 12px on --muted in dark, the base
-                                  token measures 3.83:1, below AA. See globals.css. */}
+                              {/* A past election links to its results: the badge says what is
+                                  behind the link rather than that it is over. In light, a red
+                                  tint under red text measures 3.86:1 at 12px, below AA: the
+                                  badge is outlined there instead (4.99:1). */}
                               <span
                                 className={`shrink-0 whitespace-nowrap text-xs font-medium px-2 py-0.5 rounded-full ${
                                   isPast
-                                    ? "bg-muted text-muted-foreground-strong"
+                                    ? "border border-brand-on-surface/40 text-brand-on-surface dark:border-transparent dark:bg-brand/15"
                                     : "bg-primary/15 text-primary"
                                 }`}
                               >
-                                {isPast ? "Passée" : "À venir"}
+                                {isPast ? "Résultats" : "À venir"}
                               </span>
                             </span>
                             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

@@ -7,6 +7,7 @@ import { SourceLine } from "@/components/ui/SourceLine";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { EventJsonLd } from "@/components/seo/JsonLd";
 import { formatDate } from "@/lib/utils";
+import { getDepartmentOutlinePath } from "@/lib/og-department-shape";
 import type { ElectedSenator } from "@/lib/senatoriales/results-summary";
 import { SITE_URL } from "@/config/site";
 import {
@@ -18,7 +19,7 @@ import {
 import { BallotDay } from "./_components/BallotDay";
 import { CandidacyDeposit } from "./_components/CandidacyDeposit";
 import { CommuneLookup } from "./_components/CommuneLookup";
-import { ElectedByConstituency } from "./_components/ElectedByConstituency";
+import { ElectedFilter } from "./_components/ElectedFilter";
 import { ResultsOverview } from "./_components/ResultsOverview";
 import { MunicipalBridge } from "./_components/MunicipalBridge";
 import { ScrutinRules } from "./_components/ScrutinRules";
@@ -69,6 +70,17 @@ export async function generateMetadata(): Promise<Metadata> {
         "Le calendrier par série, le barème du collège et les sénateurs sortants par département.",
     alternates: { canonical: `/elections/${SENATORIALES_2026_SLUG}` },
   };
+}
+
+/** One outline per constituency that has one in the geojson (not overseas, not abroad). */
+function outlinesFor(elected: ElectedSenator[]): Record<string, string> {
+  const outlines: Record<string, string> = {};
+  for (const { constituencyCode } of elected) {
+    if (constituencyCode in outlines) continue;
+    const path = getDepartmentOutlinePath(constituencyCode);
+    if (path) outlines[constituencyCode] = path;
+  }
+  return outlines;
 }
 
 export default async function SenatorialesHubPage() {
@@ -240,7 +252,7 @@ export default async function SenatorialesHubPage() {
                 >
                   {RESULTS_ELECTED_HEADING}
                 </h2>
-                <ElectedByConstituency elected={results.elected} />
+                <ElectedFilter elected={results.elected} outlines={outlinesFor(results.elected)} />
                 <SourceLine
                   sources={[SOURCE_INTERIOR_RESULTS]}
                   consultedAt={results.lastImportedAt}

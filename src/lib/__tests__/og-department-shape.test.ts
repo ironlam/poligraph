@@ -3,6 +3,7 @@ import {
   getDepartmentSvgPath,
   getDepartmentShapeDataUri,
   getDepartmentShapeWithDot,
+  getDepartmentOutlinePath,
 } from "../og-department-shape";
 
 describe("getDepartmentSvgPath", () => {
@@ -55,5 +56,24 @@ describe("getDepartmentShapeWithDot", () => {
     const base64 = uri!.split(",")[1]!;
     const svg = Buffer.from(base64, "base64").toString("utf-8");
     expect(svg).not.toContain("<circle");
+  });
+});
+
+describe("getDepartmentOutlinePath", () => {
+  it("n'écrit que des pixels entiers, sans point répété", () => {
+    const path = getDepartmentOutlinePath("01")!;
+    expect(path).toMatch(/^M\d+ \d+(L\d+ \d+)+Z$/);
+    const points = path.slice(1, -1).split("L");
+    points.slice(1).forEach((p, i) => expect(p).not.toBe(points[i]));
+  });
+
+  it("pèse bien moins que le tracé des images OG", () => {
+    const outline = getDepartmentOutlinePath("29")!;
+    const og = getDepartmentSvgPath("29", { width: 120, height: 120 })!;
+    expect(outline.length).toBeLessThan(og.length / 2);
+  });
+
+  it("renvoie null pour une circonscription sans forme", () => {
+    expect(getDepartmentOutlinePath("ZZ")).toBeNull();
   });
 });
