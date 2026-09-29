@@ -11,7 +11,7 @@ export function MobileThemeToggle() {
   if (!mounted) {
     return (
       <button
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80"
+        className="inline-flex items-center gap-2 px-4 min-h-11 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80"
         aria-label="Changer le thème"
       >
         {/* span, not div: a button may only contain phrasing content. */}
@@ -26,7 +26,7 @@ export function MobileThemeToggle() {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
+      className="inline-flex items-center gap-2 px-4 min-h-11 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
       aria-label={isDark ? "Passer en mode clair" : "Passer en mode sombre"}
     >
       {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
