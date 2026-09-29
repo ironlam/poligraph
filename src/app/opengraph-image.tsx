@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { OgLayout, OG_SIZE, OWL_DATA_URI } from "@/lib/og-utils";
+import { OgLayout, OG_SIZE, OWL_DATA_URI, OgEmoji } from "@/lib/og-utils";
 
 export const alt = "Poligraph - Observatoire citoyen de la vie politique";
 export const size = OG_SIZE;
@@ -55,19 +55,19 @@ export default async function Image() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 28 }}>📜</span>
+            <OgEmoji emoji="📜" size={28} />
             <span>Mandats</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 28 }}>💰</span>
+            <OgEmoji emoji="💰" size={28} />
             <span>Patrimoine</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 28 }}>⚖️</span>
+            <OgEmoji emoji="⚖️" size={28} />
             <span>Affaires judiciaires</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 28 }}>🔍</span>
+            <OgEmoji emoji="🔍" size={28} />
             <span>Fact-checks</span>
           </div>
         </div>

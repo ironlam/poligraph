@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { db } from "@/lib/db";
-import { OgLayout, OgCategoryLabel, OgBadge, OG_SIZE, truncateOg } from "@/lib/og-utils";
+import { OgLayout, OgCategoryLabel, OgBadge, OG_SIZE, truncateOg, OgEmoji } from "@/lib/og-utils";
 import type { ElectionType, ElectionStatus } from "@/generated/prisma";
 
 export const alt = "Élection sur Poligraph";
@@ -104,7 +104,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
 
       {election._count.candidacies > 0 && (
         <div style={{ display: "flex", gap: 8, fontSize: 22, color: "#94a3b8" }}>
-          <span>👤</span>
+          <OgEmoji emoji="👤" size={22} />
           <span>
             {election._count.candidacies} candidat{election._count.candidacies > 1 ? "s" : ""}
           </span>
