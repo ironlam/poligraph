@@ -184,7 +184,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
               <Link
                 href="/"
                 aria-label="Poligraph, accueil"
-                className="flex items-center gap-3"
+                className="flex min-h-11 items-center gap-3"
                 onClick={close}
               >
                 <Logo size={36} />
@@ -192,7 +192,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
               </Link>
               <button
                 onClick={close}
-                className="flex items-center justify-center h-10 w-10 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="flex items-center justify-center h-11 w-11 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 aria-label="Fermer le menu"
               >
                 <X className="h-5 w-5" />
@@ -314,7 +314,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                     {filteredSecondary.map((item) => {
                       const Icon = item.icon ? ICON_MAP[item.icon] : null;
                       const className =
-                        "inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors";
+                        "inline-flex items-center gap-2 px-4 min-h-11 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors";
                       return item.external ? (
                         <a
                           key={item.href}
@@ -359,7 +359,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                       rel="noopener noreferrer"
                       onClick={close}
                       aria-label="Boussole politique (s'ouvre dans un nouvel onglet)"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
+                      className="inline-flex items-center gap-2 px-4 min-h-11 py-2.5 rounded-full border border-border text-sm font-medium text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
                     >
                       <Compass className="h-5 w-5" aria-hidden="true" />
                       <span>Boussole</span>
@@ -369,7 +369,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                 <Link
                   href="/soutenir"
                   onClick={close}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-red-500 text-red-500 font-semibold text-sm hover:bg-red-500/10 transition-colors"
+                  className="inline-flex items-center gap-2 px-5 min-h-11 py-2.5 rounded-full border-2 border-red-500 text-red-500 font-semibold text-sm hover:bg-red-500/10 transition-colors"
                 >
                   <Heart className="h-4 w-4" />
                   Nous soutenir

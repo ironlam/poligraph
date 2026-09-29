@@ -160,6 +160,26 @@ for (const theme of THEMES) {
         await expect(scope.getByRole("link", { name: /^Boussole politique/ })).toBeVisible();
       });
 
+      if (regime === "mobile") {
+        test("donne 44 px à chaque cible du menu mobile", async ({ page }) => {
+          // The project floor (AGENTS.md), measured on the rendered box: the pills at the bottom
+          // of the menu used to render at 42px from their padding alone.
+          await page.getByRole("button", { name: "Ouvrir le menu" }).click();
+          await expect(page.locator(MOBILE_MENU)).toBeVisible();
+
+          const tooSmall = await page.locator(MOBILE_MENU).evaluate((menu) =>
+            [...menu.querySelectorAll<HTMLElement>("a, button")]
+              .map((el) => ({ el, box: el.getBoundingClientRect() }))
+              .filter(({ box }) => box.height < 44)
+              .map(({ el, box }) => {
+                const name = (el.getAttribute("aria-label") ?? el.textContent ?? "").trim();
+                return `${name} (${Math.round(box.height)}px)`;
+              })
+          );
+          expect(tooSmall).toEqual([]);
+        });
+      }
+
       test("n'expose qu'un seul contrôle de recherche", async ({ page }) => {
         // The regression this encodes: the compact trigger used to carry `lg:hidden` inside a
         // `hidden lg:flex` nav, so it was visible at no width at all. A count of exactly one
