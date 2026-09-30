@@ -1,4 +1,5 @@
 "use client";
+import { getDepartmentName, formatDepartment } from "@/config/departments";
 
 import { useEffect, useId, useRef, useState, type Ref } from "react";
 import Link from "next/link";
@@ -282,7 +283,9 @@ function CommuneAnswerPanel({
 }) {
   const { commune, college, inhabitantsPerDelegate, renewal, seatsAtStake, senators } = answer;
   const locative = getDepartmentLocative(commune.departmentCode);
-  const where = locative ?? `dans le département ${commune.departmentName}`;
+  const where =
+    locative ??
+    `dans le département ${getDepartmentName(commune.departmentCode) ?? commune.departmentCode}`;
   const statutorySources =
     commune.departmentCode === "976"
       ? [SOURCE_TABLEAU_5, SOURCE_MAYOTTE_SEATS]
@@ -292,7 +295,7 @@ function CommuneAnswerPanel({
     <div className="space-y-4">
       <div className="rounded-xl border border-border p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {commune.departmentName} ({commune.departmentCode})
+          {formatDepartment(commune.departmentCode)}
         </p>
         <h3
           ref={headingRef}

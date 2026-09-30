@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { getDepartmentName, formatDepartment } from "@/config/departments";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -44,6 +45,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const { stats } = commune;
+  // Commune.departmentName holds the CODE, not the name, so it never reaches a reader.
+  const dept = getDepartmentName(commune.departmentCode) ?? commune.departmentCode;
   const title = `Municipales 2026 à ${commune.name} — Candidats et listes | Poligraph`;
   // Under 1000 inhabitants the ballot is plurinominal: candidates can declare no list at all and
   // stats.listCount is then 0, which "les 0 listes" would render as a mistake rather than as a
@@ -53,8 +56,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const candidatesPart = `${stats.candidateCount} candidat${plural(stats.candidateCount)}`;
   const description =
     stats.listCount > 0
-      ? `Découvrez les ${stats.listCount} liste${plural(stats.listCount)} et ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${commune.departmentName}).`
-      : `Découvrez les ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${commune.departmentName}).`;
+      ? `Découvrez les ${stats.listCount} liste${plural(stats.listCount)} et ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${dept}).`
+      : `Découvrez les ${candidatesPart} aux élections municipales 2026 à ${commune.name} (${dept}).`;
 
   return {
     title,
@@ -79,6 +82,9 @@ export default async function CommuneDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  // Commune.departmentName holds the CODE, not the name, so it never reaches a reader.
+  const dept = getDepartmentName(commune.departmentCode) ?? commune.departmentCode;
+
   const communeUrl = `${SITE_URL}/elections/municipales-2026/communes/${commune.id}`;
 
   return (
@@ -86,14 +92,14 @@ export default async function CommuneDetailPage({ params }: PageProps) {
       <GovernmentOrganizationJsonLd
         name={`Commune de ${commune.name}`}
         alternateName={commune.name}
-        description={`Informations publiques sur la commune de ${commune.name}, dans le département ${commune.departmentName}.`}
+        description={`Informations publiques sur la commune de ${commune.name}, dans le département ${dept}.`}
         address={commune.name}
         url={`${SITE_URL}/elections/municipales-2026/communes/${commune.id}`}
       />
       {commune.round1Date && (
         <EventJsonLd
           name={`Municipales 2026 - ${commune.name}`}
-          description={`Élections municipales 2026 à ${commune.name} (${commune.departmentName})`}
+          description={`Élections municipales 2026 à ${commune.name} (${dept})`}
           startDate={commune.round1Date.toISOString()}
           location={commune.name}
           url={communeUrl}
@@ -114,9 +120,7 @@ export default async function CommuneDetailPage({ params }: PageProps) {
             Municipales 2026 — {commune.name}
           </h1>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">
-              {commune.departmentName} ({commune.departmentCode})
-            </Badge>
+            <Badge variant="outline">{formatDepartment(commune.departmentCode)}</Badge>
             {commune.population != null && (
               <Badge variant="outline">
                 {commune.population.toLocaleString("fr-FR")} habitants

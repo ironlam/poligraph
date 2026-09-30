@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { getDepartmentName } from "@/config/departments";
 import {
   MUNICIPALES_SNAPSHOT_KEYS,
   type ParityOutliers,
@@ -186,17 +187,16 @@ export async function computeDepartmentPartyDataLive(electionId: string): Promis
   const rows = await db.$queryRaw<
     Array<{
       departmentCode: string;
-      departmentName: string;
       partyLabel: string;
       listCount: number;
     }>
   >(Prisma.sql`
-    SELECT co."departmentCode", co."departmentName", c."partyLabel",
+    SELECT co."departmentCode", c."partyLabel",
            COUNT(DISTINCT c."listName")::int as "listCount"
     FROM "Candidacy" c
     JOIN "Commune" co ON c."communeId" = co.id
     WHERE c."electionId" = ${electionId} AND c."partyLabel" IS NOT NULL
-    GROUP BY co."departmentCode", co."departmentName", c."partyLabel"
+    GROUP BY co."departmentCode", c."partyLabel"
     ORDER BY co."departmentCode", "listCount" DESC
   `);
 
@@ -212,7 +212,7 @@ export async function computeDepartmentPartyDataLive(electionId: string): Promis
   for (const row of rows) {
     const existing = deptMap.get(row.departmentCode) || {
       code: row.departmentCode,
-      name: row.departmentName,
+      name: getDepartmentName(row.departmentCode) ?? row.departmentCode,
       parties: [],
       totalLists: 0,
     };

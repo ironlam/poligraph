@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { getDepartmentName, formatDepartment } from "@/config/departments";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -42,8 +43,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description =
     commune.lists.length > 0
       ? `Résultats des élections municipales 2020 à ${commune.communeName}` +
-        ` (${commune.departmentName}) : ${commune.lists.length} listes en compétition.`
-      : `Résultats des élections municipales 2020 à ${commune.communeName} (${commune.departmentName}).`;
+        ` (${getDepartmentName(commune.departmentCode) ?? commune.departmentCode}) : ${commune.lists.length} listes en compétition.`
+      : `Résultats des élections municipales 2020 à ${commune.communeName} (${getDepartmentName(commune.departmentCode) ?? commune.departmentCode}).`;
 
   return {
     title,
@@ -78,9 +79,7 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
           Municipales 2020 — {commune.communeName}
         </h1>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">
-            {commune.departmentName} ({commune.departmentCode})
-          </Badge>
+          <Badge variant="outline">{formatDepartment(commune.departmentCode)}</Badge>
           {commune.population != null && (
             <Badge variant="outline">{commune.population.toLocaleString("fr-FR")} habitants</Badge>
           )}

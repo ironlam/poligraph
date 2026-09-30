@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getDepartmentName } from "@/config/departments";
 import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { USER_AGENT } from "@/config/site";
@@ -113,7 +114,6 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
       id: true,
       name: true,
       departmentCode: true,
-      departmentName: true,
       constituencyNumber: true,
     },
   });
@@ -219,7 +219,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
       deputy,
       senators,
       commune: commune.name,
-      department: commune.departmentName,
+      department: getDepartmentName(commune.departmentCode) ?? commune.departmentCode,
       departmentCode: commune.departmentCode,
       constituencyNumber: commune.constituencyNumber,
       multipleDeputies,

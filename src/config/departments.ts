@@ -171,3 +171,31 @@ export function getDepartmentBySlug(slug: string) {
 export function getDepartmentSlug(name: string) {
   return generateSlug(name);
 }
+
+/**
+ * The department name behind a code, or null when the code names no department.
+ *
+ * Exists because `Commune.departmentName` holds the CODE, on all 34 969 rows, so displaying that
+ * column prints "86 (86)" where "Vienne (86)" was meant. Resolve through here instead, and never
+ * read that column for anything a reader sees.
+ *
+ * Null rather than a made-up name for the six communes of the TAAF (984) and Clipperton (989):
+ * those territories have no department. Adding them to DEPARTMENTS would be the tempting fix and
+ * the wrong one, since that map drives the /departements routes and the sitemap, which would gain
+ * two entries that are not departments.
+ */
+export function getDepartmentName(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return DEPARTMENTS[code]?.name ?? null;
+}
+
+/**
+ * A department for display: "Vienne (86)", or the bare code when no name exists.
+ *
+ * The bare code is deliberate. "984 (984)" reads as a bug, and the TAAF have no name to give.
+ */
+export function formatDepartment(code: string | null | undefined): string {
+  if (!code) return "";
+  const name = getDepartmentName(code);
+  return name ? `${name} (${code})` : code;
+}

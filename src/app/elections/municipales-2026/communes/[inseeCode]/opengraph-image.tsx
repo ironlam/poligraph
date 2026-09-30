@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { formatDepartment } from "@/config/departments";
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { OgLayout, OgCategoryLabel, OG_SIZE, OgEmoji } from "@/lib/og-utils";
@@ -16,7 +17,6 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
     select: {
       name: true,
       departmentCode: true,
-      departmentName: true,
       population: true,
       latitude: true,
       longitude: true,
@@ -102,7 +102,7 @@ export default async function Image({ params }: { params: Promise<{ inseeCode: s
           </div>
 
           <div style={{ fontSize: 22, color: "#94a3b8", marginBottom: 28 }}>
-            {`${commune.departmentName} (${commune.departmentCode})`}
+            {formatDepartment(commune.departmentCode)}
           </div>
 
           {(listCount > 0 || candidateCount > 0) && (

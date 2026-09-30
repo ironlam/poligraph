@@ -7,6 +7,7 @@ import {
   getSittingSenators,
 } from "@/lib/data/senatoriales";
 import { inhabitantsPerDelegate } from "@/lib/senatoriales/college";
+import { getDepartmentName } from "@/config/departments";
 
 /**
  * Resolves a postal code, then a commune, for the Sénatoriales 2026 college lookup.
@@ -53,7 +54,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
           id: view.id,
           name: view.name,
           departmentCode: view.departmentCode,
-          departmentName: view.departmentName,
+          departmentName: getDepartmentName(view.departmentCode) ?? view.departmentCode,
         },
         college: view.college,
         inhabitantsPerDelegate: inhabitantsPerDelegate(view.college),
