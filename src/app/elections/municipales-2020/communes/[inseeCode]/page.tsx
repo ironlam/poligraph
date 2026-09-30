@@ -68,6 +68,27 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
     notFound();
   }
 
+  const sansListe = commune.namedListCount === 0;
+  const horsListe = commune.lists.length - commune.namedListCount;
+
+  // Le titre nomme ce que le chiffre compte, et se cale sur « Résultats par liste » de 2026.
+  const sectionTitle = sansListe
+    ? `Résultats par candidat (${commune.lists.length})`
+    : horsListe > 0
+      ? `Résultats (${commune.namedListCount} liste${commune.namedListCount > 1 ? "s" : ""} et ${horsListe} candidat${horsListe > 1 ? "s" : ""} hors liste)`
+      : `Résultats par liste (${commune.namedListCount})`;
+
+  // Sans cette phrase, le lecteur qui vient d'une commune voisine plus peuplée conclut que
+  // l'information nous manque, alors que c'est le mode de scrutin qui diffère. Le déclencheur
+  // d'affichage est l'absence de liste, pas la population : on n'énonce la règle de droit que
+  // lorsque la population la justifie, et on décrit notre donnée sinon.
+  const petiteCommune = commune.population != null && commune.population < 1000;
+  const explication = !sansListe
+    ? null
+    : petiteCommune
+      ? "Dans cette commune, on ne vote pas pour une liste. Sous 1 000 habitants, chaque personne se présente seule et l'électeur compose son bulletin en prenant les noms qu'il veut, y compris dans des camps différents. Il coche autant de noms qu'il y a de sièges à pourvoir, donc les pourcentages ci-dessous s'additionnent bien au-delà de 100 % : ils se lisent un par un."
+      : "Aucun nom de liste n'est enregistré pour ce scrutin : les résultats sont publiés candidat par candidat.";
+
   return (
     <main className="container mx-auto px-4 pt-4 pb-8 max-w-6xl">
       <Breadcrumb
@@ -96,17 +117,14 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
 
       {/* Lists / Results */}
       <section>
-        <h2 className="text-lg font-semibold mb-4">
-          {commune.namedListCount > 0
-            ? `Résultats (${commune.namedListCount} liste${commune.namedListCount > 1 ? "s" : ""})`
-            : `Candidats (${commune.lists.length})`}
-        </h2>
+        <h2 className="text-lg font-semibold mb-4">{sectionTitle}</h2>
+        {explication && <p className="text-sm text-muted-foreground mb-4">{explication}</p>}
 
         {commune.lists.length > 0 ? (
           <div className="space-y-4">
             {commune.lists.map((list) => (
               <Card
-                key={list.listName}
+                key={list.key}
                 className={list.isElected ? "border-green-300 dark:border-green-800" : undefined}
               >
                 <CardContent className="pt-5">
@@ -119,7 +137,7 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
                         {list.isElected && (
                           <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 gap-1">
                             <CheckCircle2 className="h-3 w-3" />
-                            Élue
+                            {list.isNamedList ? "Élue" : "Siège obtenu"}
                           </Badge>
                         )}
                       </div>
@@ -154,7 +172,9 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
                           </span>
                         )}
                       </div>
-                      {list.round1Qualified != null && (
+                      {/* Sans liste déclarée, « qualifiée » n'a pas d'objet : l'import remplit ce
+                          champ depuis le nombre de sièges, pas depuis l'accès au second tour. */}
+                      {list.isNamedList && list.round1Qualified != null && (
                         <Badge
                           variant="outline"
                           className={

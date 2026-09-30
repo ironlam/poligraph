@@ -34,13 +34,17 @@ export function HistoriqueSection({ data, year }: HistoriqueSectionProps) {
         <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {/* Participation T1 */}
           <div>
-            <dt className="text-sm text-muted-foreground">Participation</dt>
+            {/* ElectionRound n'a pas de commune : ce taux est celui de la France entière. Le
+                libellé doit le dire, sans quoi l'encart le fait passer pour un chiffre local. */}
+            <dt className="text-sm text-muted-foreground">Participation en France</dt>
             <dd className="text-2xl font-bold tabular-nums">{data.participationT1.toFixed(1)} %</dd>
           </div>
 
           {/* Winning list */}
           <div className="col-span-2 sm:col-span-1">
-            <dt className="text-sm text-muted-foreground">Liste gagnante</dt>
+            <dt className="text-sm text-muted-foreground">
+              {data.totalLists > 0 ? "Liste gagnante" : "En tête au 1er tour"}
+            </dt>
             <dd className="flex items-center gap-2">
               {data.winningList.nuance && (
                 <span

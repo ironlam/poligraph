@@ -30,8 +30,12 @@ vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 // Import AFTER mocks
 import { getCommuneResults2020 } from "@/lib/data/elections";
 
+let seq = 0;
+
 function candidacy(listName: string | null, candidateName: string, votes = 10) {
   return {
+    // La requête sélectionne l'id, et le regroupement s'en sert pour distinguer deux homonymes.
+    id: `cand-${++seq}`,
     candidateName,
     listName,
     listPosition: null,
@@ -103,6 +107,19 @@ describe("résultats 2020 d'une commune", () => {
     ).toEqual(["BIEN VIVRE À CHATAIN", "CHATAIN AUTREMENT"]);
   });
 
+  it("ne fusionne pas deux homonymes de la même commune", async () => {
+    // Mesuré en production : 3 communes, 3 cartes qui disparaissaient avec leurs voix.
+    candidacyFindMany.mockResolvedValue([
+      candidacy(null, "Jean MARTIN", 31),
+      candidacy(null, "Jean MARTIN", 28),
+    ]);
+
+    const commune = await getCommuneResults2020("86063");
+
+    expect(commune?.lists).toHaveLength(2);
+    expect(new Set(commune?.lists.map((l) => l.key)).size).toBe(2);
+  });
+
   it("rend zéro liste et zéro candidat sur une commune sans candidature", async () => {
     candidacyFindMany.mockResolvedValue([]);
 
@@ -120,7 +137,7 @@ describe("garde-fou sur l'import 2020", () => {
       "utf8"
     );
 
-    // Le repli exact qui a produit les 354 948 fausses listes.
+    // Le repli exact qui a mis un nom de personne sur 354 948 des 375 371 candidatures.
     expect(source).not.toMatch(/listName:\s*list\.listName\s*\|\|\s*candidateName/);
     expect(source).toMatch(/listName:\s*list\.listName\s*\|\|\s*null/);
   });

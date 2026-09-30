@@ -16,7 +16,7 @@ import { NAV_ELECTIONS } from "@/config/navigation";
  * Headline counters for the 2020 municipal election.
  *
  * Two former counters were dropped on 2026-09-12 because neither measured what its label claimed.
- * The "lists" counter read 375 368 where roughly 19 342 lists exist, because the import wrote
+ * The "lists" counter read 348 593 where 19 342 lists exist, because the import wrote
  * `listName: list.listName || candidateName` and turned every candidate of a commune under 1000
  * inhabitants into a list of their own. The "elected mayors" counter filtered on `listPosition = 1`,
  * which the 2020 import never fills, so it published a plain 0.
@@ -50,6 +50,8 @@ export interface DepartmentResult2020 {
 }
 
 export interface CommuneListResult2020 {
+  /** Stable per entry: the list name, or the candidacy row when the ballot had no list. */
+  key: string;
   /** The declared list name, or the candidate's own name when the ballot had no list. */
   listName: string;
   /**
@@ -204,6 +206,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   const candidacies = await db.candidacy.findMany({
     where: { electionId, communeId: inseeCode },
     select: {
+      id: true,
       candidateName: true,
       listName: true,
       listPosition: true,
@@ -215,7 +218,9 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
       round2Pct: true,
       isElected: true,
     },
-    orderBy: [{ listName: "asc" }, { listPosition: "asc" }],
+    // candidateName ferme le tri : sur un scrutin plurinominal listName et listPosition sont
+    // nulles sur toutes les lignes, et l'ordre deviendrait celui que la base veut bien rendre.
+    orderBy: [{ listName: "asc" }, { listPosition: "asc" }, { candidateName: "asc" }],
   });
 
   if (candidacies.length === 0) {
@@ -234,6 +239,8 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   const listsMap = new Map<
     string,
     {
+      key: string;
+      displayName: string;
       isNamedList: boolean;
       partyLabel: string | null;
       teteDeListe: string;
@@ -248,11 +255,13 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   >();
 
   for (const c of candidacies) {
-    const key = c.listName || c.candidateName;
+    const key = c.listName ?? `candidature:${c.id}`;
     const existing = listsMap.get(key);
     if (!existing) {
       // First candidate in this list — use them as tete de liste
       listsMap.set(key, {
+        key,
+        displayName: c.listName ?? c.candidateName,
         isNamedList: c.listName != null,
         partyLabel: c.partyLabel,
         teteDeListe: c.candidateName,
@@ -285,8 +294,9 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
 
   // Build lists array and sort: elected first, then by round1Pct desc
   const lists: CommuneListResult2020[] = Array.from(listsMap.entries())
-    .map(([listName, data]) => ({
-      listName,
+    .map(([, data]) => ({
+      key: data.key,
+      listName: data.displayName,
       isNamedList: data.isNamedList,
       partyLabel: data.partyLabel,
       candidateName: data.teteDeListe,

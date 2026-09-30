@@ -349,15 +349,22 @@ export function CommuneSearch({
                           {formatPopulation(result.population) !== null && (
                             <span>{formatPopulation(result.population)} hab.</span>
                           )}
-                          {result.listCount > 0 && (
+                          {/* listCount tombe à zéro sur un scrutin plurinominal, où aucune liste
+                              n'est déclarée. Le nombre de candidats, lui, reste exact : le
+                              conditionner au premier faisait disparaître les deux. */}
+                          {result.candidateCount > 0 && (
                             <>
                               {formatPopulation(result.population) !== null && (
                                 <span className="mx-1">&middot;</span>
                               )}
                               <span>
-                                {result.listCount} liste
-                                {result.listCount > 1 ? "s" : ""} &middot; {result.candidateCount}{" "}
-                                candidat
+                                {result.listCount > 0 && (
+                                  <>
+                                    {result.listCount} liste
+                                    {result.listCount > 1 ? "s" : ""} &middot;{" "}
+                                  </>
+                                )}
+                                {result.candidateCount} candidat
                                 {result.candidateCount > 1 ? "s" : ""}
                               </span>
                             </>

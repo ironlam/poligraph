@@ -98,6 +98,14 @@ const ALLOWED_UNBOUNDED: AllowedUnbounded = new Map([
         },
       ],
       [
+        "getCommuneHistorique2020",
+        {
+          count: 1,
+          reason:
+            "borné par le réel : les noms de liste distincts d'une seule commune, quelques dizaines au plus",
+        },
+      ],
+      [
         "getCumulCandidates",
         {
           count: 1,

@@ -67,6 +67,24 @@ export default async function DepartmentsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Sans cette légende, l'effondrement de la colonne Listes se lit comme une panne : sur un
+            département rural elle passe de plusieurs milliers à quelques centaines. */}
+        <div className="mt-6 space-y-2 text-sm text-muted-foreground">
+          <p>
+            Une liste n{"'"}existe que dans les communes de 1 000 habitants et plus. En dessous,
+            chaque personne se présente seule : elle compte dans la colonne Candidatures, jamais
+            dans la colonne Listes.
+          </p>
+          <p>
+            La colonne Candidatures mélange deux unités héritées du fichier source : une ligne y
+            vaut une personne dans les petites communes, et une liste entière dans les autres.
+          </p>
+          <p>
+            Source : résultats officiels du ministère de l{"'"}Intérieur, élections municipales des
+            15 mars et 28 juin 2020.
+          </p>
+        </div>
       </main>
     </>
   );
