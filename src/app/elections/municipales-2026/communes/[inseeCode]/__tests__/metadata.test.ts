@@ -28,7 +28,6 @@ describe("/elections/municipales-2026/communes/[inseeCode] metadata", () => {
   it("laisse intacte la metadata d'une commune existante", async () => {
     getCommune.mockResolvedValue({
       name: "Saint-Étienne",
-      departmentName: "42",
       population: 170000,
       stats: { listCount: 6, candidateCount: 300 },
     });
@@ -54,7 +53,6 @@ describe("accord de la description", () => {
   const descriptionFor = async (listCount: number, candidateCount: number) => {
     getCommune.mockResolvedValue({
       name: "Chatain",
-      departmentName: "86",
       population: 240,
       stats: { listCount, candidateCount },
     });

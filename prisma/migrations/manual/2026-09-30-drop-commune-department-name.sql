@@ -1,0 +1,38 @@
+-- Suppression de la colonne Commune."departmentName" (suivi #947).
+--
+-- La colonne contenait le CODE du département, jamais son nom, sur les 34 969
+-- lignes sans exception : le seeder écrivait `nomDepartement ?? codeDepartement`
+-- et geo.api.gouv.fr ne renvoie pas `nomDepartement`, donc le repli se
+-- déclenchait à chaque ligne. Toute surface qui l'affichait écrivait « 86 (86) ».
+--
+-- La PR #946 a retiré toute lecture : le nom se résout depuis `departmentCode`
+-- via DEPARTMENTS. La PR #949 retire la déclaration du schéma Prisma et
+-- l'écriture du seeder. La colonne apparaît donc dans chaque diff comme un DROP
+-- en attente, ce qui fait échouer db:push et masque les vraies dérives : ce
+-- fichier existe pour refermer cette fenêtre.
+--
+-- Vérifié avant exécution, sur la production :
+--   objets dépendant de la colonne (pg_depend) ... 0
+--   policies RLS la citant ....................... 0
+--   vues la citant ............................... 0
+--   lecteurs dans src/ ........................... 0, garanti par un test
+-- Aucune donnée n'est perdue : la valeur est le code, qui reste dans
+-- `departmentCode` sur la même ligne.
+--
+-- ORDRE À RESPECTER. La migration d'origine déclare la colonne NOT NULL sans
+-- défaut, et Prisma ne l'envoie plus dans ses INSERT. Toute CRÉATION de commune
+-- part donc en 23502 tant que la colonne existe : jouer ce fichier AVANT le
+-- prochain `npm run seed:communes`. Les 34 969 lignes existantes passent par
+-- UPDATE et ne sont pas concernées.
+--
+-- STAGING garde la colonne. `staging-migrate.yml` applique `migrate deploy`, et
+-- l'historique versionné la crée toujours ; aucune suppression de colonne de ce
+-- dépôt ne passe par une migration versionnée. Y rejouer ce fichier à la main
+-- si une insertion de commune y devient nécessaire.
+--
+-- Équivalent via l'outillage, une fois le déploiement fait :
+--   npm run db:push -- --allow=DROP_COLUMN
+-- (db:push sans --accept-data-loss demande une confirmation interactive sur une
+-- colonne peuplée : ce fichier évite ce détour.)
+
+ALTER TABLE "Commune" DROP COLUMN IF EXISTS "departmentName";
