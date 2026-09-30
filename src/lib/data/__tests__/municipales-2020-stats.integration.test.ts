@@ -30,8 +30,8 @@ describeIfDisposableDb("statistiques municipales 2020", () => {
 
     await db.commune.createMany({
       data: [
-        { id: "01004", name: "Ambérieu", departmentCode: "01", departmentName: "Ain" },
-        { id: "01005", name: "Ambronay", departmentCode: "01", departmentName: "Ain" },
+        { id: "01004", name: "Ambérieu", departmentCode: "01" },
+        { id: "01005", name: "Ambronay", departmentCode: "01" },
       ],
       skipDuplicates: true,
     });

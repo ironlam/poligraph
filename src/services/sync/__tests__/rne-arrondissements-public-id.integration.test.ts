@@ -60,7 +60,6 @@ describeIfDisposableDb("arrondissements : collision publicId et rollback Postgre
         id: "75056",
         name: "Paris",
         departmentCode: "75",
-        departmentName: "Paris",
         postalCodes: [],
       },
     });
