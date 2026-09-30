@@ -93,8 +93,8 @@ describe("municipales snapshot fallback", () => {
   it("getDepartmentPartyData falls back to live when snapshot missing", async () => {
     findUniqueMock.mockResolvedValueOnce(null);
     queryRawMock.mockResolvedValueOnce([
-      { departmentCode: "75", departmentName: "Paris", partyLabel: "EELV", listCount: 3 },
-      { departmentCode: "75", departmentName: "Paris", partyLabel: "PS", listCount: 1 },
+      { departmentCode: "75", partyLabel: "EELV", listCount: 3 },
+      { departmentCode: "75", partyLabel: "PS", listCount: 1 },
     ]);
 
     const result = await getDepartmentPartyData();

@@ -2415,7 +2415,6 @@ model Commune {
   id                 String   @id // INSEE code (e.g., "75056")
   name               String
   departmentCode     String
-  departmentName     String
   regionCode         String?
   regionName         String?
   postalCodes        String[]

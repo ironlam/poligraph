@@ -36,7 +36,6 @@ interface GeoAPICommune {
   code: string; // INSEE code
   nom: string;
   codeDepartement: string;
-  nomDepartement?: string;
   codeRegion?: string;
   nomRegion?: string;
   codesPostaux?: string[];
@@ -77,7 +76,7 @@ function computeTotalSeats(population: number | undefined): number | null {
 
 async function fetchCommunes(): Promise<GeoAPICommune[]> {
   const url =
-    "https://geo.api.gouv.fr/communes?fields=code,nom,codeDepartement,nomDepartement,codeRegion,nomRegion,codesPostaux,population,centre&limit=100000";
+    "https://geo.api.gouv.fr/communes?fields=code,nom,codeDepartement,codeRegion,nomRegion,codesPostaux,population,centre&limit=100000";
 
   console.log("Fetching communes from geo.api.gouv.fr...");
   const response = await fetch(url);
@@ -117,7 +116,6 @@ async function main() {
           const data = {
             name: commune.nom,
             departmentCode: commune.codeDepartement,
-            departmentName: commune.nomDepartement ?? commune.codeDepartement,
             regionCode: commune.codeRegion ?? null,
             regionName: commune.nomRegion ?? null,
             postalCodes: commune.codesPostaux ?? [],
