@@ -202,7 +202,12 @@ export async function syncMunicipales2020(statsOnly = false) {
       entries.push({
         candidateName,
         partyLabel,
-        listName: list.listName || candidateName,
+        // Null, never the candidate name. Under 1000 inhabitants the ballot is plurinominal and
+        // the CSV carries no list name because no list exists. Substituting the person turned
+        // 354 948 candidacies into as many "lists": the 2020 pages announced 348 593 of them
+        // where 19 342 were real. A missing list name is a fact about the ballot, not a gap to
+        // fill. See issue #941.
+        listName: list.listName || null,
         communeId: commune.inseeCode,
         constituencyCode: commune.inseeCode,
         round1Votes: list.votes,

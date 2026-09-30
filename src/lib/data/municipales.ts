@@ -1017,7 +1017,13 @@ export interface Historique2020 {
     pct: number;
     seatsWon: number | null;
   };
+  /**
+   * Declared lists only. Zero on a plurinominal ballot, where `candidateCount` carries the figure.
+   *
+   * Was a raw candidacy count, so a village of nine candidates announced nine lists. Issue #941.
+   */
   totalLists: number;
+  candidateCount: number;
   hadSecondRound: boolean;
   participationT2: number | null;
   electedMayor: { fullName: string; gender: string | null } | null;
@@ -1033,11 +1039,18 @@ export const getCommuneHistorique2020 = cache(async function getCommuneHistoriqu
   });
   if (!election) return null;
 
-  // 2. Count lists for this commune
-  const listCount = await db.candidacy.count({
+  // 2. Candidacies gate the block: no candidacy, no history to show.
+  const candidateCount = await db.candidacy.count({
     where: { electionId: election.id, communeId: inseeCode },
   });
-  if (listCount === 0) return null;
+  if (candidateCount === 0) return null;
+
+  // Declared lists are a different question, and the one the "Listes" figure answers.
+  const namedLists = await db.candidacy.findMany({
+    where: { electionId: election.id, communeId: inseeCode, listName: { not: null } },
+    select: { listName: true },
+    distinct: ["listName"],
+  });
 
   // 3. Find winning list — order by isElected desc, then round1Pct desc
   const topList = await db.candidacy.findFirst({
@@ -1100,7 +1113,8 @@ export const getCommuneHistorique2020 = cache(async function getCommuneHistoriqu
       pct: topList.round1Pct ? Number(topList.round1Pct) : 0,
       seatsWon: null,
     },
-    totalLists: listCount,
+    totalLists: namedLists.length,
+    candidateCount,
     hadSecondRound,
     participationT2,
     electedMayor: electedMayor ? { fullName: electedMayor.candidateName, gender: null } : null,

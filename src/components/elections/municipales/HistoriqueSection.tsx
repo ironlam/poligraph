@@ -68,11 +68,20 @@ export function HistoriqueSection({ data, year }: HistoriqueSectionProps) {
             </div>
           )}
 
-          {/* Total lists */}
-          <div>
-            <dt className="text-sm text-muted-foreground">Listes</dt>
-            <dd className="text-2xl font-bold tabular-nums">{data.totalLists}</dd>
-          </div>
+          {/* Lists, or candidates when the ballot had none. Under 1000 inhabitants the vote is
+              plurinominal: people stand individually, so "Listes : 9" was counting the nine
+              candidates. 2014 has no such case and carries no candidate count, hence the narrowing. */}
+          {data.totalLists > 0 ? (
+            <div>
+              <dt className="text-sm text-muted-foreground">Listes</dt>
+              <dd className="text-2xl font-bold tabular-nums">{data.totalLists}</dd>
+            </div>
+          ) : "candidateCount" in data ? (
+            <div>
+              <dt className="text-sm text-muted-foreground">Candidats</dt>
+              <dd className="text-2xl font-bold tabular-nums">{data.candidateCount}</dd>
+            </div>
+          ) : null}
 
           {/* Second round */}
           {data.hadSecondRound && data.participationT2 != null && (

@@ -40,11 +40,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const title = `Municipales 2020 à ${commune.communeName} — Résultats | Poligraph`;
+  // Sous 1000 habitants le scrutin est plurinominal : il n'y a pas de liste, seulement des
+  // candidats. Annoncer « N listes en compétition » y était faux sur environ 34 000 communes.
+  const dept = getDepartmentName(commune.departmentCode) ?? commune.departmentCode;
+  const ou = `à ${commune.communeName} (${dept})`;
   const description =
-    commune.lists.length > 0
-      ? `Résultats des élections municipales 2020 à ${commune.communeName}` +
-        ` (${getDepartmentName(commune.departmentCode) ?? commune.departmentCode}) : ${commune.lists.length} listes en compétition.`
-      : `Résultats des élections municipales 2020 à ${commune.communeName} (${getDepartmentName(commune.departmentCode) ?? commune.departmentCode}).`;
+    commune.namedListCount > 0
+      ? `Résultats des élections municipales 2020 ${ou} : ${commune.namedListCount} liste${commune.namedListCount > 1 ? "s" : ""} en compétition.`
+      : commune.lists.length > 0
+        ? `Résultats des élections municipales 2020 ${ou} : ${commune.lists.length} candidat${commune.lists.length > 1 ? "s" : ""}.`
+        : `Résultats des élections municipales 2020 ${ou}.`;
 
   return {
     title,
@@ -92,7 +97,9 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
       {/* Lists / Results */}
       <section>
         <h2 className="text-lg font-semibold mb-4">
-          Résultats ({commune.lists.length} liste{commune.lists.length > 1 ? "s" : ""})
+          {commune.namedListCount > 0
+            ? `Résultats (${commune.namedListCount} liste${commune.namedListCount > 1 ? "s" : ""})`
+            : `Candidats (${commune.lists.length})`}
         </h2>
 
         {commune.lists.length > 0 ? (
@@ -119,10 +126,14 @@ export default async function Commune2020DetailPage({ params }: PageProps) {
                       {list.partyLabel && (
                         <p className="text-sm text-muted-foreground mt-0.5">{list.partyLabel}</p>
                       )}
-                      <p className="text-sm text-muted-foreground">
-                        Tête de liste : {list.candidateName} · {list.candidateCount} candidat
-                        {list.candidateCount > 1 ? "s" : ""}
-                      </p>
+                      {list.isNamedList && (
+                        <p className="text-sm text-muted-foreground">
+                          Tête de liste : {list.candidateName}
+                          {/* L'import 2020 ne garde qu'une ligne par liste, la tête : le compte de
+                              colistiers vaut 1 et ne veut rien dire. On ne l'affiche que s'il informe. */}
+                          {list.candidateCount > 1 && ` · ${list.candidateCount} candidats`}
+                        </p>
+                      )}
                     </div>
                   </div>
 

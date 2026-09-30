@@ -16,13 +16,16 @@ import { NAV_ELECTIONS } from "@/config/navigation";
  * Headline counters for the 2020 municipal election.
  *
  * Two former counters were dropped on 2026-09-12 because neither measured what its label claimed.
- * `municipales-2020.ts` writes `listName: list.listName || candidateName`, so in communes under
- * 1000 inhabitants (93 % of the rows) the list name is the person's name: the "lists" counter read
- * 375 368 where there are roughly 20 000 actual lists. The "elected mayors" counter filtered on
- * `listPosition = 1`, which the 2020 import never fills, so it published a plain 0.
+ * The "lists" counter read 375 368 where roughly 19 342 lists exist, because the import wrote
+ * `listName: list.listName || candidateName` and turned every candidate of a commune under 1000
+ * inhabitants into a list of their own. The "elected mayors" counter filtered on `listPosition = 1`,
+ * which the 2020 import never fills, so it published a plain 0.
  *
- * `totalCandidacies` is kept but is not clean either: one row is a person in small communes and a
- * list in larger ones. Both counters return once the import has an explicit data unit.
+ * The list confusion is settled since issue #941: a missing list name stays null, and only named
+ * lists are counted. `totalCandidacies` is still not clean, for the remaining reason: one row is a
+ * person in small communes and a whole list, represented by its head, in larger ones. Measured
+ * 2026-09-30, exactly 1.00 row per (commune, list name) pair in both size classes. That counter
+ * returns once the import has an explicit data unit.
  */
 export interface Municipales2020Stats {
   totalCandidacies: number;
@@ -47,7 +50,16 @@ export interface DepartmentResult2020 {
 }
 
 export interface CommuneListResult2020 {
+  /** The declared list name, or the candidate's own name when the ballot had no list. */
   listName: string;
+  /**
+   * Whether `listName` is a declared list, or just this candidate's name standing in for one.
+   *
+   * Under 1000 inhabitants the ballot is plurinominal: candidates stand individually, each with
+   * their own votes, and no list exists. Grouping them one per person is right, calling the result
+   * a "list" is not. Issue #941.
+   */
+  isNamedList: boolean;
   partyLabel: string | null;
   candidateName: string;
   round1Votes: number | null;
@@ -66,6 +78,8 @@ export interface CommuneResult2020 {
   population: number | null;
   totalSeats: number | null;
   lists: CommuneListResult2020[];
+  /** Declared lists only. Zero on a plurinominal ballot, where `lists` still holds the candidates. */
+  namedListCount: number;
 }
 
 // ============================================
@@ -149,7 +163,9 @@ export const getDepartmentResults2020 = cache(async function getDepartmentResult
         co."departmentCode" AS "departmentCode",
         COUNT(DISTINCT co.id)::int AS "communeCount",
         COUNT(c.id)::int AS "candidacyCount",
-        COUNT(DISTINCT (c."listName", co.id))::int AS "listCount"
+        -- Les candidatures sans nom de liste ne sont pas des listes : sous 1000 habitants
+        -- le scrutin est plurinominal. Sans ce filtre, chaque commune en compterait une.
+        COUNT(DISTINCT (c."listName", co.id)) FILTER (WHERE c."listName" IS NOT NULL)::int AS "listCount"
       FROM "Candidacy" c
       JOIN "Commune" co ON c."communeId" = co.id
       WHERE c."electionId" = ${electionId}
@@ -210,6 +226,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
       population: commune.population,
       totalSeats: commune.totalSeats,
       lists: [],
+      namedListCount: 0,
     };
   }
 
@@ -217,6 +234,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   const listsMap = new Map<
     string,
     {
+      isNamedList: boolean;
       partyLabel: string | null;
       teteDeListe: string;
       round1Votes: number | null;
@@ -235,6 +253,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
     if (!existing) {
       // First candidate in this list — use them as tete de liste
       listsMap.set(key, {
+        isNamedList: c.listName != null,
         partyLabel: c.partyLabel,
         teteDeListe: c.candidateName,
         round1Votes: c.round1Votes,
@@ -268,6 +287,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
   const lists: CommuneListResult2020[] = Array.from(listsMap.entries())
     .map(([listName, data]) => ({
       listName,
+      isNamedList: data.isNamedList,
       partyLabel: data.partyLabel,
       candidateName: data.teteDeListe,
       round1Votes: data.round1Votes,
@@ -292,6 +312,7 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
     population: commune.population,
     totalSeats: commune.totalSeats,
     lists,
+    namedListCount: lists.filter((l) => l.isNamedList).length,
   };
 });
 
