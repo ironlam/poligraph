@@ -6,6 +6,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { parsePagination } from "@/lib/api/pagination";
 import { getPublicFactCheckSqlWhere, getPublicPartySqlWhere } from "@/lib/api/public-contract";
 import { normalizeDossierAlias } from "@/lib/legislation/alias";
+import { getDepartmentName } from "@/config/departments";
 
 const MAX_LIMIT = 8;
 
@@ -65,7 +66,7 @@ interface RawDossier {
 interface RawCommune {
   id: string;
   name: string;
-  departmentName: string;
+  departmentCode: string;
   population: number | null;
 }
 
@@ -186,7 +187,7 @@ export const GET = withPublicRoute(async (request) => {
 
       // Communes: accent-insensitive, startsWith for more relevant results
       db.$queryRaw<RawCommune[]>`
-        SELECT c."id", c."name", c."departmentName", c."population"
+        SELECT c."id", c."name", c."departmentCode", c."population"
         FROM "Commune" c
         WHERE unaccent(c."name") ILIKE unaccent(${startsWithPattern})
         ORDER BY c."population" DESC NULLS LAST
@@ -245,7 +246,7 @@ export const GET = withPublicRoute(async (request) => {
       communes: communes.map((c) => ({
         id: c.id,
         name: c.name,
-        departmentName: c.departmentName,
+        departmentName: getDepartmentName(c.departmentCode) ?? c.departmentCode,
         population: c.population,
       })),
     }),

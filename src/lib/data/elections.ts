@@ -41,7 +41,6 @@ export interface ElectionRoundData {
 
 export interface DepartmentResult2020 {
   departmentCode: string;
-  departmentName: string;
   communeCount: number;
   candidacyCount: number;
   listCount: number;
@@ -64,7 +63,6 @@ export interface CommuneResult2020 {
   inseeCode: string;
   communeName: string;
   departmentCode: string;
-  departmentName: string;
   population: number | null;
   totalSeats: number | null;
   lists: CommuneListResult2020[];
@@ -149,14 +147,13 @@ export const getDepartmentResults2020 = cache(async function getDepartmentResult
   const rows = await db.$queryRaw<DepartmentResult2020[]>(Prisma.sql`
       SELECT
         co."departmentCode" AS "departmentCode",
-        co."departmentName" AS "departmentName",
         COUNT(DISTINCT co.id)::int AS "communeCount",
         COUNT(c.id)::int AS "candidacyCount",
         COUNT(DISTINCT (c."listName", co.id))::int AS "listCount"
       FROM "Candidacy" c
       JOIN "Commune" co ON c."communeId" = co.id
       WHERE c."electionId" = ${electionId}
-      GROUP BY co."departmentCode", co."departmentName"
+      GROUP BY co."departmentCode"
       ORDER BY co."departmentCode" ASC
     `);
 
@@ -180,7 +177,6 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
       id: true,
       name: true,
       departmentCode: true,
-      departmentName: true,
       population: true,
       totalSeats: true,
     },
@@ -211,7 +207,6 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
       inseeCode: commune.id,
       communeName: commune.name,
       departmentCode: commune.departmentCode,
-      departmentName: commune.departmentName,
       population: commune.population,
       totalSeats: commune.totalSeats,
       lists: [],
@@ -294,7 +289,6 @@ export const getCommuneResults2020 = cache(async function getCommuneResults2020(
     inseeCode: commune.id,
     communeName: commune.name,
     departmentCode: commune.departmentCode,
-    departmentName: commune.departmentName,
     population: commune.population,
     totalSeats: commune.totalSeats,
     lists,
@@ -313,7 +307,6 @@ export interface Municipales2014Stats {
 
 export interface DepartmentResult2014 {
   departmentCode: string;
-  departmentName: string;
   communeCount: number;
   candidacyCount: number;
 }
@@ -333,7 +326,6 @@ export interface CommuneResult2014 {
   inseeCode: string;
   communeName: string;
   departmentCode: string;
-  departmentName: string;
   population: number | null;
   totalSeats: number | null;
   lists: CommuneListResult2014[];
@@ -421,13 +413,12 @@ export const getDepartmentResults2014 = cache(async function getDepartmentResult
   const rows = await db.$queryRaw<DepartmentResult2014[]>(Prisma.sql`
     SELECT
       co."departmentCode" AS "departmentCode",
-      co."departmentName" AS "departmentName",
       COUNT(DISTINCT co.id)::int AS "communeCount",
       COUNT(c.id)::int AS "candidacyCount"
     FROM "Candidacy" c
     JOIN "Commune" co ON c."communeId" = co.id
     WHERE c."electionId" = ${electionId}
-    GROUP BY co."departmentCode", co."departmentName"
+    GROUP BY co."departmentCode"
     ORDER BY co."departmentCode" ASC
   `);
 
@@ -450,7 +441,6 @@ export const getCommuneResults2014 = cache(async function getCommuneResults2014(
       id: true,
       name: true,
       departmentCode: true,
-      departmentName: true,
       population: true,
       totalSeats: true,
     },
@@ -490,7 +480,6 @@ export const getCommuneResults2014 = cache(async function getCommuneResults2014(
     inseeCode: commune.id,
     communeName: commune.name,
     departmentCode: commune.departmentCode,
-    departmentName: commune.departmentName,
     population: commune.population,
     totalSeats: commune.totalSeats,
     lists,

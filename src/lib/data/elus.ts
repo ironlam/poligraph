@@ -1,6 +1,7 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { MandateType } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import { getDepartmentName } from "@/config/departments";
 import { LOCAL_MANDATE_TYPES } from "@/config/labels";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -48,7 +49,6 @@ const COMMUNE_SELECT = {
   id: true,
   name: true,
   departmentCode: true,
-  departmentName: true,
   population: true,
 } as const;
 
@@ -88,7 +88,6 @@ type RawMandate = {
       id: string;
       name: string;
       departmentCode: string;
-      departmentName: string;
       population: number | null;
     } | null;
   } | null;
@@ -113,7 +112,9 @@ function toSummary(m: RawMandate): EluSummary {
           inseeCode: m.localData.commune.id,
           name: m.localData.commune.name,
           departmentCode: m.localData.commune.departmentCode,
-          departmentName: m.localData.commune.departmentName,
+          departmentName:
+            getDepartmentName(m.localData.commune.departmentCode) ??
+            m.localData.commune.departmentCode,
           population: m.localData.commune.population,
         }
       : null,
@@ -316,7 +317,6 @@ export async function getCommuneWithElus(inseeCode: string) {
       id: true,
       name: true,
       departmentCode: true,
-      departmentName: true,
       regionCode: true,
       regionName: true,
       postalCodes: true,
@@ -362,7 +362,7 @@ export async function getCommuneWithElus(inseeCode: string) {
       inseeCode: commune.id,
       name: commune.name,
       departmentCode: commune.departmentCode,
-      departmentName: commune.departmentName,
+      departmentName: getDepartmentName(commune.departmentCode) ?? commune.departmentCode,
       regionCode: commune.regionCode,
       regionName: commune.regionName,
       postalCodes: commune.postalCodes,

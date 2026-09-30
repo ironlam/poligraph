@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { getDepartmentName } from "@/config/departments";
 import { getDepartmentResults2020 } from "@/lib/data/elections";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 
@@ -47,7 +48,9 @@ export default async function DepartmentsPage() {
                   className="border-b hover:bg-muted/30 transition-colors"
                 >
                   <td className="py-3 pr-4">
-                    <span className="font-medium">{dept.departmentName}</span>
+                    <span className="font-medium">
+                      {getDepartmentName(dept.departmentCode) ?? dept.departmentCode}
+                    </span>
                     <span className="text-muted-foreground ml-1">({dept.departmentCode})</span>
                   </td>
                   <td className="py-3 px-4 text-right tabular-nums">

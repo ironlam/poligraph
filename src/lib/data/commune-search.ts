@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { getDepartmentName } from "@/config/departments";
 
 /**
  * Commune lookup shared by the municipal election autocomplete routes.
@@ -14,7 +15,6 @@ const COMMUNE_FIELDS = {
   id: true,
   name: true,
   departmentCode: true,
-  departmentName: true,
   population: true,
   totalSeats: true,
 } as const;
@@ -48,7 +48,6 @@ type CommuneRow = {
   id: string;
   name: string;
   departmentCode: string;
-  departmentName: string;
   population: number | null;
   totalSeats: number | null;
 };
@@ -113,6 +112,9 @@ async function withStats(
     const counts = stats.get(commune.id);
     return {
       ...commune,
+      // Resolved here rather than read from Commune.departmentName, which holds the CODE on all
+      // 34 969 rows. Every autocomplete that renders this field was printing "86" for "Vienne".
+      departmentName: getDepartmentName(commune.departmentCode) ?? commune.departmentCode,
       listCount: counts?.listCount ?? 0,
       candidateCount: counts?.candidateCount ?? 0,
     };

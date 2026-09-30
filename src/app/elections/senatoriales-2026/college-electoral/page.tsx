@@ -5,6 +5,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MissingData } from "@/components/ui/MissingData";
 import { SourceLine } from "@/components/ui/SourceLine";
 import { getDepartmentLocative } from "@/config/department-prepositions";
+import { getDepartmentName } from "@/config/departments";
 import {
   DELEGATES_BY_RIGHT_THRESHOLD,
   SUPPLEMENTARY_DELEGATE_FLOOR,
@@ -103,7 +104,7 @@ export default async function CollegeElectoralPage() {
 
             <div className="rounded-xl border border-border p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {city.departmentName}
+                {getDepartmentName(city.departmentCode) ?? city.departmentCode}
                 {city.renewal === "renewed" ? " · série renouvelée le 27 septembre" : ""}
               </p>
               <p className="font-display text-2xl font-extrabold tracking-tight">{city.name}</p>
