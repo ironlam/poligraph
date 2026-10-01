@@ -79,12 +79,22 @@ export function CandidateSynthesis({
         ) : (
           <>
             <p className="mt-1 max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
-              {/* The singular branch carries its own article and participle: the count sits inside
-                  it, so "des" cannot be factored out of the sentence. The branch that dropped the
-                  number read "des mandats, des votes et des mesures publiées" for one. */}
-              Texte généré à partir des mandats, des votes et{" "}
-              {measureCount === 1 ? "de la mesure publiée" : `des ${measureCount} mesures publiées`}{" "}
-              ci-dessous
+              {/* Three branches, not two. The singular one carries its own article and participle,
+                  because the count sits inside it and "des" cannot be factored out of the sentence.
+                  The zero one drops the measures AND the "ci-dessous" that pointed at them: on a
+                  fiche without a programme there is nothing below to check the text against, and
+                  naming a count of nothing read as a defect of the candidate. */}
+              {measureCount === 0 ? (
+                <>Texte généré à partir des mandats et des votes</>
+              ) : (
+                <>
+                  Texte généré à partir des mandats, des votes et{" "}
+                  {measureCount === 1
+                    ? "de la mesure publiée"
+                    : `des ${measureCount} mesures publiées`}{" "}
+                  ci-dessous
+                </>
+              )}
               {generatedAt !== null && <>, le {formatDate(generatedAt)}</>}. Il n&apos;ajoute aucune
               information qui ne figure sur cette page.
             </p>

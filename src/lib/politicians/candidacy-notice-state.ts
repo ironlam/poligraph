@@ -1,4 +1,4 @@
-import { isFicheCandidatPublishable } from "@/config/publication-gates";
+import { hasPublishedProgramme } from "@/config/publication-gates";
 import type { PoliticianCandidacy } from "@/lib/data/politician-candidacy";
 import { deriveElectionBannerState } from "@/lib/elections/banner-state";
 
@@ -67,8 +67,9 @@ export function deriveCandidacyNoticeState(
     };
   }
 
-  return isFicheCandidatPublishable({
-    statusSourced: true,
+  // The programme predicate, not the fiche one: these two states describe what there is to READ,
+  // and the fiche now exists in both. `DECLARED_EMPTY` links to it all the same.
+  return hasPublishedProgramme({
     verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
   })
     ? { kind: "DECLARED_WITH_MEASURES" }

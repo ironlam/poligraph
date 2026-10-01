@@ -151,14 +151,11 @@ export default async function PoliticianPage({ params }: PageProps) {
   // the notice sayable: there is no "we are not sure" state, the block simply does not appear.
   const presidentialCandidacy = await getPoliticianPresidentialCandidacy(politician.id);
   const now = new Date();
-  // Null below the gate, where the fiche route redirects back here: the notice then points at the
-  // hub and drops its possessive wording rather than promising a page that bounces.
+  // Null only when there is no sourced candidacy, which is the one case the fiche route sends back
+  // here. A sourced candidacy without a published programme has a fiche of its own, so the notice
+  // points at it and keeps its possessive wording.
   const ficheHref =
-    presidentialCandidacy !== null &&
-    isFicheCandidatPublishable({
-      statusSourced: true,
-      verifiedMeasuresWithPrimarySource: presidentialCandidacy.primarySourceMeasureCount,
-    })
+    presidentialCandidacy !== null && isFicheCandidatPublishable({ statusSourced: true })
       ? `/elections/${presidentialCandidacy.electionSlug}/candidats/${politician.slug}`
       : null;
 
