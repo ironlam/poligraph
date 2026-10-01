@@ -31,12 +31,22 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/data/presidentielle-affaires", () => ({
   getPresidentialAffairs: vi.fn(),
 }));
+vi.mock("@/lib/data/politician-candidacy", () => ({
+  getPoliticianPresidentialCandidacy: vi.fn(),
+  getCandidateFicheDetail: vi.fn(),
+}));
+vi.mock("@/lib/data/politicians", () => ({
+  getPoliticianIdentity: vi.fn(),
+}));
 
 import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
 import { generateMetadata as presidentialAffairsGenerateMetadata } from "@/app/elections/presidentielle-2027/affaires-judiciaires/page";
 import { getPresidentialAffairs } from "@/lib/data/presidentielle-affaires";
 import { metadata as presidentialComparisonMetadata } from "@/app/elections/presidentielle-2027/comparer/page";
 import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/methodologie/mesures-presidentielle-2027/page";
+import { generateMetadata as candidateFicheGenerateMetadata } from "@/app/elections/presidentielle-2027/candidats/[slug]/page";
+import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
+import { getPoliticianIdentity } from "@/lib/data/politicians";
 
 // Living map of the index-bloat doctrine. If any representative surface flips, this
 // file fails: a strong page must never become noindex, a thin one must never become
@@ -93,6 +103,27 @@ describe("doctrine — strong surfaces stay indexable", () => {
     expect(metadata.robots).toBeUndefined();
     expect(metadata.alternates?.canonical).toBe(
       "/elections/presidentielle-2027/affaires-judiciaires"
+    );
+  });
+
+  // Arbitrated 2026-10-01, and a deliberate reversal: a sourced candidacy used to be held out of
+  // the index until one primary-sourced measure existed. The missing programme is OUR gap, the page
+  // names it in those words, and withholding the page read as a verdict on the candidate. The
+  // measure count is left at zero here on purpose, because that is the case that used to fail.
+  it("sourced presidential candidacy with no published measure stays indexable", async () => {
+    vi.mocked(getPoliticianIdentity).mockResolvedValue({
+      id: "p1",
+      fullName: "Camille Rivière",
+    } as unknown as Awaited<ReturnType<typeof getPoliticianIdentity>>);
+    vi.mocked(getPoliticianPresidentialCandidacy).mockResolvedValue({
+      primarySourceMeasureCount: 0,
+    } as unknown as Awaited<ReturnType<typeof getPoliticianPresidentialCandidacy>>);
+    const metadata = await candidateFicheGenerateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.alternates?.canonical).toBe(
+      "/elections/presidentielle-2027/candidats/camille-riviere"
     );
   });
 

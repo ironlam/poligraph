@@ -112,8 +112,13 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
         }
       : state.kind === "DECLARED_EMPTY"
         ? {
-            href: hubHref,
-            label: `Suivre le dossier ${candidacy.electionShortTitle}`,
+            // The fiche exists without a published programme since 2026-10-01, so the reader is sent
+            // to it rather than to the whole field. It carries the status, its source and the
+            // summary of the record, which is more than the hub says about this person.
+            href: ficheHref ?? hubHref,
+            label: ficheHref
+              ? "Sa candidature, statut et source"
+              : `Suivre le dossier ${candidacy.electionShortTitle}`,
             detail: null,
           }
         : state.kind === "WITHDRAWN"

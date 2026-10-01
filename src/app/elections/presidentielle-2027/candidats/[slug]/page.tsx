@@ -7,9 +7,8 @@ import { ShareBar } from "@/components/ui/ShareBar";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { BreadcrumbJsonLd, PersonJsonLd } from "@/components/seo/JsonLd";
 import { candidacyRoleLabel } from "@/config/labels";
-import { isFicheCandidatPublishable } from "@/config/publication-gates";
+import { hasPublishedProgramme, isFicheCandidatPublishable } from "@/config/publication-gates";
 import { SITE_URL } from "@/config/site";
-import { cn } from "@/lib/utils";
 // Reuses the established politician authority rather than adding a second, lighter read for three
 // fields: it is cached under `politician:<slug>`, warmed by /politiques/[slug]. That authority is
 // now the identity half of the profile read, which still carries every field this page uses and no
@@ -35,13 +34,13 @@ import {
  * Candidate fiche for the presidential hub. `[slug]` is the POLITICIAN slug, consistent with
  * `politicianSlug` everywhere in the hub data layer and with the link the notice emits.
  *
- * Below the publication gate the route redirects to `/politiques/[slug]`, which is what spec §4.1 of
- * the hub design prescribes ("no fiche, the name points to /politiques/[slug]"). A redirect leaves no
- * orphan page to maintain and no URL to de-index later.
+ * Without a sourced candidacy at all the route redirects to `/politiques/[slug]`: there is nothing to
+ * say here, and a redirect leaves no orphan page to maintain and no URL to de-index later.
  *
- * Above the gate it renders a MINIMAL fiche: identity, sourced status, measure volume linking to the
- * subject pages, provenance. The full #D3 screen of the handoff is a separate lot and grows on top of
- * this one.
+ * With one, the page is published and indexable whatever its programme (arbitrated 2026-10-01, see
+ * `@/config/publication-gates`). `hasProgramme` then decides what fills it: the measures and their
+ * counters, or the block naming OUR gap. The synthesis sits outside that choice, because it
+ * summarises the record and the record exists before any measure does.
  */
 
 export const revalidate = 86400;
@@ -74,12 +73,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!politician) return { robots: { index: false, follow: true } };
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
-  const publishable =
-    candidacy !== null &&
-    isFicheCandidatPublishable({
-      statusSourced: true,
-      verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
-    });
+  // `getPoliticianPresidentialCandidacy` already filters on status and both source fields, so a
+  // non-null row IS a sourced candidacy. Passed explicitly rather than assumed: the predicate is
+  // what the policy is read from, and a reader should not have to chase the where clause for it.
+  const publishable = candidacy !== null && isFicheCandidatPublishable({ statusSourced: true });
 
   const title = `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`;
   const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par thème, avec leurs sources.`;
@@ -87,8 +84,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    // A surface below its gate stays out of search results (spec §4.2). `follow: true` so the links
-    // out of the page keep their value.
+    // Only a person with no sourced candidacy stays out of search here, and that page redirects
+    // anyway. `follow: true` so the links out of it keep their value.
     robots: publishable ? undefined : { index: false, follow: true },
     alternates: { canonical: fichePath(slug) },
     // A pasted link must show the fiche, not the tab title a platform guesses from the document.
@@ -111,73 +108,61 @@ export default async function CandidateFichePage({ params }: PageProps) {
   if (!politician) notFound();
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
-  const publishable =
-    candidacy !== null &&
-    isFicheCandidatPublishable({
-      statusSourced: true,
-      verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
-    });
 
   if (!candidacy) {
     redirect(`/politiques/${slug}`);
   }
 
-  const detail = publishable
+  // No `publishable` here: the redirect above is the gate. Past it the candidacy is sourced, so the
+  // fiche is open, and the only remaining question is what fills it.
+  const hasProgramme = hasPublishedProgramme({
+    verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
+  });
+
+  const detail = hasProgramme
     ? await getCandidateFicheDetail(candidacy.candidacyId, politician.id)
     : null;
 
   return (
     <>
-      {publishable && (
-        <>
-          <PersonJsonLd
-            name={politician.fullName}
-            givenName={politician.firstName}
-            familyName={politician.lastName}
-            affiliation={candidacy.partyLabel ?? undefined}
-            image={politician.blobPhotoUrl ?? politician.photoUrl ?? undefined}
-            url={`${SITE_URL}${fichePath(slug)}`}
-          />
-          <BreadcrumbJsonLd
-            items={[
-              { name: "Élections", url: `${SITE_URL}/elections` },
-              {
-                name: "Présidentielle 2027",
-                url: `${SITE_URL}/elections/${candidacy.electionSlug}`,
-              },
-              { name: politician.fullName, url: `${SITE_URL}${fichePath(slug)}` },
-            ]}
-          />
-        </>
-      )}
+      <PersonJsonLd
+        name={politician.fullName}
+        givenName={politician.firstName}
+        familyName={politician.lastName}
+        affiliation={candidacy.partyLabel ?? undefined}
+        image={politician.blobPhotoUrl ?? politician.photoUrl ?? undefined}
+        url={`${SITE_URL}${fichePath(slug)}`}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Élections", url: `${SITE_URL}/elections` },
+          {
+            name: "Présidentielle 2027",
+            url: `${SITE_URL}/elections/${candidacy.electionSlug}`,
+          },
+          { name: politician.fullName, url: `${SITE_URL}${fichePath(slug)}` },
+        ]}
+      />
       {/* Sharing a fiche is the same gesture as sharing any other Poligraph page, so it is the same
-          bar, with the same platforms and the same copy control. It only appears above the
-          publication gate: below it the page carries a sourced status and nothing else, stays
-          `noindex` by policy, and handing readers buttons to spread a page we keep out of search
-          would contradict that policy rather than serve them. */}
-      {publishable && (
-        <ShareBar
-          data={{
-            title: politician.fullName,
-            // Name, election, party: the three facts that stay true. Deliberately no candidacy
-            // status and no measure count, for the reason the OG card states at length. A post
-            // outlives the day it was written, and a withdrawn candidacy shared as "annoncée"
-            // cannot be corrected once it is out.
-            text: `${politician.fullName}, ${candidacy.electionShortTitle}${candidacy.partyLabel ? ` (${candidacy.partyLabel})` : ""} : ses mesures et leurs sources sur Poligraph`,
-            url: `${SITE_URL}${fichePath(slug)}`,
-          }}
-        />
-      )}
+          bar, with the same platforms and the same copy control. It used to be held back on a fiche
+          without measures, because spreading a page we kept out of search contradicted that policy.
+          The fiche is indexed now, so the reason is gone with it. */}
+      <ShareBar
+        data={{
+          title: politician.fullName,
+          // Name, election, party: the three facts that stay true. Deliberately no candidacy
+          // status and no measure count, for the reason the OG card states at length. A post
+          // outlives the day it was written, and a withdrawn candidacy shared as "annoncée"
+          // cannot be corrected once it is out.
+          text: `${politician.fullName}, ${candidacy.electionShortTitle}${candidacy.partyLabel ? ` (${candidacy.partyLabel})` : ""} : ses mesures et leurs sources sur Poligraph`,
+          url: `${SITE_URL}${fichePath(slug)}`,
+        }}
+      />
       <CandidacyBackBar electionSlug={candidacy.electionSlug} />
       {/* The mobile share bar is fixed to the bottom of the viewport, so the last control of the
           page needs room to clear it. The extra padding goes away at `2xl`, where that bar becomes
           the vertical one on the left. */}
-      <div
-        className={cn(
-          "container mx-auto space-y-8 px-4 pt-4",
-          publishable ? "pb-24 2xl:pb-8" : "pb-8"
-        )}
-      >
+      <div className="container mx-auto space-y-8 px-4 pb-24 pt-4 2xl:pb-8">
         <Breadcrumb
           items={[
             { label: "Élections", href: "/elections" },
@@ -224,7 +209,20 @@ export default async function CandidateFichePage({ params }: PageProps) {
           )}
         </header>
 
-        {!publishable && (
+        {/* Outside the programme guard: it summarises mandates and votes, which exist from the day the
+            candidacy is declared. Holding it back left a sourced candidacy with nothing to read. */}
+        {candidacy.synthesis !== null && (
+          <CandidateSynthesis
+            synthesis={candidacy.synthesis}
+            generatedAt={candidacy.synthesisGeneratedAt}
+            measureCount={candidacy.publishedMeasureCount}
+          />
+        )}
+
+        {/* After the synthesis, not before it. A fiche with measures reads synthesis then content;
+            reading "no programme" and then a heading that says "programme proposé" inverted that
+            for the one case where the page has least to offer. */}
+        {!hasProgramme && (
           <section className="rounded-xl border border-dashed bg-muted/30 p-5 md:p-7">
             <h2 className="font-display text-xl font-bold">Contenu disponible sur Poligraph</h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground-strong">
@@ -235,14 +233,8 @@ export default async function CandidateFichePage({ params }: PageProps) {
           </section>
         )}
 
-        {publishable && detail && (
+        {hasProgramme && detail && (
           <>
-            <CandidateSynthesis
-              synthesis={candidacy.synthesis}
-              generatedAt={candidacy.synthesisGeneratedAt}
-              measureCount={candidacy.publishedMeasureCount}
-            />
-
             {/* Measures before the counters, everywhere and not only on mobile.
             The three counters describe the COVERAGE of our own work; they are a caption on the
             measures, not an introduction to them. Reading them first meant scrolling past a

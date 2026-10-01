@@ -4,12 +4,22 @@
  * One place, evaluated by the data layer. A surface below its gate renders an explicit state and is
  * `robots: noindex`; it never renders a silently degraded comparison. These are validated values, not
  * proposals: changing one changes editorial policy, so it belongs here and nowhere else.
+ *
+ * The fiche candidat is the one exception to the `noindex` half of that rule, arbitrated on
+ * 2026-10-01 (AGENTS.md §5). A sourced candidacy is a page in its own right: the missing programme
+ * is OUR gap, the page says so in those words, and keeping a declared candidate out of search read
+ * as a judgement on the candidate rather than on our coverage. The measure threshold below still
+ * decides what the fiche SHOWS; it no longer decides whether the fiche exists.
  */
 
 export const PUBLICATION_GATES = {
-  /** Fiche candidat : sourced status and at least one verified measure backed by a primary source. */
+  /** Fiche candidat : a sourced status opens the page, measures fill it. */
   ficheCandidat: {
     requiresSourcedStatus: true,
+    /**
+     * Measures needed to render the PROGRAMME on a fiche that is already open. Read by
+     * `hasPublishedProgramme` alone: `isFicheCandidatPublishable` no longer looks at it.
+     */
     minVerifiedMeasuresWithPrimarySource: 1,
   },
   /** Page sujet comparable : at least two candidacies with a verified measure on the subject. */
@@ -52,15 +62,29 @@ export function isSubjectPagePublishable(candidaciesWithVerifiedMeasure: number)
   );
 }
 
-/** A candidate fiche exists once the status is sourced and at least one primary-sourced measure is verified. */
-export function isFicheCandidatPublishable(params: {
-  statusSourced: boolean;
+/**
+ * A candidate fiche is a published, indexable page as soon as the candidacy is sourced. Whether it
+ * has a programme to show is a separate question, answered by `hasPublishedProgramme`.
+ *
+ * The parameter stays an object with one field rather than a bare boolean: every call site reads
+ * `statusSourced: ...` at the call, which is what stopped the two questions being confused the
+ * first time round.
+ */
+export function isFicheCandidatPublishable(params: { statusSourced: boolean }): boolean {
+  if (!PUBLICATION_GATES.ficheCandidat.requiresSourcedStatus) return true;
+  return params.statusSourced;
+}
+
+/**
+ * Whether an open fiche has a programme to render: the measures, their themes and the counters that
+ * caption them. Below it the fiche states the gap instead, and renders no empty comparison.
+ */
+export function hasPublishedProgramme(params: {
   verifiedMeasuresWithPrimarySource: number;
 }): boolean {
   return (
-    params.statusSourced &&
     params.verifiedMeasuresWithPrimarySource >=
-      PUBLICATION_GATES.ficheCandidat.minVerifiedMeasuresWithPrimarySource
+    PUBLICATION_GATES.ficheCandidat.minVerifiedMeasuresWithPrimarySource
   );
 }
 

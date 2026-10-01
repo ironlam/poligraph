@@ -129,11 +129,62 @@ describe("page présidentielle d'une personne", () => {
     );
   });
 
-  it("ne propose pas le partage sous la porte de publication", async () => {
+  it("propose aussi le partage d'une fiche sans programme publié", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
     const { default: Page } = await import("../page");
     render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
-    expect(screen.queryByRole("group", { name: "Partager cette page" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("group", { name: "Partager cette page" })).toHaveLength(2);
+  });
+
+  // The synthesis summarises the RECORD, which exists before any measure does. Rendered through the
+  // page rather than against the component: the bug this replaces was the page never calling it.
+  it("rend la synthèse de parcours sur une fiche sans programme publié", async () => {
+    mockGetCandidacy.mockResolvedValue(
+      candidacy({
+        synthesis: "Camille Rivière est actuellement conseillère municipale de Testville.",
+        synthesisGeneratedAt: new Date("2026-10-01T12:00:00.000Z"),
+      })
+    );
+    const { default: Page } = await import("../page");
+    render(await Page({ params: Promise.resolve({ slug: "camille-riviere" }) }));
+    expect(
+      screen.getByText("Camille Rivière est actuellement conseillère municipale de Testville.")
+    ).toBeInTheDocument();
+  });
+
+  // Without a zero branch the caption read "des 0 mesures publiées ci-dessous", naming a count of
+  // nothing and pointing at blocks the page does not render.
+  it("ne promet aucune mesure dans la légende quand il n'y en a pas", async () => {
+    mockGetCandidacy.mockResolvedValue(
+      candidacy({
+        synthesis: "Camille Rivière est actuellement conseillère municipale de Testville.",
+        synthesisGeneratedAt: new Date("2026-10-01T12:00:00.000Z"),
+      })
+    );
+    const { default: Page } = await import("../page");
+    const { container } = render(
+      await Page({ params: Promise.resolve({ slug: "camille-riviere" }) })
+    );
+    const texte = container.textContent ?? "";
+    expect(texte).not.toContain("0 mesures");
+    expect(texte).not.toContain("ci-dessous");
+    expect(texte).toContain("Texte généré à partir des mandats et des votes");
+  });
+
+  it("nomme les mesures dans la légende dès qu'il y en a", async () => {
+    mockGetCandidacy.mockResolvedValue(
+      candidacy({
+        synthesis: "Résumé.",
+        synthesisGeneratedAt: new Date("2026-10-01T12:00:00.000Z"),
+        publishedMeasureCount: 27,
+        primarySourceMeasureCount: 20,
+      })
+    );
+    const { default: Page } = await import("../page");
+    const { container } = render(
+      await Page({ params: Promise.resolve({ slug: "camille-riviere" }) })
+    );
+    expect(container.textContent ?? "").toContain("des 27 mesures publiées ci-dessous");
   });
 
   it("présente la source comme lien externe secondaire", async () => {
@@ -154,17 +205,10 @@ describe("page présidentielle d'une personne", () => {
     );
   });
 
-  it("reste noindex tant que la porte éditoriale n'est pas franchie", async () => {
+  // Decided 2026-10-01: withholding a sourced candidacy from search read as a judgement on the
+  // candidate when the missing programme is OUR gap. The page says so, so it may be indexed.
+  it("indexe une candidature sourcée même sans programme publié", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy());
-    const { generateMetadata } = await import("../page");
-    const metadata = await generateMetadata({
-      params: Promise.resolve({ slug: "camille-riviere" }),
-    });
-    expect(metadata.robots).toEqual({ index: false, follow: true });
-  });
-
-  it("devient indexable uniquement après franchissement de la porte", async () => {
-    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
     const { generateMetadata } = await import("../page");
     const metadata = await generateMetadata({
       params: Promise.resolve({ slug: "camille-riviere" }),
@@ -172,8 +216,17 @@ describe("page présidentielle d'une personne", () => {
     expect(metadata.robots).toBeUndefined();
   });
 
-  it("rend des données structurées Person et Breadcrumb seulement sur une fiche publiable", async () => {
-    mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
+  it("reste noindex quand aucune candidature publique n'existe", async () => {
+    mockGetCandidacy.mockResolvedValue(null);
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("rend des données structurées Person et Breadcrumb même sans programme publié", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy());
     const { default: Page } = await import("../page");
     const { container } = render(
       await Page({ params: Promise.resolve({ slug: "camille-riviere" }) })

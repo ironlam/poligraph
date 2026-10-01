@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PUBLICATION_GATES,
   SEGMENTATION_DOCTRINE_PUBLISHED,
+  hasPublishedProgramme,
   isFicheCandidatPublishable,
   isHubPublishable,
   isPrioritesCandidacyEligible,
@@ -37,16 +38,18 @@ describe("publication-gates : évaluateurs au seuil et en dessous", () => {
     expect(isSubjectPagePublishable(0)).toBe(false);
   });
 
-  it("fiche candidat : exige un statut sourcé ET une mesure vérifiée à source primaire", () => {
-    expect(
-      isFicheCandidatPublishable({ statusSourced: true, verifiedMeasuresWithPrimarySource: 1 })
-    ).toBe(true);
-    expect(
-      isFicheCandidatPublishable({ statusSourced: false, verifiedMeasuresWithPrimarySource: 3 })
-    ).toBe(false);
-    expect(
-      isFicheCandidatPublishable({ statusSourced: true, verifiedMeasuresWithPrimarySource: 0 })
-    ).toBe(false);
+  it("fiche candidat : la page existe dès que le statut est sourcé, sans mesure", () => {
+    expect(isFicheCandidatPublishable({ statusSourced: true })).toBe(true);
+    expect(isFicheCandidatPublishable({ statusSourced: false })).toBe(false);
+  });
+
+  // The two questions were one predicate until 2026-10-01, and conflating them hid a sourced
+  // candidacy entirely. Asserted side by side on the SAME candidacy so a future merge of the two
+  // breaks here rather than silently de-indexing a candidate again.
+  it("programme : ouvert à une mesure à source primaire, fermé à zéro, sans toucher à la fiche", () => {
+    expect(hasPublishedProgramme({ verifiedMeasuresWithPrimarySource: 1 })).toBe(true);
+    expect(hasPublishedProgramme({ verifiedMeasuresWithPrimarySource: 0 })).toBe(false);
+    expect(isFicheCandidatPublishable({ statusSourced: true })).toBe(true);
   });
 
   it("hub : publiable dès une page sujet publiable", () => {

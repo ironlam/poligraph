@@ -540,7 +540,6 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
       const stats = await getPublicMeasureStatsByCandidacy(candidate.id);
       const publishable = isFicheCandidatPublishable({
         statusSourced: candidate.sourceUrl !== null && candidate.sourceLabel !== null,
-        verifiedMeasuresWithPrimarySource: stats.primarySourceMeasureCount,
       });
       if (!publishable) continue;
       candidateFichePages.push({

@@ -51,6 +51,24 @@ const publishable: PoliticianCandidacy = {
 };
 
 describe("CandidacyNotice", () => {
+  // The fiche used not to exist without a published programme, so this state could only offer the
+  // whole field. It exists now, and it says more about this person than the hub does.
+  it("envoie vers la fiche même sans mesure publiée", () => {
+    renderNotice(base, null, BEFORE, "/elections/presidentielle-2027/candidats/camille-riviere");
+    expect(screen.getByRole("link", { name: /Sa candidature, statut et source/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/candidats/camille-riviere"
+    );
+  });
+
+  it("retombe sur le dossier quand aucune fiche n'est adressable", () => {
+    renderNotice(base, null, BEFORE, null);
+    expect(screen.getByRole("link", { name: /Suivre le dossier/ })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027"
+    );
+  });
+
   it("féminise le titre selon la civilité", () => {
     renderNotice(base, "Mme");
     expect(screen.getByText("Candidate à la présidentielle")).toBeInTheDocument();
