@@ -5,9 +5,11 @@ const mocks = vi.hoisted(() => ({
   streamText: vi.fn(),
   searchSimilar: vi.fn(),
   rerankResults: vi.fn(),
+  isFeatureEnabled: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: mocks.isFeatureEnabled }));
 vi.mock("@/lib/db", () => ({ db: { $queryRaw: mocks.queryRaw } }));
 vi.mock("@ai-sdk/anthropic", () => ({ anthropic: vi.fn(() => "mock-model") }));
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
@@ -38,6 +40,7 @@ function rawSqlText(call: unknown[]): string {
 describe("compteurs publics transmis au chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isFeatureEnabled.mockResolvedValue(true);
     process.env.ANTHROPIC_API_KEY = "test";
     process.env.VOYAGE_API_KEY = "test";
     delete process.env.UPSTASH_REDIS_REST_URL;
@@ -105,5 +108,21 @@ describe("compteurs publics transmis au chat", () => {
     const prompt = streamCall.messages.at(-1)?.content;
     expect(prompt).toContain("Total affaires judiciaires référencées: 0");
     expect(prompt).toContain("Fact-checks référencés: 0");
+  });
+
+  it("refuse de répondre quand CHATBOT_ENABLED est désactivé", async () => {
+    mocks.isFeatureEnabled.mockResolvedValue(false);
+
+    const response = await POST(
+      new Request("https://poligraph.fr/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ messages: [{ role: "user", content: "affaire" }] }),
+      })
+    );
+
+    expect(mocks.isFeatureEnabled).toHaveBeenCalledWith("CHATBOT_ENABLED");
+    expect(response.status).toBe(404);
+    expect(mocks.searchSimilar).not.toHaveBeenCalled();
+    expect(mocks.streamText).not.toHaveBeenCalled();
   });
 });

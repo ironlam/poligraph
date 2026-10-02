@@ -10,6 +10,56 @@
 import { VoyageAIClient } from "voyageai";
 import { db } from "@/lib/db";
 import type { EmbeddingType, Prisma } from "@/generated/prisma";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  getPublicFactCheckWhere,
+  PUBLIC_PARTY_WHERE,
+  PUBLIC_POLITICIAN_WHERE,
+} from "@/lib/api/public-contract";
+
+// An affair is public only when it is published AND its politician is public.
+const PUBLIC_AFFAIR_WHERE: Prisma.AffairWhereInput = {
+  ...getPublishedAffairWhere(),
+  politician: PUBLIC_POLITICIAN_WHERE,
+};
+
+// The global statistics document is stored as a PARTY embedding.
+const GLOBAL_STATS_ID = "global-stats";
+
+// Types whose source entity has a public gate: their embeddings must not outlive it.
+const GATED_TYPES = ["AFFAIR", "POLITICIAN", "FACTCHECK", "PARTY"] as const;
+
+// Candidates checked against the database per search, as a multiple of `limit`.
+const PUBLIC_CHECK_WINDOW = 4;
+
+async function removeEmbedding(entityType: EmbeddingType, entityId: string): Promise<void> {
+  await db.chatEmbedding.deleteMany({ where: { entityType, entityId } });
+}
+
+/** Delete embeddings of `entityType` whose entity is not in `publicIds`. */
+async function removeStaleEmbeddings(
+  entityType: EmbeddingType,
+  publicIds: string[]
+): Promise<void> {
+  const keep = new Set(publicIds);
+  if (entityType === "PARTY") keep.add(GLOBAL_STATS_ID);
+
+  const existing = await db.chatEmbedding.findMany({
+    where: { entityType },
+    select: { entityId: true },
+  });
+  const stale = existing.map((e) => e.entityId).filter((id) => !keep.has(id));
+
+  // Chunked to stay far below the bind-parameter limit.
+  for (let i = 0; i < stale.length; i += 1000) {
+    await db.chatEmbedding.deleteMany({
+      where: { entityType, entityId: { in: stale.slice(i, i + 1000) } },
+    });
+  }
+  if (stale.length > 0) {
+    console.log(`Removed ${stale.length} stale ${entityType} embedding(s)`);
+  }
+}
 
 // Voyage AI voyage-4-lite: shared embedding space, Matryoshka dimensions
 // Other options: voyage-4 (1024 dims), voyage-4-large (best quality)
@@ -164,10 +214,60 @@ export async function searchSimilar(params: {
       };
     })
     .filter((r) => r.similarity >= threshold)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+    .sort((a, b) => b.similarity - a.similarity);
 
-  return results;
+  const candidates = results.slice(0, limit * PUBLIC_CHECK_WINDOW);
+  return (await keepPublicResults(candidates)).slice(0, limit);
+}
+
+/**
+ * Drop results whose source entity is no longer public. Embeddings outlive a
+ * status change (unpublish, rejection, deletion), so the gate is applied at
+ * query time, not only at indexing time.
+ */
+async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[]> {
+  const idsOf = (type: EmbeddingType) =>
+    results.filter((r) => r.entityType === type).map((r) => r.entityId);
+  const affairIds = idsOf("AFFAIR");
+  const politicianIds = idsOf("POLITICIAN");
+  const factCheckIds = idsOf("FACTCHECK");
+  const partyIds = idsOf("PARTY").filter((id) => id !== GLOBAL_STATS_ID);
+
+  const [affairs, politicians, factChecks, parties] = await Promise.all([
+    affairIds.length > 0
+      ? db.affair.findMany({
+          where: { id: { in: affairIds }, ...PUBLIC_AFFAIR_WHERE },
+          select: { id: true },
+        })
+      : [],
+    politicianIds.length > 0
+      ? db.politician.findMany({
+          where: { id: { in: politicianIds }, ...PUBLIC_POLITICIAN_WHERE },
+          select: { id: true },
+        })
+      : [],
+    factCheckIds.length > 0
+      ? db.factCheck.findMany({
+          where: { id: { in: factCheckIds }, ...getPublicFactCheckWhere() },
+          select: { id: true },
+        })
+      : [],
+    partyIds.length > 0
+      ? db.party.findMany({
+          where: { id: { in: partyIds }, ...PUBLIC_PARTY_WHERE },
+          select: { id: true },
+        })
+      : [],
+  ]);
+
+  const publicIds: Partial<Record<EmbeddingType, Set<string>>> = {
+    AFFAIR: new Set(affairs.map((a) => a.id)),
+    POLITICIAN: new Set(politicians.map((p) => p.id)),
+    FACTCHECK: new Set(factChecks.map((f) => f.id)),
+    PARTY: new Set([GLOBAL_STATS_ID, ...parties.map((p) => p.id)]),
+  };
+
+  return results.filter((r) => publicIds[r.entityType]?.has(r.entityId) ?? true);
 }
 
 /**
@@ -206,22 +306,21 @@ export async function rerankResults(
  * Index a politician with their relevant information
  */
 export async function indexPolitician(politicianId: string): Promise<void> {
-  const politician = await db.politician.findUnique({
-    where: { id: politicianId },
+  const politician = await db.politician.findFirst({
+    where: { id: politicianId, ...PUBLIC_POLITICIAN_WHERE },
     include: {
       currentParty: true,
       mandates: {
         where: { isCurrent: true },
         take: 5,
       },
-      affairs: {
-        take: 5,
-        include: { sources: { take: 1 } },
-      },
     },
   });
 
-  if (!politician) return;
+  if (!politician) {
+    await removeEmbedding("POLITICIAN", politicianId);
+    return;
+  }
 
   // Build content for embedding
   const parts: string[] = [
@@ -242,11 +341,8 @@ export async function indexPolitician(politicianId: string): Promise<void> {
     parts.push(`Né(e) en ${politician.birthDate.getFullYear()}, ${age} ans`);
   }
 
-  // Add affair summary (if any)
-  if (politician.affairs.length > 0) {
-    parts.push(`${politician.affairs.length} affaire(s) judiciaire(s)`);
-  }
-
+  // No affair count here: it would go stale when an affair is unpublished without
+  // the politician being reindexed. AFFAIR embeddings carry that information.
   const content = parts.join(". ");
 
   await indexDocument({
@@ -258,7 +354,6 @@ export async function indexPolitician(politicianId: string): Promise<void> {
       slug: politician.slug,
       party: politician.currentParty?.name,
       partyId: politician.currentPartyId,
-      hasAffairs: politician.affairs.length > 0,
     },
   });
 }
@@ -351,8 +446,8 @@ export async function indexScrutin(scrutinId: string): Promise<void> {
  * Index an affair
  */
 export async function indexAffair(affairId: string): Promise<void> {
-  const affair = await db.affair.findUnique({
-    where: { id: affairId },
+  const affair = await db.affair.findFirst({
+    where: { id: affairId, ...PUBLIC_AFFAIR_WHERE },
     include: {
       politician: { select: { fullName: true, slug: true } },
       partyAtTime: { select: { name: true } },
@@ -360,7 +455,10 @@ export async function indexAffair(affairId: string): Promise<void> {
     },
   });
 
-  if (!affair) return;
+  if (!affair) {
+    await removeEmbedding("AFFAIR", affairId);
+    return;
+  }
 
   const parts: string[] = [
     affair.title,
@@ -398,21 +496,24 @@ export async function indexAffair(affairId: string): Promise<void> {
  * Index a political party with detailed mandate statistics
  */
 export async function indexParty(partyId: string): Promise<void> {
-  const party = await db.party.findUnique({
-    where: { id: partyId },
+  const party = await db.party.findFirst({
+    where: { id: partyId, ...PUBLIC_PARTY_WHERE },
     include: {
-      _count: { select: { politicians: true } },
+      _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
     },
   });
 
-  if (!party) return;
+  if (!party) {
+    await removeEmbedding("PARTY", partyId);
+    return;
+  }
 
   // Get mandate counts by type for this party
   const mandateCounts = await db.mandate.groupBy({
     by: ["type"],
     where: {
       isCurrent: true,
-      politician: { currentPartyId: partyId },
+      politician: { currentPartyId: partyId, ...PUBLIC_POLITICIAN_WHERE },
     },
     _count: true,
   });
@@ -493,16 +594,20 @@ export async function indexParty(partyId: string): Promise<void> {
  * Index a fact-check article
  */
 export async function indexFactCheck(factCheckId: string): Promise<void> {
-  const factCheck = await db.factCheck.findUnique({
-    where: { id: factCheckId },
+  const factCheck = await db.factCheck.findFirst({
+    where: { id: factCheckId, ...getPublicFactCheckWhere() },
     include: {
       mentions: {
+        where: { politician: PUBLIC_POLITICIAN_WHERE },
         include: { politician: { select: { fullName: true, slug: true } } },
       },
     },
   });
 
-  if (!factCheck) return;
+  if (!factCheck) {
+    await removeEmbedding("FACTCHECK", factCheckId);
+    return;
+  }
 
   const verdictLabels: Record<string, string> = {
     TRUE: "Vrai",
@@ -566,9 +671,11 @@ export async function indexPressArticle(articleId: string): Promise<void> {
     where: { id: articleId },
     include: {
       mentions: {
+        where: { politician: PUBLIC_POLITICIAN_WHERE },
         include: { politician: { select: { fullName: true, slug: true } } },
       },
       partyMentions: {
+        where: { party: PUBLIC_PARTY_WHERE },
         include: { party: { select: { name: true, shortName: true, slug: true } } },
       },
     },
@@ -630,7 +737,7 @@ export async function indexGlobalStats(): Promise<void> {
   // Get mandate counts by type
   const mandateCounts = await db.mandate.groupBy({
     by: ["type"],
-    where: { isCurrent: true },
+    where: { isCurrent: true, politician: PUBLIC_POLITICIAN_WHERE },
     _count: true,
   });
 
@@ -649,19 +756,19 @@ export async function indexGlobalStats(): Promise<void> {
     (countByType["PREMIER_MINISTRE"] || 0);
 
   // Get affair counts
-  const affairCount = await db.affair.count();
+  const affairCount = await db.affair.count({ where: PUBLIC_AFFAIR_WHERE });
   const condemnedCount = await db.affair.count({
-    where: { status: "CONDAMNATION_DEFINITIVE" },
+    where: { ...PUBLIC_AFFAIR_WHERE, status: "CONDAMNATION_DEFINITIVE" },
   });
 
   // Get party count
-  const partyCount = await db.party.count();
+  const partyCount = await db.party.count({ where: PUBLIC_PARTY_WHERE });
 
   // Get dossier count
   const dossierCount = await db.legislativeDossier.count();
 
   // Get fact-check and press article counts
-  const factCheckCount = await db.factCheck.count();
+  const factCheckCount = await db.factCheck.count({ where: getPublicFactCheckWhere() });
   const pressArticleCount = await db.pressArticle.count();
 
   const content = `
@@ -697,7 +804,7 @@ AUTRES STATISTIQUES:
 
   await indexDocument({
     entityType: "PARTY", // Using PARTY type for global stats
-    entityId: "global-stats",
+    entityId: GLOBAL_STATS_ID,
     content,
     metadata: {
       type: "global-stats",
@@ -760,6 +867,15 @@ export async function indexAllOfType(
     indexFn: (id: string) => Promise<void>,
     typeName: string
   ) {
+    // A full pass knows every public id, so it can drop embeddings of entities
+    // that are no longer public. A `limit` pass only sees a slice: skip it.
+    if (limit === undefined && (GATED_TYPES as readonly string[]).includes(entityType)) {
+      await removeStaleEmbeddings(
+        entityType,
+        entities.map((e) => e.id)
+      );
+    }
+
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i];
       if (!needsReindex(entity!.id, entity!.updatedAt)) {
@@ -782,6 +898,7 @@ export async function indexAllOfType(
   switch (entityType) {
     case "POLITICIAN": {
       const politicians = await db.politician.findMany({
+        where: PUBLIC_POLITICIAN_WHERE,
         select: { id: true, updatedAt: true },
         take: limit,
       });
@@ -806,6 +923,7 @@ export async function indexAllOfType(
     }
     case "AFFAIR": {
       const affairs = await db.affair.findMany({
+        where: PUBLIC_AFFAIR_WHERE,
         select: { id: true, updatedAt: true },
         take: limit,
       });
@@ -814,6 +932,7 @@ export async function indexAllOfType(
     }
     case "PARTY": {
       const parties = await db.party.findMany({
+        where: PUBLIC_PARTY_WHERE,
         select: { id: true, updatedAt: true },
         take: limit,
       });
@@ -822,6 +941,7 @@ export async function indexAllOfType(
     }
     case "FACTCHECK": {
       const factChecks = await db.factCheck.findMany({
+        where: getPublicFactCheckWhere(),
         select: { id: true, updatedAt: true },
         take: limit,
       });
