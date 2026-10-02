@@ -21,14 +21,21 @@ import {
  */
 
 const capturedConfigs: Record<string, unknown>[] = [];
+const registeredEvents: string[] = [];
 
 vi.mock("pg", () => ({
   Client: class {},
   Pool: class {
+    // pg-pool exposes its config as `options`, and `attachDatabasePool` duck-types on it: without
+    // this field it throws "Unsupported database pool type" while building the client.
+    options: Record<string, unknown>;
     constructor(config: Record<string, unknown>) {
       capturedConfigs.push(config);
+      this.options = config;
     }
-    on() {}
+    on(event: string) {
+      registeredEvents.push(event);
+    }
     // `db.ts` registers a `beforeExit` handler that calls `pool.end()`. Without it here, the worker
     // exiting turned this mock into an unhandled rejection that failed the whole suite at random:
     // `beforeExit` only fires when the event loop empties on its own, so it depended on scheduling.
@@ -54,6 +61,7 @@ vi.mock("@/lib/public-ids/prisma-extension", () => ({
  */
 async function poolConfig(): Promise<Record<string, unknown>> {
   capturedConfigs.length = 0;
+  registeredEvents.length = 0;
   const g = globalThis as unknown as {
     prisma?: unknown;
     pool?: unknown;
@@ -109,6 +117,16 @@ describe("configuration du pool Postgres", () => {
   it("donne au runtime Next le budget court", async () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
     expect((await poolConfig()).connectionTimeoutMillis).toBe(WEB_CONNECTION_TIMEOUT_MS);
+  });
+
+  /**
+   * A suspended Vercel instance keeps its sockets open toward Supavisor, which counts them against
+   * its 400 clients until they close. `attachDatabasePool` listens for releases and keeps the
+   * instance awake until the pool's idle timeout has closed them (2026-10-01, EMAXCONN).
+   */
+  it("attache le pool au cycle de vie des instances Vercel", async () => {
+    await poolConfig();
+    expect(registeredEvents).toContain("release");
   });
 
   it("fait descendre DATABASE_POOL_MAX jusqu'au pool", async () => {

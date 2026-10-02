@@ -8,6 +8,12 @@ import {
   startLoopLagProbe,
   type AcquisitionSample,
 } from "./pool-acquisition";
+import { createReportGate } from "./pool-exhaustion";
+
+/** How often one process may send a slow acquisition to Sentry. */
+export const SLOW_ACQUISITION_REPORT_INTERVAL_MS = 10 * 60_000;
+
+const slowAcquisitionGate = createReportGate(SLOW_ACQUISITION_REPORT_INTERVAL_MS);
 
 type Invocation = (...args: unknown[]) => unknown;
 
@@ -115,6 +121,11 @@ export function reportSlowAcquisition(
   // where Sentry is neither initialised nor wanted, and where an import still resolving after the
   // caller has finished is work nobody awaits. The console line above is the signal there.
   if (!process.env.NEXT_RUNTIME) return;
+
+  // Once per process per window. Unthrottled, this warning was the largest consumer of the error
+  // quota (POLIGRAPH-2X, 1243 events in a month), which ran out on 2026-09-28 and left the
+  // 2026-10-01 outage unreported. Every slow acquisition still reaches the console line above.
+  if (!slowAcquisitionGate()) return;
 
   void import("@sentry/nextjs")
     .then((Sentry) => {
