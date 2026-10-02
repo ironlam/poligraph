@@ -14,6 +14,7 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
 } from "@/lib/api/public-contract";
 import { getPublishedAffairSqlWhere } from "@/lib/affairs/public-filters";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 // Runtime configuration for streaming
 export const maxDuration = 30;
@@ -345,6 +346,14 @@ async function buildContext(results: SearchResult[], query: string): Promise<str
 
 export async function POST(request: Request) {
   try {
+    // The flag hides the page, so the endpoint must honour it too.
+    if (!(await isFeatureEnabled("CHATBOT_ENABLED"))) {
+      return new Response(JSON.stringify({ error: "Service indisponible" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Rate limiting
     const limiter = getRatelimit();
     if (limiter) {

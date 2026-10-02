@@ -10,6 +10,14 @@
 import { VoyageAIClient } from "voyageai";
 import { db } from "@/lib/db";
 import type { EmbeddingType, Prisma } from "@/generated/prisma";
+import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
+
+// An affair is public only when it is published AND its politician is public.
+const PUBLIC_AFFAIR_WHERE: Prisma.AffairWhereInput = {
+  ...getPublishedAffairWhere(),
+  politician: PUBLIC_POLITICIAN_WHERE,
+};
 
 // Voyage AI voyage-4-lite: shared embedding space, Matryoshka dimensions
 // Other options: voyage-4 (1024 dims), voyage-4-large (best quality)
@@ -164,10 +172,51 @@ export async function searchSimilar(params: {
       };
     })
     .filter((r) => r.similarity >= threshold)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+    .sort((a, b) => b.similarity - a.similarity);
 
-  return results;
+  return (await keepPublicResults(results)).slice(0, limit);
+}
+
+/**
+ * Drop results whose source entity is no longer public. Embeddings outlive a
+ * status change (unpublish, rejection, deletion), so the gate is applied at
+ * query time, not only at indexing time.
+ */
+async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[]> {
+  const idsOf = (type: EmbeddingType) =>
+    results.filter((r) => r.entityType === type).map((r) => r.entityId);
+  const affairIds = idsOf("AFFAIR");
+  const politicianIds = idsOf("POLITICIAN");
+  const factCheckIds = idsOf("FACTCHECK");
+
+  const [affairs, politicians, factChecks] = await Promise.all([
+    affairIds.length > 0
+      ? db.affair.findMany({
+          where: { id: { in: affairIds }, ...PUBLIC_AFFAIR_WHERE },
+          select: { id: true },
+        })
+      : [],
+    politicianIds.length > 0
+      ? db.politician.findMany({
+          where: { id: { in: politicianIds }, ...PUBLIC_POLITICIAN_WHERE },
+          select: { id: true },
+        })
+      : [],
+    factCheckIds.length > 0
+      ? db.factCheck.findMany({
+          where: { id: { in: factCheckIds }, ...getPublicFactCheckWhere() },
+          select: { id: true },
+        })
+      : [],
+  ]);
+
+  const publicIds: Partial<Record<EmbeddingType, Set<string>>> = {
+    AFFAIR: new Set(affairs.map((a) => a.id)),
+    POLITICIAN: new Set(politicians.map((p) => p.id)),
+    FACTCHECK: new Set(factChecks.map((f) => f.id)),
+  };
+
+  return results.filter((r) => publicIds[r.entityType]?.has(r.entityId) ?? true);
 }
 
 /**
@@ -206,8 +255,8 @@ export async function rerankResults(
  * Index a politician with their relevant information
  */
 export async function indexPolitician(politicianId: string): Promise<void> {
-  const politician = await db.politician.findUnique({
-    where: { id: politicianId },
+  const politician = await db.politician.findFirst({
+    where: { id: politicianId, ...PUBLIC_POLITICIAN_WHERE },
     include: {
       currentParty: true,
       mandates: {
@@ -215,6 +264,7 @@ export async function indexPolitician(politicianId: string): Promise<void> {
         take: 5,
       },
       affairs: {
+        where: getPublishedAffairWhere(),
         take: 5,
         include: { sources: { take: 1 } },
       },
@@ -351,8 +401,8 @@ export async function indexScrutin(scrutinId: string): Promise<void> {
  * Index an affair
  */
 export async function indexAffair(affairId: string): Promise<void> {
-  const affair = await db.affair.findUnique({
-    where: { id: affairId },
+  const affair = await db.affair.findFirst({
+    where: { id: affairId, ...PUBLIC_AFFAIR_WHERE },
     include: {
       politician: { select: { fullName: true, slug: true } },
       partyAtTime: { select: { name: true } },
@@ -649,9 +699,9 @@ export async function indexGlobalStats(): Promise<void> {
     (countByType["PREMIER_MINISTRE"] || 0);
 
   // Get affair counts
-  const affairCount = await db.affair.count();
+  const affairCount = await db.affair.count({ where: PUBLIC_AFFAIR_WHERE });
   const condemnedCount = await db.affair.count({
-    where: { status: "CONDAMNATION_DEFINITIVE" },
+    where: { ...PUBLIC_AFFAIR_WHERE, status: "CONDAMNATION_DEFINITIVE" },
   });
 
   // Get party count
@@ -661,7 +711,7 @@ export async function indexGlobalStats(): Promise<void> {
   const dossierCount = await db.legislativeDossier.count();
 
   // Get fact-check and press article counts
-  const factCheckCount = await db.factCheck.count();
+  const factCheckCount = await db.factCheck.count({ where: getPublicFactCheckWhere() });
   const pressArticleCount = await db.pressArticle.count();
 
   const content = `
@@ -782,6 +832,7 @@ export async function indexAllOfType(
   switch (entityType) {
     case "POLITICIAN": {
       const politicians = await db.politician.findMany({
+        where: PUBLIC_POLITICIAN_WHERE,
         select: { id: true, updatedAt: true },
         take: limit,
       });
@@ -806,6 +857,7 @@ export async function indexAllOfType(
     }
     case "AFFAIR": {
       const affairs = await db.affair.findMany({
+        where: PUBLIC_AFFAIR_WHERE,
         select: { id: true, updatedAt: true },
         take: limit,
       });
@@ -822,6 +874,7 @@ export async function indexAllOfType(
     }
     case "FACTCHECK": {
       const factChecks = await db.factCheck.findMany({
+        where: getPublicFactCheckWhere(),
         select: { id: true, updatedAt: true },
         take: limit,
       });
