@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { reportSlowAcquisition } from "../pg-pool";
 import { SLOW_ACQUISITION_MS } from "../pool-acquisition";
 
+const sentry = vi.hoisted(() => ({ captureMessage: vi.fn() }));
+vi.mock("@sentry/nextjs", () => sentry);
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -32,6 +35,31 @@ describe("reportSlowAcquisition", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(() => reportSlowAcquisition(SLOW_ACQUISITION_MS + 1, 5, 1, 4)).not.toThrow();
     expect(warn).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("reportSlowAcquisition vers Sentry", () => {
+  it("n'envoie qu'un warning par fenêtre et par process, la console gardant chaque occurrence", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    // A fresh module, so the gate starts closed whatever the tests above did.
+    vi.resetModules();
+    const { reportSlowAcquisition: report } = await import("../pg-pool");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    sentry.captureMessage.mockClear();
+
+    // The first report settles alone: concurrent dynamic imports of a freshly reset module race
+    // vitest's resolver and some get the real SDK, which would hide a missing gate.
+    report(SLOW_ACQUISITION_MS + 1_000, 1, 4, 4);
+    await vi.waitFor(() => expect(sentry.captureMessage).toHaveBeenCalledTimes(1));
+
+    // Puis le reste de la rafale : 49 acquisitions lentes dans la même minute sur la même instance.
+    for (let i = 0; i < 49; i++) report(SLOW_ACQUISITION_MS + 1_000, 1, 4, 4);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(50);
+
     vi.unstubAllEnvs();
   });
 });

@@ -6,6 +6,7 @@ import {
 } from "@/config/database";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions/db-connections";
 import { ObservedPool } from "@/lib/telemetry/pg-pool";
 import { createPoligraphIdExtension } from "@/lib/public-ids/prisma-extension";
 
@@ -54,6 +55,12 @@ function buildExtendedClient() {
     // docs/engineering/db-statement-timeout.md records the measurements and the dedicated-role path.
   });
   globalForPrisma.pool = pool;
+  // Keeps the instance awake until idle connections close. Without it a suspended instance keeps its
+  // sockets open toward Supavisor, which still counts them against its 400 clients: on 2026-10-01 a
+  // crawl burst scaled out, and four minutes later light traffic was still refused with EMAXCONN.
+  // Outside a Vercel function (scripts, builds, tests) it only registers a listener: the wait itself
+  // requires VERCEL_URL and VERCEL_REGION.
+  attachDatabasePool(pool);
 
   // Create the Prisma adapter
   const adapter = new PrismaPg(pool);
