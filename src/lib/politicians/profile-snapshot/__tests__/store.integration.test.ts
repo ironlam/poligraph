@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
+import { Prisma } from "@/generated/prisma";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 import type { PoliticianProfileDocument } from "../document";
 
@@ -95,6 +96,51 @@ describeIfDisposableDb("document de fiche politicien", () => {
     expect(row?.contentHash).toBe(hashOf(docB));
     expect(row?.builtAt.toISOString()).toBe(t(2).toISOString());
     expect(row?.version).toBe(1);
+  });
+
+  it("compare à l'empreinte validée par un écrivain concurrent, pas à celle d'avant son verrou", async () => {
+    const { serializeProfileDocument } = await import("../document");
+    // Stored content P (docA). A concurrent writer holds the row while it stores R (docB).
+    await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(1) });
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+    const first = db.$transaction(
+      async (tx) => {
+        await tx.politicianProfileSnapshot.update({
+          where: { politicianId },
+          data: {
+            data: serializeProfileDocument(docB),
+            contentHash: hashOf(docB),
+            builtAt: t(10),
+          },
+        });
+        locked();
+        await gate;
+      },
+      { timeout: 15_000 }
+    );
+    await rowLocked;
+
+    // Writes P again, built later: the row it replaces is R, so the content changed.
+    const second = writeProfileSnapshot({ politicianId, document: docA, startedAt: t(20) });
+    const deadline = Date.now() + 5_000;
+    for (;;) {
+      const [row] = await db.$queryRaw<Array<{ waiting: number }>>(Prisma.sql`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+      `);
+      if ((row?.waiting ?? 0) > 0) break;
+      if (Date.now() > deadline) throw new Error("le second écrivain n'attend jamais le verrou");
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    release();
+    await first;
+
+    expect(await second).toEqual({ written: true, changed: true });
+    expect(await storedHash(politicianId)).toBe(hashOf(docA));
   });
 
   it("construit le document d'un député avec ses votes", async () => {

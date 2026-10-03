@@ -35,15 +35,33 @@ export async function refreshPoliticianProfile(
   } else {
     const { written, changed } = await writeProfileSnapshot({ politicianId, document, startedAt });
     status = !written ? "skipped-stale" : changed ? "updated" : "unchanged";
-    if (status === "updated") await revalidate(`politician:${document.identity.slug}`);
+    if (status === "updated") {
+      try {
+        await revalidate(`politician:${document.identity.slug}`);
+      } catch (error) {
+        // The write is committed, so a retry compares equal hashes and never invalidates: the
+        // miss has to be visible in the logs.
+        log(outcome(politicianId, status, startedAt, reason), { revalidateFailed: true });
+        throw error;
+      }
+    }
   }
 
-  const outcome: RefreshOutcome = {
-    politicianId,
-    status,
-    durationMs: Date.now() - startedAt.getTime(),
-    reason,
-  };
-  console.info(JSON.stringify({ event: "[profile-snapshot] refresh", ...outcome }));
-  return outcome;
+  const result = outcome(politicianId, status, startedAt, reason);
+  log(result);
+  return result;
+}
+
+function outcome(
+  politicianId: string,
+  status: RefreshOutcome["status"],
+  startedAt: Date,
+  reason: string
+): RefreshOutcome {
+  return { politicianId, status, durationMs: Date.now() - startedAt.getTime(), reason };
+}
+
+function log(result: RefreshOutcome, extra: { revalidateFailed?: true } = {}): void {
+  // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+  console.info(JSON.stringify({ event: "[profile-snapshot] refresh", ...result, ...extra }));
 }

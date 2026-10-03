@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { queryRaw, build } = vi.hoisted(() => ({ queryRaw: vi.fn(), build: vi.fn() }));
-vi.mock("@/lib/db", () => ({ db: { $queryRaw: queryRaw } }));
+vi.mock("@/lib/db", () => ({
+  db: {
+    $queryRaw: queryRaw,
+    $transaction: (fn: (tx: { $queryRaw: typeof queryRaw }) => unknown) =>
+      fn({ $queryRaw: queryRaw }),
+  },
+}));
 vi.mock("../build", () => ({ buildPoliticianProfileDocument: build }));
 
 import { refreshPoliticianProfile } from "../refresh";
@@ -16,6 +22,13 @@ const doc = {
 } as unknown as PoliticianProfileDocument;
 const hash = hashSerializedDocument(serializeProfileDocument(doc));
 
+/** The locked read of the previous hash, then the upsert (one row when written). */
+function stored(prevHash: string | null, written: boolean) {
+  queryRaw
+    .mockResolvedValueOnce(prevHash === null ? [] : [{ contentHash: prevHash }])
+    .mockResolvedValueOnce(written ? [{ "?column?": 1 }] : []);
+}
+
 describe("refreshPoliticianProfile", () => {
   const revalidate = vi.fn();
 
@@ -28,7 +41,7 @@ describe("refreshPoliticianProfile", () => {
   });
 
   it("invalide la fiche du slug courant quand le contenu change", async () => {
-    queryRaw.mockResolvedValue([{ prev_hash: "ancienne", written: 1 }]);
+    stored("ancienne", true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
     expect(outcome).toMatchObject({ politicianId: "pol-1", status: "updated", reason: "test" });
     expect(revalidate).toHaveBeenCalledTimes(1);
@@ -36,21 +49,21 @@ describe("refreshPoliticianProfile", () => {
   });
 
   it("invalide aussi à la première écriture", async () => {
-    queryRaw.mockResolvedValue([{ prev_hash: null, written: 1 }]);
+    stored(null, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
     expect(outcome.status).toBe("updated");
     expect(revalidate).toHaveBeenCalledTimes(1);
   });
 
   it("n'invalide pas quand le contenu est inchangé", async () => {
-    queryRaw.mockResolvedValue([{ prev_hash: hash, written: 1 }]);
+    stored(hash, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
     expect(outcome.status).toBe("unchanged");
     expect(revalidate).not.toHaveBeenCalled();
   });
 
   it("n'invalide pas quand l'écriture est rejetée comme plus ancienne", async () => {
-    queryRaw.mockResolvedValue([{ prev_hash: "plus-récente", written: 0 }]);
+    stored("plus-récente", false);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
     expect(outcome.status).toBe("skipped-stale");
     expect(revalidate).not.toHaveBeenCalled();
@@ -65,7 +78,7 @@ describe("refreshPoliticianProfile", () => {
   });
 
   it("journalise une ligne JSON par recalcul", async () => {
-    queryRaw.mockResolvedValue([{ prev_hash: hash, written: 1 }]);
+    stored(hash, true);
     await refreshPoliticianProfile("pol-1", "test", { revalidate });
     const line = vi.mocked(console.info).mock.calls.at(-1)?.[0] as string;
     expect(JSON.parse(line)).toMatchObject({
@@ -73,6 +86,21 @@ describe("refreshPoliticianProfile", () => {
       politicianId: "pol-1",
       status: "unchanged",
       reason: "test",
+    });
+  });
+
+  it("journalise l'échec d'invalidation avant de le propager", async () => {
+    stored("ancienne", true);
+    revalidate.mockRejectedValue(new Error("revalidate indisponible"));
+    await expect(refreshPoliticianProfile("pol-1", "test", { revalidate })).rejects.toThrow(
+      "revalidate indisponible"
+    );
+    const line = vi.mocked(console.info).mock.calls.at(-1)?.[0] as string;
+    expect(JSON.parse(line)).toMatchObject({
+      event: "[profile-snapshot] refresh",
+      politicianId: "pol-1",
+      status: "updated",
+      revalidateFailed: true,
     });
   });
 });
