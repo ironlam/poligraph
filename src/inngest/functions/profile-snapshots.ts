@@ -1,6 +1,9 @@
 import * as Sentry from "@sentry/nextjs";
 import { inngest } from "../client";
-import type { ReconcileBatchResult } from "@/lib/politicians/profile-snapshot/reconcile";
+import {
+  MAX_FAILED_IDS,
+  type ReconcileBatchResult,
+} from "@/lib/politicians/profile-snapshot/reconcile";
 import {
   PROFILE_INVALIDATION_CAP,
   PROFILE_RECONCILE_EVENT,
@@ -96,7 +99,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
       totals.invalidated += batch.invalidated;
       totals.deferred += batch.deferred;
       totals.failures += batch.failures;
-      totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, 20);
+      totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, MAX_FAILED_IDS);
       invalidationsLeft -= batch.invalidated;
       cursor = batch.cursor;
       if (cursor === null) break;
