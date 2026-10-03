@@ -155,6 +155,9 @@ const PARTY_SURFACES = [
 
 const FACTCHECK_SURFACES = [
   "src/app/api/chat/route.ts",
+  // Reaches FactCheck only through the profile-snapshot request module it imports for
+  // requestProfileReconcile; the route answers with tag names, behind CRON_SECRET.
+  "src/app/api/cron/revalidate/route.ts",
   "src/app/api/export/factchecks/route.ts",
   "src/app/api/export/politiques/route.ts",
   "src/app/api/factchecks/route.ts",
@@ -195,6 +198,9 @@ const AFFAIR_SURFACES = [
   "src/app/api/affaires/neighbors/route.ts",
   "src/app/api/affaires/route.ts",
   "src/app/api/chat/route.ts",
+  // Reaches Affair only through the profile-snapshot request module it imports for
+  // requestProfileReconcile; the route answers with tag names, behind CRON_SECRET.
+  "src/app/api/cron/revalidate/route.ts",
   "src/app/api/elections/senatoriales-2026/commune/route.ts",
   "src/app/api/export/affaires/route.ts",
   "src/app/api/export/politiques/route.ts",

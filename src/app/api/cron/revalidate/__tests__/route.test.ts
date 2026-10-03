@@ -1,0 +1,56 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const h = vi.hoisted(() => ({
+  revalidateTags: vi.fn(),
+  revalidateAll: vi.fn(),
+  requestProfileReconcile: vi.fn(),
+}));
+
+vi.mock("@/lib/cache", () => ({
+  revalidateTags: h.revalidateTags,
+  revalidateAll: h.revalidateAll,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileReconcile: h.requestProfileReconcile,
+}));
+
+import { POST } from "../route";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function req(body: unknown): any {
+  return new Request("http://test/api/cron/revalidate", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { authorization: "Bearer secret", "content-type": "application/json" },
+  });
+}
+
+describe("POST /api/cron/revalidate : rattrapage des fiches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CRON_SECRET", "secret");
+    h.requestProfileReconcile.mockResolvedValue({ sent: 1 });
+  });
+
+  it("demande un rattrapage quand un tag de fiche est revalidé", async () => {
+    const res = await POST(req({ tags: ["stats", "votes"] }));
+
+    expect(await res.json()).toEqual({ revalidated: ["stats", "votes"] });
+    expect(h.revalidateTags).toHaveBeenCalledWith(["stats", "votes"]);
+    expect(h.requestProfileReconcile).toHaveBeenCalledWith("cron:stats,votes");
+  });
+
+  it("ne demande rien pour des tags qui ne touchent pas les fiches", async () => {
+    const res = await POST(req({ tags: ["stats"] }));
+
+    expect(await res.json()).toEqual({ revalidated: ["stats"] });
+    expect(h.requestProfileReconcile).not.toHaveBeenCalled();
+  });
+
+  it("demande un rattrapage sur la revalidation complète, réponse inchangée", async () => {
+    const res = await POST(req({ all: true }));
+
+    expect(await res.json()).toEqual({ revalidated: "all", deprecated: true });
+    expect(h.requestProfileReconcile).toHaveBeenCalledWith("cron:all");
+  });
+});
