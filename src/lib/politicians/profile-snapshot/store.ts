@@ -13,7 +13,8 @@ import {
  *
  * `builtAt` is when the build started, so a slow build that read older data cannot overwrite a
  * faster one that started after it. `written` says whether a row was inserted or updated;
- * `changed` whether its content hash differs from the row it replaced (or there was none).
+ * `changed` whether its content hash differs from the row it replaced. A first insert is never a
+ * change: the backfill would otherwise invalidate every live page it fills.
  *
  * The previous hash is read `FOR UPDATE` in the same transaction: a snapshot read could predate a
  * concurrent writer's commit, report "unchanged" against content that is no longer stored, and
@@ -53,6 +54,10 @@ export async function writeProfileSnapshot(input: {
       RETURNING 1
     `);
     const written = up.length > 0;
-    return { written, changed: written && prev[0]?.contentHash !== contentHash };
+    // A first insert is not a change: no live page was built from this document yet.
+    return {
+      written,
+      changed: written && prev.length > 0 && prev[0]!.contentHash !== contentHash,
+    };
   });
 }

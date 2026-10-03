@@ -48,11 +48,11 @@ describe("refreshPoliticianProfile", () => {
     expect(revalidate).toHaveBeenCalledWith("politician:slug-courant");
   });
 
-  it("invalide aussi à la première écriture", async () => {
+  it("n'invalide pas à la première écriture : aucune page n'a encore servi ce document", async () => {
     stored(null, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
-    expect(outcome.status).toBe("updated");
-    expect(revalidate).toHaveBeenCalledTimes(1);
+    expect(outcome.status).toBe("unchanged");
+    expect(revalidate).not.toHaveBeenCalled();
   });
 
   it("n'invalide pas quand le contenu est inchangé", async () => {

@@ -83,10 +83,10 @@ describeIfDisposableDb("document de fiche politicien", () => {
     });
   });
 
-  it("signale un changement à la création puis quand l'empreinte diffère", async () => {
+  it("ne signale pas de changement à la création, puis en signale un quand l'empreinte diffère", async () => {
     expect(await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(1) })).toEqual({
       written: true,
-      changed: true,
+      changed: false,
     });
     expect(await writeProfileSnapshot({ politicianId, document: docB, startedAt: t(2) })).toEqual({
       written: true,
