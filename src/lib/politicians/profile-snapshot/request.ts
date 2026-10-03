@@ -123,3 +123,29 @@ export async function requestProfileRefresh(
     return { sent, mode };
   }
 }
+
+/**
+ * Asks for one reconcile pass over every public profile, after a write too wide to target (a
+ * sync, a cron revalidation). Never throws, for the same reason as `requestProfileRefresh`.
+ */
+export async function requestProfileReconcile(
+  reason: string,
+  send: Send = defaultSend
+): Promise<{ sent: number }> {
+  try {
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+    console.info(JSON.stringify({ event: "[profile-snapshot] reconcile request", reason }));
+    await send([{ name: PROFILE_RECONCILE_EVENT, data: { reason } }]);
+    return { sent: 1 };
+  } catch (error) {
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+    console.warn(
+      JSON.stringify({
+        event: "[profile-snapshot] reconcile request failed",
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return { sent: 0 };
+  }
+}
