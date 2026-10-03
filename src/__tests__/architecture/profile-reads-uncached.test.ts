@@ -1,0 +1,28 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+function read(path: string): string {
+  return readFileSync(path, "utf8");
+}
+
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+describe("lectures brutes de la fiche politicien", () => {
+  it("n'utilisent aucun cache Next", () => {
+    const src = withoutComments(read("src/lib/data/politician-profile-reads.ts"));
+    expect(src).not.toMatch(/["']use cache["']|cacheTag\(|cacheLife\(/);
+    expect(src).not.toMatch(/getPoliticianVotingStats\(/);
+    expect(src).toMatch(/computePoliticianVotingStats\(/);
+  });
+
+  it("sont déléguées par les lectures en cache", () => {
+    const politicians = withoutComments(read("src/lib/data/politicians.ts"));
+    expect(politicians).toMatch(/readPoliticianIdentity\(/);
+    expect(politicians).toMatch(/readPoliticianDossier\(/);
+    expect(withoutComments(read("src/app/politiques/[slug]/vote-stats.ts"))).toMatch(
+      /readProfileVoteStats\(/
+    );
+  });
+});
