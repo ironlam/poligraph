@@ -5,7 +5,7 @@ import {
   PROFILE_INVALIDATION_CAP,
   PROFILE_RECONCILE_EVENT,
   PROFILE_REFRESH_EVENT,
-} from "@/lib/politicians/profile-snapshot/request";
+} from "@/lib/politicians/profile-snapshot/events";
 
 const BATCH_BUDGET_MS = 240_000;
 

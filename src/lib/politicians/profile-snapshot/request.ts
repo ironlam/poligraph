@@ -1,8 +1,11 @@
 import { db } from "@/lib/db";
-
-export const PROFILE_REFRESH_EVENT = "politician/profile.refresh";
-export const PROFILE_RECONCILE_EVENT = "politician/profile.reconcile";
-export const PROFILE_INVALIDATION_CAP = 2000;
+import {
+  defaultSend,
+  PROFILE_INVALIDATION_CAP,
+  PROFILE_RECONCILE_EVENT,
+  PROFILE_REFRESH_EVENT,
+  type Send,
+} from "./events";
 
 const SEND_BATCH_SIZE = 100;
 
@@ -11,9 +14,6 @@ export type ProfileRefreshTarget =
   | { partyId: string }
   | { factCheckId: string }
   | { affairIds: string[] };
-
-export type InngestEventPayload = { name: string; data: Record<string, unknown> };
-type Send = (events: InngestEventPayload[]) => Promise<unknown>;
 
 /**
  * Resolves every politician whose profile document depends on the written entity.
@@ -63,12 +63,6 @@ export async function resolveProfileTargets(target: ProfileRefreshTarget): Promi
     for (const l of a.linkedBy) out.add(l.politicianId);
   }
   return [...out];
-}
-
-async function defaultSend(events: InngestEventPayload[]): Promise<unknown> {
-  // Lazy import: resolving targets must not construct the Inngest client.
-  const { inngest } = await import("@/inngest/client");
-  return inngest.send(events);
 }
 
 /**
@@ -121,31 +115,5 @@ export async function requestProfileRefresh(
       })
     );
     return { sent, mode };
-  }
-}
-
-/**
- * Asks for one reconcile pass over every public profile, after a write too wide to target (a
- * sync, a cron revalidation). Never throws, for the same reason as `requestProfileRefresh`.
- */
-export async function requestProfileReconcile(
-  reason: string,
-  send: Send = defaultSend
-): Promise<{ sent: number }> {
-  try {
-    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
-    console.info(JSON.stringify({ event: "[profile-snapshot] reconcile request", reason }));
-    await send([{ name: PROFILE_RECONCILE_EVENT, data: { reason } }]);
-    return { sent: 1 };
-  } catch (error) {
-    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
-    console.warn(
-      JSON.stringify({
-        event: "[profile-snapshot] reconcile request failed",
-        reason,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
-    return { sent: 0 };
   }
 }

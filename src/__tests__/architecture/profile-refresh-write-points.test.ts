@@ -143,5 +143,16 @@ describe("points d'écriture des fiches politicien", () => {
 
     const cron = withoutComments(read("src/app/api/cron/revalidate/route.ts"));
     expect(cron).toMatch(/requestProfileReconcile\(/);
+    expect(cron).toContain('from "@/lib/politicians/profile-snapshot/events"');
+    expect(cron).not.toContain("profile-snapshot/request");
+  });
+
+  it("le module d'envoi des events ne touche pas la base", () => {
+    // The cron route imports it: reaching Prisma from here would put Affair and FactCheck in
+    // that route's import graph (mcp-public-contract-surfaces.test.ts).
+    const events = withoutComments(read("src/lib/politicians/profile-snapshot/events.ts"));
+    const imports = [...events.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    expect(imports).toEqual(["@/inngest/client"]);
+    expect(events).not.toMatch(/@\/lib\/db|@\/lib\/data|from "\.\/request"/);
   });
 });

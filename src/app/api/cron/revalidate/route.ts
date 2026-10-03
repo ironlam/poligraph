@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
-import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/request";
+import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/events";
 
 const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
 

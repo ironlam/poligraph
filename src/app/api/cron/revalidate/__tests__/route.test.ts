@@ -10,7 +10,7 @@ vi.mock("@/lib/cache", () => ({
   revalidateTags: h.revalidateTags,
   revalidateAll: h.revalidateAll,
 }));
-vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+vi.mock("@/lib/politicians/profile-snapshot/events", () => ({
   requestProfileReconcile: h.requestProfileReconcile,
 }));
 

@@ -1,4 +1,5 @@
 import { refreshPoliticianProfile, type RefreshOutcome } from "./refresh";
+import { requestProfileReconcile } from "./events";
 import { requestProfileRefresh, resolveProfileTargets, type ProfileRefreshTarget } from "./request";
 
 /**
@@ -16,7 +17,8 @@ export type ModerationRefreshTarget = Exclude<ProfileRefreshTarget, { partyId: s
  * response. Sequential on purpose: one pool connection at a time.
  *
  * Never throws: the moderation write is committed, failing the request would only hide that.
- * A failed recompute is logged and requested again through Inngest; the reconcile covers the rest.
+ * A failed recompute is logged and requested again through Inngest; a failed target resolution
+ * asks for a reconcile pass.
  *
  * Bulk moderation: when more than MODERATION_SYNC_LIMIT profiles are touched, only
  * `privacyCriticalPoliticianIds` are recomputed inline (the profiles that showed an affair which
@@ -42,6 +44,8 @@ export async function refreshProfilesForModeration(
     }
   } catch (error) {
     logFailure("[profile-snapshot] moderation resolve failed", { reason }, error);
+    // The write is committed: without targets, only a full pass removes an unpublished item.
+    await requestProfileReconcile(`moderation-fallback:${reason}`);
     return [];
   }
 

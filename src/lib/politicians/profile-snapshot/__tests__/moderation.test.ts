@@ -19,7 +19,7 @@ vi.mock("../refresh", () => ({ refreshPoliticianProfile }));
 vi.mock("@/inngest/client", () => ({ inngest: { send: inngestSend } }));
 
 import { MODERATION_SYNC_LIMIT, refreshProfilesForModeration } from "../moderation";
-import { PROFILE_REFRESH_EVENT } from "../request";
+import { PROFILE_RECONCILE_EVENT, PROFILE_REFRESH_EVENT } from "../events";
 
 const outcome = (politicianId: string) => ({
   politicianId,
@@ -95,8 +95,9 @@ describe("refreshProfilesForModeration", () => {
     ]);
   });
 
-  it("ne lève pas quand la résolution des cibles échoue", async () => {
+  it("ne lève pas quand la résolution des cibles échoue, et demande un rattrapage", async () => {
     mentionFindMany.mockRejectedValue(new Error("db down"));
+    inngestSend.mockResolvedValue(undefined);
 
     await expect(refreshProfilesForModeration({ factCheckId: "f1" }, "r")).resolves.toEqual([]);
 
@@ -106,6 +107,16 @@ describe("refreshProfilesForModeration", () => {
       reason: "r",
       error: "db down",
     });
+    expect(inngestSend).toHaveBeenCalledWith([
+      { name: PROFILE_RECONCILE_EVENT, data: { reason: "moderation-fallback:r" } },
+    ]);
+  });
+
+  it("ne lève pas quand la demande de rattrapage de secours échoue aussi", async () => {
+    mentionFindMany.mockRejectedValue(new Error("db down"));
+
+    await expect(refreshProfilesForModeration({ factCheckId: "f1" }, "r")).resolves.toEqual([]);
+    expect(inngestSend).toHaveBeenCalledTimes(1);
   });
 
   it("au-delà du seuil, ne recalcule dans la requête que les fiches dont une affaire est dépubliée", async () => {

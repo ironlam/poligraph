@@ -5,7 +5,7 @@ import { revalidateTags } from "@/lib/cache";
 import { isIngestionAnomaly } from "@/lib/monitoring/amendment-link-freshness";
 import { linkableUnlinkedVoteWhere } from "@/lib/monitoring/amendment-link-query";
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
-import { PROFILE_RECONCILE_EVENT } from "@/lib/politicians/profile-snapshot/request";
+import { PROFILE_RECONCILE_EVENT } from "@/lib/politicians/profile-snapshot/events";
 
 interface DailyStep {
   name: string;
