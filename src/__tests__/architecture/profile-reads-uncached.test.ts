@@ -25,4 +25,11 @@ describe("lectures brutes de la fiche politicien", () => {
       /readProfileVoteStats\(/
     );
   });
+
+  it("sont appelées l'une après l'autre par la construction du document", () => {
+    // One connection at a time: PostgresDriverMetrics does not measure concurrency.
+    const build = withoutComments(read("src/lib/politicians/profile-snapshot/build.ts"));
+    expect(build).toMatch(/readPoliticianIdentity\(/);
+    expect(build).not.toMatch(/Promise\.all/); // also catches Promise.allSettled
+  });
 });
