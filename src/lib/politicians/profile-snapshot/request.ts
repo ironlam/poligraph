@@ -25,7 +25,15 @@ export async function resolveProfileTargets(target: ProfileRefreshTarget): Promi
   if ("partyId" in target) {
     const { partyId } = target;
     const rows = await db.politician.findMany({
-      where: { OR: [{ currentPartyId: partyId }, { partyHistory: { some: { partyId } } }] },
+      where: {
+        // Every place the document shows a party: current, history, mandate, affair party-at-time.
+        OR: [
+          { currentPartyId: partyId },
+          { partyHistory: { some: { partyId } } },
+          { mandates: { some: { partyId } } },
+          { affairs: { some: { partyAtTimeId: partyId } } },
+        ],
+      },
       select: { id: true },
     });
     return [...new Set(rows.map((r) => r.id))];
@@ -72,38 +80,46 @@ export async function requestProfileRefresh(
   reason: string,
   send: Send = defaultSend
 ): Promise<{ sent: number; mode: "targeted" | "reconcile" }> {
-  const politicianIds = await resolveProfileTargets(target);
-  const mode = politicianIds.length > PROFILE_INVALIDATION_CAP ? "reconcile" : "targeted";
-  const count = politicianIds.length;
-
-  // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
-  console.info(JSON.stringify({ event: "[profile-snapshot] request", reason, count, mode }));
-
-  if (count === 0) return { sent: 0, mode };
-
+  let politicianIds: string[] = [];
+  let mode: "targeted" | "reconcile" = "targeted";
+  let sent = 0;
   try {
+    politicianIds = await resolveProfileTargets(target);
+    mode = politicianIds.length > PROFILE_INVALIDATION_CAP ? "reconcile" : "targeted";
+
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+    console.info(
+      JSON.stringify({
+        event: "[profile-snapshot] request",
+        reason,
+        count: politicianIds.length,
+        mode,
+      })
+    );
+
+    if (politicianIds.length === 0) return { sent: 0, mode };
     if (mode === "reconcile") {
       await send([{ name: PROFILE_RECONCILE_EVENT, data: { reason } }]);
       return { sent: 1, mode };
     }
-    for (let i = 0; i < count; i += SEND_BATCH_SIZE) {
-      await send(
-        politicianIds
-          .slice(i, i + SEND_BATCH_SIZE)
-          .map((politicianId) => ({ name: PROFILE_REFRESH_EVENT, data: { politicianId, reason } }))
-      );
+    for (let i = 0; i < politicianIds.length; i += SEND_BATCH_SIZE) {
+      const batch = politicianIds
+        .slice(i, i + SEND_BATCH_SIZE)
+        .map((politicianId) => ({ name: PROFILE_REFRESH_EVENT, data: { politicianId, reason } }));
+      await send(batch);
+      sent += batch.length;
     }
-    return { sent: count, mode };
+    return { sent, mode };
   } catch (error) {
     // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
     console.warn(
       JSON.stringify({
         event: "[profile-snapshot] request failed",
         reason,
-        count,
+        count: politicianIds.length,
         error: error instanceof Error ? error.message : String(error),
       })
     );
-    return { sent: 0, mode };
+    return { sent, mode };
   }
 }

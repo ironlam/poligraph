@@ -42,7 +42,14 @@ describe("resolveProfileTargets", () => {
     politicianFindMany.mockResolvedValue([{ id: "p1" }, { id: "p2" }, { id: "p1" }]);
     expect((await resolveProfileTargets({ partyId: "x" })).sort()).toEqual(["p1", "p2"]);
     expect(politicianFindMany).toHaveBeenCalledWith({
-      where: { OR: [{ currentPartyId: "x" }, { partyHistory: { some: { partyId: "x" } } }] },
+      where: {
+        OR: [
+          { currentPartyId: "x" },
+          { partyHistory: { some: { partyId: "x" } } },
+          { mandates: { some: { partyId: "x" } } },
+          { affairs: { some: { partyAtTimeId: "x" } } },
+        ],
+      },
       select: { id: true },
     });
   });
@@ -108,6 +115,31 @@ describe("requestProfileRefresh", () => {
       reason: "r",
       count: 1,
       error: "no event key",
+    });
+  });
+
+  it("ne lève pas quand la résolution des cibles échoue", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    politicianFindMany.mockRejectedValue(new Error("db down"));
+    const send = vi.fn();
+    await expect(requestProfileRefresh({ partyId: "x" }, "r", send)).resolves.toEqual({
+      sent: 0,
+      mode: "targeted",
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({
+      event: "[profile-snapshot] request failed",
+      error: "db down",
+    });
+  });
+
+  it("renvoie le nombre d'events réellement envoyés quand un paquet échoue", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const send = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("x"));
+    const politicianIds = ids(250).map((r) => r.id);
+    expect(await requestProfileRefresh({ politicianIds }, "r", send)).toEqual({
+      sent: 100,
+      mode: "targeted",
     });
   });
 
