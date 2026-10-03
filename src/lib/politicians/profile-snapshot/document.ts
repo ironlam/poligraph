@@ -85,7 +85,58 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** sha256 hex of the key-sorted JSON, so key order never changes the hash. */
+const VOLATILE_KEYS = new Set(["updatedAt", "createdAt"]);
+
+const PARIS_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Paris",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** `{ $date: iso }` → the Europe/Paris calendar day `formatDate` prints, as `YYYY-MM-DD`. */
+function parisDay(value: unknown): unknown {
+  if (value !== null && typeof value === "object" && "$date" in value) {
+    const iso = (value as { $date: unknown }).$date;
+    if (typeof iso === "string") return PARIS_DAY.format(new Date(iso));
+  }
+  return value;
+}
+
+/**
+ * What the content hash covers: the serialized document minus every `updatedAt` / `createdAt` at
+ * any depth. Those are `@updatedAt` bookkeeping a sync rewrites without changing anything shown
+ * (`deputes.ts` touches every mandate on every run), and hashing them would invalidate live pages
+ * for nothing. Two timestamps are shown and stay in:
+ * - `identity.updatedAt`, printed as a day by `PoliticianProfileBody` ("mis à jour le"), kept as
+ *   that day only;
+ * - `dossier.affairs[].createdAt`, the last fallback of the affair sort in `AffairsSection`, kept
+ *   whole since a sort compares it whole (it never changes after insert anyway).
+ * The stored `data` stays complete; only the hash ignores the rest.
+ */
+export function fingerprintProjection(value: unknown, path = ""): unknown {
+  if (Array.isArray(value)) return value.map((item) => fingerprintProjection(item, `${path}[]`));
+  if (value === null || typeof value !== "object") return value;
+  if ("$date" in value) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const itemPath = path ? `${path}.${key}` : key;
+    if (VOLATILE_KEYS.has(key)) {
+      if (itemPath === "identity.updatedAt") out[key] = parisDay(item);
+      else if (itemPath === "dossier.affairs[].createdAt") out[key] = item;
+      continue;
+    }
+    out[key] = fingerprintProjection(item, itemPath);
+  }
+  return out;
+}
+
+/**
+ * sha256 hex of the key-sorted JSON of `fingerprintProjection(data)`, so key order and volatile
+ * timestamps never change the hash.
+ */
 export function hashSerializedDocument(data: Prisma.InputJsonValue): string {
-  return createHash("sha256").update(stableStringify(data)).digest("hex");
+  return createHash("sha256")
+    .update(stableStringify(fingerprintProjection(data)))
+    .digest("hex");
 }

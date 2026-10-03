@@ -35,6 +35,9 @@ function sampleDocument(
   } as unknown as PoliticianProfileDocument;
 }
 
+const hashOf = (doc: PoliticianProfileDocument) =>
+  hashSerializedDocument(serializeProfileDocument(doc));
+
 describe("document de fiche politicien", () => {
   it("restitue exactement le document, dates comprises", () => {
     const doc = sampleDocument(1500.5);
@@ -58,13 +61,58 @@ describe("document de fiche politicien", () => {
     expect(hashSerializedDocument({ a: [1, 2] })).not.toBe(hashSerializedDocument({ a: [2, 1] }));
   });
 
-  it("change d'empreinte quand une date change d'une milliseconde", () => {
-    const a = serializeProfileDocument(sampleDocument());
-    const later = sampleDocument();
-    later.identity.updatedAt = new Date(later.identity.updatedAt.getTime() + 1);
-    expect(hashSerializedDocument(a)).not.toBe(
-      hashSerializedDocument(serializeProfileDocument(later))
+  it("ignore un updatedAt de mandat dans l'empreinte", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    (a.identity.mandates[0] as unknown as Record<string, unknown>).updatedAt = new Date(
+      "2026-09-01T10:00:00.000Z"
     );
+    (b.identity.mandates[0] as unknown as Record<string, unknown>).updatedAt = new Date(
+      "2026-10-02T04:00:00.000Z"
+    );
+    expect(hashOf(a)).toBe(hashOf(b));
+  });
+
+  it("ignore un changement d'identity.updatedAt dans la même journée", () => {
+    const later = sampleDocument();
+    later.identity.updatedAt = new Date("2026-09-01T21:59:59.000Z"); // 23:59:59 à Paris
+    expect(hashOf(later)).toBe(hashOf(sampleDocument()));
+  });
+
+  it("change d'empreinte quand identity.updatedAt passe au jour suivant à Paris", () => {
+    const nextDay = sampleDocument();
+    nextDay.identity.updatedAt = new Date("2026-09-01T22:00:00.000Z"); // 00:00 le 2 à Paris
+    expect(hashOf(nextDay)).not.toBe(hashOf(sampleDocument()));
+  });
+
+  it("garde le createdAt d'une affaire, dernier critère de tri affiché", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    (a.dossier.affairs[0] as unknown as Record<string, unknown>).createdAt = new Date(
+      "2025-01-01T00:00:00.000Z"
+    );
+    (b.dossier.affairs[0] as unknown as Record<string, unknown>).createdAt = new Date(
+      "2025-06-01T00:00:00.000Z"
+    );
+    expect(hashOf(a)).not.toBe(hashOf(b));
+  });
+
+  it("change d'empreinte quand un champ affiché change", () => {
+    const renamed = sampleDocument();
+    renamed.identity.fullName = "Jeanne Autre";
+    expect(hashOf(renamed)).not.toBe(hashOf(sampleDocument()));
+  });
+
+  it("stocke les horodatages ignorés par l'empreinte", () => {
+    const doc = sampleDocument();
+    (doc.identity.mandates[0] as unknown as Record<string, unknown>).updatedAt = new Date(
+      "2026-10-02T04:00:00.000Z"
+    );
+    const out = serializeProfileDocument(doc) as {
+      identity: { updatedAt: unknown; mandates: { updatedAt: unknown }[] };
+    };
+    expect(out.identity.mandates[0]!.updatedAt).toEqual({ $date: "2026-10-02T04:00:00.000Z" });
+    expect(out.identity.updatedAt).toEqual({ $date: "2026-09-01T10:00:00.000Z" });
   });
 
   it("convertit un Decimal en nombre", () => {
