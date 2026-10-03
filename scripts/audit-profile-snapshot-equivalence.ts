@@ -4,15 +4,27 @@
  *
  * READ-ONLY equivalence audit of the precomputed politician profile documents.
  * For a stratified sample of published politicians, rebuilds the document from the
- * source tables and compares its content hash with the stored one. On a mismatch it
- * prints the first differing JSON path (never the values: affair data is sensitive).
+ * source tables and compares it with the stored one twice: by content hash, and by deep
+ * equality of the deserialized document, which is what proves nothing was lost on the
+ * way through JSON (the hash compares two serializations, so a loss there is invisible to
+ * it). On a mismatch it prints the first differing JSON path (never the values: affair
+ * data is sensitive). A document that differs only by `updatedAt` / `createdAt`, which the
+ * hash ignores on purpose, is reported apart and does not fail the audit.
  *
- * Exit codes: 0 = every sampled document matches; 1 = at least one mismatch, missing
- * or outdated document; 2 = bad usage or no DATABASE_URL.
+ * Exit codes: 0 = every sampled document matches (timestamp-only drifts allowed); 1 = at
+ * least one mismatch, missing or outdated document; 2 = bad usage or no DATABASE_URL.
  *
  * Only SELECTs. It must never call writeProfileSnapshot, refreshPoliticianProfile or
  * any revalidate: an architecture test greps this file for write calls.
  */
+
+import { Prisma } from "@/generated/prisma";
+import {
+  deserializeProfileDocument,
+  hashSerializedDocument,
+  serializeProfileDocument,
+  type PoliticianProfileDocument,
+} from "@/lib/politicians/profile-snapshot/document";
 
 const DEFAULT_SAMPLE = 300;
 
@@ -39,33 +51,91 @@ export function splitEvenly(total: number, parts: number): number[] {
   return Array.from({ length: parts }, (_, i) => base + (i < rest ? 1 : 0));
 }
 
-function isObject(v: unknown): v is Record<string, unknown> {
-  return v !== null && typeof v === "object" && !Array.isArray(v);
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
 }
 
-/** First JSON path where two serialized trees differ, or null when equal. Values are never returned. */
-export function firstDiffPath(a: unknown, b: unknown, path = ""): string | null {
+/** Every JSON path where two documents differ. Values are never returned. */
+export function diffPaths(a: unknown, b: unknown, path = ""): string[] {
+  const here = path || "(racine)";
   if (Array.isArray(a) && Array.isArray(b)) {
-    const len = Math.max(a.length, b.length);
-    for (let i = 0; i < len; i++) {
+    const out: string[] = [];
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
       const sub = `${path}[${i}]`;
-      if (i >= a.length || i >= b.length) return sub;
-      const d = firstDiffPath(a[i], b[i], sub);
-      if (d) return d;
+      if (i >= a.length || i >= b.length) out.push(sub);
+      else out.push(...diffPaths(a[i], b[i], sub));
     }
-    return null;
+    return out;
   }
-  if (isObject(a) && isObject(b)) {
+  if (a instanceof Date && b instanceof Date) {
+    return Object.is(a.getTime(), b.getTime()) ? [] : [here];
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const out: string[] = [];
     const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
     for (const key of keys) {
-      const sub = path ? `${path}.${key}` : key;
-      if (!(key in a) || !(key in b)) return sub;
-      const d = firstDiffPath(a[key], b[key], sub);
-      if (d) return d;
+      // An undefined property and a missing one carry the same information.
+      out.push(...diffPaths(a[key], b[key], path ? `${path}.${key}` : key));
     }
-    return null;
+    return out;
   }
-  return Object.is(a, b) ? null : path || "(racine)";
+  // Anything else that is an object (a Map, a class instance, a Date against a string) does not
+  // survive JSON as itself: report it rather than compare its enumerable keys.
+  if ((a !== null && typeof a === "object") || (b !== null && typeof b === "object")) {
+    return [here];
+  }
+  return Object.is(a, b) ? [] : [here];
+}
+
+/** First JSON path where two documents differ, or null when equal. Values are never returned. */
+export function firstDiffPath(a: unknown, b: unknown): string | null {
+  return diffPaths(a, b)[0] ?? null;
+}
+
+/** Prisma.Decimal → number at any depth: the document stores Decimals as numbers (Ruling 6). */
+function decimalsAsNumbers(value: unknown): unknown {
+  if (Prisma.Decimal.isDecimal(value)) return (value as Prisma.Decimal).toNumber();
+  if (Array.isArray(value)) return value.map(decimalsAsNumbers);
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, decimalsAsNumbers(v)]));
+  }
+  return value;
+}
+
+const TIMESTAMP_PATH = /(^|\.)(updatedAt|createdAt)$/;
+
+export type SnapshotComparison =
+  | { kind: "match" }
+  | { kind: "timestamps"; path: string }
+  | { kind: "mismatch"; path: string };
+
+/**
+ * Compares a freshly built document with a stored row. A hash mismatch or any deep difference
+ * outside `updatedAt` / `createdAt` is a mismatch; a deep difference on those keys alone, which
+ * the hash ignores, is reported as `timestamps`.
+ */
+export function compareSnapshot(
+  built: PoliticianProfileDocument,
+  stored: { data: Prisma.JsonValue; contentHash: string }
+): SnapshotComparison {
+  const serialized = serializeProfileDocument(built);
+  const deep = diffPaths(
+    decimalsAsNumbers(built),
+    decimalsAsNumbers(deserializeProfileDocument(stored.data))
+  );
+  const shown = deep.filter((path) => !TIMESTAMP_PATH.test(path));
+  const hashesAgree =
+    hashSerializedDocument(serialized) === stored.contentHash &&
+    // The hash guards the stored hash column; the data column is what readers serve.
+    hashSerializedDocument(stored.data as Prisma.InputJsonValue) === stored.contentHash;
+  if (!hashesAgree) {
+    return { kind: "mismatch", path: shown[0] ?? deep[0] ?? "(contentHash)" };
+  }
+  if (shown.length > 0) return { kind: "mismatch", path: shown[0]! };
+  if (deep.length > 0) return { kind: "timestamps", path: deep[0]! };
+  return { kind: "match" };
 }
 
 async function main(): Promise<number> {
@@ -81,12 +151,10 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const { Prisma } = await import("@/generated/prisma");
   const { db } = await import("@/lib/db");
   const { buildPoliticianProfileDocument } =
     await import("@/lib/politicians/profile-snapshot/build");
-  const { serializeProfileDocument, hashSerializedDocument, PROFILE_SNAPSHOT_VERSION } =
-    await import("@/lib/politicians/profile-snapshot/document");
+  const { PROFILE_SNAPSHOT_VERSION } = await import("@/lib/politicians/profile-snapshot/document");
 
   try {
     const mandateTypes = ["DEPUTE", "SENATEUR", "DEPUTE_EUROPEEN", "MAIRE"] as const;
@@ -132,6 +200,7 @@ async function main(): Promise<number> {
     const missing: string[] = [];
     const outdated: string[] = [];
     const mismatches: { id: string; path: string }[] = [];
+    const timestampOnly: { id: string; path: string }[] = [];
 
     for (const id of ids) {
       const built = await buildPoliticianProfileDocument({ id });
@@ -150,28 +219,23 @@ async function main(): Promise<number> {
         outdated.push(id);
         continue;
       }
-      const serialized = serializeProfileDocument(built);
-      if (hashSerializedDocument(serialized) === stored.contentHash) {
-        // The hash guards the stored hash column; the data column is what readers serve.
-        const dataHash = hashSerializedDocument(stored.data as typeof serialized);
-        if (dataHash === stored.contentHash) {
-          matched++;
-          continue;
-        }
-        mismatches.push({ id, path: firstDiffPath(serialized, stored.data) ?? "(data)" });
-        continue;
-      }
-      mismatches.push({ id, path: firstDiffPath(serialized, stored.data) ?? "(contentHash)" });
+      const result = compareSnapshot(built, stored);
+      if (result.kind === "match") matched++;
+      else if (result.kind === "timestamps") timestampOnly.push({ id, path: result.path });
+      else mismatches.push({ id, path: result.path });
     }
 
     for (const m of mismatches) console.error(`[ECART] politicien=${m.id} chemin=${m.path}`);
     for (const id of missing) console.error(`[ABSENT] politicien=${id} aucun document stocké`);
     for (const id of outdated) console.error(`[PERIME] politicien=${id} version obsolète`);
+    for (const t of timestampOnly) {
+      console.warn(`[HORODATAGE] politicien=${t.id} chemin=${t.path} (horodatage seul)`);
+    }
 
     console.log(
       `[audit:profile-snapshots] échantillon=${ids.length} identiques=${matched} ` +
-        `écarts=${mismatches.length} absents=${missing.length} périmés=${outdated.length} ` +
-        `non-construits=${unbuildable}`
+        `écarts=${mismatches.length} horodatage-seul=${timestampOnly.length} ` +
+        `absents=${missing.length} périmés=${outdated.length} non-construits=${unbuildable}`
     );
     return mismatches.length + missing.length + outdated.length > 0 ? 1 : 0;
   } finally {
@@ -185,7 +249,10 @@ if (require.main === module) {
       process.exitCode = code;
     })
     .catch((error) => {
-      console.error(error);
+      // The message only: a raw error can carry query parameters, hence affair data.
+      console.error(
+        `[audit:profile-snapshots] ${error instanceof Error ? error.message : String(error)}`
+      );
       process.exitCode = 1;
     });
 }

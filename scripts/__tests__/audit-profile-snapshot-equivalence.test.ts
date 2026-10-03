@@ -1,7 +1,44 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { firstDiffPath, parseArgs, splitEvenly } from "../audit-profile-snapshot-equivalence";
+import { Prisma } from "@/generated/prisma";
+import {
+  hashSerializedDocument,
+  serializeProfileDocument,
+  type PoliticianProfileDocument,
+} from "@/lib/politicians/profile-snapshot/document";
+import {
+  compareSnapshot,
+  firstDiffPath,
+  parseArgs,
+  splitEvenly,
+} from "../audit-profile-snapshot-equivalence";
+
+// Fictitious fixture carrying only the fields these tests exercise.
+function sampleDocument(): PoliticianProfileDocument {
+  return {
+    identity: {
+      id: "pol_1",
+      slug: "jeanne-exemple",
+      fullName: "Jeanne Exemple",
+      updatedAt: new Date("2026-09-01T10:00:00.000Z"),
+      mandates: [{ id: "m1", updatedAt: new Date("2026-09-01T10:00:00.000Z") }],
+      declarations: [{ id: "d1", totalNet: new Prisma.Decimal("1200.25") }],
+    },
+    dossier: { affairs: [] },
+    voteStats: null,
+    mandateType: "DEPUTE",
+  } as unknown as PoliticianProfileDocument;
+}
+
+/** The row `writeProfileSnapshot` would store for `doc`. */
+function storedRow(doc: PoliticianProfileDocument) {
+  const data = serializeProfileDocument(doc);
+  return {
+    data: JSON.parse(JSON.stringify(data)) as Prisma.JsonValue,
+    contentHash: hashSerializedDocument(data),
+  };
+}
 
 describe("audit-profile-snapshot-equivalence", () => {
   it("reste en lecture seule : aucune écriture ni revalidation dans le source", () => {
@@ -14,15 +51,79 @@ describe("audit-profile-snapshot-equivalence", () => {
     for (const forbidden of [
       "writeProfileSnapshot",
       "refreshPoliticianProfile",
-      "revalidateTag",
+      "revalidate",
       "$executeRaw",
+      "$transaction",
       "create(",
       "update(",
       "upsert(",
       "delete(",
+      // createMany, updateMany, deleteMany, and findMany too: the audit reads row by row.
+      "Many(",
     ]) {
       expect(code, forbidden).not.toContain(forbidden);
     }
+
+    const sqlTexts = [...code.matchAll(/Prisma\.sql`([\s\S]*?)`/g)].map((m) => m[1]!);
+    // Guards the extraction itself: no SQL found would make the check below pass on nothing.
+    expect(sqlTexts.length).toBeGreaterThan(2);
+    for (const sql of sqlTexts) {
+      expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    }
+  });
+
+  it("n'imprime que le message d'une erreur fatale", () => {
+    const source = readFileSync(
+      join(__dirname, "..", "audit-profile-snapshot-equivalence.ts"),
+      "utf8"
+    );
+    const handler = source.slice(source.lastIndexOf(".catch("));
+    expect(handler).toContain("error instanceof Error ? error.message : String(error)");
+    expect(handler).not.toMatch(/console\.error\(\s*error\s*\)/);
+  });
+
+  it("déclare identique un document stocké fidèlement, Decimal compris", () => {
+    const doc = sampleDocument();
+    expect(compareSnapshot(doc, storedRow(doc))).toEqual({ kind: "match" });
+  });
+
+  it("signale une information perdue à la sérialisation que l'empreinte ne voit pas", () => {
+    const doc = sampleDocument();
+    // A Map serializes to {}: both hashes agree, only the deep comparison sees the loss.
+    (doc.identity as unknown as Record<string, unknown>).extra = new Map([["k", "v"]]);
+    const row = storedRow(doc);
+    expect(hashSerializedDocument(serializeProfileDocument(doc))).toBe(row.contentHash);
+    expect(compareSnapshot(doc, row)).toEqual({ kind: "mismatch", path: "identity.extra" });
+  });
+
+  it("classe à part un écart d'horodatage seul, sans échec", () => {
+    const stored = storedRow(sampleDocument());
+    const rebuilt = sampleDocument();
+    (rebuilt.identity.mandates[0] as unknown as { updatedAt: Date }).updatedAt = new Date(
+      "2026-10-02T04:00:00.000Z"
+    );
+    expect(compareSnapshot(rebuilt, stored)).toEqual({
+      kind: "timestamps",
+      path: "identity.mandates[0].updatedAt",
+    });
+  });
+
+  it("signale un champ affiché divergent par son chemin, sans sa valeur", () => {
+    const stored = storedRow(sampleDocument());
+    const rebuilt = sampleDocument();
+    rebuilt.identity.fullName = "Jeanne Autre";
+    rebuilt.identity.updatedAt = new Date("2026-09-01T11:00:00.000Z");
+    expect(compareSnapshot(rebuilt, stored)).toEqual({
+      kind: "mismatch",
+      path: "identity.fullName",
+    });
+  });
+
+  it("signale une colonne data qui ne correspond plus à l'empreinte stockée", () => {
+    const doc = sampleDocument();
+    const row = storedRow(doc);
+    row.contentHash = "0".repeat(64);
+    expect(compareSnapshot(doc, row)).toEqual({ kind: "mismatch", path: "(contentHash)" });
   });
 
   it("donne le chemin du premier écart sans jamais exposer de valeur", () => {
