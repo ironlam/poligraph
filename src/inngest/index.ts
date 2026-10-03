@@ -17,6 +17,10 @@ import { syncPress } from "./functions/sync-press";
 import { syncScrutins } from "./functions/sync-scrutins";
 import { syncPlatformUpdates } from "./functions/sync-platform-updates";
 import { pipelineDigest } from "./functions/pipeline-digest";
+import {
+  reconcilePoliticianProfilesFn,
+  refreshPoliticianProfileFn,
+} from "./functions/profile-snapshots";
 import { runVoteSyncWithCacheInvalidation } from "./vote-cache";
 
 // --- Grouped multi-step functions ---
@@ -40,6 +44,8 @@ const groupedFunctions = [
   syncEngagement,
   pipelineDigest,
   syncPlatformUpdates,
+  refreshPoliticianProfileFn,
+  reconcilePoliticianProfilesFn,
 ];
 
 // --- Individual script wrappers (admin SCRIPT_CATALOG) ---
