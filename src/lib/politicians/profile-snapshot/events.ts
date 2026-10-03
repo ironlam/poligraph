@@ -17,6 +17,16 @@ export async function defaultSend(events: InngestEventPayload[]): Promise<unknow
 }
 
 /**
+ * Whether the automatic triggers (end of sync-daily, cron revalidation, scrutin sync) may ask for
+ * a reconcile pass. Off unless `PROFILE_SNAPSHOT_AUTO_RECONCILE` is exactly `"true"`: the first
+ * fill is a measured manual run, not whatever sync happens to follow the deploy. A manual event
+ * from the Inngest dashboard and the moderation fallback do not consult it.
+ */
+export function isProfileAutoReconcileEnabled(): boolean {
+  return process.env.PROFILE_SNAPSHOT_AUTO_RECONCILE === "true";
+}
+
+/**
  * Asks for one reconcile pass over every public profile, after a write too wide to target (a
  * sync, a cron revalidation). Never throws: the write that asked for it is already committed,
  * and the next reconcile covers a lost request.

@@ -5,7 +5,10 @@ import { revalidateTags } from "@/lib/cache";
 import { isIngestionAnomaly } from "@/lib/monitoring/amendment-link-freshness";
 import { linkableUnlinkedVoteWhere } from "@/lib/monitoring/amendment-link-query";
 import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
-import { PROFILE_RECONCILE_EVENT } from "@/lib/politicians/profile-snapshot/events";
+import {
+  PROFILE_RECONCILE_EVENT,
+  isProfileAutoReconcileEnabled,
+} from "@/lib/politicians/profile-snapshot/events";
 
 interface DailyStep {
   name: string;
@@ -424,11 +427,14 @@ export const syncDaily = inngest.createFunction(
     }
 
     // The steps above write profile data (affairs, fact-checks, publication status, votes)
-    // without targeting a politician: one reconcile pass catches up every profile.
-    await step.sendEvent("profile-reconcile", {
-      name: PROFILE_RECONCILE_EVENT,
-      data: { reason: "sync-daily" },
-    });
+    // without targeting a politician: one reconcile pass catches up every profile, once the
+    // automatic triggers are switched on.
+    if (isProfileAutoReconcileEnabled()) {
+      await step.sendEvent("profile-reconcile", {
+        name: PROFILE_RECONCILE_EVENT,
+        data: { reason: "sync-daily" },
+      });
+    }
 
     const failed = results.filter((r) => !r.success);
     return {

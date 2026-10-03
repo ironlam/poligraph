@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
-import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/events";
+import {
+  isProfileAutoReconcileEnabled,
+  requestProfileReconcile,
+} from "@/lib/politicians/profile-snapshot/events";
 
 const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
 
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
       // with the specific tags your sync touched.
       console.warn("[/api/cron/revalidate] { all: true } is deprecated; use scoped tags instead");
       revalidateAll();
-      await requestProfileReconcile("cron:all");
+      if (isProfileAutoReconcileEnabled()) await requestProfileReconcile("cron:all");
       return NextResponse.json({ revalidated: "all", deprecated: true });
     }
 
@@ -53,7 +56,10 @@ export async function POST(request: NextRequest) {
       }
 
       revalidateTags(tags);
-      if (tags.some((tag: string) => PROFILE_TAGS.includes(tag))) {
+      if (
+        isProfileAutoReconcileEnabled() &&
+        tags.some((tag: string) => PROFILE_TAGS.includes(tag))
+      ) {
         await requestProfileReconcile(`cron:${tags.join(",")}`);
       }
       return NextResponse.json({ revalidated: tags });
