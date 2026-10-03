@@ -47,18 +47,20 @@ export const refreshPoliticianProfileFn = inngest.createFunction(
 
 /**
  * Same debounce semantics as above: no key, so every reconcile request shares one window and
- * the run starts 10 minutes after the last request.
+ * the run starts 10 minutes after the last request. `timeout: "1h"` caps the extension, so
+ * requests arriving less than 10 minutes apart cannot postpone the run indefinitely.
  */
 export const reconcilePoliticianProfilesFn = inngest.createFunction(
   {
     id: "reconcile-politician-profiles",
     concurrency: { limit: 1 },
-    debounce: { period: "10m" },
+    debounce: { period: "10m", timeout: "1h" },
   },
   { event: PROFILE_RECONCILE_EVENT },
   async ({ event, step }) => {
     const reason = `reconcile:${(event.data as { reason?: string }).reason ?? "reconcile"}`;
-    const startedAt = Date.now();
+    // Taken in a step: a plain Date.now() is re-evaluated on every replay.
+    const startedAt = await step.run("start", () => Date.now());
     const totals = {
       batches: 0,
       processed: 0,
@@ -66,6 +68,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
       invalidated: 0,
       deferred: 0,
       failures: 0,
+      failedIds: [] as string[],
     };
 
     // Steps are pure functions of their inputs (replay): state travels through return values.
@@ -93,6 +96,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
       totals.invalidated += batch.invalidated;
       totals.deferred += batch.deferred;
       totals.failures += batch.failures;
+      totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, 20);
       invalidationsLeft -= batch.invalidated;
       cursor = batch.cursor;
       if (cursor === null) break;

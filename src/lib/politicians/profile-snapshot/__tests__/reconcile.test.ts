@@ -75,6 +75,7 @@ describe("runReconcileBatch", () => {
   });
 
   it("compte un échec sans interrompre le lot", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const refresh = vi.fn(async (id: string) => {
       if (id === "p003") throw new Error("boom");
       return outcome(id, "unchanged");
@@ -83,6 +84,15 @@ describe("runReconcileBatch", () => {
       { cursor: null, budgetMs: 1e9, invalidationsLeft: 10 },
       { listIds: listFrom(ids(5)), refresh, now: () => 0 }
     );
-    expect(r).toMatchObject({ processed: 5, failures: 1 });
+    expect(r).toMatchObject({ processed: 5, failures: 1, failedIds: ["p003"] });
+    const logged = errorSpy.mock.calls.map((c) => JSON.parse(String(c[0])));
+    expect(logged).toEqual([
+      {
+        event: "[profile-snapshot] reconcile failure",
+        politicianId: "p003",
+        message: "boom",
+      },
+    ]);
+    errorSpy.mockRestore();
   });
 });

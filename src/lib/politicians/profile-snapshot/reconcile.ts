@@ -3,6 +3,7 @@ import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import type { refreshPoliticianProfile } from "./refresh";
 
 const PAGE_SIZE = 50;
+export const MAX_FAILED_IDS = 20;
 
 export type ReconcileBatchInput = {
   cursor: string | null;
@@ -18,6 +19,8 @@ export type ReconcileBatchResult = {
   invalidated: number;
   deferred: number;
   failures: number;
+  /** First ids that failed, bounded to MAX_FAILED_IDS. */
+  failedIds: string[];
 };
 
 export type ReconcileBatchDeps = {
@@ -61,6 +64,7 @@ export async function runReconcileBatch(
     invalidated: 0,
     deferred: 0,
     failures: 0,
+    failedIds: [],
   };
 
   for (;;) {
@@ -80,9 +84,19 @@ export async function runReconcileBatch(
             result.deferred++;
           }
         }
-      } catch {
-        // The refresh logs its own failure; one bad politician must not stop the walk.
+      } catch (error) {
+        // refresh only logs its revalidate failure, so a build or write error would vanish:
+        // log it here with the id, then carry on with the walk.
+        // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+        console.error(
+          JSON.stringify({
+            event: "[profile-snapshot] reconcile failure",
+            politicianId: id,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        );
         result.failures++;
+        if (result.failedIds.length < MAX_FAILED_IDS) result.failedIds.push(id);
       }
       result.processed++;
       cursor = id;
