@@ -5,6 +5,7 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { updatePoliticianSchema } from "@/lib/security/schemas/politician";
 import { generateSlug } from "@/lib/utils";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
 import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentielle/search-sync";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
@@ -190,6 +191,7 @@ export const PUT = withAdminAuth(
     });
 
     invalidateEntity("politician", politician.slug);
+    await requestProfileRefresh({ politicianIds: [politician.id] }, "admin:politique-modifié");
     for (const electionId of presidentialElectionIds) {
       invalidatePresidentialCandidacyTags(electionId);
     }

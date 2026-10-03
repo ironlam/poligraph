@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { DataSource } from "@/generated/prisma";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { getRequestMeta } from "@/lib/security/audit";
 import { recordMentionBlock } from "@/lib/identity/mention-blocklist";
 import { withValidation } from "@/lib/security/validate";
@@ -57,6 +58,10 @@ export const DELETE = withAdminAuth(async (request: NextRequest, context) => {
 
   invalidateEntity("factcheck");
   invalidateEntity("politician", mention.politician.slug);
+  await requestProfileRefresh(
+    { politicianIds: [mention.politicianId] },
+    "admin:mention-fact-check-retirée"
+  );
 
   return NextResponse.json({ success: true });
 });
@@ -70,6 +75,7 @@ export const PATCH = withAdminAuth(
       select: {
         id: true,
         isClaimant: true,
+        politicianId: true,
         politician: { select: { fullName: true, slug: true } },
         factCheck: { select: { title: true } },
       },
@@ -102,6 +108,10 @@ export const PATCH = withAdminAuth(
 
     invalidateEntity("factcheck");
     invalidateEntity("politician", mention.politician.slug);
+    await requestProfileRefresh(
+      { politicianIds: [mention.politicianId] },
+      "admin:mention-fact-check-modifiée"
+    );
 
     return NextResponse.json(updated);
   })

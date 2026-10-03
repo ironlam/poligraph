@@ -8,12 +8,21 @@ const h = vi.hoisted(() => ({
   },
   invalidateEntity: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
+  resolveProfileTargets: vi.fn(),
+  refreshProfilesForModeration: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ db: h.db }));
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: h.invalidateEntity,
   invalidateAffectedPoliticians: h.invalidateAffectedPoliticians,
+}));
+
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  resolveProfileTargets: h.resolveProfileTargets,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: h.refreshProfilesForModeration,
 }));
 
 import {
@@ -82,6 +91,8 @@ describe("affair-politician workbench", () => {
       updatedAt: new Date("2026-01-02"),
     };
     h.db.affair.findUnique.mockResolvedValue(current);
+    h.resolveProfileTargets.mockResolvedValue(["pol-old", "pol-lie"]);
+    h.refreshProfilesForModeration.mockResolvedValue([]);
     const context = await getAffairReassignmentContext("aff-1");
     const tx = {
       affair: {
@@ -129,5 +140,15 @@ describe("affair-politician workbench", () => {
       "nouvelle-personnalite",
     ]);
     expect(result.affair).toEqual({ id: "aff-1", ...updated });
+    // The affair went back to DRAFT: the previous owner and linked owners, resolved before the
+    // write, drop it within the request, and the new owner is recomputed too.
+    expect(h.resolveProfileTargets).toHaveBeenCalledWith({ affairIds: ["aff-1"] });
+    expect(h.resolveProfileTargets.mock.invocationCallOrder[0]!).toBeLessThan(
+      tx.affair.updateMany.mock.invocationCallOrder[0]!
+    );
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { politicianIds: ["pol-old", "pol-lie", "pol-new"] },
+      "admin:affaire-réattribuée"
+    );
   });
 });

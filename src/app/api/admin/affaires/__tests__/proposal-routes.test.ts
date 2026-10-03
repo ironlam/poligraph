@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   rejectProposal: vi.fn(),
   invalidateEntity: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
+  requestProfileRefresh: vi.fn(),
 }));
 
 vi.mock("@/services/affairs/proposal-review", () => ({
@@ -19,6 +20,9 @@ vi.mock("@/services/affairs/proposal-review", () => ({
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: h.invalidateEntity,
   invalidateAffectedPoliticians: h.invalidateAffectedPoliticians,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
 }));
 vi.mock("@/lib/api/with-admin-auth", () => ({
   withAdminAuth: (fn: (req: unknown, ctx: unknown) => unknown) => (req: unknown, ctx: unknown) =>
@@ -77,6 +81,10 @@ describe("POST accept", () => {
     expect(h.invalidateAffectedPoliticians).toHaveBeenCalledWith(["jean-testeur"]);
     // Ordering is the point: a rollback must never leave a purged cache behind.
     expect(order).toEqual(["commit", "invalidate:affair", "invalidate:politicians"]);
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { affairIds: ["aff_1"] },
+      "admin:proposition-acceptée"
+    );
   });
 
   it("409 et aucune invalidation quand la valeur a dérivé", async () => {

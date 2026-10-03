@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const h = vi.hoisted(() => ({
   invalidateEntity: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
+  resolveProfileTargets: vi.fn(),
+  refreshProfilesForModeration: vi.fn(),
   db: {
     // Depublication now commits the row and its audit trail together (#572).
     $transaction: vi.fn(),
@@ -28,6 +30,12 @@ vi.mock("@/lib/cache", () => ({
   invalidateAffectedPoliticians: h.invalidateAffectedPoliticians,
 }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  resolveProfileTargets: h.resolveProfileTargets,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: h.refreshProfilesForModeration,
+}));
 
 // Pass-through auth + validation wrappers (we test invalidation, not auth/zod).
 vi.mock("@/lib/api/with-admin-auth", () => ({
@@ -80,6 +88,8 @@ beforeEach(() => {
   db.auditLog.createMany.mockResolvedValue({});
   db.moderationReview.updateMany.mockResolvedValue({ count: 0 });
   db.$transaction.mockResolvedValue([{ id: "1" }, {}]);
+  h.resolveProfileTargets.mockResolvedValue([]);
+  h.refreshProfilesForModeration.mockResolvedValue([]);
 });
 
 describe("affair mutations invalidate affected politician profiles", () => {
@@ -189,5 +199,69 @@ describe("une décision clôt les revues de modération de son affaire", () => {
     await quickUpdatePATCH(req({ publicationStatus: "REJECTED" }), ctx({ id: "d2" }));
 
     expect(closeCall().where.affairId).toEqual({ in: ["d2"] });
+  });
+});
+
+// The precomputed profile document must drop an unpublished affair within the moderation request.
+describe("une décision de publication recalcule les fiches dans la requête", () => {
+  it("moderate (reject) recalcule, et protège en priorité les fiches qui affichaient l'affaire", async () => {
+    db.affair.findMany.mockResolvedValue([
+      { id: "a1", publicationStatus: "PUBLISHED", politician: { slug: "pol-a" } },
+      { id: "a2", publicationStatus: "DRAFT", politician: { slug: "pol-b" } },
+    ]);
+    db.affair.updateMany.mockResolvedValue({ count: 2 });
+    h.resolveProfileTargets.mockResolvedValue(["pol-a-id", "pol-lie-id"]);
+
+    await moderatePOST(req({ ids: ["a1", "a2"], action: "reject" }), ctx());
+
+    // Only the published affair is privacy-critical, and it is resolved before the write.
+    expect(h.resolveProfileTargets).toHaveBeenCalledWith({ affairIds: ["a1"] });
+    expect(h.resolveProfileTargets.mock.invocationCallOrder[0]!).toBeLessThan(
+      db.affair.updateMany.mock.invocationCallOrder[0]!
+    );
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { affairIds: ["a1", "a2"] },
+      "admin:affaires-reject",
+      { privacyCriticalPoliticianIds: ["pol-a-id", "pol-lie-id"] }
+    );
+  });
+
+  it("bulk (delete) résout les fiches avant la suppression puis les recalcule", async () => {
+    db.affair.findMany.mockResolvedValue([
+      { id: "c1", publicationStatus: "PUBLISHED", politician: { slug: "p" } },
+    ]);
+    db.affair.deleteMany.mockResolvedValue({ count: 1 });
+    h.resolveProfileTargets.mockResolvedValue(["p-id"]);
+
+    await bulkPOST(req({ ids: ["c1"], action: "delete" }), ctx());
+
+    expect(h.resolveProfileTargets).toHaveBeenCalledWith({ affairIds: ["c1"] });
+    const deleted = db.affair.deleteMany.mock.invocationCallOrder[0]!;
+    for (const order of h.resolveProfileTargets.mock.invocationCallOrder) {
+      expect(order).toBeLessThan(deleted);
+    }
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { politicianIds: ["p-id"] },
+      "admin:affaires-supprimées-en-lot",
+      { privacyCriticalPoliticianIds: ["p-id"] }
+    );
+    expect(h.refreshProfilesForModeration.mock.invocationCallOrder[0]!).toBeGreaterThan(deleted);
+  });
+
+  it("quick-update (dépublication) recalcule la fiche de l'affaire", async () => {
+    db.affair.findUnique.mockResolvedValue({
+      id: "d3",
+      slug: "s",
+      status: "RELAXE",
+      publicationStatus: "PUBLISHED",
+      politician: { slug: "p" },
+    });
+
+    await quickUpdatePATCH(req({ publicationStatus: "REJECTED" }), ctx({ id: "d3" }));
+
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { affairIds: ["d3"] },
+      "admin:affaire-mise-à-jour-rapide"
+    );
   });
 });

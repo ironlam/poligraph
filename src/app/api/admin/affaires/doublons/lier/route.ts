@@ -5,6 +5,7 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { pairLinkSchema, type PairLinkBody } from "@/lib/security/schemas/affair-pair";
 import { canonicalPair } from "@/services/affairs/affair-pair";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 
 /**
  * Publishes the relation between two affairs already ruled LINKED (issue #525).
@@ -90,6 +91,17 @@ export const POST = withAdminAuth(
     // After the transaction commits, never before.
     invalidateEntity("affair");
     if (from.politician?.slug) invalidateEntity("politician", from.politician.slug);
+    // The replaced target too: its owner's profile listed this affair under "linked by".
+    await requestProfileRefresh(
+      {
+        affairIds: [
+          fromAffairId,
+          toAffairId,
+          ...(from.linkedAffairId ? [from.linkedAffairId] : []),
+        ],
+      },
+      "admin:affaires-liées"
+    );
 
     return NextResponse.json({ success: true, replaced: replacing });
   })

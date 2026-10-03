@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { updatePartySchema } from "@/lib/security/schemas/party";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
 import { syncCandidacySearchDocumentsForParty } from "@/lib/presidentielle/search-sync";
@@ -137,6 +138,7 @@ export const PUT = withAdminAuth(
     });
 
     invalidateEntity("party", updatedParty.slug ?? undefined);
+    await requestProfileRefresh({ partyId: id! }, "admin:parti-modifié");
     invalidateEntity("stats");
     for (const electionId of presidentialElectionIds) {
       invalidatePresidentialCandidacyTags(electionId);

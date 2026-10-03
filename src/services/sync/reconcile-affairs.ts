@@ -19,6 +19,7 @@ import {
 import { decideMergeAction, type MergeDecision } from "@/services/affairs/merge-decision";
 import { db } from "@/lib/db";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,6 +61,7 @@ async function invalidateAfterMerges(survivorIds: string[]): Promise<void> {
     select: { politician: { select: { slug: true } } },
   });
   invalidateAffectedPoliticians(survivors.map((a) => a.politician?.slug));
+  await requestProfileRefresh({ affairIds: [...new Set(survivorIds)] }, "sync:fusion-affaires");
 }
 
 interface PlannedPair {

@@ -4,6 +4,7 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { reviewProposalSchema } from "@/lib/security/schemas/affair-proposal";
 import { acceptProposal } from "@/services/affairs/proposal-review";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { z } from "zod/v4";
 
 // Affaires v2, lot 1: applies a pending proposal.
@@ -84,6 +85,7 @@ export const POST = withAdminAuth(
 
     invalidateEntity("affair", result.affairSlug);
     invalidateAffectedPoliticians([result.politicianSlug]);
+    await requestProfileRefresh({ affairIds: [result.affairId] }, "admin:proposition-acceptée");
 
     return NextResponse.json({ ok: true, appliedFields: result.appliedFields });
   })

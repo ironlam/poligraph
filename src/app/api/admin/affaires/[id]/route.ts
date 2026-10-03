@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { invalidateEntity } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import { generateAffairSlug } from "@/lib/utils";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import { updateAffairSchema } from "@/lib/validations/affairs";
@@ -227,6 +229,11 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
     select: { slug: true },
   });
   if (pol) invalidateEntity("politician", pol.slug);
+  // The previous link target too: its owner's profile listed this affair under "linked by".
+  await refreshProfilesForModeration(
+    { affairIds: [id!, ...(existing.linkedAffairId ? [existing.linkedAffairId] : [])] },
+    "admin:affaire-modifiée"
+  );
 
   return NextResponse.json(affair);
 });
@@ -243,6 +250,9 @@ export const DELETE = withAdminAuth(async (_request: NextRequest, context) => {
     return NextResponse.json({ error: "Affaire non trouvée" }, { status: 404 });
   }
 
+  // Resolved before the delete: the row and its links disappear with it.
+  const profileTargets = await resolveProfileTargets({ affairIds: [id!] });
+
   // Delete affair (sources will cascade)
   await db.affair.delete({ where: { id } });
 
@@ -258,6 +268,7 @@ export const DELETE = withAdminAuth(async (_request: NextRequest, context) => {
 
   invalidateEntity("affair");
   if (affair.politician?.slug) invalidateEntity("politician", affair.politician.slug);
+  await refreshProfilesForModeration({ politicianIds: profileTargets }, "admin:affaire-supprimée");
 
   return NextResponse.json({ success: true });
 });

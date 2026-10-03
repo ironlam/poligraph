@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { createMandateSchema } from "@/lib/security/schemas/mandate";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { MandateType } from "@/generated/prisma";
 import type { z } from "zod/v4";
 
@@ -40,7 +41,14 @@ export const POST = withAdminAuth(
     const isCurrent = !endDate;
 
     // If this is a current mandate, close previous current leadership mandates for this party
+    // Their holders' profiles show the closed mandate too.
+    const closedHolderIds: string[] = [];
     if (isCurrent) {
+      const closing = await db.mandate.findMany({
+        where: { type: "PRESIDENT_PARTI", partyId, isCurrent: true },
+        select: { politicianId: true },
+      });
+      closedHolderIds.push(...closing.map((m) => m.politicianId));
       await db.mandate.updateMany({
         where: {
           type: "PRESIDENT_PARTI",
@@ -100,6 +108,10 @@ export const POST = withAdminAuth(
       select: { slug: true },
     });
     if (polWithSlug) invalidateEntity("politician", polWithSlug.slug);
+    await requestProfileRefresh(
+      { politicianIds: [politicianId, ...closedHolderIds] },
+      "admin:mandat-créé"
+    );
 
     return NextResponse.json(mandate, { status: 201 });
   })

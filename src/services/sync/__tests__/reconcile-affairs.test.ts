@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   withImportRun: vi.fn(),
   affairFindMany: vi.fn(),
   invalidateEntity: vi.fn(),
+  requestProfileRefresh: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
 }));
 
@@ -30,6 +31,10 @@ vi.mock("@/lib/db", () => ({ db: { affair: { findMany: h.affairFindMany } } }));
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: h.invalidateEntity,
   invalidateAffectedPoliticians: h.invalidateAffectedPoliticians,
+}));
+
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
 }));
 
 import { reconcileAffairs } from "../reconcile-affairs";
@@ -102,6 +107,10 @@ describe("reconcileAffairs — invalidation du chemin cron (#525)", () => {
     expect(order).toEqual(["merge", "invalidate", "invalidate-politicians"]);
     expect(h.invalidateEntity).toHaveBeenCalledWith("affair");
     expect(h.invalidateAffectedPoliticians).toHaveBeenCalledWith(["jean-dupont"]);
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { affairIds: [h.mergeAffairs.mock.calls[0]![0]] },
+      "sync:fusion-affaires"
+    );
   });
 
   it("n'appelle jamais l'absorption sur une paire traversant le publié", async () => {
@@ -244,6 +253,7 @@ describe("reconcileAffairs — invalidation du chemin cron (#525)", () => {
 
     expect(stats.errors).toBe(1);
     expect(h.invalidateEntity).not.toHaveBeenCalled();
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 
   it("ne touche à rien sans autoMerge", async () => {

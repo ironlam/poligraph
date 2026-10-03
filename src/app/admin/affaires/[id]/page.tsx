@@ -144,6 +144,9 @@ async function updatePublicationStatus(
   // that announce this URL (#572).
   invalidateEntity("affair", target.slug);
   invalidateAffectedPoliticians([target.politician?.slug]);
+  const { refreshProfilesForModeration } =
+    await import("@/lib/politicians/profile-snapshot/moderation");
+  await refreshProfilesForModeration({ affairIds: [id] }, "admin:affaire-statut");
   revalidatePath(`/admin/affaires/${id}`);
   return { ok: true };
 }
@@ -413,13 +416,23 @@ function DeleteButton({ id }: { id: string }) {
         const { isAuthenticated } = await import("@/lib/auth");
         const { redirect } = await import("next/navigation");
         const { db } = await import("@/lib/db");
+        const { resolveProfileTargets } =
+          await import("@/lib/politicians/profile-snapshot/request");
+        const { refreshProfilesForModeration } =
+          await import("@/lib/politicians/profile-snapshot/moderation");
 
         const authenticated = await isAuthenticated();
         if (!authenticated) {
           redirect("/admin/login");
         }
 
+        // Resolved before the delete: the row and its links disappear with it.
+        const profileTargets = await resolveProfileTargets({ affairIds: [id] });
         await db.affair.delete({ where: { id } });
+        await refreshProfilesForModeration(
+          { politicianIds: profileTargets },
+          "admin:affaire-supprimée"
+        );
         redirect("/admin/affaires");
       }}
     >

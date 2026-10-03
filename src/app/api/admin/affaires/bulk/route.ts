@@ -5,6 +5,8 @@ import { withValidation } from "@/lib/security/validate";
 import { bulkAffairSchema } from "@/lib/security/schemas/affair";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import {
   assertPublishable,
   PublishGuardError,
@@ -24,11 +26,23 @@ export const POST = withAdminAuth(
     // the rows disappear) so their profiles are invalidated too.
     const affected = await db.affair.findMany({
       where: { id: { in: ids } },
-      select: { politician: { select: { slug: true } } },
+      select: { id: true, publicationStatus: true, politician: { select: { slug: true } } },
     });
     const politicianSlugs = affected.map((a) => a.politician.slug);
+    // Profiles showing one of these affairs right now: rejecting or deleting it is the
+    // privacy-critical case that stays synchronous even on a large batch. Resolved before the
+    // write, while the rows and their links still exist.
+    const publishedIds = affected
+      .filter((a) => a.publicationStatus === "PUBLISHED")
+      .map((a) => a.id);
+    const privacyCriticalPoliticianIds =
+      action === "publish" || publishedIds.length === 0
+        ? []
+        : await resolveProfileTargets({ affairIds: publishedIds });
 
     if (action === "delete") {
+      // Resolved before the delete: the rows and their links disappear with it.
+      const profileTargets = await resolveProfileTargets({ affairIds: ids });
       const result = await db.affair.deleteMany({
         where: { id: { in: ids } },
       });
@@ -46,6 +60,11 @@ export const POST = withAdminAuth(
       // onDelete: Cascade, les revues partent avec l'affaire.
       invalidateEntity("affair");
       invalidateAffectedPoliticians(politicianSlugs);
+      await refreshProfilesForModeration(
+        { politicianIds: profileTargets },
+        "admin:affaires-supprimées-en-lot",
+        { privacyCriticalPoliticianIds }
+      );
 
       return NextResponse.json({ deleted: result.count });
     }
@@ -80,6 +99,10 @@ export const POST = withAdminAuth(
         await closeModerationReviews(published, VERIFIED_BY_MODERATION);
         invalidateEntity("affair");
         invalidateAffectedPoliticians(politicianSlugs);
+        await refreshProfilesForModeration(
+          { affairIds: published },
+          "admin:affaires-publiées-en-lot"
+        );
       }
 
       return NextResponse.json({ updated: published.length, failed });
@@ -107,6 +130,9 @@ export const POST = withAdminAuth(
     await closeModerationReviews(ids, VERIFIED_BY_MODERATION);
     invalidateEntity("affair");
     invalidateAffectedPoliticians(politicianSlugs);
+    await refreshProfilesForModeration({ affairIds: ids }, "admin:affaires-rejetées-en-lot", {
+      privacyCriticalPoliticianIds,
+    });
 
     return NextResponse.json({ updated: result.count });
   })

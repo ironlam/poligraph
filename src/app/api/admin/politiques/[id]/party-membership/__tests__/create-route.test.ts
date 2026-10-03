@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   setCurrentParty: vi.fn(),
   findCurrentOpenMembership: vi.fn(),
   invalidateEntity: vi.fn(),
+  requestProfileRefresh: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -19,6 +20,9 @@ vi.mock("@/lib/db", () => ({
     partyMembership: { findMany: h.membershipFindMany, create: h.membershipCreate },
     auditLog: { create: h.auditCreate },
   },
+}));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
 }));
 vi.mock("@/services/politician", () => ({
   setCurrentParty: h.setCurrentParty,
@@ -86,6 +90,10 @@ describe("POST party-membership: creation", () => {
       },
     });
     expect(h.invalidateEntity).toHaveBeenCalledWith("politician", "jeanne-exemple");
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { politicianIds: ["pol_1"] },
+      "admin:affiliation-ajoutée"
+    );
   });
 
   it("delegates a succession to setCurrentParty, role included", async () => {

@@ -8,6 +8,10 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ db: h.db }));
 vi.mock("@/lib/api/with-admin-auth", () => ({ withAdminAuth: (handler: unknown) => handler }));
 vi.mock("@/lib/cache", () => ({ invalidateEntity: vi.fn() }));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({ resolveProfileTargets: vi.fn() }));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: vi.fn(),
+}));
 vi.mock("@/lib/utils", () => ({ generateAffairSlug: vi.fn() }));
 vi.mock("@/services/affairs/status-tracking", () => ({ trackStatusChange: vi.fn() }));
 vi.mock("@/lib/affairs/publish-guard", () => ({
