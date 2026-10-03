@@ -22,6 +22,8 @@ import {
 import { queryQueue, type QueueFilters } from "@/app/admin/policy-titles/_data/queue-query";
 import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
 import { updateTags } from "@/lib/cache";
+// A public policy title shows in the "Derniers votes" of every profile that voted the scrutin.
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { ApproveBlockedError } from "@/app/admin/policy-titles/errors";
 import type { Prisma, ScrutinPolicyTitle } from "@/generated/prisma";
 
@@ -97,6 +99,7 @@ export async function editScrutinPolicyTitle(
   if (row.status === "APPROVED") {
     await revalidatePublicPathsForScrutin(scrutinId);
     updateTags(["votes"]);
+    await requestProfileRefresh({ scrutinIds: [scrutinId] }, "admin:titre-scrutin-modifié");
   }
 }
 
@@ -131,6 +134,7 @@ export async function approveScrutinPolicyTitle(scrutinId: string): Promise<void
   revalidate(scrutinId);
   await revalidatePublicPathsForScrutin(scrutinId);
   updateTags(["votes"]);
+  await requestProfileRefresh({ scrutinIds: [scrutinId] }, "admin:titre-scrutin-approuvé");
 }
 
 /**
@@ -170,6 +174,7 @@ export async function approveWithOverrideScrutinPolicyTitle(
   revalidate(scrutinId);
   await revalidatePublicPathsForScrutin(scrutinId);
   updateTags(["votes"]);
+  await requestProfileRefresh({ scrutinIds: [scrutinId] }, "admin:titre-scrutin-approuvé");
 }
 
 /**
@@ -239,6 +244,7 @@ export async function rejectScrutinPolicyTitle(scrutinId: string, reason: string
   if (row.status === "APPROVED") {
     await revalidatePublicPathsForScrutin(scrutinId);
     updateTags(["votes"]);
+    await requestProfileRefresh({ scrutinIds: [scrutinId] }, "admin:titre-scrutin-rejeté");
   }
 }
 
@@ -292,6 +298,7 @@ export async function regenerateScrutinPolicyTitle(scrutinId: string): Promise<v
   if (wasApproved) {
     await revalidatePublicPathsForScrutin(scrutinId);
     updateTags(["votes"]);
+    await requestProfileRefresh({ scrutinIds: [scrutinId] }, "admin:titre-scrutin-régénéré");
   }
 }
 
@@ -349,6 +356,10 @@ export async function batchApprove(scrutinIds: string[]): Promise<BatchApproveRe
   }
   if (contexts.length > 0) {
     updateTags(["votes"]);
+    await requestProfileRefresh(
+      { scrutinIds: contexts.map((ctx) => ctx.scrutin.id) },
+      "admin:titres-scrutin-approuvés"
+    );
   }
 
   return { approved: contexts.length, failures: [] };

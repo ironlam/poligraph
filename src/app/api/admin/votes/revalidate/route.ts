@@ -5,6 +5,7 @@ import { revalidateVotesSchema } from "@/lib/security/schemas";
 import { db } from "@/lib/db";
 import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
 import { revalidateTags } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { partitionRevalidatable } from "./partition";
 
 /**
@@ -36,7 +37,11 @@ export const POST = withAdminAuth(
     for (const scrutinId of toRevalidate) {
       await revalidatePublicPathsForScrutin(scrutinId);
     }
-    if (toRevalidate.length > 0) revalidateTags(["votes"], "max");
+    if (toRevalidate.length > 0) {
+      revalidateTags(["votes"], "max");
+      // The approved titles also show in the "Derniers votes" of their voters' profiles.
+      await requestProfileRefresh({ scrutinIds: toRevalidate }, "admin:votes-revalidés");
+    }
 
     await db.auditLog.create({
       data: {

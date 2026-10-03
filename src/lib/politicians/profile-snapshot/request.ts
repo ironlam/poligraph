@@ -13,7 +13,14 @@ export type ProfileRefreshTarget =
   | { politicianIds: string[] }
   | { partyId: string }
   | { factCheckId: string }
-  | { affairIds: string[] };
+  | { affairIds: string[] }
+  // A scrutin's policy title shows on the profile of every politician whose recent votes include
+  // it. Taking every voter over-approximates "one of the five latest votes" without a query per
+  // politician; past the cap, the request turns into a reconcile anyway. A list, so a batch of
+  // scrutins is checked against the cap once rather than once per scrutin.
+  | { scrutinIds: string[] }
+  // A dossier's title and status show on its authors' profiles.
+  | { dossierId: string };
 
 /**
  * Resolves every politician whose profile document depends on the written entity.
@@ -42,6 +49,25 @@ export async function resolveProfileTargets(target: ProfileRefreshTarget): Promi
   if ("factCheckId" in target) {
     const rows = await db.factCheckMention.findMany({
       where: { factCheckId: target.factCheckId },
+      select: { politicianId: true },
+    });
+    return [...new Set(rows.map((r) => r.politicianId))];
+  }
+
+  if ("scrutinIds" in target) {
+    if (target.scrutinIds.length === 0) return [];
+    // groupBy, not findMany: the distinct is done in SQL, so a batch of scrutins returns one row
+    // per voter instead of one per vote.
+    const rows = await db.vote.groupBy({
+      by: ["politicianId"],
+      where: { scrutinId: { in: [...new Set(target.scrutinIds)] } },
+    });
+    return rows.map((r) => r.politicianId);
+  }
+
+  if ("dossierId" in target) {
+    const rows = await db.dossierAuthor.findMany({
+      where: { dossierId: target.dossierId },
       select: { politicianId: true },
     });
     return [...new Set(rows.map((r) => r.politicianId))];

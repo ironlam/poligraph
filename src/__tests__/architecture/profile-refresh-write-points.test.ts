@@ -5,12 +5,20 @@ import { describe, expect, it } from "vitest";
 /**
  * Every write that changes what `/politiques/[slug]` displays must ask for the profile document
  * to be recomputed. The cache invalidation calls are the inventory of those writes: a file that
- * purges a politician, affair, party or fact-check tag wrote something a profile may show.
+ * purges a politician, affair, party, fact-check, dossier, mandate or vote entity, or the `votes`
+ * tag, wrote something a profile may show. A reconcile request counts as a recompute: it is how
+ * the syncs that write without naming a politician catch up.
  */
 
-const INVALIDATES_PROFILE_DATA =
-  /invalidateEntity\(\s*["'](politician|affair|party|factcheck)["']|invalidateAffectedPoliticians\(/;
-const REQUESTS_REFRESH = /requestProfileRefresh\(|refreshProfilesForModeration\(/;
+const INVALIDATES_PROFILE_DATA = new RegExp(
+  [
+    /invalidateEntity\(\s*["'](politician|affair|party|factcheck|dossier|mandate|vote)["']/.source,
+    /invalidateAffectedPoliticians\(/.source,
+    /(updateTags|revalidateTags)\(\s*\[[^\]]*["']votes["']/.source,
+  ].join("|")
+);
+const REQUESTS_REFRESH =
+  /requestProfileRefresh\(|refreshProfilesForModeration\(|requestProfileReconcile\(|PROFILE_RECONCILE_EVENT/;
 
 // Files that invalidate one of those tags but write nothing the profile document holds. The
 // document holds: identity, current party, party history, mandates, declarations, external ids,
@@ -34,6 +42,8 @@ const WRITE_POINT_EXEMPTIONS: Record<string, string> = {
     "Party programme: not shown on a politician profile.",
   "src/app/api/admin/proposals/route.ts": "Party proposal: not shown on a politician profile.",
   "src/app/api/admin/proposals/[id]/route.ts": "Party proposal: not shown on a politician profile.",
+  "src/app/admin/dossiers/[id]/alias-actions.ts":
+    "Dossier aliases: the profile document reads a dossier's slug, titles, number, status and filing date, never an alias.",
 };
 
 // Files under the affair and fact-check admin routes that mention publicationStatus without
@@ -95,6 +105,17 @@ describe("points d'écriture des fiches politicien", () => {
     // Guards the scan itself: an empty inventory would make every check below pass.
     expect(writers.length).toBeGreaterThan(20);
     expect(publicationWriters.length).toBeGreaterThan(3);
+    // One per invalidation shape the scan was widened to: a regex that stops matching one of
+    // them must fail here rather than silently drop its writers from the rule below.
+    for (const file of [
+      "src/app/admin/policy-titles/actions.ts", // updateTags(["votes"])
+      "src/inngest/vote-cache.ts", // revalidateTags(["votes"], "max")
+      "src/app/api/admin/votes/revalidate/route.ts",
+      "src/app/api/admin/dossiers/[id]/route.ts", // invalidateEntity("dossier")
+      "src/app/api/admin/mandates/route.ts", // invalidateEntity("mandate")
+    ]) {
+      expect(writers, file).toContain(file);
+    }
   });
 
   it("chaque écriture qui touche une fiche demande son recalcul", () => {

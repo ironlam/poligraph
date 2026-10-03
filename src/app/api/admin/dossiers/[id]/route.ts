@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { updateDossierSchema } from "@/lib/security/schemas/dossier";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { z } from "zod/v4";
 
 type UpdateDossierBody = z.infer<typeof updateDossierSchema>;
@@ -85,6 +86,8 @@ export const PUT = withAdminAuth(
     });
 
     invalidateEntity("dossier");
+    // The short title and status show in the "Propositions de loi" of the authors' profiles.
+    await requestProfileRefresh({ dossierId: id! }, "admin:dossier-modifié");
 
     return NextResponse.json(updated);
   })

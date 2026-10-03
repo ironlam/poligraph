@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { affairFindMany, politicianFindMany, mentionFindMany } = vi.hoisted(() => ({
-  affairFindMany: vi.fn(),
-  politicianFindMany: vi.fn(),
-  mentionFindMany: vi.fn(),
-}));
+const { affairFindMany, politicianFindMany, mentionFindMany, voteGroupBy, authorFindMany } =
+  vi.hoisted(() => ({
+    affairFindMany: vi.fn(),
+    politicianFindMany: vi.fn(),
+    mentionFindMany: vi.fn(),
+    voteGroupBy: vi.fn(),
+    authorFindMany: vi.fn(),
+  }));
 vi.mock("@/lib/db", () => ({
   db: {
     affair: { findMany: affairFindMany },
     politician: { findMany: politicianFindMany },
     factCheckMention: { findMany: mentionFindMany },
+    vote: { groupBy: voteGroupBy },
+    dossierAuthor: { findMany: authorFindMany },
   },
 }));
 
@@ -56,6 +61,33 @@ describe("resolveProfileTargets", () => {
   it("propage un fact-check aux politiciens mentionnés", async () => {
     mentionFindMany.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p2" }]);
     expect(await resolveProfileTargets({ factCheckId: "f1" })).toEqual(["p1", "p2"]);
+  });
+
+  it("propage un titre de scrutin à tous les votants des scrutins, une fois chacun", async () => {
+    voteGroupBy.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p2" }]);
+    expect(await resolveProfileTargets({ scrutinIds: ["s1", "s2", "s1"] })).toEqual(["p1", "p2"]);
+    expect(voteGroupBy).toHaveBeenCalledWith({
+      by: ["politicianId"],
+      where: { scrutinId: { in: ["s1", "s2"] } },
+    });
+  });
+
+  it("ne lit rien pour une liste de scrutins vide", async () => {
+    expect(await resolveProfileTargets({ scrutinIds: [] })).toEqual([]);
+    expect(voteGroupBy).not.toHaveBeenCalled();
+  });
+
+  it("propage un dossier législatif à ses auteurs", async () => {
+    authorFindMany.mockResolvedValue([
+      { politicianId: "p1" },
+      { politicianId: "p2" },
+      { politicianId: "p1" },
+    ]);
+    expect(await resolveProfileTargets({ dossierId: "d1" })).toEqual(["p1", "p2"]);
+    expect(authorFindMany).toHaveBeenCalledWith({
+      where: { dossierId: "d1" },
+      select: { politicianId: true },
+    });
   });
 
   it("dédoublonne les identifiants explicites", async () => {
