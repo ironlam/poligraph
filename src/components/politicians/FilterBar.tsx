@@ -6,7 +6,7 @@ import { SelectFilter } from "@/components/filters";
 import { Spinner } from "@/components/ui/spinner";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 
-export type SortOption = "prominence" | "alpha" | "alpha-desc" | "recent" | "affairs";
+export type SortOption = "prominence" | "alpha" | "alpha-desc" | "recent";
 export type MandateFilter = "" | "depute" | "senateur" | "gouvernement" | "dirigeants" | "maire";
 export type StatusFilter = "" | "active" | "former"; // kept for backward compat — unused in UI
 
@@ -15,7 +15,6 @@ const SORT_OPTIONS: Record<SortOption, string> = {
   alpha: "A - Z",
   "alpha-desc": "Z - A",
   recent: "Plus récents",
-  affairs: "Plus d'affaires",
 };
 
 const MANDATE_OPTIONS: Record<MandateFilter, string> = {

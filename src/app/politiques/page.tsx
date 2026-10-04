@@ -75,7 +75,6 @@ const SORT_CONFIGS: Record<SortOption, unknown> = {
   alpha: { lastName: "asc" },
   "alpha-desc": { lastName: "desc" },
   recent: { createdAt: "desc" },
-  affairs: [{ affairs: { _count: "desc" } }, { lastName: "asc" }],
 };
 
 // Shared include block for the listing query
