@@ -155,6 +155,8 @@ export async function syncFactchecks(
 
   /** Fact-checks written by this run, for one profile recompute request at the end. */
   const writtenFactCheckIds = new Set<string>();
+  /** Politicians a `--force` rewrite may have dropped from a fact-check's mentions. */
+  const previouslyMentionedIds = new Set<string>();
 
   // Build politician index + blocklist for mention matching
   const allPoliticians = await buildPoliticianIndex();
@@ -316,6 +318,12 @@ export async function syncFactchecks(
           } else {
             try {
               if (force) {
+                // The upsert replaces every mention: a politician dropped from them still shows
+                // the fact-check on a stored profile, so it is recomputed too.
+                const previous = await db.factCheckMention.findMany({
+                  where: { factCheck: { sourceUrl: review.url } },
+                  select: { politicianId: true },
+                });
                 const written = await db.factCheck.upsert({
                   where: { sourceUrl: review.url },
                   update: {
@@ -361,6 +369,7 @@ export async function syncFactchecks(
                   select: { id: true },
                 });
                 writtenFactCheckIds.add(written.id);
+                for (const m of previous) previouslyMentionedIds.add(m.politicianId);
               } else {
                 const written = await db.factCheck.create({
                   data: {
@@ -418,9 +427,15 @@ export async function syncFactchecks(
   }
 
   // A published fact-check shows on the profile of every politician it mentions. Resolved
-  // after the writes, so the mentions this run added are included.
+  // after the writes, so the mentions this run added are included; the ones a `--force` rewrite
+  // removed are passed along, as they no longer resolve from the fact-check.
   if (writtenFactCheckIds.size > 0) {
-    await requestProfileRefresh({ factCheckIds: [...writtenFactCheckIds] }, "sync:factchecks");
+    await requestProfileRefresh(
+      previouslyMentionedIds.size > 0
+        ? { factCheckIds: [...writtenFactCheckIds], politicianIds: [...previouslyMentionedIds] }
+        : { factCheckIds: [...writtenFactCheckIds] },
+      "sync:factchecks"
+    );
   }
 
   return stats;

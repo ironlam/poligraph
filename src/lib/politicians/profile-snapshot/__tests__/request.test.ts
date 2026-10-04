@@ -76,6 +76,17 @@ describe("resolveProfileTargets", () => {
     });
   });
 
+  it("ajoute aux mentionnés d'un lot de fact-checks les politiciens qui n'en font plus partie", async () => {
+    mentionFindMany.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p2" }]);
+    expect(
+      await resolveProfileTargets({ factCheckIds: ["f1"], politicianIds: ["p3", "p1"] })
+    ).toEqual(["p1", "p2", "p3"]);
+    expect(mentionFindMany).toHaveBeenCalledWith({
+      where: { factCheckId: { in: ["f1"] } },
+      select: { politicianId: true },
+    });
+  });
+
   it("ne lit rien pour un lot de fact-checks vide", async () => {
     expect(await resolveProfileTargets({ factCheckIds: [] })).toEqual([]);
     expect(mentionFindMany).not.toHaveBeenCalled();

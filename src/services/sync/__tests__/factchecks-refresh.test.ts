@@ -4,6 +4,8 @@ const h = vi.hoisted(() => ({
   factCheckFindUnique: vi.fn(),
   factCheckFindFirst: vi.fn(),
   factCheckCreate: vi.fn(),
+  factCheckUpsert: vi.fn(),
+  mentionFindMany: vi.fn(),
   mentionFindUnique: vi.fn(),
   mentionCreate: vi.fn(),
   searchClaims: vi.fn(),
@@ -16,8 +18,13 @@ vi.mock("@/lib/db", () => ({
       findUnique: h.factCheckFindUnique,
       findFirst: h.factCheckFindFirst,
       create: h.factCheckCreate,
+      upsert: h.factCheckUpsert,
     },
-    factCheckMention: { findUnique: h.mentionFindUnique, create: h.mentionCreate },
+    factCheckMention: {
+      findMany: h.mentionFindMany,
+      findUnique: h.mentionFindUnique,
+      create: h.mentionCreate,
+    },
   },
 }));
 vi.mock("@/lib/api", () => ({
@@ -74,6 +81,8 @@ describe("syncFactchecks et les fiches précalculées", () => {
     h.factCheckFindUnique.mockResolvedValue(null);
     h.factCheckFindFirst.mockResolvedValue(null);
     h.factCheckCreate.mockResolvedValue({ id: "f-nouveau" });
+    h.factCheckUpsert.mockResolvedValue({ id: "f-reecrit" });
+    h.mentionFindMany.mockResolvedValue([]);
     h.mentionFindUnique.mockResolvedValue(null);
     h.requestProfileRefresh.mockResolvedValue({ sent: 1, mode: "targeted" });
   });
@@ -119,6 +128,36 @@ describe("syncFactchecks et les fiches précalculées", () => {
     await syncFactchecks({ politician: "exemple" });
 
     expect(h.requestProfileRefresh).not.toHaveBeenCalled();
+  });
+
+  it("avec --force, demande aussi le recalcul des politiciens retirés des mentions", async () => {
+    // The stored fact-check mentions p-retire; this run only matches the target, p1.
+    h.mentionFindMany.mockResolvedValue([{ politicianId: "p-retire" }]);
+
+    await syncFactchecks({ politician: "exemple", force: true });
+
+    expect(h.mentionFindMany).toHaveBeenCalledWith({
+      where: { factCheck: { sourceUrl: "https://example.org/verif-fictive" } },
+      select: { politicianId: true },
+    });
+    // Read before the upsert drops them.
+    expect(h.mentionFindMany.mock.invocationCallOrder[0]).toBeLessThan(
+      h.factCheckUpsert.mock.invocationCallOrder[0]!
+    );
+    expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { factCheckIds: ["f-reecrit"], politicianIds: ["p-retire"] },
+      "sync:factchecks"
+    );
+  });
+
+  it("sans --force, ne lit pas les mentions existantes et ne demande que les fact-checks", async () => {
+    await syncFactchecks({ politician: "exemple" });
+
+    expect(h.mentionFindMany).not.toHaveBeenCalled();
+    expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { factCheckIds: ["f-nouveau"] },
+      "sync:factchecks"
+    );
   });
 
   it("ne demande rien en simulation", async () => {
