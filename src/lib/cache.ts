@@ -241,9 +241,9 @@ export function invalidateEntity(
 
 /**
  * After an affair mutation, invalidate each affected politician profile so its
- * affairs list reflects the change. Both halves of the profile read
- * (getPoliticianIdentity, which counts the affairs, and getPoliticianDossier, which lists them)
- * are tagged `politician:<slug>`, so this purges the counter and the list together.
+ * affairs list reflects the change. The profile page reads its precomputed document through
+ * `getPoliticianProfile`, tagged `politician:<slug>`, which carries the counter and the list
+ * together, so this purges both.
  * De-dupes and skips falsy slugs. Pair with invalidateEntity("affair", ...).
  */
 export function invalidateAffectedPoliticians(slugs: Array<string | null | undefined>): void {

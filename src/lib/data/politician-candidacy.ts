@@ -398,6 +398,34 @@ export async function loadCandidateFicheDetail(
 }
 
 /**
+ * The id of the presidential election, which keys the tags of the reads below. Plain async for
+ * tests and scripts; pages go through `getPresidentialElectionId`.
+ */
+export async function loadPresidentialElectionId(): Promise<string | null> {
+  const election = await db.election.findUnique({
+    where: { slug: PRESIDENTIELLE_2027_SLUG },
+    select: { id: true },
+  });
+  return election?.id ?? null;
+}
+
+/**
+ * One cache entry for the whole site: every politician fiche and every candidate fiche resolves
+ * the same id, so after the first render none of them pays a query for it.
+ *
+ * Its own tag, deliberately not `elections`: that one is purged by `invalidateEntity("election")`
+ * and by `revalidateAll()` after every sync, and since every profile reads this entry, sharing the
+ * tag would make every profile stale on each sync. The id of a row does not change, so nothing
+ * purges this tag; the `synced` backstop covers an election deleted and recreated.
+ */
+export async function getPresidentialElectionId(): Promise<string | null> {
+  "use cache";
+  cacheTag("election-id:presidentielle-2027");
+  cacheLife("synced");
+  return loadPresidentialElectionId();
+}
+
+/**
  * Cached read for the politician fiche, carrying BOTH tags of the presidential surfaces.
  *
  * `election-candidacies` because the notice's state depends on `CandidacyPresidential`
@@ -408,17 +436,14 @@ export async function loadCandidateFicheDetail(
  * stayed closed for 24h with the data already in place.
  *
  * The election id is resolved first because both tags are keyed on it, and the slug alone cannot
- * name them.
+ * name them. It comes from `getPresidentialElectionId`, one cache entry shared by the whole site.
  */
 export async function getPoliticianPresidentialCandidacy(
   politicianId: string
 ): Promise<PoliticianCandidacy | null> {
-  const election = await db.election.findUnique({
-    where: { slug: PRESIDENTIELLE_2027_SLUG },
-    select: { id: true },
-  });
-  if (election === null) return null;
-  return getPoliticianPresidentialCandidacyCached(politicianId, election.id);
+  const electionId = await getPresidentialElectionId();
+  if (electionId === null) return null;
+  return getPoliticianPresidentialCandidacyCached(politicianId, electionId);
 }
 
 async function getPoliticianPresidentialCandidacyCached(
@@ -442,11 +467,8 @@ export async function getCandidateFicheDetail(
   candidacyId: string,
   politicianId: string
 ): Promise<CandidateFicheDetail> {
-  const election = await db.election.findUnique({
-    where: { slug: PRESIDENTIELLE_2027_SLUG },
-    select: { id: true },
-  });
-  if (election === null) {
+  const electionId = await getPresidentialElectionId();
+  if (electionId === null) {
     return {
       themes: [],
       recentVotes: [],
@@ -455,7 +477,7 @@ export async function getCandidateFicheDetail(
       probityNonDefinitiveConvictionCount: 0,
     };
   }
-  return getCandidateFicheDetailCached(candidacyId, politicianId, election.id);
+  return getCandidateFicheDetailCached(candidacyId, politicianId, electionId);
 }
 
 async function getCandidateFicheDetailCached(

@@ -6,8 +6,8 @@ import { readProfileVoteStats } from "@/lib/data/politician-profile-reads";
  * and a render wider than that queues behind itself (POLIGRAPH-2X). The card reuses these stats
  * rather than computing them again, and its dissidence query is cached here with them.
  *
- * Moved out of `page.tsx` when the tab bodies went behind their own Suspense boundary: the profile
- * body is what needs it now, and the page no longer reads it at all.
+ * No longer read by `/politiques/[slug]`, whose vote stats come from the precomputed profile
+ * document. Kept until a separate cleanup removes it.
  */
 export async function getProfileVoteStats(
   politicianId: string,

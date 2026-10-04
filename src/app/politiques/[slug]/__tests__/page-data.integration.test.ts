@@ -21,6 +21,7 @@ let pageData: PageData;
 let reads: Reads;
 let buildPoliticianProfileDocument: typeof import("@/lib/politicians/profile-snapshot/build").buildPoliticianProfileDocument;
 let resolveProfileMandateType: typeof import("@/lib/politicians/profile-snapshot/build").resolveProfileMandateType;
+let candidacy: typeof import("@/lib/data/politician-candidacy");
 let writeProfileSnapshot: typeof import("@/lib/politicians/profile-snapshot/store").writeProfileSnapshot;
 
 const SLUG = "page-data-test";
@@ -36,6 +37,14 @@ const FACTCHECK_URL = "https://example.test/page-data/factcheck";
 const SCRUTIN_PREFIX = "PDT-SCRUTIN";
 const DOSSIER_EXTERNAL_ID = "PDT-DOSSIER-1";
 
+const PRESIDENTIELLE_SLUG = "presidentielle-2027";
+/**
+ * Fully cold chain for a sourced candidacy: document 1, election id 1, candidacy row 1, its party,
+ * election and extension 3, measure counters and programme 7. Same as before the read model: the
+ * candidacy read was not part of it. Pinned so a widening shows up here.
+ */
+const CANDIDATE_QUERY_COUNT = 13;
+
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 /** `Prisma.Decimal` → number, as the document stores it (controller Ruling 6). */
@@ -47,6 +56,9 @@ function decimalsAsNumbers(value: unknown): unknown {
 }
 
 async function cleanup() {
+  // The candidacy read hardcodes the presidential slug, so the fixture cannot namespace it.
+  await db.candidacy.deleteMany({ where: { election: { slug: PRESIDENTIELLE_SLUG } } });
+  await db.election.deleteMany({ where: { slug: PRESIDENTIELLE_SLUG } });
   await db.factCheckMention.deleteMany({ where: { politician: { slug: { startsWith: SLUG } } } });
   await db.affair.deleteMany({ where: { slug: { startsWith: SLUG } } });
   await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
@@ -97,6 +109,7 @@ describeIfDisposableDb("fiche politicien lue depuis son document", () => {
     ({ db } = await import("@/lib/db"));
     pageData = await import("../page-data");
     reads = await import("@/lib/data/politician-profile-reads");
+    candidacy = await import("@/lib/data/politician-candidacy");
     ({ buildPoliticianProfileDocument, resolveProfileMandateType } =
       await import("@/lib/politicians/profile-snapshot/build"));
     ({ writeProfileSnapshot } = await import("@/lib/politicians/profile-snapshot/store"));
@@ -384,6 +397,30 @@ describeIfDisposableDb("fiche politicien lue depuis son document", () => {
       },
     });
 
+    // The MEP carries a sourced presidential candidacy, with its party and its extension row.
+    const election = await db.election.create({
+      data: {
+        slug: PRESIDENTIELLE_SLUG,
+        type: "PRESIDENTIELLE",
+        scope: "NATIONAL",
+        title: "Élection présidentielle de test",
+        shortTitle: "Présidentielle 2027",
+      },
+    });
+    const eurodepute = await db.politician.findUniqueOrThrow({ where: { slug: EURODEPUTE } });
+    await db.candidacy.create({
+      data: {
+        electionId: election.id,
+        politicianId: eurodepute.id,
+        candidateName: "Alix Inventée",
+        partyId: party.id,
+        status: "DECLARE",
+        sourceUrl: "https://example.test/candidature",
+        sourceLabel: "Déclaration fictive",
+        presidentialData: { create: { declaredAt: d("2026-09-01") } },
+      },
+    });
+
     for (const slug of [DEPUTE, MAIRE, EURODEPUTE, SANS_MANDAT]) await storeDocument(slug);
   });
 
@@ -429,13 +466,33 @@ describeIfDisposableDb("fiche politicien lue depuis son document", () => {
     expect(model.personJsonLd.memberOf).toEqual([{ name: "Société fictive A" }]);
   });
 
-  it("un rendu de fiche émet au plus 2 requêtes", async () => {
-    // POLIGRAPH-2X guard: the stored document plus the presidential candidacy read.
+  // POLIGRAPH-2X guard. `loadPoliticianPageUncached` runs the reads of `loadPoliticianPage` in the
+  // same order with the cache boundaries removed: document, presidential election id, candidacy.
+  // The election id is ONE cache entry for the whole site (`getPresidentialElectionId`), warm after
+  // the first profile rendered anywhere, so a render whose own entries are cold costs the document
+  // and the candidacy: 2 queries for a non-candidate. The count below is the fully cold chain.
+  it("un rendu de fiche sans candidature émet 3 requêtes à froid, 2 une fois l'id d'élection en cache", async () => {
     const m = await measurePostgresDriverOperation(() =>
       pageData.loadPoliticianPageUncached(DEPUTE)
     );
     expect(m.result?.profile.identity.slug).toBe(DEPUTE);
-    expect(m.metrics.queryCount).toBeLessThanOrEqual(2);
+    expect(m.result?.presidentialCandidacy).toBeNull();
+    expect(m.metrics.queryCount).toBe(3);
+
+    const electionId = await measurePostgresDriverOperation(() =>
+      candidacy.loadPresidentialElectionId()
+    );
+    expect(electionId.result).not.toBeNull();
+    expect(m.metrics.queryCount - electionId.metrics.queryCount).toBeLessThanOrEqual(2);
+  });
+
+  it("un rendu de fiche de candidat émet le nombre de requêtes attendu", async () => {
+    const m = await measurePostgresDriverOperation(() =>
+      pageData.loadPoliticianPageUncached(EURODEPUTE)
+    );
+    expect(m.result?.presidentialCandidacy?.status).toBe("DECLARE");
+    expect(m.result?.presidentialCandidacy?.partyLabel).toBe("PDT");
+    expect(m.metrics.queryCount).toBe(CANDIDATE_QUERY_COUNT);
   });
 
   it("ne rend rien pour une fiche inconnue", async () => {

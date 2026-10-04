@@ -312,6 +312,7 @@ jobs:
             "src/lib/data/__tests__/subject-reads.performance.integration.test.ts"
             "src/lib/data/__tests__/politician-profile.integration.test.ts"
             "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts"
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts"
             "src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts"
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
           )
@@ -327,6 +328,7 @@ jobs:
             src/lib/data/__tests__/subject-reads.performance.integration.test.ts \
             src/lib/data/__tests__/politician-profile.integration.test.ts \
             "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts" \
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts" \
             src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts \
             src/lib/telemetry/__tests__/pg-pool.integration.test.ts \
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
@@ -342,6 +344,7 @@ jobs:
             "src/lib/data/__tests__/subject-reads.performance.integration.test.ts" \
             "src/lib/data/__tests__/politician-profile.integration.test.ts" \
             "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts" \
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts" \
             "src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts" \
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
 

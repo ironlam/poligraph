@@ -10,6 +10,7 @@ import { getPoliticianProfile, readProfileSnapshot } from "@/lib/data/politician
 import {
   getPoliticianPresidentialCandidacy,
   loadPoliticianPresidentialCandidacy,
+  loadPresidentialElectionId,
   type PoliticianCandidacy,
 } from "@/lib/data/politician-candidacy";
 import type {
@@ -28,13 +29,16 @@ export type PoliticianPageData = {
 };
 
 /**
- * Uncached: the stored document, then the raw candidacy read. Two queries when the person has no
- * sourced candidacy. Exported for the integration test; the page calls `loadPoliticianPage`.
+ * `loadPoliticianPage` with every cache boundary removed, the same reads in the same order: the
+ * stored document, the presidential election id, then the candidacy. Exported for the integration
+ * test that counts the queries of a cold render; the page calls `loadPoliticianPage`.
  */
 export async function loadPoliticianPageUncached(slug: string): Promise<PoliticianPageData | null> {
   const profile = await readProfileSnapshot(slug);
   if (!profile) return null;
-  const presidentialCandidacy = await loadPoliticianPresidentialCandidacy(profile.identity.id);
+  const electionId = await loadPresidentialElectionId();
+  const presidentialCandidacy =
+    electionId === null ? null : await loadPoliticianPresidentialCandidacy(profile.identity.id);
   return { profile, presidentialCandidacy };
 }
 

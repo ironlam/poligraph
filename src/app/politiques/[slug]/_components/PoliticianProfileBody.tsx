@@ -40,9 +40,10 @@ export interface PoliticianProfileBodyProps {
   dossier: PoliticianDossier;
   voteStats: ProfileVoteStats | null;
   /**
-   * Resolved once by the page and handed down rather than re-derived here. The mandate a profile
-   * headlines and the mandate its votes tab reads are not the same one, and deriving that twice is
-   * how 42 profiles ended up serving an empty votes tab (#919).
+   * The current DEPUTE or SENATEUR mandate, resolved once by the page (`derivePoliticianPageModel`)
+   * and handed down rather than re-derived here. It is not the mandate the profile headlines: a
+   * parliamentarian who also holds a newer local mandate headlines the local one, and reading that
+   * one here is how 42 profiles ended up serving an empty votes tab (#919).
    */
   currentParliamentaryMandate: {
     type: "DEPUTE" | "SENATEUR";

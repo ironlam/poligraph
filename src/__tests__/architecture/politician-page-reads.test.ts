@@ -58,6 +58,33 @@ function documentFedFiles(): string[] {
   return [...seen];
 }
 
+const CANDIDACY = "src/lib/data/politician-candidacy.ts";
+
+/** The source text of the body of the top-level function `name` in `file`, comments stripped. */
+function functionBody(file: string, name: string): string {
+  const unit = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  let body: string | undefined;
+  unit.forEachChild((node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name && node.body) {
+      body = node.body.getText(unit);
+    }
+  });
+  if (body === undefined) throw new Error(`${name} introuvable dans ${file}`);
+  return withoutComments(body);
+}
+
+/** What each call in a body calls, as written: `a.b.c(` gives `a.b.c`. */
+function calledFunctions(body: string): string[] {
+  const unit = ts.createSourceFile("body.ts", body, ts.ScriptTarget.Latest, true);
+  const calls: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) calls.push(node.expression.getText(unit));
+    node.forEachChild(visit);
+  };
+  visit(unit);
+  return calls;
+}
+
 /** Decimal columns that reach the document: `Affair.fineAmount` and the `Declaration` amounts. */
 const DECIMAL_FIELDS =
   "fineAmount|realEstate|securities|bankAccounts|otherAssets|liabilities|totalNet";
@@ -95,6 +122,44 @@ describe("fiche politicien : lecture du document précalculé", () => {
     expect(page).toMatch(/getPoliticianProfile\(/);
     expect(pageData).toMatch(/getPoliticianProfile\(/);
     expect(pageData).toMatch(/getPoliticianPresidentialCandidacy\(/);
+  });
+
+  it("loadPoliticianPage ne lit rien d'autre que le document et la candidature en cache", () => {
+    const calls = calledFunctions(functionBody(PAGE_DATA, "loadPoliticianPage"));
+    expect(
+      calls.filter(
+        (c) => !["getPoliticianProfile", "getPoliticianPresidentialCandidacy"].includes(c)
+      )
+    ).toEqual([]);
+    expect(functionBody(PAGE_DATA, "loadPoliticianPage")).not.toMatch(/\bdb\./);
+  });
+
+  it("l'id de l'élection présidentielle se lit dans une entrée de cache dédiée", () => {
+    const candidacy = functionBody(CANDIDACY, "getPoliticianPresidentialCandidacy");
+    // The only read before the cached candidacy is the cached election id.
+    expect(candidacy).not.toMatch(/\bdb\./);
+    expect(
+      calledFunctions(candidacy).filter(
+        (c) =>
+          !["getPresidentialElectionId", "getPoliticianPresidentialCandidacyCached"].includes(c)
+      )
+    ).toEqual([]);
+    expect(functionBody(CANDIDACY, "getPoliticianPresidentialCandidacyCached")).toMatch(
+      /^\{\s*"use cache";/
+    );
+
+    const electionId = functionBody(CANDIDACY, "getPresidentialElectionId");
+    expect(electionId).toMatch(/^\{\s*"use cache";/);
+    expect(electionId).toMatch(/cacheTag\("election-id:presidentielle-2027"\)/);
+    expect(electionId).toMatch(/cacheLife\("synced"\)/);
+    // `elections` is purged after every sync: on this entry it would stale every profile.
+    expect([...electionId.matchAll(/cacheTag\(([^)]*)\)/g)].map((m) => m[1])).toEqual([
+      '"election-id:presidentielle-2027"',
+    ]);
+    expect(functionBody(CANDIDACY, "getCandidateFicheDetail")).toMatch(
+      /await getPresidentialElectionId\(\)/
+    );
+    expect(functionBody(CANDIDACY, "getCandidateFicheDetail")).not.toMatch(/\bdb\./);
   });
 
   it("le corps de la fiche reçoit le document en props, sans lecture ni Suspense", () => {

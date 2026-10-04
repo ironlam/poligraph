@@ -203,6 +203,24 @@ describeIfDisposableDb("loadPoliticianPresidentialCandidacy", () => {
     expect(found?.electionShortTitle).toBe("Présidentielle 2027");
   });
 
+  it("retourne une candidature sans ligne CandidacyPresidential", async () => {
+    expect(
+      await db.candidacyPresidential.count({ where: { candidacyId: ids.declaredCandidacy! } })
+    ).toBe(0);
+    const found = await loadPoliticianPresidentialCandidacy(ids.declared!);
+    expect(found).toMatchObject({
+      candidacyId: ids.declaredCandidacy,
+      electionSlug: "presidentielle-2027",
+      round1Date: new Date("2027-04-11T00:00:00.000Z"),
+      partyLabel: null,
+      partyLogoUrl: null,
+      declaredAt: null,
+      withdrewAt: null,
+      synthesis: null,
+      synthesisGeneratedAt: null,
+    });
+  });
+
   it("retourne une candidature retirée : l'extension PUBLISHED n'est pas requise", async () => {
     const found = await loadPoliticianPresidentialCandidacy(ids.withdrawn!);
     expect(found?.status).toBe("RETIRE");
