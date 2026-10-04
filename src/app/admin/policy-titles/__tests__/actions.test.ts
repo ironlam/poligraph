@@ -18,6 +18,12 @@ vi.mock("next/cache", () => ({
   updateTag: vi.fn(),
 }));
 
+// Profile recompute requests go to Inngest; record them instead.
+const mockRequestProfileRefresh = vi.fn();
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: (...a: unknown[]) => mockRequestProfileRefresh(...a),
+}));
+
 // Mock ONLY generateScrutinPolicyTitle; keep buildInputHashInput real (actions
 // and seeding both need the genuine hash builder).
 const mockGenerate = vi.fn();
@@ -155,6 +161,7 @@ describeIfDb("policy-title server actions", () => {
 
   beforeEach(() => {
     mockGenerate.mockReset();
+    mockRequestProfileRefresh.mockReset();
   });
 
   afterAll(async () => {
@@ -196,11 +203,16 @@ describeIfDb("policy-title server actions", () => {
 
     let row = await db.scrutinPolicyTitle.findUnique({ where: { scrutinId } });
     expect(row?.status).not.toBe("APPROVED");
+    expect(mockRequestProfileRefresh).not.toHaveBeenCalled();
 
     await actions.approveWithOverrideScrutinPolicyTitle(scrutinId, "Titre long mais clair");
 
     row = await db.scrutinPolicyTitle.findUnique({ where: { scrutinId } });
     expect(row?.status).toBe("APPROVED");
+    expect(mockRequestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { scrutinIds: [scrutinId] },
+      expect.any(String)
+    );
 
     const rev = await db.scrutinPolicyTitleRevision.findFirst({
       where: { policyTitleId, action: "approved" },
@@ -448,6 +460,10 @@ describeIfDb("policy-title server actions", () => {
     await actions.approveScrutinPolicyTitle(scrutinId);
     expect(spy).toHaveBeenCalledWith("/parlement/votes");
     expect(await publicMode(scrutinId)).toBe("policy");
+    expect(mockRequestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { scrutinIds: [scrutinId] },
+      expect.any(String)
+    );
   });
 
   it("APPROVED → REJECTED triggers public revalidation and reverts to official (hide)", async () => {
@@ -461,6 +477,10 @@ describeIfDb("policy-title server actions", () => {
     await actions.rejectScrutinPolicyTitle(scrutinId, "raison");
     expect(spy).toHaveBeenCalledWith("/parlement/votes");
     expect(await publicMode(scrutinId)).toBe("official");
+    expect(mockRequestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { scrutinIds: [scrutinId] },
+      expect.any(String)
+    );
   });
 
   it("APPROVED → edited title triggers public revalidation (stays policy with new text)", async () => {
@@ -477,6 +497,10 @@ describeIfDb("policy-title server actions", () => {
     });
     expect(spy).toHaveBeenCalledWith("/parlement/votes");
     expect(await publicMode(scrutinId)).toBe("policy");
+    expect(mockRequestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { scrutinIds: [scrutinId] },
+      expect.any(String)
+    );
   });
 
   it("APPROVED → regenerate triggers public revalidation and hides (no longer policy)", async () => {
@@ -492,5 +516,9 @@ describeIfDb("policy-title server actions", () => {
     spy.mockClear();
     await actions.regenerateScrutinPolicyTitle(scrutinId);
     expect(spy).toHaveBeenCalledWith("/parlement/votes");
+    expect(mockRequestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { scrutinIds: [scrutinId] },
+      expect.any(String)
+    );
   });
 });

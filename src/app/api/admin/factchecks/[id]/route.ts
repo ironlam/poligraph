@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { invalidateEntity } from "@/lib/cache";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import { getRequestMeta } from "@/lib/security/audit";
 import { withValidation } from "@/lib/security/validate";
 import { updateFactcheckSchema } from "@/lib/security/schemas";
@@ -17,6 +19,9 @@ export const DELETE = withAdminAuth(async (request, context) => {
   if (!factCheck) {
     return NextResponse.json({ error: "Fact-check non trouvé" }, { status: 404 });
   }
+
+  // Resolved before the delete: the mentions cascade with it.
+  const profileTargets = await resolveProfileTargets({ factCheckId: id! });
 
   // Cascade: mentions
   await db.factCheck.delete({ where: { id } });
@@ -34,6 +39,10 @@ export const DELETE = withAdminAuth(async (request, context) => {
   });
 
   invalidateEntity("factcheck");
+  await refreshProfilesForModeration(
+    { politicianIds: profileTargets },
+    "admin:fact-check-supprimé"
+  );
 
   return NextResponse.json({ success: true });
 });
@@ -81,6 +90,7 @@ export const PATCH = withAdminAuth(
     });
 
     invalidateEntity("factcheck");
+    await refreshProfilesForModeration({ factCheckId: id! }, "admin:fact-check-modifié");
 
     return NextResponse.json(updated);
   })

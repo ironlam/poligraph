@@ -31,6 +31,7 @@
 import { db } from "@/lib/db";
 import { acceptProposal, rejectProposal } from "@/services/affairs/proposal-review";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { Prisma, ProposalRisk, ProposalStatus } from "@/generated/prisma";
 import { parseAffairProposalPayload } from "@/lib/security/schemas/affair-proposal";
 import {
@@ -192,6 +193,7 @@ interface Outcome {
   ok: boolean;
   /** Slugs to invalidate once, at the end of a batch. */
   affairSlug?: string;
+  affairId?: string;
   politicianSlug?: string;
 }
 
@@ -235,7 +237,12 @@ async function accept(id: string, note?: string, quiet = false): Promise<Outcome
   if (!quiet) {
     console.log(`APPLIQUÉ ${id} → ${result.appliedFields.join(", ")} (${result.affairSlug})`);
   }
-  return { ok: true, affairSlug: result.affairSlug, politicianSlug: result.politicianSlug };
+  return {
+    ok: true,
+    affairSlug: result.affairSlug,
+    affairId: result.affairId,
+    politicianSlug: result.politicianSlug,
+  };
 }
 
 async function reject(id: string, note?: string, quiet = false): Promise<Outcome> {
@@ -253,14 +260,18 @@ async function reject(id: string, note?: string, quiet = false): Promise<Outcome
 }
 
 /** One invalidation pass for a whole batch, instead of one per proposal. */
-function invalidateBatch(outcomes: Outcome[]): void {
+async function invalidateBatch(outcomes: Outcome[]): Promise<void> {
   const affairs = new Set<string>();
   const politicians = new Set<string>();
+  const affairIds = new Set<string>();
   for (const o of outcomes) {
     if (o.affairSlug) affairs.add(o.affairSlug);
     if (o.politicianSlug) politicians.add(o.politicianSlug);
+    if (o.affairId) affairIds.add(o.affairId);
   }
   if (affairs.size === 0) return;
+  // Outside the try: it works without a Next runtime, and never throws.
+  await requestProfileRefresh({ affairIds: [...affairIds] }, "cli:propositions");
   try {
     for (const slug of affairs) invalidateEntity("affair", slug);
     invalidateAffectedPoliticians([...politicians]);
@@ -455,7 +466,7 @@ async function acceptBatch(
   console.log(
     `\n${applied}/${rows.length} appliquée(s)${failed > 0 ? `, ${failed} en échec (voir ci-dessus)` : ""} en ${((Date.now() - started) / 1000).toFixed(1)} s`
   );
-  invalidateBatch(outcomes);
+  await invalidateBatch(outcomes);
 }
 
 async function rejectBatch(ids: string[], note: string | undefined) {
@@ -490,7 +501,7 @@ async function acceptSelectedIds(
   console.log(
     `${outcomes.filter((outcome) => outcome.ok).length}/${acceptedIds.length} appliquée(s).`
   );
-  invalidateBatch(outcomes);
+  await invalidateBatch(outcomes);
 }
 
 function parseRisk(raw: string | undefined): ProposalRisk[] | undefined {
@@ -522,7 +533,7 @@ async function main() {
   const acceptId = arg("accept");
   if (acceptId) {
     const outcome = await accept(acceptId, note);
-    invalidateBatch([outcome]);
+    await invalidateBatch([outcome]);
     return;
   }
 

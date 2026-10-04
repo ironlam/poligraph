@@ -5,6 +5,7 @@ import { withValidation } from "@/lib/security/validate";
 import { addFactcheckMentionSchema } from "@/lib/security/schemas";
 import { getRequestMeta } from "@/lib/security/audit";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 
 export const POST = withAdminAuth(
   withValidation(addFactcheckMentionSchema, async (request, context, body) => {
@@ -69,6 +70,7 @@ export const POST = withAdminAuth(
 
     invalidateEntity("factcheck");
     invalidateEntity("politician", politician.slug);
+    await requestProfileRefresh({ politicianIds: [politician.id] }, "admin:mention-fact-check");
 
     return NextResponse.json(mention, { status: 201 });
   })

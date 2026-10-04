@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   invalidateEntity: vi.fn(),
   invalidateAffectedPoliticians: vi.fn(),
   assertPublishable: vi.fn(),
+  refreshProfilesForModeration: vi.fn(),
   db: {
     $transaction: vi.fn(),
     affair: { findUnique: vi.fn(), update: vi.fn() },
@@ -23,6 +24,9 @@ vi.mock("@/lib/cache", () => ({
   invalidateAffectedPoliticians: h.invalidateAffectedPoliticians,
 }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: h.refreshProfilesForModeration,
+}));
 vi.mock("@/lib/api/with-admin-auth", () => ({
   withAdminAuth: (fn: (req: unknown, ctx: unknown) => unknown) => (req: unknown, ctx: unknown) =>
     fn(req, ctx),
@@ -128,6 +132,19 @@ describe("depublication commits before it invalidates", () => {
 
     expect(h.invalidateEntity).not.toHaveBeenCalled();
     expect(h.invalidateAffectedPoliticians).not.toHaveBeenCalled();
+    expect(h.refreshProfilesForModeration).not.toHaveBeenCalled();
+  });
+
+  it("recalcule la fiche dans la requête, une fois la dépublication commitée", async () => {
+    await quickUpdatePATCH(req({ publicationStatus: "DRAFT" }), ctx());
+
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { affairIds: ["aff-1"] },
+      "admin:affaire-mise-à-jour-rapide"
+    );
+    expect(h.refreshProfilesForModeration.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      db.$transaction.mock.invocationCallOrder[0]!
+    );
   });
 
   it("purges the affairs tag, which is what carries the sitemap shards", async () => {
@@ -166,6 +183,7 @@ describe("the publication flow is left as it was", () => {
     expect(res.status).toBe(422);
     expect(db.auditLog.create).not.toHaveBeenCalled();
     expect(h.invalidateEntity).not.toHaveBeenCalled();
+    expect(h.refreshProfilesForModeration).not.toHaveBeenCalled();
   });
 
   it("still routes a plain field edit through the transaction", async () => {

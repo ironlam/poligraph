@@ -10,11 +10,19 @@ const h = vi.hoisted(() => ({
   mergeAffairs: vi.fn(),
   invalidateEntity: vi.fn(),
   findUnique: vi.fn(),
+  resolveProfileTargets: vi.fn(),
+  refreshProfilesForModeration: vi.fn(),
 }));
 
 vi.mock("@/services/affairs/reconciliation", () => ({ mergeAffairs: h.mergeAffairs }));
 vi.mock("@/lib/cache", () => ({ invalidateEntity: h.invalidateEntity }));
 vi.mock("@/lib/db", () => ({ db: { affair: { findUnique: h.findUnique } } }));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  resolveProfileTargets: h.resolveProfileTargets,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: h.refreshProfilesForModeration,
+}));
 vi.mock("@/lib/api/with-admin-auth", () => ({
   withAdminAuth: (fn: (req: unknown, ctx: unknown) => unknown) => (req: unknown, ctx: unknown) =>
     fn(req, ctx),
@@ -58,6 +66,8 @@ beforeEach(() => {
   h.invalidateEntity.mockImplementation(() => {
     order.push("invalidate");
   });
+  h.resolveProfileTargets.mockResolvedValue(["p-primaire", "p-lie"]);
+  h.refreshProfilesForModeration.mockResolvedValue([]);
 });
 
 describe("POST /api/admin/affaires/merge — issue #525", () => {
@@ -113,5 +123,22 @@ describe("POST /api/admin/affaires/merge — issue #525", () => {
 
     await expect(POST(req({ primaryId: "a", secondaryId: "b" }), ctx)).rejects.toThrow("rollback");
     expect(h.invalidateEntity).not.toHaveBeenCalled();
+    expect(h.refreshProfilesForModeration).not.toHaveBeenCalled();
+  });
+
+  it("résout les fiches avant la fusion et les recalcule après son commit", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "a", politician: { slug: "jean-dupont" } });
+    h.findUnique.mockResolvedValueOnce({ id: "b" });
+
+    await POST(req({ primaryId: "a", secondaryId: "b" }), ctx);
+
+    expect(h.resolveProfileTargets).toHaveBeenCalledWith({ affairIds: ["a", "b"] });
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { politicianIds: ["p-primaire", "p-lie"] },
+      "admin:affaires-fusionnées"
+    );
+    const merge = h.mergeAffairs.mock.invocationCallOrder[0]!;
+    expect(h.resolveProfileTargets.mock.invocationCallOrder[0]!).toBeLessThan(merge);
+    expect(h.refreshProfilesForModeration.mock.invocationCallOrder[0]!).toBeGreaterThan(merge);
   });
 });

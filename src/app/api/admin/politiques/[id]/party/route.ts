@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { addPartyMembershipSchema } from "@/lib/security/schemas/party";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { setCurrentParty, removeParty } from "@/services/politician";
 import type { z } from "zod/v4";
 
@@ -40,6 +41,7 @@ export const POST = withAdminAuth(
     });
 
     invalidateEntity("politician", politician.slug);
+    await requestProfileRefresh({ politicianIds: [politician.id] }, "admin:parti-actuel");
 
     return NextResponse.json({ success: true });
   })
@@ -82,6 +84,7 @@ export const DELETE = withAdminAuth(async (request: NextRequest, context) => {
   });
 
   invalidateEntity("politician", politician.slug);
+  await requestProfileRefresh({ politicianIds: [politician.id] }, "admin:parti-retiré");
 
   return NextResponse.json({ success: true });
 });

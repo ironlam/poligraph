@@ -19,6 +19,7 @@ import { AFFAIR_STATUSES, AFFAIR_CATEGORIES } from "./affair-moderation";
 import { createSilentJSDOM } from "@/lib/parsing/jsdom-silent";
 import { Readability } from "@mozilla/readability";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { extractDateFromUrl } from "@/lib/extract-date-from-url";
 import { removeSidebarElements } from "@/lib/parsing/html-utils";
 import { callAnthropic, extractToolUse } from "@/lib/api/anthropic";
@@ -545,6 +546,8 @@ export async function enrichAffair(affairId: string): Promise<EnrichmentResult> 
   } catch {
     // Expected outside Next.js (e.g. in sync scripts)
   }
+  // Works outside Next.js too, and never throws.
+  await requestProfileRefresh({ affairIds: [affairId] }, "enrichissement-affaire");
 
   return {
     enriched: true,

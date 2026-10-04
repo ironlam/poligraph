@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { invalidateEntity } from "@/lib/cache";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
 import { isAuthenticated } from "@/lib/auth";
 import { PublicationStatus } from "@/generated/prisma";
 import { revalidatePath } from "next/cache";
@@ -29,5 +30,6 @@ export async function updateFactcheckStatus(id: string, status: PublicationStatu
   });
 
   invalidateEntity("factcheck");
+  await refreshProfilesForModeration({ factCheckId: id }, "admin:fact-check-statut");
   revalidatePath("/admin/factchecks");
 }

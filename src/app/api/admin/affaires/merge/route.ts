@@ -5,6 +5,8 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { mergeAffairsSchema } from "@/lib/security/schemas/affair";
 import { mergeAffairs } from "@/services/affairs/reconciliation";
 import { invalidateEntity } from "@/lib/cache";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import type { z } from "zod/v4";
 
 type MergeBody = z.infer<typeof mergeAffairsSchema>;
@@ -31,6 +33,10 @@ export const POST = withAdminAuth(
       return NextResponse.json({ error: "Affaire(s) non trouvée(s)" }, { status: 404 });
     }
 
+    // Resolved before the merge: the secondary affair, possibly published, and its links
+    // disappear with it.
+    const profileTargets = await resolveProfileTargets({ affairIds: [primaryId, secondaryId] });
+
     const meta = getRequestMeta(request);
     const result = await mergeAffairs(primaryId, secondaryId, {
       audit: { ipAddress: meta.ip, userAgent: meta.userAgent },
@@ -39,6 +45,10 @@ export const POST = withAdminAuth(
     // After the transaction commits, never before.
     invalidateEntity("affair");
     if (primary.politician?.slug) invalidateEntity("politician", primary.politician.slug);
+    await refreshProfilesForModeration(
+      { politicianIds: profileTargets },
+      "admin:affaires-fusionnées"
+    );
 
     return NextResponse.json({ success: true, ...result });
   })

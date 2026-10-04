@@ -345,6 +345,17 @@ export async function getPoliticianVotingStats(
   cacheTag("votes", "politicians");
   cacheLife("synced");
 
+  return computePoliticianVotingStats(politicianId, mandateType);
+}
+
+/**
+ * Uncached body of `getPoliticianVotingStats`, for callers that must not go through a Next cache
+ * (Inngest jobs and scripts replaying the profile reads).
+ */
+export async function computePoliticianVotingStats(
+  politicianId: string,
+  mandateType?: MandateType
+): Promise<PoliticianVotingStats> {
   // Resolve the complete current parliamentary perimeter before applying a requested view.
   // `take: 2` is sufficient to distinguish zero, exactly one, and multiple mandates.
   const currentParliamentaryMandates = await db.mandate.findMany({

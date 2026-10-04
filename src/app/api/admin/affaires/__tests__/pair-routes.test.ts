@@ -18,6 +18,9 @@ const h = vi.hoisted(() => ({
   recordPairDecision: vi.fn(),
   invalidateEntity: vi.fn(),
   revalidateTags: vi.fn(),
+  resolveProfileTargets: vi.fn(),
+  requestProfileRefresh: vi.fn(),
+  refreshProfilesForModeration: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -48,6 +51,13 @@ vi.mock("@/services/affairs/pair-decision", () => ({
 vi.mock("@/lib/cache", () => ({
   invalidateEntity: h.invalidateEntity,
   revalidateTags: h.revalidateTags,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  resolveProfileTargets: h.resolveProfileTargets,
+  requestProfileRefresh: h.requestProfileRefresh,
+}));
+vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
+  refreshProfilesForModeration: h.refreshProfilesForModeration,
 }));
 vi.mock("@/lib/api/with-admin-auth", () => ({
   withAdminAuth: (fn: (req: unknown, ctx: unknown) => unknown) => (req: unknown, ctx: unknown) =>
@@ -101,6 +111,9 @@ beforeEach(() => {
     order.push("invalidate");
   });
   h.decisionFindUnique.mockResolvedValue({ classification: "LINKED" });
+  h.resolveProfileTargets.mockResolvedValue(["p-keep"]);
+  h.requestProfileRefresh.mockResolvedValue({ sent: 0, mode: "targeted" });
+  h.refreshProfilesForModeration.mockResolvedValue([]);
   h.absorbDraftIntoPublished.mockImplementation(async () => {
     order.push("absorb");
     return { proposalsCreated: 1, proposedFields: ["court"], recordedDifferences: [] };
@@ -272,6 +285,31 @@ describe("POST /doublons/fusionner — jamais supprimer une fiche publiée (#525
     expect(order[0]).toBe("merge");
     expect(order.slice(1)).toEqual(["invalidate", "invalidate"]);
   });
+
+  it("recalcule après la fusion les fiches résolues avant elle", async () => {
+    h.affairFindUnique
+      .mockResolvedValueOnce({
+        id: "keep",
+        updatedAt: new Date(),
+        publicationStatus: "DRAFT",
+        politician: { slug: "jean-dupont" },
+      })
+      .mockResolvedValueOnce({ id: "remove", updatedAt: new Date(), publicationStatus: "DRAFT" });
+
+    await mergePOST(req({ keepId: "keep", removeId: "remove", signal }), ctx);
+
+    expect(h.resolveProfileTargets).toHaveBeenCalledWith({ affairIds: ["keep", "remove"] });
+    expect(h.resolveProfileTargets.mock.invocationCallOrder[0]!).toBeLessThan(
+      h.mergeAffairs.mock.invocationCallOrder[0]!
+    );
+    expect(h.refreshProfilesForModeration).toHaveBeenCalledWith(
+      { politicianIds: ["p-keep"] },
+      "admin:doublons-fusionnés"
+    );
+    expect(h.refreshProfilesForModeration.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      h.mergeAffairs.mock.invocationCallOrder[0]!
+    );
+  });
 });
 
 describe("POST /doublons/lier — publier le lien est un acte séparé (#525)", () => {
@@ -376,6 +414,11 @@ describe("POST /doublons/lier — publier le lien est un acte séparé (#525)", 
         }),
       }),
     });
+    // The replaced target's owner listed this affair under "linked by".
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { affairIds: ["from", "to", "autre"] },
+      "admin:affaires-liées"
+    );
   });
 
   it("renvoie 404 si une affaire a disparu", async () => {

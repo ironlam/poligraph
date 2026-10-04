@@ -7,6 +7,8 @@ import { mergeAffairs } from "@/services/affairs/reconciliation";
 import { absorbDraftIntoPublished } from "@/services/affairs/absorb-draft";
 import { withImportRun, IMPORTER_MANUAL_ADMIN } from "@/services/affairs/import-run";
 import { invalidateEntity } from "@/lib/cache";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 
 /**
  * Human-confirmed merge of a duplicate pair, with its DUPLICATE ruling written in
@@ -59,6 +61,9 @@ export const POST = withAdminAuth(
       );
     }
 
+    // Resolved before the merge: the absorbed affair and its links disappear with it.
+    const profileTargets = await resolveProfileTargets({ affairIds: [keepId, removeId] });
+
     const meta = getRequestMeta(request);
     // The plain merge needs the timestamps here; the absorption path re-reads them
     // inside its own transaction, so it takes only the reviewer and the signal.
@@ -106,6 +111,10 @@ export const POST = withAdminAuth(
     // After the transaction commits, never before.
     invalidateEntity("affair");
     if (keep.politician?.slug) invalidateEntity("politician", keep.politician.slug);
+    await refreshProfilesForModeration(
+      { politicianIds: profileTargets },
+      "admin:doublons-fusionnés"
+    );
 
     return NextResponse.json({ success: true, proposalsCreated, ...result });
   })

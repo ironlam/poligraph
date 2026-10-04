@@ -111,6 +111,10 @@ function DeleteButton({ id }: { id: string }) {
         const { isAuthenticated } = await import("@/lib/auth");
         const { db } = await import("@/lib/db");
         const { invalidateEntity } = await import("@/lib/cache");
+        const { resolveProfileTargets } =
+          await import("@/lib/politicians/profile-snapshot/request");
+        const { refreshProfilesForModeration } =
+          await import("@/lib/politicians/profile-snapshot/moderation");
         const { redirect } = await import("next/navigation");
 
         const authenticated = await isAuthenticated();
@@ -123,6 +127,8 @@ function DeleteButton({ id }: { id: string }) {
           select: { title: true, politician: { select: { slug: true } } },
         });
 
+        // Resolved before the delete: the row and its links disappear with it.
+        const profileTargets = await resolveProfileTargets({ affairIds: [id] });
         await db.affair.delete({ where: { id } });
 
         await db.auditLog.create({
@@ -136,6 +142,10 @@ function DeleteButton({ id }: { id: string }) {
 
         invalidateEntity("affair");
         if (affair?.politician?.slug) invalidateEntity("politician", affair.politician.slug);
+        await refreshProfilesForModeration(
+          { politicianIds: profileTargets },
+          "admin:affaire-supprimée"
+        );
 
         redirect("/admin/affaires");
       }}

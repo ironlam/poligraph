@@ -5,6 +5,8 @@ import { withValidation } from "@/lib/security/validate";
 import { moderateAffairSchema } from "@/lib/security/schemas/affair";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import {
   assertPublishable,
   PublishGuardError,
@@ -75,7 +77,7 @@ export const POST = withAdminAuth(
     // (tagged `politician:<slug>`) are invalidated too (not just "affairs").
     const affected = await db.affair.findMany({
       where: { id: { in: ids } },
-      select: { politician: { select: { slug: true } } },
+      select: { id: true, publicationStatus: true, politician: { select: { slug: true } } },
     });
     const politicianSlugs = affected.map((a) => a.politician.slug);
 
@@ -117,12 +119,21 @@ export const POST = withAdminAuth(
         await closeModerationReviews(published, VERIFIED_BY_MODERATION);
         invalidateEntity("affair");
         invalidateAffectedPoliticians(politicianSlugs);
+        await refreshProfilesForModeration({ affairIds: published }, "admin:affaires-publiées");
       }
 
       return NextResponse.json({ updated: published.length, failed });
     }
 
     const publicationStatus = ACTION_TO_STATUS[action];
+
+    // Profiles showing one of these affairs right now: unpublishing it is the privacy-critical
+    // case that stays synchronous even on a large batch. Resolved before the write.
+    const publishedIds = affected
+      .filter((a) => a.publicationStatus === "PUBLISHED")
+      .map((a) => a.id);
+    const privacyCriticalPoliticianIds =
+      publishedIds.length > 0 ? await resolveProfileTargets({ affairIds: publishedIds }) : [];
 
     const result = await db.affair.updateMany({
       where: { id: { in: ids } },
@@ -142,6 +153,9 @@ export const POST = withAdminAuth(
 
     invalidateEntity("affair");
     invalidateAffectedPoliticians(politicianSlugs);
+    await refreshProfilesForModeration({ affairIds: ids }, `admin:affaires-${action}`, {
+      privacyCriticalPoliticianIds,
+    });
 
     return NextResponse.json({ updated: result.count });
   })

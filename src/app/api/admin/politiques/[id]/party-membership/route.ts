@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { createPartyMembershipSchema } from "@/lib/security/schemas/party";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { setCurrentParty, findCurrentOpenMembership } from "@/services/politician";
 import { findOverlaps, type AffiliationInterval } from "@/lib/politicians/party-overlap";
 import type { z } from "zod/v4";
@@ -156,6 +157,7 @@ export const POST = withAdminAuth(
     });
 
     invalidateEntity("politician", politician.slug);
+    await requestProfileRefresh({ politicianIds: [politician.id] }, "admin:affiliation-ajoutée");
 
     return NextResponse.json({ success: true, warnings });
   })

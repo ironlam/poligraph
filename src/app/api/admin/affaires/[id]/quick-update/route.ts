@@ -5,6 +5,7 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { quickUpdateAffairSchema } from "@/lib/security/schemas/affair";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import {
   assertPublishable,
@@ -149,6 +150,7 @@ export const PATCH = withAdminAuth(
     // shards that announce this URL (#572).
     invalidateEntity("affair", affair.slug);
     invalidateAffectedPoliticians([affair.politician?.slug]);
+    await refreshProfilesForModeration({ affairIds: [id!] }, "admin:affaire-mise-à-jour-rapide");
 
     return NextResponse.json(updated);
   })

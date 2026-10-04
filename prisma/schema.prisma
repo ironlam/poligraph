@@ -104,6 +104,7 @@ model Politician {
   candidacies               Candidacy[] // Election candidacies
   candidates                Candidate[] // Local election candidates linked to this politician
   participation             PoliticianParticipation? // Pre-computed participation stats
+  profileSnapshot           PoliticianProfileSnapshot? // Pre-computed politician profile document
   identityDecisions         IdentityDecision[] // Identity resolution audit trail
   affairPoliticianDecisions AffairPoliticianDecision[] @relation("AffairDecisionPolitician")
   newsletterEditions        NewsletterEdition[] // Weeks featured as "politician of the week"
@@ -2349,6 +2350,23 @@ model PoliticianParticipation {
   @@index([chamber, participationRate]) // Fast filtered+sorted pagination
   @@index([participationRate]) // Fast global ranking
   @@index([chamber, dissidenceRate]) // Fast dissidence ranking
+}
+
+/// Pre-computed politician profile document for zero-cold-start rendering of `/politiques/[slug]`.
+/// A single JSON document per politician containing identity, mandates, affairs, fact-checks,
+/// votes stats, and everything else displayed on the profile page.
+///
+/// No slug column: a slug would go stale on rename and could collide when another politician
+/// reuses it. Instead, the read query filters by Politician.slug, resolved as a related field.
+model PoliticianProfileSnapshot {
+  id           String     @id @default(cuid())
+  politicianId String     @unique
+  politician   Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  version     Int
+  data        Json
+  contentHash String
+  builtAt     DateTime
 }
 
 /// Key-value store for aggregate stats (party/group participation, etc.).

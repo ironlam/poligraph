@@ -4,6 +4,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { updateMandateSchema, patchMandateSchema } from "@/lib/security/schemas/mandate";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { z } from "zod/v4";
 
 type UpdateMandateBody = z.infer<typeof updateMandateSchema>;
@@ -41,7 +42,7 @@ export const PATCH = withAdminAuth(
 
     const existing = await db.mandate.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, politicianId: true },
     });
 
     if (!existing) {
@@ -72,6 +73,8 @@ export const PATCH = withAdminAuth(
     });
 
     invalidateEntity("mandate", undefined, { affectsListings: false });
+    // The profile document carries the mandate's URLs.
+    await requestProfileRefresh({ politicianIds: [existing.politicianId] }, "admin:mandat-urls");
 
     return NextResponse.json(mandate);
   })
@@ -99,7 +102,19 @@ export const PUT = withAdminAuth(
     const isCurrent = !endDate;
 
     // If making this mandate current, close other current leadership mandates for same party
+    // Their holders' profiles show the closed mandate too.
+    const closedHolderIds: string[] = [];
     if (isCurrent && existing.partyId && existing.type === "PRESIDENT_PARTI") {
+      const closing = await db.mandate.findMany({
+        where: {
+          type: "PRESIDENT_PARTI",
+          partyId: existing.partyId,
+          isCurrent: true,
+          id: { not: id },
+        },
+        select: { politicianId: true },
+      });
+      closedHolderIds.push(...closing.map((m) => m.politicianId));
       await db.mandate.updateMany({
         where: {
           type: "PRESIDENT_PARTI",
@@ -144,6 +159,10 @@ export const PUT = withAdminAuth(
 
     invalidateEntity("mandate");
     if (mandate.politician?.slug) invalidateEntity("politician", mandate.politician.slug);
+    await requestProfileRefresh(
+      { politicianIds: [mandate.politicianId, ...closedHolderIds] },
+      "admin:mandat-modifié"
+    );
 
     return NextResponse.json(mandate);
   })
@@ -190,6 +209,7 @@ export const DELETE = withAdminAuth(async (request: NextRequest, context) => {
     select: { slug: true },
   });
   if (pol) invalidateEntity("politician", pol.slug);
+  await requestProfileRefresh({ politicianIds: [existing.politicianId] }, "admin:mandat-supprimé");
 
   return NextResponse.json({ success: true });
 });

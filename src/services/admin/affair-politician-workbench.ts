@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { invalidateAffectedPoliticians, invalidateEntity } from "@/lib/cache";
+import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
+import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import { generateAffairSlug } from "@/lib/utils";
 
 export class AffairReassignmentConflictError extends Error {
@@ -175,6 +177,9 @@ export async function reassignAffairPolitician(input: {
     oldPoliticianSlug: string;
     newPoliticianSlug: string;
   };
+  // Resolved before the write: the previous owner and the owners of linked affairs. A published
+  // affair goes back to DRAFT here, so their profiles must drop it within the request.
+  const previousTargets = await resolveProfileTargets({ affairIds: [input.affairId] });
   try {
     result = await db.$transaction(async (tx) => {
       const current = await tx.affair.findUnique({
@@ -283,5 +288,9 @@ export async function reassignAffairPolitician(input: {
 
   invalidateEntity("affair", result.affair.slug);
   invalidateAffectedPoliticians([result.oldPoliticianSlug, result.newPoliticianSlug]);
+  await refreshProfilesForModeration(
+    { politicianIds: [...previousTargets, input.politicianId] },
+    "admin:affaire-réattribuée"
+  );
   return result;
 }

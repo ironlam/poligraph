@@ -5,6 +5,7 @@ import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { withValidation, getRequestMeta } from "@/lib/security";
 import { updatePartyMembershipSchema } from "@/lib/security/schemas/party";
 import { invalidateEntity } from "@/lib/cache";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import type { z } from "zod/v4";
 
 type UpdateBody = z.infer<typeof updatePartyMembershipSchema>;
@@ -79,6 +80,7 @@ export const PATCH = withAdminAuth(
     if (politician) {
       invalidateEntity("politician", politician.slug);
     }
+    await requestProfileRefresh({ politicianIds: [id!] }, "admin:affiliation-modifiée");
 
     return NextResponse.json(updated);
   })
@@ -140,6 +142,7 @@ export const DELETE = withAdminAuth(async (request: NextRequest, context) => {
   if (politicianForSlug) {
     invalidateEntity("politician", politicianForSlug.slug);
   }
+  await requestProfileRefresh({ politicianIds: [id!] }, "admin:affiliation-supprimée");
 
   return NextResponse.json({ success: true });
 });

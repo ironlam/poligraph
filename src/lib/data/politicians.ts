@@ -3,6 +3,11 @@ import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  readPoliticianDossier,
+  readPoliticianIdentity,
+  type PoliticianIdentity,
+} from "@/lib/data/politician-profile-reads";
 
 /**
  * Everything the top of a politician profile reads: the header, `generateMetadata`, the JSON-LD and
@@ -21,102 +26,11 @@ export const getPoliticianIdentity = cache(async function getPoliticianIdentity(
   cacheTag(`politician:${slug}`, "politicians");
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
-    include: {
-      currentParty: true,
-      // Counted rather than loaded: the only thing any caller of this read asks of these two
-      // relations is how many there are. Same `where` as the dossier read that lists them.
-      _count: {
-        select: {
-          affairs: { where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE } },
-          factCheckMentions: { where: { factCheck: getPublicFactCheckWhere() } },
-        },
-      },
-      mandates: {
-        orderBy: { startDate: "desc" },
-        include: {
-          // Who the person sat with, shown on the career timeline: the party
-          // for a party leadership, the group for a parliamentary mandate.
-          party: {
-            select: {
-              name: true,
-              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
-            },
-          },
-          parliamentaryData: {
-            select: {
-              parliamentaryGroup: {
-                select: { code: true, name: true, color: true },
-              },
-            },
-          },
-          europeanData: {
-            select: {
-              europeanGroup: { select: { name: true } },
-            },
-          },
-          // Commune population feeds the SEO richness predicate (politician-robots).
-          localData: {
-            select: {
-              commune: { select: { population: true } },
-            },
-          },
-        },
-      },
-      // Kept on the critical path: `generateMetadata` reads the latest DIA's `details` to build the
-      // description, so a count would not do here.
-      declarations: {
-        orderBy: { year: "desc" },
-      },
-      externalIds: {
-        select: { url: true, source: true, metadata: true },
-      },
-      // Also on the critical path: `PoliticianHeader` renders the party roles still held.
-      partyHistory: {
-        include: {
-          party: {
-            select: {
-              name: true,
-              shortName: true,
-              slug: true,
-              color: true,
-              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
-            },
-          },
-        },
-        orderBy: { startDate: "desc" },
-      },
-    },
-  });
-
-  if (!politician) return null;
-
-  // A party with no public member is not nameable on a public surface.
-  const mandates = politician.mandates.map((mandate) => ({
-    ...mandate,
-    party:
-      mandate.party && mandate.party._count.politicians > 0 ? { name: mandate.party.name } : null,
-  }));
-  const partyHistory = politician.partyHistory.flatMap((membership) => {
-    if (!membership.party || membership.party._count.politicians === 0) return [];
-    return [
-      {
-        ...membership,
-        party: {
-          name: membership.party.name,
-          shortName: membership.party.shortName,
-          slug: membership.party.slug,
-          color: membership.party.color,
-        },
-      },
-    ];
-  });
-  return { ...politician, mandates, partyHistory };
+  return readPoliticianIdentity({ slug });
 });
 
 /** The non-null shape of `getPoliticianIdentity`, for components that receive it as a prop. */
-export type PoliticianIdentity = NonNullable<Awaited<ReturnType<typeof getPoliticianIdentity>>>;
+export type { PoliticianIdentity };
 
 /**
  * The tab bodies of a politician profile: the three relations nobody reads above the fold, headed
@@ -131,100 +45,7 @@ export const getPoliticianDossier = cache(async function getPoliticianDossier(sl
   cacheTag(`politician:${slug}`, "politicians");
   cacheLife("synced");
 
-  const politician = await db.politician.findUnique({
-    where: { slug, ...PUBLIC_POLITICIAN_WHERE },
-    select: {
-      affairs: {
-        where: { ...getPublishedAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE },
-        include: {
-          sources: true,
-          partyAtTime: {
-            include: {
-              _count: { select: { politicians: { where: PUBLIC_POLITICIAN_WHERE } } },
-            },
-          },
-          events: {
-            orderBy: { date: "asc" },
-          },
-          linkedAffair: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              involvement: true,
-              publicationStatus: true,
-              politician: { select: { id: true, fullName: true, slug: true } },
-            },
-          },
-          linkedBy: {
-            where: { publicationStatus: "PUBLISHED" as const },
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              involvement: true,
-              publicationStatus: true,
-              politician: { select: { id: true, fullName: true, slug: true } },
-            },
-          },
-        },
-        orderBy: { verdictDate: "desc" },
-      },
-      factCheckMentions: {
-        where: { factCheck: getPublicFactCheckWhere() },
-        include: {
-          factCheck: {
-            select: {
-              id: true,
-              slug: true,
-              title: true,
-              claimText: true,
-              claimant: true,
-              verdictRating: true,
-              source: true,
-              sourceUrl: true,
-              publishedAt: true,
-            },
-          },
-        },
-        orderBy: { factCheck: { publishedAt: "desc" } },
-        take: 20,
-      },
-      dossierAuthors: {
-        include: {
-          dossier: {
-            select: {
-              slug: true,
-              shortTitle: true,
-              title: true,
-              number: true,
-              status: true,
-              filingDate: true,
-            },
-          },
-        },
-        orderBy: { dossier: { filingDate: "desc" } },
-      },
-    },
-  });
-
-  if (!politician) return null;
-
-  return {
-    ...politician,
-    // Decimal is not serialisable across the server/client boundary.
-    affairs: politician.affairs.map((affair) => ({
-      ...affair,
-      partyAtTime:
-        affair.partyAtTime && affair.partyAtTime._count.politicians > 0
-          ? (() => {
-              const { _count: _publicMembers, ...partyAtTime } = affair.partyAtTime;
-              return partyAtTime;
-            })()
-          : null,
-      fineAmount: affair.fineAmount ? Number(affair.fineAmount) : null,
-    })),
-  };
+  return readPoliticianDossier({ slug });
 });
 
 export async function getPoliticianForComparison(slug: string) {
