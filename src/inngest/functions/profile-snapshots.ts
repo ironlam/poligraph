@@ -71,6 +71,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
       removed: 0,
       invalidated: 0,
       deferred: 0,
+      orphansDeferred: 0,
       failures: 0,
       failedIds: [] as string[],
     };
@@ -92,7 +93,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
           const { refreshPoliticianProfile } =
             await import("@/lib/politicians/profile-snapshot/refresh");
           return runReconcileBatch(
-            { ...input, budgetMs: BATCH_BUDGET_MS },
+            { ...input, budgetMs: BATCH_BUDGET_MS, orphans: walk === "orphans" },
             {
               listIds: walk === "batch" ? listPublicPoliticianIds : listOrphanProfileSnapshotIds,
               refresh: refreshPoliticianProfile,
@@ -107,6 +108,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
         totals.removed += batch.removed;
         totals.invalidated += batch.invalidated;
         totals.deferred += batch.deferred;
+        totals.orphansDeferred += batch.orphansDeferred;
         totals.failures += batch.failures;
         totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, MAX_FAILED_IDS);
         invalidationsLeft -= batch.invalidated;
@@ -116,7 +118,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
     }
 
     const summary = { ...totals, durationMs: Date.now() - startedAt };
-    if (summary.deferred > 0 || summary.failures > 0) {
+    if (summary.deferred > 0 || summary.orphansDeferred > 0 || summary.failures > 0) {
       Sentry.captureMessage("Rattrapage des fiches politicien incomplet", {
         level: "warning",
         fingerprint: ["profile-snapshot-reconcile"],

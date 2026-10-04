@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Handler = (ctx: { event: unknown; step: unknown }) => Promise<unknown>;
 
@@ -40,6 +40,7 @@ function batch(overrides: Record<string, unknown>) {
     removed: 0,
     invalidated: 0,
     deferred: 0,
+    orphansDeferred: 0,
     failures: 0,
     failedIds: [],
     ...overrides,
@@ -47,11 +48,20 @@ function batch(overrides: Record<string, unknown>) {
 }
 
 describe("rattrapage des fiches politicien", () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it("parcourt les fiches publiques puis les documents orphelins, et compte les suppressions", async () => {
-    const inputs: { list: unknown; invalidationsLeft: number }[] = [];
+    const inputs: { list: unknown; invalidationsLeft: number; orphans?: boolean }[] = [];
     h.runReconcileBatch.mockImplementation(
-      async (input: { invalidationsLeft: number }, deps: { listIds: unknown }) => {
-        inputs.push({ list: deps.listIds, invalidationsLeft: input.invalidationsLeft });
+      async (
+        input: { invalidationsLeft: number; orphans?: boolean },
+        deps: { listIds: unknown }
+      ) => {
+        inputs.push({
+          list: deps.listIds,
+          invalidationsLeft: input.invalidationsLeft,
+          orphans: input.orphans,
+        });
         return deps.listIds === h.listPublicPoliticianIds
           ? batch({ processed: 10, updated: 3, invalidated: 3 })
           : batch({ processed: 2, removed: 2, invalidated: 2 });
@@ -65,11 +75,37 @@ describe("rattrapage des fiches politicien", () => {
     });
 
     expect(inputs).toEqual([
-      { list: h.listPublicPoliticianIds, invalidationsLeft: PROFILE_INVALIDATION_CAP },
-      { list: h.listOrphanProfileSnapshotIds, invalidationsLeft: PROFILE_INVALIDATION_CAP - 3 },
+      {
+        list: h.listPublicPoliticianIds,
+        invalidationsLeft: PROFILE_INVALIDATION_CAP,
+        orphans: false,
+      },
+      {
+        list: h.listOrphanProfileSnapshotIds,
+        invalidationsLeft: PROFILE_INVALIDATION_CAP - 3,
+        orphans: true,
+      },
     ]);
     expect(step.run.mock.calls.map((c) => c[0])).toEqual(["start", "batch-1", "orphans-1"]);
     expect(summary).toMatchObject({ batches: 2, processed: 12, updated: 3, removed: 2 });
     expect(summary).toMatchObject({ invalidated: 5 });
+  });
+
+  it("signale dans Sentry les orphelins laissés en place faute de budget", async () => {
+    h.runReconcileBatch.mockImplementation(async (_input: unknown, deps: { listIds: unknown }) =>
+      deps.listIds === h.listPublicPoliticianIds ? batch({}) : batch({ orphansDeferred: 4 })
+    );
+    const step = { run: vi.fn(async (_id: string, fn: () => unknown) => fn()) };
+
+    const summary = await (h.handlers["reconcile-politician-profiles"] as Handler)({
+      event: { data: { reason: "test" } },
+      step,
+    });
+
+    expect(summary).toMatchObject({ orphansDeferred: 4, deferred: 0, failures: 0 });
+    expect(h.captureMessage).toHaveBeenCalledExactlyOnceWith(
+      "Rattrapage des fiches politicien incomplet",
+      expect.objectContaining({ extra: expect.objectContaining({ orphansDeferred: 4 }) })
+    );
   });
 });

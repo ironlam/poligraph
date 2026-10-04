@@ -83,6 +83,17 @@ describe("runReconcileBatch", () => {
     expect(r).toMatchObject({ processed: 4, updated: 0, removed: 3, invalidated: 2, deferred: 1 });
   });
 
+  it("laisse en place et compte les orphelins une fois le plafond atteint", async () => {
+    const refresh = vi.fn(async (id: string) => outcome(id, "not-public", true));
+    const r = await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 1, orphans: true },
+      { listIds: listFrom(ids(3)), refresh, now: () => 0 }
+    );
+    expect(refresh).toHaveBeenCalledExactlyOnceWith("p001", "reconcile");
+    expect(r).toMatchObject({ removed: 1, invalidated: 1, deferred: 0, orphansDeferred: 2 });
+    expect(r.cursor).toBeNull();
+  });
+
   it("compte un échec sans interrompre le lot", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const refresh = vi.fn(async (id: string) => {

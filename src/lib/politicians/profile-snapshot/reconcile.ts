@@ -9,6 +9,12 @@ export type ReconcileBatchInput = {
   cursor: string | null;
   budgetMs: number;
   invalidationsLeft: number;
+  /**
+   * The walk lists orphan documents (listOrphanProfileSnapshotIds). Past the invalidation
+   * budget they are skipped rather than deleted uninvalidated: the row stays, so the next run
+   * finds it and removes it with an invalidation.
+   */
+  orphans?: boolean;
 };
 
 export type ReconcileBatchResult = {
@@ -20,6 +26,8 @@ export type ReconcileBatchResult = {
   removed: number;
   invalidated: number;
   deferred: number;
+  /** Orphan documents left in place because the invalidation budget was spent. */
+  orphansDeferred: number;
   failures: number;
   /** First ids that failed, bounded to MAX_FAILED_IDS. */
   failedIds: string[];
@@ -87,6 +95,7 @@ export async function runReconcileBatch(
     removed: 0,
     invalidated: 0,
     deferred: 0,
+    orphansDeferred: 0,
     failures: 0,
     failedIds: [],
   };
@@ -94,6 +103,13 @@ export async function runReconcileBatch(
   for (;;) {
     const page = await deps.listIds(cursor, PAGE_SIZE);
     for (const id of page) {
+      if (input.orphans && invalidationsLeft <= 0) {
+        result.orphansDeferred++;
+        cursor = id;
+        result.cursor = id;
+        if (deps.now() - startedAt >= input.budgetMs) return result;
+        continue;
+      }
       try {
         const outcome =
           invalidationsLeft > 0

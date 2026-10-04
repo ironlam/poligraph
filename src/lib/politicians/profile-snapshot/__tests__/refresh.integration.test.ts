@@ -195,4 +195,22 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
     expect(await storedRow(politicianId)).toBeNull();
     expect(await storedRow(other.id)).not.toBeNull();
   });
+
+  it("le rattrapage laisse en place un orphelin au-delà du plafond, sans l'invalider", async () => {
+    const { runReconcileBatch } = await import("../reconcile");
+    await refreshPoliticianProfile(politicianId, "test", { revalidate: () => {} });
+    await unpublish();
+    const revalidate = vi.fn();
+    const r = await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 0, orphans: true },
+      {
+        listIds: async (cursor) => (cursor ? [] : [politicianId]),
+        refresh: (id, reason) => refreshPoliticianProfile(id, reason, { revalidate }),
+        now: Date.now,
+      }
+    );
+    expect(r).toMatchObject({ orphansDeferred: 1, removed: 0, invalidated: 0 });
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(await storedRow(politicianId)).not.toBeNull();
+  });
 });
