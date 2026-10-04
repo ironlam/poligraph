@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * défaut, elle emprunte le chemin de listing normal, et elle n'atteint jamais
  * le `<select>` de tri, qui n'aurait pas d'option correspondante.
  *
- * `dissidence` est le cas concret qui a motivé ce test (tri retiré), mais
- * l'invariant vaut pour toute valeur retirée par la suite.
+ * `dissidence` est le cas concret qui a motivé ce test (tri retiré), `affairs`
+ * a suivi : un classement par nombre d'affaires laissait deviner des affaires
+ * non publiées. L'invariant vaut pour toute valeur retirée par la suite.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -53,9 +54,9 @@ beforeEach(() => {
   ]);
 });
 
-describe("/politiques : le tri dissidence a été retiré", () => {
-  it("rend un ?sort=dissidence périmé par le chemin normal", async () => {
-    await expect(render({ sort: "dissidence" })).resolves.toBeDefined();
+describe.each(["dissidence", "affairs"])("/politiques : le tri %s a été retiré", (retired) => {
+  it("rend un ?sort= retiré par le chemin normal", async () => {
+    await expect(render({ sort: retired })).resolves.toBeDefined();
 
     // Le chemin normal compte les résultats ; la branche dédiée sortait avant.
     expect(mocks.politicianCount).toHaveBeenCalled();
@@ -74,7 +75,7 @@ describe("/politiques : le tri dissidence a été retiré", () => {
     // ordonnait par nom. Distinguer les deux prouve que la normalisation a eu
     // lieu en amont, donc que le <select> et les liens de filtre reçoivent une
     // valeur qui existe.
-    await render({ sort: "dissidence" });
+    await render({ sort: retired });
 
     expect(mocks.politicianFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,7 +85,7 @@ describe("/politiques : le tri dissidence a été retiré", () => {
   });
 
   it("n'exécute aucune requête brute de classement", async () => {
-    await render({ sort: "dissidence" });
+    await render({ sort: retired });
 
     // getFilterCounts fait un $queryRaw ; aucun autre ne doit apparaître.
     expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
