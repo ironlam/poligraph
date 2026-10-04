@@ -591,6 +591,38 @@ async function runPhase3(byCommune: Map<string, WinnerInfo>) {
   }
 }
 
+/**
+ * Phase 1 apply step: closes the given MAIRE mandates in chunks, then asks for a profile
+ * refresh of the politicians whose chunk was applied. The refresh sits in a `finally` so a crash
+ * mid-loop still refreshes the chunks already written; the original error is rethrown untouched.
+ */
+export async function closeObsoleteMandates(
+  items: { mandateId: string; politicianId: string }[]
+): Promise<number> {
+  let done = 0;
+  const appliedPoliticianIds = new Set<string>();
+  try {
+    for (let i = 0; i < items.length; i += 500) {
+      const chunk = items.slice(i, i + 500);
+      const res = await db.mandate.updateMany({
+        where: { id: { in: chunk.map((o) => o.mandateId) }, isCurrent: true },
+        data: { isCurrent: false, endDate: INSTALL_DATE },
+      });
+      for (const o of chunk) appliedPoliticianIds.add(o.politicianId);
+      done += res.count;
+      console.log(`  ...${done}/${items.length}`);
+    }
+  } finally {
+    if (done > 0) {
+      await requestProfileRefresh(
+        { politicianIds: [...appliedPoliticianIds] },
+        "cli:reconcile-municipales-2026-mayors:phase1"
+      );
+    }
+  }
+  return done;
+}
+
 async function main() {
   const mandates = await db.mandate.findMany({
     where: { type: "MAIRE", isCurrent: true, source: "RNE", localData: { isNot: null } },
@@ -631,6 +663,7 @@ async function main() {
   let noData = 0;
   const obsolete: {
     mandateId: string;
+    politicianId: string;
     commune: string;
     dept: string;
     communeName: string;
@@ -669,6 +702,7 @@ async function main() {
     const bucket = firstMatch ? "b2" : "b1";
     obsolete.push({
       mandateId: m.id,
+      politicianId: m.politicianId,
       commune,
       dept: m.departmentCode ?? commune.slice(0, 2),
       communeName: w.communeName ?? "",
@@ -721,17 +755,7 @@ async function main() {
 
   if (APPLY_PHASE1) {
     console.log(`\n>>> APPLY PHASE 1: clôture de ${b1.length} mandats obsolètes (b1) ...`);
-    const ids = b1.map((o) => o.mandateId);
-    let done = 0;
-    for (let i = 0; i < ids.length; i += 500) {
-      const chunk = ids.slice(i, i + 500);
-      const res = await db.mandate.updateMany({
-        where: { id: { in: chunk }, isCurrent: true },
-        data: { isCurrent: false, endDate: INSTALL_DATE },
-      });
-      done += res.count;
-      console.log(`  ...${done}/${ids.length}`);
-    }
+    const done = await closeObsoleteMandates(b1);
     console.log(`Phase 1 terminée: ${done} mandats clos.`);
   } else {
     console.log(
