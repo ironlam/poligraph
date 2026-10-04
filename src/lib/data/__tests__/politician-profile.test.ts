@@ -36,7 +36,7 @@ describe("readProfileSnapshot, repli", () => {
     findFirst.mockResolvedValue(null);
     build.mockResolvedValue(doc);
     readDatabaseNow.mockResolvedValue(DB_NOW);
-    write.mockResolvedValue({ written: true, changed: false });
+    write.mockResolvedValue({ written: true, inserted: true, changed: false });
     warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     error = vi.spyOn(console, "error").mockImplementation(() => {});
   });

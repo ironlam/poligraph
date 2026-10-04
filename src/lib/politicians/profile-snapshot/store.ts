@@ -26,8 +26,10 @@ export async function readDatabaseNow(): Promise<Date> {
  *
  * `builtAt` is when the build started, so a slow build that read older data cannot overwrite a
  * faster one that started after it. `written` says whether a row was inserted or updated;
- * `changed` whether its content hash differs from the row it replaced. A first insert is never a
- * change: the backfill would otherwise invalidate every live page it fills.
+ * `inserted` whether no row existed before this write; `changed` whether its content hash differs
+ * from the row it replaced, so a first insert is never a change. Callers that invalidate pages
+ * must treat an insert as one too: a page cached while the politician was not public (a cached
+ * `null`) has no row to compare against.
  *
  * The previous hash is read `FOR UPDATE` in the same transaction: a snapshot read could predate a
  * concurrent writer's commit, report "unchanged" against content that is no longer stored, and
@@ -37,7 +39,7 @@ export async function writeProfileSnapshot(input: {
   politicianId: string;
   document: PoliticianProfileDocument;
   startedAt: Date;
-}): Promise<{ written: boolean; changed: boolean }> {
+}): Promise<{ written: boolean; inserted: boolean; changed: boolean }> {
   const data = serializeProfileDocument(input.document);
   const contentHash = hashSerializedDocument(data);
 
@@ -67,9 +69,9 @@ export async function writeProfileSnapshot(input: {
       RETURNING 1
     `);
     const written = up.length > 0;
-    // A first insert is not a change: no live page was built from this document yet.
     return {
       written,
+      inserted: written && prev.length === 0,
       changed: written && prev.length > 0 && prev[0]!.contentHash !== contentHash,
     };
   });

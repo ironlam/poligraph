@@ -59,11 +59,24 @@ describe("refreshPoliticianProfile", () => {
     expect(revalidate).toHaveBeenCalledWith("politician:slug-courant");
   });
 
-  it("n'invalide pas à la première écriture : aucune page n'a encore servi ce document", async () => {
+  it("invalide à la première écriture : la page a pu mettre en cache une fiche absente", async () => {
     stored(null, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
-    expect(outcome.status).toBe("unchanged");
+    expect(outcome.status).toBe("updated");
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith("politician:slug-courant");
+  });
+
+  it("avec deferInvalidation, marque en attente la première écriture au lieu d'invalider", async () => {
+    stored(null, true);
+    executeRaw.mockResolvedValue(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome).toMatchObject({ status: "updated", invalidationDeferred: true });
     expect(revalidate).not.toHaveBeenCalled();
+    const sql = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(sql.values).toEqual([PENDING_INVALIDATION_HASH, "pol-1", DB_NOW]);
   });
 
   it("n'invalide pas quand le contenu est inchangé", async () => {

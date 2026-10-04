@@ -140,6 +140,30 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
     expect((await storedRow(politicianId))?.contentHash).toBe(laterHash);
   });
 
+  it("invalide la fiche republiée à l'insertion de son premier document, pas à une réécriture identique", async () => {
+    // Visited while not public: the page cached `null`, and no document exists.
+    await db.politician.update({
+      where: { id: politicianId },
+      data: { publicationStatus: "DRAFT" },
+    });
+    expect(await storedRow(politicianId)).toBeNull();
+    await db.politician.update({
+      where: { id: politicianId },
+      data: { publicationStatus: "PUBLISHED" },
+    });
+
+    const revalidate = vi.fn();
+    const first = await refreshPoliticianProfile(politicianId, "test", { revalidate });
+    expect(first.status).toBe("updated");
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith(`politician:${SLUG}-elu`);
+    expect(await storedRow(politicianId)).not.toBeNull();
+
+    revalidate.mockClear();
+    const again = await refreshPoliticianProfile(politicianId, "test", { revalidate });
+    expect(again.status).toBe("unchanged");
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
   async function unpublish(data: { slug?: string } = {}) {
     await db.politician.update({
       where: { id: politicianId },

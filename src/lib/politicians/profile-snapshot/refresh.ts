@@ -42,9 +42,9 @@ async function revalidateProfileTag(tag: string): Promise<void> {
 
 /**
  * Rebuilds a politician's profile document and stores it unless a later build already did.
- * Invalidates `politician:<slug>` only when the stored content actually changed, with the slug
- * read from the fresh build so a renamed politician invalidates the current URL. A politician who
- * is no longer public loses the stored document, after its page is invalidated, unless
+ * Invalidates `politician:<slug>` only when the stored content changed or was first inserted,
+ * with the slug read from the fresh build so a renamed politician invalidates the current URL. A
+ * politician who is no longer public loses the stored document, after its page is invalidated, unless
  * `keepNonPublic` asks to leave it for a later run that can afford the invalidation.
  */
 export async function refreshPoliticianProfile(
@@ -83,8 +83,14 @@ export async function refreshPoliticianProfile(
       }
     }
   } else {
-    const { written, changed } = await writeProfileSnapshot({ politicianId, document, startedAt });
-    status = !written ? "skipped-stale" : changed ? "updated" : "unchanged";
+    const { written, inserted, changed } = await writeProfileSnapshot({
+      politicianId,
+      document,
+      startedAt,
+    });
+    // An insert invalidates too: the page may hold a `null` cached while the politician was not
+    // public, and nothing else would replace it before the cache expires.
+    status = !written ? "skipped-stale" : changed || inserted ? "updated" : "unchanged";
     if (status === "updated" && deps.deferInvalidation) {
       // Same guard as the failure path below: a row rewritten since by a later build is left
       // alone, that build compared against the right hash and owns the invalidation. A failed
