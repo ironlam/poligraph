@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryRaw, build } = vi.hoisted(() => ({ queryRaw: vi.fn(), build: vi.fn() }));
+const { queryRaw, executeRaw, build } = vi.hoisted(() => ({
+  queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
+  build: vi.fn(),
+}));
 vi.mock("@/lib/db", () => ({
   db: {
     $queryRaw: queryRaw,
+    $executeRaw: executeRaw,
     $transaction: (fn: (tx: { $queryRaw: typeof queryRaw }) => unknown) =>
       fn({ $queryRaw: queryRaw }),
   },
@@ -12,6 +17,8 @@ vi.mock("../build", () => ({ buildPoliticianProfileDocument: build }));
 
 import { refreshPoliticianProfile } from "../refresh";
 import { hashSerializedDocument, serializeProfileDocument } from "../document";
+import { PENDING_INVALIDATION_HASH } from "../store";
+import type { Prisma } from "@/generated/prisma";
 import type { PoliticianProfileDocument } from "../document";
 
 const doc = {
@@ -34,6 +41,7 @@ describe("refreshPoliticianProfile", () => {
 
   beforeEach(() => {
     queryRaw.mockReset();
+    executeRaw.mockReset();
     build.mockReset();
     revalidate.mockReset();
     build.mockResolvedValue(doc);
@@ -102,5 +110,47 @@ describe("refreshPoliticianProfile", () => {
       status: "updated",
       revalidateFailed: true,
     });
+  });
+
+  it("remplace l'empreinte par la sentinelle quand l'invalidation échoue, puis relance l'erreur", async () => {
+    stored("ancienne", true);
+    executeRaw.mockResolvedValue(1);
+    revalidate.mockRejectedValue(new Error("revalidate indisponible"));
+    await expect(refreshPoliticianProfile("pol-1", "test", { revalidate })).rejects.toThrow(
+      "revalidate indisponible"
+    );
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const sql = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(sql.sql).toMatch(/UPDATE "PoliticianProfileSnapshot"/);
+    expect(sql.sql).toMatch(/"builtAt" = /);
+    expect(sql.values[0]).toBe(PENDING_INVALIDATION_HASH);
+    expect(sql.values[1]).toBe("pol-1");
+    // The row is matched on this build's start: the same instant written by the upsert.
+    const upsert = queryRaw.mock.calls[1]![0] as Prisma.Sql;
+    expect(sql.values[2]).toBeInstanceOf(Date);
+    expect(upsert.values).toContainEqual(sql.values[2]);
+  });
+
+  it("relance l'erreur d'invalidation d'origine même si la sentinelle ne s'écrit pas", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    stored("ancienne", true);
+    executeRaw.mockRejectedValue(new Error("base indisponible"));
+    revalidate.mockRejectedValue(new Error("revalidate indisponible"));
+    await expect(refreshPoliticianProfile("pol-1", "test", { revalidate })).rejects.toThrow(
+      "revalidate indisponible"
+    );
+    expect(JSON.parse(String(errorSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
+      event: "[profile-snapshot] pending-invalidation mark failed",
+      politicianId: "pol-1",
+      message: "base indisponible",
+    });
+    errorSpy.mockRestore();
+  });
+
+  it("invalide à la nouvelle tentative quand l'empreinte stockée est la sentinelle", async () => {
+    stored(PENDING_INVALIDATION_HASH, true);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
+    expect(outcome.status).toBe("updated");
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith("politician:slug-courant");
   });
 });

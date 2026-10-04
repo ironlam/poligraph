@@ -1,5 +1,5 @@
 import { buildPoliticianProfileDocument } from "./build";
-import { writeProfileSnapshot } from "./store";
+import { markProfileSnapshotPendingInvalidation, writeProfileSnapshot } from "./store";
 
 export type RefreshOutcome = {
   politicianId: string;
@@ -39,8 +39,10 @@ export async function refreshPoliticianProfile(
       try {
         await revalidate(`politician:${document.identity.slug}`);
       } catch (error) {
-        // The write is committed, so a retry compares equal hashes and never invalidates: the
-        // miss has to be visible in the logs.
+        // The write is committed, so a retry would compare equal hashes and never invalidate:
+        // swap the stored hash for a sentinel so the retry sees a change. Best effort, the
+        // original error is the one rethrown.
+        await markPendingInvalidation(politicianId, startedAt);
         log(outcome(politicianId, status, startedAt, reason), { revalidateFailed: true });
         throw error;
       }
@@ -50,6 +52,21 @@ export async function refreshPoliticianProfile(
   const result = outcome(politicianId, status, startedAt, reason);
   log(result);
   return result;
+}
+
+async function markPendingInvalidation(politicianId: string, startedAt: Date): Promise<void> {
+  try {
+    await markProfileSnapshotPendingInvalidation({ politicianId, builtAt: startedAt });
+  } catch (markError) {
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+    console.error(
+      JSON.stringify({
+        event: "[profile-snapshot] pending-invalidation mark failed",
+        politicianId,
+        message: markError instanceof Error ? markError.message : String(markError),
+      })
+    );
+  }
 }
 
 function outcome(

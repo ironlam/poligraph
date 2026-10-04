@@ -132,6 +132,12 @@ export function fingerprintProjection(value: unknown, path = ""): unknown {
  * sha256 hex of the key-sorted JSON of `fingerprintProjection(data)`, so key order and volatile
  * timestamps never change the hash.
  */
+/**
+ * Stored in place of a content hash when the invalidation that followed a write failed. No real
+ * hash equals it, so the next build reports "updated" and invalidates again.
+ */
+export const PENDING_INVALIDATION_HASH = "pending-invalidation";
+
 export function hashSerializedDocument(data: Prisma.InputJsonValue): string {
   return createHash("sha256")
     .update(stableStringify(fingerprintProjection(data)))

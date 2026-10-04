@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@/generated/prisma";
 import {
+  PENDING_INVALIDATION_HASH,
   hashSerializedDocument,
   serializeProfileDocument,
   type PoliticianProfileDocument,
@@ -136,6 +137,19 @@ describe("audit-profile-snapshot-equivalence", () => {
     const row = storedRow(doc);
     row.contentHash = "0".repeat(64);
     expect(compareSnapshot(doc, row)).toEqual({ kind: "mismatch", path: "(contentHash)" });
+  });
+
+  it("classe à part une empreinte sentinelle d'invalidation en attente, contenu identique", () => {
+    const doc = sampleDocument();
+    const row = { ...storedRow(doc), contentHash: PENDING_INVALIDATION_HASH };
+    expect(compareSnapshot(doc, row)).toEqual({ kind: "pending-invalidation" });
+  });
+
+  it("signale quand même un écart de contenu derrière une empreinte sentinelle", () => {
+    const row = { ...storedRow(sampleDocument()), contentHash: PENDING_INVALIDATION_HASH };
+    const rebuilt = sampleDocument();
+    rebuilt.identity.fullName = "Jeanne Autre";
+    expect(compareSnapshot(rebuilt, row)).toEqual({ kind: "mismatch", path: "identity.fullName" });
   });
 
   it("donne le chemin du premier écart sans jamais exposer de valeur", () => {

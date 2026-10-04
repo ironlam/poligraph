@@ -10,9 +10,11 @@
  * it). On a mismatch it prints the first differing JSON path (never the values: affair
  * data is sensitive). A document that differs only by the bookkeeping timestamps the hash
  * ignores on purpose (`updatedAt`, `lastConfirmedAt`, `…CheckedAt`…) is reported apart and does
- * not fail the audit.
+ * not fail the audit. A row whose hash is the pending-invalidation sentinel (a failed cache
+ * invalidation awaiting its retry) is checked on its data alone and reported apart too.
  *
- * Exit codes: 0 = every sampled document matches (timestamp-only drifts allowed); 1 = at
+ * Exit codes: 0 = every sampled document matches (timestamp-only drifts and pending
+ * invalidations allowed); 1 = at
  * least one mismatch, missing or outdated document; 2 = bad usage or no DATABASE_URL.
  *
  * Only SELECTs. It must never call writeProfileSnapshot, refreshPoliticianProfile or
@@ -21,6 +23,7 @@
 
 import { Prisma } from "@/generated/prisma";
 import {
+  PENDING_INVALIDATION_HASH,
   deserializeProfileDocument,
   hashSerializedDocument,
   isHashIgnoredPath,
@@ -108,6 +111,7 @@ function decimalsAsNumbers(value: unknown): unknown {
 
 export type SnapshotComparison =
   | { kind: "match" }
+  | { kind: "pending-invalidation" }
   | { kind: "timestamps"; path: string }
   | { kind: "mismatch"; path: string };
 
@@ -126,14 +130,21 @@ export function compareSnapshot(
     decimalsAsNumbers(deserializeProfileDocument(stored.data))
   );
   const shown = deep.filter((path) => !isHashIgnoredPath(path));
+  // A failed invalidation left the sentinel in place of the hash: the data column is still
+  // checked against the build, the hash column has nothing to compare.
+  const pending = stored.contentHash === PENDING_INVALIDATION_HASH;
+  const storedHash = pending
+    ? hashSerializedDocument(stored.data as Prisma.InputJsonValue)
+    : stored.contentHash;
   const hashesAgree =
-    hashSerializedDocument(serialized) === stored.contentHash &&
+    hashSerializedDocument(serialized) === storedHash &&
     // The hash guards the stored hash column; the data column is what readers serve.
-    hashSerializedDocument(stored.data as Prisma.InputJsonValue) === stored.contentHash;
+    hashSerializedDocument(stored.data as Prisma.InputJsonValue) === storedHash;
   if (!hashesAgree) {
     return { kind: "mismatch", path: shown[0] ?? deep[0] ?? "(contentHash)" };
   }
   if (shown.length > 0) return { kind: "mismatch", path: shown[0]! };
+  if (pending) return { kind: "pending-invalidation" };
   if (deep.length > 0) return { kind: "timestamps", path: deep[0]! };
   return { kind: "match" };
 }
@@ -201,6 +212,7 @@ async function main(): Promise<number> {
     const outdated: string[] = [];
     const mismatches: { id: string; path: string }[] = [];
     const timestampOnly: { id: string; path: string }[] = [];
+    const pendingInvalidation: string[] = [];
 
     for (const id of ids) {
       const built = await buildPoliticianProfileDocument({ id });
@@ -221,6 +233,7 @@ async function main(): Promise<number> {
       }
       const result = compareSnapshot(built, stored);
       if (result.kind === "match") matched++;
+      else if (result.kind === "pending-invalidation") pendingInvalidation.push(id);
       else if (result.kind === "timestamps") timestampOnly.push({ id, path: result.path });
       else mismatches.push({ id, path: result.path });
     }
@@ -231,10 +244,14 @@ async function main(): Promise<number> {
     for (const t of timestampOnly) {
       console.warn(`[HORODATAGE] politicien=${t.id} chemin=${t.path} (horodatage seul)`);
     }
+    for (const id of pendingInvalidation) {
+      console.warn(`[INVALIDATION] politicien=${id} invalidation en attente de nouvelle tentative`);
+    }
 
     console.log(
       `[audit:profile-snapshots] échantillon=${ids.length} identiques=${matched} ` +
         `écarts=${mismatches.length} horodatage-seul=${timestampOnly.length} ` +
+        `invalidation-en-attente=${pendingInvalidation.length} ` +
         `absents=${missing.length} périmés=${outdated.length} non-construits=${unbuildable}`
     );
     return mismatches.length + missing.length + outdated.length > 0 ? 1 : 0;

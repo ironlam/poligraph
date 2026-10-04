@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import {
+  PENDING_INVALIDATION_HASH,
   PROFILE_SNAPSHOT_VERSION,
   hashSerializedDocument,
   serializeProfileDocument,
@@ -60,4 +61,25 @@ export async function writeProfileSnapshot(input: {
       changed: written && prev.length > 0 && prev[0]!.contentHash !== contentHash,
     };
   });
+}
+
+// Defined next to the hash so the read-only audit can import it without a database client.
+export { PENDING_INVALIDATION_HASH };
+
+/**
+ * Replaces the stored hash with PENDING_INVALIDATION_HASH, only while the row is still the one
+ * written by the build that started at `builtAt`: a later build already compared against the
+ * right hash and owns the invalidation. Returns whether the row was marked.
+ */
+export async function markProfileSnapshotPendingInvalidation(input: {
+  politicianId: string;
+  builtAt: Date;
+}): Promise<boolean> {
+  const count = await db.$executeRaw(Prisma.sql`
+    UPDATE "PoliticianProfileSnapshot"
+    SET "contentHash" = ${PENDING_INVALIDATION_HASH}
+    WHERE "politicianId" = ${input.politicianId}
+      AND "builtAt" = ${input.builtAt}::timestamp
+  `);
+  return count > 0;
 }
