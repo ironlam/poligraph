@@ -56,26 +56,25 @@ describe("runReconcileBatch", () => {
     expect(listIdsFn).toHaveBeenCalledWith("p050", 50);
   });
 
-  it("écrit sans invalider une fois le plafond atteint", async () => {
-    const calls: { id: string; revalidate: unknown; keepNonPublic: unknown }[] = [];
-    const refresh = vi.fn(
-      async (
-        id: string,
-        _reason: string,
-        deps?: { revalidate?: (t: string) => void; keepNonPublic?: boolean }
-      ) => {
-        calls.push({ id, revalidate: deps?.revalidate, keepNonPublic: deps?.keepNonPublic });
-        return outcome(id, "updated");
-      }
-    );
+  it("écrit sans invalider une fois le plafond atteint, en marquant l'invalidation en attente", async () => {
+    const calls: { id: string; deps: unknown }[] = [];
+    const refresh = vi.fn(async (id: string, _reason: string, deps?: unknown) => {
+      calls.push({ id, deps });
+      return outcome(id, "updated");
+    });
     const r = await runReconcileBatch(
       { cursor: null, budgetMs: 1e9, invalidationsLeft: 2 },
       { listIds: listFrom(ids(5)), refresh, now: () => 0 }
     );
     expect(r).toMatchObject({ updated: 5, invalidated: 2, deferred: 3 });
-    // Deferred ones get a no-op revalidate, the first two get the default (undefined deps).
-    expect(calls[0]?.revalidate).toBeUndefined();
-    expect(typeof calls[2]?.revalidate).toBe("function");
+    // Within the cap, the default refresh invalidates; past it, it marks instead of invalidating.
+    expect(calls.map((c) => c.deps)).toEqual([
+      undefined,
+      undefined,
+      { deferInvalidation: true, keepNonPublic: true },
+      { deferInvalidation: true, keepNonPublic: true },
+      { deferInvalidation: true, keepNonPublic: true },
+    ]);
   });
 
   it("garde, au-delà du plafond, le document d'une fiche dépubliée entre listage et calcul", async () => {

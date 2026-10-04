@@ -2,6 +2,22 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 
+// Lets a test run code between a refresh's write and its pending-invalidation mark, to stand in
+// for a later build landing in between. Inactive unless a test sets it.
+const hooks = vi.hoisted(() => ({ beforeMark: null as null | (() => Promise<void>) }));
+vi.mock("../store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../store")>();
+  return {
+    ...actual,
+    markProfileSnapshotPendingInvalidation: async (
+      input: Parameters<typeof actual.markProfileSnapshotPendingInvalidation>[0]
+    ) => {
+      if (hooks.beforeMark) await hooks.beforeMark();
+      return actual.markProfileSnapshotPendingInvalidation(input);
+    },
+  };
+});
+
 let db: typeof import("@/lib/db").db;
 let refreshPoliticianProfile: typeof import("../refresh").refreshPoliticianProfile;
 let writeProfileSnapshot: typeof import("../store").writeProfileSnapshot;
@@ -38,6 +54,7 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
   });
 
   beforeEach(async () => {
+    hooks.beforeMark = null;
     vi.spyOn(console, "info").mockImplementation(() => {});
     await db.politicianProfileSnapshot.deleteMany({ where: { politicianId } });
     await db.politician.update({
@@ -284,5 +301,57 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
     expect(next).toMatchObject({ removed: 1, invalidated: 1 });
     expect(revalidate).toHaveBeenCalledExactlyOnceWith(`politician:${SLUG}-elu`);
     expect(await storedRow(politicianId)).toBeNull();
+  });
+
+  /** One public-walk batch over this politician only, with `invalidationsLeft` budget. */
+  async function publicWalk(invalidationsLeft: number, revalidate: (tag: string) => void) {
+    const { runReconcileBatch } = await import("../reconcile");
+    return runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft },
+      {
+        listIds: async (cursor) => (cursor ? [] : [politicianId]),
+        refresh: (id, reason, deps) =>
+          refreshPoliticianProfile(id, reason, {
+            ...deps,
+            revalidate: deps?.revalidate ?? revalidate,
+          }),
+        now: Date.now,
+      }
+    );
+  }
+
+  it("au-delà du plafond, la passe publique marque en attente le document modifié, et le run suivant l'invalide", async () => {
+    await storeThenChange();
+    const revalidate = vi.fn();
+    const pastCap = await publicWalk(0, revalidate);
+    expect(pastCap).toMatchObject({ processed: 1, updated: 1, invalidated: 0, deferred: 1 });
+    expect(revalidate).not.toHaveBeenCalled();
+    expect((await storedRow(politicianId))?.contentHash).toBe(PENDING_INVALIDATION_HASH);
+
+    // Same content as the deferred write: without the mark, this run would see "unchanged".
+    const next = await publicWalk(10, revalidate);
+    expect(next).toMatchObject({ updated: 1, invalidated: 1, deferred: 0 });
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith(`politician:${SLUG}-elu`);
+    expect((await storedRow(politicianId))?.contentHash).not.toBe(PENDING_INVALIDATION_HASH);
+  });
+
+  it("au-delà du plafond, ne marque pas une ligne réécrite entre-temps par un calcul plus récent", async () => {
+    await storeThenChange();
+    const { buildPoliticianProfileDocument } = await import("../build");
+    let laterHash: string | undefined;
+    hooks.beforeMark = async () => {
+      const doc = await buildPoliticianProfileDocument({ id: politicianId });
+      await writeProfileSnapshot({
+        politicianId,
+        document: doc!,
+        startedAt: new Date(Date.now() + 60_000),
+      });
+      laterHash = (await storedRow(politicianId))?.contentHash;
+    };
+    const r = await publicWalk(0, vi.fn());
+    expect(r).toMatchObject({ updated: 1, deferred: 1, failures: 0 });
+    expect(laterHash).toBeDefined();
+    expect(laterHash).not.toBe(PENDING_INVALIDATION_HASH);
+    expect((await storedRow(politicianId))?.contentHash).toBe(laterHash);
   });
 });

@@ -14,6 +14,23 @@ export type RefreshOutcome = {
   reason: string;
   /** Whether the stored document of a no longer public politician was deleted. */
   removed: boolean;
+  /**
+   * Set when an updated document was stored without invalidating its page (`deferInvalidation`):
+   * the row carries PENDING_INVALIDATION_HASH, so the next refresh sees a change and invalidates.
+   */
+  invalidationDeferred?: true;
+};
+
+export type RefreshDeps = {
+  revalidate?: (tag: string) => void | Promise<void>;
+  keepNonPublic?: boolean;
+  /**
+   * Write an updated document without invalidating its page, and mark the row pending
+   * invalidation instead, for a caller out of invalidation budget. Writing silently would
+   * "consume" the change: the next refresh would compare equal hashes and never invalidate.
+   * Only applies to a public politician; pair it with `keepNonPublic` for the other case.
+   */
+  deferInvalidation?: boolean;
 };
 
 // Same cacheLife profile as `src/lib/cache.ts`. Imported lazily so tsx scripts and unit tests
@@ -33,7 +50,7 @@ async function revalidateProfileTag(tag: string): Promise<void> {
 export async function refreshPoliticianProfile(
   politicianId: string,
   reason: string,
-  deps: { revalidate?: (tag: string) => void | Promise<void>; keepNonPublic?: boolean } = {}
+  deps: RefreshDeps = {}
 ): Promise<RefreshOutcome> {
   // `startedAt` is what `builtAt` stores and compares: the database clock. `t0` only times the run.
   const t0 = Date.now();
@@ -42,6 +59,7 @@ export async function refreshPoliticianProfile(
 
   let status: RefreshOutcome["status"];
   let removed = false;
+  let invalidationDeferred = false;
   const document = await buildPoliticianProfileDocument({ id: politicianId });
   if (!document) {
     status = "not-public";
@@ -67,7 +85,13 @@ export async function refreshPoliticianProfile(
   } else {
     const { written, changed } = await writeProfileSnapshot({ politicianId, document, startedAt });
     status = !written ? "skipped-stale" : changed ? "updated" : "unchanged";
-    if (status === "updated") {
+    if (status === "updated" && deps.deferInvalidation) {
+      // Same guard as the failure path below: a row rewritten since by a later build is left
+      // alone, that build compared against the right hash and owns the invalidation. A failed
+      // mark is not swallowed here: the change would otherwise never be invalidated.
+      await markProfileSnapshotPendingInvalidation({ politicianId, builtAt: startedAt });
+      invalidationDeferred = true;
+    } else if (status === "updated") {
       try {
         await revalidate(`politician:${document.identity.slug}`);
       } catch (error) {
@@ -84,6 +108,7 @@ export async function refreshPoliticianProfile(
   }
 
   const result = outcome(politicianId, status, t0, reason, removed);
+  if (invalidationDeferred) result.invalidationDeferred = true;
   log(result);
   return result;
 }

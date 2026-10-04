@@ -205,6 +205,34 @@ describe("refreshPoliticianProfile", () => {
     errorSpy.mockRestore();
   });
 
+  it("avec deferInvalidation, écrit puis marque l'invalidation en attente au lieu d'invalider", async () => {
+    stored("ancienne", true);
+    executeRaw.mockResolvedValue(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome).toMatchObject({ status: "updated", invalidationDeferred: true });
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const sql = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(sql.sql).toMatch(/UPDATE "PoliticianProfileSnapshot"/);
+    expect(sql.sql).toMatch(/"builtAt" = /);
+    expect(sql.values).toEqual([PENDING_INVALIDATION_HASH, "pol-1", DB_NOW]);
+  });
+
+  it("avec deferInvalidation, ne marque rien quand le contenu est inchangé", async () => {
+    stored(hash, true);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome.status).toBe("unchanged");
+    expect(outcome.invalidationDeferred).toBeUndefined();
+    expect(executeRaw).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
   it("invalide à la nouvelle tentative quand l'empreinte stockée est la sentinelle", async () => {
     stored(PENDING_INVALIDATION_HASH, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
