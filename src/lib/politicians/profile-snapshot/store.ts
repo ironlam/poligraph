@@ -83,3 +83,32 @@ export async function markProfileSnapshotPendingInvalidation(input: {
   `);
   return count > 0;
 }
+
+/** Slug of the stored document, when one exists that was built before `before`. */
+export async function readStoredProfileSlug(input: {
+  politicianId: string;
+  before: Date;
+}): Promise<string | null> {
+  const rows = await db.$queryRaw<Array<{ slug: string | null }>>(Prisma.sql`
+    SELECT "data"->'identity'->>'slug' AS "slug" FROM "PoliticianProfileSnapshot"
+    WHERE "politicianId" = ${input.politicianId}
+      AND "builtAt" < ${input.before}::timestamp
+  `);
+  return rows[0]?.slug ?? null;
+}
+
+/**
+ * Deletes the stored document unless a build that started at or after `before` wrote it.
+ * Returns whether a row was deleted.
+ */
+export async function deleteProfileSnapshotBuiltBefore(input: {
+  politicianId: string;
+  before: Date;
+}): Promise<boolean> {
+  const count = await db.$executeRaw(Prisma.sql`
+    DELETE FROM "PoliticianProfileSnapshot"
+    WHERE "politicianId" = ${input.politicianId}
+      AND "builtAt" < ${input.before}::timestamp
+  `);
+  return count > 0;
+}

@@ -77,12 +77,42 @@ describe("refreshPoliticianProfile", () => {
     expect(revalidate).not.toHaveBeenCalled();
   });
 
-  it("n'écrit ni n'invalide une fiche non publique", async () => {
+  it("n'écrit ni n'invalide une fiche non publique sans document stocké", async () => {
     build.mockResolvedValue(null);
+    queryRaw.mockResolvedValueOnce([]);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
-    expect(outcome.status).toBe("not-public");
-    expect(queryRaw).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ status: "not-public", removed: false });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(executeRaw).not.toHaveBeenCalled();
     expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it("invalide le slug stocké puis supprime le document d'une fiche devenue non publique", async () => {
+    build.mockResolvedValue(null);
+    queryRaw.mockResolvedValueOnce([{ slug: "slug-stocké" }]);
+    executeRaw.mockResolvedValueOnce(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
+    expect(outcome).toMatchObject({ status: "not-public", removed: true });
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith("politician:slug-stocké");
+    const del = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(del.sql).toMatch(/DELETE FROM "PoliticianProfileSnapshot"/);
+    expect(revalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      executeRaw.mock.invocationCallOrder[0]!
+    );
+    const line = vi.mocked(console.info).mock.calls.at(-1)?.[0] as string;
+    expect(JSON.parse(line)).toMatchObject({ status: "not-public", removed: true });
+  });
+
+  it("garde le document d'une fiche non publique quand son invalidation échoue", async () => {
+    build.mockResolvedValue(null);
+    queryRaw.mockResolvedValueOnce([{ slug: "slug-stocké" }]);
+    revalidate.mockRejectedValue(new Error("revalidate indisponible"));
+    await expect(refreshPoliticianProfile("pol-1", "test", { revalidate })).rejects.toThrow(
+      "revalidate indisponible"
+    );
+    expect(executeRaw).not.toHaveBeenCalled();
+    const line = vi.mocked(console.info).mock.calls.at(-1)?.[0] as string;
+    expect(JSON.parse(line)).toMatchObject({ status: "not-public", revalidateFailed: true });
   });
 
   it("journalise une ligne JSON par recalcul", async () => {

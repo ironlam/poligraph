@@ -68,6 +68,7 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
       batches: 0,
       processed: 0,
       updated: 0,
+      removed: 0,
       invalidated: 0,
       deferred: 0,
       failures: 0,
@@ -75,34 +76,43 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
     };
 
     // Steps are pure functions of their inputs (replay): state travels through return values.
-    let cursor: string | null = null;
+    // Two walks share the invalidation budget: public politicians, then the stored documents of
+    // politicians no longer public, which the first walk cannot see.
     let invalidationsLeft = PROFILE_INVALIDATION_CAP;
-    for (let n = 1; ; n++) {
-      const input: { cursor: string | null; invalidationsLeft: number } = {
-        cursor,
-        invalidationsLeft,
-      };
-      const batch: ReconcileBatchResult = await step.run(`batch-${n}`, async () => {
-        const { runReconcileBatch, listPublicPoliticianIds } =
-          await import("@/lib/politicians/profile-snapshot/reconcile");
-        const { refreshPoliticianProfile } =
-          await import("@/lib/politicians/profile-snapshot/refresh");
-        return runReconcileBatch(
-          { ...input, budgetMs: BATCH_BUDGET_MS },
-          { listIds: listPublicPoliticianIds, refresh: refreshPoliticianProfile, now: Date.now },
-          reason
-        );
-      });
-      totals.batches++;
-      totals.processed += batch.processed;
-      totals.updated += batch.updated;
-      totals.invalidated += batch.invalidated;
-      totals.deferred += batch.deferred;
-      totals.failures += batch.failures;
-      totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, MAX_FAILED_IDS);
-      invalidationsLeft -= batch.invalidated;
-      cursor = batch.cursor;
-      if (cursor === null) break;
+    for (const walk of ["batch", "orphans"] as const) {
+      let cursor: string | null = null;
+      for (let n = 1; ; n++) {
+        const input: { cursor: string | null; invalidationsLeft: number } = {
+          cursor,
+          invalidationsLeft,
+        };
+        const batch: ReconcileBatchResult = await step.run(`${walk}-${n}`, async () => {
+          const { runReconcileBatch, listPublicPoliticianIds, listOrphanProfileSnapshotIds } =
+            await import("@/lib/politicians/profile-snapshot/reconcile");
+          const { refreshPoliticianProfile } =
+            await import("@/lib/politicians/profile-snapshot/refresh");
+          return runReconcileBatch(
+            { ...input, budgetMs: BATCH_BUDGET_MS },
+            {
+              listIds: walk === "batch" ? listPublicPoliticianIds : listOrphanProfileSnapshotIds,
+              refresh: refreshPoliticianProfile,
+              now: Date.now,
+            },
+            reason
+          );
+        });
+        totals.batches++;
+        totals.processed += batch.processed;
+        totals.updated += batch.updated;
+        totals.removed += batch.removed;
+        totals.invalidated += batch.invalidated;
+        totals.deferred += batch.deferred;
+        totals.failures += batch.failures;
+        totals.failedIds = [...totals.failedIds, ...batch.failedIds].slice(0, MAX_FAILED_IDS);
+        invalidationsLeft -= batch.invalidated;
+        cursor = batch.cursor;
+        if (cursor === null) break;
+      }
     }
 
     const summary = { ...totals, durationMs: Date.now() - startedAt };

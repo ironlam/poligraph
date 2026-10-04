@@ -14,8 +14,8 @@ function listFrom(all: string[]) {
   );
 }
 
-function outcome(id: string, status: RefreshOutcome["status"]): RefreshOutcome {
-  return { politicianId: id, status, durationMs: 1, reason: "test" };
+function outcome(id: string, status: RefreshOutcome["status"], removed = false): RefreshOutcome {
+  return { politicianId: id, status, durationMs: 1, reason: "test", removed };
 }
 
 describe("runReconcileBatch", () => {
@@ -72,6 +72,15 @@ describe("runReconcileBatch", () => {
     // Deferred ones get a no-op revalidate, the first two get the default (undefined deps).
     expect(calls[0]?.revalidate).toBeUndefined();
     expect(typeof calls[2]?.revalidate).toBe("function");
+  });
+
+  it("compte les documents supprimés et les impute au plafond d'invalidations", async () => {
+    const refresh = vi.fn(async (id: string) => outcome(id, "not-public", id !== "p003"));
+    const r = await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 2 },
+      { listIds: listFrom(ids(4)), refresh, now: () => 0 }
+    );
+    expect(r).toMatchObject({ processed: 4, updated: 0, removed: 3, invalidated: 2, deferred: 1 });
   });
 
   it("compte un échec sans interrompre le lot", async () => {

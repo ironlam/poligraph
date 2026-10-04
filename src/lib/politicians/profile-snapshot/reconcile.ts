@@ -16,6 +16,8 @@ export type ReconcileBatchResult = {
   cursor: string | null;
   processed: number;
   updated: number;
+  /** Stored documents of no longer public politicians, deleted. */
+  removed: number;
   invalidated: number;
   deferred: number;
   failures: number;
@@ -42,12 +44,33 @@ export async function listPublicPoliticianIds(
   return rows.map((r) => r.id);
 }
 
+/**
+ * Politicians whose stored document outlived their publication (unpublished by a sync, say):
+ * the public walk above never visits them. The negation of PUBLIC_POLITICIAN_WHERE is exact:
+ * `publicationStatus` is a required column.
+ */
+export async function listOrphanProfileSnapshotIds(
+  cursor: string | null,
+  take: number
+): Promise<string[]> {
+  const rows = await db.politicianProfileSnapshot.findMany({
+    where: {
+      politician: { NOT: PUBLIC_POLITICIAN_WHERE },
+      ...(cursor ? { politicianId: { gt: cursor } } : {}),
+    },
+    orderBy: { politicianId: "asc" },
+    take,
+    select: { politicianId: true },
+  });
+  return rows.map((r) => r.politicianId);
+}
+
 const noRevalidate = () => {};
 
 /**
- * Refreshes public politicians by ascending id until the time budget is spent. Once the
- * invalidation budget is exhausted, documents are still written but their cache tag is left
- * alone ("deferred"): they go live when the page cache expires on its own.
+ * Refreshes the politicians `listIds` walks, by ascending id, until the time budget is spent.
+ * Once the invalidation budget is exhausted, documents are still written (or deleted) but their
+ * cache tag is left alone ("deferred"): the change goes live when the page cache expires.
  */
 export async function runReconcileBatch(
   input: ReconcileBatchInput,
@@ -61,6 +84,7 @@ export async function runReconcileBatch(
     cursor,
     processed: 0,
     updated: 0,
+    removed: 0,
     invalidated: 0,
     deferred: 0,
     failures: 0,
@@ -75,8 +99,9 @@ export async function runReconcileBatch(
           invalidationsLeft > 0
             ? await deps.refresh(id, reason)
             : await deps.refresh(id, reason, { revalidate: noRevalidate });
-        if (outcome.status === "updated") {
-          result.updated++;
+        if (outcome.status === "updated") result.updated++;
+        if (outcome.removed) result.removed++;
+        if (outcome.status === "updated" || outcome.removed) {
           if (invalidationsLeft > 0) {
             invalidationsLeft--;
             result.invalidated++;
