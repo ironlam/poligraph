@@ -415,8 +415,9 @@ export async function loadPresidentialElectionId(): Promise<string | null> {
  *
  * Its own tag, deliberately not `elections`: that one is purged by `invalidateEntity("election")`
  * and by `revalidateAll()` after every sync, and since every profile reads this entry, sharing the
- * tag would make every profile stale on each sync. The id of a row does not change, so nothing
- * purges this tag; the `synced` backstop covers an election deleted and recreated.
+ * tag would make every profile stale on each sync. Only `invalidateEntity("election")` purges
+ * this tag, never `revalidateAll()`: an election recreated, or missing when the entry filled,
+ * would otherwise freeze the candidacy until the `synced` backstop.
  */
 export async function getPresidentialElectionId(): Promise<string | null> {
   "use cache";

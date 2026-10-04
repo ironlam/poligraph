@@ -231,6 +231,12 @@ export function invalidateEntity(
 
     case "election":
       revalidateTag("elections", ELECTION_PROFILE);
+      // The cached id of the presidential election (`getPresidentialElectionId`), so an election
+      // recreated, or missing when the entry filled, does not freeze every profile's candidacy
+      // until the entry expires. Explicit path only: never in `revalidateAll()`, which runs after
+      // every sync. Every caller also purges `election-candidacies:<id>`, which the same profiles
+      // already carry, so this stales no page that was not already stale.
+      revalidateTag("election-id:presidentielle-2027", ELECTION_PROFILE);
       break;
 
     case "election-2026":
