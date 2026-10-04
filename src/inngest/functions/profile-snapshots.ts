@@ -77,10 +77,13 @@ export const reconcilePoliticianProfilesFn = inngest.createFunction(
     };
 
     // Steps are pure functions of their inputs (replay): state travels through return values.
-    // Two walks share the invalidation budget: public politicians, then the stored documents of
-    // politicians no longer public, which the first walk cannot see.
+    // Two walks share the invalidation budget: first the stored documents of politicians no
+    // longer public, which the public walk cannot see, then public politicians. Orphans go first:
+    // a sync running without an event key cannot ask for a targeted refresh, so this run is the
+    // only path that purges the cached page of someone it unpublished, and that must not wait for
+    // the whole public walk nor depend on budget left over from it.
     let invalidationsLeft = PROFILE_INVALIDATION_CAP;
-    for (const walk of ["batch", "orphans"] as const) {
+    for (const walk of ["orphans", "batch"] as const) {
       let cursor: string | null = null;
       for (let n = 1; ; n++) {
         const input: { cursor: string | null; invalidationsLeft: number } = {
