@@ -2,6 +2,7 @@ import { buildPoliticianProfileDocument } from "./build";
 import {
   deleteProfileSnapshotBuiltBefore,
   markProfileSnapshotPendingInvalidation,
+  readDatabaseNow,
   readStoredProfileSlug,
   writeProfileSnapshot,
 } from "./store";
@@ -26,14 +27,17 @@ async function revalidateProfileTag(tag: string): Promise<void> {
  * Rebuilds a politician's profile document and stores it unless a later build already did.
  * Invalidates `politician:<slug>` only when the stored content actually changed, with the slug
  * read from the fresh build so a renamed politician invalidates the current URL. A politician who
- * is no longer public loses the stored document, after its page is invalidated.
+ * is no longer public loses the stored document, after its page is invalidated, unless
+ * `keepNonPublic` asks to leave it for a later run that can afford the invalidation.
  */
 export async function refreshPoliticianProfile(
   politicianId: string,
   reason: string,
-  deps: { revalidate?: (tag: string) => void | Promise<void> } = {}
+  deps: { revalidate?: (tag: string) => void | Promise<void>; keepNonPublic?: boolean } = {}
 ): Promise<RefreshOutcome> {
-  const startedAt = new Date();
+  // `startedAt` is what `builtAt` stores and compares: the database clock. `t0` only times the run.
+  const t0 = Date.now();
+  const startedAt = await readDatabaseNow();
   const revalidate = deps.revalidate ?? revalidateProfileTag;
 
   let status: RefreshOutcome["status"];
@@ -41,19 +45,24 @@ export async function refreshPoliticianProfile(
   const document = await buildPoliticianProfileDocument({ id: politicianId });
   if (!document) {
     status = "not-public";
-    // Invalidate first, delete second. The read path filters PUBLIC_POLITICIAN_WHERE, so the row
-    // left in between is never served; and if the invalidation fails, the retry still finds the
-    // row and its slug, and invalidates again. Deleting first would lose the slug on a failure.
-    // Only a row built before this build started is touched: a later one is a newer decision.
-    const slug = await readStoredProfileSlug({ politicianId, before: startedAt });
-    if (slug) {
-      try {
-        await revalidate(`politician:${slug}`);
-      } catch (error) {
-        log(outcome(politicianId, status, startedAt, reason, removed), { revalidateFailed: true });
-        throw error;
+    // keepNonPublic: nothing to invalidate while the row stays. The read path already hides it,
+    // and the orphan walk of a later run removes it with an invalidation.
+    if (!deps.keepNonPublic) {
+      // Invalidate first, delete second. The read path filters PUBLIC_POLITICIAN_WHERE, so the
+      // row left in between is never served; and if the invalidation fails, the retry still
+      // finds the row and its slug, and invalidates again. Deleting first would lose the slug on
+      // a failure. Only a row built before this build started is touched: a later one is a
+      // newer decision.
+      const slug = await readStoredProfileSlug({ politicianId, before: startedAt });
+      if (slug) {
+        try {
+          await revalidate(`politician:${slug}`);
+        } catch (error) {
+          log(outcome(politicianId, status, t0, reason, removed), { revalidateFailed: true });
+          throw error;
+        }
+        removed = await deleteProfileSnapshotBuiltBefore({ politicianId, before: startedAt });
       }
-      removed = await deleteProfileSnapshotBuiltBefore({ politicianId, before: startedAt });
     }
   } else {
     const { written, changed } = await writeProfileSnapshot({ politicianId, document, startedAt });
@@ -66,7 +75,7 @@ export async function refreshPoliticianProfile(
         // swap the stored hash for a sentinel so the retry sees a change. Best effort, the
         // original error is the one rethrown.
         await markPendingInvalidation(politicianId, startedAt);
-        log(outcome(politicianId, status, startedAt, reason, removed), {
+        log(outcome(politicianId, status, t0, reason, removed), {
           revalidateFailed: true,
         });
         throw error;
@@ -74,7 +83,7 @@ export async function refreshPoliticianProfile(
     }
   }
 
-  const result = outcome(politicianId, status, startedAt, reason, removed);
+  const result = outcome(politicianId, status, t0, reason, removed);
   log(result);
   return result;
 }
@@ -97,11 +106,11 @@ async function markPendingInvalidation(politicianId: string, startedAt: Date): P
 function outcome(
   politicianId: string,
   status: RefreshOutcome["status"],
-  startedAt: Date,
+  t0: number,
   reason: string,
   removed: boolean
 ): RefreshOutcome {
-  return { politicianId, status, durationMs: Date.now() - startedAt.getTime(), reason, removed };
+  return { politicianId, status, durationMs: Date.now() - t0, reason, removed };
 }
 
 function log(result: RefreshOutcome, extra: { revalidateFailed?: true } = {}): void {

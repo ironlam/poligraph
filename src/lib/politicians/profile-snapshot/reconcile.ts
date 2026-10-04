@@ -77,8 +77,11 @@ const noRevalidate = () => {};
 
 /**
  * Refreshes the politicians `listIds` walks, by ascending id, until the time budget is spent.
- * Once the invalidation budget is exhausted, documents are still written (or deleted) but their
- * cache tag is left alone ("deferred"): the change goes live when the page cache expires.
+ * Once the invalidation budget is exhausted, documents are still written but their cache tag is
+ * left alone ("deferred"): the change goes live when the page cache expires. A politician
+ * unpublished between listing and build keeps its document then (`keepNonPublic`): deleting it
+ * uninvalidated would leave the cached page up with nothing left to find it by, while the row
+ * left in place is what the orphan walk of the next run removes, with an invalidation.
  */
 export async function runReconcileBatch(
   input: ReconcileBatchInput,
@@ -114,7 +117,7 @@ export async function runReconcileBatch(
         const outcome =
           invalidationsLeft > 0
             ? await deps.refresh(id, reason)
-            : await deps.refresh(id, reason, { revalidate: noRevalidate });
+            : await deps.refresh(id, reason, { revalidate: noRevalidate, keepNonPublic: true });
         if (outcome.status === "updated") result.updated++;
         if (outcome.removed) result.removed++;
         if (outcome.status === "updated" || outcome.removed) {

@@ -10,6 +10,18 @@ import {
 } from "./document";
 
 /**
+ * The database clock, truncated to the millisecond `builtAt` stores. Builds take their start
+ * from here, so ordering between builds never depends on the clocks of the servers that ran
+ * them, and the value read here is the one stored, exactly.
+ */
+export async function readDatabaseNow(): Promise<Date> {
+  const rows = await db.$queryRaw<Array<{ now: Date }>>(
+    Prisma.sql`SELECT date_trunc('milliseconds', clock_timestamp()) AS "now"`
+  );
+  return rows[0]!.now;
+}
+
+/**
  * Upserts the document unless the stored one was built later.
  *
  * `builtAt` is when the build started, so a slow build that read older data cannot overwrite a

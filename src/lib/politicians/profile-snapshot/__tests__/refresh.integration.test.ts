@@ -5,6 +5,7 @@ import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard"
 let db: typeof import("@/lib/db").db;
 let refreshPoliticianProfile: typeof import("../refresh").refreshPoliticianProfile;
 let writeProfileSnapshot: typeof import("../store").writeProfileSnapshot;
+let readDatabaseNow: typeof import("../store").readDatabaseNow;
 let PENDING_INVALIDATION_HASH: string;
 
 const SLUG = "profile-snapshot-refresh";
@@ -20,7 +21,8 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
     ({ refreshPoliticianProfile } = await import("../refresh"));
-    ({ writeProfileSnapshot, PENDING_INVALIDATION_HASH } = await import("../store"));
+    ({ writeProfileSnapshot, readDatabaseNow, PENDING_INVALIDATION_HASH } =
+      await import("../store"));
 
     await db.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
     const politician = await db.politician.create({
@@ -46,6 +48,35 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
 
   afterAll(async () => {
     await db?.politician.deleteMany({ where: { slug: { startsWith: SLUG } } });
+  });
+
+  it("date le calcul à l'horloge de la base, pas à celle du serveur", async () => {
+    const before = await readDatabaseNow();
+    // A server clock years behind the database: a build dated by it would land outside the
+    // window read from the database around the refresh.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2001-01-01T00:00:00.000Z") });
+    try {
+      await refreshPoliticianProfile(politicianId, "test", { revalidate: () => {} });
+    } finally {
+      vi.useRealTimers();
+    }
+    const after = await readDatabaseNow();
+    const builtAt = (await storedRow(politicianId))!.builtAt;
+    expect(builtAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(builtAt.getTime()).toBeLessThanOrEqual(after.getTime());
+  });
+
+  it("l'horloge de la base se relit à l'identique dans builtAt et la sentinelle la retrouve", async () => {
+    const { buildPoliticianProfileDocument } = await import("../build");
+    const { markProfileSnapshotPendingInvalidation } = await import("../store");
+    const startedAt = await readDatabaseNow();
+    const doc = await buildPoliticianProfileDocument({ id: politicianId });
+    await writeProfileSnapshot({ politicianId, document: doc!, startedAt });
+    expect((await storedRow(politicianId))!.builtAt).toEqual(startedAt);
+    expect(await markProfileSnapshotPendingInvalidation({ politicianId, builtAt: startedAt })).toBe(
+      true
+    );
+    expect((await storedRow(politicianId))?.contentHash).toBe(PENDING_INVALIDATION_HASH);
   });
 
   /** Stores a first document, then changes a displayed field so the next build differs. */
@@ -212,5 +243,46 @@ describeIfDisposableDb("recalcul d'une fiche politicien", () => {
     expect(r).toMatchObject({ orphansDeferred: 1, removed: 0, invalidated: 0 });
     expect(revalidate).not.toHaveBeenCalled();
     expect(await storedRow(politicianId)).not.toBeNull();
+  });
+  it("au-delà du plafond, la passe publique garde sans l'invalider le document d'une fiche dépubliée entre listage et calcul", async () => {
+    const { listOrphanProfileSnapshotIds, runReconcileBatch } = await import("../reconcile");
+    await refreshPoliticianProfile(politicianId, "test", { revalidate: () => {} });
+    const revalidate = vi.fn();
+    const pastCap = await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 0 },
+      {
+        // Listed while public, unpublished before its build.
+        listIds: async (cursor) => {
+          if (cursor) return [];
+          await unpublish();
+          return [politicianId];
+        },
+        refresh: (id, reason, deps) =>
+          refreshPoliticianProfile(id, reason, {
+            ...deps,
+            revalidate: deps?.revalidate ?? revalidate,
+          }),
+        now: Date.now,
+      }
+    );
+    expect(pastCap).toMatchObject({ processed: 1, removed: 0, deferred: 0, failures: 0 });
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(await storedRow(politicianId)).not.toBeNull();
+
+    // The next run's orphan walk removes it, invalidating the stored slug first.
+    const next = await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 10, orphans: true },
+      {
+        listIds: (cursor, take) =>
+          listOrphanProfileSnapshotIds(cursor, take).then((list) =>
+            list.filter((id) => id === politicianId)
+          ),
+        refresh: (id, reason) => refreshPoliticianProfile(id, reason, { revalidate }),
+        now: Date.now,
+      }
+    );
+    expect(next).toMatchObject({ removed: 1, invalidated: 1 });
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith(`politician:${SLUG}-elu`);
+    expect(await storedRow(politicianId)).toBeNull();
   });
 });

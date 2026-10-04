@@ -57,10 +57,14 @@ describe("runReconcileBatch", () => {
   });
 
   it("écrit sans invalider une fois le plafond atteint", async () => {
-    const calls: { id: string; revalidate: unknown }[] = [];
+    const calls: { id: string; revalidate: unknown; keepNonPublic: unknown }[] = [];
     const refresh = vi.fn(
-      async (id: string, _reason: string, deps?: { revalidate?: (t: string) => void }) => {
-        calls.push({ id, revalidate: deps?.revalidate });
+      async (
+        id: string,
+        _reason: string,
+        deps?: { revalidate?: (t: string) => void; keepNonPublic?: boolean }
+      ) => {
+        calls.push({ id, revalidate: deps?.revalidate, keepNonPublic: deps?.keepNonPublic });
         return outcome(id, "updated");
       }
     );
@@ -72,6 +76,26 @@ describe("runReconcileBatch", () => {
     // Deferred ones get a no-op revalidate, the first two get the default (undefined deps).
     expect(calls[0]?.revalidate).toBeUndefined();
     expect(typeof calls[2]?.revalidate).toBe("function");
+  });
+
+  it("garde, au-delà du plafond, le document d'une fiche dépubliée entre listage et calcul", async () => {
+    const calls: { id: string; keepNonPublic: unknown }[] = [];
+    const refresh = vi.fn(
+      async (id: string, _reason: string, deps?: { keepNonPublic?: boolean }) => {
+        calls.push({ id, keepNonPublic: deps?.keepNonPublic });
+        return outcome(id, "updated");
+      }
+    );
+    await runReconcileBatch(
+      { cursor: null, budgetMs: 1e9, invalidationsLeft: 1 },
+      { listIds: listFrom(ids(3)), refresh, now: () => 0 }
+    );
+    // Within the cap the default refresh removes it with an invalidation; past it, it stays.
+    expect(calls).toEqual([
+      { id: "p001", keepNonPublic: undefined },
+      { id: "p002", keepNonPublic: true },
+      { id: "p003", keepNonPublic: true },
+    ]);
   });
 
   it("compte les documents supprimés et les impute au plafond d'invalidations", async () => {
