@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { db } from "../src/lib/db.js";
 import { PublicationStatus } from "../src/generated/prisma/index.js";
+import { requestProfileRefresh } from "../src/lib/politicians/profile-snapshot/request.js";
 
 interface PromoteStats {
   eligible: number;
@@ -124,6 +125,7 @@ async function main() {
 
   stats.promoted = result.count;
   console.log(`\nPromoted ${stats.promoted} maires to PUBLISHED`);
+  await requestProfileRefresh({ politicianIds: ids }, "cli:promote-maires");
 
   await db.$disconnect();
 }

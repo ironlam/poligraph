@@ -136,6 +136,24 @@ describeIfDisposableDb("lecture du document de fiche politicien", () => {
     }
   });
 
+  it("date l'écriture du repli à l'horloge de la base, pas à celle du serveur", async () => {
+    const { readDatabaseNow } = await import("@/lib/politicians/profile-snapshot/store");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const before = await readDatabaseNow();
+    // A server clock years behind the database would date the build outside this window.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2001-01-01T00:00:00.000Z") });
+    try {
+      expect(await readProfileSnapshot(SLUG_DEPUTE)).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+    const after = await readDatabaseNow();
+    const row = await db.politicianProfileSnapshot.findUnique({ where: { politicianId: id } });
+    expect(row!.builtAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(row!.builtAt.getTime()).toBeLessThanOrEqual(after.getTime());
+  });
+
   it("ne reconstruit pas quand le document est à la version courante", async () => {
     await seedSnapshot();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

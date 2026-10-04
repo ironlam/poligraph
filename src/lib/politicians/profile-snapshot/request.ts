@@ -13,6 +13,9 @@ export type ProfileRefreshTarget =
   | { politicianIds: string[] }
   | { partyId: string }
   | { factCheckId: string }
+  // A sync that writes several fact-checks in one run asks once for all of them. `politicianIds`
+  // adds politicians no longer mentioned: a rewrite drops their mention before the request.
+  | { factCheckIds: string[]; politicianIds?: string[] }
   | { affairIds: string[] }
   // A scrutin's policy title shows on the profile of every politician whose recent votes include
   // it. Taking every voter over-approximates "one of the five latest votes" without a query per
@@ -27,6 +30,17 @@ export type ProfileRefreshTarget =
  * Not filtered on publication: the refresh itself skips non-public politicians.
  */
 export async function resolveProfileTargets(target: ProfileRefreshTarget): Promise<string[]> {
+  // Before the `politicianIds` branch: this target may carry politicianIds too.
+  if ("factCheckIds" in target) {
+    const extra = target.politicianIds ?? [];
+    if (target.factCheckIds.length === 0) return [...new Set(extra)];
+    const rows = await db.factCheckMention.findMany({
+      where: { factCheckId: { in: [...new Set(target.factCheckIds)] } },
+      select: { politicianId: true },
+    });
+    return [...new Set([...rows.map((r) => r.politicianId), ...extra])];
+  }
+
   if ("politicianIds" in target) return [...new Set(target.politicianIds)];
 
   if ("partyId" in target) {

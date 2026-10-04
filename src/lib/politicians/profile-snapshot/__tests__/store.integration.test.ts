@@ -71,7 +71,7 @@ describeIfDisposableDb("document de fiche politicien", () => {
   it("n'écrase pas un document construit plus tard", async () => {
     await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(10) });
     const r = await writeProfileSnapshot({ politicianId, document: docB, startedAt: t(5) });
-    expect(r).toEqual({ written: false, changed: false });
+    expect(r).toEqual({ written: false, inserted: false, changed: false });
     expect(await storedHash(politicianId)).toBe(hashOf(docA));
   });
 
@@ -79,17 +79,20 @@ describeIfDisposableDb("document de fiche politicien", () => {
     await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(1) });
     expect(await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(2) })).toEqual({
       written: true,
+      inserted: false,
       changed: false,
     });
   });
 
-  it("ne signale pas de changement à la création, puis en signale un quand l'empreinte diffère", async () => {
+  it("signale une insertion sans changement à la création, puis un changement quand l'empreinte diffère", async () => {
     expect(await writeProfileSnapshot({ politicianId, document: docA, startedAt: t(1) })).toEqual({
       written: true,
+      inserted: true,
       changed: false,
     });
     expect(await writeProfileSnapshot({ politicianId, document: docB, startedAt: t(2) })).toEqual({
       written: true,
+      inserted: false,
       changed: true,
     });
     const row = await db.politicianProfileSnapshot.findUnique({ where: { politicianId } });
@@ -139,7 +142,7 @@ describeIfDisposableDb("document de fiche politicien", () => {
     release();
     await first;
 
-    expect(await second).toEqual({ written: true, changed: true });
+    expect(await second).toEqual({ written: true, inserted: false, changed: true });
     expect(await storedHash(politicianId)).toBe(hashOf(docA));
   });
 

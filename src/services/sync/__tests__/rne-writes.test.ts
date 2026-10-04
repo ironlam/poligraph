@@ -21,7 +21,14 @@ const h = vi.hoisted(() => {
     calls.set(key, fn);
     return fn;
   };
-  return { calls, op, resolveBatch: vi.fn(), getText: vi.fn(), resolveUrl: vi.fn() };
+  return {
+    calls,
+    op,
+    resolveBatch: vi.fn(),
+    getText: vi.fn(),
+    resolveUrl: vi.fn(),
+    requestProfileRefresh: vi.fn(),
+  };
 });
 
 vi.mock("@/lib/db", () => {
@@ -53,6 +60,10 @@ vi.mock("../rne-resource", () => ({
 vi.mock("@/lib/identity", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/identity")>()),
   resolveBatch: h.resolveBatch,
+}));
+
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
 }));
 
 import { syncRNEMaires } from "../rne";
@@ -272,5 +283,104 @@ describe("écritures du sync RNE", () => {
     for (const key of ["politician.create", "politician.update", "mandate.update"]) {
       expect(h.op(key), key).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("recalcul des fiches après le sync RNE", () => {
+  /** A stub the resolver cannot tell apart from a national politician: Phase 2 drafts it. */
+  function undecidedStub(): void {
+    h.op("politician.findMany").mockResolvedValue([
+      {
+        id: "stub-1",
+        firstName: "Alice",
+        lastName: "Martin",
+        birthDate: new Date("1970-04-02"),
+        mandates: [
+          {
+            id: "m1",
+            departmentCode: "01",
+            localData: { rneExternalId: "01001", communeId: "01001" },
+          },
+        ],
+      },
+    ]);
+    h.resolveBatch.mockResolvedValue({
+      results: [
+        { sourceId: "01001", politicianId: "national-1", decision: "UNDECIDED", confidence: 0.6 },
+      ],
+      stats: { total: 1, matched: 0, review: 1, notFound: 0, blocked: 0 },
+    });
+  }
+
+  it("demande une fois, après les écritures, le recalcul des fiches créées et mises en brouillon", async () => {
+    undecidedStub();
+
+    await syncRNEMaires();
+
+    expect(h.op("politician.update")).toHaveBeenCalledWith({
+      where: { id: "stub-1" },
+      data: { publicationStatus: "DRAFT" },
+    });
+    expect(h.requestProfileRefresh).toHaveBeenCalledTimes(1);
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { politicianIds: ["politician.create-id", "stub-1"] },
+      "sync:rne"
+    );
+    expect(h.requestProfileRefresh.mock.invocationCallOrder[0]).toBeGreaterThan(
+      h.op("politician.update").mock.invocationCallOrder[0]!
+    );
+  });
+
+  it("compte la fiche créée dans une succession, après la transaction", async () => {
+    h.op("mandateLocal.findMany").mockImplementation(
+      async (args: { where: { mandate: { isCurrent?: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? [
+              localRow({
+                isCurrent: true,
+                firstName: "Bob",
+                lastName: "DURAND",
+                birthDate: new Date("1955-01-01"),
+              }),
+            ]
+          : []
+    );
+
+    await syncRNEMaires();
+
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { politicianIds: ["politician.create-id"] },
+      "sync:rne"
+    );
+  });
+
+  it("ne demande rien quand aucun statut ne change", async () => {
+    // Un nouveau mandat sur une fiche connue : aucune fiche créée, aucune mise en brouillon.
+    h.op("mandateLocal.findMany").mockImplementation(
+      async (args: { where: { mandate: { isCurrent?: boolean } } }) =>
+        args.where.mandate.isCurrent
+          ? []
+          : [
+              localRow({
+                isCurrent: false,
+                firstName: "Alice",
+                lastName: "MARTIN",
+                birthDate: new Date("1970-04-02"),
+              }),
+            ]
+    );
+
+    await syncRNEMaires();
+
+    expect(h.op("mandate.create")).toHaveBeenCalledOnce();
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
+  });
+
+  it("ne demande rien en simulation", async () => {
+    undecidedStub();
+
+    await syncRNEMaires({ dryRun: true });
+
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 });

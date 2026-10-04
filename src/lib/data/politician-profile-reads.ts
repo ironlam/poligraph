@@ -26,7 +26,9 @@ type PoliticianWhere = { slug: string } | { id: string };
  * two are filtered `_count`s here, under the same public predicates as the rows they count, so the
  * figures the robots predicate sees are unchanged.
  *
- * The tab bodies read `getPoliticianDossier` instead, behind their own Suspense boundary.
+ * `/politiques/[slug]` no longer calls it directly: the profile document builder does
+ * (`profile-snapshot/build.ts`), and the page reads the stored document. The candidate routes
+ * still read it through `getPoliticianIdentity`.
  */
 export async function readPoliticianIdentity(where: PoliticianWhere) {
   const politician = await db.politician.findUnique({
@@ -130,9 +132,8 @@ export type PoliticianIdentity = NonNullable<Awaited<ReturnType<typeof readPolit
  * The tab bodies of a politician profile: the three relations nobody reads above the fold, headed
  * by the affairs tree, which is the deepest read of the whole fiche.
  *
- * Same cache tags as `getPoliticianIdentity` on purpose. Splitting the tags would decouple the two
- * entries' invalidation, which is worth doing, but it changes when each surface goes stale and that
- * is a separate decision from moving the read off the critical path.
+ * Read by the profile document builder, which stores it with the identity so the page never sees
+ * one without the other.
  */
 export async function readPoliticianDossier(where: PoliticianWhere) {
   const politician = await db.politician.findUnique({

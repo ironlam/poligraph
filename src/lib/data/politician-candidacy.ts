@@ -87,27 +87,20 @@ export async function loadPoliticianPresidentialCandidacy(
       sourceUrl: { not: null },
       sourceLabel: { not: null },
     },
+    // Scalars only. Prisma sends one more query per selected relation even when no row matches,
+    // and almost every politician has no candidacy: selecting the relations here cost every
+    // profile render four queries to learn that. They are read below, once a row exists.
     select: {
       id: true,
       status: true,
       sourceUrl: true,
       sourceLabel: true,
       partyLabel: true,
-      party: { select: { name: true, shortName: true, logoUrl: true, color: true } },
+      partyId: true,
+      electionId: true,
       round1Pct: true,
       round2Pct: true,
       isElected: true,
-      election: {
-        select: { slug: true, title: true, shortTitle: true, round1Date: true, round2Date: true },
-      },
-      presidentialData: {
-        select: {
-          declaredAt: true,
-          withdrewAt: true,
-          synthesis: true,
-          synthesisGeneratedAt: true,
-        },
-      },
     },
   });
 
@@ -116,6 +109,27 @@ export async function loadPoliticianPresidentialCandidacy(
   if (!row || row.status === null || row.sourceUrl === null || row.sourceLabel === null) {
     return null;
   }
+
+  // One after the other, as Prisma read them when they were nested: no wider than before.
+  const party = row.partyId
+    ? await db.party.findUnique({
+        where: { id: row.partyId },
+        select: { name: true, shortName: true, logoUrl: true, color: true },
+      })
+    : null;
+  const election = await db.election.findUniqueOrThrow({
+    where: { id: row.electionId },
+    select: { slug: true, title: true, shortTitle: true, round1Date: true, round2Date: true },
+  });
+  const presidentialData = await db.candidacyPresidential.findUnique({
+    where: { candidacyId: row.id },
+    select: {
+      declaredAt: true,
+      withdrewAt: true,
+      synthesis: true,
+      synthesisGeneratedAt: true,
+    },
+  });
 
   const [stats, programme] = await Promise.all([
     getPublicMeasureStatsByCandidacy(row.id),
@@ -132,29 +146,29 @@ export async function loadPoliticianPresidentialCandidacy(
   // Dropped together. The block's own caption dates the text ("Texte généré ... le 7 août"), so a
   // date left behind without the text it dates has nothing to describe.
   const synthesisContradicted = isSynthesisContradictedByMeasures({
-    generatedAt: row.presidentialData?.synthesisGeneratedAt ?? null,
+    generatedAt: presidentialData?.synthesisGeneratedAt ?? null,
     firstMeasurePublishedAt: stats.firstPublishedAt,
   });
 
   return {
     candidacyId: row.id,
-    electionSlug: row.election.slug,
-    electionShortTitle: row.election.shortTitle ?? row.election.title,
-    round1Date: row.election.round1Date,
-    round2Date: row.election.round2Date,
+    electionSlug: election.slug,
+    electionShortTitle: election.shortTitle ?? election.title,
+    round1Date: election.round1Date,
+    round2Date: election.round2Date,
     status: row.status,
     sourceUrl: row.sourceUrl,
     sourceLabel: row.sourceLabel,
-    partyLabel: row.partyLabel ?? row.party?.shortName ?? row.party?.name ?? null,
-    partyLogoUrl: row.party?.logoUrl ?? null,
-    partyColor: row.party?.color ?? null,
+    partyLabel: row.partyLabel ?? party?.shortName ?? party?.name ?? null,
+    partyLogoUrl: party?.logoUrl ?? null,
+    partyColor: party?.color ?? null,
     programmeIdentified: programme !== null,
-    declaredAt: row.presidentialData?.declaredAt ?? null,
-    withdrewAt: row.presidentialData?.withdrewAt ?? null,
-    synthesis: synthesisContradicted ? null : (row.presidentialData?.synthesis ?? null),
+    declaredAt: presidentialData?.declaredAt ?? null,
+    withdrewAt: presidentialData?.withdrewAt ?? null,
+    synthesis: synthesisContradicted ? null : (presidentialData?.synthesis ?? null),
     synthesisGeneratedAt: synthesisContradicted
       ? null
-      : (row.presidentialData?.synthesisGeneratedAt ?? null),
+      : (presidentialData?.synthesisGeneratedAt ?? null),
     publishedMeasureCount: stats.measureCount,
     themesCoveredCount: stats.themesCoveredCount,
     primarySourceMeasureCount: stats.primarySourceMeasureCount,
@@ -384,6 +398,35 @@ export async function loadCandidateFicheDetail(
 }
 
 /**
+ * The id of the presidential election, which keys the tags of the reads below. Plain async for
+ * tests and scripts; pages go through `getPresidentialElectionId`.
+ */
+export async function loadPresidentialElectionId(): Promise<string | null> {
+  const election = await db.election.findUnique({
+    where: { slug: PRESIDENTIELLE_2027_SLUG },
+    select: { id: true },
+  });
+  return election?.id ?? null;
+}
+
+/**
+ * One cache entry for the whole site: every politician fiche and every candidate fiche resolves
+ * the same id, so after the first render none of them pays a query for it.
+ *
+ * Its own tag, deliberately not `elections`: that one is purged by `invalidateEntity("election")`
+ * and by `revalidateAll()` after every sync, and since every profile reads this entry, sharing the
+ * tag would make every profile stale on each sync. Only `invalidateEntity("election")` purges
+ * this tag, never `revalidateAll()`: an election recreated, or missing when the entry filled,
+ * would otherwise freeze the candidacy until the `synced` backstop.
+ */
+export async function getPresidentialElectionId(): Promise<string | null> {
+  "use cache";
+  cacheTag("election-id:presidentielle-2027");
+  cacheLife("synced");
+  return loadPresidentialElectionId();
+}
+
+/**
  * Cached read for the politician fiche, carrying BOTH tags of the presidential surfaces.
  *
  * `election-candidacies` because the notice's state depends on `CandidacyPresidential`
@@ -394,17 +437,14 @@ export async function loadCandidateFicheDetail(
  * stayed closed for 24h with the data already in place.
  *
  * The election id is resolved first because both tags are keyed on it, and the slug alone cannot
- * name them.
+ * name them. It comes from `getPresidentialElectionId`, one cache entry shared by the whole site.
  */
 export async function getPoliticianPresidentialCandidacy(
   politicianId: string
 ): Promise<PoliticianCandidacy | null> {
-  const election = await db.election.findUnique({
-    where: { slug: PRESIDENTIELLE_2027_SLUG },
-    select: { id: true },
-  });
-  if (election === null) return null;
-  return getPoliticianPresidentialCandidacyCached(politicianId, election.id);
+  const electionId = await getPresidentialElectionId();
+  if (electionId === null) return null;
+  return getPoliticianPresidentialCandidacyCached(politicianId, electionId);
 }
 
 async function getPoliticianPresidentialCandidacyCached(
@@ -428,11 +468,8 @@ export async function getCandidateFicheDetail(
   candidacyId: string,
   politicianId: string
 ): Promise<CandidateFicheDetail> {
-  const election = await db.election.findUnique({
-    where: { slug: PRESIDENTIELLE_2027_SLUG },
-    select: { id: true },
-  });
-  if (election === null) {
+  const electionId = await getPresidentialElectionId();
+  if (electionId === null) {
     return {
       themes: [],
       recentVotes: [],
@@ -441,7 +478,7 @@ export async function getCandidateFicheDetail(
       probityNonDefinitiveConvictionCount: 0,
     };
   }
-  return getCandidateFicheDetailCached(candidacyId, politicianId, election.id);
+  return getCandidateFicheDetailCached(candidacyId, politicianId, electionId);
 }
 
 async function getCandidateFicheDetailCached(

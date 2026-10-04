@@ -22,6 +22,7 @@
 import { DataSource, Judgement, PublicationStatus } from "@/generated/prisma";
 
 import { db } from "@/lib/db";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { couldDuplicate } from "@/services/sync/rne-holder";
 
 const BATCH = 200;
@@ -134,6 +135,14 @@ async function main(): Promise<void> {
     console.log(`  ${Math.min(start + BATCH, homonymes.length)}/${homonymes.length}`);
   }
   console.log(`\n${published} fiches republiées.`);
+  // Every candidate, not only the rows the guarded write changed: a refresh of an unchanged
+  // profile stores nothing.
+  if (published > 0) {
+    await requestProfileRefresh(
+      { politicianIds: homonymes.map((entry) => entry.id) },
+      "cli:repair-rne-namesake-drafts"
+    );
+  }
 
   await db.$disconnect();
 }

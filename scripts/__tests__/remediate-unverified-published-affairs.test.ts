@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   },
   checkPublishable: vi.fn(),
   revalidateRemoteCache: vi.fn(),
+  requestProfileRefresh: vi.fn(),
 }));
 
 vi.mock("../../src/lib/db", () => ({ db: h.db }));
@@ -23,6 +24,9 @@ vi.mock("../../src/lib/affairs/publish-guard", () => ({
 }));
 vi.mock("../lib/revalidate-cache", () => ({
   revalidateRemoteCache: h.revalidateRemoteCache,
+}));
+vi.mock("../../src/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
 }));
 
 const UNVERIFIED_AFFAIR = {
@@ -47,6 +51,7 @@ describe("scripts/remediate-unverified-published-affairs", () => {
     h.db.$disconnect.mockReset().mockResolvedValue(undefined);
     h.checkPublishable.mockReset().mockResolvedValue([]);
     h.revalidateRemoteCache.mockReset().mockResolvedValue(undefined);
+    h.requestProfileRefresh.mockReset().mockResolvedValue({ sent: 0, mode: "targeted" });
     consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     originalArgv = process.argv;
@@ -104,5 +109,55 @@ describe("scripts/remediate-unverified-published-affairs", () => {
       expect.stringContaining("ATTENTION"),
       expect.any(Error)
     );
+  });
+
+  it("still requests the profile refresh and the purge for affairs depublished before a crash, then rethrows", async () => {
+    process.argv.push("--confirm");
+    h.db.affair.findMany.mockResolvedValue([
+      UNVERIFIED_AFFAIR,
+      { ...UNVERIFIED_AFFAIR, id: "aff-2", slug: "aff-2-slug" },
+      { ...UNVERIFIED_AFFAIR, id: "aff-3", slug: "aff-3-slug" },
+    ]);
+    h.db.affair.update
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("connexion perdue"));
+    const { main } = await import("../remediate-unverified-published-affairs");
+
+    await expect(main()).rejects.toThrow("connexion perdue");
+
+    // Only aff-1 reached DRAFT: aff-2 failed, aff-3 was never attempted.
+    expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { affairIds: ["aff-1"] },
+      "cli:remediate-unverified-published-affairs"
+    );
+    expect(h.revalidateRemoteCache).toHaveBeenCalledExactlyOnceWith(["affairs", "politicians"]);
+  });
+
+  it("requests the profile refresh for every depublished affair on a full run", async () => {
+    process.argv.push("--confirm");
+    h.db.affair.findMany.mockResolvedValue([
+      UNVERIFIED_AFFAIR,
+      { ...UNVERIFIED_AFFAIR, id: "aff-2", slug: "aff-2-slug" },
+    ]);
+    const { main } = await import("../remediate-unverified-published-affairs");
+
+    await main();
+
+    expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
+      { affairIds: ["aff-1", "aff-2"] },
+      "cli:remediate-unverified-published-affairs"
+    );
+  });
+
+  it("requests nothing when the very first update fails", async () => {
+    process.argv.push("--confirm");
+    h.db.affair.findMany.mockResolvedValue([UNVERIFIED_AFFAIR]);
+    h.db.affair.update.mockRejectedValueOnce(new Error("connexion perdue"));
+    const { main } = await import("../remediate-unverified-published-affairs");
+
+    await expect(main()).rejects.toThrow("connexion perdue");
+
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
+    expect(h.revalidateRemoteCache).not.toHaveBeenCalled();
   });
 });

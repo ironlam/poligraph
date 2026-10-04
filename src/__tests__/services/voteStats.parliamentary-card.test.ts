@@ -55,7 +55,9 @@ describe("fiche politicien : une seule lecture des statistiques par rendu", () =
       .replace(/\/\/.*$/gm, "");
   }
 
-  const page = read("src/app/politiques/[slug]/page.tsx");
+  // The page's derivations live in `page-data.ts` since the page reads the profile document.
+  const page =
+    read("src/app/politiques/[slug]/page.tsx") + read("src/app/politiques/[slug]/page-data.ts");
   const body = read("src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx");
   const voteStats = read("src/app/politiques/[slug]/vote-stats.ts");
   // The reads moved out of the cache wrapper (profile read model): the stats call and the
@@ -92,11 +94,14 @@ describe("fiche politicien : une seule lecture des statistiques par rendu", () =
   it("n'élargit pas le rendu en lançant le dossier et les votes ensemble", () => {
     // Each of these two reads already fans out close to the pool's four connections. Running them
     // inside one `Promise.all` asks for eight and queues the excess, which is the shape
-    // POLIGRAPH-2X reports. They are awaited one after the other on purpose.
+    // POLIGRAPH-2X reports. The profile body no longer reads them: the document builder does, and
+    // it awaits them one after the other on purpose.
     const flatBody = body.replace(/\s+/g, " ");
+    const flatBuild = read("src/lib/politicians/profile-snapshot/build.ts").replace(/\s+/g, " ");
 
-    expect(flatBody).toMatch(/const dossier = await getPoliticianDossier\(/);
-    expect(flatBody).toMatch(/const voteStats = mandateType \? await getProfileVoteStats\(/);
-    expect(flatBody).not.toMatch(/Promise\.all\(\[\s*getPoliticianDossier/);
+    expect(flatBody).not.toMatch(/getPoliticianDossier\(|getProfileVoteStats\(/);
+    expect(flatBuild).toMatch(/const dossier = await readPoliticianDossier\(/);
+    expect(flatBuild).toMatch(/const voteStats = mandateType \? await readProfileVoteStats\(/);
+    expect(flatBuild).not.toMatch(/Promise\.all/);
   });
 });

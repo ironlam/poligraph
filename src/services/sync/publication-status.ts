@@ -7,6 +7,7 @@
 
 import { db } from "@/lib/db";
 import { PublicationStatus } from "@/generated/prisma";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { determineStatus, type PoliticianRow } from "./publication-status-rules";
 
 // ---------------------------------------------------------------------------
@@ -116,6 +117,12 @@ export async function assignPublicationStatus(
         where: { id: { in: ids } },
         data: { publicationStatus: status },
       });
+    }
+    // Publications and depublications in one request, after every write: a profile that left
+    // PUBLISHED loses its stored document, a new one gets built.
+    const changedIds = [...changes.values()].flat();
+    if (changedIds.length > 0) {
+      await requestProfileRefresh({ politicianIds: changedIds }, "sync:publication-status");
     }
   }
 

@@ -168,6 +168,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const { db } = await import("@/lib/db");
   const { revalidateRemoteCache } = await import("./lib/revalidate-cache");
+  const { requestProfileRefresh } = await import("@/lib/politicians/profile-snapshot/request");
 
   console.log(
     `[factcheck-sources] source canonicalisation backfill  apply=${args.apply}  batch=${args.batch}`
@@ -180,6 +181,8 @@ async function main() {
   let renamed = 0;
   let published = 0;
   const shown: RepairPlan[] = [];
+  /** Rows written, renamed or published: a profile shows a fact-check's source too. */
+  const writtenIds: string[] = [];
 
   for await (const row of iterateFactChecks(db, args.batch)) {
     scanned++;
@@ -195,6 +198,7 @@ async function main() {
         where: { id: plan.id },
         data: { source: plan.source.to, publicationStatus: plan.publicationStatus },
       });
+      writtenIds.push(plan.id);
     }
   }
 
@@ -221,6 +225,9 @@ async function main() {
       await revalidateRemoteCache(["factchecks"]).catch((err) => {
         console.warn(`[factcheck-sources] cache purge failed (${err}); purge "factchecks" by hand`);
       });
+    }
+    if (writtenIds.length > 0) {
+      await requestProfileRefresh({ factCheckIds: writtenIds }, "cli:backfill-factcheck-sources");
     }
   } else {
     console.log(`\n[factcheck-sources] report only — re-run with --apply --confirm-production`);

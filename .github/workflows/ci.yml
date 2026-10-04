@@ -311,7 +311,11 @@ jobs:
             "src/lib/data/__tests__/subject-page.integration.test.ts"
             "src/lib/data/__tests__/subject-reads.performance.integration.test.ts"
             "src/lib/data/__tests__/politician-profile.integration.test.ts"
+            "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts"
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts"
             "src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts"
+            "src/lib/politicians/profile-snapshot/__tests__/refresh.integration.test.ts"
+            "src/lib/politicians/profile-snapshot/__tests__/request.integration.test.ts"
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
           )
           for expected_file in "${expected_files[@]}"; do test -f "$expected_file"; done
@@ -325,7 +329,11 @@ jobs:
             src/lib/data/__tests__/subject-page.integration.test.ts \
             src/lib/data/__tests__/subject-reads.performance.integration.test.ts \
             src/lib/data/__tests__/politician-profile.integration.test.ts \
+            "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts" \
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts" \
             src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts \
+            src/lib/politicians/profile-snapshot/__tests__/refresh.integration.test.ts \
+            src/lib/politicians/profile-snapshot/__tests__/request.integration.test.ts \
             src/lib/telemetry/__tests__/pg-pool.integration.test.ts \
             --reporter=json --outputFile=presidential-measure-loads-vitest.json
           npx tsx src/test/vitest-report-validator.ts \
@@ -339,7 +347,11 @@ jobs:
             "src/lib/data/__tests__/subject-page.integration.test.ts" \
             "src/lib/data/__tests__/subject-reads.performance.integration.test.ts" \
             "src/lib/data/__tests__/politician-profile.integration.test.ts" \
+            "src/app/politiques/[slug]/__tests__/page-data.integration.test.ts" \
+            "src/lib/data/__tests__/politician-candidacy.integration.test.ts" \
             "src/lib/politicians/profile-snapshot/__tests__/store.integration.test.ts" \
+            "src/lib/politicians/profile-snapshot/__tests__/refresh.integration.test.ts" \
+            "src/lib/politicians/profile-snapshot/__tests__/request.integration.test.ts" \
             "src/lib/telemetry/__tests__/pg-pool.integration.test.ts"
 
       - name: Publish presidential driver metrics

@@ -29,6 +29,18 @@ describe("cache invalidation scopes", () => {
     expect(tags).not.toContain("elections-municipales-2026");
   });
 
+  it("invalidateEntity('election') purges the cached presidential election id", () => {
+    invalidateEntity("election");
+    expect(revalidateTagSpy).toHaveBeenCalledWith("election-id:presidentielle-2027", "hours");
+  });
+
+  it("revalidateAll never purges the cached presidential election id", () => {
+    revalidateAll();
+    const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
+    expect(tags.length).toBeGreaterThan(0);
+    expect(tags).not.toContain("election-id:presidentielle-2027");
+  });
+
   it("invalidateEntity('election-2026') updates only the municipales-2026 tag", () => {
     invalidateEntity("election-2026");
     const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);

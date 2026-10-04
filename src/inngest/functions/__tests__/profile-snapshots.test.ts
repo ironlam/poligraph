@@ -50,7 +50,7 @@ function batch(overrides: Record<string, unknown>) {
 describe("rattrapage des fiches politicien", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("parcourt les fiches publiques puis les documents orphelins, et compte les suppressions", async () => {
+  it("parcourt les documents orphelins avant les fiches publiques, budget transmis", async () => {
     const inputs: { list: unknown; invalidationsLeft: number; orphans?: boolean }[] = [];
     h.runReconcileBatch.mockImplementation(
       async (
@@ -76,19 +76,52 @@ describe("rattrapage des fiches politicien", () => {
 
     expect(inputs).toEqual([
       {
-        list: h.listPublicPoliticianIds,
-        invalidationsLeft: PROFILE_INVALIDATION_CAP,
-        orphans: false,
-      },
-      {
         list: h.listOrphanProfileSnapshotIds,
-        invalidationsLeft: PROFILE_INVALIDATION_CAP - 3,
+        invalidationsLeft: PROFILE_INVALIDATION_CAP,
         orphans: true,
       },
+      {
+        list: h.listPublicPoliticianIds,
+        invalidationsLeft: PROFILE_INVALIDATION_CAP - 2,
+        orphans: false,
+      },
     ]);
-    expect(step.run.mock.calls.map((c) => c[0])).toEqual(["start", "batch-1", "orphans-1"]);
+    expect(step.run.mock.calls.map((c) => c[0])).toEqual(["start", "orphans-1", "batch-1"]);
     expect(summary).toMatchObject({ batches: 2, processed: 12, updated: 3, removed: 2 });
     expect(summary).toMatchObject({ invalidated: 5 });
+  });
+
+  it("porte le budget restant d'un lot à l'autre, d'abord sur les orphelins", async () => {
+    const seen: { orphans?: boolean; cursor: unknown; invalidationsLeft: number }[] = [];
+    let orphanCalls = 0;
+    h.runReconcileBatch.mockImplementation(
+      async (input: { cursor: unknown; invalidationsLeft: number; orphans?: boolean }) => {
+        seen.push({
+          orphans: input.orphans,
+          cursor: input.cursor,
+          invalidationsLeft: input.invalidationsLeft,
+        });
+        if (input.orphans) {
+          orphanCalls++;
+          return orphanCalls === 1
+            ? batch({ cursor: "o-050", removed: 5, invalidated: 5 })
+            : batch({ removed: 1, invalidated: 1 });
+        }
+        return batch({ updated: 4, invalidated: 4 });
+      }
+    );
+    const step = { run: vi.fn(async (_id: string, fn: () => unknown) => fn()) };
+
+    await (h.handlers["reconcile-politician-profiles"] as Handler)({
+      event: { data: { reason: "test" } },
+      step,
+    });
+
+    expect(seen).toEqual([
+      { orphans: true, cursor: null, invalidationsLeft: PROFILE_INVALIDATION_CAP },
+      { orphans: true, cursor: "o-050", invalidationsLeft: PROFILE_INVALIDATION_CAP - 5 },
+      { orphans: false, cursor: null, invalidationsLeft: PROFILE_INVALIDATION_CAP - 6 },
+    ]);
   });
 
   it("signale dans Sentry les orphelins laissés en place faute de budget", async () => {

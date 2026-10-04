@@ -231,6 +231,12 @@ export function invalidateEntity(
 
     case "election":
       revalidateTag("elections", ELECTION_PROFILE);
+      // The cached id of the presidential election (`getPresidentialElectionId`), so an election
+      // recreated, or missing when the entry filled, does not freeze every profile's candidacy
+      // until the entry expires. Explicit path only: never in `revalidateAll()`, which runs after
+      // every sync. Every caller also purges `election-candidacies:<id>`, which the same profiles
+      // already carry, so this stales no page that was not already stale.
+      revalidateTag("election-id:presidentielle-2027", ELECTION_PROFILE);
       break;
 
     case "election-2026":
@@ -241,9 +247,9 @@ export function invalidateEntity(
 
 /**
  * After an affair mutation, invalidate each affected politician profile so its
- * affairs list reflects the change. Both halves of the profile read
- * (getPoliticianIdentity, which counts the affairs, and getPoliticianDossier, which lists them)
- * are tagged `politician:<slug>`, so this purges the counter and the list together.
+ * affairs list reflects the change. The profile page reads its precomputed document through
+ * `getPoliticianProfile`, tagged `politician:<slug>`, which carries the counter and the list
+ * together, so this purges both.
  * De-dupes and skips falsy slugs. Pair with invalidateEntity("affair", ...).
  */
 export function invalidateAffectedPoliticians(slugs: Array<string | null | undefined>): void {

@@ -2,22 +2,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Hoisted: `vi.mock` factories run before the module body, so the spies cannot be plain consts.
 const mocks = vi.hoisted(() => ({
-  getPoliticianDossier: vi.fn(),
-  getProfileVoteStats: vi.fn(),
+  getPoliticianProfile: vi.fn(),
+  getPoliticianPresidentialCandidacy: vi.fn(async () => null),
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");
   }),
 }));
-const { getPoliticianDossier, notFound } = mocks;
+const { getPoliticianProfile, notFound } = mocks;
 
 vi.mock("server-only", () => ({}));
 // The component tree reaches `@/lib/data/scrutins`, which builds the Prisma client at import time.
 // The unit CI job has no DATABASE_URL, so the import alone would throw before any test runs.
 vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
-vi.mock("@/lib/data/politicians", () => ({ getPoliticianDossier: mocks.getPoliticianDossier }));
-vi.mock("../vote-stats", () => ({ getProfileVoteStats: mocks.getProfileVoteStats }));
+vi.mock("@/lib/data/politician-profile", () => ({
+  getPoliticianProfile: mocks.getPoliticianProfile,
+  readProfileSnapshot: vi.fn(),
+}));
+vi.mock("@/lib/data/politician-candidacy", () => ({
+  getPoliticianPresidentialCandidacy: mocks.getPoliticianPresidentialCandidacy,
+  loadPoliticianPresidentialCandidacy: vi.fn(),
+}));
 
+import PoliticianPage from "../page";
 import { PoliticianProfileBody } from "../_components/PoliticianProfileBody";
 
 const IDENTITY = {
@@ -32,13 +40,16 @@ const IDENTITY = {
 } as never;
 
 /**
- * The profile read is split in two. The identity half can be a warm cache entry describing a
- * profile that the dossier half no longer finds public, and the empty fallback that case invites
- * is not survivable: it renders a clean profile for someone who has a judicial record, drops the
- * Fact-checks tab from the bar, and lets `generateMetadata` keep counting the affairs it no longer
- * shows. That page is then cached for 24h under `revalidate = 86400`.
+ * The profile used to be read in two halves, and the identity half could be a warm cache entry
+ * describing a profile that the dossier half no longer found public. The empty fallback that case
+ * invites is not survivable: it renders a clean profile for someone who has a judicial record,
+ * drops the Fact-checks tab from the bar, and lets `generateMetadata` keep counting the affairs it
+ * no longer shows, cached for 24h under `revalidate = 86400`.
+ *
+ * The page now reads one document that carries both halves, so the only "dossier missing" case
+ * left is the whole document missing, and that is a 404.
  */
-describe("PoliticianProfileBody, dossier introuvable", () => {
+describe("fiche politicien, dossier introuvable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     notFound.mockImplementation(() => {
@@ -47,39 +58,37 @@ describe("PoliticianProfileBody, dossier introuvable", () => {
   });
 
   it("fait un 404 au lieu de rendre une fiche vide", async () => {
-    getPoliticianDossier.mockResolvedValue(null);
+    getPoliticianProfile.mockResolvedValue(null);
 
     await expect(
-      PoliticianProfileBody({
-        politician: IDENTITY,
-        mandateType: null,
-        currentParliamentaryMandate: null,
-        currentGroup: null,
-        isActiveParliamentarian: false,
-        isChamberPresident: false,
-      })
+      PoliticianPage({ params: Promise.resolve({ slug: "alice-publique" }) })
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
     expect(notFound).toHaveBeenCalledOnce();
   });
 
   it("ne fait pas de 404 quand le dossier est simplement vide", async () => {
-    getPoliticianDossier.mockResolvedValue({
-      affairs: [],
-      factCheckMentions: [],
-      dossierAuthors: [],
+    getPoliticianProfile.mockResolvedValue({
+      identity: IDENTITY,
+      dossier: { affairs: [], factCheckMentions: [], dossierAuthors: [] },
+      voteStats: null,
+      mandateType: null,
     });
 
     await expect(
+      PoliticianPage({ params: Promise.resolve({ slug: "alice-publique" }) })
+    ).resolves.toBeTruthy();
+    expect(
       PoliticianProfileBody({
         politician: IDENTITY,
-        mandateType: null,
+        dossier: { affairs: [], factCheckMentions: [], dossierAuthors: [] },
+        voteStats: null,
         currentParliamentaryMandate: null,
         currentGroup: null,
         isActiveParliamentarian: false,
         isChamberPresident: false,
       })
-    ).resolves.toBeTruthy();
+    ).toBeTruthy();
 
     expect(notFound).not.toHaveBeenCalled();
   });

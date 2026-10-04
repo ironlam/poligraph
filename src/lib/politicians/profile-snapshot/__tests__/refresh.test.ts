@@ -28,6 +28,8 @@ const doc = {
   mandateType: null,
 } as unknown as PoliticianProfileDocument;
 const hash = hashSerializedDocument(serializeProfileDocument(doc));
+/** The database clock, as readDatabaseNow returns it: the first query of every refresh. */
+const DB_NOW = new Date("2026-10-04T08:00:00.123Z");
 
 /** The locked read of the previous hash, then the upsert (one row when written). */
 function stored(prevHash: string | null, written: boolean) {
@@ -44,6 +46,7 @@ describe("refreshPoliticianProfile", () => {
     executeRaw.mockReset();
     build.mockReset();
     revalidate.mockReset();
+    queryRaw.mockResolvedValueOnce([{ now: DB_NOW }]);
     build.mockResolvedValue(doc);
     vi.spyOn(console, "info").mockImplementation(() => {});
   });
@@ -56,11 +59,24 @@ describe("refreshPoliticianProfile", () => {
     expect(revalidate).toHaveBeenCalledWith("politician:slug-courant");
   });
 
-  it("n'invalide pas à la première écriture : aucune page n'a encore servi ce document", async () => {
+  it("invalide à la première écriture : la page a pu mettre en cache une fiche absente", async () => {
     stored(null, true);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
-    expect(outcome.status).toBe("unchanged");
+    expect(outcome.status).toBe("updated");
+    expect(revalidate).toHaveBeenCalledExactlyOnceWith("politician:slug-courant");
+  });
+
+  it("avec deferInvalidation, marque en attente la première écriture au lieu d'invalider", async () => {
+    stored(null, true);
+    executeRaw.mockResolvedValue(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome).toMatchObject({ status: "updated", invalidationDeferred: true });
     expect(revalidate).not.toHaveBeenCalled();
+    const sql = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(sql.values).toEqual([PENDING_INVALIDATION_HASH, "pol-1", DB_NOW]);
   });
 
   it("n'invalide pas quand le contenu est inchangé", async () => {
@@ -82,9 +98,34 @@ describe("refreshPoliticianProfile", () => {
     queryRaw.mockResolvedValueOnce([]);
     const outcome = await refreshPoliticianProfile("pol-1", "test", { revalidate });
     expect(outcome).toMatchObject({ status: "not-public", removed: false });
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(executeRaw).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it("laisse en place, sans l'invalider, le document d'une fiche non publique avec keepNonPublic", async () => {
+    build.mockResolvedValue(null);
+    queryRaw.mockResolvedValueOnce([{ slug: "slug-stocké" }]);
+    executeRaw.mockResolvedValueOnce(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      keepNonPublic: true,
+    });
+    expect(outcome).toMatchObject({ status: "not-public", removed: false });
+    // Only the clock read: neither the stored slug nor a delete.
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(executeRaw).not.toHaveBeenCalled();
     expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it("date le calcul à l'horloge de la base, pas à celle du serveur", async () => {
+    stored("ancienne", true);
+    await refreshPoliticianProfile("pol-1", "test", { revalidate });
+    const clockSql = queryRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(clockSql.sql).toMatch(/clock_timestamp\(\)/);
+    const upsert = queryRaw.mock.calls[2]![0] as Prisma.Sql;
+    expect(upsert.sql).toMatch(/INSERT INTO "PoliticianProfileSnapshot"/);
+    expect(upsert.values).toContainEqual(DB_NOW);
   });
 
   it("invalide le slug stocké puis supprime le document d'une fiche devenue non publique", async () => {
@@ -156,8 +197,8 @@ describe("refreshPoliticianProfile", () => {
     expect(sql.values[0]).toBe(PENDING_INVALIDATION_HASH);
     expect(sql.values[1]).toBe("pol-1");
     // The row is matched on this build's start: the same instant written by the upsert.
-    const upsert = queryRaw.mock.calls[1]![0] as Prisma.Sql;
-    expect(sql.values[2]).toBeInstanceOf(Date);
+    const upsert = queryRaw.mock.calls[2]![0] as Prisma.Sql;
+    expect(sql.values[2]).toEqual(DB_NOW);
     expect(upsert.values).toContainEqual(sql.values[2]);
   });
 
@@ -175,6 +216,34 @@ describe("refreshPoliticianProfile", () => {
       message: "base indisponible",
     });
     errorSpy.mockRestore();
+  });
+
+  it("avec deferInvalidation, écrit puis marque l'invalidation en attente au lieu d'invalider", async () => {
+    stored("ancienne", true);
+    executeRaw.mockResolvedValue(1);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome).toMatchObject({ status: "updated", invalidationDeferred: true });
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+    const sql = executeRaw.mock.calls[0]![0] as Prisma.Sql;
+    expect(sql.sql).toMatch(/UPDATE "PoliticianProfileSnapshot"/);
+    expect(sql.sql).toMatch(/"builtAt" = /);
+    expect(sql.values).toEqual([PENDING_INVALIDATION_HASH, "pol-1", DB_NOW]);
+  });
+
+  it("avec deferInvalidation, ne marque rien quand le contenu est inchangé", async () => {
+    stored(hash, true);
+    const outcome = await refreshPoliticianProfile("pol-1", "test", {
+      revalidate,
+      deferInvalidation: true,
+    });
+    expect(outcome.status).toBe("unchanged");
+    expect(outcome.invalidationDeferred).toBeUndefined();
+    expect(executeRaw).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
   });
 
   it("invalide à la nouvelle tentative quand l'empreinte stockée est la sentinelle", async () => {

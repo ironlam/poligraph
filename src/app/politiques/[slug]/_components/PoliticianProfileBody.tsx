@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { FileText } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
@@ -19,9 +18,12 @@ import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
 import { computeJudicialCounts } from "@/lib/politicians/judicial-counts";
 import { buildPoliticianSignals } from "@/lib/politicians/signals";
 import { buildSourceLinks } from "@/lib/politicians/external-sources";
-import { getPoliticianDossier, type PoliticianIdentity } from "@/lib/data/politicians";
+import type {
+  PoliticianDossier,
+  PoliticianIdentity,
+  ProfileVoteStats,
+} from "@/lib/data/politician-profile-reads";
 import type { DeclarationDetails } from "@/types/hatvp";
-import { getProfileVoteStats } from "../vote-stats";
 
 const OS_DATASET_LABELS: Record<string, string> = {
   fr_assemblee: "Assemblée nationale",
@@ -34,12 +36,15 @@ const OS_DATASET_LABELS: Record<string, string> = {
 
 export interface PoliticianProfileBodyProps {
   politician: PoliticianIdentity;
+  /** From the same precomputed document as `politician`, so the two cannot disagree. */
+  dossier: PoliticianDossier;
+  voteStats: ProfileVoteStats | null;
   /**
-   * Resolved once by the page and handed down rather than re-derived here. The mandate a profile
-   * headlines and the mandate its votes tab reads are not the same one, and deriving that twice is
-   * how 42 profiles ended up serving an empty votes tab (#919).
+   * The current DEPUTE or SENATEUR mandate, resolved once by the page (`derivePoliticianPageModel`)
+   * and handed down rather than re-derived here. It is not the mandate the profile headlines: a
+   * parliamentarian who also holds a newer local mandate headlines the local one, and reading that
+   * one here is how 42 profiles ended up serving an empty votes tab (#919).
    */
-  mandateType: "DEPUTE" | "SENATEUR" | null;
   currentParliamentaryMandate: {
     type: "DEPUTE" | "SENATEUR";
     title: string;
@@ -50,29 +55,15 @@ export interface PoliticianProfileBodyProps {
   isChamberPresident: boolean;
 }
 
-export async function PoliticianProfileBody({
+export function PoliticianProfileBody({
   politician,
-  mandateType,
+  dossier,
+  voteStats,
   currentParliamentaryMandate,
   currentGroup,
   isActiveParliamentarian,
   isChamberPresident,
 }: PoliticianProfileBodyProps) {
-  // Awaited one after the other, not in a `Promise.all`. Each of these two reads already fans out
-  // close to the pool's four connections on its own, so running them together would ask for eight
-  // and queue the excess: the exact shape POLIGRAPH-2X reports. Nothing above the fold waits on
-  // this boundary, so the sequential cost is paid where no visitor is looking at a blank screen.
-  const dossier = await getPoliticianDossier(politician.slug);
-  const voteStats = mandateType ? await getProfileVoteStats(politician.id, mandateType) : null;
-
-  // Not an empty fallback. A null here means the row stopped being public between the two reads,
-  // and treating that as "no affairs, no fact-checks" would serve a clean profile for someone who
-  // has a record: the Affaires tab loses its badge, the Fact-checks tab disappears from the bar,
-  // and `generateMetadata` still counts N affairs off the identity read, so the page stays
-  // indexable while asserting the opposite. It would then sit in the ISR cache for 24h. The read
-  // was single before the split and this case was a 404; it stays one.
-  if (!dossier) notFound();
-
   const { affairs, factCheckMentions, dossierAuthors } = dossier;
 
   const voteData = voteStats?.voteData ?? null;

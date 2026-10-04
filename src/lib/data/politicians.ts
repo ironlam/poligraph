@@ -19,7 +19,8 @@ import {
  * two are filtered `_count`s here, under the same public predicates as the rows they count, so the
  * figures the robots predicate sees are unchanged.
  *
- * The tab bodies read `getPoliticianDossier` instead, behind their own Suspense boundary.
+ * `/politiques/[slug]` reads the precomputed profile document instead
+ * (`@/lib/data/politician-profile`); the candidate routes still read this one.
  */
 export const getPoliticianIdentity = cache(async function getPoliticianIdentity(slug: string) {
   "use cache";
@@ -39,6 +40,8 @@ export type { PoliticianIdentity };
  * Same cache tags as `getPoliticianIdentity` on purpose. Splitting the tags would decouple the two
  * entries' invalidation, which is worth doing, but it changes when each surface goes stale and that
  * is a separate decision from moving the read off the critical path.
+ *
+ * `/politiques/[slug]` no longer reads it: its tab bodies come from the precomputed document.
  */
 export const getPoliticianDossier = cache(async function getPoliticianDossier(slug: string) {
   "use cache";

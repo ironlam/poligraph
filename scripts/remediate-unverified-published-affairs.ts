@@ -30,6 +30,7 @@ import { dirname } from "node:path";
 import { db } from "../src/lib/db";
 import { checkPublishable, type PublishBlockReason } from "../src/lib/affairs/publish-guard";
 import { revalidateRemoteCache } from "./lib/revalidate-cache";
+import { requestProfileRefresh } from "../src/lib/politicians/profile-snapshot/request";
 
 interface Candidate {
   id: string;
@@ -171,53 +172,64 @@ export async function main() {
     return;
   }
 
-  let updated = 0;
-  for (const c of candidates) {
-    // Statut et champs de validation remis à zéro dans la même écriture :
-    // un verifiedAt résiduel rendrait l'affaire indiscernable d'une affaire
-    // validée lors d'un audit ultérieur.
-    await db.affair.update({
-      where: { id: c.id },
-      data: { publicationStatus: "DRAFT", verifiedAt: null, verifiedBy: null },
-    });
+  // Ids actually set back to DRAFT. The profile refresh and the export purge run in `finally`
+  // for these: a crash halfway through the loop must not leave the affairs already depublished
+  // on cached profiles and exports. The original error is rethrown once they have gone out.
+  const depublishedIds: string[] = [];
+  try {
+    for (const c of candidates) {
+      // Statut et champs de validation remis à zéro dans la même écriture :
+      // un verifiedAt résiduel rendrait l'affaire indiscernable d'une affaire
+      // validée lors d'un audit ultérieur.
+      await db.affair.update({
+        where: { id: c.id },
+        data: { publicationStatus: "DRAFT", verifiedAt: null, verifiedBy: null },
+      });
+      depublishedIds.push(c.id);
 
-    await db.auditLog.create({
-      data: {
-        action: "UPDATE",
-        entityType: "Affair",
-        entityId: c.id,
-        changes: {
-          remediation: "unverified-publication",
-          from: "PUBLISHED",
-          to: "DRAFT",
-          previousVerifiedAt: c.verifiedAt?.toISOString() ?? null,
-          previousVerifiedBy: c.verifiedBy,
-          reasons: c.reasons,
+      await db.auditLog.create({
+        data: {
+          action: "UPDATE",
+          entityType: "Affair",
+          entityId: c.id,
+          changes: {
+            remediation: "unverified-publication",
+            from: "PUBLISHED",
+            to: "DRAFT",
+            previousVerifiedAt: c.verifiedAt?.toISOString() ?? null,
+            previousVerifiedBy: c.verifiedBy,
+            reasons: c.reasons,
+          },
         },
-      },
-    });
+      });
+    }
 
-    updated++;
-  }
-
-  console.log(`\n✓ ${updated} affaire(s) dépubliée(s) vers DRAFT, tracées dans AuditLog.`);
-  console.log("  Elles sont désormais dans la file de modération pour revue humaine.");
-
-  // The CSV exports are cached at the edge for 24h. A depublication that does not reach
-  // the CDN leaves the affair downloadable, so the purge is part of the remediation, not
-  // an optimisation. Only triggered when something was actually depublished.
-  // "politicians" too: /api/export/politiques carries an affairs count and an ?affairs=true
-  // filter, both computed over published affairs.
-  if (updated > 0) {
-    try {
-      await revalidateRemoteCache(["affairs", "politicians"]);
-      console.log("Cache des exports purgé.");
-    } catch (error) {
-      console.error(
-        "ATTENTION : la purge du cache a échoué. Les affaires dépubliées peuvent rester dans " +
-          "/api/export/affaires jusqu'à 24 h. Purger le tag « exports » depuis le dashboard Vercel.",
-        error
+    console.log(
+      `\n✓ ${depublishedIds.length} affaire(s) dépubliée(s) vers DRAFT, tracées dans AuditLog.`
+    );
+    console.log("  Elles sont désormais dans la file de modération pour revue humaine.");
+  } finally {
+    if (depublishedIds.length > 0) {
+      await requestProfileRefresh(
+        { affairIds: depublishedIds },
+        "cli:remediate-unverified-published-affairs"
       );
+
+      // The CSV exports are cached at the edge for 24h. A depublication that does not reach
+      // the CDN leaves the affair downloadable, so the purge is part of the remediation, not
+      // an optimisation. Only triggered when something was actually depublished.
+      // "politicians" too: /api/export/politiques carries an affairs count and an ?affairs=true
+      // filter, both computed over published affairs.
+      try {
+        await revalidateRemoteCache(["affairs", "politicians"]);
+        console.log("Cache des exports purgé.");
+      } catch (error) {
+        console.error(
+          "ATTENTION : la purge du cache a échoué. Les affaires dépubliées peuvent rester dans " +
+            "/api/export/affaires jusqu'à 24 h. Purger le tag « exports » depuis le dashboard Vercel.",
+          error
+        );
+      }
     }
   }
 
