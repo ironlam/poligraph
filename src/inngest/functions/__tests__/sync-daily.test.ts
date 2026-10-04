@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 type Handler = (ctx: { step: unknown }) => Promise<unknown>;
 
@@ -33,22 +33,7 @@ async function runDaily() {
 }
 
 describe("sync-daily : rattrapage des fiches", () => {
-  beforeEach(() => vi.unstubAllEnvs());
-
-  it("n'envoie pas le rattrapage sans l'interrupteur", async () => {
-    const step = await runDaily();
-    expect(step.run).toHaveBeenCalled();
-    expect(step.sendEvent).not.toHaveBeenCalled();
-  });
-
-  it("n'envoie pas le rattrapage si l'interrupteur vaut autre chose que \"true\"", async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "yes");
-    const step = await runDaily();
-    expect(step.sendEvent).not.toHaveBeenCalled();
-  });
-
-  it('envoie le rattrapage après les étapes quand l\'interrupteur vaut "true"', async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "true");
+  it("envoie le rattrapage après les étapes", async () => {
     const step = await runDaily();
     expect(step.sendEvent).toHaveBeenCalledExactlyOnceWith("profile-reconcile", {
       name: PROFILE_RECONCILE_EVENT,

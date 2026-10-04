@@ -14,7 +14,6 @@ import { runVoteSyncWithCacheInvalidation } from "../vote-cache";
 describe("runVoteSyncWithCacheInvalidation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
   });
 
   it.each([
@@ -53,25 +52,12 @@ describe("runVoteSyncWithCacheInvalidation", () => {
     expect(revalidateTags).not.toHaveBeenCalled();
   });
 
-  it("ne demande pas de rattrapage des fiches sans l'interrupteur", async () => {
-    await runVoteSyncWithCacheInvalidation(async () => ({ votesCreated: 1 }));
-    expect(requestProfileReconcile).not.toHaveBeenCalled();
-  });
-
-  it('ne demande pas de rattrapage si l\'interrupteur vaut autre chose que "true"', async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "1");
-    await runVoteSyncWithCacheInvalidation(async () => ({ votesCreated: 1 }));
-    expect(requestProfileReconcile).not.toHaveBeenCalled();
-  });
-
-  it('demande un rattrapage des fiches après le sync quand l\'interrupteur vaut "true"', async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "true");
+  it("demande un rattrapage des fiches après le sync", async () => {
     await runVoteSyncWithCacheInvalidation(async () => ({ votesCreated: 1 }));
     expect(requestProfileReconcile).toHaveBeenCalledExactlyOnceWith("sync-scrutins");
   });
 
   it("ne demande pas de rattrapage quand le sync échoue", async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "true");
     await expect(
       runVoteSyncWithCacheInvalidation(async () => {
         throw new Error("sync failed");

@@ -31,7 +31,6 @@ describe("POST /api/cron/revalidate : rattrapage des fiches", () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv("CRON_SECRET", "secret");
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "true");
     h.requestProfileReconcile.mockResolvedValue({ sent: 1 });
   });
 
@@ -55,22 +54,5 @@ describe("POST /api/cron/revalidate : rattrapage des fiches", () => {
 
     expect(await res.json()).toEqual({ revalidated: "all", deprecated: true });
     expect(h.requestProfileReconcile).toHaveBeenCalledWith("cron:all");
-  });
-
-  it.each([
-    ["absent", undefined],
-    ['"false"', "false"],
-    ['"TRUE"', "TRUE"],
-  ])("ne demande aucun rattrapage quand l'interrupteur est %s", async (_label, value) => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", value);
-
-    const tagged = await POST(req({ tags: ["politicians", "votes"] }));
-    const all = await POST(req({ all: true }));
-
-    expect(await tagged.json()).toEqual({ revalidated: ["politicians", "votes"] });
-    expect(await all.json()).toEqual({ revalidated: "all", deprecated: true });
-    expect(h.revalidateTags).toHaveBeenCalledWith(["politicians", "votes"]);
-    expect(h.revalidateAll).toHaveBeenCalled();
-    expect(h.requestProfileReconcile).not.toHaveBeenCalled();
   });
 });

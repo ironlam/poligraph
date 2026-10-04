@@ -1,6 +1,10 @@
 /**
  * Event names and sending for the profile-snapshot jobs. No database access here on purpose:
  * routes that only send events (the cron revalidation) must not reach Prisma models through it.
+ *
+ * The automatic triggers (end of sync-daily, cron revalidation, scrutin sync, votes revalidation)
+ * always send: deploy in off-peak hours and run the first reconcile by hand right after, so the
+ * initial fill is measured rather than left to whatever sync follows the deploy.
  */
 
 export const PROFILE_REFRESH_EVENT = "politician/profile.refresh";
@@ -14,16 +18,6 @@ export async function defaultSend(events: InngestEventPayload[]): Promise<unknow
   // Lazy import: loading this module must not construct the Inngest client.
   const { inngest } = await import("@/inngest/client");
   return inngest.send(events);
-}
-
-/**
- * Whether the automatic triggers (end of sync-daily, cron revalidation, scrutin sync) may ask for
- * a reconcile pass. Off unless `PROFILE_SNAPSHOT_AUTO_RECONCILE` is exactly `"true"`: the first
- * fill is a measured manual run, not whatever sync happens to follow the deploy. A manual event
- * from the Inngest dashboard and the moderation fallback do not consult it.
- */
-export function isProfileAutoReconcileEnabled(): boolean {
-  return process.env.PROFILE_SNAPSHOT_AUTO_RECONCILE === "true";
 }
 
 /**

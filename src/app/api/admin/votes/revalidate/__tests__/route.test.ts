@@ -40,33 +40,25 @@ async function post(scrutinIds: string[]) {
 describe("POST /api/admin/votes/revalidate : recalcul des fiches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
     h.scrutinFindMany.mockResolvedValue([
       { id: "s1", policyTitle: { status: "APPROVED" } },
       { id: "s2", policyTitle: { status: "DRAFT" } },
     ]);
   });
 
-  it("ne demande aucun recalcul sans l'interrupteur, mais revalide les votes", async () => {
+  it("revalide les votes et demande le recalcul des votants des seuls titres approuvés", async () => {
     const res = await post(["s1", "s2"]);
 
     expect(await res.json()).toEqual({ revalidated: ["s1"], skipped: expect.any(Array) });
     expect(h.revalidateTags).toHaveBeenCalledWith(["votes"], "max");
-    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
-  });
-
-  it('ne demande aucun recalcul si l\'interrupteur vaut autre chose que "true"', async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "false");
-    await post(["s1", "s2"]);
-    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
-  });
-
-  it('demande le recalcul des votants des seuls titres approuvés quand il vaut "true"', async () => {
-    vi.stubEnv("PROFILE_SNAPSHOT_AUTO_RECONCILE", "true");
-    await post(["s1", "s2"]);
     expect(h.requestProfileRefresh).toHaveBeenCalledExactlyOnceWith(
       { scrutinIds: ["s1"] },
       "admin:votes-revalidés"
     );
+  });
+
+  it("ne demande aucun recalcul quand aucun titre n'est approuvé", async () => {
+    await post(["s2"]);
+    expect(h.requestProfileRefresh).not.toHaveBeenCalled();
   });
 });

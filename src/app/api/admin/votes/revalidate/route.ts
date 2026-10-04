@@ -5,7 +5,6 @@ import { revalidateVotesSchema } from "@/lib/security/schemas";
 import { db } from "@/lib/db";
 import { revalidatePublicPathsForScrutin } from "@/lib/votes/revalidate-public";
 import { revalidateTags } from "@/lib/cache";
-import { isProfileAutoReconcileEnabled } from "@/lib/politicians/profile-snapshot/events";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { partitionRevalidatable } from "./partition";
 
@@ -40,11 +39,8 @@ export const POST = withAdminAuth(
     }
     if (toRevalidate.length > 0) {
       revalidateTags(["votes"], "max");
-      // The approved titles also show in the "Derniers votes" of their voters' profiles. Called
-      // after the daily auto-approve, so it is an automatic trigger: behind the same switch.
-      if (isProfileAutoReconcileEnabled()) {
-        await requestProfileRefresh({ scrutinIds: toRevalidate }, "admin:votes-revalidés");
-      }
+      // The approved titles also show in the "Derniers votes" of their voters' profiles.
+      await requestProfileRefresh({ scrutinIds: toRevalidate }, "admin:votes-revalidés");
     }
 
     await db.auditLog.create({
