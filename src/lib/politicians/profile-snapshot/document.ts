@@ -85,35 +85,36 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-const VOLATILE_KEYS = new Set(["updatedAt", "createdAt"]);
-
-const PARIS_DAY = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Europe/Paris",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-/** `{ $date: iso }` → the Europe/Paris calendar day `formatDate` prints, as `YYYY-MM-DD`. */
-function parisDay(value: unknown): unknown {
-  if (value !== null && typeof value === "object" && "$date" in value) {
-    const iso = (value as { $date: unknown }).$date;
-    if (typeof iso === "string") return PARIS_DAY.format(new Date(iso));
-  }
-  return value;
-}
+/** Bookkeeping keys dropped from the hash wherever they appear. */
+const VOLATILE_KEYS = new Set(["updatedAt", "createdAt", "lastConfirmedAt"]);
+/** `photoCheckedAt`, `careerCheckedAt`, `webSearchCheckedAt` and any later `…CheckedAt`. */
+const CHECKED_AT = /CheckedAt$/;
+/** Affair bookkeeping set by enrichment, SLAPP qualification and admin review, never displayed. */
+const AFFAIR_VOLATILE_KEYS = new Set(["descriptionEnrichedAt", "slappQualifiedAt", "verifiedAt"]);
 
 /**
- * What the content hash covers: the serialized document minus every `updatedAt` / `createdAt` at
- * any depth. Those are `@updatedAt` bookkeeping a sync rewrites without changing anything shown
- * (`deputes.ts` touches every mandate on every run), and hashing them would invalidate live pages
- * for nothing. Two timestamps are shown and stay in:
- * - `identity.updatedAt`, printed as a day by `PoliticianProfileBody` ("mis à jour le"), kept as
- *   that day only;
- * - `dossier.affairs[].createdAt`, the last fallback of the affair sort in `AffairsSection`, kept
- *   whole since a sort compares it whole (it never changes after insert anyway).
+ * What the content hash covers: the serialized document minus the timestamps a sync or a job
+ * rewrites without changing anything the profile shows. Hashing them would invalidate live pages
+ * for nothing: `deputes.ts` and `senateurs.ts` touch every parliamentarian and mandate on every
+ * run (`updatedAt`), every mandate sync confirms its rows (`lastConfirmedAt`), and the photo,
+ * career and web-search jobs stamp the politician (`…CheckedAt`). Dropped at any depth.
+ *
+ * `identity.updatedAt` is printed ("mis à jour le") but dropped too, by owner decision: it moves
+ * daily for every parliamentarian, and a cached page showing an older date until a real change is
+ * accepted as cosmetic. Kept: `dossier.affairs[].createdAt`, the last fallback of the affair sort
+ * in `AffairsSection`, and `biographyGeneratedAt`, printed under the biography.
  * The stored `data` stays complete; only the hash ignores the rest.
  */
+export function isHashIgnoredPath(path: string): boolean {
+  // Array indices do not matter: `dossier.affairs[3].createdAt` is `dossier.affairs[].createdAt`.
+  const normalized = path.replace(/\[\d*\]/g, "[]");
+  if (normalized === "dossier.affairs[].createdAt") return false;
+  const key = normalized.slice(normalized.lastIndexOf(".") + 1);
+  if (VOLATILE_KEYS.has(key) || CHECKED_AT.test(key)) return true;
+  return normalized === `dossier.affairs[].${key}` && AFFAIR_VOLATILE_KEYS.has(key);
+}
+
+/** The serialized document with every `isHashIgnoredPath` key removed. */
 export function fingerprintProjection(value: unknown, path = ""): unknown {
   if (Array.isArray(value)) return value.map((item) => fingerprintProjection(item, `${path}[]`));
   if (value === null || typeof value !== "object") return value;
@@ -121,11 +122,7 @@ export function fingerprintProjection(value: unknown, path = ""): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     const itemPath = path ? `${path}.${key}` : key;
-    if (VOLATILE_KEYS.has(key)) {
-      if (itemPath === "identity.updatedAt") out[key] = parisDay(item);
-      else if (itemPath === "dossier.affairs[].createdAt") out[key] = item;
-      continue;
-    }
+    if (isHashIgnoredPath(itemPath)) continue;
     out[key] = fingerprintProjection(item, itemPath);
   }
   return out;

@@ -73,16 +73,74 @@ describe("document de fiche politicien", () => {
     expect(hashOf(a)).toBe(hashOf(b));
   });
 
-  it("ignore un changement d'identity.updatedAt dans la même journée", () => {
+  it("ignore identity.updatedAt, même un autre jour (décision du propriétaire)", () => {
     const later = sampleDocument();
-    later.identity.updatedAt = new Date("2026-09-01T21:59:59.000Z"); // 23:59:59 à Paris
+    later.identity.updatedAt = new Date("2026-09-15T08:00:00.000Z");
     expect(hashOf(later)).toBe(hashOf(sampleDocument()));
   });
 
-  it("change d'empreinte quand identity.updatedAt passe au jour suivant à Paris", () => {
-    const nextDay = sampleDocument();
-    nextDay.identity.updatedAt = new Date("2026-09-01T22:00:00.000Z"); // 00:00 le 2 à Paris
-    expect(hashOf(nextDay)).not.toBe(hashOf(sampleDocument()));
+  it("ignore le lastConfirmedAt d'un mandat réécrit à chaque sync", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    (a.identity.mandates[0] as unknown as Record<string, unknown>).lastConfirmedAt = new Date(
+      "2026-09-01T04:00:00.000Z"
+    );
+    (b.identity.mandates[0] as unknown as Record<string, unknown>).lastConfirmedAt = new Date(
+      "2026-09-02T04:00:00.000Z"
+    );
+    expect(hashOf(a)).toBe(hashOf(b));
+  });
+
+  it("ignore tout …CheckedAt, à toute profondeur", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    const stamp = (doc: PoliticianProfileDocument, iso: string) => {
+      const identity = doc.identity as unknown as Record<string, unknown>;
+      identity.photoCheckedAt = new Date(iso);
+      identity.careerCheckedAt = new Date(iso);
+      identity.webSearchCheckedAt = new Date(iso);
+      (doc.dossier.affairs[0] as unknown as Record<string, unknown>).exposeCheckedAt = new Date(
+        iso
+      );
+    };
+    stamp(a, "2026-09-01T04:00:00.000Z");
+    stamp(b, "2026-09-20T04:00:00.000Z");
+    expect(hashOf(a)).toBe(hashOf(b));
+  });
+
+  it("ignore les horodatages de traitement d'une affaire, jamais affichés", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    for (const [doc, iso] of [
+      [a, "2026-09-01T04:00:00.000Z"],
+      [b, "2026-09-20T04:00:00.000Z"],
+    ] as const) {
+      const affair = doc.dossier.affairs[0] as unknown as Record<string, unknown>;
+      affair.descriptionEnrichedAt = new Date(iso);
+      affair.slappQualifiedAt = new Date(iso);
+      affair.verifiedAt = new Date(iso);
+    }
+    expect(hashOf(a)).toBe(hashOf(b));
+  });
+
+  it("garde biographyGeneratedAt, affiché sous la biographie", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    (a.identity as unknown as Record<string, unknown>).biographyGeneratedAt = new Date(
+      "2026-09-01T04:00:00.000Z"
+    );
+    (b.identity as unknown as Record<string, unknown>).biographyGeneratedAt = new Date(
+      "2026-09-20T04:00:00.000Z"
+    );
+    expect(hashOf(a)).not.toBe(hashOf(b));
+  });
+
+  it("ne retire verifiedAt qu'au niveau d'une affaire", () => {
+    const a = sampleDocument();
+    const b = sampleDocument();
+    (a.identity as unknown as Record<string, unknown>).verifiedAt = new Date("2026-09-01");
+    (b.identity as unknown as Record<string, unknown>).verifiedAt = new Date("2026-09-20");
+    expect(hashOf(a)).not.toBe(hashOf(b));
   });
 
   it("garde le createdAt d'une affaire, dernier critère de tri affiché", () => {

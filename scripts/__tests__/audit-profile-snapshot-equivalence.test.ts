@@ -108,6 +108,18 @@ describe("audit-profile-snapshot-equivalence", () => {
     });
   });
 
+  it("classe aussi lastConfirmedAt et …CheckedAt en horodatage seul", () => {
+    const stored = storedRow(sampleDocument());
+    const rebuilt = sampleDocument();
+    (rebuilt.identity.mandates[0] as unknown as Record<string, unknown>).lastConfirmedAt = new Date(
+      "2026-10-02T04:00:00.000Z"
+    );
+    (rebuilt.identity as unknown as Record<string, unknown>).photoCheckedAt = new Date(
+      "2026-10-02T04:00:00.000Z"
+    );
+    expect(compareSnapshot(rebuilt, stored).kind).toBe("timestamps");
+  });
+
   it("signale un champ affiché divergent par son chemin, sans sa valeur", () => {
     const stored = storedRow(sampleDocument());
     const rebuilt = sampleDocument();

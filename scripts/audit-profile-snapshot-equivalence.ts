@@ -8,8 +8,9 @@
  * equality of the deserialized document, which is what proves nothing was lost on the
  * way through JSON (the hash compares two serializations, so a loss there is invisible to
  * it). On a mismatch it prints the first differing JSON path (never the values: affair
- * data is sensitive). A document that differs only by `updatedAt` / `createdAt`, which the
- * hash ignores on purpose, is reported apart and does not fail the audit.
+ * data is sensitive). A document that differs only by the bookkeeping timestamps the hash
+ * ignores on purpose (`updatedAt`, `lastConfirmedAt`, `…CheckedAt`…) is reported apart and does
+ * not fail the audit.
  *
  * Exit codes: 0 = every sampled document matches (timestamp-only drifts allowed); 1 = at
  * least one mismatch, missing or outdated document; 2 = bad usage or no DATABASE_URL.
@@ -22,6 +23,7 @@ import { Prisma } from "@/generated/prisma";
 import {
   deserializeProfileDocument,
   hashSerializedDocument,
+  isHashIgnoredPath,
   serializeProfileDocument,
   type PoliticianProfileDocument,
 } from "@/lib/politicians/profile-snapshot/document";
@@ -104,8 +106,6 @@ function decimalsAsNumbers(value: unknown): unknown {
   return value;
 }
 
-const TIMESTAMP_PATH = /(^|\.)(updatedAt|createdAt)$/;
-
 export type SnapshotComparison =
   | { kind: "match" }
   | { kind: "timestamps"; path: string }
@@ -113,8 +113,8 @@ export type SnapshotComparison =
 
 /**
  * Compares a freshly built document with a stored row. A hash mismatch or any deep difference
- * outside `updatedAt` / `createdAt` is a mismatch; a deep difference on those keys alone, which
- * the hash ignores, is reported as `timestamps`.
+ * outside the bookkeeping timestamps the hash ignores (`isHashIgnoredPath`) is a mismatch; a deep
+ * difference on those alone is reported as `timestamps`.
  */
 export function compareSnapshot(
   built: PoliticianProfileDocument,
@@ -125,7 +125,7 @@ export function compareSnapshot(
     decimalsAsNumbers(built),
     decimalsAsNumbers(deserializeProfileDocument(stored.data))
   );
-  const shown = deep.filter((path) => !TIMESTAMP_PATH.test(path));
+  const shown = deep.filter((path) => !isHashIgnoredPath(path));
   const hashesAgree =
     hashSerializedDocument(serialized) === stored.contentHash &&
     // The hash guards the stored hash column; the data column is what readers serve.
