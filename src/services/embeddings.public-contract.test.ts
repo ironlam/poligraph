@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
     politician: { findMany: vi.fn(), findFirst: vi.fn() },
     factCheck: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
     party: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
-    pressArticle: { findUnique: vi.fn(), count: vi.fn() },
+    pressArticle: { findMany: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
     mandate: { groupBy: vi.fn() },
     legislativeDossier: { count: vi.fn() },
   },
@@ -225,6 +225,22 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
 
       expect(mocks.db.chatEmbedding.deleteMany).toHaveBeenCalledWith({
         where: { entityType: "PARTY", entityId: { in: ["parti-interne"] } },
+      });
+    });
+
+    it("supprime les embeddings d'articles de presse qui n'existent plus", async () => {
+      mocks.db.chatEmbedding.findMany.mockResolvedValue([
+        { entityId: "article-present", updatedAt: new Date() },
+        { entityId: "article-supprime", updatedAt: new Date() },
+      ]);
+      mocks.db.pressArticle.findMany.mockResolvedValue([
+        { id: "article-present", createdAt: new Date(0) },
+      ]);
+
+      await indexAllOfType("PRESS_ARTICLE", { deltaOnly: true });
+
+      expect(mocks.db.chatEmbedding.deleteMany).toHaveBeenCalledWith({
+        where: { entityType: "PRESS_ARTICLE", entityId: { in: ["article-supprime"] } },
       });
     });
 

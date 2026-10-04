@@ -26,8 +26,9 @@ const PUBLIC_AFFAIR_WHERE: Prisma.AffairWhereInput = {
 // The global statistics document is stored as a PARTY embedding.
 const GLOBAL_STATS_ID = "global-stats";
 
-// Types whose source entity has a public gate: their embeddings must not outlive it.
-const GATED_TYPES = ["AFFAIR", "POLITICIAN", "FACTCHECK", "PARTY"] as const;
+// Types whose embeddings must not outlive their source: gated types lose theirs when
+// unpublished, press articles when deleted (they have no publication status).
+const SWEPT_TYPES = ["AFFAIR", "POLITICIAN", "FACTCHECK", "PARTY", "PRESS_ARTICLE"] as const;
 
 // Candidates checked against the database per search, as a multiple of `limit`.
 const PUBLIC_CHECK_WINDOW = 4;
@@ -867,9 +868,9 @@ export async function indexAllOfType(
     indexFn: (id: string) => Promise<void>,
     typeName: string
   ) {
-    // A full pass knows every public id, so it can drop embeddings of entities
-    // that are no longer public. A `limit` pass only sees a slice: skip it.
-    if (limit === undefined && (GATED_TYPES as readonly string[]).includes(entityType)) {
+    // A full pass knows every indexable id, so it can drop embeddings of entities
+    // that are gone or no longer public. A `limit` pass only sees a slice: skip it.
+    if (limit === undefined && (SWEPT_TYPES as readonly string[]).includes(entityType)) {
       await removeStaleEmbeddings(
         entityType,
         entities.map((e) => e.id)
