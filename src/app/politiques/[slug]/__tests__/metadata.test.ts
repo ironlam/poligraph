@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// generateMetadata only reads the politician row. Stub Prisma so the module
+// generateMetadata only reads the identity of the profile document. Stub Prisma so the module
 // imports with no DATABASE_URL, and the cache primitives so nothing runs
 // outside a Next request.
 const getPoliticianIdentity = vi.fn();
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
-vi.mock("@/lib/data/politicians", () => ({
-  getPoliticianIdentity: (slug: string) => getPoliticianIdentity(slug),
+vi.mock("@/lib/data/politician-profile", () => ({
+  getPoliticianProfile: async (slug: string) => {
+    const identity = await getPoliticianIdentity(slug);
+    return identity ? { identity } : null;
+  },
+  readProfileSnapshot: vi.fn(),
 }));
 vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: vi.fn(async () => null),

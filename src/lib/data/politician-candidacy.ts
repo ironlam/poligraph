@@ -87,27 +87,20 @@ export async function loadPoliticianPresidentialCandidacy(
       sourceUrl: { not: null },
       sourceLabel: { not: null },
     },
+    // Scalars only. Prisma sends one more query per selected relation even when no row matches,
+    // and almost every politician has no candidacy: selecting the relations here cost every
+    // profile render four queries to learn that. They are read below, once a row exists.
     select: {
       id: true,
       status: true,
       sourceUrl: true,
       sourceLabel: true,
       partyLabel: true,
-      party: { select: { name: true, shortName: true, logoUrl: true, color: true } },
+      partyId: true,
+      electionId: true,
       round1Pct: true,
       round2Pct: true,
       isElected: true,
-      election: {
-        select: { slug: true, title: true, shortTitle: true, round1Date: true, round2Date: true },
-      },
-      presidentialData: {
-        select: {
-          declaredAt: true,
-          withdrewAt: true,
-          synthesis: true,
-          synthesisGeneratedAt: true,
-        },
-      },
     },
   });
 
@@ -116,6 +109,27 @@ export async function loadPoliticianPresidentialCandidacy(
   if (!row || row.status === null || row.sourceUrl === null || row.sourceLabel === null) {
     return null;
   }
+
+  // One after the other, as Prisma read them when they were nested: no wider than before.
+  const party = row.partyId
+    ? await db.party.findUnique({
+        where: { id: row.partyId },
+        select: { name: true, shortName: true, logoUrl: true, color: true },
+      })
+    : null;
+  const election = await db.election.findUniqueOrThrow({
+    where: { id: row.electionId },
+    select: { slug: true, title: true, shortTitle: true, round1Date: true, round2Date: true },
+  });
+  const presidentialData = await db.candidacyPresidential.findUnique({
+    where: { candidacyId: row.id },
+    select: {
+      declaredAt: true,
+      withdrewAt: true,
+      synthesis: true,
+      synthesisGeneratedAt: true,
+    },
+  });
 
   const [stats, programme] = await Promise.all([
     getPublicMeasureStatsByCandidacy(row.id),
@@ -132,29 +146,29 @@ export async function loadPoliticianPresidentialCandidacy(
   // Dropped together. The block's own caption dates the text ("Texte généré ... le 7 août"), so a
   // date left behind without the text it dates has nothing to describe.
   const synthesisContradicted = isSynthesisContradictedByMeasures({
-    generatedAt: row.presidentialData?.synthesisGeneratedAt ?? null,
+    generatedAt: presidentialData?.synthesisGeneratedAt ?? null,
     firstMeasurePublishedAt: stats.firstPublishedAt,
   });
 
   return {
     candidacyId: row.id,
-    electionSlug: row.election.slug,
-    electionShortTitle: row.election.shortTitle ?? row.election.title,
-    round1Date: row.election.round1Date,
-    round2Date: row.election.round2Date,
+    electionSlug: election.slug,
+    electionShortTitle: election.shortTitle ?? election.title,
+    round1Date: election.round1Date,
+    round2Date: election.round2Date,
     status: row.status,
     sourceUrl: row.sourceUrl,
     sourceLabel: row.sourceLabel,
-    partyLabel: row.partyLabel ?? row.party?.shortName ?? row.party?.name ?? null,
-    partyLogoUrl: row.party?.logoUrl ?? null,
-    partyColor: row.party?.color ?? null,
+    partyLabel: row.partyLabel ?? party?.shortName ?? party?.name ?? null,
+    partyLogoUrl: party?.logoUrl ?? null,
+    partyColor: party?.color ?? null,
     programmeIdentified: programme !== null,
-    declaredAt: row.presidentialData?.declaredAt ?? null,
-    withdrewAt: row.presidentialData?.withdrewAt ?? null,
-    synthesis: synthesisContradicted ? null : (row.presidentialData?.synthesis ?? null),
+    declaredAt: presidentialData?.declaredAt ?? null,
+    withdrewAt: presidentialData?.withdrewAt ?? null,
+    synthesis: synthesisContradicted ? null : (presidentialData?.synthesis ?? null),
     synthesisGeneratedAt: synthesisContradicted
       ? null
-      : (row.presidentialData?.synthesisGeneratedAt ?? null),
+      : (presidentialData?.synthesisGeneratedAt ?? null),
     publishedMeasureCount: stats.measureCount,
     themesCoveredCount: stats.themesCoveredCount,
     primarySourceMeasureCount: stats.primarySourceMeasureCount,
