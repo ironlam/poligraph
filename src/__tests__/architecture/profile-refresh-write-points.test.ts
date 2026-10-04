@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -56,6 +57,89 @@ const PUBLICATION_RULE_EXEMPTIONS: Record<string, string> = {
     "Read-only proposal list that reads the target affair's publicationStatus.",
 };
 
+// Files under src/services, src/inngest and scripts that write publicationStatus on Affair,
+// Politician or FactCheck without asking for a profile recompute.
+const SYNC_PUBLICATION_EXEMPTIONS: Record<string, string> = {
+  "src/services/sync/rne-arrondissements.ts":
+    "Creates DRAFT politicians only: a new non-public row has no profile document to recompute.",
+  "src/services/sync/wikidata-politicians.ts":
+    "Creates DRAFT politicians only: a new non-public row has no profile document to recompute.",
+  "src/services/affairs/create-draft.ts":
+    "Creates DRAFT affairs only (status hard-coded): the profile lists published affairs.",
+};
+
+const PROFILE_MODELS = new Set(["politician", "affair", "factCheck"]);
+const WRITE_METHODS = new Set(["create", "createMany", "update", "updateMany", "upsert"]);
+const WRITE_PAYLOAD_KEYS = new Set(["data", "create", "update"]);
+const FILTER_KEYS = new Set([
+  "where",
+  "select",
+  "include",
+  "omit",
+  "orderBy",
+  "cursor",
+  "distinct",
+  "some",
+  "none",
+  "every",
+  "is",
+  "isNot",
+]);
+const RAW_STATUS_UPDATE = /UPDATE\s+"(Politician|Affair|FactCheck)"[^;`]*?"publicationStatus"\s*=/;
+const REQUESTS_TARGETED_REFRESH = /requestProfileRefresh\(|refreshProfilesForModeration\(/g;
+
+/**
+ * Offsets of every `publicationStatus` written to Affair, Politician or FactCheck: a property of a
+ * `data` / `create` / `update` payload whose call is `<client>.<model>.<write method>(`, a local
+ * `const data = {...}` in a file that writes one of those models, or a raw `UPDATE`. A property
+ * under `where` or `select` is a filter, not a write.
+ */
+function publicationStatusWrites(path: string, source = read(path)): number[] {
+  const code = withoutComments(source);
+  const file = ts.createSourceFile(path, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const writesProfileModel =
+    /\.(politician|affair|factCheck)\.(create|createMany|update|updateMany|upsert)\(/.test(code);
+
+  const isWrite = (node: ts.Node): boolean => {
+    let inPayload = false;
+    for (let current = node.parent; current; current = current.parent) {
+      if (ts.isPropertyAssignment(current)) {
+        const key = current.name.getText(file);
+        if (FILTER_KEYS.has(key)) return false;
+        if (WRITE_PAYLOAD_KEYS.has(key)) inPayload = true;
+      }
+      if (ts.isVariableDeclaration(current) && current.name.getText(file) === "data") {
+        return writesProfileModel;
+      }
+      if (
+        ts.isCallExpression(current) &&
+        ts.isPropertyAccessExpression(current.expression) &&
+        WRITE_METHODS.has(current.expression.name.text) &&
+        ts.isPropertyAccessExpression(current.expression.expression)
+      ) {
+        return inPayload && PROFILE_MODELS.has(current.expression.expression.name.text);
+      }
+    }
+    return false;
+  };
+
+  const offsets: number[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+      node.name.getText(file) === "publicationStatus" &&
+      isWrite(node)
+    ) {
+      offsets.push(node.getStart(file));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  const raw = RAW_STATUS_UPDATE.exec(code);
+  if (raw) offsets.push(raw.index);
+  return offsets;
+}
+
 function read(path: string): string {
   return readFileSync(path, "utf8");
 }
@@ -93,6 +177,87 @@ function filesMatching(pattern: RegExp, dir: RegExp): string[] {
     .filter((file) => dir.test(file))
     .filter((file) => pattern.test(withoutComments(read(file))));
 }
+
+describe("changements de publication hors des routes d'administration", () => {
+  const files = [
+    ...sourceFiles("src/services"),
+    ...sourceFiles("src/inngest"),
+    ...sourceFiles("scripts"),
+  ];
+  const statusWriters = new Map(
+    files
+      .map((file) => [file, publicationStatusWrites(file)] as const)
+      .filter(([, offsets]) => offsets.length > 0)
+  );
+
+  it("trouve les écritures de statut à vérifier", () => {
+    // Guards the scan itself: one file per shape it must recognise.
+    for (const file of [
+      "src/services/sync/publication-status.ts", // politician.updateMany data
+      "src/services/sync/factchecks.ts", // factCheck.create data + upsert create
+      "src/services/sync/rne.ts", // politician.create data + politician.update data
+      "src/services/admin/affair-politician-workbench.ts", // tx.affair.updateMany data
+      "src/services/affairs/create-draft.ts", // const data = {...} then affair.create({ data })
+      "scripts/promote-maires.ts",
+      "scripts/remediate-unverified-published-affairs.ts",
+      "scripts/backfill-factcheck-sources.ts",
+    ]) {
+      expect([...statusWriters.keys()], file).toContain(file);
+    }
+    // Filters are not writes: these only read publicationStatus.
+    for (const file of ["src/services/search.ts", "src/services/sync/opensanctions.ts"]) {
+      expect([...statusWriters.keys()], file).not.toContain(file);
+    }
+  });
+
+  it("distingue une écriture de statut d'un filtre ou d'un autre modèle", () => {
+    const writes = (code: string) => publicationStatusWrites("fixture.ts", code).length;
+    expect(
+      writes(`db.affair.updateMany({ where: { publicationStatus: "DRAFT" }, data: { title } })`)
+    ).toBe(0);
+    expect(
+      writes(`db.measure.update({ where: { id }, data: { publicationStatus: "DRAFT" } })`)
+    ).toBe(0);
+    // A filter nested inside a write payload is still a filter.
+    expect(
+      writes(
+        `db.politician.update({ where: { id }, data: { affairs: { updateMany: { where: { publicationStatus: "DRAFT" }, data: { title } } } } })`
+      )
+    ).toBe(0);
+    expect(writes(`db.politician.findMany({ where: { publicationStatus: "PUBLISHED" } })`)).toBe(0);
+    expect(writes(`tx.politician.update({ where: { id }, data: { publicationStatus } })`)).toBe(1);
+    expect(
+      writes(`db.factCheck.upsert({ where: { id }, update: {}, create: { publicationStatus: s } })`)
+    ).toBe(1);
+    expect(writes(`const data = { publicationStatus: "DRAFT" }; db.affair.create({ data });`)).toBe(
+      1
+    );
+    expect(
+      writes('db.$executeRaw`UPDATE "Affair" SET "publicationStatus" = ${s} WHERE id = ${id}`')
+    ).toBe(1);
+  });
+
+  it("chaque écriture de statut est suivie d'une demande de recalcul des fiches", () => {
+    for (const [file, offsets] of statusWriters) {
+      if (file in SYNC_PUBLICATION_EXEMPTIONS) continue;
+      const code = withoutComments(read(file));
+      const requests = [...code.matchAll(REQUESTS_TARGETED_REFRESH)].map((m) => m.index);
+      expect(requests.length, file).toBeGreaterThan(0);
+      // Textual order: the request comes after the last write, not before it.
+      expect(Math.max(...requests), file).toBeGreaterThan(Math.max(...offsets));
+    }
+  });
+
+  it("aucune exemption de statut ne survit à son écriture ni ne masque une demande", () => {
+    for (const file of Object.keys(SYNC_PUBLICATION_EXEMPTIONS)) {
+      expect(existsSync(file), file).toBe(true);
+      expect([...statusWriters.keys()], file).toContain(file);
+      expect(withoutComments(read(file)), file).not.toMatch(
+        new RegExp(REQUESTS_TARGETED_REFRESH.source)
+      );
+    }
+  });
+});
 
 describe("points d'écriture des fiches politicien", () => {
   const writers = filesCalling(INVALIDATES_PROFILE_DATA);

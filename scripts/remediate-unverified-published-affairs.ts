@@ -30,6 +30,7 @@ import { dirname } from "node:path";
 import { db } from "../src/lib/db";
 import { checkPublishable, type PublishBlockReason } from "../src/lib/affairs/publish-guard";
 import { revalidateRemoteCache } from "./lib/revalidate-cache";
+import { requestProfileRefresh } from "../src/lib/politicians/profile-snapshot/request";
 
 interface Candidate {
   id: string;
@@ -202,6 +203,13 @@ export async function main() {
 
   console.log(`\n✓ ${updated} affaire(s) dépubliée(s) vers DRAFT, tracées dans AuditLog.`);
   console.log("  Elles sont désormais dans la file de modération pour revue humaine.");
+
+  if (updated > 0) {
+    await requestProfileRefresh(
+      { affairIds: candidates.map((c) => c.id) },
+      "cli:remediate-unverified-published-affairs"
+    );
+  }
 
   // The CSV exports are cached at the edge for 24h. A depublication that does not reach
   // the CDN leaves the affair downloadable, so the purge is part of the remediation, not

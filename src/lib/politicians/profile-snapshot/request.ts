@@ -13,6 +13,8 @@ export type ProfileRefreshTarget =
   | { politicianIds: string[] }
   | { partyId: string }
   | { factCheckId: string }
+  // A sync that writes several fact-checks in one run asks once for all of them.
+  | { factCheckIds: string[] }
   | { affairIds: string[] }
   // A scrutin's policy title shows on the profile of every politician whose recent votes include
   // it. Taking every voter over-approximates "one of the five latest votes" without a query per
@@ -49,6 +51,15 @@ export async function resolveProfileTargets(target: ProfileRefreshTarget): Promi
   if ("factCheckId" in target) {
     const rows = await db.factCheckMention.findMany({
       where: { factCheckId: target.factCheckId },
+      select: { politicianId: true },
+    });
+    return [...new Set(rows.map((r) => r.politicianId))];
+  }
+
+  if ("factCheckIds" in target) {
+    if (target.factCheckIds.length === 0) return [];
+    const rows = await db.factCheckMention.findMany({
+      where: { factCheckId: { in: [...new Set(target.factCheckIds)] } },
       select: { politicianId: true },
     });
     return [...new Set(rows.map((r) => r.politicianId))];

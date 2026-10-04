@@ -63,6 +63,24 @@ describe("resolveProfileTargets", () => {
     expect(await resolveProfileTargets({ factCheckId: "f1" })).toEqual(["p1", "p2"]);
   });
 
+  it("propage un lot de fact-checks aux politiciens mentionnés, une fois chacun", async () => {
+    mentionFindMany.mockResolvedValue([
+      { politicianId: "p1" },
+      { politicianId: "p2" },
+      { politicianId: "p1" },
+    ]);
+    expect(await resolveProfileTargets({ factCheckIds: ["f1", "f2", "f1"] })).toEqual(["p1", "p2"]);
+    expect(mentionFindMany).toHaveBeenCalledWith({
+      where: { factCheckId: { in: ["f1", "f2"] } },
+      select: { politicianId: true },
+    });
+  });
+
+  it("ne lit rien pour un lot de fact-checks vide", async () => {
+    expect(await resolveProfileTargets({ factCheckIds: [] })).toEqual([]);
+    expect(mentionFindMany).not.toHaveBeenCalled();
+  });
+
   it("propage un titre de scrutin à tous les votants des scrutins, une fois chacun", async () => {
     voteGroupBy.mockResolvedValue([{ politicianId: "p1" }, { politicianId: "p2" }]);
     expect(await resolveProfileTargets({ scrutinIds: ["s1", "s2", "s1"] })).toEqual(["p1", "p2"]);

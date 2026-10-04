@@ -17,6 +17,7 @@
 import "dotenv/config";
 import { writeFileSync } from "node:fs";
 import { db } from "@/lib/db";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { DataSource, Judgement, MandateType, PublicationStatus } from "@/generated/prisma";
 import { resolveBatch } from "@/lib/identity";
 import type { ResolveInput } from "@/lib/identity";
@@ -377,6 +378,8 @@ async function runPhase3(byCommune: Map<string, WinnerInfo>) {
     console.log(
       `\n>>> APPLY PHASE 3: ${alreadyLinked.length} liés + ${needsResolution.length} à résoudre ...`
     );
+    /** Profiles this phase set to PUBLISHED, for one recompute request at the end. */
+    const publishedIds: string[] = [];
 
     // (i) ALREADY-LINKED: create MAIRE mandate + local (idempotent) and publish,
     // but only after the name guard confirms the pre-existing candidacy link is
@@ -414,6 +417,7 @@ async function runPhase3(byCommune: Map<string, WinnerInfo>) {
             where: { id: pid },
             data: { publicationStatus: PublicationStatus.PUBLISHED },
           });
+          publishedIds.push(pid);
         } else {
           // False link -> fresh DRAFT stub, re-point the candidacy away from the
           // mismatched politician (which is NOT published).
@@ -523,6 +527,7 @@ async function runPhase3(byCommune: Map<string, WinnerInfo>) {
               where: { id: pid },
               data: { publicationStatus: PublicationStatus.PUBLISHED },
             });
+            publishedIds.push(pid);
           } else {
             // False SAME -> fresh DRAFT stub instead of publishing the wrong person.
             pid = await createDraftStub(w, insee);
@@ -575,6 +580,12 @@ async function runPhase3(byCommune: Map<string, WinnerInfo>) {
         `${stubs} stubs DRAFT créés (dont ${guardBlocked} SAME rejetés par le garde-nom), ` +
         `${stubsFromLinked} liens pré-existants ré-orientés vers un stub.`
     );
+    if (publishedIds.length > 0) {
+      await requestProfileRefresh(
+        { politicianIds: publishedIds },
+        "cli:reconcile-municipales-2026-mayors"
+      );
+    }
   } else {
     console.log("(dry-run — aucune écriture, aucun resolveBatch. --apply-phase3 pour appliquer.)");
   }

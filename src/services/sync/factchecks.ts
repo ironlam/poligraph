@@ -23,6 +23,7 @@ import {
 import { generateDateSlug, generateUniqueSlug, sleep } from "@/lib/utils";
 import { loadMentionBlocklist, type MentionBlocklist } from "@/lib/identity/mention-blocklist";
 import { syncMetadata } from "@/lib/sync";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 
 /**
  * Publishable when the publisher is on the allow-list, compared on the
@@ -151,6 +152,9 @@ export async function syncFactchecks(
     apiErrors: 0,
     errors: [],
   };
+
+  /** Fact-checks written by this run, for one profile recompute request at the end. */
+  const writtenFactCheckIds = new Set<string>();
 
   // Build politician index + blocklist for mention matching
   const allPoliticians = await buildPoliticianIndex();
@@ -297,6 +301,7 @@ export async function syncFactchecks(
                         isClaimant: claimantIds.has(m.politicianId),
                       },
                     });
+                    writtenFactCheckIds.add(existingByTitle.id);
                   }
                 }
               }
@@ -311,7 +316,7 @@ export async function syncFactchecks(
           } else {
             try {
               if (force) {
-                await db.factCheck.upsert({
+                const written = await db.factCheck.upsert({
                   where: { sourceUrl: review.url },
                   update: {
                     claimText: claim.text,
@@ -353,9 +358,11 @@ export async function syncFactchecks(
                       })),
                     },
                   },
+                  select: { id: true },
                 });
+                writtenFactCheckIds.add(written.id);
               } else {
-                await db.factCheck.create({
+                const written = await db.factCheck.create({
                   data: {
                     slug: await generateUniqueFactCheckSlug(reviewDate, title),
                     claimText: claim.text,
@@ -377,7 +384,9 @@ export async function syncFactchecks(
                       })),
                     },
                   },
+                  select: { id: true },
                 });
+                writtenFactCheckIds.add(written.id);
               }
 
               stats.factChecksCreated++;
@@ -406,6 +415,12 @@ export async function syncFactchecks(
   // is currently unhappy about. The next pass comes back round in a few days.
   if (nextRotationOffset !== null && !dryRun) {
     await syncMetadata.set(FACTCHECK_ROTATION_KEY, { cursor: String(nextRotationOffset) });
+  }
+
+  // A published fact-check shows on the profile of every politician it mentions. Resolved
+  // after the writes, so the mentions this run added are included.
+  if (writtenFactCheckIds.size > 0) {
+    await requestProfileRefresh({ factCheckIds: [...writtenFactCheckIds] }, "sync:factchecks");
   }
 
   return stats;

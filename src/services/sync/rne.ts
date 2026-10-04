@@ -1,4 +1,5 @@
 import { db, type DbTransactionClient } from "@/lib/db";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { nextAliases } from "@/lib/mandates/aliases";
 import { confirmedFromResourceUrl } from "@/lib/mandates/confirmation";
 import { writeFileSync } from "node:fs";
@@ -154,6 +155,8 @@ interface UpsertCounts {
   undecidedRows: UndecidedRow[];
   /** The rows that would become a brand-new profile, which Phase 2 then judges. */
   wouldCreate: ParsedMaireRow[];
+  /** Ids of the profiles created PUBLISHED by this run, for the profile recompute request. */
+  createdIds: string[];
   errors: string[];
 }
 
@@ -358,7 +361,7 @@ async function createMaire(
   verbose: boolean,
   confirmedAt: Date | null,
   client: DbTransactionClient = db
-): Promise<void> {
+): Promise<string> {
   const { title, constituency } = mandateLabels(row);
 
   // Two mayors can share a name. The INSEE suffix keeps the second slug unique.
@@ -405,6 +408,7 @@ async function createMaire(
   if (verbose) {
     console.log(`  Created politician: ${row.fullName} (${row.inseeCode}) -> ${created.id}`);
   }
+  return created.id;
 }
 
 /**
@@ -473,6 +477,7 @@ async function upsertMaires(
     handledInPhase1: new Set<string>(),
     undecidedRows: [],
     wouldCreate: [],
+    createdIds: [],
     errors: [],
   };
 
@@ -504,9 +509,12 @@ async function upsertMaires(
             : null;
 
         /** A new profile, or a further term on the profile we already hold. */
-        const publish = async (tx: DbTransactionClient = db): Promise<void> => {
-          if (knownPersonId) await createMaireTerm(row, knownPersonId, confirmedAt, tx);
-          else await createMaire(row, verbose, confirmedAt, tx);
+        const publish = async (tx: DbTransactionClient = db): Promise<string | null> => {
+          if (knownPersonId) {
+            await createMaireTerm(row, knownPersonId, confirmedAt, tx);
+            return null;
+          }
+          return createMaire(row, verbose, confirmedAt, tx);
         };
         const countPublication = (): void => {
           if (knownPersonId) {
@@ -576,13 +584,14 @@ async function upsertMaires(
           case "close-and-create":
             if (!dryRun) {
               // One unit: a failed creation must not leave the commune without a mayor.
-              await db.$transaction(async (tx) => {
+              const createdId = await db.$transaction(async (tx) => {
                 await tx.mandate.update({
                   where: { id: existingMandate!.mandateId },
                   data: { isCurrent: false, endDate },
                 });
-                await publish(tx);
+                return publish(tx);
               });
+              if (createdId) counts.createdIds.push(createdId);
             }
             counts.handledInPhase1.add(existingMandate!.mandateId);
             countPublication();
@@ -611,13 +620,14 @@ async function upsertMaires(
             // The register is authoritative on who is mayor. Leaving this mandate current
             // would publish two mayors for one commune.
             if (!dryRun) {
-              await db.$transaction(async (tx) => {
+              const createdId = await db.$transaction(async (tx) => {
                 await tx.mandate.update({
                   where: { id: incumbent!.mandateId },
                   data: { isCurrent: false, endDate },
                 });
-                await publish(tx);
+                return publish(tx);
               });
+              if (createdId) counts.createdIds.push(createdId);
             }
             counts.handledInPhase1.add(incumbent!.mandateId);
             countPublication();
@@ -630,7 +640,7 @@ async function upsertMaires(
             break;
 
           case "create":
-            if (!dryRun) await createMaire(row, verbose, confirmedAt);
+            if (!dryRun) counts.createdIds.push(await createMaire(row, verbose, confirmedAt));
             counts.created++;
             counts.wouldCreate.push(row);
             break;
@@ -739,7 +749,13 @@ function logPhase1Counts(counts: UpsertCounts, dryRun: boolean): void {
 async function reconcileRNEStubs(
   communeNameByInsee: Map<string, string>,
   verbose: boolean
-): Promise<{ matched: number; drafted: number; notFound: number; errors: string[] }> {
+): Promise<{
+  matched: number;
+  drafted: number;
+  draftedIds: string[];
+  notFound: number;
+  errors: string[];
+}> {
   console.log(
     "\n--- Phase 2: Reconcile new RNE Politicians with existing national Politicians ---"
   );
@@ -774,7 +790,8 @@ async function reconcileRNEStubs(
   });
 
   console.log(`  Found ${rneOnlyPoliticians.length} RNE-only Politicians to reconcile`);
-  if (rneOnlyPoliticians.length === 0) return { matched: 0, drafted: 0, notFound: 0, errors: [] };
+  if (rneOnlyPoliticians.length === 0)
+    return { matched: 0, drafted: 0, draftedIds: [], notFound: 0, errors: [] };
 
   const politicianBySourceId = new Map<string, (typeof rneOnlyPoliticians)[number]>();
   const inputs = rneOnlyPoliticians.map((politician) => {
@@ -833,6 +850,7 @@ async function reconcileRNEStubs(
   const errors: string[] = [];
   let matched = 0;
   let drafted = 0;
+  const draftedIds: string[] = [];
   let namesakes = 0;
 
   for (const result of batchResult.results) {
@@ -860,6 +878,7 @@ async function reconcileRNEStubs(
           data: { publicationStatus: PublicationStatus.DRAFT },
         });
         drafted++;
+        draftedIds.push(stub.id);
         if (verbose) {
           console.log(
             `  Brouillon: ${stub.firstName} ${stub.lastName} ressemble à ${result.politicianId} [confiance=${result.confidence}]`
@@ -906,6 +925,7 @@ async function reconcileRNEStubs(
   return {
     matched,
     drafted,
+    draftedIds,
     notFound: batchResult.stats.notFound + batchResult.stats.blocked,
     errors,
   };
@@ -1198,7 +1218,7 @@ export async function syncRNEMaires(
   // the resolver over the previous import's leftovers. It is simulated instead: the number of
   // merges is the one that needs validating, since a merge deletes the created profile.
   const reconciled = dryRun
-    ? { matched: 0, drafted: 0, notFound: 0, errors: [] as string[] }
+    ? { matched: 0, drafted: 0, draftedIds: [] as string[], notFound: 0, errors: [] as string[] }
     : await reconcileRNEStubs(parsed.communeNameByInsee, verbose);
   const phase2Simulation = dryRun
     ? await simulatePhase2(upserted.wouldCreate, parsed.communeNameByInsee)
@@ -1233,6 +1253,13 @@ export async function syncRNEMaires(
     // What actually changed. Counting `same` too would announce 21 000 untouched mayors as an
     // update on every run.
     await recordPlatformUpdate(upserted.created + upserted.newTerms + upserted.adopted);
+
+    // Profiles published by Phase 1 and drafted by Phase 2, in one request after both. A stub
+    // Phase 2 merged and deleted resolves to no profile, so the refresh has nothing to build.
+    const statusChanged = [...upserted.createdIds, ...reconciled.draftedIds];
+    if (statusChanged.length > 0) {
+      await requestProfileRefresh({ politicianIds: statusChanged }, "sync:rne");
+    }
   }
 
   return {
