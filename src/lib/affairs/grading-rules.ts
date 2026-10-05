@@ -12,6 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import type { Involvement } from "@/generated/prisma";
+import { ADVERSE_INVOLVEMENTS } from "@/config/certainty";
 
 export const RULES = {
   /**
@@ -24,7 +25,7 @@ export const RULES = {
    * rules were in force that day cannot be reconstructed honestly. That baseline
    * therefore carries no version and is reported as incomparable.
    */
-  version: 2,
+  version: 3,
 
   evidence: {
     /** Court and competent-institution hosts. Level B. */
@@ -55,6 +56,7 @@ export const RULES = {
   coherence: {
     /**
      * Roles for which the judicial outcome of the affair is the person's own.
+     * Shared with the public predicates: INDIRECT (witness) is not one of them.
      *
      * `satisfies` rather than a cast at the point of use: it checks every value
      * against the Prisma enum while keeping the literal types the fingerprint
@@ -62,7 +64,7 @@ export const RULES = {
      * `includes()` would match no involvement at all, so every conviction in the
      * corpus would be reported as describing a third party's outcome.
      */
-    adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly Involvement[],
+    adverseInvolvements: ADVERSE_INVOLVEMENTS satisfies readonly Involvement[],
 
     /**
      * A recourse still open, stated explicitly.

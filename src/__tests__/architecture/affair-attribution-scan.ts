@@ -919,11 +919,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   {
-    path: "src/lib/affairs/grading-rules.ts",
-    snippet: 'adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly Involvement[],',
-    count: 1,
-  },
-  {
     path: "src/lib/affairs/probity-stats.ts",
     snippet: "const rows = await db.affair.groupBy({",
     count: 1,
