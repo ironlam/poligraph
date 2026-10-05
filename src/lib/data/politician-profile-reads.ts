@@ -10,8 +10,8 @@ import {
 
 /**
  * Uncached reads behind the politician profile. No `"use cache"`, no cache tag: the cached readers
- * in `politicians.ts` and `app/politiques/[slug]/vote-stats.ts` delegate here, and so can Inngest
- * jobs and scripts, where a Next cache read returns a stale value or throws.
+ * in `politicians.ts` delegate here, and so can the profile document builder, Inngest jobs and
+ * scripts, where a Next cache read returns a stale value or throws.
  */
 
 type PoliticianWhere = { slug: string } | { id: string };
