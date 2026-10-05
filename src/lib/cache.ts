@@ -1,6 +1,7 @@
 import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 import { after } from "next/server";
 import * as Sentry from "@sentry/nextjs";
+import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { ALL_TAGS } from "@/lib/cache-tags";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
@@ -231,12 +232,14 @@ export function invalidateEntity(
 
     case "election":
       revalidateTag("elections", ELECTION_PROFILE);
-      // The cached id of the presidential election (`getPresidentialElectionId`), so an election
-      // recreated, or missing when the entry filled, does not freeze every profile's candidacy
-      // until the entry expires. Explicit path only: never in `revalidateAll()`, which runs after
-      // every sync. Every caller also purges `election-candidacies:<id>`, which the same profiles
-      // already carry, so this stales no page that was not already stale.
-      revalidateTag("election-id:presidentielle-2027", ELECTION_PROFILE);
+      // The cached id of the presidential election (`getPresidentialElectionId`), read by every
+      // profile page, so an election recreated, or missing when the entry filled, does not freeze
+      // every profile's candidacy until the entry expires. Purged only when the caller says the
+      // presidential election changed: a write on another election must not stale every profile.
+      // Never in `revalidateAll()`, which runs after every sync.
+      if (slug === PRESIDENTIELLE_2027_SLUG) {
+        revalidateTag("election-id:presidentielle-2027", ELECTION_PROFILE);
+      }
       break;
 
     case "election-2026":

@@ -39,6 +39,7 @@ export const PATCH = withAdminAuth(
           candidacy: {
             select: {
               electionId: true,
+              election: { select: { slug: true } },
               status: true,
               sourceUrl: true,
               sourceLabel: true,
@@ -72,6 +73,7 @@ export const PATCH = withAdminAuth(
         kind: "ok" as const,
         updated,
         electionId: existing.candidacy.electionId,
+        electionSlug: existing.candidacy.election.slug,
       };
     });
 
@@ -84,7 +86,7 @@ export const PATCH = withAdminAuth(
         { status: 400 }
       );
     }
-    invalidateEntity("election");
+    invalidateEntity("election", outcome.electionSlug);
     // A PATCH can flip publicationStatus, which is exactly what opens or closes the four hub
     // surfaces. `invalidateEntity("election")` purges the `elections` tag and never reaches them.
     invalidatePresidentialCandidacyTags(outcome.electionId);
@@ -105,7 +107,11 @@ export const DELETE = withAdminAuth(async (request, context) => {
 
     const existing = await tx.candidacyPresidential.findUnique({
       where: { id },
-      select: { id: true, candidacyId: true, candidacy: { select: { electionId: true } } },
+      select: {
+        id: true,
+        candidacyId: true,
+        candidacy: { select: { electionId: true, election: { select: { slug: true } } } },
+      },
     });
     if (!existing) return null;
     await tx.candidacyPresidential.delete({ where: { id } });
@@ -121,12 +127,15 @@ export const DELETE = withAdminAuth(async (request, context) => {
       },
     });
     await syncPresidentialSearchDocumentsForCandidacy(tx, existing.candidacyId);
-    return { electionId: existing.candidacy.electionId };
+    return {
+      electionId: existing.candidacy.electionId,
+      electionSlug: existing.candidacy.election.slug,
+    };
   });
   if (!outcome) {
     return NextResponse.json({ error: "Métadonnées candidature non trouvées" }, { status: 404 });
   }
-  invalidateEntity("election");
+  invalidateEntity("election", outcome.electionSlug);
   // Deleting a PUBLISHED extension removes a candidacy from the subject pages, which can close a
   // subject that was open. Same tag as publication, same reason.
   invalidatePresidentialCandidacyTags(outcome.electionId);
