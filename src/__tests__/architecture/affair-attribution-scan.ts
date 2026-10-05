@@ -705,6 +705,42 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason:
       "getJudicialData : byStatus déjà limité à DIRECT et à l'ordre pénal (directFilter, getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS)).",
   },
+  {
+    path: "src/app/affaires/parti/[slug]/page.tsx",
+    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason:
+      "getPartyAffairsData : misEnCauseAffairs déjà limité à la personne mise en cause (isAccusedInvolvement) et à l'ordre pénal.",
+  },
+  {
+    path: "src/app/affaires/parti/[slug]/page.tsx",
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CONDAMNATION"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getPartyAffairsData : même liste misEnCauseAffairs, DIRECT et ordre pénal.",
+  },
+  {
+    path: "src/app/affaires/parti/[slug]/page.tsx",
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "PROCEDURE_VALIDEE"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getPartyAffairsData : même liste misEnCauseAffairs, DIRECT et ordre pénal.",
+  },
+  {
+    path: "src/app/affaires/parti/[slug]/page.tsx",
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "ENQUETE"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getPartyAffairsData : même liste misEnCauseAffairs, DIRECT et ordre pénal.",
+  },
+  {
+    path: "src/app/affaires/parti/[slug]/page.tsx",
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CLOSE_SANS_CONDAMNATION"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getPartyAffairsData : même liste misEnCauseAffairs, DIRECT et ordre pénal.",
+  },
 ];
 
 /** Écarts relevés au premier passage. Cliquet : on retire, on n'ajoute pas. */
@@ -718,78 +754,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
   {
     path: "src/app/affaires/[slug]/page.tsx",
     snippet: '{affair.involvement !== "DIRECT" && (',
-    count: 1,
-  },
-  {
-    path: "src/app/affaires/condamnations/opengraph-image.tsx",
-    snippet: "db.affair.count({",
-    count: 2,
-  },
-  {
-    path: "src/app/affaires/condamnations/opengraph-image.tsx",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
-    count: 2,
-  },
-  {
-    path: "src/app/affaires/condamnations/page.tsx",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
-    count: 2,
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'const MIS_EN_CAUSE: Involvement[] = ["DIRECT", "INDIRECT"];',
-    count: 1,
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'const VICTIMS: Involvement[] = ["VICTIM", "PLAINTIFF"];',
-    count: 1,
-  },
-  { path: "src/app/affaires/parti/[slug]/page.tsx", snippet: "affairsAtTime: {", count: 1 },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: "MIS_EN_CAUSE.includes(a.involvement as Involvement)",
-    count: 1,
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet:
-      "const victimAffairs = affairs.filter((a) => VICTIMS.includes(a.involvement as Involvement));",
-    count: 1,
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CONDAMNATION"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "PROCEDURE_VALIDEE"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "ENQUETE"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CLOSE_SANS_CONDAMNATION"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
     count: 1,
   },
   {
@@ -815,20 +779,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   { path: "src/app/api/search/global/route.ts", snippet: "db.$queryRaw<RawAffair[]>`", count: 1 },
-  {
-    path: "src/app/partis/[slug]/_lib/affair-summary.ts",
-    snippet:
-      ".map((affair) => ({ ...affair, certainty: getCertaintyLevel(affair.status as AffairStatus) }));",
-    count: 1,
-    family: "guarded-before-call",
-  },
-  {
-    path: "src/app/partis/[slug]/_lib/affair-summary.ts",
-    snippet:
-      "const maturities = direct.map((affair) => getJudicialMaturity(affair.status as AffairStatus));",
-    count: 1,
-    family: "guarded-before-call",
-  },
   {
     path: "src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx",
     snippet: 'const directAffairs = affairs.filter((a) => a.involvement === "DIRECT");',

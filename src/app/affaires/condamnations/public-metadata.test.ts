@@ -18,6 +18,8 @@ vi.mock("@/lib/data/condamnations", () => ({
 }));
 
 import { generateMetadata } from "./page";
+import { ATTRIBUTION_ROWS } from "@/lib/affairs/__tests__/fixtures/attribution";
+import { evaluateWhere } from "@/lib/affairs/__tests__/fixtures/evaluate-where";
 
 const metadataForParty = (parti?: string) =>
   generateMetadata({
@@ -72,21 +74,18 @@ describe("metadata /affaires/condamnations", () => {
     );
     expect(metadata.description).not.toContain("99");
     expect(mocks.affairCount).toHaveBeenCalledTimes(2);
-    expect(mocks.affairCount).toHaveBeenNthCalledWith(1, {
-      where: {
-        publicationStatus: "PUBLISHED",
-        politician: { publicationStatus: "PUBLISHED" },
-        involvement: { in: ["DIRECT", "INDIRECT"] },
-        status: "CONDAMNATION_DEFINITIVE",
-      },
-    });
-    expect(mocks.affairCount).toHaveBeenNthCalledWith(2, {
-      where: {
-        publicationStatus: "PUBLISHED",
-        politician: { publicationStatus: "PUBLISHED" },
-        involvement: { in: ["DIRECT", "INDIRECT"] },
-        status: { in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"] },
-      },
+    // Les deux compteurs ne retiennent que la condamnation pénale de la personne mise en cause.
+    const [definitive, nonDefinitive] = mocks.affairCount.mock.calls.map(
+      (call) => (call[0] as { where: Record<string, unknown> }).where
+    );
+    const matched = (where: Record<string, unknown>) =>
+      ATTRIBUTION_ROWS.filter((row) => evaluateWhere(row, where)).map((row) => row.key);
+    expect(matched(definitive!)).toEqual(["directPenalConvicted"]);
+    expect(matched({ ...nonDefinitive!, status: "CONDAMNATION_DEFINITIVE" })).toEqual([
+      "directPenalConvicted",
+    ]);
+    expect(nonDefinitive!.status).toEqual({
+      in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"],
     });
   });
 });

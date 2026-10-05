@@ -14,6 +14,12 @@ import { ensureContrast } from "@/lib/contrast";
 import { SITE_URL } from "@/config/site";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import { PartyAffairsList } from "@/components/affairs/PartyAffairsList";
+import { isAccusedInvolvement } from "@/config/certainty";
+import {
+  ADVERSE_JURISDICTION_ORDER,
+  VICTIM_LISTING_INVOLVEMENTS,
+  getPublishedAffairWhere,
+} from "@/lib/affairs/public-filters";
 import type { AffairStatus, Involvement } from "@/types";
 
 export const revalidate = 300;
@@ -22,8 +28,7 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-const MIS_EN_CAUSE: Involvement[] = ["DIRECT", "INDIRECT"];
-const VICTIMS: Involvement[] = ["VICTIM", "PLAINTIFF"];
+const VICTIM_ROLES = new Set<Involvement>(VICTIM_LISTING_INVOLVEMENTS);
 
 async function getPartyAffairsData(slug: string) {
   "use cache";
@@ -40,7 +45,7 @@ async function getPartyAffairsData(slug: string) {
       color: true,
       logoUrl: true,
       affairsAtTime: {
-        where: { publicationStatus: "PUBLISHED" },
+        where: getPublishedAffairWhere(),
         include: {
           politician: {
             select: {
@@ -67,11 +72,13 @@ async function getPartyAffairsData(slug: string) {
     fineAmount: a.fineAmount ? Number(a.fineAmount) : null,
   }));
 
-  // Split by involvement role
-  const misEnCauseAffairs = affairs.filter((a) =>
-    MIS_EN_CAUSE.includes(a.involvement as Involvement)
+  // Split by involvement role. The counters only take the person prosecuted
+  // (DIRECT, never a witness) before a criminal court; the full list below
+  // still shows every affair with its role.
+  const misEnCauseAffairs = affairs.filter(
+    (a) => isAccusedInvolvement(a.involvement) && a.jurisdictionOrder === ADVERSE_JURISDICTION_ORDER
   );
-  const victimAffairs = affairs.filter((a) => VICTIMS.includes(a.involvement as Involvement));
+  const victimAffairs = affairs.filter((a) => VICTIM_ROLES.has(a.involvement));
 
   // KPIs: maturity-based, unique by politician per tier
   const condamnesPol = new Set<string>();
@@ -195,7 +202,7 @@ export async function generateStaticParams() {
   const parties = await db.party.findMany({
     where: {
       slug: { not: null },
-      affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },
+      affairsAtTime: { some: getPublishedAffairWhere() },
     },
     select: { slug: true },
   });
