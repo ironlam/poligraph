@@ -6,6 +6,7 @@ import {
   FACTCHECK_ALLOWED_SOURCES,
   MANDATE_TYPE_LABELS,
 } from "@/config/labels";
+import { getAdverseAffairWhere, getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { SITE_URL } from "./config";
 import type { RecentlyPosted } from "./dedup";
 import { wasRecentlyPosted } from "./dedup";
@@ -208,18 +209,7 @@ async function generateStatsAngle(angle: string, entityId: string): Promise<Twee
     case "condamnations-par-parti": {
       const condamnationCounts = await db.affair.groupBy({
         by: ["politicianId"],
-        where: {
-          publicationStatus: "PUBLISHED",
-          involvement: "DIRECT",
-          status: {
-            in: [
-              "CONDAMNATION_DEFINITIVE",
-              "CONDAMNATION_PREMIERE_INSTANCE",
-              "APPEL_EN_COURS",
-              "POURVOI_EN_CASSATION",
-            ],
-          },
-        },
+        where: getConvictionOnlyWhere(),
         _count: true,
       });
 
@@ -475,7 +465,7 @@ async function deputySpotlight(recent: RecentlyPosted): Promise<TweetDraft[]> {
       },
       _count: {
         select: {
-          affairs: { where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" } },
+          affairs: { where: getAdverseAffairWhere() },
         },
       },
     },

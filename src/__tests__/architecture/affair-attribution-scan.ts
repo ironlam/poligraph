@@ -923,20 +923,10 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     snippet: "const affairs = await db.affair.findMany({",
     count: 1,
   },
-  {
-    path: "src/lib/social/generators.ts",
-    snippet: "const condamnationCounts = await db.affair.groupBy({",
-    count: 1,
-  },
-  { path: "src/lib/social/generators.ts", snippet: 'involvement: "DIRECT",', count: 2 },
+  { path: "src/lib/social/generators.ts", snippet: 'involvement: "DIRECT",', count: 1 },
   {
     path: "src/lib/social/generators.ts",
     snippet: "const affairs = await db.affair.findMany({",
     count: 1,
-  },
-  {
-    path: "src/lib/social/generators.ts",
-    snippet: 'affairs: { where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" } },',
-    count: 2,
   },
 ];
