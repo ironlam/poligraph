@@ -187,7 +187,7 @@
  *           description: Nombre d'affaires publiées impliquant la personne, tous rôles confondus.
  *         adverseAffairsCount:
  *           type: integer
- *           description: Affaires comptées à charge : implication directe, ordre pénal, condamnation ou procédure validée par un juge.
+ *           description: "Affaires comptées à charge : implication directe, ordre pénal, condamnation ou procédure validée par un juge."
  *         affairsMentionedCount:
  *           type: integer
  *           description: Affaires où la personne est simplement mentionnée.
@@ -285,7 +285,7 @@
  *               type: string
  *             countedInAdverseAggregates:
  *               type: boolean
- *               description: Vrai si l'affaire entre dans les compteurs à charge : implication directe, ordre pénal, condamnation ou procédure validée par un juge.
+ *               description: "Vrai si l'affaire entre dans les compteurs à charge : implication directe, ordre pénal, condamnation ou procédure validée par un juge."
  *         politician:
  *           $ref: '#/components/schemas/PoliticianSummary'
  *         partyAtTime:
