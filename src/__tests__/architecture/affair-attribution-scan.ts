@@ -654,6 +654,21 @@ export const ALLOWED: AllowedOccurrence[] = [
       "getProbityStats : lignes déjà limitées à DIRECT et à l'ordre pénal par getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS).",
   },
   {
+    path: "src/lib/data/affairs.ts",
+    snippet: "counts[getCertaintyLevel(row.status)] += row._count;",
+    count: 1,
+    nature: "documentary-facet",
+    reason:
+      "getCertaintyFacetCounts : options du filtre par stade de /affaires, même périmètre que les cartes listées (getDocumentaryAffairWhere), rien n'est compté à charge.",
+  },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: "const adverseLevel = getCertaintyLevel(row.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getAdverseCertaintyCounts : lignes déjà filtrées par getAdverseAffairWhere().",
+  },
+  {
     path: "src/lib/data/hemicycle.ts",
     snippet: "const level = getCertaintyLevel(a.status);",
     count: 1,

@@ -17,7 +17,11 @@ import {
 } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  getAdverseAffairWhere,
+  getDocumentaryAffairWhere,
+  getPublishedAffairWhere,
+} from "@/lib/affairs/public-filters";
 
 export async function getPartiesWithAffairs() {
   "use cache";
@@ -448,6 +452,63 @@ export async function getCertaintyCounts() {
     counts[level] += row._count;
   }
 
+  return counts;
+}
+
+const EMPTY_CERTAINTY_COUNTS: Record<CertaintyLevel, number> = {
+  ETABLI: 0,
+  PRONONCE: 0,
+  EN_COURS: 0,
+  CLOS_SANS_CHARGE: 0,
+  CLOS_FAVORABLE: 0,
+};
+
+/**
+ * Comptes des options du filtre par stade du listing /affaires : même périmètre que les
+ * cartes (implications du mode, catégories de violences en mode victime), groupées par le
+ * stade de la procédure. Ce n'est pas un compte à charge : une carte de témoin y figure.
+ */
+export async function getCertaintyFacetCounts(
+  involvements: readonly Involvement[]
+): Promise<Record<CertaintyLevel, number>> {
+  "use cache";
+  cacheTag("affairs");
+  cacheLife("synced");
+
+  const statusCounts = await db.affair.groupBy({
+    by: ["status"],
+    _count: true,
+    where: {
+      ...getDocumentaryAffairWhere(involvements),
+      ...(involvements.includes("VICTIM") && { category: { in: VIOLENCE_CATEGORIES } }),
+      politician: PUBLIC_POLITICIAN_WHERE,
+    },
+  });
+
+  const counts = { ...EMPTY_CERTAINTY_COUNTS };
+  for (const row of statusCounts) {
+    counts[getCertaintyLevel(row.status)] += row._count;
+  }
+  return counts;
+}
+
+/** Comptes par stade des seules affaires à charge (DIRECT, pénal, validées par un juge). */
+export async function getAdverseCertaintyCounts(): Promise<Record<CertaintyLevel, number>> {
+  "use cache";
+  cacheTag("affairs");
+  cacheLife("synced");
+
+  const statusCounts = await db.affair.groupBy({
+    by: ["status"],
+    _count: true,
+    where: { ...getAdverseAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+  });
+
+  const counts = { ...EMPTY_CERTAINTY_COUNTS };
+  for (const row of statusCounts) {
+    const adverseLevel = getCertaintyLevel(row.status);
+    counts[adverseLevel] += row._count;
+  }
   return counts;
 }
 

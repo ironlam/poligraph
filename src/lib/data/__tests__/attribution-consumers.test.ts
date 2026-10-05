@@ -95,7 +95,11 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { getAdverseInvolvementSql } from "@/lib/affairs/public-filters";
+import {
+  DEFAULT_LISTING_INVOLVEMENTS,
+  VICTIM_LISTING_INVOLVEMENTS,
+  getAdverseInvolvementSql,
+} from "@/lib/affairs/public-filters";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import { getProbityStats } from "@/lib/affairs/probity-stats";
 import { getCondamnations, getCondamnationsStatsByParty } from "@/lib/data/condamnations";
@@ -103,6 +107,7 @@ import { loadComparisonData } from "@/lib/data/compare";
 import { getJudicialData } from "@/lib/data/statistics";
 import { getParties, getPartiesStats } from "@/lib/data/partis";
 import { getHemicycleData } from "@/lib/data/hemicycle";
+import { getAdverseCertaintyCounts, getAffairs, getCertaintyFacetCounts } from "@/lib/data/affairs";
 
 const ADVERSE_SQL = getAdverseInvolvementSql("a").sql;
 
@@ -310,5 +315,40 @@ describe("probity-stats", () => {
     const stats = await getProbityStats("politician-1");
     expect(stats.etabli).toBe(1);
     expect(stats.total).toBe(DIRECT_PENAL_KEYS.length);
+  });
+});
+
+describe("facettes de certitude", () => {
+  async function listingTotal(involvements: readonly string[]) {
+    const listing = await getAffairs(undefined, undefined, undefined, undefined, undefined, 1, [
+      ...involvements,
+    ] as Parameters<typeof getAffairs>[6]);
+    return listing.total;
+  }
+
+  const sum = (counts: Record<string, number>) => Object.values(counts).reduce((a, b) => a + b, 0);
+
+  it("mode mis en cause : CLOS_FAVORABLE garde l'issue favorable et le total égale le listing", async () => {
+    const counts = await getCertaintyFacetCounts(DEFAULT_LISTING_INVOLVEMENTS);
+    expect(counts.CLOS_FAVORABLE).toBe(1);
+    expect(sum(counts)).toBe(await listingTotal(DEFAULT_LISTING_INVOLVEMENTS));
+  });
+
+  it("mode victime : le total égale le listing, catégories de violences comprises", async () => {
+    const counts = await getCertaintyFacetCounts(VICTIM_LISTING_INVOLVEMENTS);
+    const total = await listingTotal(VICTIM_LISTING_INVOLVEMENTS);
+    expect(total).toBe(1);
+    expect(sum(counts)).toBe(total);
+  });
+
+  it("getAdverseCertaintyCounts : ETABLI ne compte que la condamnation DIRECT pénale", async () => {
+    const counts = await getAdverseCertaintyCounts();
+    expect(counts).toEqual({
+      ETABLI: 1,
+      PRONONCE: 0,
+      EN_COURS: 0,
+      CLOS_SANS_CHARGE: 0,
+      CLOS_FAVORABLE: 0,
+    });
   });
 });
