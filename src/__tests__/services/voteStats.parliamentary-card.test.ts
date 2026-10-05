@@ -59,19 +59,17 @@ describe("fiche politicien : une seule lecture des statistiques par rendu", () =
   const page =
     read("src/app/politiques/[slug]/page.tsx") + read("src/app/politiques/[slug]/page-data.ts");
   const body = read("src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx");
-  const voteStats = read("src/app/politiques/[slug]/vote-stats.ts");
-  // The reads moved out of the cache wrapper (profile read model): the stats call and the
-  // dissidence call now live in the uncached module, the wrapper keeps the cache boundary.
+  // The stats call and the dissidence call live in the uncached module; the document builder reads
+  // them through `readProfileVoteStats`.
   const rawReads = read("src/lib/data/politician-profile-reads.ts");
 
   it("ne lit les statistiques de vote qu'une fois", () => {
     // Two reads under two cache keys returned the same value, so no behavioural test
     // could see the duplicate. It cost a render one extra chain on a pool of four.
     expect(rawReads.match(/computePoliticianVotingStats\(/g)).toHaveLength(1);
-    expect(voteStats).not.toContain("getPoliticianVotingStats");
     expect(page).not.toContain("getPoliticianVotingStats");
     expect(body).not.toContain("getPoliticianVotingStats");
-    expect(page + body + voteStats).not.toContain("getPoliticianParliamentaryCard");
+    expect(page + body).not.toContain("getPoliticianParliamentaryCard");
   });
 
   it("résout le parlementaire même quand un mandat local est plus récent", () => {
@@ -84,9 +82,10 @@ describe("fiche politicien : une seule lecture des statistiques par rendu", () =
     expect(body.replace(/\s+/g, " ")).toMatch(/currentMandate=\{\s*currentParliamentaryMandate/);
   });
 
-  it("garde la dissidence dans la frontière de cache des votes", () => {
-    expect(voteStats).toContain('"use cache"');
-    expect(voteStats).toContain("readProfileVoteStats(politicianId, mandateType)");
+  it("lit la dissidence une seule fois, avec les statistiques, pour la construction du document", () => {
+    const build = read("src/lib/politicians/profile-snapshot/build.ts");
+
+    expect(build).toContain("readProfileVoteStats(");
     expect(rawReads).toContain("getPoliticianDissidence(politicianId)");
     expect(rawReads.match(/getPoliticianDissidence\(/g)).toHaveLength(1);
   });

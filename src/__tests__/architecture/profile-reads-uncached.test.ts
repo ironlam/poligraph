@@ -21,15 +21,13 @@ describe("lectures brutes de la fiche politicien", () => {
     const politicians = withoutComments(read("src/lib/data/politicians.ts"));
     expect(politicians).toMatch(/readPoliticianIdentity\(/);
     expect(politicians).toMatch(/readPoliticianDossier\(/);
-    expect(withoutComments(read("src/app/politiques/[slug]/vote-stats.ts"))).toMatch(
-      /readProfileVoteStats\(/
-    );
   });
 
   it("sont appelées l'une après l'autre par la construction du document", () => {
     // One connection at a time: PostgresDriverMetrics does not measure concurrency.
     const build = withoutComments(read("src/lib/politicians/profile-snapshot/build.ts"));
     expect(build).toMatch(/readPoliticianIdentity\(/);
+    expect(build).toMatch(/readProfileVoteStats\(/);
     expect(build).not.toMatch(/Promise\.all/); // also catches Promise.allSettled
   });
 });
