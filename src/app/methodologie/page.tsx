@@ -308,11 +308,11 @@ export default function MethodologiePage() {
                 Implication directe et secondaire
               </h4>
               <p>
-                Un politicien n{"'"}est compté à charge que lorsqu{"'"}il est directement mis en
-                cause, poursuivi ou condamné. Une implication secondaire (témoin, rôle annexe) s
-                {"'"}affiche sur sa fiche mais n{"'"}entre dans aucun compteur. Les simples mentions
-                dans une affaire tierce ou les cas où le politicien est victime/plaignant ne sont
-                pas inclus non plus dans ces compteurs.
+                Une personne n{"'"}est comptée à charge que lorsqu{"'"}elle est directement mise en
+                cause, poursuivie ou condamnée. Une implication secondaire (témoin, rôle annexe) s
+                {"'"}affiche sur sa fiche mais n{"'"}entre dans aucun compteur à charge. Les simples
+                mentions dans une affaire tierce et les cas où la personne est victime ou plaignante
+                sont exclus de ces compteurs au même titre.
               </p>
             </div>
             <div className="rounded-lg border p-4">
