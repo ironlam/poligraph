@@ -159,8 +159,9 @@ describe("données HTML publiques des partis", () => {
     });
     expect(listingQuery.include.affairsAtTime.where).toEqual({
       publicationStatus: "PUBLISHED",
+      involvement: { in: ["DIRECT"] },
+      jurisdictionOrder: "PENAL",
       politician: { publicationStatus: "PUBLISHED" },
-      involvement: { notIn: ["VICTIM", "PLAINTIFF"] },
     });
   });
 });

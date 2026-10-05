@@ -97,9 +97,11 @@ vi.mock("@/lib/db", () => ({
 
 import { getAdverseInvolvementSql } from "@/lib/affairs/public-filters";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
+import { getProbityStats } from "@/lib/affairs/probity-stats";
 import { getCondamnations, getCondamnationsStatsByParty } from "@/lib/data/condamnations";
 import { loadComparisonData } from "@/lib/data/compare";
 import { getJudicialData } from "@/lib/data/statistics";
+import { getParties, getPartiesStats } from "@/lib/data/partis";
 import { getHemicycleData } from "@/lib/data/hemicycle";
 
 const ADVERSE_SQL = getAdverseInvolvementSql("a").sql;
@@ -216,6 +218,45 @@ describe("getJudicialData", () => {
   });
 });
 
+describe("/partis", () => {
+  it("les compteurs d'un parti excluent le témoin et le non pénal", async () => {
+    mocks.partyFindMany.mockImplementation(
+      async (args: { include: { affairsAtTime: { where: Where } } }) => [
+        {
+          id: "party-1",
+          slug: "parti",
+          predecessor: null,
+          _count: { politicians: 1, partyMemberships: 1 },
+          affairsAtTime: matching(args.include.affairsAtTime.where),
+        },
+      ]
+    );
+    const [party] = await getParties();
+    expect(party!.affairCounts).toEqual({
+      condamnations: 1,
+      enCours: 1,
+      closesSansCondamnation: 1,
+      total: DIRECT_PENAL_KEYS.length,
+    });
+  });
+
+  it("le SQL des statistiques filtre l'implication par le fragment partagé", async () => {
+    mocks.queryRaw.mockResolvedValue([
+      {
+        actifs: BigInt(0),
+        gauche: BigInt(0),
+        centre: BigInt(0),
+        droite: BigInt(0),
+        affaires: BigInt(0),
+      },
+    ]);
+    await getPartiesStats();
+    const query = lastRawSql();
+    expectAdverseSql(query);
+    expect(query.sql).not.toContain("NOT IN ('VICTIM'");
+  });
+});
+
 describe("hémicycle", () => {
   it("un élu avec seulement une enquête préliminaire n'est pas mis en cause", async () => {
     const deputy = (slug: string, keysOf: string[]) => (where: Where) => ({
@@ -261,5 +302,13 @@ describe("hémicycle", () => {
     expect(bySlug.enquete).toMatchObject({ activeAffairCount: 0, maxCertaintyLevel: null });
     expect(bySlug.temoin).toMatchObject({ activeAffairCount: 0, maxCertaintyLevel: null });
     expect(bySlug.condamne).toMatchObject({ activeAffairCount: 1, maxCertaintyLevel: "ETABLI" });
+  });
+});
+
+describe("probity-stats", () => {
+  it("le témoin et le non pénal sont exclus", async () => {
+    const stats = await getProbityStats("politician-1");
+    expect(stats.etabli).toBe(1);
+    expect(stats.total).toBe(DIRECT_PENAL_KEYS.length);
   });
 });

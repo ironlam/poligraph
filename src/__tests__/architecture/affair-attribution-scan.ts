@@ -646,11 +646,41 @@ export const ALLOWED: AllowedOccurrence[] = [
       "computeJudicialCounts : un témoin est compté avec les mentions, pas avec les mis en cause.",
   },
   {
+    path: "src/lib/affairs/probity-stats.ts",
+    snippet: "const level = getCertaintyLevel(row.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason:
+      "getProbityStats : lignes déjà limitées à DIRECT et à l'ordre pénal par getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS).",
+  },
+  {
     path: "src/lib/data/hemicycle.ts",
     snippet: "const level = getCertaintyLevel(a.status);",
     count: 1,
     nature: "adverse-prefiltered",
     reason: "getHemicycleData : affaires déjà filtrées par getAdverseAffairWhere().",
+  },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: '(a) => getJudicialMaturity(a.status) === "CONDAMNATION"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason:
+      "queryParties : affairsAtTime déjà limité à DIRECT et à l'ordre pénal par getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS).",
+  },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: "const m = getJudicialMaturity(a.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
+  },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: '(a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"',
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
   },
   {
     path: "src/lib/data/statistics.ts",
@@ -934,22 +964,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   {
-    path: "src/lib/affairs/probity-stats.ts",
-    snippet: "const rows = await db.affair.groupBy({",
-    count: 1,
-  },
-  {
-    path: "src/lib/affairs/probity-stats.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
-    count: 1,
-  },
-  {
-    path: "src/lib/affairs/probity-stats.ts",
-    snippet: "const level = getCertaintyLevel(row.status);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
     path: "src/lib/api/public-contract.ts",
     snippet: "const judicialMaturity = getJudicialMaturity(affair.status);",
     count: 1,
@@ -994,39 +1008,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
   {
     path: "src/lib/data/partis.ts",
     snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
-    count: 1,
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF"] },',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CONDAMNATION"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "const m = getJudicialMaturity(a.status);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"',
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF')",
     count: 1,
   },
   {
