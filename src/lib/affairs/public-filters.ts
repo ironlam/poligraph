@@ -59,7 +59,7 @@ export function getAdverseInvolvementSql(alias: "a" = "a"): Prisma.Sql {
     throw new Error(`Unsupported public affair SQL alias: ${alias}`);
   }
 
-  return Prisma.sql`a.involvement = 'DIRECT'`;
+  return Prisma.sql`a.involvement IN (${Prisma.join([...ADVERSE_INVOLVEMENTS])})`;
 }
 
 /** Version en mémoire des agrégats à charge, équivalente à getAdverseAffairWhere(). */

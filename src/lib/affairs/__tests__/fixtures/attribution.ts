@@ -19,7 +19,9 @@ export interface AttributionRow {
  * Lignes de référence partagées par les tests d'attribution : seule une condamnation
  * DIRECT d'ordre pénal entre dans les agrégats à charge.
  */
-export const ATTRIBUTION_ROWS: AttributionRow[] = [
+type RowInput = Omit<AttributionRow, "publicationStatus" | "politician">;
+
+const INPUT: RowInput[] = [
   {
     key: "indirectWitnessConvicted",
     involvement: "INDIRECT",
@@ -55,8 +57,10 @@ export const ATTRIBUTION_ROWS: AttributionRow[] = [
     jurisdictionOrder: "PENAL",
     expectedAdverse: false,
   },
-].map((row) => ({
+];
+
+export const ATTRIBUTION_ROWS: AttributionRow[] = INPUT.map((row) => ({
   ...row,
-  publicationStatus: "PUBLISHED" as const,
-  politician: { publicationStatus: "PUBLISHED" as const },
-})) as AttributionRow[];
+  publicationStatus: "PUBLISHED",
+  politician: { publicationStatus: "PUBLISHED" },
+}));

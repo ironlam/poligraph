@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { getAttributedCertaintyLevel, isAccusedInvolvement } from "@/config/certainty";
+import { AGGREGATE_STATUSES } from "@/config/judicial-maturity";
 import {
+  ADVERSE_INVOLVEMENTS,
   DEFAULT_LISTING_INVOLVEMENTS,
   VICTIM_LISTING_INVOLVEMENTS,
   getAdverseAffairWhere,
@@ -20,9 +22,18 @@ describe("prédicat d'attribution à charge", () => {
     expect(evaluateWhere(row, getAdverseAffairWhere())).toBe(row.expectedAdverse);
 
     const sql = getAdverseInvolvementSql("a");
-    const text = sql.sql + sql.values.join(" ");
-    expect(text).toContain("'DIRECT'");
-    expect(text).not.toContain("INDIRECT");
+    const sqlVerdict =
+      (sql.values as unknown[]).includes(row.involvement) &&
+      row.jurisdictionOrder === "PENAL" &&
+      AGGREGATE_STATUSES.includes(row.status);
+    expect(sqlVerdict).toBe(row.expectedAdverse);
+  });
+
+  it("le SQL à charge est dérivé de ADVERSE_INVOLVEMENTS et ne contient pas INDIRECT", () => {
+    const sql = getAdverseInvolvementSql("a");
+    expect(sql.values).toEqual([...ADVERSE_INVOLVEMENTS]);
+    expect(sql.sql + sql.values.join(" ")).not.toContain("INDIRECT");
+    expect(() => getAdverseInvolvementSql("b" as "a")).toThrow();
   });
 
   it("l'évaluateur refuse un opérateur qu'il ne connaît pas", () => {
