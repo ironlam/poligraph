@@ -88,6 +88,7 @@ export async function setCandidacyStatusAction(input: {
       select: {
         id: true,
         electionId: true,
+        election: { select: { slug: true } },
         status: true,
         sourceUrl: true,
         sourceLabel: true,
@@ -103,7 +104,11 @@ export async function setCandidacyStatusAction(input: {
       candidacy.sourceLabel === sourceLabel &&
       !mustClearSynthesis
     ) {
-      return { ok: true as const, electionId: candidacy.electionId };
+      return {
+        ok: true as const,
+        electionId: candidacy.electionId,
+        electionSlug: candidacy.election.slug,
+      };
     }
 
     await tx.candidacy.update({
@@ -135,11 +140,15 @@ export async function setCandidacyStatusAction(input: {
       },
     });
     await syncPresidentialSearchDocumentsForCandidacy(tx, candidacyId);
-    return { ok: true as const, electionId: candidacy.electionId };
+    return {
+      ok: true as const,
+      electionId: candidacy.electionId,
+      electionSlug: candidacy.election.slug,
+    };
   });
 
   if (!outcome.ok) return outcome;
-  invalidateEntity("election");
+  invalidateEntity("election", outcome.electionSlug);
   invalidatePresidentialCandidacyTags(outcome.electionId);
   revalidate();
   return { ok: true };
@@ -177,6 +186,7 @@ export async function setCandidacyPublicationAction(input: {
       select: {
         id: true,
         electionId: true,
+        election: { select: { slug: true } },
         status: true,
         sourceUrl: true,
         sourceLabel: true,
@@ -218,12 +228,16 @@ export async function setCandidacyPublicationAction(input: {
       },
     });
     await syncPresidentialSearchDocumentsForCandidacy(tx, candidacyId);
-    return { ok: true as const, electionId: candidacy.electionId };
+    return {
+      ok: true as const,
+      electionId: candidacy.electionId,
+      electionSlug: candidacy.election.slug,
+    };
   });
 
   if (!outcome.ok) return outcome;
 
-  invalidateEntity("election");
+  invalidateEntity("election", outcome.electionSlug);
   // The four hub reads, the candidate fiche and the politician notice all gate on this status and
   // carry this tag alone. `invalidateEntity("election")` purges `elections`, which none of them use.
   invalidatePresidentialCandidacyTags(outcome.electionId);

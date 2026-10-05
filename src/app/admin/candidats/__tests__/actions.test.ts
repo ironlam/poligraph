@@ -50,6 +50,7 @@ vi.mock("@/services/candidate-synthesis", () => ({
 const SOURCED_CANDIDACY = {
   id: "cand-1",
   electionId: "elec-1",
+  election: { slug: "presidentielle-2027" },
   status: "DECLARE",
   sourceUrl: "https://example.org/annonce",
   sourceLabel: "Annonce de candidature",
@@ -125,6 +126,18 @@ describe("actions de publication des candidatures", () => {
     );
     expect(invalidateCandidacyTagsMock).toHaveBeenCalledWith("elec-1");
     expect(revalidatePathMock).toHaveBeenCalledWith("/admin/candidats");
+  });
+
+  it("passe le slug de l'élection de la candidature à la purge", async () => {
+    dbMock.candidacy.findUnique.mockResolvedValue({
+      ...SOURCED_CANDIDACY,
+      election: { slug: "municipales-2026" },
+    });
+    const a = await actions();
+
+    await a.setCandidacyPublicationAction({ candidacyId: "cand-1", status: "PUBLISHED" });
+
+    expect(invalidateEntityMock).toHaveBeenCalledWith("election", "municipales-2026");
   });
 
   it("crée l'extension absente au lieu d'échouer", async () => {
@@ -295,6 +308,7 @@ describe("statut politique d'une candidature", () => {
         sourceLabel: "Déclaration officielle",
       })
     ).toEqual({ ok: true });
+    expect(invalidateEntityMock).toHaveBeenCalledWith("election", "presidentielle-2027");
     expect(dbMock.candidacy.update).toHaveBeenCalledWith({
       where: { id: "cand-1" },
       data: {

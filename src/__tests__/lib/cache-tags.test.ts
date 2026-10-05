@@ -29,9 +29,23 @@ describe("cache invalidation scopes", () => {
     expect(tags).not.toContain("elections-municipales-2026");
   });
 
-  it("invalidateEntity('election') purges the cached presidential election id", () => {
-    invalidateEntity("election");
+  it("invalidateEntity('election', presidential slug) purges the cached presidential election id", () => {
+    invalidateEntity("election", "presidentielle-2027");
+    const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
+    expect(tags).toContain("elections");
     expect(revalidateTagSpy).toHaveBeenCalledWith("election-id:presidentielle-2027", "hours");
+  });
+
+  it("invalidateEntity('election', other slug) leaves the presidential election id alone", () => {
+    invalidateEntity("election", "municipales-2026");
+    const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
+    expect(tags).toEqual(["elections"]);
+  });
+
+  it("invalidateEntity('election') without slug leaves the presidential election id alone", () => {
+    invalidateEntity("election");
+    const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
+    expect(tags).toEqual(["elections"]);
   });
 
   it("revalidateAll never purges the cached presidential election id", () => {

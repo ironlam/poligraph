@@ -106,7 +106,7 @@ export const POST = withAdminAuth(
       },
     });
 
-    invalidateEntity("election");
+    invalidateEntity("election", data.electionSlug);
     // The hub reads gate on the extension's publication status, and `invalidateEntity("election")`
     // does not reach them. The election id comes from the row just created, so this costs no query.
     invalidatePresidentialCandidacyTags(outcome.candidacy.electionId);
