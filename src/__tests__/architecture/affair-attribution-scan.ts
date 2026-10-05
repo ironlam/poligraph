@@ -936,13 +936,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
   },
   {
     path: "src/lib/api/public-contract.ts",
-    snippet:
-      "const certaintyLevel = statusAppliesToPolitician ? getCertaintyLevel(affair.status) : null;",
-    count: 1,
-    family: "guarded-before-call",
-  },
-  {
-    path: "src/lib/api/public-contract.ts",
     snippet: "const judicialMaturity = getJudicialMaturity(affair.status);",
     count: 1,
     family: "guarded-before-call",

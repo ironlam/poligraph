@@ -15,7 +15,12 @@ import {
   INVOLVEMENT_LABELS,
   JURISDICTION_ORDER_LABELS,
 } from "@/config/labels";
-import { CERTAINTY_LABELS, getCertaintyLevel, isAccusedInvolvement } from "@/config/certainty";
+import {
+  CERTAINTY_LABELS,
+  getAttributedCertaintyLevel,
+  isAccusedInvolvement,
+} from "@/config/certainty";
+import { isCountedInAdverseAggregates } from "@/lib/affairs/public-filters";
 import { getJudicialMaturity, MATURITY_LABELS } from "@/config/judicial-maturity";
 
 /**
@@ -99,7 +104,7 @@ export function getPublicAffairSemantics(affair: {
   jurisdictionOrder: JurisdictionOrder;
 }) {
   const statusAppliesToPolitician = isAccusedInvolvement(affair.involvement);
-  const certaintyLevel = statusAppliesToPolitician ? getCertaintyLevel(affair.status) : null;
+  const certaintyLevel = getAttributedCertaintyLevel(affair);
   const judicialMaturity = getJudicialMaturity(affair.status);
 
   return {
@@ -117,7 +122,7 @@ export function getPublicAffairSemantics(affair: {
     jurisdictionOrderLabel: JURISDICTION_ORDER_LABELS[affair.jurisdictionOrder],
     // Dit explicitement ce que nos compteurs font de l'affaire, pour qu'un
     // réutilisateur puisse reproduire l'agrégat sans deviner la règle.
-    countedInAdverseAggregates: affair.jurisdictionOrder === "PENAL",
+    countedInAdverseAggregates: isCountedInAdverseAggregates(affair),
   };
 }
 
