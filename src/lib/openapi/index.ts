@@ -38,7 +38,7 @@ Merci de faire un usage raisonnable de l'API.
 
 Les exports CSV (\`/api/export/affaires\`, \`/api/export/politiques\`, \`/api/export/factchecks\`, \`/api/export/votes\`) acceptent 5 requêtes par minute et par adresse IP, sur une fenêtre glissante. Au-delà, l'API répond \`429\` et indique dans l'en-tête \`Retry-After\` le nombre de secondes à attendre. Chaque réponse porte aussi \`X-RateLimit-Limit\`, \`X-RateLimit-Remaining\` et \`X-RateLimit-Reset\` (horodatage Unix en millisecondes).
 
-Un export renvoie jusqu'à 50 000 lignes en une requête, et peut rester en cache jusqu'à 24 heures. Un téléchargement par jour suffit pour suivre les mises à jour. Un client qui continue d'envoyer des requêtes malgré les réponses \`429\` est refusé en amont de l'API, sans ces en-têtes.
+Le paramètre \`limit\` plafonne chaque export à 50 000 enregistrements par requête, et un export peut rester en cache jusqu'à 24 heures. Un téléchargement par jour suffit pour suivre les mises à jour. Un client qui continue d'envoyer des requêtes malgré les réponses \`429\` est refusé en amont de l'API, sans ces en-têtes.
       `.trim(),
       contact: {
         name: "Poligraph",

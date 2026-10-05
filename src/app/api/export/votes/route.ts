@@ -12,6 +12,52 @@ import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tag
 
 export const dynamic = "force-dynamic";
 
+/**
+ * @openapi
+ * /api/export/votes:
+ *   get:
+ *     summary: Export CSV des scrutins parlementaires
+ *     description: >
+ *       Retourne les scrutins de l'Assemblée nationale et du Sénat au format CSV, du plus
+ *       récent au plus ancien, une ligne par scrutin : date, législature, chambre, nombre de
+ *       voix pour, contre et abstentions, résultat, lien vers la source officielle et vers
+ *       la page du scrutin sur Poligraph.
+ *     tags: [Exports]
+ *     parameters:
+ *       - in: query
+ *         name: chamber
+ *         schema:
+ *           type: string
+ *           enum: [AN, SENAT]
+ *       - in: query
+ *         name: result
+ *         schema:
+ *           type: string
+ *           enum: [ADOPTED, REJECTED]
+ *       - in: query
+ *         name: legislature
+ *         schema:
+ *           type: integer
+ *         description: Numéro de législature
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10000
+ *           minimum: 1
+ *           maximum: 50000
+ *     responses:
+ *       200:
+ *         description: Fichier CSV UTF-8 avec BOM
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *       400:
+ *         description: Chambre, résultat ou législature invalide
+ *       429:
+ *         description: Plus de 5 requêtes par minute depuis la même adresse IP. L'en-tête Retry-After indique le délai en secondes.
+ */
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
 
