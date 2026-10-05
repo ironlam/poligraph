@@ -262,6 +262,10 @@ export function AffairForm({ initialData, initialPoliticianId }: AffairFormProps
                   </option>
                 ))}
               </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Témoin/Secondaire n&apos;est compté à charge nulle part. Réserver « Mis en cause » à
+                la personne poursuivie ou condamnée.
+              </p>
             </div>
 
             {isEditing && (
