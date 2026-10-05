@@ -424,37 +424,6 @@ export async function getSeverityCounts() {
   >;
 }
 
-export async function getCertaintyCounts() {
-  "use cache";
-  cacheTag("affairs");
-  cacheLife("synced");
-
-  const statusCounts = await db.affair.groupBy({
-    by: ["status"],
-    _count: true,
-    where: {
-      ...getPublishedAffairWhere(),
-      politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] },
-    },
-  });
-
-  const counts: Record<CertaintyLevel, number> = {
-    ETABLI: 0,
-    PRONONCE: 0,
-    EN_COURS: 0,
-    CLOS_SANS_CHARGE: 0,
-    CLOS_FAVORABLE: 0,
-  };
-
-  for (const row of statusCounts) {
-    const level = getCertaintyLevel(row.status);
-    counts[level] += row._count;
-  }
-
-  return counts;
-}
-
 const EMPTY_CERTAINTY_COUNTS: Record<CertaintyLevel, number> = {
   ETABLI: 0,
   PRONONCE: 0,
@@ -506,8 +475,8 @@ export async function getAdverseCertaintyCounts(): Promise<Record<CertaintyLevel
 
   const counts = { ...EMPTY_CERTAINTY_COUNTS };
   for (const row of statusCounts) {
-    const adverseLevel = getCertaintyLevel(row.status);
-    counts[adverseLevel] += row._count;
+    const level = getCertaintyLevel(row.status);
+    counts[level] += row._count;
   }
   return counts;
 }

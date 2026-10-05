@@ -11,7 +11,8 @@ import { SeoIntro } from "@/components/seo/SeoIntro";
 import {
   getAffairs,
   getSuperCategoryCounts,
-  getCertaintyCounts,
+  getCertaintyFacetCounts,
+  getAdverseCertaintyCounts,
   getPartiesWithAffairs,
   getPublicPartyMetadataBySlug,
 } from "@/lib/data/affairs";
@@ -31,6 +32,10 @@ import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/
 import { AFFAIRES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { buildRetourParam } from "@/lib/affairs/listing-return";
 import { parsePageParam } from "@/lib/data/query-params";
+import {
+  DEFAULT_LISTING_INVOLVEMENTS,
+  VICTIM_LISTING_INVOLVEMENTS,
+} from "@/lib/affairs/public-filters";
 
 export const revalidate = 300; // 5 minutes — CDN edge cache with ISR
 
@@ -129,29 +134,35 @@ export default async function AffairesPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const activeInvolvements =
-    mode === "victime"
-      ? (["VICTIM", "PLAINTIFF"] as Involvement[])
-      : (["DIRECT", "INDIRECT", "MENTIONED_ONLY"] as Involvement[]);
+  const activeInvolvements: Involvement[] =
+    mode === "victime" ? [...VICTIM_LISTING_INVOLVEMENTS] : [...DEFAULT_LISTING_INVOLVEMENTS];
 
-  const [{ affairs, total, totalPages }, superCounts, certaintyCounts, partiesWithAffairs] =
-    await Promise.all([
-      getAffairs(
-        searchFilter || undefined,
-        statusFilter,
-        superCatFilter || undefined,
-        categoryFilter,
-        undefined, // severity — removed from public filters
-        page,
-        activeInvolvements,
-        partiFilter || undefined,
-        sortFilter || undefined,
-        certaintyFilter || undefined
-      ),
-      getSuperCategoryCounts(),
-      getCertaintyCounts(),
-      getPartiesWithAffairs(),
-    ]);
+  const [
+    { affairs, total, totalPages },
+    superCounts,
+    certaintyCounts,
+    adverseCertaintyCounts,
+    partiesWithAffairs,
+  ] = await Promise.all([
+    getAffairs(
+      searchFilter || undefined,
+      statusFilter,
+      superCatFilter || undefined,
+      categoryFilter,
+      undefined, // severity — removed from public filters
+      page,
+      activeInvolvements,
+      partiFilter || undefined,
+      sortFilter || undefined,
+      certaintyFilter || undefined
+    ),
+    getSuperCategoryCounts(),
+    // Filter options count the cards of the listed perimeter, a witness included;
+    // the hub tile counts only the convictions of the person prosecuted.
+    getCertaintyFacetCounts(activeInvolvements),
+    getAdverseCertaintyCounts(),
+    getPartiesWithAffairs(),
+  ]);
 
   const totalAffairs = Object.values(superCounts).reduce((a, b) => a + b, 0);
 
@@ -209,7 +220,7 @@ export default async function AffairesPage({ searchParams }: PageProps) {
 
         {/* Hub tiles: route the strong judicial/statistics/victim intents from the bare listing */}
         <div className="mb-4">
-          <AffairHubTiles etabliCount={certaintyCounts.ETABLI ?? 0} />
+          <AffairHubTiles etabliCount={adverseCertaintyCounts.ETABLI} />
         </div>
 
         {/* Victim mode methodology note */}

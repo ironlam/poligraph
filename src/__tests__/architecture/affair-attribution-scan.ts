@@ -574,22 +574,6 @@ export function scanAffairAttribution(files: { path: string; source: string }[])
 /** Exceptions assumées, une par occurrence. */
 export const ALLOWED: AllowedOccurrence[] = [
   {
-    path: "src/app/affaires/page.tsx",
-    snippet: '? (["VICTIM", "PLAINTIFF"] as Involvement[])',
-    count: 1,
-    nature: "documentary-facet",
-    reason:
-      "Listing /affaires en mode victime : chaque carte affiche le rôle, rien n'est compté à charge.",
-  },
-  {
-    path: "src/app/affaires/page.tsx",
-    snippet: ': (["DIRECT", "INDIRECT", "MENTIONED_ONLY"] as Involvement[]);',
-    count: 1,
-    nature: "documentary-facet",
-    reason:
-      "Listing /affaires en mode mis en cause : un témoin y figure avec son rôle, sans badge à charge.",
-  },
-  {
     path: "src/app/api/affaires/neighbors/route.ts",
     snippet:
       'mode === "victime" ? ["VICTIM", "PLAINTIFF"] : ["DIRECT", "INDIRECT", "MENTIONED_ONLY"];',
@@ -660,13 +644,6 @@ export const ALLOWED: AllowedOccurrence[] = [
     nature: "documentary-facet",
     reason:
       "getCertaintyFacetCounts : options du filtre par stade de /affaires, même périmètre que les cartes listées (getDocumentaryAffairWhere), rien n'est compté à charge.",
-  },
-  {
-    path: "src/lib/data/affairs.ts",
-    snippet: "const adverseLevel = getCertaintyLevel(row.status);",
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason: "getAdverseCertaintyCounts : lignes déjà filtrées par getAdverseAffairWhere().",
   },
   {
     path: "src/lib/data/hemicycle.ts",
@@ -740,6 +717,13 @@ export const ALLOWED: AllowedOccurrence[] = [
     count: 1,
     nature: "adverse-prefiltered",
     reason: "getPartyAffairsData : même liste misEnCauseAffairs, DIRECT et ordre pénal.",
+  },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: "const level = getCertaintyLevel(row.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getAdverseCertaintyCounts : lignes déjà filtrées par getAdverseAffairWhere().",
   },
 ];
 
@@ -949,17 +933,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   { path: "src/lib/data/affairs.ts", snippet: 'involvement: "DIRECT",', count: 3 },
-  {
-    path: "src/lib/data/affairs.ts",
-    snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] },',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/affairs.ts",
-    snippet: "const level = getCertaintyLevel(row.status);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
   {
     path: "src/lib/data/affairs.ts",
     snippet: 'const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"];',
