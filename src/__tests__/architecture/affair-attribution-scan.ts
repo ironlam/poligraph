@@ -16,9 +16,12 @@
  * `public-filters.ts` et `src/config/certainty.ts` ne sont pas scannés : ils définissent le
  * prédicat et la classification que le garde exige ailleurs.
  *
- * Limite assumée : le garde lit la forme écrite dans le fichier. Il suit une constante locale
- * (`const where = { ...getAdverseAffairWhere() }`) mais pas un prédicat construit dans un autre
- * module ; dans ce cas le sink est signalé et l'occurrence se documente.
+ * Limite assumée : le garde lit la forme écrite dans le fichier. Il suit une constante locale,
+ * résolue par portée (`const where = { ...getAdverseAffairWhere() }`), mais pas un prédicat construit dans un autre
+ * module ; dans ce cas le sink est signalé et l'occurrence se documente. Un spread approuvé
+ * approuve tout l'objet : une surcharge voisine ou un NOT dans le même where n'est pas inspecté,
+ * et getPublishedAffairWhere / getDocumentaryAffairWhere approuvent des sinks qui ne sont pas des
+ * comptes à charge. La justesse à charge relève des tests sur la fixture partagée, pas de ce garde.
  */
 
 import ts from "typescript";
@@ -27,10 +30,14 @@ export type FindingKind = "involvement-filter" | "affair-sink" | "raw-classifica
 
 export type Finding = { path: string; line: number; kind: FindingKind; snippet: string };
 
-export type AllowedOccurrence = {
-  path: string;
-  /** Extrait exact de la ligne signalée. */
-  snippet: string;
+/**
+ * Entrée d'une liste du garde. `snippet` est la ligne signalée, réduite de ses espaces de bord ;
+ * `count` est le nombre exact de findings qu'elle couvre (deux lignes identiques dans un fichier
+ * comptent pour deux, comme deux findings de nature différente sur une même ligne).
+ */
+export type CoverageEntry = { path: string; snippet: string; count: number };
+
+export type AllowedOccurrence = CoverageEntry & {
   nature:
     | "documentary-facet"
     | "identity-check"
@@ -45,13 +52,52 @@ export type AllowedOccurrence = {
  * - `guarded-before-call` : l'implication est testée juste avant, migration mécanique vers
  *   `getAttributedCertaintyLevel` ;
  * - `adverse-prefiltered` : lignes déjà filtrées par un prédicat à charge, exception ALLOWED
- *   ajoutée par la tâche qui rebranche la source.
+ *   ajoutée par la tâche qui rebranche la source ;
+ * - `unguarded` : aucune des deux, défaut à corriger (pas d'exception à créer).
  */
-export type DebtEntry = {
-  path: string;
-  snippet: string;
-  family?: "guarded-before-call" | "adverse-prefiltered";
+export type DebtEntry = CoverageEntry & {
+  family?: "guarded-before-call" | "adverse-prefiltered" | "unguarded";
+  /** Responsable d'une entrée résiduelle (rempli par la tâche 10). */
+  owner?: string;
 };
+
+export type Coverage = {
+  /** Findings qu'aucune entrée ne couvre. */
+  unlisted: Finding[];
+  /** Entrées dont le nombre de findings couverts diffère de `count`. */
+  miscounted: string[];
+  /** Entrées déclarées deux fois (même fichier, même ligne). */
+  duplicated: string[];
+};
+
+/** Rapproche les findings des entrées : égalité exacte de ligne, nombre exact d'occurrences. */
+export function checkCoverage(findings: Finding[], entries: CoverageEntry[]): Coverage {
+  const key = (path: string, snippet: string): string => `${path}\u0000${snippet}`;
+  const expected = new Map<string, CoverageEntry>();
+  const duplicated: string[] = [];
+  for (const entry of entries) {
+    const k = key(entry.path, entry.snippet);
+    if (expected.has(k)) duplicated.push(`${entry.path}: ${entry.snippet}`);
+    else expected.set(k, entry);
+  }
+
+  const actual = new Map<string, number>();
+  const unlisted: Finding[] = [];
+  for (const finding of findings) {
+    const k = key(finding.path, finding.snippet);
+    if (!expected.has(k)) unlisted.push(finding);
+    else actual.set(k, (actual.get(k) ?? 0) + 1);
+  }
+
+  const miscounted = [...expected.entries()]
+    .filter(([k, entry]) => (actual.get(k) ?? 0) !== entry.count)
+    .map(
+      ([k, entry]) =>
+        `${entry.path}: ${entry.snippet} (attendu ${entry.count}, trouvé ${actual.get(k) ?? 0})`
+    );
+
+  return { unlisted, miscounted, duplicated };
+}
 
 const PUBLIC_FILTERS_MODULE = "@/lib/affairs/public-filters";
 
@@ -103,7 +149,6 @@ interface Context {
   approvedLocals: Set<string>;
   /** Tous les noms importés de public-filters (helpers et constantes, dont ADVERSE_INVOLVEMENTS). */
   filtersImports: Set<string>;
-  constants: Map<string, ts.Expression>;
   findings: Finding[];
 }
 
@@ -152,21 +197,64 @@ function collectApprovedImports(ctx: Context): void {
   }
 }
 
-function collectConstants(ctx: Context): void {
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isVariableDeclarationList(node.parent) &&
-      (node.parent.flags & ts.NodeFlags.Const) !== 0 &&
-      !ctx.constants.has(node.name.text)
-    ) {
-      ctx.constants.set(node.name.text, node.initializer);
+function bindsName(name: ts.BindingName, text: string): boolean {
+  if (ts.isIdentifier(name)) return name.text === text;
+  return name.elements.some(
+    (element) => !ts.isOmittedExpression(element) && bindsName(element.name, text)
+  );
+}
+
+/**
+ * Initialiseur de la constante que désigne `identifier`, résolue par portée : on remonte les
+ * blocs englobants jusqu'à la première déclaration du nom. Un paramètre, un `let`, une
+ * déstructuration ou une variable de boucle du même nom arrêtent la résolution (non approuvé).
+ */
+function resolveConst(identifier: ts.Identifier): ts.Expression | undefined {
+  const text = identifier.text;
+  let node: ts.Node | undefined = identifier.parent;
+
+  while (node !== undefined) {
+    if (ts.isFunctionLike(node)) {
+      if (node.parameters.some((parameter) => bindsName(parameter.name, text))) return undefined;
     }
-    node.forEachChild(visit);
-  };
-  visit(ctx.file);
+    if (
+      (ts.isForStatement(node) || ts.isForOfStatement(node) || ts.isForInStatement(node)) &&
+      node.initializer !== undefined &&
+      ts.isVariableDeclarationList(node.initializer) &&
+      node.initializer.declarations.some((declaration) => bindsName(declaration.name, text))
+    ) {
+      return undefined;
+    }
+    if (ts.isCatchClause(node) && node.variableDeclaration) {
+      if (bindsName(node.variableDeclaration.name, text)) return undefined;
+    }
+
+    const statements =
+      ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node)
+        ? node.statements
+        : ts.isCaseClause(node) || ts.isDefaultClause(node)
+          ? node.statements
+          : undefined;
+    if (statements !== undefined) {
+      for (const statement of statements) {
+        if (
+          (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+          statement.name?.text === text
+        ) {
+          return undefined;
+        }
+        if (!ts.isVariableStatement(statement)) continue;
+        const list = statement.declarationList;
+        for (const declaration of list.declarations) {
+          if (!bindsName(declaration.name, text)) continue;
+          const isConst = (list.flags & ts.NodeFlags.Const) !== 0;
+          return isConst && ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+        }
+      }
+    }
+    node = node.parent;
+  }
+  return undefined;
 }
 
 function isApprovedCall(ctx: Context, expression: ts.Expression): boolean {
@@ -186,7 +274,7 @@ function isApprovedWhere(ctx: Context, expression: ts.Expression, depth = 0): bo
   if (isApprovedCall(ctx, node)) return true;
 
   if (ts.isIdentifier(node)) {
-    const initializer = ctx.constants.get(node.text);
+    const initializer = resolveConst(node);
     return initializer !== undefined && isApprovedWhere(ctx, initializer, depth + 1);
   }
 
@@ -223,7 +311,7 @@ function isApprovedSql(ctx: Context, template: ts.TemplateLiteral, depth = 0): b
     const expression = unwrap(span.expression);
     if (isApprovedCall(ctx, expression)) return true;
     if (!ts.isIdentifier(expression)) return false;
-    const initializer = ctx.constants.get(expression.text);
+    const initializer = resolveConst(expression);
     if (initializer === undefined) return false;
     const resolved = unwrap(initializer);
     const nested = ts.isTaggedTemplateExpression(resolved) ? resolved.template : resolved;
@@ -297,7 +385,7 @@ function isSharedInvolvementSet(ctx: Context, expression: ts.Expression): boolea
   const node = unwrap(expression);
   if (!ts.isIdentifier(node)) return false;
   if (ctx.filtersImports.has(node.text)) return true;
-  const initializer = ctx.constants.get(node.text);
+  const initializer = resolveConst(node);
   if (initializer === undefined) return false;
   let derived = false;
   const visit = (child: ts.Node): void => {
@@ -460,11 +548,9 @@ export function scanAffairAttribution(files: { path: string; source: string }[])
       lines: source.split("\n"),
       approvedLocals: new Set(),
       filtersImports: new Set(),
-      constants: new Map(),
       findings: [],
     };
     collectApprovedImports(ctx);
-    collectConstants(ctx);
 
     const walk = (node: ts.Node): void => {
       scanNode(ctx, node);
@@ -490,13 +576,15 @@ export const ALLOWED: AllowedOccurrence[] = [
   {
     path: "src/app/affaires/page.tsx",
     snippet: '? (["VICTIM", "PLAINTIFF"] as Involvement[])',
+    count: 1,
     nature: "documentary-facet",
     reason:
       "Listing /affaires en mode victime : chaque carte affiche le rôle, rien n'est compté à charge.",
   },
   {
     path: "src/app/affaires/page.tsx",
-    snippet: ': (["DIRECT", "INDIRECT", "MENTIONED_ONLY"] as Involvement[])',
+    snippet: ': (["DIRECT", "INDIRECT", "MENTIONED_ONLY"] as Involvement[]);',
+    count: 1,
     nature: "documentary-facet",
     reason:
       "Listing /affaires en mode mis en cause : un témoin y figure avec son rôle, sans badge à charge.",
@@ -504,7 +592,8 @@ export const ALLOWED: AllowedOccurrence[] = [
   {
     path: "src/app/api/affaires/neighbors/route.ts",
     snippet:
-      'mode === "victime" ? ["VICTIM", "PLAINTIFF"] : ["DIRECT", "INDIRECT", "MENTIONED_ONLY"]',
+      'mode === "victime" ? ["VICTIM", "PLAINTIFF"] : ["DIRECT", "INDIRECT", "MENTIONED_ONLY"];',
+    count: 1,
     nature: "documentary-facet",
     reason:
       "Navigation précédent/suivant du listing /affaires : même périmètre que la liste affichée.",
@@ -512,25 +601,30 @@ export const ALLOWED: AllowedOccurrence[] = [
   {
     path: "src/lib/affairs/involvement-note.ts",
     snippet: "const REQUIRES_NOTE: ReadonlySet<Involvement> = new Set<Involvement>([",
+    count: 1,
     nature: "enum-listing",
     reason:
       "Implications qui exigent une note sourcée avant publication : règle de modération, pas un agrégat.",
   },
   {
     path: "src/lib/affairs/involvement-note.ts",
-    snippet: "return REQUIRES_NOTE.has(involvement)",
+    snippet: "return REQUIRES_NOTE.has(involvement);",
+    count: 1,
     nature: "enum-listing",
     reason: "Test d'appartenance à REQUIRES_NOTE, même règle de modération.",
   },
   {
     path: "src/lib/politicians/judicial-counts.ts",
     snippet: '(x) => x.involvement === "DIRECT" && x.jurisdictionOrder === "PENAL"',
+    count: 1,
     nature: "role-display",
     reason: "computeJudicialCounts : compteurs à charge déjà limités à DIRECT et à l'ordre pénal.",
   },
   {
     path: "src/lib/politicians/judicial-counts.ts",
-    snippet: 'direct.filter((x) => getJudicialMaturity(x.status) === "PROCEDURE_VALIDEE")',
+    snippet:
+      'proceduresEnCours: direct.filter((x) => getJudicialMaturity(x.status) === "PROCEDURE_VALIDEE")',
+    count: 1,
     nature: "adverse-prefiltered",
     reason:
       "computeJudicialCounts : `direct` est déjà filtré sur DIRECT et l'ordre pénal juste au-dessus.",
@@ -538,6 +632,7 @@ export const ALLOWED: AllowedOccurrence[] = [
   {
     path: "src/lib/politicians/judicial-counts.ts",
     snippet: '(x) => x.involvement === "VICTIM" || x.involvement === "PLAINTIFF"',
+    count: 1,
     nature: "role-display",
     reason:
       "computeJudicialCounts : compte victime ou plaignant, affiché comme un rôle, jamais à charge.",
@@ -545,6 +640,7 @@ export const ALLOWED: AllowedOccurrence[] = [
   {
     path: "src/lib/politicians/judicial-counts.ts",
     snippet: '(x) => x.involvement === "INDIRECT" || x.involvement === "MENTIONED_ONLY"',
+    count: 1,
     nature: "role-display",
     reason:
       "computeJudicialCounts : un témoin est compté avec les mentions, pas avec les mis en cause.",
@@ -555,316 +651,466 @@ export const ALLOWED: AllowedOccurrence[] = [
 export const ATTRIBUTION_DEBT: DebtEntry[] = [
   {
     path: "src/app/affaires/[slug]/page.tsx",
-    snippet: "const certainty = getCertaintyLevel(affair.status)",
+    snippet: "const certainty = getCertaintyLevel(affair.status);",
+    count: 1,
     family: "guarded-before-call",
   },
-  { path: "src/app/affaires/[slug]/page.tsx", snippet: '{affair.involvement !== "DIRECT" &&' },
-  { path: "src/app/affaires/condamnations/opengraph-image.tsx", snippet: "db.affair.count({" },
+  {
+    path: "src/app/affaires/[slug]/page.tsx",
+    snippet: '{affair.involvement !== "DIRECT" && (',
+    count: 1,
+  },
   {
     path: "src/app/affaires/condamnations/opengraph-image.tsx",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] }',
+    snippet: "db.affair.count({",
+    count: 2,
+  },
+  {
+    path: "src/app/affaires/condamnations/opengraph-image.tsx",
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
+    count: 2,
   },
   {
     path: "src/app/affaires/condamnations/page.tsx",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] }',
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
+    count: 2,
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'const MIS_EN_CAUSE: Involvement[] = ["DIRECT", "INDIRECT"]',
+    snippet: 'const MIS_EN_CAUSE: Involvement[] = ["DIRECT", "INDIRECT"];',
+    count: 1,
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'const VICTIMS: Involvement[] = ["VICTIM", "PLAINTIFF"]',
+    snippet: 'const VICTIMS: Involvement[] = ["VICTIM", "PLAINTIFF"];',
+    count: 1,
   },
-  { path: "src/app/affaires/parti/[slug]/page.tsx", snippet: "affairsAtTime: {" },
+  { path: "src/app/affaires/parti/[slug]/page.tsx", snippet: "affairsAtTime: {", count: 1 },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
     snippet: "MIS_EN_CAUSE.includes(a.involvement as Involvement)",
+    count: 1,
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: "VICTIMS.includes(a.involvement as Involvement)",
+    snippet:
+      "const victimAffairs = affairs.filter((a) => VICTIMS.includes(a.involvement as Involvement));",
+    count: 1,
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'getJudicialMaturity(a.status as AffairStatus) === "CONDAMNATION"',
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CONDAMNATION"',
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'getJudicialMaturity(a.status as AffairStatus) === "PROCEDURE_VALIDEE"',
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "PROCEDURE_VALIDEE"',
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'getJudicialMaturity(a.status as AffairStatus) === "CLOSE_SANS_CONDAMNATION"',
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "ENQUETE"',
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'getJudicialMaturity(a.status as AffairStatus) === "ENQUETE"',
+    snippet: '(a) => getJudicialMaturity(a.status as AffairStatus) === "CLOSE_SANS_CONDAMNATION"',
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/app/affaires/parti/[slug]/page.tsx",
-    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } }',
+    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
+    count: 1,
   },
-  { path: "src/app/api/affaires/route.ts", snippet: 'involvement.split(",") : ["DIRECT"]' },
-  { path: "src/app/api/affaires/route.ts", snippet: "involvement: { in: requestedInvolvements }" },
+  {
+    path: "src/app/api/affaires/route.ts",
+    snippet:
+      'const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];',
+    count: 1,
+  },
+  {
+    path: "src/app/api/affaires/route.ts",
+    snippet: "involvement: { in: requestedInvolvements },",
+    count: 1,
+  },
   {
     path: "src/app/api/politiques/[slug]/affaires/route.ts",
-    snippet: 'involvement.split(",") : ["DIRECT"]',
+    snippet:
+      'const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];',
+    count: 1,
   },
   {
     path: "src/app/api/politiques/[slug]/affaires/route.ts",
-    snippet: "involvement: { in: requestedInvolvements }",
+    snippet: "involvement: { in: requestedInvolvements },",
+    count: 1,
   },
-  { path: "src/app/api/search/global/route.ts", snippet: "db.$queryRaw<RawAffair[]>`" },
+  { path: "src/app/api/search/global/route.ts", snippet: "db.$queryRaw<RawAffair[]>`", count: 1 },
   {
     path: "src/app/partis/[slug]/_lib/affair-summary.ts",
-    snippet: "certainty: getCertaintyLevel(affair.status as AffairStatus)",
+    snippet:
+      ".map((affair) => ({ ...affair, certainty: getCertaintyLevel(affair.status as AffairStatus) }));",
+    count: 1,
     family: "guarded-before-call",
   },
   {
     path: "src/app/partis/[slug]/_lib/affair-summary.ts",
-    snippet: "direct.map((affair) => getJudicialMaturity(affair.status as AffairStatus))",
+    snippet:
+      "const maturities = direct.map((affair) => getJudicialMaturity(affair.status as AffairStatus));",
+    count: 1,
     family: "guarded-before-call",
   },
   {
     path: "src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx",
-    snippet: 'affairs.filter((a) => a.involvement === "DIRECT")',
+    snippet: 'const directAffairs = affairs.filter((a) => a.involvement === "DIRECT");',
+    count: 1,
   },
-  { path: "src/app/politiques/page.tsx", snippet: "affairs: { where: CONVICTION_BADGE_WHERE }" },
-  { path: "src/app/politiques/page.tsx", snippet: "affairs: {" },
-  { path: "src/app/politiques/page.tsx", snippet: "affairs: { some: CONVICTION_BADGE_WHERE }" },
-  { path: "src/app/politiques/page.tsx", snippet: "const [counts] = await db.$queryRaw<" },
-  { path: "src/app/politiques/page.tsx", snippet: "AND a.involvement = 'DIRECT'" },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
+    count: 1,
+  },
+  { path: "src/app/politiques/page.tsx", snippet: "affairs: {", count: 1 },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "affairs: { some: CONVICTION_BADGE_WHERE },",
+    count: 1,
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "const [counts] = await db.$queryRaw<",
+    count: 1,
+  },
+  { path: "src/app/politiques/page.tsx", snippet: "AND a.involvement = 'DIRECT'", count: 1 },
   {
     path: "src/app/politiques/page.tsx",
     snippet: "AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
+    count: 1,
   },
   {
     path: "src/app/sitemap.ts",
-    snippet: "const politicians = await db.$queryRaw<Array<{ slug: string;",
+    snippet:
+      "const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`",
+    count: 1,
   },
-  { path: "src/app/sitemap.ts", snippet: "const lastAffairUpdate = await db.affair.findFirst(" },
-  { path: "src/app/sitemap.ts", snippet: "db.affair.findMany({" },
   {
     path: "src/app/sitemap.ts",
-    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } }',
+    snippet: "const lastAffairUpdate = await db.affair.findFirst({",
+    count: 1,
+  },
+  { path: "src/app/sitemap.ts", snippet: "db.affair.findMany({", count: 1 },
+  {
+    path: "src/app/sitemap.ts",
+    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
+    count: 1,
   },
   {
     path: "src/components/affairs/AffairListingCard.tsx",
-    snippet: "const certainty = getCertaintyLevel(affair.status)",
+    snippet: "const certainty = getCertaintyLevel(affair.status);",
+    count: 1,
     family: "guarded-before-call",
   },
   {
     path: "src/components/affairs/AffairListingCard.tsx",
-    snippet: '{accused && affair.involvement !== "DIRECT" &&',
+    snippet: '{accused && affair.involvement !== "DIRECT" && (',
+    count: 1,
   },
   {
     path: "src/components/affairs/AffairStatusNotice.tsx",
-    snippet: 'return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party"',
+    snippet:
+      'return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : "not_accused";',
+    count: 1,
     family: "guarded-before-call",
   },
   {
     path: "src/components/affairs/PartyAffairsList.tsx",
-    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
+    count: 2,
     family: "guarded-before-call",
   },
   {
     path: "src/components/compare/categories/DeputesComparison.tsx",
-    snippet: "const level = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/components/compare/categories/GroupesComparison.tsx",
-    snippet: "const level = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/components/compare/categories/MinistresComparison.tsx",
-    snippet: "const level = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/components/compare/categories/PartisComparison.tsx",
-    snippet: "const level = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/components/compare/categories/SenateursComparison.tsx",
-    snippet: "const level = getJudicialMaturity(a.status as AffairStatus)",
+    snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/components/politicians/AffairsSection.tsx",
     snippet: '(a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"',
+    count: 1,
   },
   {
     path: "src/components/politicians/AffairsSection.tsx",
-    snippet: 'a.involvement === "MENTIONED_ONLY"',
+    snippet: 'const mentionAffairs = affairs.filter((a) => a.involvement === "MENTIONED_ONLY");',
+    count: 1,
   },
   {
     path: "src/components/politicians/AffairsSection.tsx",
     snippet: '(a) => a.involvement === "VICTIM" || a.involvement === "PLAINTIFF"',
+    count: 1,
   },
   {
     path: "src/components/politicians/AffairsSection.tsx",
-    snippet: "const level = getCertaintyLevel(affair.status)",
+    snippet: "const level = getCertaintyLevel(affair.status);",
+    count: 1,
     family: "guarded-before-call",
   },
-  { path: "src/config/labels.ts", snippet: 'involvement: "DIRECT" as const' },
-  { path: "src/config/labels.ts", snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"]' },
-  { path: "src/config/labels.ts", snippet: 'victime: ["VICTIM", "PLAINTIFF"]' },
-  { path: "src/config/labels.ts", snippet: 'mentionne: ["MENTIONED_ONLY"]' },
+  { path: "src/config/labels.ts", snippet: 'involvement: "DIRECT" as const,', count: 1 },
+  { path: "src/config/labels.ts", snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"],', count: 1 },
+  { path: "src/config/labels.ts", snippet: 'victime: ["VICTIM", "PLAINTIFF"],', count: 1 },
+  { path: "src/config/labels.ts", snippet: 'mentionne: ["MENTIONED_ONLY"],', count: 1 },
   {
     path: "src/lib/affairs/affair-counts.ts",
-    snippet: 'if (involvement === "MENTIONED_ONLY") affairsMentionedCount++',
+    snippet: 'if (involvement === "MENTIONED_ONLY") affairsMentionedCount++;',
+    count: 1,
   },
   {
     path: "src/lib/affairs/affair-counts.ts",
-    snippet: 'if (involvement === "VICTIM" || involvement === "PLAINTIFF")',
+    snippet:
+      'if (involvement === "VICTIM" || involvement === "PLAINTIFF") affairsVictimOrPlaintiffCount++;',
+    count: 1,
   },
   {
     path: "src/lib/affairs/audit-evidence.ts",
-    snippet: "if (!ADVERSE_INVOLVEMENTS.includes(affair.involvement))",
+    snippet: "if (!ADVERSE_INVOLVEMENTS.includes(affair.involvement)) {",
+    count: 1,
   },
   {
     path: "src/lib/affairs/audit-evidence.ts",
-    snippet: "aboutThisPerson = ADVERSE_INVOLVEMENTS.includes(affair.involvement)",
+    snippet: "const aboutThisPerson = ADVERSE_INVOLVEMENTS.includes(affair.involvement);",
+    count: 1,
   },
   {
     path: "src/lib/affairs/blocked-affairs.ts",
-    snippet: "const affairs = await db.affair.findMany(",
+    snippet: "const affairs = await db.affair.findMany({",
+    count: 1,
   },
   {
     path: "src/lib/affairs/grading-rules.ts",
-    snippet: 'adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly',
-  },
-  { path: "src/lib/affairs/probity-stats.ts", snippet: "const rows = await db.affair.groupBy(" },
-  {
-    path: "src/lib/affairs/probity-stats.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] }',
+    snippet: 'adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly Involvement[],',
+    count: 1,
   },
   {
     path: "src/lib/affairs/probity-stats.ts",
-    snippet: "const level = getCertaintyLevel(row.status)",
+    snippet: "const rows = await db.affair.groupBy({",
+    count: 1,
+  },
+  {
+    path: "src/lib/affairs/probity-stats.ts",
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
+    count: 1,
+  },
+  {
+    path: "src/lib/affairs/probity-stats.ts",
+    snippet: "const level = getCertaintyLevel(row.status);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/lib/api/public-contract.ts",
-    snippet: "statusAppliesToPolitician ? getCertaintyLevel(affair.status) : null",
+    snippet:
+      "const certaintyLevel = statusAppliesToPolitician ? getCertaintyLevel(affair.status) : null;",
+    count: 1,
     family: "guarded-before-call",
   },
   {
     path: "src/lib/api/public-contract.ts",
-    snippet: "const judicialMaturity = getJudicialMaturity(affair.status)",
+    snippet: "const judicialMaturity = getJudicialMaturity(affair.status);",
+    count: 1,
     family: "guarded-before-call",
   },
-  { path: "src/lib/data/affairs.ts", snippet: "involvement: { in: involvements }" },
-  { path: "src/lib/data/affairs.ts", snippet: 'involvements: Involvement[] = ["DIRECT"]' },
-  { path: "src/lib/data/affairs.ts", snippet: "db.affair.findMany({" },
-  { path: "src/lib/data/affairs.ts", snippet: "db.affair.count({ where })" },
+  { path: "src/lib/data/affairs.ts", snippet: "involvement: { in: involvements },", count: 1 },
   {
     path: "src/lib/data/affairs.ts",
-    snippet: "const rows = await db.affair.findMany({ where, orderBy, select: {",
+    snippet: 'involvements: Involvement[] = ["DIRECT"],',
+    count: 4,
   },
-  { path: "src/lib/data/affairs.ts", snippet: 'involvement: "DIRECT"' },
+  { path: "src/lib/data/affairs.ts", snippet: "db.affair.findMany({", count: 1 },
+  { path: "src/lib/data/affairs.ts", snippet: "db.affair.count({ where }),", count: 1 },
   {
     path: "src/lib/data/affairs.ts",
-    snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] }',
+    snippet:
+      "const rows = await db.affair.findMany({ where, orderBy, select: { slug: true, title: true } });",
+    count: 1,
+  },
+  { path: "src/lib/data/affairs.ts", snippet: 'involvement: "DIRECT",', count: 3 },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] },',
+    count: 1,
   },
   {
     path: "src/lib/data/affairs.ts",
-    snippet: "const level = getCertaintyLevel(row.status)",
+    snippet: "const level = getCertaintyLevel(row.status);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/lib/data/affairs.ts",
-    snippet: 'const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"]',
+    snippet: 'const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"];',
+    count: 1,
   },
-  { path: "src/lib/data/affairs.ts", snippet: "involvement: { in: VICTIM_INVOLVEMENTS }" },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: "involvement: { in: VICTIM_INVOLVEMENTS },",
+    count: 1,
+  },
   {
     path: "src/lib/data/compare.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] }',
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },',
+    count: 1,
   },
-  { path: "src/lib/data/compare.ts", snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] }' },
+  {
+    path: "src/lib/data/compare.ts",
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
+    count: 3,
+  },
   {
     path: "src/lib/data/condamnations.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] }',
+    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },',
+    count: 1,
   },
-  { path: "src/lib/data/condamnations.ts", snippet: "AND a.involvement IN ('DIRECT','INDIRECT')" },
-  { path: "src/lib/data/hemicycle.ts", snippet: "affairs: {" },
-  { path: "src/lib/data/hemicycle.ts", snippet: 'involvement: "DIRECT"' },
+  {
+    path: "src/lib/data/condamnations.ts",
+    snippet: "AND a.involvement IN ('DIRECT','INDIRECT')",
+    count: 1,
+  },
+  { path: "src/lib/data/hemicycle.ts", snippet: "affairs: {", count: 1 },
+  { path: "src/lib/data/hemicycle.ts", snippet: 'involvement: "DIRECT",', count: 1 },
   {
     path: "src/lib/data/hemicycle.ts",
-    snippet: "const level = getCertaintyLevel(a.status)",
+    snippet: "const level = getCertaintyLevel(a.status);",
+    count: 1,
     family: "adverse-prefiltered",
   },
-  { path: "src/lib/data/partis.ts", snippet: "affairs: { where: CONVICTION_BADGE_WHERE }" },
-  { path: "src/lib/data/partis.ts", snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF"] }' },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
+    count: 1,
+  },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: 'involvement: { notIn: ["VICTIM", "PLAINTIFF"] },',
+    count: 1,
+  },
   {
     path: "src/lib/data/partis.ts",
     snippet: '(a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"',
+    count: 1,
   },
   {
     path: "src/lib/data/partis.ts",
     snippet: '(a) => getJudicialMaturity(a.status) === "CONDAMNATION"',
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/lib/data/partis.ts",
-    snippet: "const m = getJudicialMaturity(a.status)",
+    snippet: "const m = getJudicialMaturity(a.status);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/lib/data/partis.ts",
     snippet: '(a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"',
+    count: 1,
     family: "adverse-prefiltered",
   },
-  { path: "src/lib/data/partis.ts", snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF')" },
-  { path: "src/lib/data/pipelines.ts", snippet: "entitiesCreated7d = await db.affair.count(" },
-  { path: "src/lib/data/recap.ts", snippet: "certaintyLevel: getCertaintyLevel(al.affair.status)" },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF')",
+    count: 1,
+  },
+  {
+    path: "src/lib/data/pipelines.ts",
+    snippet: "entitiesCreated7d = await db.affair.count({",
+    count: 1,
+  },
+  // Aucune implication testée avant l'appel : la tâche 7 le fait passer par getAttributedCertaintyLevel.
+  {
+    path: "src/lib/data/recap.ts",
+    snippet: "certaintyLevel: getCertaintyLevel(al.affair.status),",
+    count: 1,
+    family: "unguarded",
+  },
   {
     path: "src/lib/data/recap.ts",
     snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')",
+    count: 1,
   },
-  { path: "src/lib/data/slapp.ts", snippet: "return db.affair.findMany(" },
-  { path: "src/lib/data/slapp.ts", snippet: "db.affair.count({" },
-  { path: "src/lib/data/slapp.ts", snippet: "db.affair.groupBy({" },
+  { path: "src/lib/data/slapp.ts", snippet: "return db.affair.findMany({", count: 1 },
+  { path: "src/lib/data/slapp.ts", snippet: "db.affair.count({", count: 1 },
+  { path: "src/lib/data/slapp.ts", snippet: "db.affair.groupBy({", count: 1 },
   {
     path: "src/lib/data/statistics.ts",
-    snippet: 'involvement: { in: ["DIRECT" as const, "INDIRECT" as const] }',
+    snippet: 'involvement: { in: ["DIRECT" as const, "INDIRECT" as const] },',
+    count: 1,
   },
-  { path: "src/lib/data/statistics.ts", snippet: "db.affair.groupBy({" },
-  { path: "src/lib/data/statistics.ts", snippet: "db.affair.findMany({" },
+  { path: "src/lib/data/statistics.ts", snippet: "db.affair.groupBy({", count: 2 },
+  { path: "src/lib/data/statistics.ts", snippet: "db.affair.findMany({", count: 1 },
   {
     path: "src/lib/data/statistics.ts",
-    snippet: "const tier = getJudicialMaturity(a.status)",
+    snippet: "const tier = getJudicialMaturity(a.status);",
+    count: 1,
     family: "adverse-prefiltered",
   },
   {
     path: "src/lib/politicians/profile-snapshot/request.ts",
-    snippet: "{ affairs: { some: { partyAtTimeId: partyId } } }",
+    snippet: "{ affairs: { some: { partyAtTimeId: partyId } } },",
+    count: 1,
   },
   {
     path: "src/lib/politicians/profile-snapshot/request.ts",
-    snippet: "const affairs = await db.affair.findMany(",
+    snippet: "const affairs = await db.affair.findMany({",
+    count: 1,
   },
   {
     path: "src/lib/social/generators.ts",
-    snippet: "const condamnationCounts = await db.affair.groupBy(",
+    snippet: "const condamnationCounts = await db.affair.groupBy({",
+    count: 1,
   },
-  { path: "src/lib/social/generators.ts", snippet: 'involvement: "DIRECT"' },
-  { path: "src/lib/social/generators.ts", snippet: "const affairs = await db.affair.findMany(" },
+  { path: "src/lib/social/generators.ts", snippet: 'involvement: "DIRECT",', count: 2 },
   {
     path: "src/lib/social/generators.ts",
-    snippet: 'affairs: { where: { publicationStatus: "PUBLISHED", involvement:',
+    snippet: "const affairs = await db.affair.findMany({",
+    count: 1,
+  },
+  {
+    path: "src/lib/social/generators.ts",
+    snippet: 'affairs: { where: { publicationStatus: "PUBLISHED", involvement: "DIRECT" } },',
+    count: 2,
   },
 ];

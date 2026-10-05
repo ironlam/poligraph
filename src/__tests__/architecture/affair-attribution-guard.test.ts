@@ -18,7 +18,9 @@ import path from "node:path";
 import {
   ALLOWED,
   ATTRIBUTION_DEBT,
+  checkCoverage,
   scanAffairAttribution,
+  type CoverageEntry,
   type Finding,
 } from "./affair-attribution-scan";
 
@@ -116,6 +118,22 @@ describe("scanAffairAttribution", () => {
     expect(findings.map((f) => f.kind)).toEqual(["affair-sink"]);
   });
 
+  it("résout une constante par portée : un where approuvé ailleurs n'approuve pas celui-ci", () => {
+    const findings = scanOne(
+      IMPORT_FILTERS +
+        "export const a = () => {\n" +
+        "  const where = { ...getAdverseAffairWhere() };\n" +
+        "  return db.affair.count({ where });\n" +
+        "};\n" +
+        "export const b = () => {\n" +
+        '  const where = { publicationStatus: "PUBLISHED" };\n' +
+        "  return db.affair.count({ where });\n" +
+        "};\n" +
+        "export const c = (where: object) => db.affair.count({ where });\n"
+    );
+    expect(findings.map((f) => `${f.line} ${f.kind}`)).toEqual(["8 affair-sink", "10 affair-sink"]);
+  });
+
   it("accepte getAttributedCertaintyLevel", () => {
     const findings = scanOne(
       'import { getAttributedCertaintyLevel } from "@/config/certainty";\n' +
@@ -123,6 +141,48 @@ describe("scanAffairAttribution", () => {
       "src/components/affairs/Probe.tsx"
     );
     expect(findings).toEqual([]);
+  });
+});
+
+describe("checkCoverage", () => {
+  const finding = (line: number): Finding => ({
+    path: "src/lib/data/probe.ts",
+    line,
+    kind: "affair-sink",
+    snippet: "db.affair.findMany({",
+  });
+  const entry: CoverageEntry = {
+    path: "src/lib/data/probe.ts",
+    snippet: "db.affair.findMany({",
+    count: 2,
+  };
+
+  it("accepte le nombre exact d'occurrences", () => {
+    expect(checkCoverage([finding(1), finding(9)], [entry])).toEqual({
+      unlisted: [],
+      miscounted: [],
+      duplicated: [],
+    });
+  });
+
+  it("échoue quand une occurrence identique s'ajoute", () => {
+    const coverage = checkCoverage([finding(1), finding(9), finding(20)], [entry]);
+    expect(coverage.miscounted).toHaveLength(1);
+  });
+
+  it("échoue quand une occurrence corrigée laisse un compte trop haut", () => {
+    const coverage = checkCoverage([finding(1)], [entry]);
+    expect(coverage.miscounted).toHaveLength(1);
+  });
+
+  it("exige l'égalité de ligne, pas une sous-chaîne", () => {
+    const wider = { ...finding(3), snippet: "const rows = await db.affair.findMany({" };
+    const coverage = checkCoverage([finding(1), finding(9), wider], [entry]);
+    expect(coverage.unlisted).toEqual([wider]);
+  });
+
+  it("refuse une entrée déclarée deux fois", () => {
+    expect(checkCoverage([], [entry, entry]).duplicated).toHaveLength(1);
   });
 });
 
@@ -173,11 +233,8 @@ function collectFiles(): { path: string; source: string }[] {
 const FILES = collectFiles();
 const FINDINGS = scanAffairAttribution(FILES);
 
-type Entry = { path: string; snippet: string };
-
-function covers(entry: Entry, finding: Finding): boolean {
-  return entry.path === finding.path && finding.snippet.includes(entry.snippet);
-}
+const ENTRIES: CoverageEntry[] = [...ALLOWED, ...ATTRIBUTION_DEBT];
+const COVERAGE = checkCoverage(FINDINGS, ENTRIES);
 
 describe("dépôt", () => {
   it("scanne un nombre significatif de fichiers", () => {
@@ -188,11 +245,8 @@ describe("dépôt", () => {
   });
 
   it("aucun finding hors ALLOWED et ATTRIBUTION_DEBT", () => {
-    const entries: Entry[] = [...ALLOWED, ...ATTRIBUTION_DEBT];
-    const unlisted = FINDINGS.filter((finding) => !entries.some((e) => covers(e, finding)));
-
     expect(
-      unlisted.map((f) => `${f.path}:${f.line} [${f.kind}] ${f.snippet}`),
+      COVERAGE.unlisted.map((f) => `${f.path}:${f.line} [${f.kind}] ${f.snippet}`),
       "Lecture ou classification d'affaire sans prédicat partagé. Passer par " +
         "@/lib/affairs/public-filters ou getAttributedCertaintyLevel, ou documenter une " +
         "exception dans ALLOWED (jamais dans ATTRIBUTION_DEBT, qui ne fait que rétrécir)."
@@ -200,9 +254,7 @@ describe("dépôt", () => {
   });
 
   it("chaque exception ALLOWED et chaque entrée de dette correspond encore à du code", () => {
-    const entries: Entry[] = [...ALLOWED, ...ATTRIBUTION_DEBT];
-
-    const missing = entries.filter((entry) => {
+    const missing = ENTRIES.filter((entry) => {
       const file = FILES.find((f) => f.path === entry.path);
       return file === undefined || !file.source.includes(entry.snippet);
     });
@@ -211,11 +263,21 @@ describe("dépôt", () => {
       "Extrait introuvable : retirer l'entrée ou la mettre à jour."
     ).toEqual([]);
 
-    // Cliquet : une entrée dont le code a été rebranché ne couvre plus aucun finding et sort.
-    const settled = entries.filter((entry) => !FINDINGS.some((f) => covers(entry, f)));
+    // Cliquet : une occurrence rebranchée fait baisser `count`, une entrée à zéro sort.
+    expect(COVERAGE.miscounted, "Mettre `count` à jour ou retirer l'entrée.").toEqual([]);
+    expect(COVERAGE.duplicated, "Entrée déclarée deux fois.").toEqual([]);
+  });
+
+  it("chaque entrée de dette de classification porte sa famille", () => {
+    const classified = ATTRIBUTION_DEBT.filter((entry) =>
+      FINDINGS.some(
+        (f) =>
+          f.kind === "raw-classification" && f.path === entry.path && f.snippet === entry.snippet
+      )
+    );
+    expect(classified.length).toBeGreaterThan(0);
     expect(
-      settled.map((e) => `${e.path}: ${e.snippet}`),
-      "Ces entrées ne couvrent plus aucun finding : les retirer."
+      classified.filter((entry) => entry.family === undefined).map((e) => `${e.path}: ${e.snippet}`)
     ).toEqual([]);
   });
 
