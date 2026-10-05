@@ -8,7 +8,13 @@ import {
   type AffairSuperCategory,
 } from "@/config/labels";
 import { getJudicialMaturity, type JudicialMaturity } from "@/config/judicial-maturity";
-import { getConvictionOnlyWhere, getMisEnCauseWhere } from "@/lib/affairs/public-filters";
+import {
+  ADVERSE_INVOLVEMENTS,
+  ADVERSE_JURISDICTION_ORDER,
+  getConvictionOnlyWhere,
+  getDocumentaryAffairWhere,
+  getMisEnCauseWhere,
+} from "@/lib/affairs/public-filters";
 import type { AffairStatus, AffairCategory } from "@/types";
 import type { Chamber } from "@/generated/prisma";
 
@@ -19,9 +25,11 @@ export async function getJudicialData() {
   cacheTag("statistics", "affairs");
   cacheLife("synced");
 
+  // Même population que les compteurs de condamnés plus bas : DIRECT (jamais un témoin) et
+  // ordre pénal ; tous les statuts restent pour la ventilation par maturité.
   const directFilter = {
-    publicationStatus: "PUBLISHED" as const,
-    involvement: { in: ["DIRECT" as const, "INDIRECT" as const] },
+    ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
   };
 
   // Single batch: maturity counts + status breakdown + category + critique by party

@@ -1,4 +1,9 @@
-import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
+import type {
+  AffairCategory,
+  AffairStatus,
+  Involvement,
+  JurisdictionOrder,
+} from "@/generated/prisma";
 
 export interface AttributionRow {
   key:
@@ -6,10 +11,14 @@ export interface AttributionRow {
     | "directNonPenalConvicted"
     | "directPreliminaryInquiry"
     | "directPenalConvicted"
-    | "directFavorableOutcome";
+    | "directFavorableOutcome"
+    | "victimViolence"
+    | "plaintiffProbity"
+    | "mentionedOnlyConvicted";
   involvement: Involvement;
   status: AffairStatus;
   jurisdictionOrder: JurisdictionOrder;
+  category: AffairCategory;
   publicationStatus: "PUBLISHED";
   politician: { publicationStatus: "PUBLISHED" };
   expectedAdverse: boolean;
@@ -17,7 +26,9 @@ export interface AttributionRow {
 
 /**
  * Lignes de référence partagées par les tests d'attribution : seule une condamnation
- * DIRECT d'ordre pénal entre dans les agrégats à charge.
+ * DIRECT d'ordre pénal entre dans les agrégats à charge. Les trois dernières lignes
+ * (victime, plaignant, simple mention) alimentent les facettes et les listings : la
+ * plainte porte sur une catégorie hors violences, que le mode victime ne liste pas.
  */
 type RowInput = Omit<AttributionRow, "publicationStatus" | "politician">;
 
@@ -27,6 +38,7 @@ const INPUT: RowInput[] = [
     involvement: "INDIRECT",
     status: "CONDAMNATION_DEFINITIVE",
     jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
     expectedAdverse: false,
   },
   {
@@ -34,6 +46,7 @@ const INPUT: RowInput[] = [
     involvement: "DIRECT",
     status: "CONDAMNATION_DEFINITIVE",
     jurisdictionOrder: "FINANCIER",
+    category: "CORRUPTION",
     expectedAdverse: false,
   },
   {
@@ -41,6 +54,7 @@ const INPUT: RowInput[] = [
     involvement: "DIRECT",
     status: "ENQUETE_PRELIMINAIRE",
     jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
     expectedAdverse: false,
   },
   {
@@ -48,6 +62,7 @@ const INPUT: RowInput[] = [
     involvement: "DIRECT",
     status: "CONDAMNATION_DEFINITIVE",
     jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
     expectedAdverse: true,
   },
   {
@@ -55,6 +70,31 @@ const INPUT: RowInput[] = [
     involvement: "DIRECT",
     status: "RELAXE",
     jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
+    expectedAdverse: false,
+  },
+  {
+    key: "victimViolence",
+    involvement: "VICTIM",
+    status: "CONDAMNATION_DEFINITIVE",
+    jurisdictionOrder: "PENAL",
+    category: "VIOLENCE",
+    expectedAdverse: false,
+  },
+  {
+    key: "plaintiffProbity",
+    involvement: "PLAINTIFF",
+    status: "MISE_EN_EXAMEN",
+    jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
+    expectedAdverse: false,
+  },
+  {
+    key: "mentionedOnlyConvicted",
+    involvement: "MENTIONED_ONLY",
+    status: "CONDAMNATION_DEFINITIVE",
+    jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
     expectedAdverse: false,
   },
 ];

@@ -5,14 +5,27 @@ import { getPoliticianVotingStats } from "@/services/voteStats";
 import { participationStatusFor } from "@/lib/votes/participation-publication";
 import { CATEGORY_MANDATE_TYPES } from "@/types/compare";
 import type { CompareCategory } from "@/types/compare";
-import type { MandateType, Involvement } from "@/types";
+import type { MandateType } from "@/types";
 import {
   getPublicFactCheckWhere,
   PUBLIC_PARTY_WHERE,
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  ADVERSE_INVOLVEMENTS,
+  ADVERSE_JURISDICTION_ORDER,
+  getDocumentaryAffairWhere,
+} from "@/lib/affairs/public-filters";
+
+/**
+ * Affaires comparées : la personne est mise en cause (DIRECT, jamais un témoin) devant une
+ * juridiction pénale. Tous les statuts restent, ventilés par maturité à l'affichage.
+ */
+const COMPARED_AFFAIR_WHERE = {
+  ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
+  jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
+};
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -294,10 +307,7 @@ const POLITICIAN_COMPARISON_SELECT = {
   affairs: {
     // Only affairs where the politician is the accused feed the comparison
     // counts; victim/plaintiff/mentioned affairs are not their condamnations (#383).
-    where: {
-      ...getPublishedAffairWhere(),
-      involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
-    },
+    where: COMPARED_AFFAIR_WHERE,
     select: { id: true, status: true, severity: true },
   },
   declarations: {
@@ -441,10 +451,7 @@ async function getMinistreForComparison(slug: string) {
         },
       },
       affairs: {
-        where: {
-          ...getPublishedAffairWhere(),
-          involvement: { in: ["DIRECT", "INDIRECT"] },
-        },
+        where: COMPARED_AFFAIR_WHERE,
         select: { id: true, status: true, severity: true },
       },
       declarations: {
@@ -527,8 +534,7 @@ async function getPartyForComparison(slugOrId: string) {
   // Published affairs of members (bounded)
   const affairs = await db.affair.findMany({
     where: {
-      ...getPublishedAffairWhere(),
-      involvement: { in: ["DIRECT", "INDIRECT"] },
+      ...COMPARED_AFFAIR_WHERE,
       politician: { currentPartyId: party.id, ...PUBLIC_POLITICIAN_WHERE },
     },
     select: { id: true, status: true, severity: true },
@@ -770,8 +776,7 @@ async function getGroupForComparison(idOrCode: string) {
   // Get published affairs of group members
   const affairs = await db.affair.findMany({
     where: {
-      ...getPublishedAffairWhere(),
-      involvement: { in: ["DIRECT", "INDIRECT"] },
+      ...COMPARED_AFFAIR_WHERE,
       politician: {
         ...PUBLIC_POLITICIAN_WHERE,
         mandates: {

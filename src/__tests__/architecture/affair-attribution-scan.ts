@@ -645,6 +645,21 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason:
       "computeJudicialCounts : un témoin est compté avec les mentions, pas avec les mis en cause.",
   },
+  {
+    path: "src/lib/data/hemicycle.ts",
+    snippet: "const level = getCertaintyLevel(a.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason: "getHemicycleData : affaires déjà filtrées par getAdverseAffairWhere().",
+  },
+  {
+    path: "src/lib/data/statistics.ts",
+    snippet: "const tier = getJudicialMaturity(a.status);",
+    count: 1,
+    nature: "adverse-prefiltered",
+    reason:
+      "getJudicialData : byStatus déjà limité à DIRECT et à l'ordre pénal (directFilter, getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS)).",
+  },
 ];
 
 /** Écarts relevés au premier passage. Cliquet : on retire, on n'ajoute pas. */
@@ -977,34 +992,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   {
-    path: "src/lib/data/compare.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/compare.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] },',
-    count: 3,
-  },
-  {
-    path: "src/lib/data/condamnations.ts",
-    snippet: 'involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/condamnations.ts",
-    snippet: "AND a.involvement IN ('DIRECT','INDIRECT')",
-    count: 1,
-  },
-  { path: "src/lib/data/hemicycle.ts", snippet: "affairs: {", count: 1 },
-  { path: "src/lib/data/hemicycle.ts", snippet: 'involvement: "DIRECT",', count: 1 },
-  {
-    path: "src/lib/data/hemicycle.ts",
-    snippet: "const level = getCertaintyLevel(a.status);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
-  {
     path: "src/lib/data/partis.ts",
     snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
     count: 1,
@@ -1062,19 +1049,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
   { path: "src/lib/data/slapp.ts", snippet: "return db.affair.findMany({", count: 1 },
   { path: "src/lib/data/slapp.ts", snippet: "db.affair.count({", count: 1 },
   { path: "src/lib/data/slapp.ts", snippet: "db.affair.groupBy({", count: 1 },
-  {
-    path: "src/lib/data/statistics.ts",
-    snippet: 'involvement: { in: ["DIRECT" as const, "INDIRECT" as const] },',
-    count: 1,
-  },
-  { path: "src/lib/data/statistics.ts", snippet: "db.affair.groupBy({", count: 2 },
-  { path: "src/lib/data/statistics.ts", snippet: "db.affair.findMany({", count: 1 },
-  {
-    path: "src/lib/data/statistics.ts",
-    snippet: "const tier = getJudicialMaturity(a.status);",
-    count: 1,
-    family: "adverse-prefiltered",
-  },
   {
     path: "src/lib/politicians/profile-snapshot/request.ts",
     snippet: "{ affairs: { some: { partyAtTimeId: partyId } } },",
