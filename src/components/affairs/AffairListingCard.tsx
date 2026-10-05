@@ -2,10 +2,9 @@ import Link from "next/link";
 import { stripMarkdown } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
 import {
-  getCertaintyLevel,
+  getAttributedCertaintyLevel,
   CERTAINTY_LABELS,
   CERTAINTY_COLORS,
-  isAccusedInvolvement,
   type CertaintyLevel,
 } from "@/config/certainty";
 import {
@@ -34,7 +33,7 @@ const CERTAINTY_BORDER: Record<CertaintyLevel, string> = {
   CLOS_FAVORABLE: "#9ca3af",
 };
 
-// Non-accused cards (victim, plaintiff, mentioned) never carry a charging
+// Non-accused cards (witness, victim, plaintiff, mentioned) never carry a charging
 // certainty tier: the border stays neutral so a third party's conviction does
 // not tint the tracked politician's entry as severe. Mirrors the pill gating.
 const NON_ACCUSED_BORDER = "#9ca3af";
@@ -70,10 +69,9 @@ interface AffairListingCardProps {
 }
 
 export function AffairListingCard({ affair, retour, resultCount }: AffairListingCardProps) {
-  const certainty = getCertaintyLevel(affair.status);
   // Charging certainty pill only for the accused; otherwise the involvement
   // badge carries the politician's role, never a status that is not theirs (#383).
-  const accused = isAccusedInvolvement(affair.involvement);
+  const certainty = getAttributedCertaintyLevel(affair);
   const superCat = CATEGORY_TO_SUPER[affair.category];
   const detailBase = `/affaires/${affair.slug ?? affair.id}`;
   const detailHref = (() => {
@@ -99,10 +97,12 @@ export function AffairListingCard({ affair, retour, resultCount }: AffairListing
     <article
       id={citeAnchorId.affair(affair.id)}
       className="group relative rounded-xl border border-l-4 bg-card p-4 text-card-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-      style={{ borderLeftColor: accused ? CERTAINTY_BORDER[certainty] : NON_ACCUSED_BORDER }}
+      style={{
+        borderLeftColor: certainty !== null ? CERTAINTY_BORDER[certainty] : NON_ACCUSED_BORDER,
+      }}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        {accused ? (
+        {certainty !== null ? (
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${CERTAINTY_COLORS[certainty]}`}
           >
@@ -178,12 +178,9 @@ export function AffairListingCard({ affair, retour, resultCount }: AffairListing
 
       <p className="mt-1 text-xs text-muted-foreground">
         {AFFAIR_SUPER_CATEGORY_LABELS[superCat]} · {AFFAIR_CATEGORY_LABELS[affair.category]}
-        {accused && affair.involvement !== "DIRECT" && (
-          <> · {INVOLVEMENT_LABELS[affair.involvement]}</>
-        )}
       </p>
 
-      {!accused && affair.involvementNote && (
+      {certainty === null && affair.involvementNote && (
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Rôle : </span>
           {affair.involvementNote}
@@ -201,7 +198,9 @@ export function AffairListingCard({ affair, retour, resultCount }: AffairListing
       </p>
 
       <div className="mt-3 border-t pt-3">
-        {affair.sentence && (
+        {/* The sentence belongs to the person prosecuted: never shown on a card
+            where the politician is not that person. */}
+        {certainty !== null && affair.sentence && (
           <p className="mb-1 text-sm font-medium text-foreground">{affair.sentence}</p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">

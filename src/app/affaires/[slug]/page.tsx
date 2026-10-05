@@ -18,11 +18,9 @@ import {
   AFFAIR_SUPER_CATEGORY_LABELS,
   AFFAIR_SUPER_CATEGORY_COLORS,
   CATEGORY_TO_SUPER,
-  INVOLVEMENT_LABELS,
-  INVOLVEMENT_COLORS,
 } from "@/config/labels";
 import {
-  getCertaintyLevel,
+  getAttributedCertaintyLevel,
   CERTAINTY_LABELS,
   CERTAINTY_COLORS,
   CERTAINTY_DESCRIPTIONS,
@@ -42,7 +40,7 @@ import { AffairContextBand } from "@/components/affairs/AffairContextBand";
 import { AffairContinue } from "@/components/affairs/AffairContinue";
 import { AffairNeighborBar } from "@/components/affairs/AffairNeighborBar";
 import { pickDisplayMandate, formatMandateMeta } from "@/lib/affairs/context-meta";
-import type { AffairCategory, Involvement } from "@/types";
+import type { AffairCategory } from "@/types";
 import type { Prisma } from "@/generated/prisma";
 import { SITE_URL } from "@/config/site";
 import { getAffairPartyDisplay } from "@/lib/affairs/party-display";
@@ -267,11 +265,11 @@ export default async function AffairDetailPage({ params }: PageProps) {
   const resolvedDecisionFields = resolveDecisionFields(linkedDecisions);
 
   const superCategory = CATEGORY_TO_SUPER[affair.category as AffairCategory];
-  const certainty = getCertaintyLevel(affair.status);
   // The certainty/status describes the outcome for the person prosecuted. When
-  // the tracked politician is a plaintiff, victim or merely mentioned, a
+  // the tracked politician is a witness, plaintiff, victim or merely mentioned, a
   // charging badge ("Condamnation définitive") would misrepresent them (#383).
-  const accused = isAccusedInvolvement(affair.involvement);
+  const certainty = getAttributedCertaintyLevel(affair);
+  const accused = certainty !== null;
   const noticeVariant = getAffairNoticeVariant(affair.status, affair.involvement);
   const partyDisplay = getAffairPartyDisplay({
     factsDate: affair.factsDate,
@@ -380,11 +378,6 @@ export default async function AffairDetailPage({ params }: PageProps) {
                   description={AFFAIR_STATUS_DESCRIPTIONS[affair.status]}
                   colorClass={AFFAIR_STATUS_COLORS[affair.status]}
                 />
-                {affair.involvement !== "DIRECT" && (
-                  <Badge className={INVOLVEMENT_COLORS[affair.involvement as Involvement]}>
-                    {INVOLVEMENT_LABELS[affair.involvement as Involvement]}
-                  </Badge>
-                )}
               </>
             ) : (
               // Not accused: no charging certainty pill and no offence category

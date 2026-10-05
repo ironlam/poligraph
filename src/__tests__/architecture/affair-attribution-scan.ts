@@ -725,21 +725,18 @@ export const ALLOWED: AllowedOccurrence[] = [
     nature: "adverse-prefiltered",
     reason: "getAdverseCertaintyCounts : lignes déjà filtrées par getAdverseAffairWhere().",
   },
+  {
+    path: "src/components/affairs/PartyAffairsList.tsx",
+    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
+    count: 2,
+    nature: "documentary-facet",
+    reason:
+      "Onglets par stade de la liste d'affaires d'un parti : ils comptent et filtrent les cartes listées, tous rôles confondus, comme le filtre par stade de /affaires. La carte d'un non mis en cause affiche son rôle, un statut neutre et l'encart « Résultat judiciaire d'un tiers ».",
+  },
 ];
 
 /** Écarts relevés au premier passage. Cliquet : on retire, on n'ajoute pas. */
 export const ATTRIBUTION_DEBT: DebtEntry[] = [
-  {
-    path: "src/app/affaires/[slug]/page.tsx",
-    snippet: "const certainty = getCertaintyLevel(affair.status);",
-    count: 1,
-    family: "guarded-before-call",
-  },
-  {
-    path: "src/app/affaires/[slug]/page.tsx",
-    snippet: '{affair.involvement !== "DIRECT" && (',
-    count: 1,
-  },
   {
     path: "src/app/api/affaires/route.ts",
     snippet:
@@ -808,30 +805,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     count: 1,
   },
   {
-    path: "src/components/affairs/AffairListingCard.tsx",
-    snippet: "const certainty = getCertaintyLevel(affair.status);",
-    count: 1,
-    family: "guarded-before-call",
-  },
-  {
-    path: "src/components/affairs/AffairListingCard.tsx",
-    snippet: '{accused && affair.involvement !== "DIRECT" && (',
-    count: 1,
-  },
-  {
-    path: "src/components/affairs/AffairStatusNotice.tsx",
-    snippet:
-      'return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : "not_accused";',
-    count: 1,
-    family: "guarded-before-call",
-  },
-  {
-    path: "src/components/affairs/PartyAffairsList.tsx",
-    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
-    count: 2,
-    family: "guarded-before-call",
-  },
-  {
     path: "src/components/compare/categories/DeputesComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
@@ -860,27 +833,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
     family: "adverse-prefiltered",
-  },
-  {
-    path: "src/components/politicians/AffairsSection.tsx",
-    snippet: '(a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"',
-    count: 1,
-  },
-  {
-    path: "src/components/politicians/AffairsSection.tsx",
-    snippet: 'const mentionAffairs = affairs.filter((a) => a.involvement === "MENTIONED_ONLY");',
-    count: 1,
-  },
-  {
-    path: "src/components/politicians/AffairsSection.tsx",
-    snippet: '(a) => a.involvement === "VICTIM" || a.involvement === "PLAINTIFF"',
-    count: 1,
-  },
-  {
-    path: "src/components/politicians/AffairsSection.tsx",
-    snippet: "const level = getCertaintyLevel(affair.status);",
-    count: 1,
-    family: "guarded-before-call",
   },
   { path: "src/config/labels.ts", snippet: 'involvement: "DIRECT" as const,', count: 1 },
   { path: "src/config/labels.ts", snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"],', count: 1 },
