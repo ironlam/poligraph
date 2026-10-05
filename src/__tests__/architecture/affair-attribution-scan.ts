@@ -727,11 +727,11 @@ export const ALLOWED: AllowedOccurrence[] = [
   },
   {
     path: "src/components/affairs/PartyAffairsList.tsx",
-    snippet: "const maturity = getJudicialMaturity(a.status as AffairStatus);",
-    count: 2,
-    nature: "documentary-facet",
+    snippet: "return getJudicialMaturity(affair.status as AffairStatus);",
+    count: 1,
+    nature: "adverse-prefiltered",
     reason:
-      "Onglets par stade de la liste d'affaires d'un parti : ils comptent et filtrent les cartes listées, tous rôles confondus, comme le filtre par stade de /affaires. La carte d'un non mis en cause affiche son rôle, un statut neutre et l'encart « Résultat judiciaire d'un tiers ».",
+      "attributedMaturity : appelé seulement après isAccusedInvolvement et l'ordre pénal testés juste au-dessus, comme les compteurs de la page de parti ; une affaire où l'élu n'est pas mis en cause ne reçoit aucun onglet de stade et ne figure que sous « Toutes ».",
   },
 ];
 
