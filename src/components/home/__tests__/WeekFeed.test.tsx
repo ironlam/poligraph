@@ -62,6 +62,7 @@ describe("WeekFeed — Cette semaine", () => {
               {
                 slug: "affaire-1",
                 title: "Affaire test",
+                involvement: "DIRECT",
                 certaintyLevel: "EN_COURS",
                 politicianName: "Jean Dupont",
                 politicianSlug: "jean-dupont",

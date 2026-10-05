@@ -1,7 +1,16 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import { Prisma, type PlatformUpdateType } from "@/generated/prisma";
-import { getCertaintyLevel } from "@/config/certainty";
+import {
+  Prisma,
+  type AffairStatus,
+  type Involvement,
+  type PlatformUpdateType,
+} from "@/generated/prisma";
+import {
+  CERTAINTY_SORT_ORDER,
+  getAttributedCertaintyLevel,
+  type CertaintyLevel,
+} from "@/config/certainty";
 import {
   getPublicFactCheckSqlWhere,
   getPublicFactCheckWhere,
@@ -24,10 +33,21 @@ interface TopPolitician {
   count: number;
 }
 
+/**
+ * Affaire citée dans le récap. `certaintyLevel` est null quand l'élu n'est pas la personne
+ * mise en cause (témoin, victime, plaignant, simple mention) : le rôle s'affiche à la place.
+ */
+export interface RecapAffairMention {
+  slug: string;
+  title: string;
+  involvement: Involvement;
+  certaintyLevel: CertaintyLevel | null;
+}
+
 export interface PressStoryMentions {
   politicians: Array<{ slug: string; fullName: string; party: string | null; isActive: boolean }>;
   parties: Array<{ slug: string; shortName: string }>;
-  affairs: Array<{ slug: string; title: string; certaintyLevel: string }>;
+  affairs: RecapAffairMention[];
 }
 
 export interface PressStoryCandidate {
@@ -54,7 +74,7 @@ export interface PressStory {
   mentions: {
     politicians: Array<{ slug: string; fullName: string; party: string | null }>;
     parties: Array<{ slug: string; shortName: string }>;
-    affairs: Array<{ slug: string; title: string; certaintyLevel: string }>;
+    affairs: RecapAffairMention[];
   };
 }
 
@@ -70,7 +90,8 @@ export interface PoliticianStory {
 export interface AffairStory {
   slug: string;
   title: string;
-  certaintyLevel: string;
+  involvement: Involvement;
+  certaintyLevel: CertaintyLevel | null;
   politicianSlug: string;
   politicianName: string;
   articleCount: number;
@@ -90,7 +111,8 @@ interface WeeklyScrutin {
 interface WeeklyAffair {
   slug: string;
   title: string;
-  certaintyLevel: string;
+  involvement: Involvement;
+  certaintyLevel: CertaintyLevel | null;
   politicianName: string;
   politicianSlug: string;
 }
@@ -255,7 +277,9 @@ export async function selectPressStories(
             politician: PUBLIC_POLITICIAN_WHERE,
           },
         },
-        include: { affair: { select: { slug: true, title: true, status: true } } },
+        include: {
+          affair: { select: { slug: true, title: true, status: true, involvement: true } },
+        },
       },
     },
   });
@@ -285,7 +309,8 @@ export async function selectPressStories(
       affairs: a.affairLinks.map((al) => ({
         slug: al.affair.slug,
         title: al.affair.title,
-        certaintyLevel: getCertaintyLevel(al.affair.status),
+        involvement: al.affair.involvement,
+        certaintyLevel: getAttributedCertaintyLevel(al.affair),
       })),
     },
   }));
@@ -336,6 +361,11 @@ export async function selectPressStories(
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
+
+/** Rang de tri : les affaires sans certitude attribuée viennent après celles des mis en cause. */
+function certaintyRank(level: CertaintyLevel | null): number {
+  return level === null ? Number.MAX_SAFE_INTEGER : CERTAINTY_SORT_ORDER[level];
+}
 
 async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyRecapData> {
   const [scrutins, topVoters, affairs, factCheckData, pressData, platformUpdates] =
@@ -392,7 +422,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         Array<{
           slug: string;
           title: string;
-          certaintyLevel: string;
+          status: AffairStatus;
+          involvement: Involvement;
           politicianName: string;
           politicianSlug: string;
         }>
@@ -400,19 +431,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
       SELECT
         a.slug,
         a.title,
-        CASE a.status
-          WHEN 'CONDAMNATION_DEFINITIVE' THEN 'ETABLI'
-          WHEN 'CONDAMNATION_PREMIERE_INSTANCE' THEN 'PRONONCE'
-          WHEN 'APPEL_EN_COURS' THEN 'PRONONCE'
-          WHEN 'POURVOI_EN_CASSATION' THEN 'PRONONCE'
-          WHEN 'MISE_EN_EXAMEN' THEN 'EN_COURS'
-          WHEN 'RENVOI_TRIBUNAL' THEN 'EN_COURS'
-          WHEN 'PROCES_EN_COURS' THEN 'EN_COURS'
-          WHEN 'ENQUETE_PRELIMINAIRE' THEN 'EN_COURS'
-          WHEN 'INSTRUCTION' THEN 'EN_COURS'
-          WHEN 'INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN' THEN 'CLOS_SANS_CHARGE'
-          ELSE 'CLOS_FAVORABLE'
-        END as "certaintyLevel",
+        a.status as "status",
+        a.involvement as "involvement",
         p."fullName" as "politicianName",
         p.slug as "politicianSlug"
       FROM "Affair" a
@@ -624,7 +644,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
     {
       slug: string;
       title: string;
-      certaintyLevel: string;
+      involvement: Involvement;
+      certaintyLevel: CertaintyLevel | null;
       politicianSlug: string;
       politicianName: string;
       articleCount: number;
@@ -642,6 +663,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         affairAggregates.set(af.slug, {
           slug: af.slug,
           title: af.title,
+          involvement: af.involvement,
           certaintyLevel: af.certaintyLevel,
           politicianSlug: firstPolitician?.slug ?? "",
           politicianName: firstPolitician?.fullName ?? "",
@@ -680,6 +702,20 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
     (a, b) => b.articleCount - a.articleCount
   );
 
+  // La certitude décrit l'issue pour la personne poursuivie : calculée ici, et seulement
+  // quand l'élu est cette personne. Le SQL trie par statut ; un témoin d'une affaire grave
+  // ne doit pas passer devant les mis en cause, d'où ce second tri (stable).
+  const newAffairs: WeeklyAffair[] = affairs
+    .map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      involvement: a.involvement,
+      certaintyLevel: getAttributedCertaintyLevel(a),
+      politicianName: a.politicianName,
+      politicianSlug: a.politicianSlug,
+    }))
+    .sort((a, b) => certaintyRank(a.certaintyLevel) - certaintyRank(b.certaintyLevel));
+
   const toBigintSafe = (
     rows: Array<{
       slug: string;
@@ -704,8 +740,8 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
       topVoters: toBigintSafe(topVoters),
     },
     affairs: {
-      newAffairs: affairs,
-      total: affairs.length,
+      newAffairs,
+      total: newAffairs.length,
     },
     factChecks: {
       total: fcTotal,

@@ -905,13 +905,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     snippet: "entitiesCreated7d = await db.affair.count({",
     count: 1,
   },
-  // Aucune implication testée avant l'appel : la tâche 7 le fait passer par getAttributedCertaintyLevel.
-  {
-    path: "src/lib/data/recap.ts",
-    snippet: "certaintyLevel: getCertaintyLevel(al.affair.status),",
-    count: 1,
-    family: "unguarded",
-  },
   {
     path: "src/lib/data/recap.ts",
     snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')",

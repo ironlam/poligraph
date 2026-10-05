@@ -41,7 +41,7 @@ describe("scorePressStory", () => {
       mentions: {
         ...baseArticle.mentions,
         politicians: [{ slug: "x", fullName: "X", party: "P", isActive: true }],
-        affairs: [{ slug: "af", title: "Aff", certaintyLevel: "ETABLI" }],
+        affairs: [{ slug: "af", title: "Aff", involvement: "DIRECT", certaintyLevel: "ETABLI" }],
       },
     };
     expect(scorePressStory(article, [], [])).toBe(3 + 5 + 2);

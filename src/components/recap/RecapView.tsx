@@ -12,8 +12,12 @@ import {
   getISOWeekString,
   type WeeklyRecapData,
 } from "@/lib/data/recap";
-import { PLATFORM_UPDATE_TYPE_LABELS, PLATFORM_UPDATE_TYPE_ICONS } from "@/config/labels";
-import { CERTAINTY_LABELS, CERTAINTY_COLORS, type CertaintyLevel } from "@/config/certainty";
+import {
+  INVOLVEMENT_LABELS,
+  PLATFORM_UPDATE_TYPE_LABELS,
+  PLATFORM_UPDATE_TYPE_ICONS,
+} from "@/config/labels";
+import { CERTAINTY_LABELS, CERTAINTY_COLORS } from "@/config/certainty";
 import { NewsletterCTA } from "@/app/recap/NewsletterCTA";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { RecapShareBlock } from "./RecapShareBlock";
@@ -282,12 +286,19 @@ export function RecapView({ weekStart, data }: RecapViewProps) {
                         key={a.slug}
                         className="flex items-start gap-3 py-2 border-b last:border-0"
                       >
-                        <Badge
-                          variant="outline"
-                          className={`shrink-0 ${CERTAINTY_COLORS[a.certaintyLevel as CertaintyLevel] || ""}`}
-                        >
-                          {CERTAINTY_LABELS[a.certaintyLevel as CertaintyLevel] || a.certaintyLevel}
-                        </Badge>
+                        {/* Certitude réservée au mis en cause ; sinon le rôle de l'élu. */}
+                        {a.certaintyLevel !== null ? (
+                          <Badge
+                            variant="outline"
+                            className={`shrink-0 ${CERTAINTY_COLORS[a.certaintyLevel]}`}
+                          >
+                            {CERTAINTY_LABELS[a.certaintyLevel]}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="shrink-0">
+                            {INVOLVEMENT_LABELS[a.involvement]}
+                          </Badge>
+                        )}
                         <div className="min-w-0">
                           <Link
                             href={`/affaires/${a.slug}`}
