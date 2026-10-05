@@ -192,6 +192,7 @@ Two ratchets carry the debt that predates the rule, both frozen lists in the gua
 - **Pagination**: `parsePagination()` from `@/lib/api/pagination` — never inline `parseInt(searchParams.get("page"))`.
 - **v1 public API**: CORS `*`, tiered `withCache()` (`static` 1h, `daily` 5 min, `stats` 15 min).
 - **CSV exports**: `stripMarkdownForCSV()` from `@/lib/csv`, max 50k rows, `poligraphId` is the primary stable join key.
+- **Rate limits**: tiers in `src/proxy.ts` (Upstash sliding window per IP, e.g. `export` 5/min), with `X-RateLimit-*` and `Retry-After` on 429.
 
 ### Key domain models
 
@@ -222,6 +223,7 @@ Two distinct resolver systems:
 - `cacheTag()` uses entity-based tags (`politicians`, `affairs`, `parties`, `elections`) for targeted invalidation.
 - `export const revalidate = N` (ISR) for listing pages with search.
 - `React.cache()` to deduplicate between `generateMetadata()` and `page()`.
+- **`/politiques/[slug]` reads a precomputed document** (`PoliticianProfileSnapshot`, tag `politician:<slug>` only). A write that changes data shown on the profile must call `requestProfileRefresh` (async, Inngest) or `refreshProfilesForModeration` (publication changes, synchronous); enforced by `src/__tests__/architecture/profile-refresh-write-points.test.ts`.
 - **Never combine `generateStaticParams` with `searchParams`** on a page with `useCache: true` — it crashes with `DYNAMIC_SERVER_USAGE`. Use `revalidate = N` alone.
 
 ### Indexation / SEO doctrine
