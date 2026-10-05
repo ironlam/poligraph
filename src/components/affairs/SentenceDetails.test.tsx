@@ -340,10 +340,10 @@ describe("SentenceDetails — attribution personnelle (#511)", () => {
     expect(screen.queryByText(NOT_MINE)).not.toBeInTheDocument();
   });
 
-  it("un mis en cause secondaire garde l'affichage : la peine est bien la sienne", () => {
+  it("un témoin ou rôle secondaire (INDIRECT) : aucune peine affichée", () => {
     renderWithTooltip(<SentenceDetails affair={SENTENCE} involvement="INDIRECT" />);
 
-    expect(screen.getByText("Peine prononcée")).toBeInTheDocument();
-    expect(screen.queryByText(NOT_MINE)).not.toBeInTheDocument();
+    expect(screen.getByText(NOT_MINE)).toBeInTheDocument();
+    expect(screen.queryByText("Peine prononcée")).not.toBeInTheDocument();
   });
 });

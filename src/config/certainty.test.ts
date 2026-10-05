@@ -85,14 +85,14 @@ describe("isActiveCertainty", () => {
 
 describe("isAccusedInvolvement (issue #383)", () => {
   // The certainty/status of an affair describes the outcome for the person
-  // prosecuted. Only DIRECT/INDIRECT make the tracked politician that person, so
-  // only those may carry a charging certainty badge ("Condamnation définitive").
+  // prosecuted. Only DIRECT makes the tracked politician that person, so
+  // only it may carry a charging certainty badge ("Condamnation définitive").
   it("returns true for DIRECT", () => {
     expect(isAccusedInvolvement("DIRECT")).toBe(true);
   });
 
-  it("returns true for INDIRECT", () => {
-    expect(isAccusedInvolvement("INDIRECT")).toBe(true);
+  it("returns false for INDIRECT (witness, secondary role)", () => {
+    expect(isAccusedInvolvement("INDIRECT")).toBe(false);
   });
 
   it("returns false for PLAINTIFF (the politician filed the complaint)", () => {

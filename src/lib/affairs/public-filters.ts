@@ -1,4 +1,6 @@
 import { Prisma } from "@/generated/prisma";
+import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
+import { ADVERSE_INVOLVEMENTS } from "@/config/certainty";
 import {
   AGGREGATE_STATUSES,
   CONDAMNATION_STATUSES,
@@ -27,8 +29,14 @@ import {
 /** Seul ordre de juridiction compté dans les agrégats à charge. */
 export const ADVERSE_JURISDICTION_ORDER = "PENAL" as const;
 
-/** Involvements comptés dans les agrégats à charge. */
-export const ADVERSE_INVOLVEMENTS = ["DIRECT", "INDIRECT"] as const;
+/** Involvements comptés dans les agrégats à charge : DIRECT seul, jamais INDIRECT (témoin). */
+export { ADVERSE_INVOLVEMENTS };
+
+/** Involvements listés par défaut sur /affaires (mode « mis en cause »), sans valeur de charge. */
+export const DEFAULT_LISTING_INVOLVEMENTS = ["DIRECT", "INDIRECT", "MENTIONED_ONLY"] as const;
+
+/** Involvements listés en mode « victime ». */
+export const VICTIM_LISTING_INVOLVEMENTS = ["VICTIM", "PLAINTIFF"] as const;
 
 export const PUBLIC_AFFAIR_PUBLICATION_STATUS = "PUBLISHED" as const;
 
@@ -43,6 +51,38 @@ export function getPublishedAffairSqlWhere(alias: "a" = "a"): Prisma.Sql {
   }
 
   return Prisma.sql`a."publicationStatus" = ${PUBLIC_AFFAIR_PUBLICATION_STATUS}`;
+}
+
+/** SQL equivalent of the adverse involvement filter, restricted to reviewed aliases. */
+export function getAdverseInvolvementSql(alias: "a" = "a"): Prisma.Sql {
+  if (alias !== "a") {
+    throw new Error(`Unsupported public affair SQL alias: ${alias}`);
+  }
+
+  return Prisma.sql`a.involvement = 'DIRECT'`;
+}
+
+/** Version en mémoire des agrégats à charge, équivalente à getAdverseAffairWhere(). */
+export function isCountedInAdverseAggregates(affair: {
+  involvement: Involvement;
+  status: AffairStatus;
+  jurisdictionOrder: JurisdictionOrder;
+}): boolean {
+  return (
+    (ADVERSE_INVOLVEMENTS as readonly Involvement[]).includes(affair.involvement) &&
+    affair.jurisdictionOrder === ADVERSE_JURISDICTION_ORDER &&
+    AGGREGATE_STATUSES.includes(affair.status)
+  );
+}
+
+/** Périmètre documentaire d'un listing : publié et involvement dans la liste, sans valeur de charge. */
+export function getDocumentaryAffairWhere(
+  involvements: readonly Involvement[]
+): Prisma.AffairWhereInput {
+  return {
+    publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
+    involvement: { in: [...involvements] },
+  };
 }
 
 /** Affaires à charge : condamnations + procédures validées par un juge. */
@@ -78,8 +118,8 @@ export function getMisEnCauseWhere(): Prisma.AffairWhereInput {
 /**
  * Procédures closes sans condamnation (issues favorables, prescription incluse).
  *
- * Garde le filtre DIRECT/INDIRECT : ce compteur recense les procédures
- * concernant une personne mise en cause, pas les cas où elle est victime
+ * Garde le filtre DIRECT : ce compteur recense les procédures visant la
+ * personne mise en cause, pas celles où elle est témoin (INDIRECT), victime
  * ou plaignante.
  */
 export function getFavorableOutcomeWhere(): Prisma.AffairWhereInput {

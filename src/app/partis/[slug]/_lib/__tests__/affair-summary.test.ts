@@ -27,13 +27,13 @@ describe("summarizePartyAffairs", () => {
     expect(summary.condamnations).toBe(0);
   });
 
-  it("keeps both accused involvements", () => {
+  it("ne compte pas un témoin (INDIRECT) parmi les condamnations", () => {
     const summary = summarizePartyAffairs([
       affair("CONDAMNATION_DEFINITIVE", "DIRECT"),
       affair("CONDAMNATION_DEFINITIVE", "INDIRECT"),
     ]);
 
-    expect(summary.condamnations).toBe(2);
+    expect(summary.condamnations).toBe(1);
   });
 
   it("counts an open investigation as en cours, not as a conviction", () => {

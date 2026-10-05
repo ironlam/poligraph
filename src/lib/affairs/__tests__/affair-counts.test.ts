@@ -6,10 +6,11 @@ const a = (status: string, involvement: string, jurisdictionOrder = "PENAL"): A 
   ({ status, involvement, jurisdictionOrder }) as A;
 
 describe("computeAffairCounts — compteurs par rôle (RGPD art. 10)", () => {
-  it("adverseAffairsCount = DIRECT/INDIRECT + statuts à charge (Tier 1+2)", () => {
+  it("adverseAffairsCount = DIRECT + statuts à charge (Tier 1+2)", () => {
     const counts = computeAffairCounts([
       a("CONDAMNATION_DEFINITIVE", "DIRECT"),
-      a("MISE_EN_EXAMEN", "INDIRECT"),
+      a("MISE_EN_EXAMEN", "INDIRECT"), // exclu (témoin)
+      a("MISE_EN_EXAMEN", "DIRECT"),
       a("ENQUETE_PRELIMINAIRE", "DIRECT"), // exclu (Tier 3)
       a("RELAXE", "DIRECT"), // exclu (favorable)
       a("CONDAMNATION_DEFINITIVE", "MENTIONED_ONLY"), // exclu (involvement)
@@ -35,17 +36,17 @@ describe("computeAffairCounts — compteurs par rôle (RGPD art. 10)", () => {
     expect(counts.affairsVictimOrPlaintiffCount).toBe(2);
   });
 
-  it("favorableOutcomeCount = DIRECT/INDIRECT + issues favorables (prescription incluse)", () => {
+  it("favorableOutcomeCount = DIRECT + issues favorables (prescription incluse)", () => {
     const counts = computeAffairCounts([
       a("RELAXE", "DIRECT"),
-      a("ACQUITTEMENT", "INDIRECT"),
+      a("ACQUITTEMENT", "INDIRECT"), // exclu (témoin)
       a("NON_LIEU", "DIRECT"),
       a("CLASSEMENT_SANS_SUITE", "DIRECT"),
       a("PRESCRIPTION", "DIRECT"),
       a("RELAXE", "VICTIM"), // exclu (involvement)
       a("CONDAMNATION_DEFINITIVE", "DIRECT"), // exclu (à charge)
     ]);
-    expect(counts.favorableOutcomeCount).toBe(5);
+    expect(counts.favorableOutcomeCount).toBe(4);
   });
 
   it("liste vide → tous les compteurs à 0", () => {

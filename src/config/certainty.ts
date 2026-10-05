@@ -1,5 +1,13 @@
 import type { AffairStatus, Involvement } from "@/generated/prisma";
 
+/**
+ * Involvements qui désignent la personne suivie comme mise en cause. Défini ici (module sans
+ * dépendance d'exécution, importé par des composants client) et réexporté par
+ * `@/lib/affairs/public-filters`, qui reste la porte d'entrée des prédicats.
+ * INDIRECT (« Témoin/Secondaire ») n'en fait pas partie.
+ */
+export const ADVERSE_INVOLVEMENTS = ["DIRECT"] as const;
+
 export type CertaintyLevel =
   | "ETABLI"
   | "PRONONCE"
@@ -11,13 +19,14 @@ export type CertaintyLevel =
  * Whether a certainty/status badge describes the tracked politician themselves.
  *
  * An affair's `status` (and the certainty derived from it) describes the outcome
- * for the person prosecuted. Only DIRECT/INDIRECT make the tracked politician
- * that person; for PLAINTIFF, VICTIM or MENTIONED_ONLY the status refers to a
- * third party, so a charging certainty badge ("Condamnation définitive") would
- * misrepresent them (issue #383). Mirrors the guard in `AffairStatusNotice`.
+ * for the person prosecuted. Only DIRECT makes the tracked politician that person;
+ * for INDIRECT (witness, secondary role), PLAINTIFF, VICTIM or MENTIONED_ONLY the
+ * status refers to a third party, so a charging certainty badge ("Condamnation
+ * définitive") would misrepresent them (issue #383). Mirrors the guard in
+ * `AffairStatusNotice`.
  */
 export function isAccusedInvolvement(involvement: Involvement): boolean {
-  return involvement === "DIRECT" || involvement === "INDIRECT";
+  return (ADVERSE_INVOLVEMENTS as readonly Involvement[]).includes(involvement);
 }
 
 const STATUS_TO_CERTAINTY: Record<AffairStatus, CertaintyLevel> = {
@@ -40,6 +49,14 @@ const STATUS_TO_CERTAINTY: Record<AffairStatus, CertaintyLevel> = {
 
 export function getCertaintyLevel(status: AffairStatus): CertaintyLevel {
   return STATUS_TO_CERTAINTY[status];
+}
+
+/** Certitude d'une affaire pour la personne suivie, null quand elle n'est pas la personne mise en cause. */
+export function getAttributedCertaintyLevel(affair: {
+  involvement: Involvement;
+  status: AffairStatus;
+}): CertaintyLevel | null {
+  return isAccusedInvolvement(affair.involvement) ? getCertaintyLevel(affair.status) : null;
 }
 
 const INACTIVE_LEVELS: ReadonlySet<CertaintyLevel> = new Set([
