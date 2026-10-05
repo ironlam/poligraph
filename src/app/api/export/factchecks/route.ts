@@ -55,6 +55,8 @@ export const dynamic = "force-dynamic";
  *               type: string
  *       400:
  *         description: Filtre structuré vide, invalide ou non autorisé
+ *       429:
+ *         description: Plus de 5 requêtes par minute depuis la même adresse IP. L'en-tête Retry-After indique le délai en secondes.
  */
 export const GET = withPublicRoute(async (request) => {
   const searchParams = request.nextUrl.searchParams;
