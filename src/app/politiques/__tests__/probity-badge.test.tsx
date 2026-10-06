@@ -113,7 +113,7 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
 });
 
 describe("PoliticiansGrid : libellé du filtre probité", () => {
-  it("affiche « Condamnés pour probité » avec son infobulle", () => {
+  it("affiche « Condamnés pour atteinte à la probité » avec son infobulle", () => {
     render(
       <TooltipProvider>
         <PoliticiansGrid
@@ -141,10 +141,10 @@ describe("PoliticiansGrid : libellé du filtre probité", () => {
       </TooltipProvider>
     );
 
-    const badge = screen.getByRole("button", { name: "Condamnés pour probité (3)" });
+    const badge = screen.getByRole("button", { name: "Condamnés pour atteinte à la probité (3)" });
     expect(badge).toHaveAttribute("title", "Condamnation définitive pour atteinte à la probité");
     expect(screen.queryByText(/Avec décision de justice/)).toBeNull();
-    expect(screen.getByLabelText("Condamnés pour probité (3)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Condamnés pour atteinte à la probité (3)")).toBeInTheDocument();
   });
 });
 

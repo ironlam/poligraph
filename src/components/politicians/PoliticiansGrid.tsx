@@ -154,7 +154,7 @@ export function PoliticiansGrid({
               }
               title="Condamnation définitive pour atteinte à la probité"
             >
-              Condamnés pour probité ({counts.withConviction})
+              Condamnés pour atteinte à la probité ({counts.withConviction})
             </Badge>
           </div>
         </div>
