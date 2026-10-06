@@ -15,10 +15,11 @@ const mocks = vi.hoisted(() => ({
   partyFindMany: vi.fn(),
   partyFindFirst: vi.fn(),
   queryRaw: vi.fn(),
+  cacheTag: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+vi.mock("next/cache", () => ({ cacheTag: mocks.cacheTag, cacheLife: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
@@ -165,6 +166,16 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
         f.values,
       ])
     );
+  });
+});
+
+describe("/politiques : invalidation sur modification d'affaire", () => {
+  it("le listing et les compteurs portent le tag affairs", async () => {
+    await renderPage({});
+    const tagCalls = mocks.cacheTag.mock.calls.filter((c) => c.includes("politicians"));
+
+    // Listing filtré puis compteurs de filtres.
+    expect(tagCalls.filter((c) => c.includes("affairs")).length).toBeGreaterThanOrEqual(2);
   });
 });
 

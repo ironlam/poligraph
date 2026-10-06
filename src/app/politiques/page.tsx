@@ -257,7 +257,8 @@ async function getPoliticiansFiltered(
   page = 1
 ) {
   "use cache";
-  cacheTag("politicians");
+  // "affairs" : les badges et filtres de condamnation dépendent du statut et de la catégorie.
+  cacheTag("politicians", "affairs");
   cacheLife("synced");
   return queryPoliticians(
     undefined,
@@ -343,7 +344,7 @@ async function getParties() {
 
 async function getFilterCounts() {
   "use cache";
-  cacheTag("politicians");
+  cacheTag("politicians", "affairs");
   cacheTag("filter-counts");
   cacheLife("synced");
 
