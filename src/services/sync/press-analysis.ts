@@ -936,15 +936,12 @@ async function rejectLowConfidenceAffair(
   });
 }
 
-function isDetectedSubject(
-  politician: { firstName: string; lastName: string },
-  detectedName: string
-): boolean {
-  const name = ` ${normalizeForMatching(detectedName)} `;
-  return (
-    name.includes(` ${normalizeForMatching(politician.firstName)} `) &&
-    name.includes(` ${normalizeForMatching(politician.lastName)} `)
-  );
+// Whole-name equality: testing first and last name as separate tokens lets
+// "Paul Martin" pass for "Jean-Paul Martin". A prefix of the given names is not
+// accepted either, since compound first names are often stored with a space
+// ("Jean Luc"), which would let "Jean Moudenc" pass for "Jean Luc Moudenc".
+function isDetectedSubject(politician: { fullName: string }, detectedName: string): boolean {
+  return normalizeForMatching(detectedName) === normalizeForMatching(politician.fullName);
 }
 
 /**

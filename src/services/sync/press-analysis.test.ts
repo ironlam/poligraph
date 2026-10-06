@@ -385,6 +385,26 @@ describe("processAnalyzedArticle : sujet de l'affaire", () => {
     });
   });
 
+  it("rejette un homonyme au prénom plus court que le sujet détecté", async () => {
+    mocks.politicianFindUnique.mockResolvedValue({
+      firstName: "Paul",
+      lastName: "Martin",
+      fullName: "Paul Martin",
+    });
+    const stats = zeroStats();
+
+    await processAnalyzedArticle(
+      article,
+      "Jean-Paul Martin a déposé plainte pour diffamation contre un journal.",
+      { isAffairRelated: true, summary: "résumé", affairs: [detected("Jean-Paul Martin")] },
+      stats,
+      { dryRun: false, verbose: false }
+    );
+
+    expect(stats.affairsRejected).toBe(1);
+    expect(mocks.findMatchingAffairs).not.toHaveBeenCalled();
+  });
+
   it("accepte le sujet malgré les accents, tirets et espaces insécables", async () => {
     mocks.politicianFindUnique.mockResolvedValue({
       firstName: "Jean-Luc",
