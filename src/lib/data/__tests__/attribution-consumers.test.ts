@@ -237,9 +237,11 @@ describe("/partis", () => {
       ]
     );
     const [party] = await getParties();
+    // L'enquête préliminaire reste dans total mais n'entre plus dans enCours.
     expect(party!.affairCounts).toEqual({
-      condamnations: 1,
-      enCours: 2,
+      condamnationsDefinitives: 1,
+      condamnationsNonDefinitives: 0,
+      enCours: 1,
       closesSansCondamnation: 1,
       total: DIRECT_PENAL_KEYS.length,
     });

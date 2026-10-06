@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/utils";
 import { AFFAIR_STATUS_LABELS, AFFAIR_STATUS_COLORS } from "@/config/labels";
 import { CERTAINTY_LABELS, CERTAINTY_COLORS, type CertaintyLevel } from "@/config/certainty";
 import type { AffairStatus } from "@/types";
-import type { Involvement } from "@/generated/prisma";
+import type { Involvement, JurisdictionOrder } from "@/generated/prisma";
 import { byCertainty, countByCertainty, summarizePartyAffairs } from "../_lib/affair-summary";
 
 /** Only the fields the card renders. The page passes richer rows; extra keys are ignored. */
@@ -15,6 +15,7 @@ export interface PartyAffair {
   title: string;
   status: string;
   involvement: Involvement;
+  jurisdictionOrder: JurisdictionOrder;
   verdictDate: Date | null;
   politician: { fullName: string };
 }
@@ -63,16 +64,22 @@ export function PartyAffairsCard({
 }: PartyAffairsCardProps) {
   if (affairs.length === 0) return null;
 
-  const { direct, condamnations, enCours, closesSansCondamnation } = summarizePartyAffairs(affairs);
+  const {
+    direct,
+    condamnationsDefinitives,
+    condamnationsNonDefinitives,
+    enCours,
+    closesSansCondamnation,
+  } = summarizePartyAffairs(affairs);
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
           <CardTitle>
-            {condamnations > 0
-              ? `${condamnations} condamnation${condamnations > 1 ? "s" : ""}`
-              : "Aucune condamnation"}
+            {condamnationsDefinitives > 0
+              ? `${condamnationsDefinitives} condamnation${condamnationsDefinitives > 1 ? "s" : ""} définitive${condamnationsDefinitives > 1 ? "s" : ""}`
+              : "Aucune condamnation définitive"}
           </CardTitle>
           <Link
             href="/methodologie#comment-nous-comptons"
@@ -86,6 +93,12 @@ export function PartyAffairsCard({
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-4">
+          {condamnationsNonDefinitives > 0 && (
+            <span>
+              {condamnationsNonDefinitives} condamnation{condamnationsNonDefinitives > 1 ? "s" : ""}{" "}
+              non définitive{condamnationsNonDefinitives > 1 ? "s" : ""}
+            </span>
+          )}
           {enCours > 0 && (
             <span>
               {enCours} procédure{enCours > 1 ? "s" : ""} en cours (présomption d{"'"}
@@ -103,7 +116,8 @@ export function PartyAffairsCard({
         {/* Certainty level breakdown badges */}
         <div className="flex flex-wrap gap-2 mb-4">
           {(Object.keys(CERTAINTY_LABELS) as CertaintyLevel[]).map((level) => {
-            const count = countByCertainty(direct, level);
+            // EN_COURS reprend le compteur ci-dessus : jamais l'enquête préliminaire.
+            const count = level === "EN_COURS" ? enCours : countByCertainty(direct, level);
             if (count === 0) return null;
             return (
               <Badge key={level} variant="outline" className={CERTAINTY_COLORS[level]}>

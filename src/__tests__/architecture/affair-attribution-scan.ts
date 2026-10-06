@@ -654,28 +654,6 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason: "getHemicycleData : affaires déjà filtrées par getAdverseAffairWhere().",
   },
   {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CONDAMNATION"',
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason:
-      "queryParties : affairsAtTime déjà limité à DIRECT et à l'ordre pénal par getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS).",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "const m = getJudicialMaturity(a.status);",
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"',
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
-  },
-  {
     path: "src/lib/data/statistics.ts",
     snippet: "const tier = getJudicialMaturity(a.status);",
     count: 1,
