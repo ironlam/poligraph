@@ -3,14 +3,16 @@ import { db } from "@/lib/db";
 import { cacheTag, cacheLife } from "next/cache";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
-  getConvictionOnlyWhere,
+  getDefinitiveConvictionWhere,
+  getNonDefinitiveConvictionWhere,
   getMisEnCauseWhere,
   getFavorableOutcomeWhere,
 } from "@/lib/affairs/public-filters";
 
 export interface HomepageKPIs {
   politiciansCount: number;
-  condamnationsCount: number;
+  condamnationsDefinitivesCount: number;
+  condamnationsNonDefinitivesCount: number;
   proceduresEnCoursCount: number;
   closesSansCondamnationCount: number;
   votesCount: number;
@@ -24,7 +26,8 @@ export async function getHomepageKPIs(): Promise<HomepageKPIs> {
 
   const [
     politiciansCount,
-    condamnationsCount,
+    condamnationsDefinitivesCount,
+    condamnationsNonDefinitivesCount,
     proceduresEnCoursCount,
     closesSansCondamnationCount,
     votesCount,
@@ -32,7 +35,10 @@ export async function getHomepageKPIs(): Promise<HomepageKPIs> {
   ] = await Promise.all([
     db.politician.count({ where: PUBLIC_POLITICIAN_WHERE }),
     db.affair.count({
-      where: { ...getConvictionOnlyWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+      where: { ...getDefinitiveConvictionWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+    }),
+    db.affair.count({
+      where: { ...getNonDefinitiveConvictionWhere(), politician: PUBLIC_POLITICIAN_WHERE },
     }),
     db.affair.count({
       where: { ...getMisEnCauseWhere(), politician: PUBLIC_POLITICIAN_WHERE },
@@ -46,7 +52,8 @@ export async function getHomepageKPIs(): Promise<HomepageKPIs> {
 
   return {
     politiciansCount,
-    condamnationsCount,
+    condamnationsDefinitivesCount,
+    condamnationsNonDefinitivesCount,
     proceduresEnCoursCount,
     closesSansCondamnationCount,
     votesCount,

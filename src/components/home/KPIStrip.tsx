@@ -49,9 +49,15 @@ function CertaintyBar({ kpis }: { kpis: HomepageKPIs }) {
   const segments: Segment[] = [
     {
       label: "Condamnations définitives",
-      count: kpis.condamnationsCount,
+      count: kpis.condamnationsDefinitivesCount,
       bar: "bg-red-600 dark:bg-red-500",
       dot: "bg-red-600 dark:bg-red-500",
+    },
+    {
+      label: "Condamnations non définitives",
+      count: kpis.condamnationsNonDefinitivesCount,
+      bar: "bg-red-300 dark:bg-red-400",
+      dot: "bg-red-300 dark:bg-red-400",
     },
     {
       label: "Procédures en cours",
@@ -60,7 +66,7 @@ function CertaintyBar({ kpis }: { kpis: HomepageKPIs }) {
       dot: "bg-amber-500 dark:bg-amber-400",
     },
     {
-      label: "Classées sans condamnation",
+      label: "Closes sans condamnation",
       count: kpis.closesSansCondamnationCount,
       bar: "bg-emerald-600 dark:bg-emerald-500",
       dot: "bg-emerald-600 dark:bg-emerald-500",

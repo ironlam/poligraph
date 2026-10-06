@@ -5,7 +5,8 @@ import type { HomepageKPIs } from "@/lib/data/homepage";
 
 const base: HomepageKPIs = {
   politiciansCount: 22683,
-  condamnationsCount: 127,
+  condamnationsDefinitivesCount: 127,
+  condamnationsNonDefinitivesCount: 45,
   proceduresEnCoursCount: 34,
   closesSansCondamnationCount: 60,
   votesCount: 12829,
@@ -22,9 +23,20 @@ describe("KPIStrip — chiffres + barre de certitude", () => {
 
   it("barre de certitude : légende détaillée et rappel de présomption", () => {
     render(<KPIStrip kpis={base} />);
-    expect(screen.getByText("Condamnations définitives")).toBeInTheDocument();
-    expect(screen.getByText("Procédures en cours")).toBeInTheDocument();
-    expect(screen.getByText("Classées sans condamnation")).toBeInTheDocument();
+    const labels = [
+      "Condamnations définitives",
+      "Condamnations non définitives",
+      "Procédures en cours",
+      "Closes sans condamnation",
+    ];
+    for (const label of labels) expect(screen.getByText(label)).toBeInTheDocument();
+    const rendered = screen
+      .getAllByRole("listitem")
+      .map((li) => li.textContent ?? "")
+      .filter((t) => labels.some((l) => t.includes(l)))
+      .map((t) => labels.findIndex((l) => t.includes(l)));
+    expect(rendered).toEqual([0, 1, 2, 3]);
+    expect(screen.queryByText("Classées sans condamnation")).toBeNull();
     expect(screen.getByText(/présomption d'innocence s'applique/)).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /Répartition des affaires documentées/ })
@@ -36,7 +48,8 @@ describe("KPIStrip — chiffres + barre de certitude", () => {
       <KPIStrip
         kpis={{
           ...base,
-          condamnationsCount: 0,
+          condamnationsDefinitivesCount: 0,
+          condamnationsNonDefinitivesCount: 0,
           proceduresEnCoursCount: 0,
           closesSansCondamnationCount: 0,
         }}
