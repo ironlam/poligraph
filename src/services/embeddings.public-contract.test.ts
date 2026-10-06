@@ -22,6 +22,8 @@ vi.mock("voyageai", () => ({
   },
 }));
 
+import { ATTRIBUTION_ROWS } from "@/lib/affairs/__tests__/fixtures/attribution";
+import { evaluateWhere } from "@/lib/affairs/__tests__/fixtures/evaluate-where";
 import {
   indexAffair,
   indexAllOfType,
@@ -277,6 +279,61 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
       expect(content).toContain("Partis politiques référencés : 4");
       expect(content).toContain("Affaires judiciaires : 3 (dont 3 condamnations définitives)");
       expect(content).toContain("Fact-checks : 2 articles");
+    });
+
+    it("ne compte en condamnation définitive que la condamnation pénale du mis en cause", async () => {
+      mocks.db.mandate.groupBy.mockResolvedValue([]);
+      mocks.db.party.count.mockResolvedValue(0);
+      mocks.db.affair.count.mockImplementation(
+        async ({ where }) => ATTRIBUTION_ROWS.filter((row) => evaluateWhere(row, where)).length
+      );
+      mocks.db.factCheck.count.mockResolvedValue(0);
+      mocks.db.legislativeDossier.count.mockResolvedValue(0);
+      mocks.db.pressArticle.count.mockResolvedValue(0);
+
+      await indexGlobalStats();
+
+      expect(upsertedContent()).toContain(
+        `Affaires judiciaires : ${ATTRIBUTION_ROWS.length} (dont 1 condamnations définitives)`
+      );
+    });
+  });
+
+  describe("indexation d'une affaire", () => {
+    function affairRow(involvement: string) {
+      return {
+        id: "affaire",
+        slug: "affaire",
+        title: "Affaire de test",
+        description: "Faits décrits par les sources.",
+        status: "CONDAMNATION_DEFINITIVE",
+        category: "CORRUPTION",
+        involvement,
+        verdictDate: null,
+        partyAtTime: null,
+        politician: { fullName: "Élu Test", slug: "elu-test" },
+        sources: [],
+      };
+    }
+
+    it("le contenu indexé et les métadonnées portent le rôle d'un témoin", async () => {
+      mocks.db.affair.findFirst.mockResolvedValue(affairRow("INDIRECT"));
+
+      await indexAffair("affaire");
+
+      const create = mocks.db.chatEmbedding.upsert.mock.calls[0]?.[0]?.create;
+      expect(create.content).toContain("Concernant: Élu Test (Témoin/Secondaire)");
+      expect(create.metadata).toMatchObject({ involvement: "INDIRECT" });
+    });
+
+    it("le contenu indexé d'un mis en cause porte aussi son rôle", async () => {
+      mocks.db.affair.findFirst.mockResolvedValue(affairRow("DIRECT"));
+
+      await indexAffair("affaire");
+
+      const create = mocks.db.chatEmbedding.upsert.mock.calls[0]?.[0]?.create;
+      expect(create.content).toContain("Concernant: Élu Test (Mis en cause)");
+      expect(create.metadata).toMatchObject({ involvement: "DIRECT" });
     });
   });
 });

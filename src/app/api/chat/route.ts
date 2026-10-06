@@ -14,6 +14,9 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
 } from "@/lib/api/public-contract";
 import { getPublishedAffairSqlWhere } from "@/lib/affairs/public-filters";
+import { isAccusedInvolvement } from "@/config/certainty";
+import { INVOLVEMENT_LABELS } from "@/config/labels";
+import type { Involvement } from "@/generated/prisma";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 
 // Runtime configuration for streaming
@@ -281,10 +284,19 @@ async function buildContext(results: SearchResult[], query: string): Promise<str
       }
 
       case "AFFAIR": {
-        section += `**Affaire: ${metadata.title || "Affaire judiciaire"}**\n`;
+        // Embeddings indexed before `involvement` was stored keep the reminder: their role is unknown.
+        const involvement = metadata.involvement as Involvement | undefined;
+        const role =
+          involvement && !isAccusedInvolvement(involvement)
+            ? INVOLVEMENT_LABELS[involvement]
+            : undefined;
+        section += `**Affaire: ${metadata.title || "Affaire judiciaire"}**`;
+        section += role ? ` [${role}]\n` : "\n";
         section += result.content;
         const politicianName = metadata.politicianName || "La personne concernée";
-        section += `\n⚠️ Rappel: ${politicianName} bénéficie de la présomption d'innocence jusqu'à condamnation définitive.`;
+        if (!role) {
+          section += `\n⚠️ Rappel: ${politicianName} bénéficie de la présomption d'innocence jusqu'à condamnation définitive.`;
+        }
         if (metadata.politicianSlug) {
           section += `\n→ Fiche: /politiques/${metadata.politicianSlug}`;
         }

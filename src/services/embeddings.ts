@@ -10,7 +10,8 @@
 import { VoyageAIClient } from "voyageai";
 import { db } from "@/lib/db";
 import type { EmbeddingType, Prisma } from "@/generated/prisma";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { getConvictionOnlyWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { INVOLVEMENT_LABELS } from "@/config/labels";
 import {
   getPublicFactCheckWhere,
   PUBLIC_PARTY_WHERE,
@@ -463,7 +464,7 @@ export async function indexAffair(affairId: string): Promise<void> {
 
   const parts: string[] = [
     affair.title,
-    `Concernant: ${affair.politician.fullName}`,
+    `Concernant: ${affair.politician.fullName} (${INVOLVEMENT_LABELS[affair.involvement]})`,
     affair.description.slice(0, 500), // Truncate long descriptions
   ];
 
@@ -486,6 +487,7 @@ export async function indexAffair(affairId: string): Promise<void> {
       slug: affair.slug,
       politicianName: affair.politician.fullName,
       politicianSlug: affair.politician.slug,
+      involvement: affair.involvement,
       status: affair.status,
       category: affair.category,
       sources: affair.sources.map((s) => ({ title: s.title, url: s.url })),
@@ -758,8 +760,13 @@ export async function indexGlobalStats(): Promise<void> {
 
   // Get affair counts
   const affairCount = await db.affair.count({ where: PUBLIC_AFFAIR_WHERE });
+  // Condamnations pénales définitives du mis en cause, jamais celles d'un tiers (témoin).
   const condemnedCount = await db.affair.count({
-    where: { ...PUBLIC_AFFAIR_WHERE, status: "CONDAMNATION_DEFINITIVE" },
+    where: {
+      ...PUBLIC_AFFAIR_WHERE,
+      ...getConvictionOnlyWhere(),
+      status: "CONDAMNATION_DEFINITIVE",
+    },
   });
 
   // Get party count
