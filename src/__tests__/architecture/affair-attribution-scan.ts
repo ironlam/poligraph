@@ -43,7 +43,8 @@ export type AllowedOccurrence = CoverageEntry & {
     | "identity-check"
     | "enum-listing"
     | "role-display"
-    | "adverse-prefiltered";
+    | "adverse-prefiltered"
+    | "adverse-inline";
   reason: string;
 };
 
@@ -596,8 +597,9 @@ export const ALLOWED: AllowedOccurrence[] = [
     path: "src/lib/politicians/judicial-counts.ts",
     snippet: '(x) => x.involvement === "DIRECT" && x.jurisdictionOrder === "PENAL"',
     count: 1,
-    nature: "role-display",
-    reason: "computeJudicialCounts : compteurs à charge déjà limités à DIRECT et à l'ordre pénal.",
+    nature: "adverse-inline",
+    reason:
+      "computeJudicialCounts : recopie en mémoire la partie implication et ordre du prédicat à charge (ADVERSE_INVOLVEMENTS, ADVERSE_JURISDICTION_ORDER) au lieu de l'importer ; chaque compteur filtre ensuite ses statuts. À réaligner si ADVERSE_INVOLVEMENTS change.",
   },
   {
     path: "src/lib/politicians/judicial-counts.ts",

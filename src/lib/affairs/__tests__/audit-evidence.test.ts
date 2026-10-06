@@ -764,4 +764,22 @@ describe("assess : un témoin INDIRECT n'est pas la personne condamnée", () => 
     expect(kinds).not.toContain("PRISON_SPLIT_ONLY_IN_PROSE");
     expect(kinds).not.toContain("INELIGIBILITY_SPLIT_ONLY_IN_PROSE");
   });
+
+  it("contrôle positif : la même fiche en DIRECT produit les deux signaux", () => {
+    const direct = ATTRIBUTION_ROWS.find((r) => r.key === "directPenalConvicted")!;
+    const a = affair({
+      involvement: direct.involvement,
+      status: direct.status,
+      prisonMonths: null,
+      prisonFirmMonths: null,
+      ineligibilityMonths: 45,
+      ineligibilityFirmMonths: null,
+      otherSentence:
+        "3 ans de prison dont 1 an ferme ; 45 mois d'inéligibilité dont 30 avec sursis",
+    });
+
+    const kinds = a.editorialSignals.map((s) => s.kind);
+    expect(kinds).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+    expect(kinds).toContain("INELIGIBILITY_SPLIT_ONLY_IN_PROSE");
+  });
 });

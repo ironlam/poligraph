@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { db } from "@/lib/db";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
+import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { OgLayout, OgCategoryLabel, OG_SIZE } from "@/lib/og-utils";
 
 export const alt = "Responsables politiques condamnés sur Poligraph";
@@ -11,11 +12,16 @@ export default async function Image() {
   const [totalDef, totalPro] = await Promise.all([
     // Condamnations pénales de la personne mise en cause, restreintes au statut de chaque compteur.
     db.affair.count({
-      where: { ...getConvictionOnlyWhere(), status: "CONDAMNATION_DEFINITIVE" },
+      where: {
+        ...getConvictionOnlyWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
+        status: "CONDAMNATION_DEFINITIVE",
+      },
     }),
     db.affair.count({
       where: {
         ...getConvictionOnlyWhere(),
+        politician: PUBLIC_POLITICIAN_WHERE,
         status: { in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"] },
       },
     }),

@@ -248,7 +248,7 @@ async function generateStatsAngle(angle: string, entityId: string): Promise<Twee
 
       const totalCondamnations = sorted.reduce((sum, [, v]) => sum + v.count, 0);
 
-      let content = `📊 ${totalCondamnations} condamnations d'élus par parti :\n\n`;
+      let content = `📊 ${totalCondamnations} ${plural(totalCondamnations, "condamnation")} d'élus par parti :\n\n`;
       for (const [party, { count, members }] of sorted) {
         content += `• ${party} : ${count}/${members} ${plural(members, "élu")}\n`;
       }

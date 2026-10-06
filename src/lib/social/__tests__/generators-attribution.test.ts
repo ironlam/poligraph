@@ -35,7 +35,7 @@ describe("générateurs sociaux : attribution directe", () => {
 
     const [draft] = await GENERATORS.chiffres!(recent);
 
-    expect(draft!.content).toContain("1 condamnations d'élus par parti");
+    expect(draft!.content).toContain("1 condamnation d'élus par parti");
     expect(draft!.content).toContain("• PX : 1/1 élu");
   });
 
@@ -58,6 +58,6 @@ describe("générateurs sociaux : attribution directe", () => {
 
     const [draft] = await GENERATORS.profil!(recent);
 
-    expect(draft!.content).toContain("1 affaire judiciaire documentée.");
+    expect(draft!.content).toContain("2 affaires judiciaires documentées.");
   });
 });

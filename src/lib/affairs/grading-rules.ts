@@ -20,10 +20,11 @@ export const RULES = {
    * the new version is given its fingerprint, which turns a silent rule change
    * into a CI failure.
    *
-   * Starts at 1 rather than 3: three commits changed the rules after the
-   * 2026-07-26 baseline was frozen (584ba9e7, b732ebc2, bcce13ce), but which
-   * rules were in force that day cannot be reconstructed honestly. That baseline
-   * therefore carries no version and is reported as incomparable.
+   * Numbering began at 1, not at 3, even though three commits had already
+   * changed the rules after the 2026-07-26 baseline was frozen (584ba9e7,
+   * b732ebc2, bcce13ce): which rules were in force that day cannot be
+   * reconstructed honestly. That baseline therefore carries no version and is
+   * reported as incomparable. Version 3 limits the adverse roles to DIRECT.
    */
   version: 3,
 

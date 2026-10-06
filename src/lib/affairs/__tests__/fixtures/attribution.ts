@@ -11,6 +11,7 @@ export interface AttributionRow {
     | "directNonPenalConvicted"
     | "directPreliminaryInquiry"
     | "directPenalConvicted"
+    | "directPenalMiseEnExamen"
     | "directFavorableOutcome"
     | "victimViolence"
     | "plaintiffProbity"
@@ -25,8 +26,9 @@ export interface AttributionRow {
 }
 
 /**
- * Lignes de référence partagées par les tests d'attribution : seule une condamnation
- * DIRECT d'ordre pénal entre dans les agrégats à charge. Les trois dernières lignes
+ * Lignes de référence partagées par les tests d'attribution : seules une condamnation et une
+ * mise en examen DIRECT d'ordre pénal entrent dans les agrégats à charge ; la mise en examen
+ * sépare le prédicat à charge de celui des seules condamnations. Les trois dernières lignes
  * (victime, plaignant, simple mention) alimentent les facettes et les listings : la
  * plainte porte sur une catégorie hors violences, que le mode victime ne liste pas.
  */
@@ -61,6 +63,14 @@ const INPUT: RowInput[] = [
     key: "directPenalConvicted",
     involvement: "DIRECT",
     status: "CONDAMNATION_DEFINITIVE",
+    jurisdictionOrder: "PENAL",
+    category: "CORRUPTION",
+    expectedAdverse: true,
+  },
+  {
+    key: "directPenalMiseEnExamen",
+    involvement: "DIRECT",
+    status: "MISE_EN_EXAMEN",
     jurisdictionOrder: "PENAL",
     category: "CORRUPTION",
     expectedAdverse: true,

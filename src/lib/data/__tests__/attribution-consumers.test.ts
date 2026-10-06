@@ -239,7 +239,7 @@ describe("/partis", () => {
     const [party] = await getParties();
     expect(party!.affairCounts).toEqual({
       condamnations: 1,
-      enCours: 1,
+      enCours: 2,
       closesSansCondamnation: 1,
       total: DIRECT_PENAL_KEYS.length,
     });
@@ -341,12 +341,12 @@ describe("facettes de certitude", () => {
     expect(sum(counts)).toBe(total);
   });
 
-  it("getAdverseCertaintyCounts : ETABLI ne compte que la condamnation DIRECT pénale", async () => {
+  it("getAdverseCertaintyCounts : ETABLI et EN_COURS ne comptent que le DIRECT pénal", async () => {
     const counts = await getAdverseCertaintyCounts();
     expect(counts).toEqual({
       ETABLI: 1,
       PRONONCE: 0,
-      EN_COURS: 0,
+      EN_COURS: 1,
       CLOS_SANS_CHARGE: 0,
       CLOS_FAVORABLE: 0,
     });

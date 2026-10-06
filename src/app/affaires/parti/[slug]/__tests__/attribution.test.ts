@@ -29,8 +29,8 @@ describe("/affaires/parti/[slug] : compteurs à charge", () => {
       params: Promise.resolve({ slug: "parti-test" }),
     });
 
-    // DIRECT pénal : enquête préliminaire, condamnation, relaxe.
-    expect(description).toMatch(/^3 élus Parti Test concernés/);
+    // DIRECT pénal : enquête préliminaire, condamnation, mise en examen, relaxe.
+    expect(description).toMatch(/^4 élus Parti Test concernés/);
     expect(description).toContain("1 élu condamné");
     expect(description).toContain("2 victimes");
   });

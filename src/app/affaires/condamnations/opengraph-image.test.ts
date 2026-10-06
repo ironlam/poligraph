@@ -33,4 +33,18 @@ describe("image OG /affaires/condamnations", () => {
       "directPenalConvicted",
     ]);
   });
+
+  it("ne compte pas la condamnation d'une fiche non publiée, comme les métadonnées de la page", async () => {
+    await Image();
+
+    const draftRow = {
+      ...ATTRIBUTION_ROWS.find((row) => row.key === "directPenalConvicted")!,
+      politician: { publicationStatus: "DRAFT" },
+    };
+    for (const call of mocks.affairCount.mock.calls) {
+      const where = (call[0] as { where: Record<string, unknown> }).where;
+      expect(evaluateWhere({ ...draftRow, status: "CONDAMNATION_DEFINITIVE" }, where)).toBe(false);
+      expect(evaluateWhere({ ...draftRow, status: "APPEL_EN_COURS" }, where)).toBe(false);
+    }
+  });
 });

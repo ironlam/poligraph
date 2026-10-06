@@ -62,7 +62,7 @@ export function getAdverseInvolvementSql(alias: "a" = "a"): Prisma.Sql {
   return Prisma.sql`a.involvement IN (${Prisma.join([...ADVERSE_INVOLVEMENTS])})`;
 }
 
-/** Version en mémoire des agrégats à charge, équivalente à getAdverseAffairWhere(). */
+/** Version en mémoire des agrégats à charge, équivalente à getAdverseAffairWhere(), hors publication. */
 export function isCountedInAdverseAggregates(affair: {
   involvement: Involvement;
   status: AffairStatus;
