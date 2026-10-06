@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   politicianFindFirst: vi.fn(),
   partyFindFirst: vi.fn(),
+  groupFindFirst: vi.fn(),
+  cacheTag: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+vi.mock("next/cache", () => ({ cacheTag: mocks.cacheTag, cacheLife: vi.fn() }));
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findFirst: mocks.politicianFindFirst },
     party: { findFirst: mocks.partyFindFirst },
+    parliamentaryGroup: { findFirst: mocks.groupFindFirst },
   },
 }));
 vi.mock("@/services/voteStats", () => ({ getPoliticianVotingStats: vi.fn() }));
@@ -89,4 +92,22 @@ describe("comparaisons publiques MCP", () => {
       })
     );
   });
+});
+
+describe("comparateur : invalidation sur modification d'affaire", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each(["partis", "groupes"] as const)(
+    "la comparaison %s porte le tag affairs (elle lit les affaires des membres)",
+    async (cat) => {
+      mocks.partyFindFirst.mockResolvedValue(null);
+      mocks.groupFindFirst.mockResolvedValue(null);
+
+      await loadComparisonData(cat, "a", "b");
+
+      const tagCalls = mocks.cacheTag.mock.calls;
+      expect(tagCalls.length).toBeGreaterThan(0);
+      for (const call of tagCalls) expect(call).toContain("affairs");
+    }
+  );
 });

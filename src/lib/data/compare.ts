@@ -500,7 +500,8 @@ export type PartyComparisonData = NonNullable<Awaited<ReturnType<typeof getParty
 
 async function getPartyForComparison(slugOrId: string) {
   "use cache";
-  cacheTag(`party:${slugOrId}`);
+  // "affairs" : la comparaison lit les affaires des membres.
+  cacheTag(`party:${slugOrId}`, "affairs");
   cacheLife("synced");
 
   const party = await db.party.findFirst({
@@ -685,7 +686,8 @@ export type GroupComparisonData = NonNullable<Awaited<ReturnType<typeof getGroup
 
 async function getGroupForComparison(idOrCode: string) {
   "use cache";
-  cacheTag("groups", "votes");
+  // "affairs" : la comparaison lit les affaires des membres.
+  cacheTag("groups", "votes", "affairs");
   cacheLife("synced");
 
   const group = await db.parliamentaryGroup.findFirst({
