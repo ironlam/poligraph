@@ -341,6 +341,13 @@ const DAILY_STEPS: DailyStep[] = [
     },
   },
   {
+    name: "embeddings-affairs",
+    run: async () => {
+      const { indexAllOfType } = await import("@/services/embeddings");
+      return indexAllOfType("AFFAIR", { deltaOnly: true });
+    },
+  },
+  {
     name: "embeddings-press",
     run: async () => {
       const { indexAllOfType } = await import("@/services/embeddings");

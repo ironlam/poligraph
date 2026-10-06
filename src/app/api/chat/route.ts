@@ -284,7 +284,8 @@ async function buildContext(results: SearchResult[], query: string): Promise<str
       }
 
       case "AFFAIR": {
-        // Embeddings indexed before `involvement` was stored keep the reminder: their role is unknown.
+        // An unknown role keeps the reminder. Search already drops AFFAIR embeddings without
+        // `involvement` or with a stale role, so this is a fallback, not the usual path.
         const involvement = metadata.involvement as Involvement | undefined;
         const role =
           involvement && !isAccusedInvolvement(involvement)

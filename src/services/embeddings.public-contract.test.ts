@@ -48,8 +48,19 @@ function gatesPublication(where: Where): boolean {
   return where?.publicationStatus === PUBLISHED;
 }
 
-function embedding(entityType: string, entityId: string) {
-  return { entityType, entityId, content: entityId, embedding: [1, 0], metadata: null };
+function embedding(
+  entityType: string,
+  entityId: string,
+  metadata: Record<string, unknown> | null = null
+) {
+  return { entityType, entityId, content: entityId, embedding: [1, 0], metadata };
+}
+
+// Role and status an up-to-date AFFAIR embedding carries, matching `currentAffair`.
+const CURRENT_AFFAIR_METADATA = { involvement: "DIRECT", status: "ENQUETE_PRELIMINAIRE" };
+
+function currentAffair(id: string) {
+  return { id, ...CURRENT_AFFAIR_METADATA };
 }
 
 function upsertedContent(): string {
@@ -74,15 +85,15 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
   describe("recherche", () => {
     it("écarte les affaires, fiches et fact-checks non publics déjà indexés", async () => {
       mocks.db.chatEmbedding.findMany.mockResolvedValue([
-        embedding("AFFAIR", "affaire-publiee"),
-        embedding("AFFAIR", "affaire-brouillon"),
+        embedding("AFFAIR", "affaire-publiee", CURRENT_AFFAIR_METADATA),
+        embedding("AFFAIR", "affaire-brouillon", CURRENT_AFFAIR_METADATA),
         embedding("POLITICIAN", "fiche-brouillon"),
         embedding("FACTCHECK", "factcheck-non-public"),
         embedding("PARTY", "parti-interne"),
         embedding("DOSSIER", "dossier"),
       ]);
       mocks.db.affair.findMany.mockImplementation(async ({ where }) =>
-        gatesPublication(where) && gatesPolitician(where) ? [{ id: "affaire-publiee" }] : []
+        gatesPublication(where) && gatesPolitician(where) ? [currentAffair("affaire-publiee")] : []
       );
 
       const results = await searchSimilar({ query: "affaire", limit: 10, threshold: 0.5 });
@@ -90,12 +101,33 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
       expect(results.map((r) => r.entityId).sort()).toEqual(["affaire-publiee", "dossier"]);
     });
 
+    it("écarte un embedding d'affaire périmé : rôle absent, rôle ou statut changés", async () => {
+      mocks.db.chatEmbedding.findMany.mockResolvedValue([
+        embedding("AFFAIR", "affaire-sans-role", { status: "ENQUETE_PRELIMINAIRE" }),
+        embedding("AFFAIR", "affaire-devenue-temoin", CURRENT_AFFAIR_METADATA),
+        embedding("AFFAIR", "affaire-statut-change", CURRENT_AFFAIR_METADATA),
+        embedding("AFFAIR", "affaire-a-jour", CURRENT_AFFAIR_METADATA),
+      ]);
+      mocks.db.affair.findMany.mockResolvedValue([
+        currentAffair("affaire-sans-role"),
+        { ...currentAffair("affaire-devenue-temoin"), involvement: "INDIRECT" },
+        { ...currentAffair("affaire-statut-change"), status: "CONDAMNATION_DEFINITIVE" },
+        currentAffair("affaire-a-jour"),
+      ]);
+
+      const results = await searchSimilar({ query: "affaire", limit: 10, threshold: 0.5 });
+
+      expect(results.map((r) => r.entityId)).toEqual(["affaire-a-jour"]);
+    });
+
     it("ne vérifie en base qu'une fenêtre bornée de candidats", async () => {
       mocks.db.chatEmbedding.findMany.mockResolvedValue(
-        Array.from({ length: 50 }, (_, i) => embedding("AFFAIR", `affaire-${i}`))
+        Array.from({ length: 50 }, (_, i) =>
+          embedding("AFFAIR", `affaire-${i}`, CURRENT_AFFAIR_METADATA)
+        )
       );
       mocks.db.affair.findMany.mockImplementation(async ({ where }) =>
-        (where.id.in as string[]).map((id) => ({ id }))
+        (where.id.in as string[]).map(currentAffair)
       );
 
       const results = await searchSimilar({ query: "affaire", limit: 2, threshold: 0.5 });
@@ -244,6 +276,25 @@ describe("le RAG du chat ne sert que du contenu publié", () => {
       expect(mocks.db.chatEmbedding.deleteMany).toHaveBeenCalledWith({
         where: { entityType: "PRESS_ARTICLE", entityId: { in: ["article-supprime"] } },
       });
+    });
+
+    it("réindexe une affaire dont l'embedding n'a pas de rôle, même plus récent qu'elle", async () => {
+      const embeddedAt = new Date("2026-10-01");
+      mocks.db.chatEmbedding.findMany.mockResolvedValue([
+        { entityId: "affaire-sans-role", updatedAt: embeddedAt, metadata: { status: "X" } },
+        { entityId: "affaire-a-jour", updatedAt: embeddedAt, metadata: CURRENT_AFFAIR_METADATA },
+      ]);
+      const affairUpdatedAt = new Date("2026-01-01");
+      mocks.db.affair.findMany.mockResolvedValue([
+        { id: "affaire-sans-role", updatedAt: affairUpdatedAt },
+        { id: "affaire-a-jour", updatedAt: affairUpdatedAt },
+      ]);
+
+      const result = await indexAllOfType("AFFAIR", { deltaOnly: true });
+
+      expect(result).toMatchObject({ indexed: 1, skipped: 1 });
+      const reindexed = mocks.db.affair.findFirst.mock.calls.map((c) => c[0]?.where?.id);
+      expect(reindexed).toEqual(["affaire-sans-role"]);
     });
 
     it("ne supprime rien quand la sélection est tronquée par limit", async () => {

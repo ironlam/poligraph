@@ -239,7 +239,7 @@ async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[
     affairIds.length > 0
       ? db.affair.findMany({
           where: { id: { in: affairIds }, ...PUBLIC_AFFAIR_WHERE },
-          select: { id: true },
+          select: { id: true, involvement: true, status: true },
         })
       : [],
     politicianIds.length > 0
@@ -262,8 +262,22 @@ async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[
       : [],
   ]);
 
+  // An AFFAIR embedding whose role or status no longer matches the affair was written
+  // under the old facts (a witness indexed as accused, for instance). Its stored text
+  // cannot be safely rewritten here, so it is dropped until the daily pass reindexes it.
+  // Embeddings from before `involvement` was stored have an unknown role: dropped too.
+  const currentAffairs = affairs.filter((a) => {
+    const metadata = results.find((r) => r.entityType === "AFFAIR" && r.entityId === a.id)
+      ?.metadata;
+    return (
+      metadata?.involvement !== undefined &&
+      metadata.involvement === a.involvement &&
+      metadata.status === a.status
+    );
+  });
+
   const publicIds: Partial<Record<EmbeddingType, Set<string>>> = {
-    AFFAIR: new Set(affairs.map((a) => a.id)),
+    AFFAIR: new Set(currentAffairs.map((a) => a.id)),
     POLITICIAN: new Set(politicians.map((p) => p.id)),
     FACTCHECK: new Set(factChecks.map((f) => f.id)),
     PARTY: new Set([GLOBAL_STATS_ID, ...parties.map((p) => p.id)]),
@@ -853,12 +867,20 @@ export async function indexAllOfType(
 
   // Build a map of existing embedding updatedAt times for delta comparison
   let embeddingDates: Map<string, Date> | undefined;
+  // AFFAIR embeddings written before `involvement` was stored: reindexed whatever their date.
+  const missingInvolvement = new Set<string>();
   if (deltaOnly) {
     const existingEmbeddings = await db.chatEmbedding.findMany({
       where: { entityType },
-      select: { entityId: true, updatedAt: true },
+      select: { entityId: true, updatedAt: true, metadata: entityType === "AFFAIR" },
     });
     embeddingDates = new Map(existingEmbeddings.map((e) => [e.entityId, e.updatedAt]));
+    if (entityType === "AFFAIR") {
+      for (const e of existingEmbeddings) {
+        const metadata = e.metadata as Record<string, unknown> | null;
+        if (metadata?.involvement === undefined) missingInvolvement.add(e.entityId);
+      }
+    }
   }
 
   // Helper: check if entity needs re-indexing
@@ -866,6 +888,7 @@ export async function indexAllOfType(
     if (!deltaOnly || !embeddingDates) return true;
     const embUpdated = embeddingDates.get(entityId);
     if (!embUpdated) return true; // No embedding yet
+    if (missingInvolvement.has(entityId)) return true;
     return entityUpdatedAt > embUpdated;
   };
 
