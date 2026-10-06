@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { PoliticianAvatar } from "./PoliticianAvatar";
+import { PoliticianAvatar, bypassesImageOptimizer } from "./PoliticianAvatar";
 
 describe("PoliticianAvatar", () => {
   it("should render initials when no photo URL", () => {
@@ -95,5 +95,19 @@ describe("PoliticianAvatar", () => {
       <PoliticianAvatar photoUrl={null} firstName="A" lastName="B" className="custom-class" />
     );
     expect(container.firstChild).toHaveClass("custom-class");
+  });
+});
+
+describe("bypassesImageOptimizer", () => {
+  it("bypasses the optimizer for European Parliament photos", () => {
+    expect(bypassesImageOptimizer("https://www.europarl.europa.eu/mepphoto/131580.jpg")).toBe(true);
+  });
+
+  it("keeps the optimizer for other hosts, including our Blob copies", () => {
+    expect(bypassesImageOptimizer("https://upload.wikimedia.org/source.jpg")).toBe(false);
+    expect(bypassesImageOptimizer("https://abc.public.blob.vercel-storage.com/politicians/x")).toBe(
+      false
+    );
+    expect(bypassesImageOptimizer("https://europarl.europa.eu.example.com/x.jpg")).toBe(false);
   });
 });

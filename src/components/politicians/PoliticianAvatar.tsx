@@ -23,6 +23,20 @@ interface PoliticianAvatarProps {
   priority?: boolean; // Load immediately (above the fold)
 }
 
+// Vercel's image optimizer answers 502 on European Parliament photos, which the
+// browser itself loads fine. These are served as is until every avatar prefers
+// the Blob copy.
+const OPTIMIZER_BLOCKED_HOST = "europarl.europa.eu";
+
+export function bypassesImageOptimizer(src: string): boolean {
+  try {
+    const { hostname } = new URL(src);
+    return hostname === OPTIMIZER_BLOCKED_HOST || hostname.endsWith(`.${OPTIMIZER_BLOCKED_HOST}`);
+  } catch {
+    return false;
+  }
+}
+
 const sizeClasses = {
   sm: "w-10 h-10 text-sm",
   md: "w-14 h-14 text-xl",
@@ -90,6 +104,7 @@ export function PoliticianAvatar({
         onLoad={() => setImageLoaded(true)}
         loading={priority ? "eager" : "lazy"}
         priority={priority}
+        unoptimized={bypassesImageOptimizer(imageSrc)}
       />
     </div>
   );
