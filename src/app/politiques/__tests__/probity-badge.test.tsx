@@ -65,7 +65,6 @@ beforeEach(() => {
   mocks.queryRaw.mockResolvedValue([
     {
       with_conviction: BigInt(0),
-      total_affairs: BigInt(0),
       deputes: BigInt(0),
       senateurs: BigInt(0),
       gouvernement: BigInt(0),
@@ -94,7 +93,7 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
     expect(kept(relation.affairs.some)).toEqual(["definitiveCorruptionGrave"]);
   });
 
-  it("les compteurs SQL utilisent le prédicat partagé, sans gravité, pour le filtre et le total", async () => {
+  it("le compteur SQL du filtre utilise le prédicat partagé, sans gravité", async () => {
     await renderPage({});
     const [strings, ...values] = mocks.queryRaw.mock.calls[0]!;
     const text = (strings as readonly string[]).join("${}");
@@ -104,7 +103,8 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
     const fragments = values.filter(
       (v): v is Prisma.Sql => typeof v === "object" && v !== null && "sql" in v && "values" in v
     );
-    expect(fragments).toHaveLength(2);
+    expect(fragments).toHaveLength(1);
+    expect(text).not.toContain("total_affairs");
     for (const fragment of fragments) {
       expect(fragment.sql).toBe(expected.sql);
       expect(fragment.values).toEqual(expected.values);
@@ -141,9 +141,10 @@ describe("PoliticiansGrid : libellé du filtre probité", () => {
       </TooltipProvider>
     );
 
-    const badge = screen.getByText("Condamnés pour probité (3)");
+    const badge = screen.getByRole("button", { name: "Condamnés pour probité (3)" });
     expect(badge).toHaveAttribute("title", "Condamnation définitive pour atteinte à la probité");
     expect(screen.queryByText(/Avec décision de justice/)).toBeNull();
+    expect(screen.getByLabelText("Condamnés pour probité (3)")).toBeInTheDocument();
   });
 });
 

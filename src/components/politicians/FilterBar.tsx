@@ -125,7 +125,7 @@ export function FilterBar({
           onChange={(e) => updateParams({ conviction: e.target.checked ? "true" : "" })}
           className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
         />
-        Condamnations ({convictionCount})
+        Condamnés pour probité ({convictionCount})
       </label>
 
       {/* Loading indicator — at the end so it doesn't displace filters */}

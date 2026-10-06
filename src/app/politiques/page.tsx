@@ -305,7 +305,6 @@ async function getFilterCounts() {
     [
       {
         with_conviction: bigint;
-        total_affairs: bigint;
         deputes: bigint;
         senateurs: bigint;
         gouvernement: bigint;
@@ -323,10 +322,6 @@ async function getFilterCounts() {
             AND ${getProbityConvictionBadgeSql("a")}
         )
       ) AS with_conviction,
-      -- Total definitive probity convictions
-      (SELECT COUNT(*) FROM "Affair" a
-        WHERE ${getProbityConvictionBadgeSql("a")}
-      ) AS total_affairs,
       -- Députés
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
@@ -374,7 +369,6 @@ async function getFilterCounts() {
 
   return {
     withConviction: Number(counts.with_conviction),
-    totalAffairs: Number(counts.total_affairs),
     deputes: Number(counts.deputes),
     senateurs: Number(counts.senateurs),
     gouvernement: Number(counts.gouvernement),

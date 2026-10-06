@@ -44,7 +44,6 @@ beforeEach(() => {
   mocks.queryRaw.mockResolvedValue([
     {
       with_conviction: BigInt(0),
-      total_affairs: BigInt(0),
       deputes: BigInt(0),
       senateurs: BigInt(0),
       gouvernement: BigInt(0),
