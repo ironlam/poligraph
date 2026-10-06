@@ -73,7 +73,7 @@ export function AffairPicker({
         </div>
       )}
       label={label}
-      placeholder="Rechercher une affaire par titre..."
+      placeholder="Rechercher une affaire par titre ou identifiant (AF-000609)..."
       description={description}
     />
   );

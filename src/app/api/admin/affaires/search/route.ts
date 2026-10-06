@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { db } from "@/lib/db";
+import { parsePublicId } from "@/lib/public-ids";
 
 export const GET = withAdminAuth(async (request: NextRequest) => {
   const parsed = z
@@ -36,9 +37,12 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
     return NextResponse.json({ results: [] });
   }
 
+  const searchedId = parsePublicId(q.toUpperCase());
   const affairs = await db.affair.findMany({
     where: {
-      title: { contains: q, mode: "insensitive" },
+      ...(searchedId?.entityType === "affair"
+        ? { publicId: searchedId.publicId }
+        : { title: { contains: q, mode: "insensitive" as const } }),
       ...(excludeId && { id: { not: excludeId } }),
     },
     select: {

@@ -8,6 +8,7 @@ import { AffairCategory, PublicationStatus, AffairStatus } from "@/generated/pri
 import { computeSeverity, isInherentlyMandateCategory } from "@/config/labels";
 import { parsePagination } from "@/lib/api/pagination";
 import { resolveAffairPolitician } from "@/lib/affair-matching";
+import { parsePublicId } from "@/lib/public-ids";
 
 const VALID_PUB_STATUSES = new Set(Object.values(PublicationStatus));
 const VALID_CATEGORIES = new Set(Object.values(AffairCategory));
@@ -46,7 +47,10 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
   if (moderation === "pending") {
     where.moderationReviews = { some: { appliedAt: null } };
   }
-  if (search) {
+  const searchedId = search ? parsePublicId(search.trim().toUpperCase()) : null;
+  if (searchedId?.entityType === "affair") {
+    where.publicId = searchedId.publicId;
+  } else if (search) {
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },
       { politician: { fullName: { contains: search, mode: "insensitive" } } },
