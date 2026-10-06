@@ -766,7 +766,7 @@ export const ALLOWED: AllowedOccurrence[] = [
     count: 1,
     nature: "documentary-facet",
     reason:
-      "getPublicAffairSemantics : maturité de l'affaire, publiée comme statusLabel ; l'attribution passe par statusAppliesToPolitician, certaintyLevel (getAttributedCertaintyLevel) et countedInAdverseAggregates. La rendre nulle pour un témoin changerait le contrat d'API.",
+      "getPublicAffairSemantics : judicialMaturity et judicialMaturityLabel décrivent l'affaire, pas la personne ; statusAppliesToPolitician et certaintyLevel (getAttributedCertaintyLevel), publiés à côté, portent l'attribution.",
   },
   {
     path: "src/components/compare/categories/DeputesComparison.tsx",
@@ -890,36 +890,6 @@ export const ALLOWED: AllowedOccurrence[] = [
     nature: "identity-check",
     reason:
       "Fiches à recalculer après une écriture sur des affaires (et leurs affaires liées) ; rien n'est affiché ni compté.",
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet:
-      "const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`",
-    count: 1,
-    nature: "documentary-facet",
-    reason:
-      "Sitemap : une affaire publiée, quel que soit le rôle, rend la fiche indexable ; rien n'est affiché ni compté.",
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet: "const lastAffairUpdate = await db.affair.findFirst({",
-    count: 1,
-    nature: "documentary-facet",
-    reason: "Sitemap : date de dernière modification de /affaires/condamnations, rien d'affiché.",
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet: "db.affair.findMany({",
-    count: 1,
-    nature: "documentary-facet",
-    reason: "Sitemap : URL de chaque affaire publiée.",
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
-    count: 1,
-    nature: "documentary-facet",
-    reason: "Sitemap : URL des pages d'affaires d'un parti qui en a au moins une publiée.",
   },
 ];
 
@@ -1048,3 +1018,35 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     reason: "Même prédicat local des procédures-bâillons.",
   },
 ];
+
+/**
+ * Identités figées de la dette (`path|snippet`). On ne peut qu'en retirer, jamais en ajouter :
+ * une entrée qui sort de ATTRIBUTION_DEBT sort aussi d'ici dans le même diff.
+ */
+export const FROZEN_DEBT_KEYS: readonly string[] = [
+  "src/app/politiques/page.tsx|AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
+  "src/app/politiques/page.tsx|AND a.involvement = 'DIRECT'",
+  "src/app/politiques/page.tsx|affairs: {",
+  "src/app/politiques/page.tsx|affairs: { some: CONVICTION_BADGE_WHERE },",
+  "src/app/politiques/page.tsx|affairs: { where: CONVICTION_BADGE_WHERE },",
+  "src/app/politiques/page.tsx|const [counts] = await db.$queryRaw<",
+  'src/config/labels.ts|"mise-en-cause": ["DIRECT", "INDIRECT"],',
+  'src/config/labels.ts|involvement: "DIRECT" as const,',
+  'src/config/labels.ts|mentionne: ["MENTIONED_ONLY"],',
+  'src/config/labels.ts|victime: ["VICTIM", "PLAINTIFF"],',
+  "src/lib/affairs/blocked-affairs.ts|const affairs = await db.affair.findMany({",
+  "src/lib/data/partis.ts|affairs: { where: CONVICTION_BADGE_WHERE },",
+  "src/lib/data/pipelines.ts|entitiesCreated7d = await db.affair.count({",
+  "src/lib/data/slapp.ts|db.affair.count({",
+  "src/lib/data/slapp.ts|db.affair.groupBy({",
+  "src/lib/data/slapp.ts|return db.affair.findMany({",
+];
+
+/** Clés de dette absentes de FROZEN_DEBT_KEYS : toute entrée nouvelle, même en échange d'une sortie. */
+export function unfrozenDebtKeys(
+  debt: readonly CoverageEntry[],
+  frozen: readonly string[] = FROZEN_DEBT_KEYS
+): string[] {
+  const allowed = new Set(frozen);
+  return debt.map((entry) => `${entry.path}|${entry.snippet}`).filter((key) => !allowed.has(key));
+}

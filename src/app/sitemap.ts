@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Prisma } from "@/generated/prisma";
 import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
+import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
@@ -91,7 +92,7 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
         )
         OR EXISTS (
           SELECT 1 FROM "Affair" a
-          WHERE a."politicianId" = p."id" AND a."publicationStatus" = 'PUBLISHED'
+          WHERE a."politicianId" = p."id" AND ${getPublishedAffairSqlWhere()}
         )
         OR EXISTS (
           SELECT 1 FROM "FactCheckMention" f WHERE f."politicianId" = p."id"
@@ -328,7 +329,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
 
   const lastAffairUpdate = await db.affair.findFirst({
     where: {
-      publicationStatus: "PUBLISHED",
+      ...getPublishedAffairWhere(),
       status: {
         in: [
           "CONDAMNATION_DEFINITIVE",
@@ -390,7 +391,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
 
   const [affairs, parties, partiesWithAffairs, elections] = await Promise.all([
     db.affair.findMany({
-      where: { publicationStatus: "PUBLISHED" },
+      where: getPublishedAffairWhere(),
       select: { slug: true, updatedAt: true },
       orderBy: { updatedAt: "desc" },
     }),
@@ -401,7 +402,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
     db.party.findMany({
       where: {
         slug: { not: null },
-        affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },
+        affairsAtTime: { some: getPublishedAffairWhere() },
       },
       select: { slug: true, updatedAt: true },
     }),

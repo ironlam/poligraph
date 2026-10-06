@@ -21,9 +21,14 @@ import {
   ATTRIBUTION_DEBT,
   checkCoverage,
   scanAffairAttribution,
+  FROZEN_DEBT_KEYS,
+  unfrozenDebtKeys,
   type CoverageEntry,
   type Finding,
 } from "./affair-attribution-scan";
+
+const debtKeys = (entries: readonly CoverageEntry[]): string[] =>
+  entries.map((entry) => `${entry.path}|${entry.snippet}`);
 
 const ROOT = process.cwd();
 
@@ -187,6 +192,22 @@ describe("checkCoverage", () => {
   });
 });
 
+describe("gel de la dette", () => {
+  const frozen = ["src/a.ts|ligne a", "src/b.ts|ligne b"];
+  const entry = (path: string, snippet: string): CoverageEntry => ({ path, snippet, count: 1 });
+
+  it("accepte une dette qui ne fait que rétrécir", () => {
+    expect(unfrozenDebtKeys([entry("src/a.ts", "ligne a")], frozen)).toEqual([]);
+  });
+
+  it("refuse une entrée nouvelle, même en échange d'une entrée retirée", () => {
+    const swapped = [entry("src/a.ts", "ligne a"), entry("src/c.ts", "ligne c")];
+    expect(swapped).toHaveLength(frozen.length);
+    expect(unfrozenDebtKeys(swapped, frozen)).toEqual(["src/c.ts|ligne c"]);
+    expect(debtKeys(swapped).sort()).not.toEqual([...frozen].sort());
+  });
+});
+
 /** Surfaces publiques scannées (brief tâche 1, correction de plan après revue). */
 const SCANNED_DIRECTORIES = [
   "src/app",
@@ -279,10 +300,12 @@ describe("dépôt", () => {
     expect(classified.map((e) => `${e.path}: ${e.snippet}`)).toEqual([]);
   });
 
-  it("la dette ne grossit pas", () => {
-    // Plafond du cliquet : à baisser quand une entrée sort, jamais à relever.
-    const occurrences = ATTRIBUTION_DEBT.reduce((sum, entry) => sum + entry.count, 0);
-    expect(occurrences).toBeLessThanOrEqual(16);
+  it("la dette ne grossit pas : identités figées et total exact", () => {
+    // Une entrée qui sort de ATTRIBUTION_DEBT sort de FROZEN_DEBT_KEYS et fait baisser ce total
+    // dans le même diff ; aucune n'y entre.
+    expect(debtKeys(ATTRIBUTION_DEBT).sort()).toEqual([...FROZEN_DEBT_KEYS].sort());
+    expect(unfrozenDebtKeys(ATTRIBUTION_DEBT)).toEqual([]);
+    expect(ATTRIBUTION_DEBT.reduce((sum, entry) => sum + entry.count, 0)).toBe(16);
   });
 
   it("chaque entrée de dette porte un responsable et une raison", () => {
