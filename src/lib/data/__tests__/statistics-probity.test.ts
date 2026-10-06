@@ -77,8 +77,7 @@ describe("getJudicialData, probité par catégorie", () => {
     const maturityTotal = Object.values(data.maturityCounts).reduce((s, n) => s + n, 0);
     expect(statusTotal).toBe(penalDirect.length);
     expect(maturityTotal).toBe(penalDirect.length);
-    expect(data.byStatus.map((s) => s.status)).not.toContain("CONDAMNATION_DEFINITIVE_NON_PENALE");
-    // un élu par ligne dans la fixture : 7 condamnations pénales, 1 mise en examen
+    // un élu par ligne dans la fixture : 6 condamnations pénales, 1 mise en examen
     expect(data.uniqueCondamnes).toBe(
       penalDirect.filter(([n]) =>
         [

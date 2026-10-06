@@ -53,7 +53,7 @@ const SUPER_CATEGORIES: { key: AffairSuperCategory; description: string }[] = [
   {
     key: "FINANCES",
     description:
-      "Infractions financières de droit commun : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie, financement illégal de campagne ou de parti.",
+      "Infractions financières : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie, ainsi que le financement illégal de campagne ou de parti.",
   },
   {
     key: "PERSONNES",
@@ -259,9 +259,8 @@ export default function MethodologiePage() {
                 Condamnations définitives (comptabilisées)
               </h4>
               <p>
-                Décision devenue définitive : les voies de recours sont épuisées. C{"'"}est le seul
-                chiffre présenté comme &laquo;&nbsp;condamnation définitive&nbsp;&raquo; sur le
-                site.
+                Décision devenue définitive : les voies de recours sont épuisées. Seul ce compteur
+                est présenté comme &laquo;&nbsp;condamnation définitive&nbsp;&raquo; sur le site.
               </p>
             </div>
             <div className="rounded-lg border border-red-200 dark:border-red-800 p-4">
@@ -270,8 +269,8 @@ export default function MethodologiePage() {
               </h4>
               <p>
                 Condamnation en première instance, en appel ou pendant un pourvoi en cassation. Elle
-                est affichée séparément et la présomption d{"'"}innocence s{"'"}applique jusqu{"'"}à
-                la décision définitive.
+                n{"'"}est jamais présentée comme définitive : la présomption d{"'"}innocence s{"'"}
+                applique jusqu{"'"}à la décision définitive.
               </p>
             </div>
             <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-4">
