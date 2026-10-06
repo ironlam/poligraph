@@ -103,6 +103,7 @@ const APPROVED_HELPERS = new Set([
   "getDefinitiveConvictionWhere",
   "getNonDefinitiveConvictionWhere",
   "getProbityConvictionBadgeWhere",
+  "getPoliticalFinancingBadgeWhere",
   "getMisEnCauseWhere",
   "getFavorableOutcomeWhere",
   "getDocumentaryAffairWhere",

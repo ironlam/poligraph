@@ -117,6 +117,37 @@ describe("PoliticianCard", () => {
     expect(screen.queryByText("Probité : 2 condamnations")).not.toBeInTheDocument();
   });
 
+  it("affiche le badge financement politique illégal, distinct de la probité", () => {
+    render(
+      <PoliticianCard
+        politician={{
+          ...mockPolitician,
+          hasPoliticalFinancingConviction: true,
+          _count: { affairs: 0 },
+        }}
+        showConvictionBadge
+      />
+    );
+    expect(screen.getByText("Financement politique illégal")).toHaveAttribute(
+      "title",
+      "Condamnation définitive pour financement politique illégal"
+    );
+    expect(screen.queryByText(/Probité/)).not.toBeInTheDocument();
+  });
+
+  it("masque le badge financement politique quand les badges sont désactivés", () => {
+    render(
+      <PoliticianCard
+        politician={{
+          ...mockPolitician,
+          hasPoliticalFinancingConviction: true,
+          _count: { affairs: 0 },
+        }}
+      />
+    );
+    expect(screen.queryByText("Financement politique illégal")).not.toBeInTheDocument();
+  });
+
   it("should render without party", () => {
     const independentPolitician = {
       ...mockPolitician,

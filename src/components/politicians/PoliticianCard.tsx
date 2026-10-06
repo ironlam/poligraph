@@ -39,6 +39,8 @@ export function PoliticianCard({
   const hasCritiqueAffair =
     ("hasCritiqueAffair" in politician && politician.hasCritiqueAffair) ||
     ("hasCritiqueAffair" in politician && politician.hasCritiqueAffair);
+  const hasPoliticalFinancingConviction =
+    "hasPoliticalFinancingConviction" in politician && politician.hasPoliticalFinancingConviction;
   const affairCount = "_count" in politician ? politician._count.affairs : 0;
   const isDeceased = politician.deathDate !== null;
   const missingDeclaration = "missingDeclaration" in politician && politician.missingDeclaration;
@@ -125,6 +127,15 @@ export function PoliticianCard({
                     className="text-xs text-destructive/80 border-destructive/40 bg-destructive/5"
                   >
                     Probité : {affairCount} condamnation{affairCount > 1 ? "s" : ""}
+                  </Badge>
+                )}
+                {showConvictionBadge && hasPoliticalFinancingConviction && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs text-orange-700 border-orange-300 bg-orange-50 dark:text-orange-400 dark:border-orange-800 dark:bg-orange-950/30"
+                    title="Condamnation définitive pour financement politique illégal"
+                  >
+                    Financement politique illégal
                   </Badge>
                 )}
                 {showMissingDeclarationBadge && missingDeclaration && (

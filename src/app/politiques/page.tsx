@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import {
+  getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
@@ -87,8 +88,9 @@ const POLITICIAN_INCLUDE = {
       affairs: { where: getProbityConvictionBadgeWhere() },
     },
   },
+  // Le badge probité se lit sur _count ; cette relation porte le badge financement politique.
   affairs: {
-    where: getProbityConvictionBadgeWhere(),
+    where: getPoliticalFinancingBadgeWhere(),
     select: { id: true },
     take: 1,
   },
@@ -209,7 +211,8 @@ async function queryPoliticians(
     const hasDeclaration = p.declarations.length > 0;
     return {
       ...p,
-      hasCritiqueAffair: p.affairs.length > 0,
+      hasCritiqueAffair: p._count.affairs > 0,
+      hasPoliticalFinancingConviction: p.affairs.length > 0,
       affairs: undefined,
       currentMandate: mandate,
       mandates: undefined,

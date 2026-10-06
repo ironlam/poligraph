@@ -383,6 +383,16 @@ export default async function PartyPage({ params }: PageProps) {
                           <span className="hidden sm:inline">probité</span>
                         </Link>
                       )}
+                      {politician.affairs.length > 0 && (
+                        <Link
+                          href={`/politiques/${politician.slug}/affaires`}
+                          className="shrink-0 px-2 py-1 text-xs font-medium text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/50 rounded-full hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors"
+                          title="Condamnation définitive pour financement politique illégal"
+                        >
+                          <span className="sm:hidden">Financement</span>
+                          <span className="hidden sm:inline">Financement politique illégal</span>
+                        </Link>
+                      )}
                     </div>
                   ))}
                 </div>
