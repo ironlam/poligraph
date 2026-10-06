@@ -19,6 +19,7 @@ import { formatDate, stripMarkdown } from "@/lib/utils";
 import { VICTIM_LISTING_INVOLVEMENTS } from "@/lib/affairs/public-filters";
 import type { AffairStatus, AffairCategory, Involvement } from "@/types";
 import { AffairCard } from "./AffairCard";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { CiteAnchor } from "@/components/ui/CiteAnchor";
 import { citeAnchorId } from "@/lib/cite";
 
@@ -126,7 +127,11 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                                   prefetch={false}
                                 >
                                   {linked.politician.fullName}
-                                </Link>
+                                </Link>{" "}
+                                en tant que{" "}
+                                {INVOLVEMENT_LABELS[
+                                  linked.involvement as Involvement
+                                ].toLowerCase()}
                                 {" - "}
                                 <Link
                                   href={`/affaires/${linked.slug}`}
@@ -211,10 +216,14 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                           </p>
                         )}
                       </div>
-                      <Badge variant="outline" className="text-xs self-start whitespace-nowrap">
-                        {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
-                      </Badge>
                     </div>
+                    {/* The status describes the person prosecuted, not this one: the
+                        third-party notice replaces the raw status badge. */}
+                    <AffairStatusNotice
+                      status={affair.status as AffairStatus}
+                      involvement={affair.involvement as Involvement}
+                      className="mt-2"
+                    />
                   </div>
                 ))}
               </div>
@@ -313,7 +322,9 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                           prefetch={false}
                         >
                           {linked.politician.fullName}
-                        </Link>
+                        </Link>{" "}
+                        en tant que{" "}
+                        {INVOLVEMENT_LABELS[linked.involvement as Involvement].toLowerCase()}
                         {" - "}
                         <Link
                           href={`/affaires/${linked.slug}`}

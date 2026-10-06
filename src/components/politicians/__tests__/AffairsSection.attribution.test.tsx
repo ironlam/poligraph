@@ -3,6 +3,7 @@ import { render, within } from "@testing-library/react";
 import { AffairsSection } from "@/components/politicians/AffairsSection";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CERTAINTY_COLORS, CERTAINTY_LABELS } from "@/config/certainty";
+import { AFFAIR_STATUS_LABELS } from "@/config/labels";
 import {
   ATTRIBUTION_ROWS,
   type AttributionRow,
@@ -114,5 +115,73 @@ describe("AffairsSection : un témoin n'est jamais présenté comme mis en cause
 
     const mention = entryOf(secondary, "Affaire où il est mentionné");
     expect(within(mention).getByText("Mentionné")).toBeTruthy();
+  });
+});
+
+describe("AffairsSection : rôle des personnes liées et statut d'un tiers", () => {
+  const linkedWitness = {
+    id: "liee",
+    slug: "affaire-liee",
+    title: "Affaire liée",
+    involvement: "INDIRECT",
+    publicationStatus: "PUBLISHED",
+    politician: { id: "autre", fullName: "Autre Élu", slug: "autre-elu" },
+  };
+
+  it.each([
+    ["sous un niveau de certitude", "directPenalConvicted"],
+    ["dans la section victime", "victimViolence"],
+  ] as const)("« Implique également » donne le rôle de la personne liée %s", (_where, key) => {
+    const { container } = render(
+      <TooltipProvider>
+        <AffairsSection
+          affairs={[{ ...affairFrom(key, "Affaire principale"), linkedBy: [linkedWitness] }]}
+          civility="M"
+        />
+      </TooltipProvider>
+    );
+
+    const sentence = [...container.querySelectorAll("p")].find((p) =>
+      p.textContent?.includes("Autre Élu")
+    )!;
+    expect(sentence.textContent).toContain(
+      "Implique également Autre Élu en tant que témoin/secondaire"
+    );
+  });
+
+  it("une mention n'affiche pas le statut brut de l'affaire mais l'encart du tiers", () => {
+    const { container } = renderProfile();
+    const accusedCard = container.querySelector<HTMLElement>("#affaires")!;
+    const secondary = [...container.querySelectorAll<HTMLElement>("details")].find(
+      (d) => !accusedCard.contains(d)
+    )!;
+
+    for (const title of ["Affaire où il est témoin", "Affaire où il est mentionné"]) {
+      const entry = entryOf(secondary, title);
+      expect(entry.textContent).not.toContain(AFFAIR_STATUS_LABELS.CONDAMNATION_DEFINITIVE);
+      expect(entry.querySelector("[role='note']")?.getAttribute("data-variant")).toBe(
+        "third_party"
+      );
+    }
+  });
+
+  it("un témoin d'une procédure en cours reçoit l'encart « non mis en cause »", () => {
+    const { container } = render(
+      <TooltipProvider>
+        <AffairsSection
+          affairs={[
+            {
+              ...affairFrom("indirectWitnessConvicted", "Affaire en cours"),
+              status: "INSTRUCTION",
+            },
+          ]}
+          civility="M"
+        />
+      </TooltipProvider>
+    );
+
+    const note = container.querySelector("[role='note']");
+    expect(note?.getAttribute("data-variant")).toBe("not_accused");
+    expect(container.textContent).not.toContain(AFFAIR_STATUS_LABELS.INSTRUCTION);
   });
 });
