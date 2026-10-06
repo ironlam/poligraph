@@ -100,6 +100,9 @@ const PUBLIC_FILTERS_MODULE = "@/lib/affairs/public-filters";
 const APPROVED_HELPERS = new Set([
   "getAdverseAffairWhere",
   "getConvictionOnlyWhere",
+  "getDefinitiveConvictionWhere",
+  "getNonDefinitiveConvictionWhere",
+  "getProbityConvictionBadgeWhere",
   "getMisEnCauseWhere",
   "getFavorableOutcomeWhere",
   "getDocumentaryAffairWhere",

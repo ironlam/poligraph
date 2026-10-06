@@ -67,6 +67,14 @@ export const CONDAMNATION_STATUSES: AffairStatus[] = Object.entries(STATUS_TO_MA
   .filter(([, tier]) => tier === "CONDAMNATION")
   .map(([status]) => status as AffairStatus);
 
+/** Condamnations définitives : seul statut qui peut s'afficher sous le libellé « définitive ». */
+export const DEFINITIVE_CONVICTION_STATUSES: AffairStatus[] = ["CONDAMNATION_DEFINITIVE"];
+
+/** Condamnations non définitives (première instance, appel, pourvoi), dérivées de Tier 1. */
+export const NON_DEFINITIVE_CONVICTION_STATUSES: AffairStatus[] = CONDAMNATION_STATUSES.filter(
+  (status) => !DEFINITIVE_CONVICTION_STATUSES.includes(status)
+);
+
 /** Tier 2 only - procédures validées par un juge, hors enquête préliminaire.
  *  À utiliser pour tout compteur présenté comme « mis en cause » ou
  *  « validé par un juge ». */

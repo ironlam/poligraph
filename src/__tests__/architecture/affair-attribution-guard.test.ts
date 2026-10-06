@@ -116,6 +116,16 @@ describe("scanAffairAttribution", () => {
     expect(findings).toEqual([]);
   });
 
+  it("accepte les helpers de condamnation définitive, non définitive et de badge probité", () => {
+    const findings = scanOne(
+      'import { getDefinitiveConvictionWhere, getNonDefinitiveConvictionWhere, getProbityConvictionBadgeWhere } from "@/lib/affairs/public-filters";\n' +
+        "export const a = () => db.affair.count({ where: getDefinitiveConvictionWhere() });\n" +
+        "export const b = () => db.affair.count({ where: getNonDefinitiveConvictionWhere() });\n" +
+        "export const c = () => db.affair.count({ where: getProbityConvictionBadgeWhere() });\n"
+    );
+    expect(findings).toEqual([]);
+  });
+
   it("refuse un helper de même nom qui ne vient pas de public-filters", () => {
     const findings = scanOne(
       'import { getAdverseAffairWhere } from "./local-filters";\n' +
