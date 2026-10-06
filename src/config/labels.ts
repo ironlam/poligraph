@@ -151,19 +151,6 @@ export const AFFAIR_STATUS_NEEDS_PRESUMPTION: Record<AffairStatus, boolean> = {
   CLASSEMENT_SANS_SUITE: false,
 };
 
-/**
- * Prisma `where` clause for conviction badges.
- * Use this everywhere a badge, count or highlight depends on "condamnation
- * définitive pour atteinte à la probité".  Single source of truth so the
- * filter never drifts between pages.
- */
-export const CONVICTION_BADGE_WHERE = {
-  publicationStatus: "PUBLISHED" as const,
-  involvement: "DIRECT" as const,
-  status: "CONDAMNATION_DEFINITIVE" as const,
-  severity: "CRITIQUE" as const,
-};
-
 export const AFFAIR_CATEGORY_LABELS: Record<AffairCategory, string> = {
   CORRUPTION: "Corruption",
   CORRUPTION_PASSIVE: "Corruption passive",

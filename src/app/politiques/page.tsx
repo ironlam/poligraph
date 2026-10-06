@@ -1,7 +1,10 @@
 import { Metadata } from "next";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import { CONVICTION_BADGE_WHERE } from "@/config/labels";
+import {
+  getProbityConvictionBadgeSql,
+  getProbityConvictionBadgeWhere,
+} from "@/lib/affairs/public-filters";
 import { type SortOption, type MandateFilter } from "@/components/politicians/FilterBar";
 import { MandateType } from "@/generated/prisma";
 import { SearchForm } from "@/components/politicians/SearchForm";
@@ -56,8 +59,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   };
 }
 
-// Badge triggers on severity=CRITIQUE (atteintes à la probité)
-// Replaced former CONVICTION_STATUSES = ["CONDAMNATION_DEFINITIVE"]
+// Badge probité : condamnation définitive dans une catégorie de probité (pas la gravité)
 
 // Mandate type groups
 const MANDATE_GROUPS: Record<string, MandateType[]> = {
@@ -82,11 +84,11 @@ const POLITICIAN_INCLUDE = {
   currentParty: true,
   _count: {
     select: {
-      affairs: { where: CONVICTION_BADGE_WHERE },
+      affairs: { where: getProbityConvictionBadgeWhere() },
     },
   },
   affairs: {
-    where: CONVICTION_BADGE_WHERE,
+    where: getProbityConvictionBadgeWhere(),
     select: { id: true },
     take: 1,
   },
@@ -154,7 +156,7 @@ async function queryPoliticians(
 
   if (withConviction) {
     conditions.push({
-      affairs: { some: CONVICTION_BADGE_WHERE },
+      affairs: { some: getProbityConvictionBadgeWhere() },
     });
   }
 
@@ -313,21 +315,17 @@ async function getFilterCounts() {
     ]
   >`
     SELECT
-      -- Politicians with critique affairs (CONDAMNATION_DEFINITIVE)
+      -- Politicians with a definitive probity conviction (same predicate as the badge)
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
           SELECT 1 FROM "Affair" a
           WHERE a."politicianId" = p.id
-            AND a.severity = 'CRITIQUE'
-            AND a.status = 'CONDAMNATION_DEFINITIVE'
-            AND a."publicationStatus" = 'PUBLISHED'
-            AND a.involvement = 'DIRECT'
+            AND ${getProbityConvictionBadgeSql("a")}
         )
       ) AS with_conviction,
-      -- Total critique affairs
-      (SELECT COUNT(*) FROM "Affair"
-        WHERE severity = 'CRITIQUE' AND status = 'CONDAMNATION_DEFINITIVE'
-          AND "publicationStatus" = 'PUBLISHED' AND involvement = 'DIRECT'
+      -- Total definitive probity convictions
+      (SELECT COUNT(*) FROM "Affair" a
+        WHERE ${getProbityConvictionBadgeSql("a")}
       ) AS total_affairs,
       -- Députés
       COUNT(DISTINCT p.id) FILTER (

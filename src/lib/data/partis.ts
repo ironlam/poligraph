@@ -3,7 +3,6 @@ import { cacheTag, cacheLife } from "next/cache";
 import { Prisma, PoliticalPosition as PoliticalPositionEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
-import { CONVICTION_BADGE_WHERE } from "@/config/labels";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
 import type { PoliticalPosition } from "@/types";
 import {
@@ -18,6 +17,7 @@ import {
   getAdverseInvolvementSql,
   getDocumentaryAffairWhere,
   getPublishedAffairSqlWhere,
+  getProbityConvictionBadgeWhere,
   getPublishedAffairWhere,
 } from "@/lib/affairs/public-filters";
 
@@ -40,7 +40,7 @@ export const getParty = cache(async function getParty(slug: string) {
           },
           _count: {
             select: {
-              affairs: { where: CONVICTION_BADGE_WHERE },
+              affairs: { where: getProbityConvictionBadgeWhere() },
             },
           },
         },

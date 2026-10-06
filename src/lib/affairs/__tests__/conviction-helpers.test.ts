@@ -7,10 +7,15 @@ import {
   DEFINITIVE_CONVICTION_STATUSES,
   NON_DEFINITIVE_CONVICTION_STATUSES,
 } from "@/config/judicial-maturity";
+import { getCategoriesForSuper } from "@/config/labels";
 import {
+  ADVERSE_INVOLVEMENTS,
+  ADVERSE_JURISDICTION_ORDER,
+  PUBLIC_AFFAIR_PUBLICATION_STATUS,
   getDefinitiveConvictionWhere,
   getFavorableOutcomeWhere,
   getNonDefinitiveConvictionWhere,
+  getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
 import { CONVICTION_ROWS } from "./fixtures/conviction-rows";
@@ -66,5 +71,48 @@ describe("helpers de condamnation", () => {
     const nonPenal = { ...CONVICTION_ROWS.relaxe, jurisdictionOrder: "FINANCIER" };
     expect(evaluateWhere(CONVICTION_ROWS.relaxe, getFavorableOutcomeWhere())).toBe(true);
     expect(evaluateWhere(nonPenal, getFavorableOutcomeWhere())).toBe(false);
+  });
+});
+
+describe("getProbityConvictionBadgeSql", () => {
+  it("lie exactement les constantes partagées, dans l'ordre du prédicat", () => {
+    const sql = getProbityConvictionBadgeSql("a");
+    expect(sql.values).toEqual([
+      PUBLIC_AFFAIR_PUBLICATION_STATUS,
+      ...ADVERSE_INVOLVEMENTS,
+      ADVERSE_JURISDICTION_ORDER,
+      ...DEFINITIVE_CONVICTION_STATUSES,
+      ...getCategoriesForSuper("PROBITE"),
+    ]);
+  });
+
+  it("filtre publication, implication, ordre, statut et catégorie, jamais la gravité", () => {
+    const { sql } = getProbityConvictionBadgeSql("a");
+    expect(sql).toContain('a."publicationStatus" =');
+    expect(sql).toContain("a.involvement IN (");
+    expect(sql).toContain('a."jurisdictionOrder" =');
+    expect(sql).toContain("a.status IN (");
+    expect(sql).toContain("a.category IN (");
+    expect(sql).not.toMatch(/severity/i);
+  });
+
+  it("donne le même verdict que getProbityConvictionBadgeWhere sur la fixture", () => {
+    const values = getProbityConvictionBadgeSql("a").values as unknown[];
+    const sqlKept = Object.entries(CONVICTION_ROWS)
+      .filter(
+        ([, r]) =>
+          values.includes(r.publicationStatus) &&
+          values.includes(r.involvement) &&
+          values.includes(r.jurisdictionOrder) &&
+          values.includes(r.status) &&
+          values.includes(r.category)
+      )
+      .map(([key]) => key)
+      .sort();
+    expect(sqlKept).toEqual(kept(getProbityConvictionBadgeWhere()));
+  });
+
+  it("refuse un alias non revu", () => {
+    expect(() => getProbityConvictionBadgeSql("b" as "a")).toThrow();
   });
 });

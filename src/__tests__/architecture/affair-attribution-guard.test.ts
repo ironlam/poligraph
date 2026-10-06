@@ -315,7 +315,7 @@ describe("dépôt", () => {
     // dans le même diff ; aucune n'y entre.
     expect(debtKeys(ATTRIBUTION_DEBT).sort()).toEqual([...FROZEN_DEBT_KEYS].sort());
     expect(unfrozenDebtKeys(ATTRIBUTION_DEBT)).toEqual([]);
-    expect(ATTRIBUTION_DEBT.reduce((sum, entry) => sum + entry.count, 0)).toBe(16);
+    expect(ATTRIBUTION_DEBT.reduce((sum, entry) => sum + entry.count, 0)).toBe(8);
   });
 
   it("chaque entrée de dette porte un responsable et une raison", () => {

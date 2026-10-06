@@ -123,6 +123,26 @@ export function getProbityConvictionBadgeWhere(): Prisma.AffairWhereInput {
   return { ...getDefinitiveConvictionWhere(), category: { in: getCategoriesForSuper("PROBITE") } };
 }
 
+/** SQL equivalent of getProbityConvictionBadgeWhere(), restricted to reviewed aliases. */
+export function getProbityConvictionBadgeSql(alias: "a" = "a"): Prisma.Sql {
+  if (alias !== "a") {
+    throw new Error(`Unsupported public affair SQL alias: ${alias}`);
+  }
+
+  const statuses = DEFINITIVE_CONVICTION_STATUSES.map(
+    (status) => Prisma.sql`${status}::"AffairStatus"`
+  );
+  const categories = getCategoriesForSuper("PROBITE").map(
+    (category) => Prisma.sql`${category}::"AffairCategory"`
+  );
+
+  return Prisma.sql`${getPublishedAffairSqlWhere(alias)}
+    AND ${getAdverseInvolvementSql(alias)}
+    AND a."jurisdictionOrder" = ${ADVERSE_JURISDICTION_ORDER}::"JurisdictionOrder"
+    AND a.status IN (${Prisma.join(statuses)})
+    AND a.category IN (${Prisma.join(categories)})`;
+}
+
 /** Mis en cause : procédures validées par un juge (Tier 2 strict). */
 export function getMisEnCauseWhere(): Prisma.AffairWhereInput {
   return {
