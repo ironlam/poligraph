@@ -376,11 +376,13 @@ export default async function PartyPage({ params }: PageProps) {
                       {politician._count.affairs > 0 && (
                         <Link
                           href={`/politiques/${politician.slug}/affaires`}
-                          className="shrink-0 flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950/50 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                          className="group shrink-0 inline-flex items-center min-h-11 min-w-11"
                           title={`${politician._count.affairs} condamnation(s) définitive(s) pour atteinte à la probité`}
                         >
-                          <span>{politician._count.affairs}</span>
-                          <span className="hidden sm:inline">probité</span>
+                          <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950/50 rounded-full group-hover:bg-red-200 dark:group-hover:bg-red-900/50 transition-colors">
+                            <span>{politician._count.affairs}</span>
+                            <span className="hidden sm:inline">probité</span>
+                          </span>
                         </Link>
                       )}
                       {politician.affairs.length > 0 && (
