@@ -33,7 +33,6 @@ import { getWeeklyRecap, type WeeklyRecapData } from "@/lib/data/recap";
 import { renderNewsletterHtml } from "../render-recap";
 
 const CERTAINTY_LABEL_VALUES = Object.values(CERTAINTY_LABELS);
-const WITNESS_ROLE = "Témoin/Secondaire";
 const witness = ATTRIBUTION_ROWS.find((r) => r.key === "indirectWitnessConvicted")!;
 const directConvicted = ATTRIBUTION_ROWS.find((r) => r.key === "directPenalConvicted")!;
 
@@ -46,14 +45,35 @@ function sqlText(call: unknown[]): string {
   return query.join("?");
 }
 
+function sqlValues(call: unknown[]): unknown[] {
+  const query = call[0] as { values?: unknown[] } | readonly string[];
+  return Array.isArray(query) ? call.slice(1) : ((query as { values?: unknown[] }).values ?? []);
+}
+
 /**
- * Émule la requête SQL des nouvelles affaires sur la fixture : même périmètre de lignes
- * (implication hors victime, plaignant, simple mention), et seulement les colonnes que la
- * requête sélectionne réellement.
+ * Filtre d'implication que la requête SQL applique réellement : la liste d'exclusion écrite à la
+ * main, ou le fragment partagé `a.involvement IN (...)` dont on relit les valeurs liées.
  */
-function affairRowsFor(sql: string): Record<string, unknown>[] {
-  const excluded = ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"];
-  return ATTRIBUTION_ROWS.filter((r) => !excluded.includes(r.involvement)).map((r) => {
+function involvementFilterFor(call: unknown[]): (row: AttributionRow) => boolean {
+  const sql = sqlText(call);
+  if (sql.includes("a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')")) {
+    return (r) => !["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"].includes(r.involvement);
+  }
+  const match = /a\.involvement IN \(([?,\s]+)\)/.exec(sql);
+  if (!match) throw new Error("filtre d'implication introuvable dans la requête des affaires");
+  const offset = (sql.slice(0, match.index).match(/\?/g) ?? []).length;
+  const size = (match[1]!.match(/\?/g) ?? []).length;
+  const allowed = sqlValues(call).slice(offset, offset + size);
+  return (r) => allowed.includes(r.involvement);
+}
+
+/**
+ * Émule la requête SQL des nouvelles affaires sur la fixture : même filtre d'implication que la
+ * requête, et seulement les colonnes qu'elle sélectionne réellement.
+ */
+function affairRowsFor(call: unknown[]): Record<string, unknown>[] {
+  const sql = sqlText(call);
+  return ATTRIBUTION_ROWS.filter(involvementFilterFor(call)).map((r) => {
     const row: Record<string, unknown> = {
       slug: slugOf(r),
       title: titleOf(r),
@@ -92,6 +112,16 @@ function pressArticleWithAllAffairs() {
   };
 }
 
+/** Restreint la requête des affaires à ces lignes de fixture, sans toucher à son filtre. */
+function onlyAffairRows(...rows: AttributionRow[]): void {
+  mocks.queryRaw.mockImplementation((...args: unknown[]) => {
+    const sql = sqlText(args);
+    if (!sql.includes('FROM "Affair" a')) return Promise.resolve([]);
+    const slugs = rows.map(slugOf);
+    return Promise.resolve(affairRowsFor(args).filter((r) => slugs.includes(r.slug as string)));
+  });
+}
+
 async function loadRecap(): Promise<WeeklyRecapData> {
   return getWeeklyRecap(new Date("2026-08-10T00:00:00.000Z"));
 }
@@ -116,7 +146,7 @@ describe("récap : la certitude ne s'attribue qu'au mis en cause", () => {
     vi.clearAllMocks();
     mocks.queryRaw.mockImplementation((...args: unknown[]) => {
       const sql = sqlText(args);
-      return Promise.resolve(sql.includes('FROM "Affair" a') ? affairRowsFor(sql) : []);
+      return Promise.resolve(sql.includes('FROM "Affair" a') ? affairRowsFor(args) : []);
     });
     mocks.scrutinFindMany.mockResolvedValue([]);
     mocks.factCheckGroupBy.mockResolvedValue([]);
@@ -127,19 +157,13 @@ describe("récap : la certitude ne s'attribue qu'au mis en cause", () => {
     mocks.platformUpdateFindMany.mockResolvedValue([]);
   });
 
-  it("nouvelles affaires : le témoin garde son rôle et n'a pas de certitude", async () => {
+  it("nouvelles affaires : le témoin n'y figure pas, le mis en cause garde sa certitude", async () => {
     const recap = await loadRecap();
-    const witnessEntry = recap.affairs.newAffairs.find((a) => a.slug === slugOf(witness))!;
     const directEntry = recap.affairs.newAffairs.find((a) => a.slug === slugOf(directConvicted))!;
 
-    expect(witnessEntry).toMatchObject({ involvement: "INDIRECT", certaintyLevel: null });
+    expect(recap.affairs.newAffairs.find((a) => a.slug === slugOf(witness))).toBeUndefined();
+    expect(recap.affairs.newAffairs.every((a) => a.involvement === "DIRECT")).toBe(true);
     expect(directEntry).toMatchObject({ involvement: "DIRECT", certaintyLevel: "ETABLI" });
-  });
-
-  it("le témoin ne passe pas devant les mis en cause dans la liste", async () => {
-    const recap = await loadRecap();
-    const levels = recap.affairs.newAffairs.map((a) => a.certaintyLevel);
-    expect(levels.indexOf(null)).toBe(levels.length - 1);
   });
 
   it("affaires liées aux articles : aucune certitude hors DIRECT", async () => {
@@ -157,54 +181,51 @@ describe("récap : la certitude ne s'attribue qu'au mis en cause", () => {
     }
   });
 
-  it("e-mail HTML : l'entrée du témoin affiche son rôle, aucun libellé de certitude", async () => {
+  it("e-mail HTML : aucune entrée ni ligne « Impliquant » pour le témoin", async () => {
+    onlyAffairRows(witness, directConvicted);
     const { html } = renderNewsletterHtml({
       recap: await loadRecap(),
       editorialIntro: "",
       politician: null,
     });
 
-    const witnessHtml = htmlEntryFor(html, titleOf(witness));
-    expect(witnessHtml).toContain(WITNESS_ROLE);
-    for (const label of CERTAINTY_LABEL_VALUES) expect(witnessHtml).not.toContain(label);
+    expect(() => htmlEntryFor(html, titleOf(witness))).toThrow();
+    expect(html).not.toContain(`Élu ${witness.key}`);
 
     const directHtml = htmlEntryFor(html, titleOf(directConvicted));
     expect(directHtml).toContain(CERTAINTY_LABELS.ETABLI);
+    expect(directHtml).toContain(`Élu ${directConvicted.key}`);
   });
 
-  it("e-mail texte brut : la ligne du témoin porte son rôle, aucun libellé de certitude", async () => {
+  it("e-mail texte brut : aucune ligne pour le témoin, ni « Impliquant » à son nom", async () => {
+    onlyAffairRows(witness, directConvicted);
     const { text } = renderNewsletterHtml({
       recap: await loadRecap(),
       editorialIntro: "",
       politician: null,
     });
 
-    const witnessLine = textLineFor(text, titleOf(witness));
-    expect(witnessLine).toBe(`[${WITNESS_ROLE}] ${titleOf(witness)}`);
-    for (const label of CERTAINTY_LABEL_VALUES) expect(witnessLine).not.toContain(label);
+    expect(() => textLineFor(text, titleOf(witness))).toThrow();
+    expect(text).not.toContain(`Impliquant Élu ${witness.key}`);
 
     expect(textLineFor(text, titleOf(directConvicted))).toBe(
       `[${CERTAINTY_LABELS.ETABLI}] ${titleOf(directConvicted)}`
     );
+    expect(text).toContain(`Impliquant Élu ${directConvicted.key}`);
   });
 
-  it("e-mail dont la seule affaire est un témoin condamné : aucun libellé de certitude nulle part", async () => {
-    mocks.queryRaw.mockImplementation((...args: unknown[]) => {
-      const sql = sqlText(args);
-      if (!sql.includes('FROM "Affair" a')) return Promise.resolve([]);
-      return Promise.resolve(affairRowsFor(sql).filter((r) => r.slug === slugOf(witness)));
-    });
+  it("semaine dont la seule affaire est un témoin condamné : ni rôle à charge, ni « Impliquant »", async () => {
+    onlyAffairRows(witness);
     mocks.pressArticleFindMany.mockResolvedValue([]);
     mocks.pressArticleCount.mockResolvedValue(0);
 
-    const { html, text } = renderNewsletterHtml({
-      recap: await loadRecap(),
-      editorialIntro: "",
-      politician: null,
-    });
+    const recap = await loadRecap();
+    expect(recap.affairs.newAffairs).toEqual([]);
 
+    const { html, text } = renderNewsletterHtml({ recap, editorialIntro: "", politician: null });
     for (const output of [html, text]) {
-      expect(output).toContain(WITNESS_ROLE);
+      expect(output).not.toContain(titleOf(witness));
+      expect(output).not.toContain("Impliquant");
       for (const label of CERTAINTY_LABEL_VALUES) expect(output).not.toContain(label);
     }
   });

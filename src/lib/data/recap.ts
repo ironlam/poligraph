@@ -18,7 +18,11 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
-import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  getAdverseInvolvementSql,
+  getPublishedAffairSqlWhere,
+  getPublishedAffairWhere,
+} from "@/lib/affairs/public-filters";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -439,7 +443,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
       JOIN "Politician" p ON a."politicianId" = p.id
       WHERE ${getPublishedAffairSqlWhere()}
         AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
-        AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')
+        AND ${getAdverseInvolvementSql("a")}
         AND COALESCE(a."startDate", a."factsDate", a."createdAt") >= ${weekStart}
         AND COALESCE(a."startDate", a."factsDate", a."createdAt") < ${weekEnd}
       ORDER BY CASE a.status
@@ -703,8 +707,9 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
   );
 
   // La certitude décrit l'issue pour la personne poursuivie : calculée ici, et seulement
-  // quand l'élu est cette personne. Le SQL trie par statut ; un témoin d'une affaire grave
-  // ne doit pas passer devant les mis en cause, d'où ce second tri (stable).
+  // quand l'élu est cette personne. Le SQL ne garde que les mis en cause (un témoin occuperait
+  // sinon une place du LIMIT sous la ligne « Impliquant X ») ; le second tri (stable) garde
+  // une ligne sans certitude en fin de liste si ce périmètre s'élargit.
   const newAffairs: WeeklyAffair[] = affairs
     .map((a) => ({
       slug: a.slug,

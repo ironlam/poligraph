@@ -868,14 +868,6 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason: "getAffairNeighborsList : précédent/suivant, même buildAffairWhere que le listing.",
   },
   {
-    path: "src/lib/data/recap.ts",
-    snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')",
-    count: 1,
-    nature: "documentary-facet",
-    reason:
-      "Récap hebdomadaire : lignes des affaires nouvelles où l'élu est mis en cause ou témoin ; chaque ligne affiche son rôle et la certitude passe par getAttributedCertaintyLevel (tâche 7).",
-  },
-  {
     path: "src/lib/politicians/profile-snapshot/request.ts",
     snippet: "{ affairs: { some: { partyAtTimeId: partyId } } },",
     count: 1,
