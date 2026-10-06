@@ -152,9 +152,9 @@ export function PoliticiansGrid({
                 e.key === "Enter" &&
                 navigateTo(buildUrl({ conviction: convictionFilter ? undefined : "true" }))
               }
-              title="Inclut les condamnations en 1ère instance (appel possible) et définitives"
+              title="Condamnation définitive pour atteinte à la probité"
             >
-              Avec décision de justice ({counts.withConviction})
+              Condamnés pour atteinte à la probité ({counts.withConviction})
             </Badge>
           </div>
         </div>

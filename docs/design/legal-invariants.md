@@ -108,7 +108,7 @@ Un agent ou un contributeur doit **refuser de produire** :
 3. Un visuel de partage qui montre un visage et un chef d'infraction sans le statut de la procédure.
 4. Une carte, un graphe ou un classement qui agrège « nombre d'affaires » toutes implications confondues : additionner un mis en cause et une victime n'a aucun sens et diffame la seconde.
 5. Un ton militant, ironique ou moralisateur, y compris dans un état vide ou un message d'erreur.
-6. Un badge « condamné » dérivé d'autre chose que `CONDAMNATION_DEFINITIVE` + `DIRECT` (voir `CONVICTION_BADGE_WHERE`, source de vérité unique).
+6. Un badge « condamné » dérivé d'autre chose que `getProbityConvictionBadgeWhere()` (ou sa forme SQL `getProbityConvictionBadgeSql()`), source de vérité unique : affaire publiée, `DIRECT`, ordre pénal, `CONDAMNATION_DEFINITIVE`, catégorie de probité.
 7. Une donnée judiciaire sur une personne qui n'est pas une personnalité publique au sens du produit.
 
 Dans ces cas, le bon comportement est de dire ce qui bloque et de proposer la version conforme, pas de livrer puis d'avertir.

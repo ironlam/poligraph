@@ -3,8 +3,6 @@ import { cacheTag, cacheLife } from "next/cache";
 import { Prisma, PoliticalPosition as PoliticalPositionEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
-import { CONVICTION_BADGE_WHERE } from "@/config/labels";
-import { getJudicialMaturity } from "@/config/judicial-maturity";
 import type { PoliticalPosition } from "@/types";
 import {
   getPublicPartySqlWhere,
@@ -18,12 +16,14 @@ import {
   getAdverseInvolvementSql,
   getDocumentaryAffairWhere,
   getPublishedAffairSqlWhere,
+  getProbityConvictionBadgeWhere,
   getPublishedAffairWhere,
 } from "@/lib/affairs/public-filters";
+import { summarizePartyCounts } from "@/lib/affairs/party-counts";
 
 export const getParty = cache(async function getParty(slug: string) {
   "use cache";
-  cacheTag(`party:${slug}`, "parties");
+  cacheTag(`party:${slug}`, "parties", "affairs");
   cacheLife("synced");
 
   const party = await db.party.findFirst({
@@ -40,7 +40,7 @@ export const getParty = cache(async function getParty(slug: string) {
           },
           _count: {
             select: {
-              affairs: { where: CONVICTION_BADGE_WHERE },
+              affairs: { where: getProbityConvictionBadgeWhere() },
             },
           },
         },
@@ -213,7 +213,7 @@ async function queryParties(
           jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
           politician: PUBLIC_POLITICIAN_WHERE,
         },
-        select: { id: true, status: true },
+        select: { id: true, status: true, involvement: true, jurisdictionOrder: true },
       },
       predecessor: {
         select: {
@@ -229,18 +229,7 @@ async function queryParties(
   return parties
     .filter((p) => p.slug)
     .map((party) => {
-      const directAffairs = party.affairsAtTime;
-      const condamnations = directAffairs.filter(
-        (a) => getJudicialMaturity(a.status) === "CONDAMNATION"
-      ).length;
-      const enCours = directAffairs.filter((a) => {
-        const m = getJudicialMaturity(a.status);
-        return m === "PROCEDURE_VALIDEE" || m === "ENQUETE";
-      }).length;
-      const closesSansCondamnation = directAffairs.filter(
-        (a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"
-      ).length;
-      const total = directAffairs.length;
+      const total = party.affairsAtTime.length;
 
       return {
         ...party,
@@ -248,7 +237,7 @@ async function queryParties(
           party.predecessor && party.predecessor._count.politicians > 0
             ? { shortName: party.predecessor.shortName, slug: party.predecessor.slug }
             : null,
-        affairCounts: { condamnations, enCours, closesSansCondamnation, total },
+        affairCounts: { ...summarizePartyCounts(party.affairsAtTime), total },
         affairsAtTime: undefined,
       };
     });
@@ -261,7 +250,7 @@ async function getPartiesFiltered(
   sort: SortOption = "members"
 ) {
   "use cache";
-  cacheTag("parties");
+  cacheTag("parties", "affairs");
   cacheLife("synced");
   return queryParties(undefined, position, status, sort);
 }
@@ -291,7 +280,7 @@ export async function getParties(
 
 export async function getPartiesStats() {
   "use cache";
-  cacheTag("parties");
+  cacheTag("parties", "affairs");
   cacheLife("synced");
 
   const [counts] = await db.$queryRaw<

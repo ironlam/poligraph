@@ -135,7 +135,8 @@ describe("données HTML publiques des partis", () => {
     expect(listing).toHaveLength(1);
     expect(listing[0]?.slug).toBe(publicParty.slug);
     expect(listing[0]?.affairCounts).toEqual({
-      condamnations: 0,
+      condamnationsDefinitives: 0,
+      condamnationsNonDefinitives: 0,
       enCours: 0,
       closesSansCondamnation: 0,
       total: 0,

@@ -1,9 +1,12 @@
 import { Prisma } from "@/generated/prisma";
 import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
+import { getCategoriesForSuper } from "@/config/labels";
 import { ADVERSE_INVOLVEMENTS, ADVERSE_JURISDICTION_ORDER } from "@/config/certainty";
 import {
   AGGREGATE_STATUSES,
   CONDAMNATION_STATUSES,
+  DEFINITIVE_CONVICTION_STATUSES,
+  NON_DEFINITIVE_CONVICTION_STATUSES,
   PROCEDURE_VALIDEE_STATUSES,
   CLOSE_STATUSES,
 } from "@/config/judicial-maturity";
@@ -95,7 +98,7 @@ export function getAdverseAffairWhere(): Prisma.AffairWhereInput {
   };
 }
 
-/** Condamnations uniquement (Tier 1). */
+/** Condamnations uniquement (Tier 1), tous degrés : ne jamais l'afficher sous un libellé « définitive ». */
 export function getConvictionOnlyWhere(): Prisma.AffairWhereInput {
   return {
     publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
@@ -103,6 +106,41 @@ export function getConvictionOnlyWhere(): Prisma.AffairWhereInput {
     jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     status: { in: CONDAMNATION_STATUSES },
   };
+}
+
+/** Condamnations définitives (pourvoi épuisé). */
+export function getDefinitiveConvictionWhere(): Prisma.AffairWhereInput {
+  return { ...getConvictionOnlyWhere(), status: { in: DEFINITIVE_CONVICTION_STATUSES } };
+}
+
+/** Condamnations non définitives : première instance, appel en cours, pourvoi en cassation. */
+export function getNonDefinitiveConvictionWhere(): Prisma.AffairWhereInput {
+  return { ...getConvictionOnlyWhere(), status: { in: NON_DEFINITIVE_CONVICTION_STATUSES } };
+}
+
+/** Badge probité : condamnation définitive dans une catégorie de probité, sans critère de gravité. */
+export function getProbityConvictionBadgeWhere(): Prisma.AffairWhereInput {
+  return { ...getDefinitiveConvictionWhere(), category: { in: getCategoriesForSuper("PROBITE") } };
+}
+
+/** SQL equivalent of getProbityConvictionBadgeWhere(), restricted to reviewed aliases. */
+export function getProbityConvictionBadgeSql(alias: "a" = "a"): Prisma.Sql {
+  if (alias !== "a") {
+    throw new Error(`Unsupported public affair SQL alias: ${alias}`);
+  }
+
+  const statuses = DEFINITIVE_CONVICTION_STATUSES.map(
+    (status) => Prisma.sql`${status}::"AffairStatus"`
+  );
+  const categories = getCategoriesForSuper("PROBITE").map(
+    (category) => Prisma.sql`${category}::"AffairCategory"`
+  );
+
+  return Prisma.sql`${getPublishedAffairSqlWhere(alias)}
+    AND ${getAdverseInvolvementSql(alias)}
+    AND a."jurisdictionOrder" = ${ADVERSE_JURISDICTION_ORDER}::"JurisdictionOrder"
+    AND a.status IN (${Prisma.join(statuses)})
+    AND a.category IN (${Prisma.join(categories)})`;
 }
 
 /** Mis en cause : procédures validées par un juge (Tier 2 strict). */
@@ -126,6 +164,7 @@ export function getFavorableOutcomeWhere(): Prisma.AffairWhereInput {
   return {
     publicationStatus: PUBLIC_AFFAIR_PUBLICATION_STATUS,
     involvement: { in: [...ADVERSE_INVOLVEMENTS] },
+    jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
     status: { in: CLOSE_STATUSES },
   };
 }

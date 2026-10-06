@@ -22,7 +22,7 @@ Tout le reste (statistiques, affaires, patrimoine, activité) vient après et n'
 - **[I1](../legal-invariants.md)** : aucun badge de certitude, de statut judiciaire ou de catégorie d'infraction dans le bloc d'identité. Une personne n'est pas une affaire. Les affaires ont leur propre section, avec leur bandeau de rôle.
 - **La féminisation est obligatoire.** `feminizeRole()` et `feminizePartyRole()` existent : les utiliser. Un titre au masculin par défaut est une erreur de données visible par la personne concernée.
 - **Un compteur d'affaires ne se met pas sur une carte d'identité** sans distinguer les implications et les statuts. « 3 affaires » additionne un mis en cause et deux mentions : c'est faux et diffamant ([I1](../legal-invariants.md), cas de refus 4).
-- Le badge de condamnation, s'il existe, dérive uniquement de `CONVICTION_BADGE_WHERE` (`DIRECT` + `CONDAMNATION_DEFINITIVE` + `CRITIQUE`). Aucune autre dérivation n'est admise.
+- Le badge de condamnation, s'il existe, dérive uniquement de `getProbityConvictionBadgeWhere()` (`src/lib/affairs/public-filters.ts`) : affaire publiée, `DIRECT`, ordre pénal, `CONDAMNATION_DEFINITIVE`, catégorie de probité. Aucun critère de gravité. Aucune autre dérivation n'est admise.
 - Les mandats antérieurs vont dans un `CollapsibleCard`, jamais dans l'en-tête.
 - La puce de parti cliquable fait 44 px minimum (voir [`ClickTarget`](./ClickTarget.md)). C'est le défaut le plus fréquent en mobile.
 - Sur une carte, la densité est modérée : photo, nom, mandat, territoire, parti. Cinq informations, pas huit.
@@ -46,5 +46,5 @@ Les couleurs de parti sont des hex de marque, non tokenisées par thème : elles
 ## État actuel dans le code
 
 - Surfaces : `src/components/politicians/PoliticianCard.tsx`, `src/app/politiques/[slug]/page.tsx`, `src/components/politicians/ProfileTabs.tsx`.
-- Contraste : `getContrastTextColor()`, `ensureContrast()` dans `src/config/party-colors.ts`. Libellés et féminisation : `MANDATE_TYPE_LABELS`, `feminizeRole()`, `feminizePartyRole()`, `CHAMBER_LABELS`, `CONVICTION_BADGE_WHERE` dans `src/config/labels.ts`.
+- Contraste : `getContrastTextColor()`, `ensureContrast()` dans `src/config/party-colors.ts`. Libellés et féminisation : `MANDATE_TYPE_LABELS`, `feminizeRole()`, `feminizePartyRole()`, `CHAMBER_LABELS` dans `src/config/labels.ts`.
 - Les couleurs de parti restent des hex de marque (non tokenisées par thème), conformément à la règle ci-dessus.

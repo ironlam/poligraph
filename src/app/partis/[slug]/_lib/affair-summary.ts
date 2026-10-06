@@ -1,10 +1,12 @@
 import {
+  ADVERSE_JURISDICTION_ORDER,
   getAttributedCertaintyLevel,
   CERTAINTY_SORT_ORDER,
   type CertaintyLevel,
 } from "@/config/certainty";
 import type { AffairStatus } from "@/types";
-import type { Involvement } from "@/generated/prisma";
+import type { Involvement, JurisdictionOrder } from "@/generated/prisma";
+import { summarizePartyCounts, type PartyCounts } from "@/lib/affairs/party-counts";
 
 /**
  * Counting a party's judicial record.
@@ -19,20 +21,20 @@ import type { Involvement } from "@/generated/prisma";
 export interface CountableAffair {
   status: string;
   involvement: Involvement;
+  jurisdictionOrder: JurisdictionOrder;
 }
 
-export interface PartyAffairSummary<T extends CountableAffair> {
-  /** Affairs where the member is the accused. Everything below counts only these. */
+/** Les quatre compteurs sont ceux de la liste /partis (`summarizePartyCounts`). */
+export interface PartyAffairSummary<T extends CountableAffair> extends PartyCounts {
+  /** Affaires pénales où le membre est la personne mise en cause. */
   direct: Array<T & { certainty: CertaintyLevel }>;
-  condamnations: number;
-  enCours: number;
-  closesSansCondamnation: number;
 }
 
 export function summarizePartyAffairs<T extends CountableAffair>(
   affairs: readonly T[]
 ): PartyAffairSummary<T> {
   const direct = affairs.flatMap((affair) => {
+    if (affair.jurisdictionOrder !== ADVERSE_JURISDICTION_ORDER) return [];
     const certainty = getAttributedCertaintyLevel({
       involvement: affair.involvement,
       status: affair.status as AffairStatus,
@@ -40,17 +42,13 @@ export function summarizePartyAffairs<T extends CountableAffair>(
     return certainty === null ? [] : [{ ...affair, certainty }];
   });
 
-  // Same tiers as the judicial maturity: ETABLI and PRONONCE are the convictions,
-  // EN_COURS the judge-validated procedures and preliminary inquiries,
-  // CLOS_FAVORABLE the outcomes without conviction. CLOS_SANS_CHARGE counts in none.
-  const count = (...levels: CertaintyLevel[]) =>
-    direct.filter((affair) => levels.includes(affair.certainty)).length;
-
+  // Mêmes compteurs que la liste : une enquête préliminaire ou une instruction close sans mise
+  // en examen reste dans `direct` (et dans la liste des affaires) sans entrer dans aucun total.
   return {
     direct,
-    condamnations: count("ETABLI", "PRONONCE"),
-    enCours: count("EN_COURS"),
-    closesSansCondamnation: count("CLOS_FAVORABLE"),
+    ...summarizePartyCounts(
+      affairs.map((affair) => ({ ...affair, status: affair.status as AffairStatus }))
+    ),
   };
 }
 

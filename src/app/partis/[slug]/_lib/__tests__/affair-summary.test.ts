@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { Involvement } from "@/generated/prisma";
+import type { Involvement, JurisdictionOrder } from "@/generated/prisma";
 import { AffairStatus } from "@/generated/prisma";
 import { getJudicialMaturity } from "@/config/judicial-maturity";
+import { CONVICTION_ROWS } from "@/lib/affairs/__tests__/fixtures/conviction-rows";
 import { byCertainty, countByCertainty, summarizePartyAffairs } from "../affair-summary";
 
-function affair(status: string, involvement: Involvement = "DIRECT") {
-  return { status, involvement };
+function affair(
+  status: string,
+  involvement: Involvement = "DIRECT",
+  jurisdictionOrder: JurisdictionOrder = "PENAL"
+) {
+  return { status, involvement, jurisdictionOrder };
 }
 
 describe("summarizePartyAffairs", () => {
@@ -15,18 +20,20 @@ describe("summarizePartyAffairs", () => {
       const maturity = getJudicialMaturity(status);
       const summary = summarizePartyAffairs([affair(status)]);
 
-      expect(summary.condamnations).toBe(maturity === "CONDAMNATION" ? 1 : 0);
-      expect(summary.enCours).toBe(
-        maturity === "PROCEDURE_VALIDEE" || maturity === "ENQUETE" ? 1 : 0
+      expect(summary.condamnationsDefinitives).toBe(status === "CONDAMNATION_DEFINITIVE" ? 1 : 0);
+      expect(summary.condamnationsNonDefinitives).toBe(
+        maturity === "CONDAMNATION" && status !== "CONDAMNATION_DEFINITIVE" ? 1 : 0
       );
+      expect(summary.enCours).toBe(maturity === "PROCEDURE_VALIDEE" ? 1 : 0);
       expect(summary.closesSansCondamnation).toBe(maturity === "CLOSE_SANS_CONDAMNATION" ? 1 : 0);
     }
   );
 
-  it("counts a definitive conviction as a condamnation", () => {
+  it("counts a definitive conviction as a condamnation définitive", () => {
     const summary = summarizePartyAffairs([affair("CONDAMNATION_DEFINITIVE")]);
 
-    expect(summary.condamnations).toBe(1);
+    expect(summary.condamnationsDefinitives).toBe(1);
+    expect(summary.condamnationsNonDefinitives).toBe(0);
     expect(summary.enCours).toBe(0);
     expect(summary.direct[0]?.certainty).toBe("ETABLI");
   });
@@ -40,7 +47,7 @@ describe("summarizePartyAffairs", () => {
     ]);
 
     expect(summary.direct).toEqual([]);
-    expect(summary.condamnations).toBe(0);
+    expect(summary.condamnationsDefinitives).toBe(0);
   });
 
   it("ne compte pas un témoin (INDIRECT) parmi les condamnations", () => {
@@ -49,17 +56,18 @@ describe("summarizePartyAffairs", () => {
       affair("CONDAMNATION_DEFINITIVE", "INDIRECT"),
     ]);
 
-    expect(summary.condamnations).toBe(1);
+    expect(summary.condamnationsDefinitives).toBe(1);
   });
 
-  it("counts an open investigation as en cours, not as a conviction", () => {
+  it("counts a mise en examen as en cours, never a preliminary inquiry", () => {
     const summary = summarizePartyAffairs([
       affair("ENQUETE_PRELIMINAIRE"),
       affair("MISE_EN_EXAMEN"),
     ]);
 
-    expect(summary.condamnations).toBe(0);
-    expect(summary.enCours).toBe(2);
+    expect(summary.condamnationsDefinitives).toBe(0);
+    expect(summary.condamnationsNonDefinitives).toBe(0);
+    expect(summary.enCours).toBe(1);
   });
 
   it.each(["RELAXE", "ACQUITTEMENT", "NON_LIEU", "PRESCRIPTION", "CLASSEMENT_SANS_SUITE"])(
@@ -67,7 +75,7 @@ describe("summarizePartyAffairs", () => {
     (status) => {
       const summary = summarizePartyAffairs([affair(status)]);
 
-      expect(summary.condamnations).toBe(0);
+      expect(summary.condamnationsDefinitives).toBe(0);
       expect(summary.enCours).toBe(0);
       expect(summary.closesSansCondamnation).toBe(1);
     }
@@ -82,20 +90,44 @@ describe("summarizePartyAffairs", () => {
     const summary = summarizePartyAffairs([affair("INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN")]);
 
     expect(summary.direct).toHaveLength(1);
-    expect(summary.condamnations).toBe(0);
+    expect(summary.condamnationsDefinitives).toBe(0);
+    expect(summary.condamnationsNonDefinitives).toBe(0);
     expect(summary.enCours).toBe(0);
     expect(summary.closesSansCondamnation).toBe(0);
   });
 
-  it("counts an appeal in progress as a conviction, because one was pronounced", () => {
+  it("counts an appeal in progress as a non-definitive conviction, never a definitive one", () => {
     const summary = summarizePartyAffairs([affair("APPEL_EN_COURS")]);
-    expect(summary.condamnations).toBe(1);
+    expect(summary.condamnationsNonDefinitives).toBe(1);
+    expect(summary.condamnationsDefinitives).toBe(0);
+  });
+
+  it("keeps a non-penal conviction (Cour des comptes) out of direct and of every counter", () => {
+    const summary = summarizePartyAffairs([
+      affair("CONDAMNATION_DEFINITIVE", "DIRECT", "FINANCIER"),
+    ]);
+
+    expect(summary.direct).toEqual([]);
+    expect(summary.condamnationsDefinitives).toBe(0);
+    expect(summary.condamnationsNonDefinitives).toBe(0);
+  });
+
+  it("gives the four counters of the reference rows", () => {
+    const summary = summarizePartyAffairs(Object.values(CONVICTION_ROWS));
+
+    expect(summary).toMatchObject({
+      condamnationsDefinitives: 3,
+      condamnationsNonDefinitives: 3,
+      enCours: 1,
+      closesSansCondamnation: 1,
+    });
   });
 
   it("returns zeroes for an empty list", () => {
     expect(summarizePartyAffairs([])).toEqual({
       direct: [],
-      condamnations: 0,
+      condamnationsDefinitives: 0,
+      condamnationsNonDefinitives: 0,
       enCours: 0,
       closesSansCondamnation: 0,
     });

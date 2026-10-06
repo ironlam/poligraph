@@ -100,12 +100,16 @@ const PUBLIC_FILTERS_MODULE = "@/lib/affairs/public-filters";
 const APPROVED_HELPERS = new Set([
   "getAdverseAffairWhere",
   "getConvictionOnlyWhere",
+  "getDefinitiveConvictionWhere",
+  "getNonDefinitiveConvictionWhere",
+  "getProbityConvictionBadgeWhere",
   "getMisEnCauseWhere",
   "getFavorableOutcomeWhere",
   "getDocumentaryAffairWhere",
   "getPublishedAffairWhere",
   "getAdverseInvolvementSql",
   "getPublishedAffairSqlWhere",
+  "getProbityConvictionBadgeSql",
 ]);
 
 const SINK_METHODS = new Set(["count", "groupBy", "findMany", "findFirst", "aggregate"]);
@@ -650,28 +654,6 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason: "getHemicycleData : affaires déjà filtrées par getAdverseAffairWhere().",
   },
   {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CONDAMNATION"',
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason:
-      "queryParties : affairsAtTime déjà limité à DIRECT et à l'ordre pénal par getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS).",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "const m = getJudicialMaturity(a.status);",
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: '(a) => getJudicialMaturity(a.status) === "CLOSE_SANS_CONDAMNATION"',
-    count: 1,
-    nature: "adverse-prefiltered",
-    reason: "queryParties : même liste affairsAtTime, DIRECT et ordre pénal.",
-  },
-  {
     path: "src/lib/data/statistics.ts",
     snippet: "const tier = getJudicialMaturity(a.status);",
     count: 1,
@@ -893,65 +875,6 @@ export const ALLOWED: AllowedOccurrence[] = [
  */
 export const ATTRIBUTION_DEBT: DebtEntry[] = [
   {
-    path: "src/app/politiques/page.tsx",
-    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
-    count: 1,
-    owner: "PR B",
-    reason:
-      "Badge de probité du listing : CONVICTION_BADGE_WHERE (DIRECT) ne limite pas à l'ordre pénal ; la PR B l'aligne sur le prédicat partagé.",
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "affairs: {",
-    count: 1,
-    owner: "PR B",
-    reason: "Même badge de probité (include du listing).",
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "affairs: { some: CONVICTION_BADGE_WHERE },",
-    count: 1,
-    owner: "PR B",
-    reason: "Filtre « condamnés » du listing, même prédicat de badge.",
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "const [counts] = await db.$queryRaw<",
-    count: 1,
-    owner: "PR B",
-    reason:
-      "Compteurs de filtre du listing : condamnations définitives écrites en SQL sans prédicat partagé ni ordre pénal.",
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "AND a.involvement = 'DIRECT'",
-    count: 1,
-    owner: "PR B",
-    reason: "Même compteur « avec condamnation » (DIRECT écrit à la main).",
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
-    count: 1,
-    owner: "PR B",
-    reason: "Même total de condamnations définitives (DIRECT écrit à la main).",
-  },
-  {
-    path: "src/config/labels.ts",
-    snippet: 'involvement: "DIRECT" as const,',
-    count: 1,
-    owner: "PR B",
-    reason:
-      "CONVICTION_BADGE_WHERE : prédicat du badge de probité écrit à la main, sans ordre pénal.",
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
-    count: 1,
-    owner: "PR B",
-    reason: "Compte des élus condamnés d'un parti, même prédicat de badge.",
-  },
-  {
     path: "src/config/labels.ts",
     snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"],',
     count: 1,
@@ -1018,18 +941,10 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
  * une entrée qui sort de ATTRIBUTION_DEBT sort aussi d'ici dans le même diff.
  */
 export const FROZEN_DEBT_KEYS: readonly string[] = [
-  "src/app/politiques/page.tsx|AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
-  "src/app/politiques/page.tsx|AND a.involvement = 'DIRECT'",
-  "src/app/politiques/page.tsx|affairs: {",
-  "src/app/politiques/page.tsx|affairs: { some: CONVICTION_BADGE_WHERE },",
-  "src/app/politiques/page.tsx|affairs: { where: CONVICTION_BADGE_WHERE },",
-  "src/app/politiques/page.tsx|const [counts] = await db.$queryRaw<",
   'src/config/labels.ts|"mise-en-cause": ["DIRECT", "INDIRECT"],',
-  'src/config/labels.ts|involvement: "DIRECT" as const,',
   'src/config/labels.ts|mentionne: ["MENTIONED_ONLY"],',
   'src/config/labels.ts|victime: ["VICTIM", "PLAINTIFF"],',
   "src/lib/affairs/blocked-affairs.ts|const affairs = await db.affair.findMany({",
-  "src/lib/data/partis.ts|affairs: { where: CONVICTION_BADGE_WHERE },",
   "src/lib/data/pipelines.ts|entitiesCreated7d = await db.affair.count({",
   "src/lib/data/slapp.ts|db.affair.count({",
   "src/lib/data/slapp.ts|db.affair.groupBy({",

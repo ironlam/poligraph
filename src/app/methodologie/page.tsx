@@ -48,12 +48,12 @@ const SUPER_CATEGORIES: { key: AffairSuperCategory; description: string }[] = [
   {
     key: "PROBITE",
     description:
-      "Infractions liées à l'exercice d'un mandat ou d'une fonction publique : corruption, détournement de fonds publics, prise illégale d'intérêts, financement illégal de campagne. Ces infractions sont spécifiques aux responsables publics (inspiré de la classification Sapin II).",
+      "Infractions liées à l'exercice d'un mandat ou d'une fonction publique : corruption, trafic d'influence, prise illégale d'intérêts, favoritisme, détournement de fonds publics, emplois fictifs, conflits d'intérêts. Ces infractions sont spécifiques aux responsables publics (inspiré de la classification Sapin II).",
   },
   {
     key: "FINANCES",
     description:
-      "Infractions financières de droit commun : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie.",
+      "Infractions financières : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie, ainsi que le financement illégal de campagne ou de parti.",
   },
   {
     key: "PERSONNES",
@@ -255,11 +255,22 @@ export default function MethodologiePage() {
           </p>
           <div className="space-y-3 text-sm text-muted-foreground">
             <div className="rounded-lg border border-red-200 dark:border-red-800 p-4">
-              <h4 className="font-medium text-foreground mb-1">Condamnations (comptabilisées)</h4>
+              <h4 className="font-medium text-foreground mb-1">
+                Condamnations définitives (comptabilisées)
+              </h4>
               <p>
-                Condamnation définitive, condamnation en première instance ou appel en cours. Ce
-                sont les affaires où un tribunal a prononcé une peine. Elles forment le chiffre
-                principal affiché dans les compteurs.
+                Décision devenue définitive : les voies de recours sont épuisées. Seul ce compteur
+                est présenté comme &laquo;&nbsp;condamnation définitive&nbsp;&raquo; sur le site.
+              </p>
+            </div>
+            <div className="rounded-lg border border-red-200 dark:border-red-800 p-4">
+              <h4 className="font-medium text-foreground mb-1">
+                Condamnations non définitives (comptabilisées à part)
+              </h4>
+              <p>
+                Condamnation en première instance, en appel ou pendant un pourvoi en cassation. Elle
+                n{"'"}est jamais présentée comme définitive : la présomption d{"'"}innocence s{"'"}
+                applique jusqu{"'"}à la décision définitive.
               </p>
             </div>
             <div className="rounded-lg border border-amber-200 dark:border-amber-800 p-4">

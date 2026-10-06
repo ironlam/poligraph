@@ -407,7 +407,7 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                     Élus condamnés ({condamnationPoliticians.length})
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Condamnation définitive ou en première instance
+                    Condamnation définitive ou non définitive (première instance, appel ou pourvoi)
                   </p>
                 </CardHeader>
                 <CardContent>
