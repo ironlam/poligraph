@@ -5,12 +5,14 @@ import { factcheckStatsService } from "@/services/factcheckStats";
 import {
   CATEGORY_TO_SUPER,
   AFFAIR_CATEGORY_LABELS,
+  getCategoriesForSuper,
   type AffairSuperCategory,
 } from "@/config/labels";
 import { getJudicialMaturity, type JudicialMaturity } from "@/config/judicial-maturity";
 import {
   ADVERSE_INVOLVEMENTS,
   ADVERSE_JURISDICTION_ORDER,
+  getAdverseAffairWhere,
   getConvictionOnlyWhere,
   getDocumentaryAffairWhere,
   getMisEnCauseWhere,
@@ -32,8 +34,8 @@ export async function getJudicialData() {
     jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
   };
 
-  // Single batch: maturity counts + status breakdown + category + critique by party
-  const [byStatusRaw, byCategoryRaw, critiqueAffairs, condamnesPoliticians, misEnCausePoliticians] =
+  // Single batch: maturity counts + status breakdown + category + probité by party
+  const [byStatusRaw, byCategoryRaw, probityAffairs, condamnesPoliticians, misEnCausePoliticians] =
     await Promise.all([
       db.affair.groupBy({
         by: ["status"],
@@ -48,7 +50,11 @@ export async function getJudicialData() {
         orderBy: { _count: { category: "desc" } },
       }),
       db.affair.findMany({
-        where: { ...directFilter, severity: "CRITIQUE" },
+        // Probité : la catégorie de l'infraction décide, jamais la gravité.
+        where: {
+          ...getAdverseAffairWhere(),
+          category: { in: getCategoriesForSuper("PROBITE") },
+        },
         select: {
           category: true,
           politician: {
@@ -109,13 +115,13 @@ export async function getJudicialData() {
       count,
     }));
 
-  // Aggregate critique affairs: category → party → count
+  // Aggregate probité affairs: category → party → count
   const critiqueByCategoryParty = new Map<
     string,
     Map<string, { count: number; color: string | null; slug: string | null }>
   >();
 
-  for (const affair of critiqueAffairs) {
+  for (const affair of probityAffairs) {
     const party = affair.politician.currentParty;
     if (!party) continue;
     const partyKey = party.name || party.shortName || "Autre";
