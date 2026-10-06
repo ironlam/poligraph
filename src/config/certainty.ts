@@ -8,6 +8,12 @@ import type { AffairStatus, Involvement } from "@/generated/prisma";
  */
 export const ADVERSE_INVOLVEMENTS = ["DIRECT"] as const;
 
+/**
+ * Seul ordre de juridiction compté dans les agrégats à charge. Même raison d'être ici
+ * qu'ADVERSE_INVOLVEMENTS : un composant client peut l'importer sans tirer Prisma.
+ */
+export const ADVERSE_JURISDICTION_ORDER = "PENAL" as const;
+
 export type CertaintyLevel =
   | "ETABLI"
   | "PRONONCE"

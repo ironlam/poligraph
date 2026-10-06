@@ -17,7 +17,7 @@ import {
 } from "@/config/labels";
 import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { getJudicialMaturity, type JudicialMaturity } from "@/config/judicial-maturity";
-import { isAccusedInvolvement } from "@/config/certainty";
+import { ADVERSE_JURISDICTION_ORDER, isAccusedInvolvement } from "@/config/certainty";
 import type { AffairCategory, AffairStatus, Involvement } from "@/types";
 
 const MATURITY_TAB_LABELS: Record<string, string> = {
@@ -64,13 +64,13 @@ export interface PartyAffair {
  * Stage tab of an affair, or null when the member is not the person prosecuted
  * before a criminal court. Same attribution as the counters above the list
  * (DIRECT, penal order): a witness, a victim, a mention or a non-criminal
- * sanction only appears under "Toutes". The penal order is written here rather
- * than imported from public-filters, which would pull Prisma into this client
- * component.
+ * sanction only appears under "Toutes". The penal order comes from
+ * `@/config/certainty` rather than public-filters, which would pull Prisma into
+ * this client component.
  */
 function attributedMaturity(affair: PartyAffair): JudicialMaturity | null {
   if (!isAccusedInvolvement(affair.involvement as Involvement)) return null;
-  if (affair.jurisdictionOrder !== "PENAL") return null;
+  if (affair.jurisdictionOrder !== ADVERSE_JURISDICTION_ORDER) return null;
   return getJudicialMaturity(affair.status as AffairStatus);
 }
 

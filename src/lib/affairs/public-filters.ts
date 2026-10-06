@@ -1,6 +1,6 @@
 import { Prisma } from "@/generated/prisma";
 import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
-import { ADVERSE_INVOLVEMENTS } from "@/config/certainty";
+import { ADVERSE_INVOLVEMENTS, ADVERSE_JURISDICTION_ORDER } from "@/config/certainty";
 import {
   AGGREGATE_STATUSES,
   CONDAMNATION_STATUSES,
@@ -27,7 +27,7 @@ import {
  */
 
 /** Seul ordre de juridiction compté dans les agrégats à charge. */
-export const ADVERSE_JURISDICTION_ORDER = "PENAL" as const;
+export { ADVERSE_JURISDICTION_ORDER };
 
 /** Involvements comptés dans les agrégats à charge : DIRECT seul, jamais INDIRECT (témoin). */
 export { ADVERSE_INVOLVEMENTS };
