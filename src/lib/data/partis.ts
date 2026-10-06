@@ -16,6 +16,7 @@ import {
   getAdverseInvolvementSql,
   getDocumentaryAffairWhere,
   getPublishedAffairSqlWhere,
+  getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeWhere,
   getPublishedAffairWhere,
 } from "@/lib/affairs/public-filters";
@@ -42,6 +43,11 @@ export const getParty = cache(async function getParty(slug: string) {
             select: {
               affairs: { where: getProbityConvictionBadgeWhere() },
             },
+          },
+          affairs: {
+            where: getPoliticalFinancingBadgeWhere(),
+            select: { id: true },
+            take: 1,
           },
         },
       },

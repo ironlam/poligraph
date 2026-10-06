@@ -38,6 +38,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { getParty } from "@/lib/data/partis";
 import * as labels from "@/config/labels";
 import {
+  getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
@@ -79,9 +80,35 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
     await renderPage({});
     const { include } = mocks.politicianFindMany.mock.calls[0]![0];
 
-    expect(kept(include.affairs.where)).toEqual(["definitiveCorruptionGrave"]);
     expect(kept(include._count.select.affairs.where)).toEqual(["definitiveCorruptionGrave"]);
-    expect(include.affairs.where).toEqual(getProbityConvictionBadgeWhere());
+    expect(include._count.select.affairs.where).toEqual(getProbityConvictionBadgeWhere());
+  });
+
+  it("le badge financement politique ne retient que le financement illégal définitif", async () => {
+    await renderPage({});
+    const { include } = mocks.politicianFindMany.mock.calls[0]![0];
+
+    expect(include.affairs.where).toEqual(getPoliticalFinancingBadgeWhere());
+    expect(kept(include.affairs.where)).toEqual(["definitiveCampaignFinancing"]);
+  });
+
+  it("dérive chaque badge de sa propre relation", async () => {
+    mocks.politicianFindMany.mockResolvedValue([
+      {
+        id: "p1",
+        _count: { affairs: 0 },
+        affairs: [{ id: "a1" }],
+        mandates: [],
+        declarations: [],
+        partyHistory: [],
+      },
+    ]);
+    mocks.politicianCount.mockResolvedValue(1);
+    const tree = await renderPage({});
+    const json = JSON.stringify(tree, (_k, v) => (typeof v === "bigint" ? Number(v) : v));
+
+    expect(json).toContain('"hasCritiqueAffair":false');
+    expect(json).toContain('"hasPoliticalFinancingConviction":true');
   });
 
   it("le filtre « condamnés » ne retient que la corruption définitive", async () => {
@@ -156,6 +183,15 @@ describe("/partis/[slug] : compte des élus condamnés pour probité", () => {
 
     expect(where).toEqual(getProbityConvictionBadgeWhere());
     expect(kept(where)).toEqual(["definitiveCorruptionGrave"]);
+  });
+
+  it("la relation affairs des membres porte le badge financement politique", async () => {
+    await getParty("parti-test");
+    const args = mocks.partyFindFirst.mock.calls[0]![0];
+    const where = args.include.politicians.include.affairs.where;
+
+    expect(where).toEqual(getPoliticalFinancingBadgeWhere());
+    expect(kept(where)).toEqual(["definitiveCampaignFinancing"]);
   });
 });
 

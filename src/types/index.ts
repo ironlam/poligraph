@@ -130,6 +130,7 @@ export type PoliticianWithPartyAndCounts = Politician & {
   };
   hasConviction?: boolean; // legacy — use hasCritiqueAffair
   hasCritiqueAffair?: boolean;
+  hasPoliticalFinancingConviction?: boolean;
   isDeceased?: boolean;
   /** True if active parliamentarian with no published DI */
   missingDeclaration?: boolean;

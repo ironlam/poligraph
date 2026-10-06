@@ -1,5 +1,10 @@
 import { Prisma } from "@/generated/prisma";
-import type { AffairStatus, Involvement, JurisdictionOrder } from "@/generated/prisma";
+import type {
+  AffairCategory,
+  AffairStatus,
+  Involvement,
+  JurisdictionOrder,
+} from "@/generated/prisma";
 import { getCategoriesForSuper } from "@/config/labels";
 import { ADVERSE_INVOLVEMENTS, ADVERSE_JURISDICTION_ORDER } from "@/config/certainty";
 import {
@@ -121,6 +126,24 @@ export function getNonDefinitiveConvictionWhere(): Prisma.AffairWhereInput {
 /** Badge probité : condamnation définitive dans une catégorie de probité, sans critère de gravité. */
 export function getProbityConvictionBadgeWhere(): Prisma.AffairWhereInput {
   return { ...getDefinitiveConvictionWhere(), category: { in: getCategoriesForSuper("PROBITE") } };
+}
+
+/**
+ * Financement politique illégal (campagne ou parti) : badge distinct de la probité, qui s'en
+ * tient à la définition stricte de l'AFA (corruption, trafic d'influence, prise illégale
+ * d'intérêts, favoritisme, détournement de fonds publics).
+ */
+export const POLITICAL_FINANCING_CATEGORIES = [
+  "FINANCEMENT_ILLEGAL_CAMPAGNE",
+  "FINANCEMENT_ILLEGAL_PARTI",
+] as const satisfies readonly AffairCategory[];
+
+/** Badge financement politique illégal : condamnation définitive, sans critère de gravité. */
+export function getPoliticalFinancingBadgeWhere(): Prisma.AffairWhereInput {
+  return {
+    ...getDefinitiveConvictionWhere(),
+    category: { in: [...POLITICAL_FINANCING_CATEGORIES] },
+  };
 }
 
 /** SQL equivalent of getProbityConvictionBadgeWhere(), restricted to reviewed aliases. */

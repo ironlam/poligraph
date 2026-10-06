@@ -34,7 +34,7 @@ These principles are constraints on every line of code, every generated string, 
 
 6. **AI usage is narrow and declared.** AI is authorized for: classification, entity resolution, mention detection, moderation assistance, summarization of public documents from verified sources. AI is NOT authorized for: generating editorial content about people, writing biographies freehand, inferring motives, speculating on affairs, or producing any user-facing text that claims a fact not present in the source data. Biographies come from structured Wikidata, then human review.
 
-7. **Gravity classification follows Sapin II logic.** Probity offenses tied to mandate (corruption, embezzlement, illegal campaign financing) rank above serious infractions (fraud, harassment, abuse) which rank above other infractions. This reflects mandate-specific gravity, not personal moral judgment.
+7. **Gravity classification follows Sapin II logic.** Mandate-tied offenses rank highest: probity offenses in the strict AFA sense (corruption, influence peddling, illegal taking of interest, favoritism, embezzlement of public funds) and illegal political financing (campaign or party). They rank above serious infractions (fraud, harassment, abuse), which rank above other infractions. Illegal political financing is NOT a probity offense: it has its own badge and never feeds the probity badge, filter or counters. This reflects mandate-specific gravity, not personal moral judgment.
 
 8. **Inclusion scope.** French politicians only, living or deceased less than ten years ago, who held a mandate or are involved in a political judicial affair. No foreign leaders, no pre-1958 figures, no private citizens.
 
