@@ -33,6 +33,7 @@ import {
   assessProcedureEvidence,
 } from "@/lib/affair-matching";
 import { previewAffairPolitician } from "@/lib/affair-matching/resolver";
+import { normalizeForMatching } from "@/lib/affair-matching/normalize";
 import { createDraftAffairFromDiscovery } from "@/services/affairs/create-draft";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import {
@@ -505,6 +506,20 @@ export async function processAnalyzedArticle(
       select: { firstName: true, lastName: true, fullName: true },
     });
     if (resolvedPolitician) {
+      // The resolver scores every name of the article, so a minister quoted in
+      // passing can outscore the subject the model detected. Only attach the
+      // detected subject.
+      if (!isDetectedSubject(resolvedPolitician, detected.politicianName)) {
+        if (verbose) {
+          console.log(
+            `  - Attribution bloquée (SUBJECT_MISMATCH) : ${resolvedPolitician.fullName} ≠ "${detected.politicianName}" → "${detected.title}" ignoré`
+          );
+        }
+        await rejectWeakAttribution(article.id, politicianId, detected, "SUBJECT_MISMATCH", dryRun);
+        stats.affairsRejected++;
+        continue;
+      }
+
       const attribution = assessPressAttribution({
         text: analysisContent,
         firstName: resolvedPolitician.firstName,
@@ -919,6 +934,17 @@ async function rejectLowConfidenceAffair(
       confidenceScore: detected.confidenceScore,
     },
   });
+}
+
+function isDetectedSubject(
+  politician: { firstName: string; lastName: string },
+  detectedName: string
+): boolean {
+  const name = ` ${normalizeForMatching(detectedName)} `;
+  return (
+    name.includes(` ${normalizeForMatching(politician.firstName)} `) &&
+    name.includes(` ${normalizeForMatching(politician.lastName)} `)
+  );
 }
 
 /**

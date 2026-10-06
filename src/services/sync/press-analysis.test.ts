@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   markCompleted: vi.fn(),
   pressArticleFindMany: vi.fn(),
   pressArticleUpdate: vi.fn(async () => ({})),
+  politicianFindUnique: vi.fn(),
+  pressAnalysisRejectionCreate: vi.fn(async () => ({})),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -28,13 +30,8 @@ vi.mock("@/lib/db", () => ({
       findMany: mocks.pressArticleFindMany,
       update: mocks.pressArticleUpdate,
     },
-    politician: {
-      findUnique: vi.fn(async () => ({
-        firstName: "Jeanne",
-        lastName: "Martin",
-        fullName: "Jeanne Martin",
-      })),
-    },
+    politician: { findUnique: mocks.politicianFindUnique },
+    pressAnalysisRejection: { create: mocks.pressAnalysisRejectionCreate },
     pressArticleAffair: { upsert: vi.fn(async () => ({})) },
     affairPoliticianDecision: { update: vi.fn(async () => ({})) },
   },
@@ -100,6 +97,11 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.politicianFindUnique.mockResolvedValue({
+    firstName: "Jeanne",
+    lastName: "Martin",
+    fullName: "Jeanne Martin",
+  });
   mocks.resolveAffairPolitician.mockResolvedValue({
     judgment: "NO_MATCH",
     topCandidateId: null,
@@ -308,6 +310,99 @@ describe("processAnalyzedArticle : garde-fou procédure", () => {
     );
 
     expect(stats.affairsRejected).toBe(0);
+  });
+});
+
+/**
+ * The resolver scores every name of the article, not the person the model
+ * names as the subject. A minister quoted in passing could outscore the
+ * subject and receive the draft. The resolved politician must be the detected
+ * subject.
+ */
+describe("processAnalyzedArticle : sujet de l'affaire", () => {
+  const article = {
+    id: "a-subject",
+    url: "https://example.com/subject",
+    title: "Titre",
+    feedSource: "lemonde",
+    publishedAt: new Date("2026-10-04"),
+  };
+  const text =
+    "Jeanne Martin a annoncé porter plainte pour diffamation contre un journal. " +
+    "Interrogé, le ministre Paul Durand a refusé de commenter.";
+
+  function detected(politicianName: string) {
+    return {
+      politicianName,
+      involvement: "PLAINTIFF" as const,
+      category: "DIFFAMATION",
+      status: "ENQUETE_PRELIMINAIRE",
+      title: "Plainte en diffamation",
+      description: "Description",
+      factsDate: null,
+      court: null,
+      charges: [],
+      excerpts: [],
+      isNewRevelation: true,
+      confidenceScore: 95,
+      mentionedNames: ["Jeanne Martin", "Paul Durand"],
+    };
+  }
+
+  beforeEach(() => {
+    mocks.resolveAffairPolitician.mockResolvedValue({
+      judgment: "SAME",
+      topCandidateId: "pol-minister",
+      decisionId: "decision-1",
+    });
+  });
+
+  it("rejette quand le resolver retient une autre personne que le sujet détecté", async () => {
+    mocks.politicianFindUnique.mockResolvedValue({
+      firstName: "Paul",
+      lastName: "Durand",
+      fullName: "Paul Durand",
+    });
+    const stats = zeroStats();
+
+    await processAnalyzedArticle(
+      article,
+      text,
+      { isAffairRelated: true, summary: "résumé", affairs: [detected("Jeanne Martin")] },
+      stats,
+      { dryRun: false, verbose: false }
+    );
+
+    expect(stats.affairsRejected).toBe(1);
+    expect(mocks.findMatchingAffairs).not.toHaveBeenCalled();
+    expect(mocks.createDraftAffairFromDiscovery).not.toHaveBeenCalled();
+    expect(mocks.pressAnalysisRejectionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        politicianId: "pol-minister",
+        politicianName: "Jeanne Martin",
+        detectedAffair: expect.objectContaining({ attributionVerdict: "SUBJECT_MISMATCH" }),
+      }),
+    });
+  });
+
+  it("accepte le sujet malgré les accents, tirets et espaces insécables", async () => {
+    mocks.politicianFindUnique.mockResolvedValue({
+      firstName: "Jean-Luc",
+      lastName: "Mélenchon",
+      fullName: "Jean-Luc Mélenchon",
+    });
+    const stats = zeroStats();
+
+    await processAnalyzedArticle(
+      article,
+      "Jean-Luc Mélenchon a déposé plainte pour diffamation contre un hebdomadaire.",
+      { isAffairRelated: true, summary: "résumé", affairs: [detected("Jean Luc\u00a0MELENCHON")] },
+      stats,
+      { dryRun: false, verbose: false }
+    );
+
+    expect(stats.affairsRejected).toBe(0);
+    expect(mocks.findMatchingAffairs).toHaveBeenCalledOnce();
   });
 });
 
