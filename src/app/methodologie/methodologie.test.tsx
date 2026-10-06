@@ -45,4 +45,16 @@ describe("pages de méthodologie", () => {
       screen.getByText(/Elle ne prouve pas qu'une proposition n'existe pas/)
     ).toBeInTheDocument();
   });
+
+  it("décrit séparément les condamnations définitives et non définitives", () => {
+    render(<MethodologiePage />);
+
+    expect(
+      screen.getByRole("heading", { name: "Condamnations définitives (comptabilisées)" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Condamnations non définitives (comptabilisées à part)" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Condamnations (comptabilisées)")).not.toBeInTheDocument();
+  });
 });
