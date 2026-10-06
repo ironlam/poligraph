@@ -6,7 +6,12 @@ import {
   FACTCHECK_ALLOWED_SOURCES,
   MANDATE_TYPE_LABELS,
 } from "@/config/labels";
-import { getAdverseAffairWhere, getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
+import {
+  ADVERSE_INVOLVEMENTS,
+  getAdverseAffairWhere,
+  getConvictionOnlyWhere,
+  getDocumentaryAffairWhere,
+} from "@/lib/affairs/public-filters";
 import { SITE_URL } from "./config";
 import type { RecentlyPosted } from "./dedup";
 import { wasRecentlyPosted } from "./dedup";
@@ -322,8 +327,7 @@ async function recentAffairs(recent: RecentlyPosted): Promise<TweetDraft[]> {
 
   const affairs = await db.affair.findMany({
     where: {
-      publicationStatus: "PUBLISHED",
-      involvement: "DIRECT",
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       updatedAt: { gte: sevenDaysAgo },
     },
     include: {

@@ -7,9 +7,10 @@
  * prédicat importé de `@/lib/affairs/public-filters`, aucun filtre d'implication n'est écrit à la
  * main, et la certitude d'une affaire passe par le helper d'attribution.
  *
- * ATTRIBUTION_DEBT recense les écarts présents au premier passage. Cliquet : une entrée sort quand
- * son code est rebranché, aucune n'entre. ALLOWED recense les exceptions assumées, une par
- * occurrence, avec leur nature et leur raison.
+ * ALLOWED recense les exceptions assumées, une par occurrence, avec leur nature et leur raison.
+ * ATTRIBUTION_DEBT recense les écarts connus et reportés, chacun avec son responsable et ce qui
+ * reste à faire. Cliquet : une entrée sort quand son code est rebranché, aucune n'entre, et le
+ * nombre total d'occurrences en dette est plafonné.
  */
 
 import { describe, expect, it } from "vitest";
@@ -244,7 +245,7 @@ describe("dépôt", () => {
     expect(FILES.some((f) => f.path.startsWith("src/app/admin/"))).toBe(false);
   });
 
-  it("aucun finding hors ALLOWED et ATTRIBUTION_DEBT", () => {
+  it("tout finding est couvert par une exception ALLOWED ou par la dette bornée", () => {
     expect(
       COVERAGE.unlisted.map((f) => `${f.path}:${f.line} [${f.kind}] ${f.snippet}`),
       "Lecture ou classification d'affaire sans prédicat partagé. Passer par " +
@@ -268,17 +269,27 @@ describe("dépôt", () => {
     expect(COVERAGE.duplicated, "Entrée déclarée deux fois.").toEqual([]);
   });
 
-  it("chaque entrée de dette de classification porte sa famille", () => {
+  it("aucune classification directe ne reste en dette", () => {
     const classified = ATTRIBUTION_DEBT.filter((entry) =>
       FINDINGS.some(
         (f) =>
           f.kind === "raw-classification" && f.path === entry.path && f.snippet === entry.snippet
       )
     );
-    expect(classified.length).toBeGreaterThan(0);
-    expect(
-      classified.filter((entry) => entry.family === undefined).map((e) => `${e.path}: ${e.snippet}`)
-    ).toEqual([]);
+    expect(classified.map((e) => `${e.path}: ${e.snippet}`)).toEqual([]);
+  });
+
+  it("la dette ne grossit pas", () => {
+    // Plafond du cliquet : à baisser quand une entrée sort, jamais à relever.
+    const occurrences = ATTRIBUTION_DEBT.reduce((sum, entry) => sum + entry.count, 0);
+    expect(occurrences).toBeLessThanOrEqual(16);
+  });
+
+  it("chaque entrée de dette porte un responsable et une raison", () => {
+    const incomplete = ATTRIBUTION_DEBT.filter(
+      (entry) => entry.owner.trim().length === 0 || entry.reason.trim().length === 0
+    );
+    expect(incomplete.map((e) => `${e.path}: ${e.snippet}`)).toEqual([]);
   });
 
   it("ALLOWED porte une raison non vide pour chaque entrée", () => {

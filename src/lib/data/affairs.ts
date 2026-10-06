@@ -18,6 +18,8 @@ import {
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import {
+  ADVERSE_INVOLVEMENTS,
+  VICTIM_LISTING_INVOLVEMENTS,
   getAdverseAffairWhere,
   getDocumentaryAffairWhere,
   getPublishedAffairWhere,
@@ -107,8 +109,7 @@ function buildAffairWhere(opts: AffairFilterOpts) {
   }
 
   return {
-    ...getPublishedAffairWhere(),
-    involvement: { in: involvements },
+    ...getDocumentaryAffairWhere(involvements),
     ...statusFilter,
     ...(categoryFilter && { category: { in: categoryFilter } }),
     ...(severity && { severity }),
@@ -359,9 +360,8 @@ export async function getSuperCategoryCounts() {
   const categoryCounts = await db.affair.groupBy({
     by: ["category"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { category: true },
   });
@@ -393,9 +393,8 @@ export async function getStatusCounts() {
   const statusCounts = await db.affair.groupBy({
     by: ["status"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { status: true },
   });
@@ -411,9 +410,8 @@ export async function getSeverityCounts() {
   const severityCounts = await db.affair.groupBy({
     by: ["severity"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { severity: true },
   });
@@ -491,7 +489,6 @@ const TERMINAL_STATUSES: AffairStatus[] = [
   "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN",
 ];
 
-const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"];
 const VIOLENCE_CATEGORIES: AffairCategory[] = [
   "MENACE",
   "VIOLENCE",
@@ -506,9 +503,8 @@ export async function getVictimStats() {
   cacheLife("synced");
 
   const victimWhere = {
-    ...getPublishedAffairWhere(),
+    ...getDocumentaryAffairWhere(VICTIM_LISTING_INVOLVEMENTS),
     politician: PUBLIC_POLITICIAN_WHERE,
-    involvement: { in: VICTIM_INVOLVEMENTS },
     category: { in: VIOLENCE_CATEGORIES },
   };
 

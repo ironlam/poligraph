@@ -48,17 +48,12 @@ export type AllowedOccurrence = CoverageEntry & {
 };
 
 /**
- * Famille d'un appel direct de classification (brief tâche 1, étape 5) :
- * - `guarded-before-call` : l'implication est testée juste avant, migration mécanique vers
- *   `getAttributedCertaintyLevel` ;
- * - `adverse-prefiltered` : lignes déjà filtrées par un prédicat à charge, exception ALLOWED
- *   ajoutée par la tâche qui rebranche la source ;
- * - `unguarded` : aucune des deux, défaut à corriger (pas d'exception à créer).
+ * Écart connu et reporté. `owner` dit qui le ferme (« PR B » pour le badge de probité et les
+ * compteurs de condamnation définitive, « suivi hors PR A » sinon), `reason` ce qui reste à faire.
  */
 export type DebtEntry = CoverageEntry & {
-  family?: "guarded-before-call" | "adverse-prefiltered" | "unguarded";
-  /** Responsable d'une entrée résiduelle (rempli par la tâche 10). */
-  owner?: string;
+  owner: "PR B" | "suivi hors PR A";
+  reason: string;
 };
 
 export type Coverage = {
@@ -733,199 +728,323 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason:
       "attributedMaturity : appelé seulement après isAccusedInvolvement et l'ordre pénal testés juste au-dessus, comme les compteurs de la page de parti ; une affaire où l'élu n'est pas mis en cause ne reçoit aucun onglet de stade et ne figure que sous « Toutes ».",
   },
-];
-
-/** Écarts relevés au premier passage. Cliquet : on retire, on n'ajoute pas. */
-export const ATTRIBUTION_DEBT: DebtEntry[] = [
   {
     path: "src/app/api/affaires/route.ts",
     snippet:
       'const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];',
     count: 1,
+    nature: "documentary-facet",
+    reason:
+      "API /api/affaires : périmètre d'implication choisi par le réutilisateur (DIRECT par défaut) ; chaque ligne porte semantics.statusAppliesToPolitician et countedInAdverseAggregates, rien n'y est compté à charge.",
   },
   {
     path: "src/app/api/affaires/route.ts",
     snippet: "involvement: { in: requestedInvolvements },",
     count: 1,
+    nature: "documentary-facet",
+    reason: "API /api/affaires : même périmètre choisi par le réutilisateur, validé contre l'enum.",
   },
   {
     path: "src/app/api/politiques/[slug]/affaires/route.ts",
     snippet:
       'const involvementValues = involvement !== null ? involvement.split(",") : ["DIRECT"];',
     count: 1,
+    nature: "documentary-facet",
+    reason:
+      "API des affaires d'un élu : périmètre d'implication choisi par le réutilisateur (DIRECT par défaut) ; chaque ligne porte semantics.statusAppliesToPolitician.",
   },
   {
     path: "src/app/api/politiques/[slug]/affaires/route.ts",
     snippet: "involvement: { in: requestedInvolvements },",
     count: 1,
+    nature: "documentary-facet",
+    reason: "API des affaires d'un élu : même périmètre choisi par le réutilisateur.",
   },
   {
-    path: "src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx",
-    snippet: 'const directAffairs = affairs.filter((a) => a.involvement === "DIRECT");',
+    path: "src/lib/api/public-contract.ts",
+    snippet: "const judicialMaturity = getJudicialMaturity(affair.status);",
     count: 1,
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
-    count: 1,
-  },
-  { path: "src/app/politiques/page.tsx", snippet: "affairs: {", count: 1 },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "affairs: { some: CONVICTION_BADGE_WHERE },",
-    count: 1,
-  },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "const [counts] = await db.$queryRaw<",
-    count: 1,
-  },
-  { path: "src/app/politiques/page.tsx", snippet: "AND a.involvement = 'DIRECT'", count: 1 },
-  {
-    path: "src/app/politiques/page.tsx",
-    snippet: "AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
-    count: 1,
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet:
-      "const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`",
-    count: 1,
-  },
-  {
-    path: "src/app/sitemap.ts",
-    snippet: "const lastAffairUpdate = await db.affair.findFirst({",
-    count: 1,
-  },
-  { path: "src/app/sitemap.ts", snippet: "db.affair.findMany({", count: 1 },
-  {
-    path: "src/app/sitemap.ts",
-    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
-    count: 1,
+    nature: "documentary-facet",
+    reason:
+      "getPublicAffairSemantics : maturité de l'affaire, publiée comme statusLabel ; l'attribution passe par statusAppliesToPolitician, certaintyLevel (getAttributedCertaintyLevel) et countedInAdverseAggregates. La rendre nulle pour un témoin changerait le contrat d'API.",
   },
   {
     path: "src/components/compare/categories/DeputesComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
-    family: "adverse-prefiltered",
+    nature: "adverse-prefiltered",
+    reason:
+      "countByMaturity : affaires chargées par lib/data/compare.ts avec COMPARED_AFFAIR_WHERE (DIRECT, ordre pénal).",
   },
   {
     path: "src/components/compare/categories/GroupesComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
-    family: "adverse-prefiltered",
+    nature: "adverse-prefiltered",
+    reason: "countByMaturity : affaires des membres filtrées par COMPARED_AFFAIR_WHERE.",
   },
   {
     path: "src/components/compare/categories/MinistresComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
-    family: "adverse-prefiltered",
+    nature: "adverse-prefiltered",
+    reason: "countByMaturity : affaires du ministre filtrées par COMPARED_AFFAIR_WHERE.",
   },
   {
     path: "src/components/compare/categories/PartisComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
-    family: "adverse-prefiltered",
+    nature: "adverse-prefiltered",
+    reason: "countByMaturity : affaires des membres filtrées par COMPARED_AFFAIR_WHERE.",
   },
   {
     path: "src/components/compare/categories/SenateursComparison.tsx",
     snippet: "const level = getJudicialMaturity(a.status as AffairStatus);",
     count: 1,
-    family: "adverse-prefiltered",
+    nature: "adverse-prefiltered",
+    reason: "countByMaturity : affaires du sénateur filtrées par COMPARED_AFFAIR_WHERE.",
   },
-  { path: "src/config/labels.ts", snippet: 'involvement: "DIRECT" as const,', count: 1 },
-  { path: "src/config/labels.ts", snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"],', count: 1 },
-  { path: "src/config/labels.ts", snippet: 'victime: ["VICTIM", "PLAINTIFF"],', count: 1 },
-  { path: "src/config/labels.ts", snippet: 'mentionne: ["MENTIONED_ONLY"],', count: 1 },
   {
     path: "src/lib/affairs/affair-counts.ts",
     snippet: 'if (involvement === "MENTIONED_ONLY") affairsMentionedCount++;',
     count: 1,
+    nature: "role-display",
+    reason:
+      "computeAffairCounts : compteur de mentions, publié comme un rôle, jamais à charge ; le compte à charge passe par ADVERSE_INVOLVEMENTS.",
   },
   {
     path: "src/lib/affairs/affair-counts.ts",
     snippet:
       'if (involvement === "VICTIM" || involvement === "PLAINTIFF") affairsVictimOrPlaintiffCount++;',
     count: 1,
+    nature: "role-display",
+    reason: "computeAffairCounts : compteur victime ou plaignant, publié comme un rôle.",
   },
   {
     path: "src/lib/affairs/audit-evidence.ts",
     snippet: "if (!ADVERSE_INVOLVEMENTS.includes(affair.involvement)) {",
     count: 1,
+    nature: "identity-check",
+    reason:
+      "Audit éditorial : signale un statut de condamnation porté par une personne qui n'est pas mise en cause. L'ensemble vient de RULES.coherence.adverseInvolvements, lui-même ADVERSE_INVOLVEMENTS de certainty.ts.",
   },
   {
     path: "src/lib/affairs/audit-evidence.ts",
     snippet: "const aboutThisPerson = ADVERSE_INVOLVEMENTS.includes(affair.involvement);",
     count: 1,
+    nature: "identity-check",
+    reason:
+      "Audit éditorial : la peine décrite ne vaut que pour la personne mise en cause, même ensemble issu des règles d'audit.",
   },
-  {
-    path: "src/lib/affairs/blocked-affairs.ts",
-    snippet: "const affairs = await db.affair.findMany({",
-    count: 1,
-  },
-  {
-    path: "src/lib/api/public-contract.ts",
-    snippet: "const judicialMaturity = getJudicialMaturity(affair.status);",
-    count: 1,
-    family: "guarded-before-call",
-  },
-  { path: "src/lib/data/affairs.ts", snippet: "involvement: { in: involvements },", count: 1 },
   {
     path: "src/lib/data/affairs.ts",
     snippet: 'involvements: Involvement[] = ["DIRECT"],',
     count: 4,
+    nature: "documentary-facet",
+    reason:
+      "Valeur par défaut des fonctions de listing ; /affaires passe toujours son périmètre explicite (DEFAULT_LISTING_INVOLVEMENTS ou VICTIM_LISTING_INVOLVEMENTS).",
   },
-  { path: "src/lib/data/affairs.ts", snippet: "db.affair.findMany({", count: 1 },
-  { path: "src/lib/data/affairs.ts", snippet: "db.affair.count({ where }),", count: 1 },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: "db.affair.findMany({",
+    count: 1,
+    nature: "documentary-facet",
+    reason:
+      "queryAffairs : cartes du listing /affaires, prédicat construit par buildAffairWhere qui part de getDocumentaryAffairWhere(involvements) ; chaque carte affiche le rôle.",
+  },
+  {
+    path: "src/lib/data/affairs.ts",
+    snippet: "db.affair.count({ where }),",
+    count: 1,
+    nature: "documentary-facet",
+    reason: "queryAffairs : total paginé du même listing documentaire.",
+  },
   {
     path: "src/lib/data/affairs.ts",
     snippet:
       "const rows = await db.affair.findMany({ where, orderBy, select: { slug: true, title: true } });",
     count: 1,
-  },
-  { path: "src/lib/data/affairs.ts", snippet: 'involvement: "DIRECT",', count: 3 },
-  {
-    path: "src/lib/data/affairs.ts",
-    snippet: 'const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"];',
-    count: 1,
-  },
-  {
-    path: "src/lib/data/affairs.ts",
-    snippet: "involvement: { in: VICTIM_INVOLVEMENTS },",
-    count: 1,
-  },
-  {
-    path: "src/lib/data/partis.ts",
-    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
-    count: 1,
-  },
-  {
-    path: "src/lib/data/pipelines.ts",
-    snippet: "entitiesCreated7d = await db.affair.count({",
-    count: 1,
+    nature: "documentary-facet",
+    reason: "getAffairNeighborsList : précédent/suivant, même buildAffairWhere que le listing.",
   },
   {
     path: "src/lib/data/recap.ts",
     snippet: "AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF', 'MENTIONED_ONLY')",
     count: 1,
+    nature: "documentary-facet",
+    reason:
+      "Récap hebdomadaire : lignes des affaires nouvelles où l'élu est mis en cause ou témoin ; chaque ligne affiche son rôle et la certitude passe par getAttributedCertaintyLevel (tâche 7).",
   },
-  { path: "src/lib/data/slapp.ts", snippet: "return db.affair.findMany({", count: 1 },
-  { path: "src/lib/data/slapp.ts", snippet: "db.affair.count({", count: 1 },
-  { path: "src/lib/data/slapp.ts", snippet: "db.affair.groupBy({", count: 1 },
   {
     path: "src/lib/politicians/profile-snapshot/request.ts",
     snippet: "{ affairs: { some: { partyAtTimeId: partyId } } },",
     count: 1,
+    nature: "identity-check",
+    reason:
+      "Fiches à recalculer après une écriture sur un parti : tous rôles et toutes publications, sinon une fiche resterait périmée ; rien n'est affiché ni compté.",
   },
   {
     path: "src/lib/politicians/profile-snapshot/request.ts",
     snippet: "const affairs = await db.affair.findMany({",
     count: 1,
+    nature: "identity-check",
+    reason:
+      "Fiches à recalculer après une écriture sur des affaires (et leurs affaires liées) ; rien n'est affiché ni compté.",
   },
-  { path: "src/lib/social/generators.ts", snippet: 'involvement: "DIRECT",', count: 1 },
   {
-    path: "src/lib/social/generators.ts",
+    path: "src/app/sitemap.ts",
+    snippet:
+      "const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`",
+    count: 1,
+    nature: "documentary-facet",
+    reason:
+      "Sitemap : une affaire publiée, quel que soit le rôle, rend la fiche indexable ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/app/sitemap.ts",
+    snippet: "const lastAffairUpdate = await db.affair.findFirst({",
+    count: 1,
+    nature: "documentary-facet",
+    reason: "Sitemap : date de dernière modification de /affaires/condamnations, rien d'affiché.",
+  },
+  {
+    path: "src/app/sitemap.ts",
+    snippet: "db.affair.findMany({",
+    count: 1,
+    nature: "documentary-facet",
+    reason: "Sitemap : URL de chaque affaire publiée.",
+  },
+  {
+    path: "src/app/sitemap.ts",
+    snippet: 'affairsAtTime: { some: { publicationStatus: "PUBLISHED" } },',
+    count: 1,
+    nature: "documentary-facet",
+    reason: "Sitemap : URL des pages d'affaires d'un parti qui en a au moins une publiée.",
+  },
+];
+
+/**
+ * Écarts connus, bornés et attribués. Cliquet : une entrée sort quand son code est rebranché,
+ * aucune n'entre (le test du dépôt plafonne le nombre d'occurrences).
+ */
+export const ATTRIBUTION_DEBT: DebtEntry[] = [
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
+    count: 1,
+    owner: "PR B",
+    reason:
+      "Badge de probité du listing : CONVICTION_BADGE_WHERE (DIRECT) ne limite pas à l'ordre pénal ; la PR B l'aligne sur le prédicat partagé.",
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "affairs: {",
+    count: 1,
+    owner: "PR B",
+    reason: "Même badge de probité (include du listing).",
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "affairs: { some: CONVICTION_BADGE_WHERE },",
+    count: 1,
+    owner: "PR B",
+    reason: "Filtre « condamnés » du listing, même prédicat de badge.",
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "const [counts] = await db.$queryRaw<",
+    count: 1,
+    owner: "PR B",
+    reason:
+      "Compteurs de filtre du listing : condamnations définitives écrites en SQL sans prédicat partagé ni ordre pénal.",
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "AND a.involvement = 'DIRECT'",
+    count: 1,
+    owner: "PR B",
+    reason: "Même compteur « avec condamnation » (DIRECT écrit à la main).",
+  },
+  {
+    path: "src/app/politiques/page.tsx",
+    snippet: "AND \"publicationStatus\" = 'PUBLISHED' AND involvement = 'DIRECT'",
+    count: 1,
+    owner: "PR B",
+    reason: "Même total de condamnations définitives (DIRECT écrit à la main).",
+  },
+  {
+    path: "src/config/labels.ts",
+    snippet: 'involvement: "DIRECT" as const,',
+    count: 1,
+    owner: "PR B",
+    reason:
+      "CONVICTION_BADGE_WHERE : prédicat du badge de probité écrit à la main, sans ordre pénal.",
+  },
+  {
+    path: "src/lib/data/partis.ts",
+    snippet: "affairs: { where: CONVICTION_BADGE_WHERE },",
+    count: 1,
+    owner: "PR B",
+    reason: "Compte des élus condamnés d'un parti, même prédicat de badge.",
+  },
+  {
+    path: "src/config/labels.ts",
+    snippet: '"mise-en-cause": ["DIRECT", "INDIRECT"],',
+    count: 1,
+    owner: "suivi hors PR A",
+    reason:
+      "INVOLVEMENT_GROUP_VALUES n'est importé nulle part mais range INDIRECT sous « Mis en cause » : à supprimer ou aligner avant toute réutilisation.",
+  },
+  {
+    path: "src/config/labels.ts",
+    snippet: 'victime: ["VICTIM", "PLAINTIFF"],',
+    count: 1,
+    owner: "suivi hors PR A",
+    reason: "Même groupe de filtre inutilisé.",
+  },
+  {
+    path: "src/config/labels.ts",
+    snippet: 'mentionne: ["MENTIONED_ONLY"],',
+    count: 1,
+    owner: "suivi hors PR A",
+    reason: "Même groupe de filtre inutilisé.",
+  },
+  {
+    path: "src/lib/affairs/blocked-affairs.ts",
     snippet: "const affairs = await db.affair.findMany({",
     count: 1,
+    owner: "suivi hors PR A",
+    reason:
+      "File de modération (brouillons inclus), lue seulement par une route admin : à sortir du périmètre scanné.",
+  },
+  {
+    path: "src/lib/data/pipelines.ts",
+    snippet: "entitiesCreated7d = await db.affair.count({",
+    count: 1,
+    owner: "suivi hors PR A",
+    reason:
+      "Compteur d'ingestion du back-office (toutes publications) : à sortir du périmètre scanné.",
+  },
+  {
+    path: "src/lib/data/slapp.ts",
+    snippet: "return db.affair.findMany({",
+    count: 1,
+    owner: "suivi hors PR A",
+    reason:
+      "Page procédures-bâillons : prédicat local sans implication ; vérifier que l'élu y est bien plaignant avant de le présenter comme auteur de la procédure.",
+  },
+  {
+    path: "src/lib/data/slapp.ts",
+    snippet: "db.affair.count({",
+    count: 1,
+    owner: "suivi hors PR A",
+    reason: "Même prédicat local des procédures-bâillons.",
+  },
+  {
+    path: "src/lib/data/slapp.ts",
+    snippet: "db.affair.groupBy({",
+    count: 1,
+    owner: "suivi hors PR A",
+    reason: "Même prédicat local des procédures-bâillons.",
   },
 ];
