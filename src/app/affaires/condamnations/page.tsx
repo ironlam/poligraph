@@ -10,7 +10,7 @@ import { CondamnationsPresumptionBanner } from "@/components/affairs/Condamnatio
 import { getCondamnations, getCondamnationsStatsByParty } from "@/lib/data/condamnations";
 import { getPartiesWithAffairs, getPublicPartyMetadataBySlug } from "@/lib/data/affairs";
 import { PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
 import { buildListTitle, buildDescription, buildCanonical } from "@/lib/seo/condamnations-metadata";
 import { CollectionPageJsonLd, AffairItemListJsonLd, DatasetJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
@@ -47,19 +47,18 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const partyName = await getPartyNameFromSlug(params.parti);
 
   const [totalDef, totalPro] = await Promise.all([
+    // Condamnations pénales de la personne mise en cause, restreintes au statut de chaque compteur.
     db.affair.count({
       where: {
-        ...getPublishedAffairWhere(),
+        ...getConvictionOnlyWhere(),
         politician: PUBLIC_POLITICIAN_WHERE,
-        involvement: { in: ["DIRECT", "INDIRECT"] },
         status: "CONDAMNATION_DEFINITIVE",
       },
     }),
     db.affair.count({
       where: {
-        ...getPublishedAffairWhere(),
+        ...getConvictionOnlyWhere(),
         politician: PUBLIC_POLITICIAN_WHERE,
-        involvement: { in: ["DIRECT", "INDIRECT"] },
         status: { in: ["CONDAMNATION_PREMIERE_INSTANCE", "APPEL_EN_COURS"] },
       },
     }),

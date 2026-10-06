@@ -1,10 +1,8 @@
 import {
-  getCertaintyLevel,
-  isAccusedInvolvement,
+  getAttributedCertaintyLevel,
   CERTAINTY_SORT_ORDER,
   type CertaintyLevel,
 } from "@/config/certainty";
-import { getJudicialMaturity } from "@/config/judicial-maturity";
 import type { AffairStatus } from "@/types";
 import type { Involvement } from "@/generated/prisma";
 
@@ -34,17 +32,25 @@ export interface PartyAffairSummary<T extends CountableAffair> {
 export function summarizePartyAffairs<T extends CountableAffair>(
   affairs: readonly T[]
 ): PartyAffairSummary<T> {
-  const direct = affairs
-    .filter((affair) => isAccusedInvolvement(affair.involvement))
-    .map((affair) => ({ ...affair, certainty: getCertaintyLevel(affair.status as AffairStatus) }));
+  const direct = affairs.flatMap((affair) => {
+    const certainty = getAttributedCertaintyLevel({
+      involvement: affair.involvement,
+      status: affair.status as AffairStatus,
+    });
+    return certainty === null ? [] : [{ ...affair, certainty }];
+  });
 
-  const maturities = direct.map((affair) => getJudicialMaturity(affair.status as AffairStatus));
+  // Same tiers as the judicial maturity: ETABLI and PRONONCE are the convictions,
+  // EN_COURS the judge-validated procedures and preliminary inquiries,
+  // CLOS_FAVORABLE the outcomes without conviction. CLOS_SANS_CHARGE counts in none.
+  const count = (...levels: CertaintyLevel[]) =>
+    direct.filter((affair) => levels.includes(affair.certainty)).length;
 
   return {
     direct,
-    condamnations: maturities.filter((m) => m === "CONDAMNATION").length,
-    enCours: maturities.filter((m) => m === "PROCEDURE_VALIDEE" || m === "ENQUETE").length,
-    closesSansCondamnation: maturities.filter((m) => m === "CLOSE_SANS_CONDAMNATION").length,
+    condamnations: count("ETABLI", "PRONONCE"),
+    enCours: count("EN_COURS"),
+    closesSansCondamnation: count("CLOS_FAVORABLE"),
   };
 }
 

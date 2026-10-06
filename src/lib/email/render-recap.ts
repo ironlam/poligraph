@@ -1,6 +1,7 @@
 import type { PressStory, WeeklyRecapData } from "@/lib/data/recap";
 import { getISOWeekNumber } from "@/lib/data/recap";
 import { CERTAINTY_LABELS } from "@/config/certainty";
+import { INVOLVEMENT_LABELS } from "@/config/labels";
 import { WEEKLY_RECAP_HTML } from "./templates/weekly-recap-compiled";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,24 @@ const CERTAINTY_EMAIL_COLORS: Record<string, string> = {
 };
 
 const CERTAINTY_EMAIL_LABELS: Record<string, string> = CERTAINTY_LABELS;
+
+const ROLE_EMAIL_COLOR = "#6b7280";
+
+type RecapAffair = WeeklyRecapData["affairs"]["newAffairs"][number];
+
+/**
+ * Libellé d'une affaire du récap : la certitude quand l'élu est le mis en cause, sinon son
+ * rôle (« Témoin/Secondaire »…), jamais une issue judiciaire qui concerne un tiers.
+ */
+function affairEmailLabel(a: RecapAffair): { label: string; color: string } {
+  if (a.certaintyLevel === null) {
+    return { label: INVOLVEMENT_LABELS[a.involvement], color: ROLE_EMAIL_COLOR };
+  }
+  return {
+    label: CERTAINTY_EMAIL_LABELS[a.certaintyLevel] ?? a.certaintyLevel,
+    color: CERTAINTY_EMAIL_COLORS[a.certaintyLevel] ?? ROLE_EMAIL_COLOR,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // HTML escaping
@@ -143,8 +162,7 @@ function buildAffairsHtml(recap: WeeklyRecapData): string {
 
   const rows = top5
     .map((a) => {
-      const color = CERTAINTY_EMAIL_COLORS[a.certaintyLevel] ?? "#6b7280";
-      const label = CERTAINTY_EMAIL_LABELS[a.certaintyLevel] ?? a.certaintyLevel;
+      const { label, color } = affairEmailLabel(a);
       const title = escapeHtml(a.title);
       const politician = escapeHtml(a.politicianName);
       const affairUrl = `${SITE_URL}/affaires/${a.slug}`;
@@ -350,7 +368,7 @@ function buildPlainText(input: RenderInput): string {
   if (recap.affairs.newAffairs.length > 0) {
     lines.push("--- AFFAIRES JUDICIAIRES ---");
     for (const a of recap.affairs.newAffairs.slice(0, 5)) {
-      const label = CERTAINTY_EMAIL_LABELS[a.certaintyLevel] ?? a.certaintyLevel;
+      const { label } = affairEmailLabel(a);
       lines.push(`[${label}] ${a.title}`);
       lines.push(`  Impliquant ${a.politicianName}`);
       lines.push(`  ${SITE_URL}/affaires/${a.slug}`);

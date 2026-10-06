@@ -8,6 +8,7 @@ import {
   type CertaintyLevel,
 } from "@/config/certainty";
 import type { PoliticalPosition } from "@/generated/prisma";
+import { getAdverseAffairWhere } from "@/lib/affairs/public-filters";
 
 export interface HemicycleDeputy {
   slug: string;
@@ -57,11 +58,10 @@ export async function getHemicycleData(): Promise<HemicycleGroup[]> {
                   slug: true,
                   firstName: true,
                   lastName: true,
+                  // Condamnations et procédures validées par un juge, DIRECT et pénales :
+                  // une enquête préliminaire ne fait pas un élu « mis en cause ».
                   affairs: {
-                    where: {
-                      publicationStatus: "PUBLISHED",
-                      involvement: "DIRECT",
-                    },
+                    where: getAdverseAffairWhere(),
                     select: { status: true },
                   },
                 },

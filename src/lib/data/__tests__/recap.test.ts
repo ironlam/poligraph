@@ -123,7 +123,7 @@ describe("frontières publiques du récapitulatif", () => {
 
     expect(affairQuery).toContain('a."publicationStatus" =');
     expect(affairQuery).toContain('p."publicationStatus" =');
-    expect(affairQuery).toContain("a.involvement NOT IN");
+    expect(affairQuery).toContain("a.involvement IN (");
     expect(factCheckQuery).toContain('fc."publicationStatus" =');
     expect(factCheckQuery).toContain("fc.source IN");
     expect(factCheckQuery).toContain('p."publicationStatus" =');

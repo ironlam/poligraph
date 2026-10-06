@@ -1,15 +1,17 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
-import type { MandateType, AffairStatus, Involvement } from "@/generated/prisma";
+import type { MandateType, AffairStatus } from "@/generated/prisma";
 import {
   PUBLIC_PARTY_WHERE,
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
 import {
+  ADVERSE_INVOLVEMENTS,
+  getAdverseInvolvementSql,
+  getDocumentaryAffairWhere,
   getPublishedAffairSqlWhere,
-  getPublishedAffairWhere,
   ADVERSE_JURISDICTION_ORDER,
 } from "@/lib/affairs/public-filters";
 
@@ -68,8 +70,8 @@ export async function getCondamnations(filters: CondamnationsFilters) {
   const statuses = CERTAINTY_STATUS[certainty];
 
   const where: Prisma.AffairWhereInput = {
-    ...getPublishedAffairWhere(),
-    involvement: { in: ["DIRECT", "INDIRECT"] as Involvement[] },
+    // Seule la personne mise en cause (DIRECT) est condamnée : un témoin n'y figure pas.
+    ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
     // Le hub liste des condamnations pénales. Une sanction de la chambre du
     // contentieux de la Cour des comptes y figurerait comme une condamnation
     // ordinaire et gonflerait les taux par parti calculés plus bas.
@@ -208,7 +210,7 @@ export async function getCondamnationsStatsByParty(
     JOIN "Party" pt ON pt.id = p."currentPartyId"
     LEFT JOIN "Affair" a ON a."politicianId" = p.id
       AND ${getPublishedAffairSqlWhere()}
-      AND a.involvement IN ('DIRECT','INDIRECT')
+      AND ${getAdverseInvolvementSql()}
       AND a."jurisdictionOrder" = ${ADVERSE_JURISDICTION_ORDER}::"JurisdictionOrder"
     WHERE p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
     ${

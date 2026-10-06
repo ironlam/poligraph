@@ -5,6 +5,7 @@ import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { parsePagination } from "@/lib/api/pagination";
 import { getPublicFactCheckSqlWhere, getPublicPartySqlWhere } from "@/lib/api/public-contract";
+import { getPublishedAffairSqlWhere } from "@/lib/affairs/public-filters";
 import { normalizeDossierAlias } from "@/lib/legislation/alias";
 import { getDepartmentName } from "@/config/departments";
 
@@ -33,6 +34,7 @@ interface RawAffair {
   slug: string;
   title: string;
   status: string;
+  involvement: string;
   politicianName: string;
   politicianSlug: string;
 }
@@ -129,12 +131,12 @@ export const GET = withPublicRoute(async (request) => {
 
       // Affairs: public affairs tied to public politicians only.
       db.$queryRaw<RawAffair[]>`
-        SELECT a."slug", a."title", a."status",
+        SELECT a."slug", a."title", a."status", a."involvement",
                pol."fullName" AS "politicianName",
                pol."slug" AS "politicianSlug"
         FROM "Affair" a
         JOIN "Politician" pol ON pol."id" = a."politicianId"
-        WHERE a."publicationStatus" = 'PUBLISHED'
+        WHERE ${getPublishedAffairSqlWhere()}
           AND pol."publicationStatus" = 'PUBLISHED'
           AND unaccent(a."title") ILIKE unaccent(${pattern})
         ORDER BY a."createdAt" DESC
@@ -217,6 +219,7 @@ export const GET = withPublicRoute(async (request) => {
         slug: a.slug,
         title: a.title,
         status: a.status,
+        involvement: a.involvement,
         politicianName: a.politicianName,
         politicianSlug: a.politicianSlug,
       })),

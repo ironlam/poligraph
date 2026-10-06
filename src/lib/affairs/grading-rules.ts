@@ -12,6 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import type { Involvement } from "@/generated/prisma";
+import { ADVERSE_INVOLVEMENTS } from "@/config/certainty";
 
 export const RULES = {
   /**
@@ -19,12 +20,13 @@ export const RULES = {
    * the new version is given its fingerprint, which turns a silent rule change
    * into a CI failure.
    *
-   * Starts at 1 rather than 3: three commits changed the rules after the
-   * 2026-07-26 baseline was frozen (584ba9e7, b732ebc2, bcce13ce), but which
-   * rules were in force that day cannot be reconstructed honestly. That baseline
-   * therefore carries no version and is reported as incomparable.
+   * Numbering began at 1, not at 3, even though three commits had already
+   * changed the rules after the 2026-07-26 baseline was frozen (584ba9e7,
+   * b732ebc2, bcce13ce): which rules were in force that day cannot be
+   * reconstructed honestly. That baseline therefore carries no version and is
+   * reported as incomparable. Version 3 limits the adverse roles to DIRECT.
    */
-  version: 2,
+  version: 3,
 
   evidence: {
     /** Court and competent-institution hosts. Level B. */
@@ -55,6 +57,7 @@ export const RULES = {
   coherence: {
     /**
      * Roles for which the judicial outcome of the affair is the person's own.
+     * Shared with the public predicates: INDIRECT (witness) is not one of them.
      *
      * `satisfies` rather than a cast at the point of use: it checks every value
      * against the Prisma enum while keeping the literal types the fingerprint
@@ -62,7 +65,7 @@ export const RULES = {
      * `includes()` would match no involvement at all, so every conviction in the
      * corpus would be reported as describing a third party's outcome.
      */
-    adverseInvolvements: ["DIRECT", "INDIRECT"] satisfies readonly Involvement[],
+    adverseInvolvements: ADVERSE_INVOLVEMENTS satisfies readonly Involvement[],
 
     /**
      * A recourse still open, stated explicitly.

@@ -17,7 +17,13 @@ import {
 } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  ADVERSE_INVOLVEMENTS,
+  VICTIM_LISTING_INVOLVEMENTS,
+  getAdverseAffairWhere,
+  getDocumentaryAffairWhere,
+  getPublishedAffairWhere,
+} from "@/lib/affairs/public-filters";
 
 export async function getPartiesWithAffairs() {
   "use cache";
@@ -103,8 +109,7 @@ function buildAffairWhere(opts: AffairFilterOpts) {
   }
 
   return {
-    ...getPublishedAffairWhere(),
-    involvement: { in: involvements },
+    ...getDocumentaryAffairWhere(involvements),
     ...statusFilter,
     ...(categoryFilter && { category: { in: categoryFilter } }),
     ...(severity && { severity }),
@@ -355,9 +360,8 @@ export async function getSuperCategoryCounts() {
   const categoryCounts = await db.affair.groupBy({
     by: ["category"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { category: true },
   });
@@ -389,9 +393,8 @@ export async function getStatusCounts() {
   const statusCounts = await db.affair.groupBy({
     by: ["status"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { status: true },
   });
@@ -407,9 +410,8 @@ export async function getSeverityCounts() {
   const severityCounts = await db.affair.groupBy({
     by: ["severity"],
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: "DIRECT",
     },
     _count: { severity: true },
   });
@@ -420,7 +422,22 @@ export async function getSeverityCounts() {
   >;
 }
 
-export async function getCertaintyCounts() {
+const EMPTY_CERTAINTY_COUNTS: Record<CertaintyLevel, number> = {
+  ETABLI: 0,
+  PRONONCE: 0,
+  EN_COURS: 0,
+  CLOS_SANS_CHARGE: 0,
+  CLOS_FAVORABLE: 0,
+};
+
+/**
+ * Comptes des options du filtre par stade du listing /affaires : même périmètre que les
+ * cartes (implications du mode, catégories de violences en mode victime), groupées par le
+ * stade de la procédure. Ce n'est pas un compte à charge : une carte de témoin y figure.
+ */
+export async function getCertaintyFacetCounts(
+  involvements: readonly Involvement[]
+): Promise<Record<CertaintyLevel, number>> {
   "use cache";
   cacheTag("affairs");
   cacheLife("synced");
@@ -429,25 +446,36 @@ export async function getCertaintyCounts() {
     by: ["status"],
     _count: true,
     where: {
-      ...getPublishedAffairWhere(),
+      ...getDocumentaryAffairWhere(involvements),
+      ...(involvements.includes("VICTIM") && { category: { in: VIOLENCE_CATEGORIES } }),
       politician: PUBLIC_POLITICIAN_WHERE,
-      involvement: { notIn: ["VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] },
     },
   });
 
-  const counts: Record<CertaintyLevel, number> = {
-    ETABLI: 0,
-    PRONONCE: 0,
-    EN_COURS: 0,
-    CLOS_SANS_CHARGE: 0,
-    CLOS_FAVORABLE: 0,
-  };
+  const counts = { ...EMPTY_CERTAINTY_COUNTS };
+  for (const row of statusCounts) {
+    counts[getCertaintyLevel(row.status)] += row._count;
+  }
+  return counts;
+}
 
+/** Comptes par stade des seules affaires à charge (DIRECT, pénal, validées par un juge). */
+export async function getAdverseCertaintyCounts(): Promise<Record<CertaintyLevel, number>> {
+  "use cache";
+  cacheTag("affairs");
+  cacheLife("synced");
+
+  const statusCounts = await db.affair.groupBy({
+    by: ["status"],
+    _count: true,
+    where: { ...getAdverseAffairWhere(), politician: PUBLIC_POLITICIAN_WHERE },
+  });
+
+  const counts = { ...EMPTY_CERTAINTY_COUNTS };
   for (const row of statusCounts) {
     const level = getCertaintyLevel(row.status);
     counts[level] += row._count;
   }
-
   return counts;
 }
 
@@ -461,7 +489,6 @@ const TERMINAL_STATUSES: AffairStatus[] = [
   "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN",
 ];
 
-const VICTIM_INVOLVEMENTS: Involvement[] = ["VICTIM", "PLAINTIFF"];
 const VIOLENCE_CATEGORIES: AffairCategory[] = [
   "MENACE",
   "VIOLENCE",
@@ -476,9 +503,8 @@ export async function getVictimStats() {
   cacheLife("synced");
 
   const victimWhere = {
-    ...getPublishedAffairWhere(),
+    ...getDocumentaryAffairWhere(VICTIM_LISTING_INVOLVEMENTS),
     politician: PUBLIC_POLITICIAN_WHERE,
-    involvement: { in: VICTIM_INVOLVEMENTS },
     category: { in: VIOLENCE_CATEGORIES },
   };
 

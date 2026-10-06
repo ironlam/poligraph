@@ -304,12 +304,15 @@ export default function MethodologiePage() {
               </p>
             </div>
             <div className="rounded-lg border p-4">
-              <h4 className="font-medium text-foreground mb-1">Implication directe et indirecte</h4>
+              <h4 className="font-medium text-foreground mb-1">
+                Implication directe et secondaire
+              </h4>
               <p>
-                Seules les affaires où le politicien est directement ou indirectement impliqué (mis
-                en cause, poursuivi ou condamné) sont comptabilisées dans les agrégats à charge. Les
-                simples mentions dans une affaire tierce ou les cas où le politicien est
-                victime/plaignant ne sont pas inclus dans ces compteurs.
+                Une personne n{"'"}est comptée à charge que lorsqu{"'"}elle est directement mise en
+                cause, poursuivie ou condamnée. Une implication secondaire (témoin, rôle annexe) s
+                {"'"}affiche sur sa fiche mais n{"'"}entre dans aucun compteur à charge. Les simples
+                mentions dans une affaire tierce et les cas où la personne est victime ou plaignante
+                sont exclus de ces compteurs au même titre.
               </p>
             </div>
             <div className="rounded-lg border p-4">
@@ -347,9 +350,9 @@ export default function MethodologiePage() {
             <div className="rounded-lg border p-4">
               <h4 className="font-medium text-foreground mb-1">À charge (procédures validées)</h4>
               <p>
-                Affaires où la personne est mise en cause (directement ou indirectement) et où un
-                juge a validé la procédure : condamnations et procédures validées par un juge. Les
-                enquêtes préliminaires en sont exclues.
+                Affaires où la personne est directement mise en cause et où un juge a validé la
+                procédure : condamnations et procédures validées par un juge. Les enquêtes
+                préliminaires en sont exclues.
               </p>
             </div>
             <div className="rounded-lg border p-4">

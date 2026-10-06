@@ -9,15 +9,17 @@ import {
   AFFAIR_CATEGORY_LABELS,
 } from "@/config/labels";
 import {
-  getCertaintyLevel,
+  getAttributedCertaintyLevel,
   CERTAINTY_LABELS,
   CERTAINTY_COLORS,
   CERTAINTY_DESCRIPTIONS,
   type CertaintyLevel,
 } from "@/config/certainty";
 import { formatDate, stripMarkdown } from "@/lib/utils";
+import { VICTIM_LISTING_INVOLVEMENTS } from "@/lib/affairs/public-filters";
 import type { AffairStatus, AffairCategory, Involvement } from "@/types";
 import { AffairCard } from "./AffairCard";
+import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { CiteAnchor } from "@/components/ui/CiteAnchor";
 import { citeAnchorId } from "@/lib/cite";
 
@@ -37,28 +39,33 @@ const CERTAINTY_LEVELS: CertaintyLevel[] = [
   "CLOS_FAVORABLE",
 ];
 
-export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
-  // Split affairs by involvement: direct (mis en cause) vs mentions vs victim
-  const directAffairs = affairs.filter(
-    (a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"
-  );
-  const mentionAffairs = affairs.filter((a) => a.involvement === "MENTIONED_ONLY");
-  const victimAffairs = affairs.filter(
-    (a) => a.involvement === "VICTIM" || a.involvement === "PLAINTIFF"
-  );
+const VICTIM_ROLES = new Set<Involvement>(VICTIM_LISTING_INVOLVEMENTS);
 
-  // Group direct affairs by certainty level
-  const groupedByLevel: Record<CertaintyLevel, typeof directAffairs> = {
+export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
+  // Only the person prosecuted (DIRECT) is grouped by certainty. A witness or
+  // secondary role (INDIRECT) joins the mentions: the status and the sentence
+  // of the affair belong to someone else.
+  const groupedByLevel: Record<CertaintyLevel, typeof affairs> = {
     ETABLI: [],
     PRONONCE: [],
     EN_COURS: [],
     CLOS_SANS_CHARGE: [],
     CLOS_FAVORABLE: [],
   };
+  const directAffairs: typeof affairs = [];
+  const mentionAffairs: typeof affairs = [];
+  const victimAffairs: typeof affairs = [];
 
-  for (const affair of directAffairs) {
-    const level = getCertaintyLevel(affair.status);
-    groupedByLevel[level].push(affair);
+  for (const affair of affairs) {
+    const level = getAttributedCertaintyLevel(affair);
+    if (level !== null) {
+      groupedByLevel[level].push(affair);
+      directAffairs.push(affair);
+    } else if (VICTIM_ROLES.has(affair.involvement)) {
+      victimAffairs.push(affair);
+    } else {
+      mentionAffairs.push(affair);
+    }
   }
 
   // Sort within each group by date (most recent first)
@@ -120,7 +127,11 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                                   prefetch={false}
                                 >
                                   {linked.politician.fullName}
-                                </Link>
+                                </Link>{" "}
+                                en tant que{" "}
+                                {INVOLVEMENT_LABELS[
+                                  linked.involvement as Involvement
+                                ].toLowerCase()}
                                 {" - "}
                                 <Link
                                   href={`/affaires/${linked.slug}`}
@@ -153,7 +164,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
         </CardContent>
       </Card>
 
-      {/* Affairs -- Mentions (MENTIONED_ONLY) */}
+      {/* Affairs -- Secondary roles and mentions (INDIRECT, MENTIONED_ONLY) */}
       {mentionAffairs.length > 0 && (
         <Card className="border-dashed border-gray-300 dark:border-gray-700">
           <CardHeader>
@@ -205,10 +216,14 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                           </p>
                         )}
                       </div>
-                      <Badge variant="outline" className="text-xs self-start whitespace-nowrap">
-                        {AFFAIR_STATUS_LABELS[affair.status as AffairStatus]}
-                      </Badge>
                     </div>
+                    {/* The status describes the person prosecuted, not this one: the
+                        third-party notice replaces the raw status badge. */}
+                    <AffairStatusNotice
+                      status={affair.status as AffairStatus}
+                      involvement={affair.involvement as Involvement}
+                      className="mt-2"
+                    />
                   </div>
                 ))}
               </div>
@@ -307,7 +322,9 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
                           prefetch={false}
                         >
                           {linked.politician.fullName}
-                        </Link>
+                        </Link>{" "}
+                        en tant que{" "}
+                        {INVOLVEMENT_LABELS[linked.involvement as Involvement].toLowerCase()}
                         {" - "}
                         <Link
                           href={`/affaires/${linked.slug}`}

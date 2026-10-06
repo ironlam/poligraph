@@ -110,6 +110,56 @@ describe("compteurs publics transmis au chat", () => {
     expect(prompt).toContain("Fact-checks référencés: 0");
   });
 
+  it("affaire indexée : le rôle d'un témoin remplace le rappel adressé à un mis en cause", async () => {
+    const results = [
+      {
+        id: "temoin",
+        entityType: "AFFAIR",
+        content: "Contenu de l'affaire du témoin",
+        similarity: 1,
+        metadata: {
+          title: "Affaire où il est témoin",
+          politicianName: "Élu Témoin",
+          involvement: "INDIRECT",
+        },
+      },
+      {
+        id: "mis-en-cause",
+        entityType: "AFFAIR",
+        content: "Contenu de l'affaire du mis en cause",
+        similarity: 1,
+        metadata: {
+          title: "Affaire où il est mis en cause",
+          politicianName: "Élu Mis En Cause",
+          involvement: "DIRECT",
+        },
+      },
+    ];
+    mocks.searchSimilar.mockResolvedValue(results);
+    mocks.rerankResults.mockResolvedValue(results);
+
+    await POST(
+      new Request("https://poligraph.fr/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ messages: [{ role: "user", content: "affaire témoin" }] }),
+      })
+    );
+
+    const streamCall = mocks.streamText.mock.calls[0]?.[0] as {
+      messages: Array<{ content: string }>;
+    };
+    const prompt = streamCall.messages.at(-1)!.content;
+    const sectionOf = (title: string) => prompt.slice(prompt.indexOf(title)).split("[AFFAIR]")[0]!;
+
+    const witness = sectionOf("Affaire où il est témoin");
+    expect(witness).toContain("Témoin/Secondaire");
+    expect(witness).not.toContain("présomption d'innocence");
+
+    const accused = sectionOf("Affaire où il est mis en cause");
+    expect(accused).toContain("Élu Mis En Cause bénéficie de la présomption d'innocence");
+    expect(accused).not.toContain("Témoin/Secondaire");
+  });
+
   it("refuse de répondre quand CHATBOT_ENABLED est désactivé", async () => {
     mocks.isFeatureEnabled.mockResolvedValue(false);
 

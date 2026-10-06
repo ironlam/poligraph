@@ -16,8 +16,8 @@ import {
   type AffairSuperCategory,
 } from "@/config/labels";
 import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
-import { getJudicialMaturity } from "@/config/judicial-maturity";
-import { isAccusedInvolvement } from "@/config/certainty";
+import { getJudicialMaturity, type JudicialMaturity } from "@/config/judicial-maturity";
+import { ADVERSE_JURISDICTION_ORDER, isAccusedInvolvement } from "@/config/certainty";
 import type { AffairCategory, AffairStatus, Involvement } from "@/types";
 
 const MATURITY_TAB_LABELS: Record<string, string> = {
@@ -48,6 +48,7 @@ export interface PartyAffair {
   status: string;
   category: string;
   involvement: string;
+  jurisdictionOrder: string;
   sentence: string | null;
   verdictDate: Date | null;
   startDate: Date | null;
@@ -57,6 +58,20 @@ export interface PartyAffair {
     fullName: string;
     slug: string;
   };
+}
+
+/**
+ * Stage tab of an affair, or null when the member is not the person prosecuted
+ * before a criminal court. Same attribution as the counters above the list
+ * (DIRECT, penal order): a witness, a victim, a mention or a non-criminal
+ * sanction only appears under "Toutes". The penal order comes from
+ * `@/config/certainty` rather than public-filters, which would pull Prisma into
+ * this client component.
+ */
+function attributedMaturity(affair: PartyAffair): JudicialMaturity | null {
+  if (!isAccusedInvolvement(affair.involvement as Involvement)) return null;
+  if (affair.jurisdictionOrder !== ADVERSE_JURISDICTION_ORDER) return null;
+  return getJudicialMaturity(affair.status as AffairStatus);
 }
 
 interface PartyAffairsListProps {
@@ -71,18 +86,15 @@ export function PartyAffairsList({ affairs }: PartyAffairsListProps) {
   const maturityCounts: Record<string, number> = { ALL: affairs.length };
   const superCatCounts: Record<string, number> = {};
   for (const a of affairs) {
-    const maturity = getJudicialMaturity(a.status as AffairStatus);
-    maturityCounts[maturity] = (maturityCounts[maturity] || 0) + 1;
+    const maturity = attributedMaturity(a);
+    if (maturity) maturityCounts[maturity] = (maturityCounts[maturity] || 0) + 1;
     const sc = CATEGORY_TO_SUPER[a.category as AffairCategory];
     superCatCounts[sc] = (superCatCounts[sc] || 0) + 1;
   }
 
   // Apply filters
   const filtered = affairs.filter((a) => {
-    if (maturityFilter !== "ALL") {
-      const maturity = getJudicialMaturity(a.status as AffairStatus);
-      if (maturity !== maturityFilter) return false;
-    }
+    if (maturityFilter !== "ALL" && attributedMaturity(a) !== maturityFilter) return false;
     if (superCatFilter) {
       const sc = CATEGORY_TO_SUPER[a.category as AffairCategory];
       if (sc !== superCatFilter) return false;

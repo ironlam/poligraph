@@ -12,6 +12,7 @@ import {
   type Ledger,
   type SourceRow,
 } from "@/lib/affairs/audit-evidence";
+import { ATTRIBUTION_ROWS } from "@/lib/affairs/__tests__/fixtures/attribution";
 
 // #566 counted two different things under one name. `hasOfficialSource` only
 // looks at Source rows, while level A is granted on a linked CourtDecision, so
@@ -671,7 +672,7 @@ describe("la file éditoriale ne réclame pas la peine d'un tiers (#576)", () =>
   const THIRD_PARTY_PROSE =
     "Alexandre Benalla a été condamné à 3 ans de prison dont 1 an ferme et 2 ans avec sursis.";
 
-  it.each(["MENTIONED_ONLY", "VICTIM", "PLAINTIFF"] as const)(
+  it.each(["MENTIONED_ONLY", "VICTIM", "PLAINTIFF", "INDIRECT"] as const)(
     "ne signale rien quand la personne est %s",
     (involvement) => {
       const a = affair({ involvement, prisonMonths: null, description: THIRD_PARTY_PROSE });
@@ -680,8 +681,8 @@ describe("la file éditoriale ne réclame pas la peine d'un tiers (#576)", () =>
     }
   );
 
-  it.each(["DIRECT", "INDIRECT"] as const)("signale quand la personne est %s", (involvement) => {
-    const a = affair({ involvement, prisonMonths: null, description: THIRD_PARTY_PROSE });
+  it("signale quand la personne est DIRECT", () => {
+    const a = affair({ involvement: "DIRECT", prisonMonths: null, description: THIRD_PARTY_PROSE });
 
     expect(a.editorialSignals.map((s) => s.kind)).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
   });
@@ -735,5 +736,50 @@ describe("verdictPostdatesAllSources (#571, partagé avec le garde de publicatio
         source({ sourceType: "WIKIDATA", publishedAt: new Date("2020-01-01") }),
       ])
     ).toBe(false);
+  });
+});
+
+describe("assess : un témoin INDIRECT n'est pas la personne condamnée", () => {
+  const witness = ATTRIBUTION_ROWS.find((r) => r.key === "indirectWitnessConvicted")!;
+
+  it("signale IMPLICATION_NON_ADVERSE pour un témoin INDIRECT condamné", () => {
+    const a = affair({ involvement: witness.involvement, status: witness.status });
+
+    expect(a.contradictions.map((c) => c.kind)).toContain("IMPLICATION_NON_ADVERSE");
+  });
+
+  it("ne produit aucun signal de fin de peine pour un témoin INDIRECT", () => {
+    const a = affair({
+      involvement: witness.involvement,
+      status: witness.status,
+      prisonMonths: null,
+      prisonFirmMonths: null,
+      ineligibilityMonths: 45,
+      ineligibilityFirmMonths: null,
+      otherSentence:
+        "3 ans de prison dont 1 an ferme ; 45 mois d'inéligibilité dont 30 avec sursis",
+    });
+
+    const kinds = a.editorialSignals.map((s) => s.kind);
+    expect(kinds).not.toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+    expect(kinds).not.toContain("INELIGIBILITY_SPLIT_ONLY_IN_PROSE");
+  });
+
+  it("contrôle positif : la même fiche en DIRECT produit les deux signaux", () => {
+    const direct = ATTRIBUTION_ROWS.find((r) => r.key === "directPenalConvicted")!;
+    const a = affair({
+      involvement: direct.involvement,
+      status: direct.status,
+      prisonMonths: null,
+      prisonFirmMonths: null,
+      ineligibilityMonths: 45,
+      ineligibilityFirmMonths: null,
+      otherSentence:
+        "3 ans de prison dont 1 an ferme ; 45 mois d'inéligibilité dont 30 avec sursis",
+    });
+
+    const kinds = a.editorialSignals.map((s) => s.kind);
+    expect(kinds).toContain("PRISON_SPLIT_ONLY_IN_PROSE");
+    expect(kinds).toContain("INELIGIBILITY_SPLIT_ONLY_IN_PROSE");
   });
 });

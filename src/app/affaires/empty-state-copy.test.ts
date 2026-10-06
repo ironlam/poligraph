@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/data/affairs", () => ({
   getAffairs: mocks.getAffairs,
   getSuperCategoryCounts: vi.fn().mockResolvedValue({}),
-  getCertaintyCounts: vi.fn().mockResolvedValue({}),
+  getCertaintyFacetCounts: vi.fn().mockResolvedValue({}),
+  getAdverseCertaintyCounts: vi.fn().mockResolvedValue({}),
   getPartiesWithAffairs: mocks.getPartiesWithAffairs,
   getPublicPartyMetadataBySlug: mocks.getPublicPartyMetadataBySlug,
 }));

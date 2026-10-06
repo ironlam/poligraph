@@ -67,7 +67,7 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
             {/* Same rule as the affair detail page (#383): when the politician is not
                 the one prosecuted, the role leads and the status turns neutral, so the
                 affair does not read as their own conviction.
-                Currently unreachable in practice: `AffairsSection` routes
+                Currently unreachable in practice: `AffairsSection` routes INDIRECT,
                 MENTIONED_ONLY, VICTIM and PLAINTIFF affairs to their own blocks, which
                 already do this. Kept because `affair` is typed `any` here, so nothing
                 stops a future call site from passing one — but the fiche is protected

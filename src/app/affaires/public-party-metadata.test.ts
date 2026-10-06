@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/data/affairs", () => ({
   getAffairs: vi.fn(),
   getSuperCategoryCounts: vi.fn(),
-  getCertaintyCounts: vi.fn(),
+  getCertaintyFacetCounts: vi.fn(),
+  getAdverseCertaintyCounts: vi.fn(),
   getPartiesWithAffairs: vi.fn(),
   getPublicPartyMetadataBySlug: mocks.getPublicPartyMetadataBySlug,
 }));

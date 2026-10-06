@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Involvement } from "@/generated/prisma";
+import { AffairStatus } from "@/generated/prisma";
+import { getJudicialMaturity } from "@/config/judicial-maturity";
 import { byCertainty, countByCertainty, summarizePartyAffairs } from "../affair-summary";
 
 function affair(status: string, involvement: Involvement = "DIRECT") {
@@ -7,6 +9,20 @@ function affair(status: string, involvement: Involvement = "DIRECT") {
 }
 
 describe("summarizePartyAffairs", () => {
+  it.each(Object.values(AffairStatus))(
+    "%s : les compteurs suivent les paliers de maturité judiciaire",
+    (status) => {
+      const maturity = getJudicialMaturity(status);
+      const summary = summarizePartyAffairs([affair(status)]);
+
+      expect(summary.condamnations).toBe(maturity === "CONDAMNATION" ? 1 : 0);
+      expect(summary.enCours).toBe(
+        maturity === "PROCEDURE_VALIDEE" || maturity === "ENQUETE" ? 1 : 0
+      );
+      expect(summary.closesSansCondamnation).toBe(maturity === "CLOSE_SANS_CONDAMNATION" ? 1 : 0);
+    }
+  );
+
   it("counts a definitive conviction as a condamnation", () => {
     const summary = summarizePartyAffairs([affair("CONDAMNATION_DEFINITIVE")]);
 
@@ -27,13 +43,13 @@ describe("summarizePartyAffairs", () => {
     expect(summary.condamnations).toBe(0);
   });
 
-  it("keeps both accused involvements", () => {
+  it("ne compte pas un témoin (INDIRECT) parmi les condamnations", () => {
     const summary = summarizePartyAffairs([
       affair("CONDAMNATION_DEFINITIVE", "DIRECT"),
       affair("CONDAMNATION_DEFINITIVE", "INDIRECT"),
     ]);
 
-    expect(summary.condamnations).toBe(2);
+    expect(summary.condamnations).toBe(1);
   });
 
   it("counts an open investigation as en cours, not as a conviction", () => {

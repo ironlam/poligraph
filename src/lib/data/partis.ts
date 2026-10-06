@@ -12,7 +12,14 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
-import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import {
+  ADVERSE_INVOLVEMENTS,
+  ADVERSE_JURISDICTION_ORDER,
+  getAdverseInvolvementSql,
+  getDocumentaryAffairWhere,
+  getPublishedAffairSqlWhere,
+  getPublishedAffairWhere,
+} from "@/lib/affairs/public-filters";
 
 export const getParty = cache(async function getParty(slug: string) {
   "use cache";
@@ -197,13 +204,16 @@ async function queryParties(
           partyMemberships: { where: { politician: PUBLIC_POLITICIAN_WHERE } },
         },
       },
+      // Compteurs du parti : personne mise en cause (DIRECT, jamais un témoin), ordre pénal.
       affairsAtTime: {
         where: {
+          // Redondant avec le helper suivant, gardé explicite pour le contrôle MCP-01.
           ...getPublishedAffairWhere(),
+          ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
+          jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
           politician: PUBLIC_POLITICIAN_WHERE,
-          involvement: { notIn: ["VICTIM", "PLAINTIFF"] },
         },
-        select: { id: true, status: true, involvement: true },
+        select: { id: true, status: true },
       },
       predecessor: {
         select: {
@@ -219,10 +229,7 @@ async function queryParties(
   return parties
     .filter((p) => p.slug)
     .map((party) => {
-      const affairs = party.affairsAtTime;
-      const directAffairs = affairs.filter(
-        (a) => a.involvement === "DIRECT" || a.involvement === "INDIRECT"
-      );
+      const directAffairs = party.affairsAtTime;
       const condamnations = directAffairs.filter(
         (a) => getJudicialMaturity(a.status) === "CONDAMNATION"
       ).length;
@@ -320,7 +327,8 @@ export async function getPartiesStats() {
               WHERE public_affair_politician.id = a."politicianId"
                 AND public_affair_politician."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
             )
-            AND a.involvement NOT IN ('VICTIM', 'PLAINTIFF')
+            AND ${getAdverseInvolvementSql()}
+            AND a."jurisdictionOrder" = ${ADVERSE_JURISDICTION_ORDER}::"JurisdictionOrder"
         )
       ) AS affaires
     FROM "Party" p

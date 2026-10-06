@@ -16,7 +16,7 @@ import {
   PUBLIC_POLITICIAN_PUBLICATION_STATUS,
   PUBLIC_POLITICIAN_WHERE,
 } from "@/lib/api/public-contract";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { getAdverseAffairWhere } from "@/lib/affairs/public-filters";
 
 // ============================================
 // Incumbent maire helper
@@ -310,11 +310,12 @@ export const getCommune = cache(async function getCommune(inseeCode: string) {
   const affairsCountMap = new Map<string, number>();
 
   if (politicianIds.length > 0) {
-    // Count affairs per politician
+    // Count adverse affairs per politician: a witness, victim or mention is not counted
+    // next to a candidate's name.
     const affairsCounts = await db.affair.groupBy({
       by: ["politicianId"],
       where: {
-        ...getPublishedAffairWhere(),
+        ...getAdverseAffairWhere(),
         politician: PUBLIC_POLITICIAN_WHERE,
         politicianId: { in: politicianIds },
       },

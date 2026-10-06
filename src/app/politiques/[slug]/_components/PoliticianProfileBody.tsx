@@ -16,6 +16,7 @@ import { PoliticianSignals } from "@/components/politicians/PoliticianSignals";
 import { PresumptionNotice } from "@/components/politicians/PresumptionNotice";
 import { PoliticianSummary } from "@/components/politicians/PoliticianSummary";
 import { computeJudicialCounts } from "@/lib/politicians/judicial-counts";
+import { isAccusedInvolvement } from "@/config/certainty";
 import { buildPoliticianSignals } from "@/lib/politicians/signals";
 import { buildSourceLinks } from "@/lib/politicians/external-sources";
 import type {
@@ -70,7 +71,7 @@ export function PoliticianProfileBody({
   const parliamentaryCard = voteStats?.parliamentaryCard ?? null;
 
   // directAffairs still feeds the Carrière timeline.
-  const directAffairs = affairs.filter((a) => a.involvement === "DIRECT");
+  const directAffairs = affairs.filter((a) => isAccusedInvolvement(a.involvement));
 
   // Judicial counters: "mis en cause" = DIRECT only (no double count with
   // mentions; enquêtes préliminaires excluded, RGPD art. 10 invariant).

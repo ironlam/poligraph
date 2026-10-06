@@ -67,7 +67,7 @@ describe("public-filters — contrat des agrégats (RGPD art. 10)", () => {
     for (const excluded of EXCLUDED_INVOLVEMENTS) {
       expect(involvements).not.toContain(excluded);
     }
-    expect(involvements).toEqual(["DIRECT", "INDIRECT"]);
+    expect(involvements).toEqual(["DIRECT"]);
   });
 
   it("« condamnés » = statuts de condamnation uniquement", () => {

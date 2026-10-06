@@ -3,6 +3,8 @@ import { findDepartmentCode } from "@/config/departments";
 import { DEPARTMENTS } from "@/config/departments";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { isAccusedInvolvement } from "@/config/certainty";
+import { INVOLVEMENT_LABELS } from "@/config/labels";
 import { extractPersonName, AFFAIR_STATUS_LABELS, formatCurrency } from "./helpers";
 
 /**
@@ -565,8 +567,13 @@ async function fetchPoliticianProfile(searchName: string): Promise<string | null
   if (politician.affairs.length > 0) {
     context += `\n⚠️ **${politician.affairs.length} affaire(s) judiciaire(s) référencée(s)** :\n`;
     for (const a of politician.affairs) {
-      const status = AFFAIR_STATUS_LABELS[a.status] || a.status;
-      context += `• ${a.title} — ${status}\n`;
+      // Le statut décrit l'issue pour la personne poursuivie : un autre rôle s'affiche à sa place.
+      if (isAccusedInvolvement(a.involvement)) {
+        const status = AFFAIR_STATUS_LABELS[a.status] || a.status;
+        context += `• ${a.title} — ${status}\n`;
+      } else {
+        context += `• [${INVOLVEMENT_LABELS[a.involvement]}] ${a.title}\n`;
+      }
     }
     const DEFINITIVE_STATUSES = [
       "CONDAMNATION_DEFINITIVE",
@@ -576,10 +583,10 @@ async function fetchPoliticianProfile(searchName: string): Promise<string | null
       "PRESCRIPTION",
       "CLASSEMENT_SANS_SUITE",
     ];
-    const isAllDefinitive = politician.affairs.every((a: { status: string }) =>
-      DEFINITIVE_STATUSES.includes(a.status)
+    const hasNonDefinitiveAccused = politician.affairs.some(
+      (a) => isAccusedInvolvement(a.involvement) && !DEFINITIVE_STATUSES.includes(a.status)
     );
-    if (!isAllDefinitive) {
+    if (hasNonDefinitiveAccused) {
       context += `\n⚠️ Rappel : ${politician.fullName} bénéficie de la présomption d'innocence pour les affaires non définitivement jugées.`;
     }
   }
@@ -619,8 +626,13 @@ async function fetchPoliticianAffairs(searchName: string): Promise<string | null
 
   let result = `**Affaires judiciaires de ${politician.fullName}** (${politician.affairs.length}) :\n\n`;
   for (const a of politician.affairs) {
-    const status = AFFAIR_STATUS_LABELS[a.status] || a.status;
-    result += `• **${a.title}** — ${status}\n`;
+    // Le statut décrit l'issue pour la personne poursuivie : un autre rôle s'affiche à sa place.
+    if (isAccusedInvolvement(a.involvement)) {
+      const status = AFFAIR_STATUS_LABELS[a.status] || a.status;
+      result += `• **${a.title}** — ${status}\n`;
+    } else {
+      result += `• [${INVOLVEMENT_LABELS[a.involvement]}] **${a.title}**\n`;
+    }
     if (a.description) result += `  ${a.description.slice(0, 200)}\n`;
     if (a.factsDate) result += `  Faits : ${a.factsDate.toLocaleDateString("fr-FR")}\n`;
     for (const src of a.sources) {
@@ -631,6 +643,7 @@ async function fetchPoliticianAffairs(searchName: string): Promise<string | null
 
   const hasNonDefinitive = politician.affairs.some(
     (a) =>
+      isAccusedInvolvement(a.involvement) &&
       ![
         "CONDAMNATION_DEFINITIVE",
         "RELAXE",

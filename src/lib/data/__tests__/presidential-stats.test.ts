@@ -66,7 +66,7 @@ describe("getPresidentialOverviewStats", () => {
         by: ["politicianId"],
         where: expect.objectContaining({
           publicationStatus: "PUBLISHED",
-          involvement: { in: ["DIRECT", "INDIRECT"] },
+          involvement: { in: ["DIRECT"] },
           status: { in: expect.any(Array) },
           category: { in: expect.any(Array) },
         }),

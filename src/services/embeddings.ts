@@ -10,7 +10,8 @@
 import { VoyageAIClient } from "voyageai";
 import { db } from "@/lib/db";
 import type { EmbeddingType, Prisma } from "@/generated/prisma";
-import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { getConvictionOnlyWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { INVOLVEMENT_LABELS } from "@/config/labels";
 import {
   getPublicFactCheckWhere,
   PUBLIC_PARTY_WHERE,
@@ -238,7 +239,7 @@ async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[
     affairIds.length > 0
       ? db.affair.findMany({
           where: { id: { in: affairIds }, ...PUBLIC_AFFAIR_WHERE },
-          select: { id: true },
+          select: { id: true, involvement: true, status: true },
         })
       : [],
     politicianIds.length > 0
@@ -261,8 +262,23 @@ async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[
       : [],
   ]);
 
+  // An AFFAIR embedding whose role or status no longer matches the affair was written
+  // under the old facts (a witness indexed as accused, for instance). Its stored text
+  // cannot be safely rewritten here, so it is dropped until the daily pass reindexes it.
+  // Embeddings from before `involvement` was stored have an unknown role: dropped too.
+  const currentAffairs = affairs.filter((a) => {
+    const metadata = results.find(
+      (r) => r.entityType === "AFFAIR" && r.entityId === a.id
+    )?.metadata;
+    return (
+      metadata?.involvement !== undefined &&
+      metadata.involvement === a.involvement &&
+      metadata.status === a.status
+    );
+  });
+
   const publicIds: Partial<Record<EmbeddingType, Set<string>>> = {
-    AFFAIR: new Set(affairs.map((a) => a.id)),
+    AFFAIR: new Set(currentAffairs.map((a) => a.id)),
     POLITICIAN: new Set(politicians.map((p) => p.id)),
     FACTCHECK: new Set(factChecks.map((f) => f.id)),
     PARTY: new Set([GLOBAL_STATS_ID, ...parties.map((p) => p.id)]),
@@ -463,7 +479,7 @@ export async function indexAffair(affairId: string): Promise<void> {
 
   const parts: string[] = [
     affair.title,
-    `Concernant: ${affair.politician.fullName}`,
+    `Concernant: ${affair.politician.fullName} (${INVOLVEMENT_LABELS[affair.involvement]})`,
     affair.description.slice(0, 500), // Truncate long descriptions
   ];
 
@@ -486,6 +502,7 @@ export async function indexAffair(affairId: string): Promise<void> {
       slug: affair.slug,
       politicianName: affair.politician.fullName,
       politicianSlug: affair.politician.slug,
+      involvement: affair.involvement,
       status: affair.status,
       category: affair.category,
       sources: affair.sources.map((s) => ({ title: s.title, url: s.url })),
@@ -758,8 +775,13 @@ export async function indexGlobalStats(): Promise<void> {
 
   // Get affair counts
   const affairCount = await db.affair.count({ where: PUBLIC_AFFAIR_WHERE });
+  // Condamnations pénales définitives du mis en cause, jamais celles d'un tiers (témoin).
   const condemnedCount = await db.affair.count({
-    where: { ...PUBLIC_AFFAIR_WHERE, status: "CONDAMNATION_DEFINITIVE" },
+    where: {
+      ...PUBLIC_AFFAIR_WHERE,
+      ...getConvictionOnlyWhere(),
+      status: "CONDAMNATION_DEFINITIVE",
+    },
   });
 
   // Get party count
@@ -846,12 +868,20 @@ export async function indexAllOfType(
 
   // Build a map of existing embedding updatedAt times for delta comparison
   let embeddingDates: Map<string, Date> | undefined;
+  // AFFAIR embeddings written before `involvement` was stored: reindexed whatever their date.
+  const missingInvolvement = new Set<string>();
   if (deltaOnly) {
     const existingEmbeddings = await db.chatEmbedding.findMany({
       where: { entityType },
-      select: { entityId: true, updatedAt: true },
+      select: { entityId: true, updatedAt: true, metadata: entityType === "AFFAIR" },
     });
     embeddingDates = new Map(existingEmbeddings.map((e) => [e.entityId, e.updatedAt]));
+    if (entityType === "AFFAIR") {
+      for (const e of existingEmbeddings) {
+        const metadata = e.metadata as Record<string, unknown> | null;
+        if (metadata?.involvement === undefined) missingInvolvement.add(e.entityId);
+      }
+    }
   }
 
   // Helper: check if entity needs re-indexing
@@ -859,6 +889,7 @@ export async function indexAllOfType(
     if (!deltaOnly || !embeddingDates) return true;
     const embUpdated = embeddingDates.get(entityId);
     if (!embUpdated) return true; // No embedding yet
+    if (missingInvolvement.has(entityId)) return true;
     return entityUpdatedAt > embUpdated;
   };
 

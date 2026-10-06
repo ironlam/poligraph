@@ -2,6 +2,11 @@ import { db } from "@/lib/db";
 import { getCategoriesForSuper } from "@/config/labels";
 import { getCertaintyLevel, type CertaintyLevel } from "@/config/certainty";
 import type { ProbityStats } from "./probity-stats-format";
+import {
+  ADVERSE_INVOLVEMENTS,
+  ADVERSE_JURISDICTION_ORDER,
+  getDocumentaryAffairWhere,
+} from "./public-filters";
 
 export { formatProbityBreakdown, type ProbityStats } from "./probity-stats-format";
 
@@ -27,11 +32,12 @@ const PROBITY_CATEGORIES = getCategoriesForSuper("PROBITE");
 export async function getProbityStats(politicianId: string): Promise<ProbityStats> {
   const rows = await db.affair.groupBy({
     by: ["status"],
+    // Personne mise en cause (DIRECT, jamais un témoin), ordre pénal, tous statuts.
     where: {
+      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
+      jurisdictionOrder: ADVERSE_JURISDICTION_ORDER,
       politicianId,
-      publicationStatus: "PUBLISHED",
       category: { in: PROBITY_CATEGORIES },
-      involvement: { in: ["DIRECT", "INDIRECT"] },
     },
     _count: { _all: true },
   });

@@ -1,6 +1,6 @@
 import type { AffairStatus, Involvement } from "@/types";
 import { isAccusedInvolvement } from "@/config/certainty";
-import { getJudicialMaturity } from "@/config/judicial-maturity";
+import { CONDAMNATION_STATUSES } from "@/config/judicial-maturity";
 
 /**
  * Encart de prudence juridique affiché avec chaque affaire publique
@@ -53,7 +53,7 @@ export function getAffairNoticeVariant(
   // personne n'est ni mise en cause ni poursuivie, et le silence total laissait le
   // statut et les qualifications se lire comme les siens (I5, #511).
   if (!isAccusedInvolvement(involvement)) {
-    return getJudicialMaturity(status) === "CONDAMNATION" ? "third_party" : "not_accused";
+    return CONDAMNATION_STATUSES.includes(status) ? "third_party" : "not_accused";
   }
   if (status === "PRESCRIPTION") return "prescription";
   if (FAVORABLE_STATUSES.includes(status)) return "favorable";

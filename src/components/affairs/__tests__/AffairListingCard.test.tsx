@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AffairListingCard, type AffairListingCardData } from "../AffairListingCard";
+import { CERTAINTY_LABELS } from "@/config/certainty";
+import { ATTRIBUTION_ROWS } from "@/lib/affairs/__tests__/fixtures/attribution";
 
 function baseAffair(overrides: Partial<AffairListingCardData> = {}): AffairListingCardData {
   return {
@@ -68,6 +70,25 @@ describe("AffairListingCard : présomption d'innocence (RGPD art. 10)", () => {
     const victimBorder = victim.container.querySelector("article")!.style.borderLeftColor;
     expect(accusedBorder).not.toBe("");
     expect(victimBorder).not.toBe(accusedBorder);
+  });
+});
+
+describe("AffairListingCard : témoin (INDIRECT) condamné en tant que tiers", () => {
+  const witness = ATTRIBUTION_ROWS.find((r) => r.key === "indirectWitnessConvicted")!;
+
+  it("ni pill de certitude à charge, ni peine attribuée ; le rôle porte le badge", () => {
+    const { container } = render(
+      <AffairListingCard
+        affair={baseAffair({
+          status: witness.status,
+          involvement: witness.involvement,
+          sentence: "Deux ans de prison avec sursis",
+        })}
+      />
+    );
+    expect(container.textContent).toContain("Témoin/Secondaire");
+    expect(container.textContent).not.toContain(CERTAINTY_LABELS.ETABLI);
+    expect(container.textContent).not.toContain("Deux ans de prison");
   });
 });
 

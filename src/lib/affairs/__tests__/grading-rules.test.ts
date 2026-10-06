@@ -16,6 +16,8 @@ const KNOWN_FINGERPRINTS: Record<number, string> = {
   // gained `;` as a segment separator, and `ineligibilityContext` was added so an
   // ineligibility split stops satisfying the prison predicate.
   2: "9d0939e641c49660",
+  // v3: `adverseInvolvements` narrowed from DIRECT + INDIRECT to DIRECT, a witness is not the accused.
+  3: "d5a9c68b933a62a1",
 };
 
 describe("les règles de notation sont versionnées", () => {
@@ -43,7 +45,7 @@ describe("les règles de notation sont versionnées", () => {
   it("l'empreinte bouge si une règle de cohérence bouge", () => {
     const altered = {
       ...RULES,
-      coherence: { ...RULES.coherence, adverseInvolvements: ["DIRECT"] as const },
+      coherence: { ...RULES.coherence, adverseInvolvements: ["DIRECT", "INDIRECT"] as const },
     };
 
     expect(fingerprintOf(altered)).not.toBe(rulesFingerprint());

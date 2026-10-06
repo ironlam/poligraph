@@ -19,9 +19,10 @@ describe("getAffairNoticeVariant — sélection par statut et involvement", () =
 
   it("condamnations : définitive vs non définitive", () => {
     expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "DIRECT")).toBe("definitive");
-    expect(getAffairNoticeVariant("CONDAMNATION_PREMIERE_INSTANCE", "INDIRECT")).toBe(
+    expect(getAffairNoticeVariant("CONDAMNATION_PREMIERE_INSTANCE", "DIRECT")).toBe(
       "non_definitive"
     );
+    expect(getAffairNoticeVariant("CONDAMNATION_DEFINITIVE", "INDIRECT")).toBe("third_party");
     expect(getAffairNoticeVariant("APPEL_EN_COURS", "DIRECT")).toBe("non_definitive");
   });
 
