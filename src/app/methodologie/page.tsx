@@ -48,12 +48,12 @@ const SUPER_CATEGORIES: { key: AffairSuperCategory; description: string }[] = [
   {
     key: "PROBITE",
     description:
-      "Infractions liées à l'exercice d'un mandat ou d'une fonction publique : corruption, détournement de fonds publics, prise illégale d'intérêts, financement illégal de campagne. Ces infractions sont spécifiques aux responsables publics (inspiré de la classification Sapin II).",
+      "Infractions liées à l'exercice d'un mandat ou d'une fonction publique : corruption, trafic d'influence, prise illégale d'intérêts, favoritisme, détournement de fonds publics, emplois fictifs, conflits d'intérêts. Ces infractions sont spécifiques aux responsables publics (inspiré de la classification Sapin II).",
   },
   {
     key: "FINANCES",
     description:
-      "Infractions financières de droit commun : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie.",
+      "Infractions financières de droit commun : fraude fiscale, abus de biens sociaux, blanchiment, escroquerie, financement illégal de campagne ou de parti.",
   },
   {
     key: "PERSONNES",
