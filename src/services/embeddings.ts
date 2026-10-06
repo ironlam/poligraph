@@ -267,8 +267,9 @@ async function keepPublicResults(results: SearchResult[]): Promise<SearchResult[
   // cannot be safely rewritten here, so it is dropped until the daily pass reindexes it.
   // Embeddings from before `involvement` was stored have an unknown role: dropped too.
   const currentAffairs = affairs.filter((a) => {
-    const metadata = results.find((r) => r.entityType === "AFFAIR" && r.entityId === a.id)
-      ?.metadata;
+    const metadata = results.find(
+      (r) => r.entityType === "AFFAIR" && r.entityId === a.id
+    )?.metadata;
     return (
       metadata?.involvement !== undefined &&
       metadata.involvement === a.involvement &&
