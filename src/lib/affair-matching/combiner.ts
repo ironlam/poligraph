@@ -16,7 +16,6 @@ export type AffairJudgment = "SAME" | "UNDECIDED" | "NO_MATCH";
 const CORROBORATING_SIGNAL_IDS = new Set([
   "external-id",
   "jurisdiction",
-  "party-context",
   "role-context",
   "temporal-mandate",
 ]);

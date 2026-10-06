@@ -51,15 +51,6 @@ export async function loadCandidatePool(): Promise<AffairCandidateRecord[]> {
           },
         },
       },
-      partyHistory: {
-        select: {
-          startDate: true,
-          endDate: true,
-          party: {
-            select: { name: true },
-          },
-        },
-      },
       externalIds: {
         select: {
           source: true,
@@ -84,13 +75,6 @@ export async function loadCandidatePool(): Promise<AffairCandidateRecord[]> {
       endDate: m.endDate ?? null,
     }));
 
-    const parties = row.partyHistory.map((pm) => ({
-      partyLabel: pm.party.name,
-      startDate: pm.startDate ?? null,
-      endDate: pm.endDate ?? null,
-      current: pm.endDate === null,
-    }));
-
     // Reduce to a map: DataSource string key → externalId value.
     // When a politician has multiple IDs from the same source, last one wins
     // (matches the assumption in ExternalIdSignal that one ID per source suffices).
@@ -110,7 +94,6 @@ export async function loadCandidatePool(): Promise<AffairCandidateRecord[]> {
       civility: row.civility ?? null,
       departments,
       mandates,
-      parties,
       externalIds,
     };
   });

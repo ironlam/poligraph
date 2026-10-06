@@ -28,7 +28,6 @@ function politician(overrides: Partial<AffairCandidateRecord>): AffairCandidateR
     civility: null,
     departments: [],
     mandates: [],
-    parties: [],
     externalIds: {},
     ...overrides,
   };
@@ -67,6 +66,28 @@ describe("scoreAffairAgainstCandidates", () => {
     const decision = scoreAffairAgainstCandidates(input, candidates, EMPTY_SURNAME_VOCABULARY);
     expect(decision.judgment).toBe("SAME");
     expect(decision.topCandidateId).toBe("winner");
+  });
+
+  // The party signal compared full party names from the base ("Rassemblement
+  // National") with acronyms found in the text ("RN"), so it never matched and
+  // docked every candidate with a party. Fixed as is, it would have turned 115
+  // replayed decisions into SAME, false ones included: a political article
+  // nearly always names a party. Removed rather than repaired.
+  it("does not score party mentions", () => {
+    const input: AffairScoringInput = {
+      text: "Le député RN Jean Dupont a été mis en examen, a indiqué un responsable LR.",
+      metadata: { source: SourceType.PRESSE },
+    };
+
+    const decision = scoreAffairAgainstCandidates(
+      input,
+      [politician({ id: "pol1" })],
+      EMPTY_SURNAME_VOCABULARY
+    );
+
+    const signalIds = decision.topCandidates.flatMap((c) => c.signals.map((s) => s.signalId));
+    expect(signalIds.length).toBeGreaterThan(0);
+    expect(signalIds).not.toContain("party-context");
   });
 
   it("returns NO_MATCH when foreign context dominates", () => {

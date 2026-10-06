@@ -19,7 +19,6 @@ import { FirstNameSignal } from "./signals/first-name";
 import { JurisdictionSignal } from "./signals/jurisdiction";
 import { TemporalMandateSignal } from "./signals/temporal-mandate";
 import { RoleContextSignal } from "./signals/role-context";
-import { PartyContextSignal } from "./signals/party-context";
 import { ContextPlausibilitySignal } from "./signals/context-plausibility";
 
 const SIGNALS = [
@@ -29,7 +28,6 @@ const SIGNALS = [
   new JurisdictionSignal(),
   new TemporalMandateSignal(),
   new RoleContextSignal(),
-  new PartyContextSignal(),
   new ContextPlausibilitySignal(),
 ];
 

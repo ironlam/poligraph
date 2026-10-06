@@ -27,7 +27,6 @@ function makeCandidate(firstName = "Jean", lastName = "Dupont"): AffairCandidate
     civility: null,
     departments: [],
     mandates: [],
-    parties: [],
     externalIds: {},
   };
 }
