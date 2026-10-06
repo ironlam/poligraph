@@ -17,14 +17,16 @@ import {
   MapPin,
 } from "lucide-react";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
-import {
-  MANDATE_TYPE_LABELS,
-  CHAMBER_SHORT_LABELS,
-  AFFAIR_STATUS_LABELS,
-  DOSSIER_STATUS_LABELS,
-} from "@/config/labels";
+import { MANDATE_TYPE_LABELS, CHAMBER_SHORT_LABELS, DOSSIER_STATUS_LABELS } from "@/config/labels";
+import { affairResultBadge } from "@/components/search/search-results";
 import { formatDateShort } from "@/lib/utils";
-import type { MandateType, Chamber, AffairStatus, DossierStatus } from "@/generated/prisma";
+import type {
+  MandateType,
+  Chamber,
+  AffairStatus,
+  DossierStatus,
+  Involvement,
+} from "@/generated/prisma";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +53,7 @@ interface AffairResult {
   slug: string;
   title: string;
   status: AffairStatus;
+  involvement: Involvement;
   politicianName: string;
   politicianSlug: string;
 }
@@ -544,7 +547,7 @@ function AffairRow({ result }: { result: AffairResult }) {
         <span className="block text-xs text-muted-foreground">{result.politicianName}</span>
       </div>
       <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 hidden sm:inline">
-        {AFFAIR_STATUS_LABELS[result.status]}
+        {affairResultBadge(result)}
       </span>
     </Link>
   );

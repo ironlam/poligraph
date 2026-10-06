@@ -1,6 +1,13 @@
 "use client";
 
-import { AFFAIR_STATUS_LABELS, CHAMBER_LABELS, MANDATE_TYPE_LABELS } from "@/config/labels";
+import {
+  AFFAIR_STATUS_LABELS,
+  CHAMBER_LABELS,
+  INVOLVEMENT_LABELS,
+  MANDATE_TYPE_LABELS,
+} from "@/config/labels";
+import { isAccusedInvolvement } from "@/config/certainty";
+import type { AffairStatus, Involvement } from "@/generated/prisma";
 
 export interface SearchResultCategory {
   key: string;
@@ -35,6 +42,7 @@ export interface GlobalSearchResponse {
     slug: string;
     title: string;
     status: string;
+    involvement: string;
     politicianName: string;
     politicianSlug: string;
   }>;
@@ -67,6 +75,18 @@ export interface GlobalSearchResponse {
     departmentName: string;
     population: number | null;
   }>;
+}
+
+/**
+ * Badge d'un résultat d'affaire : le statut décrit la personne poursuivie, il n'est affiché
+ * que lorsque c'est l'élu du résultat ; sinon le badge donne son rôle (témoin, victime...).
+ */
+export function affairResultBadge(affair: { status: string; involvement: string }): string {
+  const involvement = affair.involvement as Involvement;
+  if (!isAccusedInvolvement(involvement)) {
+    return INVOLVEMENT_LABELS[involvement] ?? affair.involvement;
+  }
+  return AFFAIR_STATUS_LABELS[affair.status as AffairStatus] ?? affair.status;
 }
 
 function formatDate(dateStr: string): string {
@@ -112,7 +132,7 @@ export function categorizeResults(data: GlobalSearchResponse): SearchResultCateg
         href: `/affaires/${a.slug}`,
         primary: a.title,
         secondary: a.politicianName,
-        badge: AFFAIR_STATUS_LABELS[a.status as keyof typeof AFFAIR_STATUS_LABELS] ?? a.status,
+        badge: affairResultBadge(a),
       })),
     },
     {

@@ -759,7 +759,6 @@ export const ATTRIBUTION_DEBT: DebtEntry[] = [
     snippet: "involvement: { in: requestedInvolvements },",
     count: 1,
   },
-  { path: "src/app/api/search/global/route.ts", snippet: "db.$queryRaw<RawAffair[]>`", count: 1 },
   {
     path: "src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx",
     snippet: 'const directAffairs = affairs.filter((a) => a.involvement === "DIRECT");',
