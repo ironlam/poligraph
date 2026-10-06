@@ -34,7 +34,6 @@ function makeCandidate(overrides: Partial<AffairCandidateRecord> = {}): AffairCa
     civility: null,
     departments: [],
     mandates: [],
-    parties: [],
     externalIds: {},
     ...overrides,
   };

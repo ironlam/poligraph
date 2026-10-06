@@ -18,7 +18,6 @@ function politician(lastName: string, id = lastName): AffairCandidateRecord {
     civility: null,
     departments: [],
     mandates: [],
-    parties: [],
     externalIds: {},
   };
 }

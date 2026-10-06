@@ -34,7 +34,6 @@ function candidate(
     civility: null,
     departments,
     mandates,
-    parties: [],
     externalIds: {},
   };
 }

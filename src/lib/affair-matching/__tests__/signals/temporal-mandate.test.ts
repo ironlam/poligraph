@@ -39,7 +39,6 @@ function candidate(overrides: Partial<AffairCandidateRecord> = {}): AffairCandid
         endDate: new Date("2017-06-30"),
       },
     ],
-    parties: [],
     externalIds: {},
     ...overrides,
   };

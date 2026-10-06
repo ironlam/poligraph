@@ -31,7 +31,6 @@ function candidate(mandates: AffairCandidateRecord["mandates"]): AffairCandidate
     civility: null,
     departments: [],
     mandates,
-    parties: [],
     externalIds: {},
   };
 }

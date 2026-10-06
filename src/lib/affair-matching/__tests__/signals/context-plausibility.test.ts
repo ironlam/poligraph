@@ -27,7 +27,6 @@ function candidate(): AffairCandidateRecord {
     civility: null,
     departments: [],
     mandates: [],
-    parties: [],
     externalIds: {},
   };
 }

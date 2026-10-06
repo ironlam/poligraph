@@ -68,13 +68,6 @@ export const ROLE_GENERIC_MATCH_LLR = 0.5;
 export const ROLE_MISMATCH_LLR = -2.0;
 
 // ============================================================================
-// Party context signal
-// ============================================================================
-export const PARTY_MATCH_LLR = 1.5;
-export const PARTY_FORMER_MATCH_LLR = 0.5;
-export const PARTY_MISMATCH_LLR = -1.5;
-
-// ============================================================================
 // Context plausibility signal
 // ============================================================================
 export const FRENCH_ANCHOR_LLR = 1.0;
@@ -104,6 +97,8 @@ export const MIN_GAP = 2.0;
  * unified the module on one normalizer: hyphens, then any run of whitespace,
  * which recovers compound surnames the press spells with a hyphen or a
  * non-breaking space while the base holds a plain one. v5 drops the English
- * possessive, which glued itself to the surname in anglophone coverage.
+ * possessive, which glued itself to the surname in anglophone coverage. v6
+ * removes the party signal, which compared full party names with acronyms and
+ * never matched.
  */
-export const RESOLVER_VERSION = "v5";
+export const RESOLVER_VERSION = "v6";

@@ -35,7 +35,6 @@ const candidate: AffairCandidateRecord = {
   civility: null,
   departments: [],
   mandates: [],
-  parties: [],
   externalIds: { WIKIDATA: "Q1" },
 };
 

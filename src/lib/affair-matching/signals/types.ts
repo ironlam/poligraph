@@ -69,12 +69,6 @@ export interface AffairCandidateRecord {
     startDate: Date;
     endDate: Date | null;
   }>;
-  parties: Array<{
-    partyLabel: string;
-    startDate: Date | null;
-    endDate: Date | null;
-    current: boolean;
-  }>;
   externalIds: Record<string, string>;
 }
 
