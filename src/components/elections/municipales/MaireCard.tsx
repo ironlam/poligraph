@@ -9,6 +9,7 @@ interface MaireCardProps {
     fullName: string;
     slug: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     departmentCode: string;
     functionStart: Date | null;
     firstElectedDate: Date | null;
@@ -33,6 +34,7 @@ export function MaireCard({ maire }: MaireCardProps) {
             {maire.photoUrl && (
               <PoliticianAvatar
                 photoUrl={maire.photoUrl}
+                blobPhotoUrl={maire.blobPhotoUrl}
                 fullName={maire.fullName}
                 size="sm"
                 className="shrink-0"

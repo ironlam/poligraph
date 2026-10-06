@@ -82,6 +82,7 @@ const affairInclude = {
       fullName: true,
       slug: true,
       photoUrl: true,
+      blobPhotoUrl: true,
       civility: true,
       currentParty: {
         select: {
@@ -421,6 +422,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
             politicianSlug={affair.politician.slug}
             fullName={affair.politician.fullName}
             photoUrl={affair.politician.photoUrl}
+            blobPhotoUrl={affair.politician.blobPhotoUrl}
             meta={politicianMeta}
             affairCount={affairCount}
             party={contextParty}

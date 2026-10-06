@@ -253,6 +253,7 @@ export function RecapView({ weekStart, data }: RecapViewProps) {
                         </span>
                         <PoliticianAvatar
                           photoUrl={p.photoUrl}
+                          blobPhotoUrl={p.blobPhotoUrl}
                           firstName={p.fullName.split(" ")[0]}
                           lastName={p.fullName.split(" ").slice(1).join(" ")}
                           size="sm"
@@ -380,6 +381,7 @@ export function RecapView({ weekStart, data }: RecapViewProps) {
                           >
                             <PoliticianAvatar
                               photoUrl={p.photoUrl}
+                              blobPhotoUrl={p.blobPhotoUrl}
                               firstName={p.fullName.split(" ")[0]}
                               lastName={p.fullName.split(" ").slice(1).join(" ")}
                               size="sm"

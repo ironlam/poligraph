@@ -13,6 +13,7 @@ export interface DeclarationRow {
   lastName: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: { id: string; name: string; shortName: string | null; color: string | null } | null;
   totalPortfolioValue: number | null;
   totalCompanies: number;
@@ -97,6 +98,7 @@ export async function getTopPortfolios(limit = 10) {
         lastName: p.lastName,
         fullName: p.fullName,
         photoUrl: p.photoUrl,
+        blobPhotoUrl: p.blobPhotoUrl,
         party: p.currentParty,
         totalPortfolioValue: details?.totalPortfolioValue ?? 0,
         totalCompanies: details?.totalCompanies ?? 0,
@@ -208,6 +210,7 @@ async function queryDeclarationsList(
       lastName: p.lastName,
       fullName: p.fullName,
       photoUrl: p.photoUrl,
+      blobPhotoUrl: p.blobPhotoUrl,
       party: p.currentParty,
       totalPortfolioValue: details?.totalPortfolioValue ?? null,
       totalCompanies: details?.totalCompanies ?? 0,

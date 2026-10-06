@@ -36,6 +36,7 @@ interface PoliticianResult {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   partyColor: string | null;
   mandate: MandateType | null;
@@ -489,6 +490,7 @@ function PoliticianRow({ result }: { result: PoliticianResult }) {
     >
       <PoliticianAvatar
         photoUrl={result.photoUrl}
+        blobPhotoUrl={result.blobPhotoUrl}
         fullName={result.fullName}
         size="sm"
         className="w-8 h-8 text-xs shrink-0"

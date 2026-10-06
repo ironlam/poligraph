@@ -8,6 +8,7 @@ interface MissingMaire {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   partyShortName: string | null;
   partyColor: string | null;
   mandateStartDate: string | null;
@@ -62,6 +63,7 @@ export function MissingMairesTable({ maires }: MissingMairesTableProps) {
                   <div className="flex items-center gap-2">
                     <PoliticianAvatar
                       photoUrl={m.photoUrl}
+                      blobPhotoUrl={m.blobPhotoUrl}
                       fullName={m.fullName}
                       size="sm"
                       className="w-8 h-8 text-xs"
@@ -104,6 +106,7 @@ export function MissingMairesTable({ maires }: MissingMairesTableProps) {
           <div key={m.id} className="border rounded-lg p-3 flex items-center gap-3">
             <PoliticianAvatar
               photoUrl={m.photoUrl}
+              blobPhotoUrl={m.blobPhotoUrl}
               fullName={m.fullName}
               size="sm"
               className="w-8 h-8 text-xs"

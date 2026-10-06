@@ -446,6 +446,7 @@ export default async function ScrutinPage({ params }: PageProps) {
                                 >
                                   <PoliticianAvatar
                                     photoUrl={vote.politician.photoUrl}
+                                    blobPhotoUrl={vote.politician.blobPhotoUrl}
                                     firstName={vote.politician.firstName}
                                     lastName={vote.politician.lastName}
                                     size="sm"

@@ -25,6 +25,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
         slug: true,
         fullName: true,
         photoUrl: true,
+        blobPhotoUrl: true,
         currentParty: { select: { shortName: true } },
         mandates: {
           where: { isCurrent: true },
@@ -66,6 +67,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
       slug: p.slug,
       fullName: p.fullName,
       photoUrl: p.photoUrl,
+      blobPhotoUrl: p.blobPhotoUrl,
       party: p.currentParty?.shortName || null,
       mandate: p.mandates[0]?.type || null,
     })),

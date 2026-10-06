@@ -108,6 +108,7 @@ export default async function DepartmentPage({ params }: PageProps) {
                   >
                     <PoliticianAvatar
                       photoUrl={deputy.photoUrl}
+                      blobPhotoUrl={deputy.blobPhotoUrl}
                       firstName={deputy.firstName}
                       lastName={deputy.lastName}
                       size="sm"
@@ -167,6 +168,7 @@ export default async function DepartmentPage({ params }: PageProps) {
                   >
                     <PoliticianAvatar
                       photoUrl={senator.photoUrl}
+                      blobPhotoUrl={senator.blobPhotoUrl}
                       firstName={senator.firstName}
                       lastName={senator.lastName}
                       size="sm"

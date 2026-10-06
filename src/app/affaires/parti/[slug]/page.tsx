@@ -53,6 +53,7 @@ async function getPartyAffairsData(slug: string) {
               fullName: true,
               slug: true,
               photoUrl: true,
+              blobPhotoUrl: true,
             },
           },
         },
@@ -117,6 +118,7 @@ async function getPartyAffairsData(slug: string) {
     fullName: string;
     slug: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     count: number;
   };
 
@@ -420,6 +422,7 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                       >
                         <PoliticianAvatar
                           photoUrl={pol.photoUrl}
+                          blobPhotoUrl={pol.blobPhotoUrl}
                           fullName={pol.fullName}
                           size="sm"
                         />
@@ -458,6 +461,7 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                       >
                         <PoliticianAvatar
                           photoUrl={pol.photoUrl}
+                          blobPhotoUrl={pol.blobPhotoUrl}
                           fullName={pol.fullName}
                           size="sm"
                         />
@@ -496,6 +500,7 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                       >
                         <PoliticianAvatar
                           photoUrl={pol.photoUrl}
+                          blobPhotoUrl={pol.blobPhotoUrl}
                           fullName={pol.fullName}
                           size="sm"
                         />
@@ -533,6 +538,7 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                       >
                         <PoliticianAvatar
                           photoUrl={pol.photoUrl}
+                          blobPhotoUrl={pol.blobPhotoUrl}
                           fullName={pol.fullName}
                           size="sm"
                         />
@@ -567,7 +573,12 @@ export default async function PartyAffairsPage({ params }: PageProps) {
                       href={`/politiques/${pol.slug}`}
                       className="flex items-center gap-3 p-3 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
                     >
-                      <PoliticianAvatar photoUrl={pol.photoUrl} fullName={pol.fullName} size="sm" />
+                      <PoliticianAvatar
+                        photoUrl={pol.photoUrl}
+                        blobPhotoUrl={pol.blobPhotoUrl}
+                        fullName={pol.fullName}
+                        size="sm"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{pol.fullName}</p>
                         <p className="text-xs text-primary">

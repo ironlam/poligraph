@@ -52,6 +52,7 @@ export function DossierPPLStats({ stats }: { stats: PPLStats }) {
                     </span>
                     <PoliticianAvatar
                       photoUrl={author.photoUrl}
+                      blobPhotoUrl={author.blobPhotoUrl}
                       fullName={author.fullName}
                       size="sm"
                     />

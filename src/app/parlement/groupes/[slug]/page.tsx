@@ -212,6 +212,7 @@ export default async function GroupeDetailPage({ params }: PageProps) {
               >
                 <PoliticianAvatar
                   photoUrl={m.photoUrl}
+                  blobPhotoUrl={m.blobPhotoUrl}
                   firstName={m.firstName}
                   lastName={m.lastName}
                   size="sm"

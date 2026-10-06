@@ -25,6 +25,7 @@ interface Representative {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   constituency?: string | null;
   party: {
     name: string;
@@ -111,7 +112,12 @@ function RepresentativeCard({ rep, role }: { rep: Representative; role: string }
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
             <div className="transition-transform duration-200 group-hover:scale-105">
-              <PoliticianAvatar photoUrl={rep.photoUrl} fullName={rep.fullName} size="md" />
+              <PoliticianAvatar
+                photoUrl={rep.photoUrl}
+                blobPhotoUrl={rep.blobPhotoUrl}
+                fullName={rep.fullName}
+                size="md"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-lg group-hover:text-primary transition-colors">

@@ -17,6 +17,7 @@ interface RankedPolitician {
   fullName: string;
   slug: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   partyColor: string | null;
   totalMentions: number;
@@ -71,7 +72,12 @@ function PoliticianRankingItem({
       <span className="text-sm font-bold text-muted-foreground w-6 text-right tabular-nums shrink-0">
         {rank}.
       </span>
-      <PoliticianAvatar photoUrl={pol.photoUrl} fullName={pol.fullName} size="sm" />
+      <PoliticianAvatar
+        photoUrl={pol.photoUrl}
+        blobPhotoUrl={pol.blobPhotoUrl}
+        fullName={pol.fullName}
+        size="sm"
+      />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium">{pol.fullName}</div>
         <div className="flex items-center gap-2">

@@ -13,6 +13,7 @@ interface SearchPolitician {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   mandate: MandateType | null;
 }
@@ -117,7 +118,12 @@ export function WatchlistSearch() {
                       key={p.slug}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/50 transition-colors"
                     >
-                      <PoliticianAvatar photoUrl={p.photoUrl} fullName={p.fullName} size="sm" />
+                      <PoliticianAvatar
+                        photoUrl={p.photoUrl}
+                        blobPhotoUrl={p.blobPhotoUrl}
+                        fullName={p.fullName}
+                        size="sm"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{p.fullName}</p>
                         <p className="text-xs text-muted-foreground">

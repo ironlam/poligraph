@@ -6,6 +6,7 @@ interface PoliticianFilterBannerProps {
   fullName: string;
   slug: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   factcheckCount: number;
   onDismiss: () => void;
@@ -14,13 +15,19 @@ interface PoliticianFilterBannerProps {
 export function PoliticianFilterBanner({
   fullName,
   photoUrl,
+  blobPhotoUrl,
   party,
   factcheckCount,
   onDismiss,
 }: PoliticianFilterBannerProps) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-lg">
-      <PoliticianAvatar photoUrl={photoUrl} fullName={fullName} size="sm" />
+      <PoliticianAvatar
+        photoUrl={photoUrl}
+        blobPhotoUrl={blobPhotoUrl}
+        fullName={fullName}
+        size="sm"
+      />
       <div className="flex-1 min-w-0">
         <span className="font-semibold text-sm">{fullName}</span>
         {party && <span className="text-xs text-primary ml-2">{party}</span>}

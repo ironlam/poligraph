@@ -63,6 +63,7 @@ const getPolitician = cache(async function getPolitician(slug: string) {
       firstName: true,
       lastName: true,
       photoUrl: true,
+      blobPhotoUrl: true,
       civility: true,
       currentParty: true,
       mandates: {
@@ -245,6 +246,7 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
         </Link>
         <PoliticianAvatar
           photoUrl={politician.photoUrl}
+          blobPhotoUrl={politician.blobPhotoUrl}
           firstName={politician.firstName}
           lastName={politician.lastName}
           size="md"
