@@ -15,10 +15,11 @@ const mocks = vi.hoisted(() => ({
   partyFindMany: vi.fn(),
   partyFindFirst: vi.fn(),
   queryRaw: vi.fn(),
+  cacheTag: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+vi.mock("next/cache", () => ({ cacheTag: mocks.cacheTag, cacheLife: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
@@ -38,6 +39,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { getParty } from "@/lib/data/partis";
 import * as labels from "@/config/labels";
 import {
+  getPoliticalFinancingBadgeSql,
   getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
@@ -111,13 +113,41 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
     expect(json).toContain('"hasPoliticalFinancingConviction":true');
   });
 
-  it("le filtre « condamnés » ne retient que la corruption définitive", async () => {
-    await renderPage({ conviction: "true" });
+  const convictionOr = async (params: Params) => {
+    await renderPage(params);
     const { where } = mocks.politicianFindMany.mock.calls[0]![0];
-    const relation = where.AND.find((c: Record<string, unknown>) => "affairs" in c);
+    return where.AND.find((c: Record<string, unknown>) => "OR" in c)?.OR as
+      | { affairs: { some: object } }[]
+      | undefined;
+  };
 
-    expect(relation.affairs.some).toEqual(getProbityConvictionBadgeWhere());
-    expect(kept(relation.affairs.some)).toEqual(["definitiveCorruptionGrave"]);
+  it("le filtre « condamnés » ne retient que la corruption définitive", async () => {
+    const or = await convictionOr({ conviction: "true" });
+
+    expect(or).toHaveLength(1);
+    expect(or![0]!.affairs.some).toEqual(getProbityConvictionBadgeWhere());
+    expect(kept(or![0]!.affairs.some)).toEqual(["definitiveCorruptionGrave"]);
+  });
+
+  it("le filtre financement ne retient que le financement illégal définitif", async () => {
+    const or = await convictionOr({ financing: "true" });
+
+    expect(or).toHaveLength(1);
+    expect(or![0]!.affairs.some).toEqual(getPoliticalFinancingBadgeWhere());
+    expect(kept(or![0]!.affairs.some)).toEqual(["definitiveCampaignFinancing"]);
+  });
+
+  it("les deux filtres cochés se combinent en « l'un ou l'autre »", async () => {
+    const or = await convictionOr({ conviction: "true", financing: "true" });
+
+    expect(or!.map((c) => c.affairs.some)).toEqual([
+      getProbityConvictionBadgeWhere(),
+      getPoliticalFinancingBadgeWhere(),
+    ]);
+  });
+
+  it("sans filtre de condamnation, aucune condition OR", async () => {
+    expect(await convictionOr({})).toBeUndefined();
   });
 
   it("le compteur SQL du filtre utilise le prédicat partagé, sans gravité", async () => {
@@ -126,21 +156,31 @@ describe("/politiques : badge probité fondé sur la catégorie", () => {
     const text = (strings as readonly string[]).join("${}");
 
     expect(text).not.toMatch(/severity/i);
-    const expected = getProbityConvictionBadgeSql("a");
     const fragments = values.filter(
       (v): v is Prisma.Sql => typeof v === "object" && v !== null && "sql" in v && "values" in v
     );
-    expect(fragments).toHaveLength(1);
     expect(text).not.toContain("total_affairs");
-    for (const fragment of fragments) {
-      expect(fragment.sql).toBe(expected.sql);
-      expect(fragment.values).toEqual(expected.values);
-    }
+    expect(fragments.map((f) => [f.sql, f.values])).toEqual(
+      [getProbityConvictionBadgeSql("a"), getPoliticalFinancingBadgeSql("a")].map((f) => [
+        f.sql,
+        f.values,
+      ])
+    );
   });
 });
 
-describe("PoliticiansGrid : libellé du filtre probité", () => {
-  it("affiche « Condamnés pour atteinte à la probité » avec son infobulle", () => {
+describe("/politiques : invalidation sur modification d'affaire", () => {
+  it("le listing et les compteurs portent le tag affairs", async () => {
+    await renderPage({});
+    const tagCalls = mocks.cacheTag.mock.calls.filter((c) => c.includes("politicians"));
+
+    // Listing filtré puis compteurs de filtres.
+    expect(tagCalls.filter((c) => c.includes("affairs")).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("PoliticiansGrid : filtres de condamnation", () => {
+  it("affiche une seule case par filtre, avec son compte", () => {
     render(
       <TooltipProvider>
         <PoliticiansGrid
@@ -151,6 +191,7 @@ describe("PoliticiansGrid : libellé du filtre probité", () => {
           parties={[]}
           counts={{
             withConviction: 3,
+            withFinancing: 2,
             deputes: 0,
             senateurs: 0,
             gouvernement: 0,
@@ -161,6 +202,7 @@ describe("PoliticiansGrid : libellé du filtre probité", () => {
             search: "",
             partyFilter: "",
             convictionFilter: false,
+            financingFilter: false,
             mandateFilter: "" as never,
             sortOption: "prominence",
           }}
@@ -168,10 +210,16 @@ describe("PoliticiansGrid : libellé du filtre probité", () => {
       </TooltipProvider>
     );
 
-    const badge = screen.getByRole("button", { name: "Condamnés pour atteinte à la probité (3)" });
-    expect(badge).toHaveAttribute("title", "Condamnation définitive pour atteinte à la probité");
+    expect(screen.getAllByText(/Condamnés pour atteinte à la probité/)).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /probité/ })).toBeNull();
+    expect(screen.getByLabelText("Condamnés pour atteinte à la probité (3)")).toHaveAttribute(
+      "type",
+      "checkbox"
+    );
+    expect(
+      screen.getByLabelText("Condamnés pour financement politique illégal (2)")
+    ).toHaveAttribute("type", "checkbox");
     expect(screen.queryByText(/Avec décision de justice/)).toBeNull();
-    expect(screen.getByLabelText("Condamnés pour atteinte à la probité (3)")).toBeInTheDocument();
   });
 });
 

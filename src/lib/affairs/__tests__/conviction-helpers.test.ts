@@ -11,10 +11,13 @@ import { getCategoriesForSuper } from "@/config/labels";
 import {
   ADVERSE_INVOLVEMENTS,
   ADVERSE_JURISDICTION_ORDER,
+  POLITICAL_FINANCING_CATEGORIES,
   PUBLIC_AFFAIR_PUBLICATION_STATUS,
   getDefinitiveConvictionWhere,
   getFavorableOutcomeWhere,
   getNonDefinitiveConvictionWhere,
+  getPoliticalFinancingBadgeSql,
+  getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
@@ -114,5 +117,38 @@ describe("getProbityConvictionBadgeSql", () => {
 
   it("refuse un alias non revu", () => {
     expect(() => getProbityConvictionBadgeSql("b" as "a")).toThrow();
+  });
+});
+
+describe("getPoliticalFinancingBadgeSql", () => {
+  it("lie les mêmes constantes que la probité, avec les catégories de financement", () => {
+    expect(getPoliticalFinancingBadgeSql("a").values).toEqual([
+      PUBLIC_AFFAIR_PUBLICATION_STATUS,
+      ...ADVERSE_INVOLVEMENTS,
+      ADVERSE_JURISDICTION_ORDER,
+      ...DEFINITIVE_CONVICTION_STATUSES,
+      ...POLITICAL_FINANCING_CATEGORIES,
+    ]);
+  });
+
+  it("donne le même verdict que getPoliticalFinancingBadgeWhere sur la fixture", () => {
+    const values = getPoliticalFinancingBadgeSql("a").values as unknown[];
+    const sqlKept = Object.entries(CONVICTION_ROWS)
+      .filter(
+        ([, r]) =>
+          values.includes(r.publicationStatus) &&
+          values.includes(r.involvement) &&
+          values.includes(r.jurisdictionOrder) &&
+          values.includes(r.status) &&
+          values.includes(r.category)
+      )
+      .map(([key]) => key)
+      .sort();
+    expect(sqlKept).toEqual(["definitiveCampaignFinancing"]);
+    expect(sqlKept).toEqual(kept(getPoliticalFinancingBadgeWhere()));
+  });
+
+  it("refuse un alias non revu", () => {
+    expect(() => getPoliticalFinancingBadgeSql("b" as "a")).toThrow();
   });
 });
