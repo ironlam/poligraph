@@ -318,7 +318,7 @@ export default function AdminAffairsPage() {
           />
           <input
             type="search"
-            placeholder="Rechercher par titre ou politicien..."
+            placeholder="Rechercher par titre, politicien ou identifiant (AF-000609)..."
             defaultValue={searchQuery}
             aria-label="Rechercher par titre ou politicien"
             onChange={(e) => {
