@@ -20,8 +20,7 @@ import { ensureContrast } from "@/lib/contrast";
 import { SITE_URL } from "@/config/site";
 import { db } from "@/lib/db";
 import { FollowButton } from "@/components/politicians/FollowButton";
-import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
-import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
+import { PUBLIC_PARTY_WHERE } from "@/lib/api/public-contract";
 import { PartyAffairsCard } from "./_components/PartyAffairsCard";
 import { PartySidebar } from "./_components/PartySidebar";
 
@@ -93,31 +92,14 @@ export default async function PartyPage({ params }: PageProps) {
     notFound();
   }
 
-  const [
-    leadershipMandates,
-    partyRoles,
-    pressEnabled,
-    programmeEnabled,
-    partyPlatform,
-    nCondamnesDef,
-  ] = await Promise.all([
-    getPartyLeadership(party.id, party.name),
-    getPartyRoles(party.id),
-    isFeatureEnabled("PRESS_SECTION"),
-    isFeatureEnabled("PROGRAMMES_ENABLED"),
-    getPartyPlatform(slug),
-    db.affair.count({
-      where: {
-        ...getConvictionOnlyWhere(),
-        status: "CONDAMNATION_DEFINITIVE",
-        politician: PUBLIC_POLITICIAN_WHERE,
-        OR: [
-          { partyAtTime: { slug: party.slug } },
-          { politician: { currentParty: { slug: party.slug } } },
-        ],
-      },
-    }),
-  ]);
+  const [leadershipMandates, partyRoles, pressEnabled, programmeEnabled, partyPlatform] =
+    await Promise.all([
+      getPartyLeadership(party.id, party.name),
+      getPartyRoles(party.id),
+      isFeatureEnabled("PRESS_SECTION"),
+      isFeatureEnabled("PROGRAMMES_ENABLED"),
+      getPartyPlatform(slug),
+    ]);
   const currentLeaders = leadershipMandates.filter((m) => m.isCurrent);
   const pastLeaders = leadershipMandates.filter((m) => !m.isCurrent);
 
@@ -449,11 +431,7 @@ export default async function PartyPage({ params }: PageProps) {
             )}
 
             {/* Affairs */}
-            <PartyAffairsCard
-              affairs={party.affairsAtTime}
-              partySlug={party.slug}
-              definitiveConvictions={nCondamnesDef}
-            />
+            <PartyAffairsCard affairs={party.affairsAtTime} partySlug={party.slug} />
 
             {/* Press mentions */}
             {pressEnabled && party.pressMentions.length > 0 && (

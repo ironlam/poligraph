@@ -24,8 +24,6 @@ interface PartyAffairsCardProps {
   affairs: PartyAffair[];
   /** Nullable in the schema; the links to the satellite pages need it, so they are guarded. */
   partySlug: string | null;
-  /** Definitive convictions, counted server-side across the whole party. */
-  definitiveConvictions: number;
 }
 
 const TOP_AFFAIRS = 5;
@@ -57,11 +55,7 @@ function ChevronIcon() {
  * Was an inline IIFE of roughly 180 lines inside the page component. The counting rules live in
  * `../_lib/affair-summary`, where they are tested; this file is the layout only.
  */
-export function PartyAffairsCard({
-  affairs,
-  partySlug,
-  definitiveConvictions,
-}: PartyAffairsCardProps) {
+export function PartyAffairsCard({ affairs, partySlug }: PartyAffairsCardProps) {
   if (affairs.length === 0) return null;
 
   const {
@@ -176,16 +170,14 @@ export function PartyAffairsCard({
           </Link>
         )}
 
-        {definitiveConvictions > 0 && partySlug && (
+        {partySlug && (
           <p className="text-sm mt-2">
             <Link
               href={`/affaires/condamnations?parti=${partySlug}&certainty=etabli`}
               className="text-primary hover:underline"
               prefetch={false}
             >
-              {definitiveConvictions} condamnation
-              {definitiveConvictions !== 1 ? "s" : ""} définitive
-              {definitiveConvictions !== 1 ? "s" : ""} →
+              Voir les condamnations définitives →
             </Link>
           </p>
         )}
