@@ -23,7 +23,7 @@ import { summarizePartyCounts } from "@/lib/affairs/party-counts";
 
 export const getParty = cache(async function getParty(slug: string) {
   "use cache";
-  cacheTag(`party:${slug}`, "parties");
+  cacheTag(`party:${slug}`, "parties", "affairs");
   cacheLife("synced");
 
   const party = await db.party.findFirst({
@@ -250,7 +250,7 @@ async function getPartiesFiltered(
   sort: SortOption = "members"
 ) {
   "use cache";
-  cacheTag("parties");
+  cacheTag("parties", "affairs");
   cacheLife("synced");
   return queryParties(undefined, position, status, sort);
 }
@@ -280,7 +280,7 @@ export async function getParties(
 
 export async function getPartiesStats() {
   "use cache";
-  cacheTag("parties");
+  cacheTag("parties", "affairs");
   cacheLife("synced");
 
   const [counts] = await db.$queryRaw<
