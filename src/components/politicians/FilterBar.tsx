@@ -31,6 +31,8 @@ interface FilterBarProps {
   currentMandate: MandateFilter;
   currentConviction: boolean;
   convictionCount: number;
+  currentFinancing: boolean;
+  financingCount: number;
   counts: {
     deputes: number;
     senateurs: number;
@@ -46,6 +48,8 @@ export function FilterBar({
   currentMandate,
   currentConviction,
   convictionCount,
+  currentFinancing,
+  financingCount,
   counts,
   onLoadingChange,
 }: FilterBarProps) {
@@ -113,10 +117,11 @@ export function FilterBar({
         />
       </div>
 
-      {/* Conviction filter */}
+      {/* Conviction filters: probité et financement politique, cumulés en « l'un ou l'autre » */}
       <label
         htmlFor="conviction-toggle"
-        className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer whitespace-nowrap"
+        className="flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer whitespace-nowrap"
+        title="Condamnation définitive pour atteinte à la probité"
       >
         <input
           id="conviction-toggle"
@@ -126,6 +131,20 @@ export function FilterBar({
           className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
         />
         Condamnés pour atteinte à la probité ({convictionCount})
+      </label>
+      <label
+        htmlFor="financing-toggle"
+        className="flex items-center gap-2 min-h-11 text-sm text-muted-foreground cursor-pointer whitespace-nowrap"
+        title="Condamnation définitive pour financement illégal de campagne ou de parti"
+      >
+        <input
+          id="financing-toggle"
+          type="checkbox"
+          checked={currentFinancing}
+          onChange={(e) => updateParams({ financing: e.target.checked ? "true" : "" })}
+          className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
+        />
+        Condamnés pour financement politique illégal ({financingCount})
       </label>
 
       {/* Loading indicator — at the end so it doesn't displace filters */}

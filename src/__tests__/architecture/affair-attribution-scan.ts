@@ -111,6 +111,7 @@ const APPROVED_HELPERS = new Set([
   "getAdverseInvolvementSql",
   "getPublishedAffairSqlWhere",
   "getProbityConvictionBadgeSql",
+  "getPoliticalFinancingBadgeSql",
 ]);
 
 const SINK_METHODS = new Set(["count", "groupBy", "findMany", "findFirst", "aggregate"]);

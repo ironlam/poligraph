@@ -148,6 +148,18 @@ export function getPoliticalFinancingBadgeWhere(): Prisma.AffairWhereInput {
 
 /** SQL equivalent of getProbityConvictionBadgeWhere(), restricted to reviewed aliases. */
 export function getProbityConvictionBadgeSql(alias: "a" = "a"): Prisma.Sql {
+  return getDefinitiveConvictionInCategoriesSql(alias, getCategoriesForSuper("PROBITE"));
+}
+
+/** SQL equivalent of getPoliticalFinancingBadgeWhere(), restricted to reviewed aliases. */
+export function getPoliticalFinancingBadgeSql(alias: "a" = "a"): Prisma.Sql {
+  return getDefinitiveConvictionInCategoriesSql(alias, POLITICAL_FINANCING_CATEGORIES);
+}
+
+function getDefinitiveConvictionInCategoriesSql(
+  alias: "a",
+  affairCategories: readonly AffairCategory[]
+): Prisma.Sql {
   if (alias !== "a") {
     throw new Error(`Unsupported public affair SQL alias: ${alias}`);
   }
@@ -155,9 +167,7 @@ export function getProbityConvictionBadgeSql(alias: "a" = "a"): Prisma.Sql {
   const statuses = DEFINITIVE_CONVICTION_STATUSES.map(
     (status) => Prisma.sql`${status}::"AffairStatus"`
   );
-  const categories = getCategoriesForSuper("PROBITE").map(
-    (category) => Prisma.sql`${category}::"AffairCategory"`
-  );
+  const categories = affairCategories.map((category) => Prisma.sql`${category}::"AffairCategory"`);
 
   return Prisma.sql`${getPublishedAffairSqlWhere(alias)}
     AND ${getAdverseInvolvementSql(alias)}

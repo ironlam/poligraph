@@ -134,6 +134,14 @@ describe("scanAffairAttribution", () => {
     expect(findings).toEqual([]);
   });
 
+  it("accepte le jumeau SQL du badge financement politique illégal", () => {
+    const findings = scanOne(
+      'import { getPoliticalFinancingBadgeSql } from "@/lib/affairs/public-filters";\n' +
+        'export const a = () => db.$queryRaw`SELECT 1 FROM "Affair" a WHERE ${getPoliticalFinancingBadgeSql("a")}`;\n'
+    );
+    expect(findings).toEqual([]);
+  });
+
   it("refuse un helper de même nom qui ne vient pas de public-filters", () => {
     const findings = scanOne(
       'import { getAdverseAffairWhere } from "./local-filters";\n' +

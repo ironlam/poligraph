@@ -16,6 +16,7 @@ interface PoliticiansGridProps {
   parties: (Party & { _count: { politicians: number } })[];
   counts: {
     withConviction: number;
+    withFinancing: number;
     deputes: number;
     senateurs: number;
     gouvernement: number;
@@ -26,6 +27,7 @@ interface PoliticiansGridProps {
     search: string;
     partyFilter: string;
     convictionFilter: boolean;
+    financingFilter: boolean;
     mandateFilter: MandateFilter;
     sortOption: SortOption;
   };
@@ -46,7 +48,8 @@ export function PoliticiansGrid({
   const _searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  const { search, partyFilter, convictionFilter, mandateFilter, sortOption } = filters;
+  const { search, partyFilter, convictionFilter, financingFilter, mandateFilter, sortOption } =
+    filters;
 
   // Build URL with current filters
   function buildUrl(newParams: Record<string, string | undefined>) {
@@ -55,6 +58,7 @@ export function PoliticiansGrid({
       search: search || undefined,
       party: partyFilter || undefined,
       conviction: convictionFilter ? "true" : undefined,
+      financing: financingFilter ? "true" : undefined,
       mandate: mandateFilter || undefined,
       status: undefined,
       sort: sortOption !== "alpha" ? sortOption : undefined,
@@ -77,7 +81,9 @@ export function PoliticiansGrid({
   };
 
   // Count active filters
-  const activeFilterCount = [partyFilter, convictionFilter, mandateFilter].filter(Boolean).length;
+  const activeFilterCount = [partyFilter, convictionFilter, financingFilter, mandateFilter].filter(
+    Boolean
+  ).length;
 
   return (
     <>
@@ -89,6 +95,8 @@ export function PoliticiansGrid({
           currentMandate={mandateFilter}
           currentConviction={convictionFilter}
           convictionCount={counts.withConviction}
+          currentFinancing={financingFilter}
+          financingCount={counts.withFinancing}
           counts={{
             deputes: counts.deputes,
             senateurs: counts.senateurs,
@@ -136,26 +144,6 @@ export function PoliticiansGrid({
                 <PartySelect parties={parties.slice(6)} currentValue={partyFilter} />
               )}
             </div>
-          </div>
-
-          {/* Conviction filter */}
-          <div className="flex items-center gap-2 sm:border-l sm:pl-4">
-            <Badge
-              variant={convictionFilter ? "destructive" : "outline"}
-              className="cursor-pointer hover:bg-destructive/10 transition-colors"
-              onClick={() =>
-                navigateTo(buildUrl({ conviction: convictionFilter ? undefined : "true" }))
-              }
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) =>
-                e.key === "Enter" &&
-                navigateTo(buildUrl({ conviction: convictionFilter ? undefined : "true" }))
-              }
-              title="Condamnation définitive pour atteinte à la probité"
-            >
-              Condamnés pour atteinte à la probité ({counts.withConviction})
-            </Badge>
           </div>
         </div>
       </div>

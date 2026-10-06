@@ -2,12 +2,13 @@ import { Metadata } from "next";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import {
+  getPoliticalFinancingBadgeSql,
   getPoliticalFinancingBadgeWhere,
   getProbityConvictionBadgeSql,
   getProbityConvictionBadgeWhere,
 } from "@/lib/affairs/public-filters";
 import { type SortOption, type MandateFilter } from "@/components/politicians/FilterBar";
-import { MandateType } from "@/generated/prisma";
+import { MandateType, type Prisma } from "@/generated/prisma";
 import { SearchForm } from "@/components/politicians/SearchForm";
 import { PoliticiansGrid } from "@/components/politicians/PoliticiansGrid";
 
@@ -29,6 +30,7 @@ interface PageProps {
     search?: string;
     party?: string;
     conviction?: string;
+    financing?: string;
     mandate?: string;
     status?: string;
     sort?: string;
@@ -42,11 +44,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   if (params.mandate) cp.set("mandate", params.mandate);
   if (params.party) cp.set("party", params.party);
   if (params.conviction === "true") cp.set("conviction", "true");
+  if (params.financing === "true") cp.set("financing", "true");
   if (params.sort && params.sort !== "prominence") cp.set("sort", params.sort);
   const qs = cp.toString();
 
   const hasNonDefaultSort = params.sort !== undefined && params.sort !== "prominence";
-  const hasConvictionFilter = params.conviction === "true";
+  const hasConvictionFilter = params.conviction === "true" || params.financing === "true";
   const noindex =
     hasActiveListingFilter(params, POLITIQUES_LISTING_FILTER_KEYS) ||
     hasConvictionFilter ||
@@ -128,6 +131,7 @@ async function queryPoliticians(
   search?: string,
   partyId?: string,
   withConviction?: boolean,
+  withFinancing?: boolean,
   mandateFilter?: MandateFilter,
   sortOption: SortOption = "alpha",
   page = 1
@@ -156,10 +160,16 @@ async function queryPoliticians(
     conditions.push({ currentPartyId: partyId });
   }
 
+  // Probité et financement politique se cumulent en « l'un ou l'autre ».
+  const convictionConditions: Prisma.PoliticianWhereInput[] = [];
   if (withConviction) {
-    conditions.push({
-      affairs: { some: getProbityConvictionBadgeWhere() },
-    });
+    convictionConditions.push({ affairs: { some: getProbityConvictionBadgeWhere() } });
+  }
+  if (withFinancing) {
+    convictionConditions.push({ affairs: { some: getPoliticalFinancingBadgeWhere() } });
+  }
+  if (convictionConditions.length > 0) {
+    conditions.push({ OR: convictionConditions });
   }
 
   // Build mandate filter conditions
@@ -241,6 +251,7 @@ async function queryPoliticians(
 async function getPoliticiansFiltered(
   partyId?: string,
   withConviction?: boolean,
+  withFinancing?: boolean,
   mandateFilter?: MandateFilter,
   sortOption: SortOption = "alpha",
   page = 1
@@ -248,7 +259,15 @@ async function getPoliticiansFiltered(
   "use cache";
   cacheTag("politicians");
   cacheLife("synced");
-  return queryPoliticians(undefined, partyId, withConviction, mandateFilter, sortOption, page);
+  return queryPoliticians(
+    undefined,
+    partyId,
+    withConviction,
+    withFinancing,
+    mandateFilter,
+    sortOption,
+    page
+  );
 }
 
 // Uncached path — free-text search creates unbounded key space
@@ -256,11 +275,20 @@ async function searchPoliticians(
   search: string,
   partyId?: string,
   withConviction?: boolean,
+  withFinancing?: boolean,
   mandateFilter?: MandateFilter,
   sortOption: SortOption = "alpha",
   page = 1
 ) {
-  return queryPoliticians(search, partyId, withConviction, mandateFilter, sortOption, page);
+  return queryPoliticians(
+    search,
+    partyId,
+    withConviction,
+    withFinancing,
+    mandateFilter,
+    sortOption,
+    page
+  );
 }
 
 // Router: use cached path when no search, uncached when searching
@@ -268,14 +296,30 @@ async function getPoliticians(
   search?: string,
   partyId?: string,
   withConviction?: boolean,
+  withFinancing?: boolean,
   mandateFilter?: MandateFilter,
   sortOption: SortOption = "alpha",
   page = 1
 ) {
   if (search) {
-    return searchPoliticians(search, partyId, withConviction, mandateFilter, sortOption, page);
+    return searchPoliticians(
+      search,
+      partyId,
+      withConviction,
+      withFinancing,
+      mandateFilter,
+      sortOption,
+      page
+    );
   }
-  return getPoliticiansFiltered(partyId, withConviction, mandateFilter, sortOption, page);
+  return getPoliticiansFiltered(
+    partyId,
+    withConviction,
+    withFinancing,
+    mandateFilter,
+    sortOption,
+    page
+  );
 }
 
 async function getParties() {
@@ -308,6 +352,7 @@ async function getFilterCounts() {
     [
       {
         with_conviction: bigint;
+        with_financing: bigint;
         deputes: bigint;
         senateurs: bigint;
         gouvernement: bigint;
@@ -325,6 +370,14 @@ async function getFilterCounts() {
             AND ${getProbityConvictionBadgeSql("a")}
         )
       ) AS with_conviction,
+      -- Politicians with a definitive illegal political financing conviction (same predicate as the badge)
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE EXISTS (
+          SELECT 1 FROM "Affair" a
+          WHERE a."politicianId" = p.id
+            AND ${getPoliticalFinancingBadgeSql("a")}
+        )
+      ) AS with_financing,
       -- Députés
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
@@ -372,6 +425,7 @@ async function getFilterCounts() {
 
   return {
     withConviction: Number(counts.with_conviction),
+    withFinancing: Number(counts.with_financing),
     deputes: Number(counts.deputes),
     senateurs: Number(counts.senateurs),
     gouvernement: Number(counts.gouvernement),
@@ -385,6 +439,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const search = params.search || "";
   const partyFilter = params.party || "";
   const convictionFilter = params.conviction === "true";
+  const financingFilter = params.financing === "true";
   const rawMandate = params.mandate || "";
   const mandateFilter = (
     rawMandate === "president_parti" ? "dirigeants" : rawMandate
@@ -398,13 +453,23 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const page = parsePageParam(params.page);
 
   const [{ politicians, total, totalPages }, parties, counts] = await Promise.all([
-    getPoliticians(search, partyFilter, convictionFilter, mandateFilter, sortOption, page),
+    getPoliticians(
+      search,
+      partyFilter,
+      convictionFilter,
+      financingFilter,
+      mandateFilter,
+      sortOption,
+      page
+    ),
     getParties(),
     getFilterCounts(),
   ]);
 
   // Count active filters
-  const activeFilterCount = [partyFilter, convictionFilter, mandateFilter].filter(Boolean).length;
+  const activeFilterCount = [partyFilter, convictionFilter, financingFilter, mandateFilter].filter(
+    Boolean
+  ).length;
 
   return (
     <>
@@ -441,6 +506,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
             defaultSearch={search}
             partyFilter={partyFilter}
             convictionFilter={convictionFilter}
+            financingFilter={financingFilter}
             mandateFilter={mandateFilter}
             sortOption={sortOption}
           />
@@ -458,6 +524,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
             search,
             partyFilter,
             convictionFilter,
+            financingFilter,
             mandateFilter,
             sortOption,
           }}
