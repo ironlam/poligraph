@@ -9,6 +9,8 @@ import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/reques
 import { invalidatePresidentialCandidacyTags } from "@/lib/presidentielle/candidacy-cache";
 import { syncPresidentialSearchDocumentsForCandidacy } from "@/lib/presidentielle/search-sync";
 import { lockMeasureCandidacy } from "@/lib/measures/lock";
+import { fetchPublicPhoto } from "@/lib/api/fetch-public-photo";
+import { uploadSourcePhotoCopy } from "@/lib/photos/blob";
 import type { DataSource, PublicationStatus } from "@/generated/prisma";
 import type { z } from "zod/v4";
 
@@ -65,6 +67,39 @@ export const PUT = withAdminAuth(
       }
     }
 
+    // The avatar prefers the Blob copy, so a new photoUrl alone kept showing the
+    // previous photo. Download outside the transaction: it can take seconds.
+    const photoUrl = body.photoUrl || null;
+    let blobPhotoUrl = existing.blobPhotoUrl;
+    if (photoUrl !== existing.photoUrl) {
+      blobPhotoUrl = null;
+      if (photoUrl) {
+        const fetched = await fetchPublicPhoto(photoUrl);
+        if (fetched.kind === "forbidden") {
+          return NextResponse.json(
+            { error: `Adresse de photo refusée : ${fetched.reason}.` },
+            { status: 400 }
+          );
+        }
+        if (fetched.kind === "not-a-photo") {
+          return NextResponse.json(
+            {
+              error: "Cette adresse ne renvoie pas une photo (page web ou image de remplacement).",
+            },
+            { status: 400 }
+          );
+        }
+        // An unreachable source is recorded without a copy, as the photo sync does.
+        if (fetched.kind === "photo") {
+          blobPhotoUrl = await uploadSourcePhotoCopy(
+            existing.id,
+            fetched.buffer,
+            fetched.contentType
+          ).catch(() => null);
+        }
+      }
+    }
+
     // Update politician
     const { politician, presidentialElectionIds } = await db.$transaction(async (tx) => {
       // Unbounded by design (see ALLOWED_UNBOUNDED in candidacy-read-bounds.test.ts): every
@@ -89,7 +124,8 @@ export const PUT = withAdminAuth(
           fullName,
           birthDate: body.birthDate ? new Date(body.birthDate) : null,
           birthPlace: body.birthPlace || null,
-          photoUrl: body.photoUrl || null,
+          photoUrl,
+          blobPhotoUrl,
           photoSource: body.photoSource || null,
           currentPartyId: body.currentPartyId || null,
           deathDate: body.deathDate ? new Date(body.deathDate) : null,
