@@ -55,6 +55,7 @@ describe("queryBatchPublishGroups", () => {
             expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
             text: "Créer un service public du logement.",
             details: null,
+            previousText: null,
           },
         ],
         hasMore: false,
@@ -139,6 +140,67 @@ describe("queryBatchPublishGroups", () => {
           measures: expect.objectContaining({
             where: expect.objectContaining({ candidacyId: "candidature-1" }),
           }),
+        }),
+      })
+    );
+  });
+
+  it("propose une correction de formulation relue avec le texte qu'elle remplace", async () => {
+    findManyMock.mockResolvedValue([]);
+    findManyMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "edition-1",
+          label: "Cahier 1",
+          version: 1,
+          candidacy: { candidateName: "Candidate Exemple" },
+          party: null,
+          election: { title: "Élection présidentielle de 2027" },
+          measures: [
+            {
+              id: "measure-1",
+              updatedAt: new Date("2027-01-16T10:00:00.000Z"),
+              publicationStatus: "PUBLISHED",
+              publishedRevision: { text: "Texte public avec une note interne." },
+              latestRevision: {
+                id: "revision-correction",
+                text: "Texte public corrigé.",
+                details: null,
+              },
+            },
+          ],
+        },
+      ]);
+
+    const [group] = await queryBatchPublishGroups();
+
+    expect(group?.items).toEqual([
+      {
+        batchKind: "TEXT_CORRECTION",
+        measureId: "measure-1",
+        revisionId: "revision-correction",
+        expectedUpdatedAt: "2027-01-16T10:00:00.000Z",
+        text: "Texte public corrigé.",
+        details: null,
+        previousText: "Texte public avec une note interne.",
+      },
+    ]);
+    expect(findManyMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          measures: {
+            some: expect.objectContaining({
+              latestRevision: {
+                is: expect.objectContaining({
+                  extractionMethod: "MANUAL",
+                  reviewedAt: { not: null },
+                }),
+              },
+            }),
+          },
         }),
       })
     );

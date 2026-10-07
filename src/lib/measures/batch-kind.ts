@@ -2,7 +2,7 @@ import type { MeasureExtractionMethod } from "@/generated/prisma";
 import { MEASURE_CONTEXT_PROMPT_VERSION } from "@/lib/measures/context-provenance";
 import { MeasureValidationError } from "@/lib/measures/errors";
 
-export type MeasureBatchKind = "FIRST_PUBLICATION" | "CONTEXT_CORRECTION";
+export type MeasureBatchKind = "FIRST_PUBLICATION" | "CONTEXT_CORRECTION" | "TEXT_CORRECTION";
 
 export function assertMeasureBatchKind(
   kind: MeasureBatchKind | undefined,
@@ -34,6 +34,18 @@ export function assertMeasureBatchKind(
     revision.details?.trim() &&
     revision.extractionMethod === "AI_ASSISTED" &&
     revision.extractorVersion?.endsWith(`:${MEASURE_CONTEXT_PROMPT_VERSION}`)
+  ) {
+    return;
+  }
+  // A human-written correction of the public formulation. It changes what readers see, so the
+  // batch panels show the published text beside the correction; AI-assisted rewrites of the
+  // formulation stay individual decisions.
+  if (
+    kind === "TEXT_CORRECTION" &&
+    measure.publicationStatus === "PUBLISHED" &&
+    measure.publishedRevision !== null &&
+    revision.text !== measure.publishedRevision.text &&
+    revision.extractionMethod === "MANUAL"
   ) {
     return;
   }

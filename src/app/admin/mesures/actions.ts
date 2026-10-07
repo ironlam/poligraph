@@ -108,7 +108,7 @@ const batchPublicationInputSchema = z
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
             expectedUpdatedAt: z.string().min(1),
-            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION", "TEXT_CORRECTION"]),
           })
           .strict()
       )
@@ -125,7 +125,7 @@ const batchReviewInputSchema = z
           .object({
             measureId: z.string().min(1),
             revisionId: z.string().min(1),
-            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION"]),
+            batchKind: z.enum(["FIRST_PUBLICATION", "CONTEXT_CORRECTION", "TEXT_CORRECTION"]),
           })
           .strict()
       )

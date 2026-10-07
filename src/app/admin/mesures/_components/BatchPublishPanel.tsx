@@ -3,6 +3,13 @@
 import { useState, useTransition } from "react";
 import { publishReviewedBatchAction, type BatchActionResult } from "../actions";
 import type { BatchPublishGroup } from "../_data/batch-publish-query";
+import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
+
+const BATCH_KIND_LABELS: Record<MeasureBatchKind, string> = {
+  FIRST_PUBLICATION: "Premières publications",
+  CONTEXT_CORRECTION: "Corrections de contexte",
+  TEXT_CORRECTION: "Corrections de formulation",
+};
 
 function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
   const [confirmed, setConfirmed] = useState(false);
@@ -34,10 +41,8 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.batchKind === "CONTEXT_CORRECTION"
-              ? "Corrections de contexte"
-              : "Premières publications"}
-            , {group.electionTitle}, {count} révision{count > 1 ? "s" : ""} relue
+            {BATCH_KIND_LABELS[group.batchKind]}, {group.electionTitle}, {count} révision
+            {count > 1 ? "s" : ""} relue
             {count > 1 ? "s" : ""} et sourcée{count > 1 ? "s" : ""}
           </p>
         </div>
@@ -48,7 +53,15 @@ function BatchPublishCard({ group }: { group: BatchPublishGroup }) {
           <ol className="mt-2 max-h-96 max-w-3xl list-decimal space-y-4 overflow-y-auto pl-5">
             {group.items.map((item) => (
               <li key={item.revisionId}>
-                <span className="font-medium">{item.text}</span>
+                {item.previousText !== null ? (
+                  <span className="block text-muted-foreground">
+                    Version publiée : <span className="line-through">{item.previousText}</span>
+                  </span>
+                ) : null}
+                <span className="font-medium">
+                  {item.previousText !== null ? "Correction : " : null}
+                  {item.text}
+                </span>
                 {item.details ? (
                   <span className="mt-1 block text-muted-foreground">
                     Contexte relu : {item.details}
@@ -140,9 +153,10 @@ export function BatchPublishPanel({ groups }: { groups: BatchPublishGroup[] }) {
         Publication par lot
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Les premières publications et les corrections de contexte déjà relues sont proposées. Une
-        correction de contexte ne peut entrer dans un lot que si elle conserve exactement la
-        formulation publique. Une transition complète contrôle encore chaque révision.
+        Les premières publications et les corrections déjà relues sont proposées. Une correction de
+        contexte ne peut entrer dans un lot que si elle conserve exactement la formulation publique.
+        Une correction de formulation écrite à la main affiche la version publiée à côté du nouveau
+        texte. Une transition complète contrôle encore chaque révision.
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
