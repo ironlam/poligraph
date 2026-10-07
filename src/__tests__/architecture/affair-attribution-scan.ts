@@ -870,6 +870,22 @@ export const ALLOWED: AllowedOccurrence[] = [
       "Fiches à recalculer après une écriture sur des affaires (et leurs affaires liées) ; rien n'est affiché ni compté.",
   },
   {
+    path: "src/lib/affairs/monitoring/needs-human.ts",
+    snippet: 'return a.publicationStatus === "PUBLISHED" && a.involvement === "DIRECT";',
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Périmètre du suivi privé (publiée et DIRECT) : prédicat de la file admin ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/lib/affairs/monitoring/needs-human.ts",
+    snippet: 'affair: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },',
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Même périmètre du suivi privé, en filtre Prisma de la file admin ; rien n'est affiché ni compté.",
+  },
+  {
     path: "src/lib/affairs/monitoring/reconcile.ts",
     snippet: "const locked = await tx.$queryRaw<{ id: string }[]>`",
     count: 1,
