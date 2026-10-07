@@ -107,9 +107,12 @@ export async function fetchPublicPhoto(raw: string): Promise<PublicPhotoFetch> {
       current = new URL(location, checked).toString();
       continue;
     }
-    if (!response.ok) return { kind: "unreachable" };
+    // Only a 200 with a body says anything about the photo: a firewall
+    // challenge (the European Parliament answers 202, empty) is not a fake one.
+    if (response.status !== 200) return { kind: "unreachable" };
 
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) return { kind: "unreachable" };
     const photo = identifyPhoto(buffer);
     return photo
       ? { kind: "photo", buffer, contentType: photo.contentType }

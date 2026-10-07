@@ -111,4 +111,12 @@ describe("fetchPublicPhoto", () => {
       kind: "unreachable",
     });
   });
+
+  it("reports a firewall challenge (202, empty body) as unreachable, not as a fake photo", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+
+    expect(await fetchPublicPhoto("https://www.europarl.europa.eu/mepphoto/1.jpg")).toEqual({
+      kind: "unreachable",
+    });
+  });
 });

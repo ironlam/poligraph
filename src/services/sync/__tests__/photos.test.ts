@@ -45,7 +45,10 @@ function politician(overrides: Record<string, unknown> = {}) {
 }
 
 /** Wikidata offers one candidate; each URL answers what `responses` says. */
-function sources(responses: Record<string, Buffer | Error>) {
+/** What the European Parliament firewall answers a non-browser client. */
+const WAF_CHALLENGE = { status: 202, data: Buffer.alloc(0) };
+
+function sources(responses: Record<string, Buffer | Error | typeof WAF_CHALLENGE>) {
   h.get.mockResolvedValue({
     ok: true,
     status: 200,
@@ -55,6 +58,7 @@ function sources(responses: Record<string, Buffer | Error>) {
     const key = Object.keys(responses).find((k) => url.includes(k));
     const answer = key ? responses[key]! : new Error(`404 ${url}`);
     if (answer instanceof Error) throw answer;
+    if (!Buffer.isBuffer(answer)) return { ok: true, ...answer };
     return { ok: true, status: 200, data: answer };
   });
 }
@@ -133,5 +137,26 @@ describe("syncPhotos --validate", () => {
     await syncPhotos({ validateExisting: true });
 
     expect(lastUpdate().data).toMatchObject({ photoSource: "wikidata", blobPhotoUrl: BLOB_URL });
+  });
+
+  // Measured on 2026-10-07: every European Parliament photo answered 202 with an
+  // empty body, was taken for a placeholder, and 81 official portraits were
+  // replaced by a Wikidata photo or removed.
+  it("never treats a 202 with an empty body as a placeholder", async () => {
+    h.findMany.mockResolvedValue([
+      politician({
+        photoUrl: "https://www.europarl.europa.eu/mepphoto/1.jpg",
+        photoSource: "parlement-europeen",
+        blobPhotoUrl: "https://abc.public.blob.vercel-storage.com/politicians/pol-1",
+      }),
+    ]);
+    sources({ europarl: WAF_CHALLENGE, "Jeanne_Martin.jpg": photo() });
+
+    await syncPhotos({ validateExisting: true });
+
+    for (const [args] of h.update.mock.calls) {
+      expect(args.data).not.toHaveProperty("photoUrl");
+      expect(args.data).not.toHaveProperty("blobPhotoUrl");
+    }
   });
 });
