@@ -102,5 +102,7 @@ else
     src/app/admin/mesures \
     "src/app/elections/[slug]/__tests__/static-params.integration.test.ts" \
     src/test/fixtures/__tests__ \
+    src/lib/affairs/monitoring/__tests__/reconcile.integration.test.ts \
+    src/lib/affairs/monitoring/__tests__/reconcile-rollback.integration.test.ts \
     src/test/__tests__/db-guard.test.ts
 fi

@@ -869,6 +869,47 @@ export const ALLOWED: AllowedOccurrence[] = [
     reason:
       "Fiches à recalculer après une écriture sur des affaires (et leurs affaires liées) ; rien n'est affiché ni compté.",
   },
+  {
+    path: "src/lib/affairs/monitoring/reconcile.ts",
+    snippet: "const locked = await tx.$queryRaw<{ id: string }[]>`",
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Suivi éditorial privé : verrou de la ligne d'affaire avant recalcul du suivi ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/lib/affairs/monitoring/reconcile.ts",
+    snippet: "db.affair.findMany({",
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Balayage du suivi privé : identifiants des affaires publiées mises en cause sans suivi ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/lib/affairs/monitoring/reconcile.ts",
+    snippet: 'involvement: "DIRECT",',
+    count: 2,
+    nature: "identity-check",
+    reason:
+      "Périmètre du suivi privé (publiée et DIRECT, spec du suivi) : même règle que isInScope ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/lib/affairs/monitoring/reconcile.ts",
+    snippet: "db.$queryRaw<{ affairId: string }[]>`",
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Balayage du suivi privé : suivis dont le statut de calcul diffère du statut de l'affaire ; rien n'est affiché ni compté.",
+  },
+  {
+    path: "src/lib/affairs/monitoring/reconcile.ts",
+    snippet:
+      'OR: [{ publicationStatus: { not: "PUBLISHED" } }, { involvement: { not: "DIRECT" } }],',
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Balayage du suivi privé : suivis actifs sortis du périmètre, à désactiver ; rien n'est affiché ni compté.",
+  },
 ];
 
 /**

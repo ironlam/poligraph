@@ -25,6 +25,9 @@ vi.mock("@/lib/db", () => ({ db: h.db }));
 vi.mock("@/services/affairs/status-tracking", () => ({
   trackStatusChange: h.trackStatusChange,
 }));
+vi.mock("@/lib/affairs/monitoring/reconcile", () => ({
+  reconcileAffairMonitoring: vi.fn(),
+}));
 vi.mock("@/lib/affairs/official-decision-verification", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/affairs/official-decision-verification")>();
