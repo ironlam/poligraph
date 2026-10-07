@@ -122,6 +122,11 @@ export async function reconcileAllAffairMonitoring(
       console.error("[affair-monitoring] reconcile failed", {
         affairId,
         error: error instanceof Error ? error.name : "unknown",
+        // Prisma code (e.g. P2002) when present; never the message.
+        code:
+          typeof (error as { code?: unknown })?.code === "string"
+            ? (error as { code: string }).code
+            : undefined,
       });
       continue;
     }

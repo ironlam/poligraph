@@ -1,7 +1,7 @@
 import { inngest } from "../client";
 
-// Never throws on per-affair failures (they are counted in `failed`): a retry would
-// replay the whole sweep, and tomorrow's run picks the leftovers up anyway.
+// Partial failures are counted in `failed` and do not throw (tomorrow's run picks them up);
+// only a total failure throws, so a systematic bug shows as a failed run.
 export const affairMonitoringReconcile = inngest.createFunction(
   {
     id: "affair-monitoring/reconcile",
@@ -10,9 +10,16 @@ export const affairMonitoringReconcile = inngest.createFunction(
   },
   { cron: "TZ=Europe/Paris 30 5 * * *" },
   async ({ step }) => {
-    return step.run("reconcile", async () => {
+    const counts = await step.run("reconcile", async () => {
       const { reconcileAllAffairMonitoring } = await import("@/lib/affairs/monitoring/reconcile");
       return reconcileAllAffairMonitoring();
     });
+    // Every processed affair failed: a systematic bug, make the run visible as failed.
+    if (counts.failed > 0 && counts.created + counts.updated + counts.deactivated === 0) {
+      throw new Error(
+        `Balayage du suivi : toutes les affaires traitées ont échoué (${counts.failed}).`
+      );
+    }
+    return counts;
   }
 );

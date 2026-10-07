@@ -43,6 +43,26 @@ describe("balayage quotidien du suivi des affaires", () => {
     await expect(handler({ step })).resolves.toEqual(counts);
   });
 
+  it("échoue quand toutes les affaires traitées ont échoué", async () => {
+    h.reconcileAllAffairMonitoring.mockResolvedValue({
+      created: 0,
+      updated: 0,
+      deactivated: 0,
+      failed: 3,
+    });
+    const handler = fn().handler as (ctx: { step: unknown }) => Promise<unknown>;
+    await expect(handler({ step })).rejects.toThrow(
+      "Balayage du suivi : toutes les affaires traitées ont échoué (3)."
+    );
+  });
+
+  it("se termine normalement sans aucun candidat", async () => {
+    const counts = { created: 0, updated: 0, deactivated: 0, failed: 0 };
+    h.reconcileAllAffairMonitoring.mockResolvedValue(counts);
+    const handler = fn().handler as (ctx: { step: unknown }) => Promise<unknown>;
+    await expect(handler({ step })).resolves.toEqual(counts);
+  });
+
   it("figure dans le registre des fonctions", () => {
     const src = readFileSync(join(process.cwd(), "src/inngest/index.ts"), "utf8");
     expect(src).toContain('from "./functions/affair-monitoring-reconcile"');

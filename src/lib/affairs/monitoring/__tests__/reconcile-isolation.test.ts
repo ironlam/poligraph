@@ -31,13 +31,16 @@ describe("balayage : isolation des échecs", () => {
   it("continue après l'échec d'une affaire, le compte et ne journalise que son id", async () => {
     h.transaction
       .mockResolvedValueOnce({ kind: "create" })
-      .mockRejectedValueOnce(new Error("Titre secret de l'affaire"))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Titre secret de l'affaire"), { code: "P2002" })
+      )
       .mockResolvedValueOnce({ kind: "update", data: { active: false } });
     const result = await reconcileAllAffairMonitoring(new Date("2026-10-07T10:00:00Z"));
     expect(result).toEqual({ created: 1, updated: 0, deactivated: 1, failed: 1 });
     expect(h.transaction).toHaveBeenCalledTimes(3);
     const logged = JSON.stringify(h.error.mock.calls);
     expect(logged).toContain("a2");
+    expect(logged).toContain("P2002");
     expect(logged).not.toContain("Titre secret");
   });
 });
