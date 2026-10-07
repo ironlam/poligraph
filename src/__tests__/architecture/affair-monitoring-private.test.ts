@@ -50,7 +50,7 @@ describe("suivi des affaires : confidentialité", () => {
   });
 
   it("contrôle positif : le scanner lit bien un fichier de suivi", () => {
-    const file = "src/lib/affairs/monitoring/reconcile.ts";
+    const file = "src/lib/affairs/monitoring/queries.ts";
     expect(files).toContain(file);
     expect(MONITORING_PATTERN.test(readFileSync(file, "utf8"))).toBe(true);
   });

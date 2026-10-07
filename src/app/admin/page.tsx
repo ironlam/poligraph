@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { getDashboardCounts, getDashboardSecondaryData } from "@/lib/admin/dashboard";
 import {
+  CalendarClock,
   CheckCircle2,
   CopyCheck,
   FileCheck2,
@@ -241,6 +242,13 @@ export default async function AdminDashboard() {
       description: "Examiner les articles analysés sans liaison d’affaire.",
       href: "/admin/liaisons/articles-affaires",
       icon: Newspaper,
+    },
+    {
+      label: "Échéances à traiter",
+      count: data.queues.monitoringToHandle,
+      description: "Délibérés, audiences et contrôles en retard.",
+      href: "/admin/affaires/echeances",
+      icon: CalendarClock,
     },
   ];
   return (
