@@ -1,0 +1,88 @@
+name: Sync Photos
+
+# Manual run of the photo sync, with the options of `npm run sync:photos`.
+# The weekly "Sync Politicians" workflow keeps its bounded missing-photo pass.
+
+on:
+  workflow_dispatch:
+    inputs:
+      validate:
+        description: "Vérifier les photos existantes (sinon : chercher les photos manquantes)"
+        type: boolean
+        default: true
+      slug:
+        description: "Slugs séparés par des virgules (vide : tous)"
+        type: string
+        required: false
+        default: ""
+      limit:
+        description: "Nombre maximal d'élus (vide : sans limite)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-photos
+  cancel-in-progress: false
+
+jobs:
+  sync-photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      # Inputs reach the shell through env and are checked before use: never
+      # interpolate ${{ inputs.* }} into a run script (command injection).
+      - name: Sync photos
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          INPUT_VALIDATE: ${{ inputs.validate }}
+          INPUT_SLUG: ${{ inputs.slug }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+        run: |
+          # Without the token the sync changes photos without their Blob copy,
+          # and pages fall back to the source host (502 on European Parliament
+          # photos through the image optimizer).
+          if [ -z "$BLOB_READ_WRITE_TOKEN" ]; then
+            echo "::error::Secret BLOB_READ_WRITE_TOKEN absent de l'environnement production."
+            exit 1
+          fi
+
+          args=()
+          if [ "$INPUT_VALIDATE" = "true" ]; then args+=(--validate); fi
+          if [ -n "$INPUT_SLUG" ]; then
+            if ! [[ "$INPUT_SLUG" =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]]; then
+              echo "::error::Slugs invalides : lettres minuscules, chiffres et tirets, séparés par des virgules."
+              exit 1
+            fi
+            args+=("--slug=$INPUT_SLUG")
+          fi
+          if [ -n "$INPUT_LIMIT" ]; then
+            if ! [[ "$INPUT_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Limite invalide : un entier positif."
+              exit 1
+            fi
+            args+=("--limit=$INPUT_LIMIT")
+          fi
+
+          npm run sync:photos -- "${args[@]}"
