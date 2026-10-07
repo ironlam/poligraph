@@ -8,7 +8,10 @@ import { describe, expect, it } from "vitest";
  * référencent le modèle.
  */
 
-const MONITORING_PATTERN = /\baffairMonitoring\b|\bAffairMonitoring\b|\bmonitoring\s*:\s*(true|\{)/;
+// Les modèles et leur table de contrôles, la relation `monitoring:` quelle que soit sa valeur, et
+// tout import du module de suivi.
+const MONITORING_PATTERN =
+  /\b[aA]ffairMonitoring(Check)?\b|"AffairMonitoring(Check)?"|\bmonitoring\s*:|affairs\/monitoring\//;
 
 const ALLOWED_PREFIXES = [
   "src/app/admin/",
@@ -18,6 +21,7 @@ const ALLOWED_PREFIXES = [
   "src/lib/affairs/monitoring/",
   "src/services/affairs/monitoring/",
   "src/inngest/functions/affair-monitoring-",
+  "src/inngest/index.ts",
   "src/lib/affairs/publish-guard.ts",
   "src/services/affairs/proposal-review.ts",
 ];
