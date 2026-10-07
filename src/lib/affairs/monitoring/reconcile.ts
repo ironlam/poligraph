@@ -66,55 +66,65 @@ export async function reconcileAffairMonitoring(
  */
 export async function reconcileAllAffairMonitoring(
   now: Date = new Date()
-): Promise<{ created: number; updated: number; deactivated: number }> {
+): Promise<{ created: number; updated: number; deactivated: number; failed: number }> {
   const openStatuses = [...OPEN_STATUSES];
 
-  const [unmonitored, statusDrift, outOfScope, revivable] = await Promise.all([
-    db.affair.findMany({
-      where: {
+  // Sequential on purpose: four concurrent reads cost pool connections (EMAXCONN, 2026-10-01).
+  const unmonitored = await db.affair.findMany({
+    where: {
+      publicationStatus: "PUBLISHED",
+      involvement: "DIRECT",
+      status: { in: openStatuses },
+      monitoring: null,
+    },
+    select: { id: true },
+  });
+  const statusDrift = await db.$queryRaw<{ affairId: string }[]>`
+    SELECT m."affairId"
+    FROM "AffairMonitoring" m
+    JOIN "Affair" a ON a.id = m."affairId"
+    WHERE m.active = true AND m."statusAtSchedule" <> a.status
+  `;
+  const outOfScope = await db.affairMonitoring.findMany({
+    where: {
+      active: true,
+      affair: {
+        OR: [{ publicationStatus: { not: "PUBLISHED" } }, { involvement: { not: "DIRECT" } }],
+      },
+    },
+    select: { affairId: true },
+  });
+  const revivable = await db.affairMonitoring.findMany({
+    where: {
+      active: false,
+      affair: {
         publicationStatus: "PUBLISHED",
         involvement: "DIRECT",
         status: { in: openStatuses },
-        monitoring: null,
       },
-      select: { id: true },
-    }),
-    db.$queryRaw<{ affairId: string }[]>`
-      SELECT m."affairId"
-      FROM "AffairMonitoring" m
-      JOIN "Affair" a ON a.id = m."affairId"
-      WHERE m.active = true AND m."statusAtSchedule" <> a.status
-    `,
-    db.affairMonitoring.findMany({
-      where: {
-        active: true,
-        affair: {
-          OR: [{ publicationStatus: { not: "PUBLISHED" } }, { involvement: { not: "DIRECT" } }],
-        },
-      },
-      select: { affairId: true },
-    }),
-    db.affairMonitoring.findMany({
-      where: {
-        active: false,
-        affair: {
-          publicationStatus: "PUBLISHED",
-          involvement: "DIRECT",
-          status: { in: openStatuses },
-        },
-      },
-      select: { affairId: true },
-    }),
-  ]);
+    },
+    select: { affairId: true },
+  });
 
   const affairIds = new Set<string>([
     ...unmonitored.map((a) => a.id),
     ...[...statusDrift, ...outOfScope, ...revivable].map((m) => m.affairId),
   ]);
 
-  const counts = { created: 0, updated: 0, deactivated: 0 };
+  const counts = { created: 0, updated: 0, deactivated: 0, failed: 0 };
   for (const affairId of affairIds) {
-    const plan = await db.$transaction((tx) => applyReconcile(tx, affairId, now));
+    let plan: ReconcilePlan;
+    try {
+      plan = await db.$transaction((tx) => applyReconcile(tx, affairId, now));
+    } catch (error) {
+      // Id only: no title, no name. The next daily run retries this affair.
+      counts.failed++;
+      console.error("[affair-monitoring] reconcile failed", {
+        affairId,
+        error: error instanceof Error ? error.name : "unknown",
+      });
+      continue;
+    }
     if (plan.kind === "create") counts.created++;
     else if (plan.kind === "update") {
       if (plan.data.active === false) counts.deactivated++;

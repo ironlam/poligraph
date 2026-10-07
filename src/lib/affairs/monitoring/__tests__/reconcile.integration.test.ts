@@ -166,6 +166,7 @@ describeIfDisposableDb("réconciliation du suivi des affaires", () => {
       created: 1,
       updated: 1,
       deactivated: 1,
+      failed: 0,
     });
 
     const rows = await db.affairMonitoring.findMany({
@@ -182,6 +183,7 @@ describeIfDisposableDb("réconciliation du suivi des affaires", () => {
       created: 0,
       updated: 0,
       deactivated: 0,
+      failed: 0,
     });
   });
 });

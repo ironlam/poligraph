@@ -895,7 +895,7 @@ export const ALLOWED: AllowedOccurrence[] = [
   },
   {
     path: "src/lib/affairs/monitoring/reconcile.ts",
-    snippet: "db.affair.findMany({",
+    snippet: "const unmonitored = await db.affair.findMany({",
     count: 1,
     nature: "identity-check",
     reason:
@@ -911,7 +911,7 @@ export const ALLOWED: AllowedOccurrence[] = [
   },
   {
     path: "src/lib/affairs/monitoring/reconcile.ts",
-    snippet: "db.$queryRaw<{ affairId: string }[]>`",
+    snippet: "const statusDrift = await db.$queryRaw<{ affairId: string }[]>`",
     count: 1,
     nature: "identity-check",
     reason:

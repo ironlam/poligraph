@@ -17,6 +17,7 @@ import { syncPress } from "./functions/sync-press";
 import { syncScrutins } from "./functions/sync-scrutins";
 import { syncPlatformUpdates } from "./functions/sync-platform-updates";
 import { pipelineDigest } from "./functions/pipeline-digest";
+import { affairMonitoringReconcile } from "./functions/affair-monitoring-reconcile";
 import {
   reconcilePoliticianProfilesFn,
   refreshPoliticianProfileFn,
@@ -43,6 +44,7 @@ const groupedFunctions = [
   onboardingSend,
   syncEngagement,
   pipelineDigest,
+  affairMonitoringReconcile,
   syncPlatformUpdates,
   refreshPoliticianProfileFn,
   reconcilePoliticianProfilesFn,
