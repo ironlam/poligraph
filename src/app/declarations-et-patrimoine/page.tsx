@@ -139,6 +139,7 @@ export default async function DeclarationsPage({ searchParams }: PageProps) {
                       </span>
                       <PoliticianAvatar
                         photoUrl={p.photoUrl}
+                        blobPhotoUrl={p.blobPhotoUrl}
                         firstName={p.firstName}
                         lastName={p.lastName}
                         size="sm"
@@ -365,6 +366,7 @@ function DeclarationListCard({ row }: { row: DeclarationRow }) {
             <div className="transition-transform duration-300 group-hover:scale-110">
               <PoliticianAvatar
                 photoUrl={row.photoUrl}
+                blobPhotoUrl={row.blobPhotoUrl}
                 firstName={row.firstName}
                 lastName={row.lastName}
                 size="sm"

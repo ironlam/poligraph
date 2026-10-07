@@ -6,6 +6,7 @@ const base = {
   politicianSlug: "jean-dupont",
   fullName: "Jean Dupont",
   photoUrl: null,
+  blobPhotoUrl: null,
   meta: "Député du Calvados",
   affairCount: 3,
   party: null,
@@ -55,5 +56,23 @@ describe("AffairContextBand — affichage sujet / rôle (B1 P2)", () => {
   it("accusé (DIRECT) : pas d'étage de rôle", () => {
     render(<AffairContextBand {...base} involvement="DIRECT" />);
     expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+// L'optimiseur d'images de Vercel répond 502 sur certaines sources (photos du
+// Parlement européen). Le bandeau doit servir la copie Blob quand elle existe.
+describe("AffairContextBand — photo", () => {
+  it("affiche la copie Blob plutôt que la photo source", () => {
+    render(
+      <AffairContextBand
+        {...base}
+        photoUrl="https://www.europarl.europa.eu/mepphoto/131580.jpg"
+        blobPhotoUrl="https://abc.public.blob.vercel-storage.com/politicians/x"
+      />
+    );
+    expect(screen.getByAltText("Jean Dupont")).toHaveAttribute(
+      "src",
+      "https://abc.public.blob.vercel-storage.com/politicians/x"
+    );
   });
 });

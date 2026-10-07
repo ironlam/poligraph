@@ -12,6 +12,7 @@ interface PoliticianContext {
   fullName: string;
   slug: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   factcheckCount: number;
 }

@@ -45,6 +45,7 @@ interface ListCardProps {
       slug: string;
       fullName: string;
       photoUrl: string | null;
+      blobPhotoUrl: string | null;
       currentParty: { shortName: string; color: string | null } | null;
       mandates: Array<{ type: string }>;
     } | null;

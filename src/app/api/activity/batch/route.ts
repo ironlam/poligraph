@@ -39,6 +39,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
       slug: true,
       fullName: true,
       photoUrl: true,
+      blobPhotoUrl: true,
       currentParty: { select: { shortName: true, color: true } },
     },
   });
@@ -62,6 +63,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
         slug: p.slug,
         fullName: p.fullName,
         photoUrl: p.photoUrl,
+        blobPhotoUrl: p.blobPhotoUrl,
         party: p.currentParty?.shortName ?? null,
         partyColor: p.currentParty?.color ?? null,
       },
@@ -219,6 +221,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
         slug: p.slug,
         fullName: p.fullName,
         photoUrl: p.photoUrl,
+        blobPhotoUrl: p.blobPhotoUrl,
         party: p.currentParty?.shortName ?? null,
         partyColor: p.currentParty?.color ?? null,
       })),

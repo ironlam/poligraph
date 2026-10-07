@@ -8,6 +8,7 @@ export interface TopAuthor {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   partyShortName: string | null;
   partyColor: string | null;
   count: number;

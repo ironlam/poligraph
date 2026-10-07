@@ -17,6 +17,7 @@ interface RawPolitician {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   partyShortName: string | null;
   partyColor: string | null;
   mandateType: string | null;
@@ -99,7 +100,7 @@ export const GET = withPublicRoute(async (request) => {
     await Promise.all([
       // Politicians: accent-insensitive on fullName/lastName/firstName
       db.$queryRaw<RawPolitician[]>`
-        SELECT p."id", p."slug", p."fullName", p."photoUrl",
+        SELECT p."id", p."slug", p."fullName", p."photoUrl", p."blobPhotoUrl",
                party."shortName" AS "partyShortName",
                party."color" AS "partyColor",
                (SELECT m."type" FROM "Mandate" m
@@ -204,6 +205,7 @@ export const GET = withPublicRoute(async (request) => {
         slug: p.slug,
         fullName: p.fullName,
         photoUrl: p.photoUrl,
+        blobPhotoUrl: p.blobPhotoUrl,
         party: p.partyShortName,
         partyColor: p.partyColor,
         mandate: p.mandateType,

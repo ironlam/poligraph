@@ -245,6 +245,7 @@ export default async function PartyPage({ params }: PageProps) {
                           >
                             <PoliticianAvatar
                               photoUrl={mandate.politician.photoUrl}
+                              blobPhotoUrl={mandate.politician.blobPhotoUrl}
                               firstName={mandate.politician.firstName}
                               lastName={mandate.politician.lastName}
                               size="sm"
@@ -276,6 +277,7 @@ export default async function PartyPage({ params }: PageProps) {
                           >
                             <PoliticianAvatar
                               photoUrl={membership.politician.photoUrl}
+                              blobPhotoUrl={membership.politician.blobPhotoUrl}
                               firstName={membership.politician.firstName}
                               lastName={membership.politician.lastName}
                               size="sm"
@@ -310,6 +312,7 @@ export default async function PartyPage({ params }: PageProps) {
                             <div className="flex items-center gap-3">
                               <PoliticianAvatar
                                 photoUrl={mandate.politician.photoUrl}
+                                blobPhotoUrl={mandate.politician.blobPhotoUrl}
                                 firstName={mandate.politician.firstName}
                                 lastName={mandate.politician.lastName}
                                 size="sm"
@@ -355,6 +358,7 @@ export default async function PartyPage({ params }: PageProps) {
                       >
                         <PoliticianAvatar
                           photoUrl={politician.photoUrl}
+                          blobPhotoUrl={politician.blobPhotoUrl}
                           firstName={politician.firstName}
                           lastName={politician.lastName}
                           size="sm"
@@ -422,6 +426,7 @@ export default async function PartyPage({ params }: PageProps) {
                       <div className="flex items-center gap-3">
                         <PoliticianAvatar
                           photoUrl={membership.politician.photoUrl}
+                          blobPhotoUrl={membership.politician.blobPhotoUrl}
                           firstName={membership.politician.firstName}
                           lastName={membership.politician.lastName}
                           size="sm"

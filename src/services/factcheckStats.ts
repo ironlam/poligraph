@@ -57,6 +57,7 @@ export interface RankedPolitician {
   fullName: string;
   slug: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   partyColor: string | null;
   totalMentions: number;
@@ -236,6 +237,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
         fullName: string;
         slug: string;
         photoUrl: string | null;
+        blobPhotoUrl: string | null;
         partyName: string | null;
         partyShortName: string | null;
         partyColor: string | null;
@@ -249,6 +251,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
         p."fullName",
         p.slug,
         p."photoUrl",
+        p."blobPhotoUrl",
         party.name AS "partyName",
         party."shortName" AS "partyShortName",
         party.color AS "partyColor",
@@ -262,7 +265,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
       WHERE fcm."isClaimant" = true
         AND ${getPublicFactCheckSqlWhere()}
         AND p."publicationStatus" = 'PUBLISHED'
-      GROUP BY p.id, p."fullName", p.slug, p."photoUrl",
+      GROUP BY p.id, p."fullName", p.slug, p."photoUrl", p."blobPhotoUrl",
                party.name, party."shortName", party.color, party.slug,
                fc."verdictRating"
     `),
@@ -286,6 +289,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
       fullName: string;
       slug: string;
       photoUrl: string | null;
+      blobPhotoUrl: string | null;
       party: string | null;
       partyColor: string | null;
       breakdown: VerdictBreakdown;
@@ -321,6 +325,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
         fullName: row.fullName,
         slug: row.slug,
         photoUrl: row.photoUrl,
+        blobPhotoUrl: row.blobPhotoUrl,
         party: partyDisplayName,
         partyColor: row.partyColor,
         breakdown: { vrai: 0, trompeur: 0, faux: 0, inverifiable: 0 },
@@ -363,6 +368,7 @@ async function getStatisticsData(): Promise<FactCheckStatisticsData> {
       fullName: p.fullName,
       slug: p.slug,
       photoUrl: p.photoUrl,
+      blobPhotoUrl: p.blobPhotoUrl,
       party: p.party,
       partyColor: p.partyColor,
       totalMentions: p.total,

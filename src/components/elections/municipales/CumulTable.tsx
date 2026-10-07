@@ -44,6 +44,7 @@ interface CumulCandidate {
     slug: string;
     fullName: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     currentParty: { shortName: string; color: string | null } | null;
     mandates: Array<{ type: string }>;
   } | null;
@@ -211,6 +212,7 @@ export function CumulTable({ candidates }: CumulTableProps) {
                     {c.politician && (
                       <PoliticianAvatar
                         photoUrl={c.politician.photoUrl}
+                        blobPhotoUrl={c.politician.blobPhotoUrl}
                         fullName={c.politician.fullName}
                         size="sm"
                         className="w-8 h-8 text-xs"
@@ -293,6 +295,7 @@ export function CumulTable({ candidates }: CumulTableProps) {
               {c.politician && (
                 <PoliticianAvatar
                   photoUrl={c.politician.photoUrl}
+                  blobPhotoUrl={c.politician.blobPhotoUrl}
                   fullName={c.politician.fullName}
                   size="sm"
                   className="w-8 h-8 text-xs"

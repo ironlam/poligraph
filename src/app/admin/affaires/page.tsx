@@ -45,6 +45,7 @@ interface AffairItem {
     fullName: string;
     slug: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
   };
   sources: { id: string; sourceType: string }[];
   moderationReviews: {
@@ -587,6 +588,7 @@ function AffairTableRow({
         >
           <PoliticianAvatar
             photoUrl={affair.politician.photoUrl}
+            blobPhotoUrl={affair.politician.blobPhotoUrl}
             fullName={affair.politician.fullName}
             size="sm"
             className="w-6 h-6 text-[10px]"

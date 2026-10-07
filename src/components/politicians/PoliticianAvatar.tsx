@@ -14,7 +14,7 @@ interface PoliticianAvatarProps {
    * page depending on an external host staying up: `photoUrl` is the provenance
    * record, not the best thing to serve.
    */
-  blobPhotoUrl?: string | null;
+  blobPhotoUrl: string | null;
   firstName?: string;
   lastName?: string;
   fullName?: string;

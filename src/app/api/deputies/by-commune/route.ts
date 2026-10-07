@@ -165,6 +165,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
         slug: match.slug,
         fullName: match.fullName,
         photoUrl: match.photoUrl,
+        blobPhotoUrl: match.blobPhotoUrl,
         constituency: match.mandates[0]?.constituency || null,
         party: match.currentParty
           ? {
@@ -205,6 +206,7 @@ export const GET = withPublicRoute(async (request: NextRequest) => {
     slug: s.slug,
     fullName: s.fullName,
     photoUrl: s.photoUrl,
+    blobPhotoUrl: s.blobPhotoUrl,
     party: s.currentParty
       ? {
           name: s.currentParty.name,

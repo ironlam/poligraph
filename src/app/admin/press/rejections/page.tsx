@@ -43,6 +43,7 @@ interface RejectionItem {
     fullName: string;
     slug: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
   } | null;
 }
 
@@ -340,6 +341,7 @@ export default function AdminPressRejectionsPage() {
                           >
                             <PoliticianAvatar
                               photoUrl={rejection.politician.photoUrl}
+                              blobPhotoUrl={rejection.politician.blobPhotoUrl}
                               fullName={rejection.politician.fullName}
                               size="sm"
                               className="w-6 h-6 text-[10px]"

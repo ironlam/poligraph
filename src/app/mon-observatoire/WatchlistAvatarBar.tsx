@@ -34,7 +34,12 @@ export function WatchlistAvatarBar({
             aria-pressed={isSelected}
             title={p.fullName}
           >
-            <PoliticianAvatar photoUrl={p.photoUrl} fullName={p.fullName} size="sm" />
+            <PoliticianAvatar
+              photoUrl={p.photoUrl}
+              blobPhotoUrl={p.blobPhotoUrl}
+              fullName={p.fullName}
+              size="sm"
+            />
           </button>
         );
       })}

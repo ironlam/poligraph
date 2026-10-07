@@ -39,7 +39,7 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
           select: { id: true, title: true, feedSource: true, publishedAt: true, url: true },
         },
         politician: {
-          select: { id: true, fullName: true, slug: true, photoUrl: true },
+          select: { id: true, fullName: true, slug: true, photoUrl: true, blobPhotoUrl: true },
         },
       },
     }),

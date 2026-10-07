@@ -14,6 +14,7 @@ interface PoliticianBridgeProps {
     slug: string;
     fullName: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     currentParty: { shortName: string; color: string | null } | null;
     mandates: Array<{ type: string }>;
   };
@@ -38,6 +39,7 @@ export function PoliticianBridge({
       <div className="flex items-center gap-2">
         <PoliticianAvatar
           photoUrl={politician.photoUrl}
+          blobPhotoUrl={politician.blobPhotoUrl}
           fullName={politician.fullName}
           size="sm"
           className="w-8 h-8 text-xs"

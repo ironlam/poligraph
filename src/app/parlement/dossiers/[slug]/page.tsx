@@ -54,6 +54,7 @@ const includeOptions = {
           slug: true,
           fullName: true,
           photoUrl: true,
+          blobPhotoUrl: true,
           civility: true,
           currentParty: { select: { shortName: true, color: true } },
           mandates: {

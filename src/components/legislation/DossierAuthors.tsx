@@ -13,6 +13,7 @@ interface DossierAuthor {
     slug: string;
     fullName: string;
     photoUrl: string | null;
+    blobPhotoUrl: string | null;
     civility: string | null;
     currentParty: { shortName: string; color: string | null } | null;
     mandates?: {
@@ -60,6 +61,7 @@ function FeaturedAuthor({ author }: { author: DossierAuthor }) {
     >
       <PoliticianAvatar
         photoUrl={author.politician.photoUrl}
+        blobPhotoUrl={author.politician.blobPhotoUrl}
         fullName={author.politician.fullName}
         size="lg"
       />
@@ -102,6 +104,7 @@ function RapporteurEntry({ author }: { author: DossierAuthor }) {
     >
       <PoliticianAvatar
         photoUrl={author.politician.photoUrl}
+        blobPhotoUrl={author.politician.blobPhotoUrl}
         fullName={author.politician.fullName}
         size="md"
       />

@@ -32,6 +32,7 @@ interface TopPolitician {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   partyShortName: string | null;
   partyColor: string | null;
   count: number;
@@ -396,6 +397,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           slug: string;
           fullName: string;
           photoUrl: string | null;
+          blobPhotoUrl: string | null;
           partyShortName: string | null;
           partyColor: string | null;
           count: bigint;
@@ -405,6 +407,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         p.slug,
         p."fullName" as "fullName",
         p."photoUrl" as "photoUrl",
+        p."blobPhotoUrl" as "blobPhotoUrl",
         par."shortName" as "partyShortName",
         par.color as "partyColor",
         COUNT(v.id) as count
@@ -416,7 +419,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         AND s."votingDate" < ${weekEnd}
         AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
         AND v.position IN ('POUR', 'CONTRE', 'ABSTENTION')
-      GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
+      GROUP BY p.id, p.slug, p."fullName", p."photoUrl", p."blobPhotoUrl", par."shortName", par.color
       ORDER BY count DESC
       LIMIT 5
     `,
@@ -477,6 +480,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
             slug: string;
             fullName: string;
             photoUrl: string | null;
+            blobPhotoUrl: string | null;
             partyShortName: string | null;
             partyColor: string | null;
             count: bigint;
@@ -486,6 +490,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           p.slug,
           p."fullName" as "fullName",
           p."photoUrl" as "photoUrl",
+          p."blobPhotoUrl" as "blobPhotoUrl",
           par."shortName" as "partyShortName",
           par.color as "partyColor",
           COUNT(m.id) as count
@@ -498,7 +503,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           AND ${getPublicFactCheckSqlWhere()}
           AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
           AND m."isClaimant" = true
-        GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
+        GROUP BY p.id, p.slug, p."fullName", p."photoUrl", p."blobPhotoUrl", par."shortName", par.color
         ORDER BY count DESC
         LIMIT 5
       `),
@@ -520,6 +525,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
             slug: string;
             fullName: string;
             photoUrl: string | null;
+            blobPhotoUrl: string | null;
             partyShortName: string | null;
             partyColor: string | null;
             count: bigint;
@@ -529,6 +535,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           p.slug,
           p."fullName" as "fullName",
           p."photoUrl" as "photoUrl",
+          p."blobPhotoUrl" as "blobPhotoUrl",
           par."shortName" as "partyShortName",
           par.color as "partyColor",
           COUNT(m."articleId") as count
@@ -539,7 +546,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
         WHERE a."publishedAt" >= ${weekStart}
           AND a."publishedAt" < ${weekEnd}
           AND p."publicationStatus" = ${PUBLIC_POLITICIAN_PUBLICATION_STATUS}
-        GROUP BY p.id, p.slug, p."fullName", p."photoUrl", par."shortName", par.color
+        GROUP BY p.id, p.slug, p."fullName", p."photoUrl", p."blobPhotoUrl", par."shortName", par.color
         ORDER BY count DESC
         LIMIT 5
       `,
@@ -726,6 +733,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
       slug: string;
       fullName: string;
       photoUrl: string | null;
+      blobPhotoUrl: string | null;
       partyShortName: string | null;
       partyColor: string | null;
       count: bigint;

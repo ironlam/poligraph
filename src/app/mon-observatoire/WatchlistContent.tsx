@@ -421,6 +421,7 @@ function ActivityCard({ item }: { item: ActivityItem }) {
       <Link href={`/politiques/${item.politician.slug}`} prefetch={false} className="shrink-0">
         <PoliticianAvatar
           photoUrl={item.politician.photoUrl}
+          blobPhotoUrl={item.politician.blobPhotoUrl}
           fullName={item.politician.fullName}
           size="sm"
         />

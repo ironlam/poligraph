@@ -248,6 +248,7 @@ export async function getGroupeDetail(slug: string) {
                   lastName: true,
                   fullName: true,
                   photoUrl: true,
+                  blobPhotoUrl: true,
                   currentParty: { select: { shortName: true } },
                 },
               },

@@ -230,6 +230,7 @@ export async function getPoliticianFactcheckContext(slug: string) {
       fullName: true,
       slug: true,
       photoUrl: true,
+      blobPhotoUrl: true,
       currentParty: {
         select: { shortName: true },
       },
@@ -251,6 +252,7 @@ export async function getPoliticianFactcheckContext(slug: string) {
     fullName: politician.fullName,
     slug: politician.slug,
     photoUrl: politician.photoUrl,
+    blobPhotoUrl: politician.blobPhotoUrl,
     party: politician.currentParty?.shortName || null,
     factcheckCount: politician._count.factCheckMentions,
   };

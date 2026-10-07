@@ -2,6 +2,7 @@ export interface WatchlistPolitician {
   slug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   party: string | null;
   partyColor: string | null;
 }

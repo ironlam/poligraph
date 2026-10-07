@@ -48,6 +48,7 @@ export function CandidateHero({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <PoliticianAvatar
           photoUrl={candidacy.politician?.photoUrl ?? null}
+          blobPhotoUrl={candidacy.politician?.blobPhotoUrl ?? null}
           fullName={candidacy.candidateName}
           size="lg"
         />

@@ -76,7 +76,12 @@ export function WatchlistSidebar({
                       : "hover:bg-accent/50 border-l-2 border-transparent pl-2"
                   }`}
                 >
-                  <PoliticianAvatar photoUrl={p.photoUrl} fullName={p.fullName} size="sm" />
+                  <PoliticianAvatar
+                    photoUrl={p.photoUrl}
+                    blobPhotoUrl={p.blobPhotoUrl}
+                    fullName={p.fullName}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{p.fullName}</p>
                     {p.party && <p className="text-xs text-muted-foreground">{p.party}</p>}

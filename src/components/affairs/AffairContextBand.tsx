@@ -29,6 +29,7 @@ interface AffairContextBandProps {
   politicianSlug: string;
   fullName: string;
   photoUrl: string | null;
+  blobPhotoUrl: string | null;
   /** Mandate · chamber · seniority, pre-formatted; omitted when unknown. */
   meta: string | null;
   affairCount: number;
@@ -75,6 +76,7 @@ export function AffairContextBand({
   politicianSlug,
   fullName,
   photoUrl,
+  blobPhotoUrl,
   meta,
   affairCount,
   party,
@@ -98,7 +100,12 @@ export function AffairContextBand({
         href={ficheHref}
         className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
-        <PoliticianAvatar fullName={fullName} photoUrl={photoUrl} size="md" />
+        <PoliticianAvatar
+          fullName={fullName}
+          photoUrl={photoUrl}
+          blobPhotoUrl={blobPhotoUrl}
+          size="md"
+        />
       </Link>
       <div>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

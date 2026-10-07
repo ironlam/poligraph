@@ -65,7 +65,7 @@ export const GET = withAdminAuth(async (request: NextRequest) => {
       take: limit,
       include: {
         politician: {
-          select: { id: true, fullName: true, slug: true, photoUrl: true },
+          select: { id: true, fullName: true, slug: true, photoUrl: true, blobPhotoUrl: true },
         },
         sources: { select: { id: true, sourceType: true } },
         moderationReviews: {
