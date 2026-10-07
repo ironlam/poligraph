@@ -53,6 +53,7 @@ describe("queryBatchReviewGroups", () => {
             revisionId: "revision-1",
             text: "Créer un service public du logement.",
             details: null,
+            previousText: null,
           },
         ],
         hasMore: false,
@@ -120,7 +121,10 @@ describe("queryBatchReviewGroups", () => {
   });
 
   it("exclut de l'interface une correction de contexte incohérente", async () => {
-    findManyMock.mockResolvedValue([
+    // Only the context query returns the row: the text-correction query filters on MANUAL in the
+    // database, which this mock does not evaluate.
+    findManyMock.mockResolvedValue([]);
+    findManyMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
       {
         id: "edition-1",
         label: "Cahier 1",
@@ -166,5 +170,99 @@ describe("queryBatchReviewGroups", () => {
         }),
       })
     );
+  });
+
+  it("propose une correction de formulation manuelle avec le texte qu'elle remplace", async () => {
+    findManyMock.mockResolvedValue([]);
+    findManyMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "edition-1",
+          label: "Cahier 1",
+          version: 1,
+          candidacy: { candidateName: "Candidate Exemple" },
+          party: null,
+          election: { title: "Élection présidentielle de 2027" },
+          measures: [
+            {
+              id: "measure-1",
+              publicationStatus: "PUBLISHED",
+              publishedRevision: { text: "Texte public avec une note interne." },
+              latestRevision: {
+                id: "revision-correction",
+                text: "Texte public corrigé.",
+                details: null,
+              },
+            },
+          ],
+        },
+      ]);
+
+    const [group] = await queryBatchReviewGroups();
+
+    expect(group).toEqual(
+      expect.objectContaining({
+        batchKind: "TEXT_CORRECTION",
+        groupKey: "edition-1:TEXT_CORRECTION",
+      })
+    );
+    expect(group?.items).toEqual([
+      {
+        batchKind: "TEXT_CORRECTION",
+        measureId: "measure-1",
+        revisionId: "revision-correction",
+        text: "Texte public corrigé.",
+        details: null,
+        previousText: "Texte public avec une note interne.",
+      },
+    ]);
+    expect(findManyMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          measures: {
+            some: expect.objectContaining({
+              publicationStatus: "PUBLISHED",
+              latestRevision: {
+                is: expect.objectContaining({ extractionMethod: "MANUAL", reviewedAt: null }),
+              },
+            }),
+          },
+        }),
+      })
+    );
+  });
+
+  it("n'inclut pas comme correction de formulation un brouillon au texte identique", async () => {
+    findManyMock.mockResolvedValue([]);
+    findManyMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "edition-1",
+          label: "Cahier 1",
+          version: 1,
+          candidacy: { candidateName: "Candidate Exemple" },
+          party: null,
+          election: { title: "Élection présidentielle de 2027" },
+          measures: [
+            {
+              id: "measure-1",
+              publicationStatus: "PUBLISHED",
+              publishedRevision: { text: "Texte public avec une note interne." },
+              latestRevision: {
+                id: "revision-correction",
+                text: "Texte public avec une note interne.",
+                details: null,
+              },
+            },
+          ],
+        },
+      ]);
+
+    await expect(queryBatchReviewGroups()).resolves.toEqual([]);
   });
 });

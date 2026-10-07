@@ -42,4 +42,35 @@ describe("assertMeasureBatchKind", () => {
       })
     ).toThrow(/type de lot/i);
   });
+
+  it("accepte seulement une correction de formulation écrite à la main", () => {
+    const manualCorrection = {
+      text: "Texte corrigé",
+      details: null,
+      extractionMethod: "MANUAL" as const,
+      extractorVersion: null,
+    };
+    expect(() =>
+      assertMeasureBatchKind("TEXT_CORRECTION", publicMeasure, manualCorrection)
+    ).not.toThrow();
+    expect(() =>
+      assertMeasureBatchKind("TEXT_CORRECTION", publicMeasure, {
+        ...manualCorrection,
+        extractionMethod: "AI_ASSISTED",
+      })
+    ).toThrow(/type de lot/i);
+    expect(() =>
+      assertMeasureBatchKind("TEXT_CORRECTION", publicMeasure, {
+        ...manualCorrection,
+        text: "Texte public",
+      })
+    ).toThrow(/type de lot/i);
+    expect(() =>
+      assertMeasureBatchKind(
+        "TEXT_CORRECTION",
+        { publicationStatus: "DRAFT", publishedRevisionId: null, publishedRevision: null },
+        manualCorrection
+      )
+    ).toThrow(/type de lot/i);
+  });
 });

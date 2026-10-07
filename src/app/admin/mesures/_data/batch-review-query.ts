@@ -5,16 +5,20 @@ import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
 import {
   buildFirstPublicationWhere,
   buildGeneratedContextCorrectionWhere,
+  buildManualTextCorrectionWhere,
 } from "./batch-eligibility";
 
 const FIRST_PUBLICATION_WHERE = buildFirstPublicationWhere("REVIEW");
 const GENERATED_CONTEXT_CORRECTION_WHERE = buildGeneratedContextCorrectionWhere("REVIEW");
+const MANUAL_TEXT_CORRECTION_WHERE = buildManualTextCorrectionWhere("REVIEW");
 
 export type BatchReviewItem = {
   measureId: string;
   revisionId: string;
   text: string;
   details: string | null;
+  /** The public formulation a TEXT_CORRECTION replaces, shown beside the correction. */
+  previousText: string | null;
   batchKind: MeasureBatchKind;
 };
 
@@ -68,10 +72,12 @@ export async function queryBatchReviewGroups(
     });
   };
 
-  const [firstPublicationEditions, contextCorrectionEditions] = await Promise.all([
-    queryKind(FIRST_PUBLICATION_WHERE),
-    queryKind(GENERATED_CONTEXT_CORRECTION_WHERE),
-  ]);
+  const [firstPublicationEditions, contextCorrectionEditions, textCorrectionEditions] =
+    await Promise.all([
+      queryKind(FIRST_PUBLICATION_WHERE),
+      queryKind(GENERATED_CONTEXT_CORRECTION_WHERE),
+      queryKind(MANUAL_TEXT_CORRECTION_WHERE),
+    ]);
 
   const serialize = (
     editions: Awaited<ReturnType<typeof queryKind>>,
@@ -82,7 +88,7 @@ export async function queryBatchReviewGroups(
         if (measure.latestRevision === null) return [];
         if (
           (batchKind === "FIRST_PUBLICATION" && measure.publicationStatus !== "DRAFT") ||
-          (batchKind === "CONTEXT_CORRECTION" && measure.publicationStatus !== "PUBLISHED")
+          (batchKind !== "FIRST_PUBLICATION" && measure.publicationStatus !== "PUBLISHED")
         ) {
           return [];
         }
@@ -92,12 +98,20 @@ export async function queryBatchReviewGroups(
         ) {
           return [];
         }
+        if (
+          batchKind === "TEXT_CORRECTION" &&
+          measure.latestRevision.text === measure.publishedRevision?.text
+        ) {
+          return [];
+        }
         return [
           {
             measureId: measure.id,
             revisionId: measure.latestRevision.id,
             text: measure.latestRevision.text,
             details: measure.latestRevision.details,
+            previousText:
+              batchKind === "TEXT_CORRECTION" ? (measure.publishedRevision?.text ?? null) : null,
             batchKind,
           },
         ];
@@ -124,5 +138,6 @@ export async function queryBatchReviewGroups(
   return [
     ...serialize(firstPublicationEditions, "FIRST_PUBLICATION"),
     ...serialize(contextCorrectionEditions, "CONTEXT_CORRECTION"),
+    ...serialize(textCorrectionEditions, "TEXT_CORRECTION"),
   ];
 }

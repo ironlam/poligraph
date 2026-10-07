@@ -5,10 +5,12 @@ import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
 import {
   buildFirstPublicationWhere,
   buildGeneratedContextCorrectionWhere,
+  buildManualTextCorrectionWhere,
 } from "./batch-eligibility";
 
 const FIRST_PUBLICATION_WHERE = buildFirstPublicationWhere("PUBLISH");
 const GENERATED_CONTEXT_CORRECTION_WHERE = buildGeneratedContextCorrectionWhere("PUBLISH");
+const MANUAL_TEXT_CORRECTION_WHERE = buildManualTextCorrectionWhere("PUBLISH");
 
 export type BatchPublishItem = {
   measureId: string;
@@ -16,6 +18,8 @@ export type BatchPublishItem = {
   expectedUpdatedAt: string;
   text: string;
   details: string | null;
+  /** The public formulation a TEXT_CORRECTION replaces, shown beside the correction. */
+  previousText: string | null;
   batchKind: MeasureBatchKind;
 };
 
@@ -32,8 +36,10 @@ export type BatchPublishGroup = {
 };
 
 /**
- * Returns first publications and generated context corrections already reviewed. Corrections that
- * alter the public formulation and republications remain individual decisions.
+ * Returns first publications, generated context corrections and manual text corrections already
+ * reviewed. A text correction alters the public formulation, so each item carries the text it
+ * replaces for the panel to show. AI-assisted rewrites of the formulation and republications
+ * remain individual decisions.
  */
 export async function queryBatchPublishGroups(
   filters: {
@@ -73,10 +79,12 @@ export async function queryBatchPublishGroups(
     });
   };
 
-  const [firstPublicationEditions, contextCorrectionEditions] = await Promise.all([
-    queryKind(FIRST_PUBLICATION_WHERE),
-    queryKind(GENERATED_CONTEXT_CORRECTION_WHERE),
-  ]);
+  const [firstPublicationEditions, contextCorrectionEditions, textCorrectionEditions] =
+    await Promise.all([
+      queryKind(FIRST_PUBLICATION_WHERE),
+      queryKind(GENERATED_CONTEXT_CORRECTION_WHERE),
+      queryKind(MANUAL_TEXT_CORRECTION_WHERE),
+    ]);
 
   const serialize = (
     editions: Awaited<ReturnType<typeof queryKind>>,
@@ -87,13 +95,19 @@ export async function queryBatchPublishGroups(
         if (measure.latestRevision === null) return [];
         if (
           (batchKind === "FIRST_PUBLICATION" && measure.publicationStatus !== "DRAFT") ||
-          (batchKind === "CONTEXT_CORRECTION" && measure.publicationStatus !== "PUBLISHED")
+          (batchKind !== "FIRST_PUBLICATION" && measure.publicationStatus !== "PUBLISHED")
         ) {
           return [];
         }
         if (
           batchKind === "CONTEXT_CORRECTION" &&
           measure.latestRevision.text !== measure.publishedRevision?.text
+        ) {
+          return [];
+        }
+        if (
+          batchKind === "TEXT_CORRECTION" &&
+          measure.latestRevision.text === measure.publishedRevision?.text
         ) {
           return [];
         }
@@ -104,6 +118,8 @@ export async function queryBatchPublishGroups(
             expectedUpdatedAt: measure.updatedAt.toISOString(),
             text: measure.latestRevision.text,
             details: measure.latestRevision.details,
+            previousText:
+              batchKind === "TEXT_CORRECTION" ? (measure.publishedRevision?.text ?? null) : null,
             batchKind,
           },
         ];
@@ -130,5 +146,6 @@ export async function queryBatchPublishGroups(
   return [
     ...serialize(firstPublicationEditions, "FIRST_PUBLICATION"),
     ...serialize(contextCorrectionEditions, "CONTEXT_CORRECTION"),
+    ...serialize(textCorrectionEditions, "TEXT_CORRECTION"),
   ];
 }

@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { reviewDraftBatchAction, type BatchReviewActionResult } from "../actions";
 import type { BatchReviewGroup } from "../_data/batch-review-query";
+import type { MeasureBatchKind } from "@/lib/measures/batch-kind";
+
+const BATCH_KIND_LABELS: Record<MeasureBatchKind, string> = {
+  FIRST_PUBLICATION: "Premières publications",
+  CONTEXT_CORRECTION: "Corrections de contexte",
+  TEXT_CORRECTION: "Corrections de formulation",
+};
 
 function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
   const router = useRouter();
@@ -40,10 +47,8 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
             {group.ownerLabel}, {group.editionLabel} (version {group.editionVersion})
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {group.batchKind === "CONTEXT_CORRECTION"
-              ? "Corrections de contexte"
-              : "Premières publications"}
-            , {group.electionTitle}, {count} brouillon{count > 1 ? "s" : ""} sourcé
+            {BATCH_KIND_LABELS[group.batchKind]}, {group.electionTitle}, {count} brouillon
+            {count > 1 ? "s" : ""} sourcé
             {count > 1 ? "s" : ""}
           </p>
         </div>
@@ -54,7 +59,15 @@ function BatchReviewCard({ group }: { group: BatchReviewGroup }) {
           <ol className="mt-2 max-h-96 max-w-3xl list-decimal space-y-4 overflow-y-auto pl-5">
             {group.items.map((item) => (
               <li key={item.revisionId}>
-                <span className="font-medium">{item.text}</span>
+                {item.previousText !== null ? (
+                  <span className="block text-muted-foreground">
+                    Version publiée : <span className="line-through">{item.previousText}</span>
+                  </span>
+                ) : null}
+                <span className="font-medium">
+                  {item.previousText !== null ? "Correction : " : null}
+                  {item.text}
+                </span>
                 {item.details ? (
                   <span className="mt-1 block text-muted-foreground">
                     Contexte proposé : {item.details}
@@ -136,9 +149,10 @@ export function BatchReviewPanel({ groups }: { groups: BatchReviewGroup[] }) {
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Chaque lot contient uniquement des brouillons actifs et sourcés. Les corrections de contexte
-        sont incluses seulement si la formulation publique reste strictement identique. Cette étape
-        ne publie rien. Une fois la relecture enregistrée, le lot passe dans la section de
-        publication.
+        sont incluses seulement si la formulation publique reste strictement identique. Les
+        corrections de formulation écrites à la main forment leur propre lot, avec la version
+        publiée affichée à côté du nouveau texte. Cette étape ne publie rien. Une fois la relecture
+        enregistrée, le lot passe dans la section de publication.
       </p>
       <div className="mt-4 space-y-3">
         {groups.map((group) => (
