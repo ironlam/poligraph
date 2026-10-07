@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADMIN_NAVIGATION_GROUPS,
   ADMIN_NAVIGATION,
+  findAdminNavigationEntry,
   isAdminNavigationActive,
 } from "./admin-navigation";
 
@@ -35,6 +36,12 @@ describe("admin navigation registry", () => {
     const deadlines = ADMIN_NAVIGATION.find((entry) => entry.id === "affair-deadlines")!;
     expect(isAdminNavigationActive("/admin/affaires/echeances", affairs)).toBe(false);
     expect(isAdminNavigationActive("/admin/affaires/echeances", deadlines)).toBe(true);
+  });
+
+  it("names the affair sub-routes in the breadcrumb, not the filtered affairs entry", () => {
+    expect(findAdminNavigationEntry("/admin/affaires/echeances")?.label).toBe("Échéances");
+    expect(findAdminNavigationEntry("/admin/affaires/propositions")?.label).toBe("Propositions");
+    expect(findAdminNavigationEntry("/admin/affaires/abc")?.id).toBe("affairs");
   });
 
   it("activates the audit entry for its quality sub-route", () => {
