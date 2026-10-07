@@ -6,6 +6,7 @@ const MONITORING_STATE_SELECT = {
   active: true,
   nextReviewAt: true,
   dueReason: true,
+  dueNote: true,
   dateOrigin: true,
   statusAtSchedule: true,
   flaggedReason: true,

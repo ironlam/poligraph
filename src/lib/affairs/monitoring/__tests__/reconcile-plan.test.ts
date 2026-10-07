@@ -12,6 +12,7 @@ function state(over: Partial<MonitoringState> = {}): MonitoringState {
     active: true,
     nextReviewAt: d("2027-01-01"),
     dueReason: "CADENCE",
+    dueNote: null,
     dateOrigin: "CADENCE",
     statusAtSchedule: "PROCES_EN_COURS",
     flaggedReason: "SIGNAL",
@@ -50,6 +51,7 @@ describe("planReconcile, création", () => {
         active: true,
         nextReviewAt: d("2027-04-07"),
         dueReason: "CADENCE",
+        dueNote: null,
         dateOrigin: "CADENCE",
         statusAtSchedule: "MISE_EN_EXAMEN",
         flaggedReason: null,
@@ -91,6 +93,7 @@ describe("planReconcile, changement de statut", () => {
       data: {
         nextReviewAt: d("2027-01-07"),
         dueReason: "CADENCE",
+        dueNote: null,
         dateOrigin: "CADENCE",
         statusAtSchedule: "CONDAMNATION_PREMIERE_INSTANCE",
         flaggedReason: null,
@@ -98,10 +101,11 @@ describe("planReconcile, changement de statut", () => {
       },
     });
   });
-  it("garde une date HUMAN strictement future", () => {
+  it("garde une date HUMAN strictement future et sa note", () => {
     const cur = state({
       dateOrigin: "HUMAN",
       dueReason: "AUDIENCE",
+      dueNote: "Audience fixée par le tribunal",
       nextReviewAt: d("2026-10-08"),
     });
     expect(planReconcile(affair("CONDAMNATION_PREMIERE_INSTANCE"), cur, today)).toEqual({
@@ -118,6 +122,18 @@ describe("planReconcile, changement de statut", () => {
         data: { nextReviewAt: d("2026-11-07"), dateOrigin: "CADENCE" },
       });
     }
+  });
+  it("efface la note d'une date HUMAN remplacée par la cadence", () => {
+    const cur = state({
+      dateOrigin: "HUMAN",
+      dueReason: "DELIBERE",
+      dueNote: "Délibéré annoncé",
+      nextReviewAt: d("2026-10-01"),
+    });
+    expect(planReconcile(affair("APPEL_EN_COURS"), cur, today)).toMatchObject({
+      kind: "update",
+      data: { nextReviewAt: d("2026-11-07"), dueReason: "CADENCE", dueNote: null },
+    });
   });
   it("passe en DELAI_RECOURS à +2 mois pour une relaxe", () => {
     expect(planReconcile(affair("RELAXE"), state(), today)).toMatchObject({

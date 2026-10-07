@@ -106,7 +106,7 @@ export async function markReviewedNoChange(input: {
       where: { affairId: input.affairId },
       data: {
         ...(next
-          ? { nextReviewAt: next.nextReviewAt, dueReason: next.dueReason }
+          ? { nextReviewAt: next.nextReviewAt, dueReason: next.dueReason, dueNote: null }
           : { active: false }),
         dateOrigin: "CADENCE",
         statusAtSchedule: affair.status,

@@ -121,12 +121,9 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
   it("désactive le suivi d'un délai de recours sur statut terminal", async () => {
     const affair = await createAffair("RELAXE");
     await createMonitoring(affair.id, "RELAXE", { dueReason: "DELAI_RECOURS" });
+    const input = { affairId: affair.id, requestKey: crypto.randomUUID(), actorId: "admin" };
 
-    const res = await markReviewedNoChange({
-      affairId: affair.id,
-      requestKey: crypto.randomUUID(),
-      actorId: "admin",
-    });
+    const res = await markReviewedNoChange(input);
 
     expect(res).toEqual({ ok: true, deduped: false });
     const m = await db.affairMonitoring.findUniqueOrThrow({
@@ -135,6 +132,31 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     });
     expect(m.active).toBe(false);
     expect(m.checks[0]?.nextReviewAtAfter).toBeNull();
+  });
+
+  it("efface la note d'un report quand la cadence fixe la nouvelle date", async () => {
+    const affair = await createAffair("PROCES_EN_COURS");
+    await db.affairMonitoring.create({
+      data: {
+        affairId: affair.id,
+        nextReviewAt: parisDay(new Date(Date.now() - DAY_MS)),
+        dueReason: "AUDIENCE",
+        dueNote: "Audience annoncée",
+        dateOrigin: "HUMAN",
+        statusAtSchedule: "PROCES_EN_COURS",
+      },
+    });
+
+    await markReviewedNoChange({
+      affairId: affair.id,
+      requestKey: crypto.randomUUID(),
+      actorId: "admin",
+    });
+
+    const m = await db.affairMonitoring.findUniqueOrThrow({ where: { affairId: affair.id } });
+    expect(m.dueReason).toBe("CADENCE");
+    expect(m.dateOrigin).toBe("CADENCE");
+    expect(m.dueNote).toBeNull();
   });
 
   it("refuse la revue sans suivi et sur affaire inconnue", async () => {

@@ -13,6 +13,7 @@ export type MonitoringState = {
   active: boolean;
   nextReviewAt: Date;
   dueReason: MonitoringDueReason;
+  dueNote: string | null;
   dateOrigin: MonitoringDateOrigin;
   statusAtSchedule: AffairStatus;
   flaggedReason: MonitoringFlag | null;
@@ -46,6 +47,7 @@ export function planReconcile(
       data: {
         active: true,
         ...computeCadenceReview(affair.status, today),
+        dueNote: null,
         dateOrigin: "CADENCE",
         statusAtSchedule: affair.status,
         flaggedReason: null,
@@ -67,7 +69,9 @@ export function planReconcile(
     data.flaggedReason = null;
     const humanDateInFuture = current.dateOrigin === "HUMAN" && current.nextReviewAt > today;
     if (!humanDateInFuture) {
+      // The note described the human date being replaced.
       Object.assign(data, computeCadenceReview(affair.status, today), {
+        dueNote: null,
         dateOrigin: "CADENCE",
         consecutiveAutoDeferrals: 0,
       });
