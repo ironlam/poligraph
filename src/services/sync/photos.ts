@@ -33,8 +33,11 @@ type PhotoFetch =
 async function fetchPhoto(url: string): Promise<PhotoFetch> {
   let buffer: Buffer;
   try {
-    const { ok, data } = await wikidataClient.getBuffer(url);
-    if (!ok) return { kind: "unreachable" };
+    const { status, data } = await wikidataClient.getBuffer(url);
+    // Only a 200 with a body says anything about the photo. The European
+    // Parliament firewall answers a 202 with an empty body, which once had every
+    // official MEP portrait replaced or removed.
+    if (status !== 200 || data.length === 0) return { kind: "unreachable" };
     buffer = data;
   } catch {
     return { kind: "unreachable" };
