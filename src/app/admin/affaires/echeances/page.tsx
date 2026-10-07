@@ -49,6 +49,14 @@ function QueueRow({
         </p>
         <p className="text-xs text-muted-foreground">{dueLine(row.dueReason, row.dateOrigin)}</p>
         {row.dueNote && <p className="text-xs text-muted-foreground">{row.dueNote}</p>}
+        {row.pendingProposalId && (
+          <Link
+            href="/admin/affaires/propositions?status=PENDING"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+          >
+            Proposition en attente
+          </Link>
+        )}
       </div>
       {actions && <AffairMonitoringActions affairId={row.affairId} minDate={minDate} />}
     </li>

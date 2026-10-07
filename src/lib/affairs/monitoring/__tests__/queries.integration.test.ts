@@ -89,6 +89,8 @@ describeIfDisposableDb("file de suivi des affaires", () => {
   const affairByKey = new Map<string, string>();
   const today = parisDay(NOW);
   let baselineCount = 0;
+  let importRunId = "";
+  const proposalIdByKey = new Map<string, string>();
 
   beforeAll(async () => {
     assertDisposableTestDb();
@@ -131,9 +133,43 @@ describeIfDisposableDb("file de suivi des affaires", () => {
         },
       });
     }
+
+    // Two pending proposals and an approved one, all on the "signal" affair.
+    importRunId = (
+      await db.importRun.create({
+        data: { importer: "test-monitoring-queue", status: "COMPLETED", finishedAt: NOW },
+      })
+    ).id;
+    const proposals: { key: string; status: "PENDING" | "APPROVED"; createdAt: string }[] = [
+      { key: "ancienne", status: "PENDING", createdAt: "2026-10-01T08:00:00Z" },
+      { key: "recente", status: "PENDING", createdAt: "2026-10-05T08:00:00Z" },
+      { key: "approuvee", status: "APPROVED", createdAt: "2026-10-06T08:00:00Z" },
+    ];
+    for (const p of proposals) {
+      const created = await db.affairUpdateProposal.create({
+        data: {
+          affairId: affairByKey.get("signal")!,
+          affairSnapshot: { title: "Affaire de test signal" },
+          importer: "test-monitoring-queue",
+          importRunId,
+          proposedPatch: { status: "APPEL_EN_COURS" },
+          observedValues: { status: "PROCES_EN_COURS" },
+          source: "MANUAL",
+          confidence: 50,
+          riskLevel: "HIGH",
+          rationale: "Donnée de test jetable.",
+          payloadHash: `test-monitoring-queue-${p.key}-${suffix}`,
+          status: p.status,
+          createdAt: new Date(p.createdAt),
+        },
+      });
+      proposalIdByKey.set(p.key, created.id);
+    }
   });
 
   afterAll(async () => {
+    await db.affairUpdateProposal.deleteMany({ where: { importRunId } });
+    await db.importRun.deleteMany({ where: { id: importRunId } });
     // Cascade removes affairs and monitoring rows.
     await db.politician.deleteMany({ where: { id: { in: politicianIds } } });
     await db.$disconnect();
@@ -185,6 +221,17 @@ describeIfDisposableDb("file de suivi des affaires", () => {
     expect(upcomingIds).not.toContain(affairByKey.get("audience-echue"));
     const handleIds = new Set(toHandle.map((r) => r.affairId));
     expect(upcomingIds.some((id) => handleIds.has(id))).toBe(false);
+  });
+
+  it("rattache à la ligne la proposition en attente la plus récente", async () => {
+    const { toHandle } = await queries.getMonitoringQueue(NOW);
+    const byId = new Map(toHandle.map((r) => [r.affairId, r]));
+    expect(byId.get(affairByKey.get("signal")!)?.pendingProposalId).toBe(
+      proposalIdByKey.get("recente")
+    );
+    const withoutProposal = byId.get(affairByKey.get("garde-fou")!);
+    expect(withoutProposal).toBeDefined();
+    expect(withoutProposal?.pendingProposalId).toBeNull();
   });
 
   it("expose le panneau d'une affaire et ses derniers contrôles", async () => {
