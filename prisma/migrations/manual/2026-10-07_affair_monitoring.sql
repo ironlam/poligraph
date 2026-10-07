@@ -4,6 +4,8 @@
 -- Run with: npx prisma db execute --file prisma/migrations/manual/2026-10-07_affair_monitoring.sql
 -- Applied: not yet
 
+BEGIN;
+
 -- CreateEnum
 CREATE TYPE "MonitoringDueReason" AS ENUM ('DELIBERE', 'AUDIENCE', 'DELAI_RECOURS', 'CADENCE', 'MANUEL');
 
@@ -84,3 +86,5 @@ ALTER TABLE "AffairMonitoringCheck" ADD CONSTRAINT "AffairMonitoringCheck_monito
 -- Row level security, no policy
 ALTER TABLE "AffairMonitoring" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AffairMonitoringCheck" ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
