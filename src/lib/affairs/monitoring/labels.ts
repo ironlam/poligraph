@@ -5,7 +5,7 @@ export const NEEDS_HUMAN_LABELS: Record<NeedsHumanReason, string> = {
   SIGNAL: "Évolution détectée",
   GARDE_FOU: "Deux contrôles sans résultat",
   DATE_ATTENDUE: "Date attendue échue",
-  CONTROLE_IMPOSSIBLE: "Contrôle en retard",
+  ECHUE: "Échéance atteinte",
 };
 
 export const DUE_REASON_LABELS: Record<MonitoringDueReason, string> = {

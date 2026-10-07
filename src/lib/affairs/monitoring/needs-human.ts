@@ -6,18 +6,10 @@ import type {
   PublicationStatus,
 } from "@/generated/prisma";
 
-export type NeedsHumanReason = "SIGNAL" | "GARDE_FOU" | "DATE_ATTENDUE" | "CONTROLE_IMPOSSIBLE";
+export type NeedsHumanReason = "SIGNAL" | "GARDE_FOU" | "DATE_ATTENDUE" | "ECHUE";
 
-/** Days of slack before an overdue review is reported as impossible to run. */
-const OVERDUE_GRACE_DAYS = 3;
+/** Due reasons that carry a date announced for the affair, rather than a routine check. */
 const DATE_DRIVEN_REASONS: MonitoringDueReason[] = ["DELIBERE", "AUDIENCE"];
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** UTC day arithmetic on a Paris day stored at 00:00 UTC. */
-function addDays(day: Date, days: number): Date {
-  return new Date(day.getTime() + days * DAY_MS);
-}
 
 export function isInScope(a: {
   publicationStatus: PublicationStatus;
@@ -39,11 +31,9 @@ export function needsHumanReason(
 ): NeedsHumanReason | null {
   if (!m.active || !isInScope(m.affair)) return null;
   if (m.flaggedReason) return m.flaggedReason;
-  if (DATE_DRIVEN_REASONS.includes(m.dueReason) && m.nextReviewAt <= today) {
-    return "DATE_ATTENDUE";
-  }
-  if (m.nextReviewAt < addDays(today, -OVERDUE_GRACE_DAYS)) return "CONTROLE_IMPOSSIBLE";
-  return null;
+  // No automatic pass yet: a review is due to a human on its day.
+  if (m.nextReviewAt > today) return null;
+  return DATE_DRIVEN_REASONS.includes(m.dueReason) ? "DATE_ATTENDUE" : "ECHUE";
 }
 
 /** Same predicate as `needsHumanReason`, as a Prisma filter. */
@@ -51,10 +41,6 @@ export function needsHumanWhere(today: Date): Prisma.AffairMonitoringWhereInput 
   return {
     active: true,
     affair: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
-    OR: [
-      { flaggedReason: { not: null } },
-      { dueReason: { in: DATE_DRIVEN_REASONS }, nextReviewAt: { lte: today } },
-      { nextReviewAt: { lt: addDays(today, -OVERDUE_GRACE_DAYS) } },
-    ],
+    OR: [{ flaggedReason: { not: null } }, { nextReviewAt: { lte: today } }],
   };
 }

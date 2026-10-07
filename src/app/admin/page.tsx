@@ -246,7 +246,7 @@ export default async function AdminDashboard() {
     {
       label: "Échéances à traiter",
       count: data.queues.monitoringToHandle,
-      description: "Délibérés, audiences et contrôles en retard.",
+      description: "Délibérés, audiences et échéances atteintes.",
       href: "/admin/affaires/echeances",
       icon: CalendarClock,
     },

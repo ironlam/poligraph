@@ -47,8 +47,16 @@ const CASES: Case[] = [
   { key: "cadence-tres-en-retard", offsetDays: -10, dueReason: "CADENCE" },
   { key: "cadence-dans-5-jours", offsetDays: 5, dueReason: "CADENCE" },
   { key: "cadence-dans-30-jours", offsetDays: 30, dueReason: "CADENCE" },
-  { key: "cadence-3-jours", offsetDays: -3, dueReason: "CADENCE" },
-  { key: "cadence-4-jours", offsetDays: -4, dueReason: "CADENCE" },
+  { key: "cadence-aujourdhui", offsetDays: 0, dueReason: "CADENCE" },
+  { key: "cadence-demain", offsetDays: 1, dueReason: "CADENCE" },
+  { key: "manuel-aujourdhui", offsetDays: 0, dueReason: "MANUEL" },
+  { key: "delibere-aujourdhui", offsetDays: 0, dueReason: "DELIBERE" },
+  {
+    key: "cadence-aujourdhui-brouillon",
+    publication: "DRAFT",
+    offsetDays: 0,
+    dueReason: "CADENCE",
+  },
   {
     key: "signal-indirect",
     involvement: "INDIRECT",
@@ -144,8 +152,12 @@ describeIfDisposableDb("file de suivi des affaires", () => {
       if (expected === null) expect(mine.has(id), c.key).toBe(false);
       else expect(mine.get(id), c.key).toBe(expected);
     }
-    expect(expectedReason(CASES.find((c) => c.key === "cadence-3-jours")!, today)).toBeNull();
-    expect(mine.get(affairByKey.get("cadence-4-jours")!)).toBe("CONTROLE_IMPOSSIBLE");
+    expect(mine.get(affairByKey.get("cadence-aujourdhui")!)).toBe("ECHUE");
+    expect(mine.get(affairByKey.get("cadence-hier")!)).toBe("ECHUE");
+    expect(mine.has(affairByKey.get("cadence-demain")!)).toBe(false);
+    expect(mine.get(affairByKey.get("manuel-aujourdhui")!)).toBe("ECHUE");
+    expect(mine.get(affairByKey.get("delibere-aujourdhui")!)).toBe("DATE_ATTENDUE");
+    expect(mine.has(affairByKey.get("cadence-aujourdhui-brouillon")!)).toBe(false);
     expect(mine.has(affairByKey.get("signal-depublie")!)).toBe(false);
     expect(mine.has(affairByKey.get("signal-indirect")!)).toBe(false);
   });
@@ -168,6 +180,8 @@ describeIfDisposableDb("file de suivi des affaires", () => {
     expect(upcomingIds).toContain(affairByKey.get("cadence-dans-5-jours"));
     expect(upcomingIds).not.toContain(affairByKey.get("cadence-dans-30-jours"));
     expect(upcomingIds).toContain(affairByKey.get("delibere-demain"));
+    expect(upcomingIds).toContain(affairByKey.get("cadence-demain"));
+    expect(upcomingIds).not.toContain(affairByKey.get("cadence-aujourdhui"));
     expect(upcomingIds).not.toContain(affairByKey.get("audience-echue"));
     const handleIds = new Set(toHandle.map((r) => r.affairId));
     expect(upcomingIds.some((id) => handleIds.has(id))).toBe(false);

@@ -62,13 +62,26 @@ describe("needsHumanReason", () => {
       needsHumanReason(row({ dueReason: "AUDIENCE", nextReviewAt: d("2026-12-01") }), today)
     ).toBe("DATE_ATTENDUE");
   });
-  it("tolère 3 jours de retard sur une cadence, pas 4", () => {
+  it("remonte une cadence le jour même, pas la veille de son échéance", () => {
     expect(
-      needsHumanReason(row({ dueReason: "CADENCE", nextReviewAt: d("2026-11-29") }), today)
+      needsHumanReason(row({ dueReason: "CADENCE", nextReviewAt: d("2026-12-02") }), today)
+    ).toBe("ECHUE");
+    expect(
+      needsHumanReason(row({ dueReason: "CADENCE", nextReviewAt: d("2026-12-03") }), today)
     ).toBeNull();
+  });
+  it("remonte une cadence dépassée", () => {
     expect(
-      needsHumanReason(row({ dueReason: "CADENCE", nextReviewAt: d("2026-11-28") }), today)
-    ).toBe("CONTROLE_IMPOSSIBLE");
+      needsHumanReason(row({ dueReason: "CADENCE", nextReviewAt: d("2026-11-20") }), today)
+    ).toBe("ECHUE");
+  });
+  it("remonte un report manuel et un délai de recours le jour même", () => {
+    expect(
+      needsHumanReason(row({ dueReason: "MANUEL", nextReviewAt: d("2026-12-02") }), today)
+    ).toBe("ECHUE");
+    expect(
+      needsHumanReason(row({ dueReason: "DELAI_RECOURS", nextReviewAt: d("2026-12-02") }), today)
+    ).toBe("ECHUE");
   });
   it("donne la priorité au signal sur la date", () => {
     expect(
@@ -78,7 +91,7 @@ describe("needsHumanReason", () => {
       )
     ).toBe("SIGNAL");
   });
-  it("donne la priorité à DATE_ATTENDUE sur CONTROLE_IMPOSSIBLE", () => {
+  it("garde DATE_ATTENDUE pour un délibéré dépassé", () => {
     expect(
       needsHumanReason(row({ dueReason: "DELIBERE", nextReviewAt: d("2026-11-01") }), today)
     ).toBe("DATE_ATTENDUE");
@@ -91,19 +104,24 @@ describe("needsHumanReason", () => {
       needsHumanReason(row({ flaggedReason: "SIGNAL", involvement: "INDIRECT" }), today)
     ).toBeNull();
     expect(needsHumanReason(row({ flaggedReason: "SIGNAL", active: false }), today)).toBeNull();
+    expect(
+      needsHumanReason(row({ nextReviewAt: d("2026-12-02"), publicationStatus: "DRAFT" }), today)
+    ).toBeNull();
+    expect(
+      needsHumanReason(row({ nextReviewAt: d("2026-12-02"), involvement: "INDIRECT" }), today)
+    ).toBeNull();
+    expect(
+      needsHumanReason(row({ nextReviewAt: d("2026-12-02"), active: false }), today)
+    ).toBeNull();
   });
 });
 
 describe("needsHumanWhere", () => {
-  it("encode le périmètre et les trois conditions avec la même arithmétique de dates", () => {
+  it("encode le périmètre, le flag et l'échéance atteinte", () => {
     expect(needsHumanWhere(today)).toEqual({
       active: true,
       affair: { publicationStatus: "PUBLISHED", involvement: "DIRECT" },
-      OR: [
-        { flaggedReason: { not: null } },
-        { dueReason: { in: ["DELIBERE", "AUDIENCE"] }, nextReviewAt: { lte: today } },
-        { nextReviewAt: { lt: d("2026-11-29") } },
-      ],
+      OR: [{ flaggedReason: { not: null } }, { nextReviewAt: { lte: today } }],
     });
   });
 });
