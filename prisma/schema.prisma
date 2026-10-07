@@ -637,6 +637,9 @@ model Affair {
   // Timeline events
   events AffairEvent[]
 
+  // Private editorial follow-up (never exposed publicly)
+  monitoring AffairMonitoring?
+
   // Press article links
   pressArticles PressArticleAffair[]
 
@@ -715,6 +718,89 @@ model AffairEvent {
   @@unique([affairId, identityKey])
   @@index([affairId])
   @@index([date])
+}
+
+// Private editorial follow-up of a published affair: when to look at it next.
+model AffairMonitoring {
+  id       String  @id @default(cuid())
+  affair   Affair  @relation(fields: [affairId], references: [id], onDelete: Cascade)
+  affairId String  @unique
+  active   Boolean @default(true)
+
+  nextReviewAt DateTime // Calendar day (Paris) stored at 00:00 UTC
+  dueReason    MonitoringDueReason
+  dueNote      String? // Short free text, max 140 chars (Zod)
+  dateOrigin   MonitoringDateOrigin
+
+  consecutiveAutoDeferrals Int             @default(0) // Guard counter, reset by any human review
+  flaggedReason            MonitoringFlag? // Set by the automatic pass, cleared by a human review
+
+  lastCheckedAt    DateTime?
+  lastAutoSearchAt DateTime?
+
+  statusAtSchedule AffairStatus // Affair status when nextReviewAt was computed
+  version          Int          @default(0) // Bumped on every write, for conditional updates
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checks AffairMonitoringCheck[]
+
+  @@index([active, nextReviewAt])
+  @@index([active, flaggedReason])
+}
+
+// Append-only log of follow-up checks, human or automatic.
+model AffairMonitoringCheck {
+  id           String           @id @default(cuid())
+  monitoring   AffairMonitoring @relation(fields: [monitoringId], references: [id], onDelete: Cascade)
+  monitoringId String
+  checkKey     String           @unique // Idempotency key
+
+  checkedAt         DateTime               @default(now())
+  actor             MonitoringActor
+  actorId           String? // Admin identifier when human
+  outcome           MonitoringCheckOutcome
+  proposalId        String? // Plain string, no FK
+  braveQueries      Int                    @default(0)
+  note              String? // Short quote or reason, max 500 chars (Zod)
+  nextReviewAtAfter DateTime?
+
+  @@index([monitoringId, checkedAt])
+  @@index([checkedAt])
+}
+
+enum MonitoringDueReason {
+  DELIBERE
+  AUDIENCE
+  DELAI_RECOURS
+  CADENCE
+  MANUEL
+}
+
+enum MonitoringDateOrigin {
+  HUMAN
+  AUTO_SOURCE
+  CADENCE
+}
+
+enum MonitoringFlag {
+  SIGNAL
+  GARDE_FOU
+}
+
+enum MonitoringActor {
+  HUMAN
+  AUTO
+}
+
+enum MonitoringCheckOutcome {
+  NO_CHANGE
+  NO_RESULT
+  DATE_ANNOUNCED
+  SIGNAL
+  UPDATED
+  FAILED
 }
 
 enum AffairEventType {
