@@ -15,17 +15,18 @@ Il ne fixe aucun seuil chiffré de publication : ceux de la section 4 de la spec
 
 ### Le statut dit la force du signal, pas l'étape administrative
 
-`CandidacyStatus` a quatre valeurs, qui gradent **la force du signal politique** :
+`CandidacyStatus` a cinq valeurs. Quatre gradent **la force du signal politique**, la cinquième marque
+l'entrée dans la liste officielle :
 
+- `OFFICIAL` : candidature retenue dans la liste officielle publiée après contrôle institutionnel.
 - `DECLARE` : la personne a annoncé officiellement sa candidature elle-même.
 - `PRESSENTI` : des sources crédibles rapportent son intention, sans annonce de l'intéressée.
 - `ENVISAGE` : hypothèse de presse, aucun signal direct de l'intéressée.
 - `RETIRE` : candidature annoncée puis retirée ou écartée.
 
-Ces quatre valeurs ne disent rien de la **validation administrative** (parrainages déposés, liste
-arrêtée par le Conseil constitutionnel). Une candidature politiquement déclarée et une candidature
-administrativement validée portent aujourd'hui le même `DECLARE`. La distinction existe dans la réalité,
-pas encore dans le modèle : voir les arbitrages en fin de document.
+Les quatre premières ne disent rien de la **validation administrative** (parrainages déposés, liste
+arrêtée par le Conseil constitutionnel). Seul `OFFICIAL` la constate, une fois la liste publiée : avant
+elle, une candidature politiquement déclarée reste en `DECLARE`.
 
 ### Ce qui vaut déclaration
 
@@ -55,6 +56,23 @@ celle-ci existe.
 **Cas limite.** Une déclaration conditionnelle, « je serai candidate si tel parti ne l'est pas », ne vaut
 pas `DECLARE` tant que la condition n'est pas un fait public et que la personne ne l'a pas confirmée. La
 frontière est l'engagement effectif, pas la présence du mot « candidat ».
+
+### Primaire, désignation, vote d'une instance (arbitré le 2026-10-08)
+
+Trois situations valent `DECLARE`, parce que la personne s'y engage elle-même :
+
+- **Une candidature à une primaire** pour l'élection présidentielle. La personne fait campagne et défend
+  un programme devant des électeurs. Ce n'est pas la déclaration conditionnelle du cas limite : l'issue
+  de la primaire ne suspend pas l'engagement, elle le tranche. Si la personne perd la primaire ou s'en
+  retire, la candidature passe en `RETIRE`, avec `withdrewReason` qui nomme l'issue (« battue à la
+  primaire »). Ses mesures restent, avec leur historique, comme pour tout retrait.
+- **Une désignation ou une investiture par un parti, un vote d'une instance**, quand la personne était
+  candidate à cette désignation ou l'a acceptée publiquement. Ce n'est pas le soutien d'un tiers de la
+  liste précédente : là, quelqu'un appelle une personne qui ne s'est pas prononcée ; ici, elle s'est
+  soumise au vote.
+- **Ses propres mots, quel que soit le canal** : publication sur son compte, entretien rapporté par la
+  presse. Un article qui la cite se disant candidate établit la déclaration. La source primaire reste
+  préférable quand elle existe.
 
 ### Une candidature déclarée se représente, même sans validation administrative
 
@@ -113,6 +131,34 @@ dans la part de sources primaires, la statistique qui pilotera l'ouverture des s
 huit natures de source sont fermées, sans catégorie fourre-tout : une source qui n'entre dans aucune n'est
 pas une source recevable.
 
+### Article republié par la candidate (arbitré le 2026-10-08)
+
+Un article de presse que la candidate republie sur son site officiel ou son compte est un contenu qu'elle
+assume. Ce que l'article met entre guillemets compte comme ses propres mots : la source est enregistrée en
+`PRIMARY`, avec la nature `INTERVIEW_PRESSE` ou `ARTICLE_PRESSE`, et le média d'origine est nommé. La
+reprise ne change pas la nature du reste de l'article. Une paraphrase du journaliste ne devient pas un
+engagement de la candidate, et une mesure qui ne repose que sur elle n'entre pas.
+
+### Documents de parti et documents antérieurs à la campagne (arbitré le 2026-10-08)
+
+Un document de parti ou de groupe parlementaire (programme de législatives, livret thématique,
+contre-budget) est une source recevable pour une candidature quand la personne dirige ce parti ou ce
+groupe, ou s'en réclame publiquement. Avant le programme présidentiel, c'est souvent la meilleure trace
+de ce qu'elle défend. Il entre à trois conditions :
+
+1. **Attribution `PARTY_PROGRAM`.** La personne porte le document sans l'avoir formulé elle-même.
+   `PERSONAL` reste réservé à ses propres mots.
+2. **Nature et date du document lisibles.** Un programme de législatives 2024 n'engage pas comme un
+   programme présidentiel 2027, et le lecteur doit pouvoir faire la différence.
+3. **Une mesure attachée à un exercice budgétaire nommé reste datée.** « Réduire de 8,7 milliards la
+   contribution en 2026 » est un engagement sur l'exercice 2026, pas une promesse de quinquennat. On ne
+   la reformule pas pour la faire paraître actuelle.
+
+L'ancienneté seule n'est pas un motif de retrait. Écarter les documents antérieurs à la campagne
+pénaliserait les partis qui publient tôt et beaucoup, sans rien dire de la qualité de leurs mesures.
+Quand le programme présidentiel paraît, chaque mesure de parti qu'il contredit reçoit une nouvelle
+révision ou un retrait sourcé, celles qu'il ne contredit pas restent.
+
 ### Précision minimale
 
 Le texte enregistré doit être **attribuable et sans ambiguïté sur son objet**. Une phrase dont on ne peut
@@ -123,7 +169,8 @@ une interprétation de notre part.
 
 Une mesure se rattache à une candidature, et, quand elle existe, à une édition de programme. **Règle
 arbitrée le 2026-08-06** : dans la chaîne du hub 2027, une mesure ne peut être créée que pour une
-candidature **de l'élection présidentielle 2027**, au statut **`DECLARE`**, dont **`sourceUrl` et
+candidature **de l'élection présidentielle 2027**, au statut **`DECLARE`** (ou `OFFICIAL` une fois la
+liste publiée), dont **`sourceUrl` et
 `sourceLabel`** sont renseignés. Rattacher une mesure à une candidature seulement `PRESSENTI` ou
 `ENVISAGE` reviendrait à prêter un programme à quelqu'un qui n'a pas déclaré, ce qui transforme une rumeur
 en position. Cette règle vit dans la chaîne du hub, pas comme contrainte universelle du modèle `Measure` :
