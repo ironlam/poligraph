@@ -30,6 +30,13 @@ describe("admin navigation registry", () => {
     expect(isAdminNavigationActive("/admin/affaires/propositions", proposals)).toBe(true);
   });
 
+  it("gives the deadlines sub-route its own entry", () => {
+    const affairs = ADMIN_NAVIGATION.find((entry) => entry.id === "affairs")!;
+    const deadlines = ADMIN_NAVIGATION.find((entry) => entry.id === "affair-deadlines")!;
+    expect(isAdminNavigationActive("/admin/affaires/echeances", affairs)).toBe(false);
+    expect(isAdminNavigationActive("/admin/affaires/echeances", deadlines)).toBe(true);
+  });
+
   it("activates the audit entry for its quality sub-route", () => {
     const audit = ADMIN_NAVIGATION.find((entry) => entry.id === "audit")!;
     expect(isAdminNavigationActive("/admin/audit/bio-quality", audit)).toBe(true);

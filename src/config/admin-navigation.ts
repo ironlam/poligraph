@@ -3,6 +3,7 @@ import {
   Activity,
   BarChart3,
   Building2,
+  CalendarClock,
   CheckSquare,
   CopyCheck,
   FileCheck2,
@@ -208,6 +209,14 @@ const entries: readonly AdminNavigationEntry[] = [
     counterKey: "moderation.proposalsPending",
   },
   {
+    id: "affair-deadlines",
+    href: "/admin/affaires/echeances",
+    label: "Échéances",
+    description: "Affaires publiées dont la situation est à vérifier.",
+    group: "quality",
+    icon: CalendarClock,
+  },
+  {
     id: "duplicates",
     href: "/admin/affaires/doublons",
     label: "Doublons",
@@ -325,9 +334,12 @@ export function isAdminNavigationActive(pathname: string, entry: AdminNavigation
   if (entry.id === "affairs") {
     return (
       pathMatches(pathname, route) &&
-      !["/admin/affaires/propositions", "/admin/affaires/doublons", "/admin/affaires/nouveau"].some(
-        (excluded) => pathMatches(pathname, excluded)
-      )
+      ![
+        "/admin/affaires/propositions",
+        "/admin/affaires/doublons",
+        "/admin/affaires/echeances",
+        "/admin/affaires/nouveau",
+      ].some((excluded) => pathMatches(pathname, excluded))
     );
   }
   return (
