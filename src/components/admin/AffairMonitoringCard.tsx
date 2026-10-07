@@ -36,16 +36,14 @@ export function AffairMonitoringCard({
   /** Lendemain (jour de Paris) au format AAAA-MM-JJ. */
   minDate: string;
 }) {
-  if (!panel || !panel.monitoring.active) {
+  if (!panel) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Échéance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {panel ? "Échéance inactive" : "Aucune échéance"}
-          </p>
+          <p className="text-sm text-muted-foreground">Aucune échéance</p>
           <div className="flex flex-wrap items-center gap-2">
             <AffairMonitoringActions affairId={affairId} minDate={minDate} showNoChange={false} />
           </div>
@@ -53,7 +51,7 @@ export function AffairMonitoringCard({
       </Card>
     );
   }
-  const { monitoring, checks, reason } = panel;
+  const { monitoring, checks, reason, inScope } = panel;
   return (
     <Card>
       <CardHeader>
@@ -61,6 +59,11 @@ export function AffairMonitoringCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1">
+          {!monitoring.active && (
+            <p className="text-sm text-muted-foreground">
+              {inScope ? "Échéance inactive" : "Active à la publication"}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {reason && <Badge variant="destructive">{NEEDS_HUMAN_LABELS[reason]}</Badge>}
             <span className="text-sm">
@@ -73,7 +76,11 @@ export function AffairMonitoringCard({
           {monitoring.dueNote && <p className="text-sm">{monitoring.dueNote}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AffairMonitoringActions affairId={monitoring.affairId} minDate={minDate} />
+          <AffairMonitoringActions
+            affairId={monitoring.affairId}
+            minDate={minDate}
+            showNoChange={monitoring.active}
+          />
         </div>
         <div>
           <h3 className="text-sm font-medium">Historique</h3>

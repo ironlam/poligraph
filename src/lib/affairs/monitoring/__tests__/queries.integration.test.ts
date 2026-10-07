@@ -239,6 +239,9 @@ describeIfDisposableDb("file de suivi des affaires", () => {
     const panel = await queries.getAffairMonitoringPanel(id, NOW);
     expect(panel?.reason).toBe("SIGNAL");
     expect(panel?.checks).toEqual([]);
+    expect(panel?.inScope).toBe(true);
+    const draft = await queries.getAffairMonitoringPanel(affairByKey.get("signal-depublie")!, NOW);
+    expect(draft?.inScope).toBe(false);
     expect(await queries.getAffairMonitoringPanel("inexistant")).toBeNull();
   });
 });

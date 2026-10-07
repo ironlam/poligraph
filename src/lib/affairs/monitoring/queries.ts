@@ -8,7 +8,7 @@ import type {
 } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { parisDay } from "./cadence";
-import { needsHumanReason, needsHumanWhere, type NeedsHumanReason } from "./needs-human";
+import { isInScope, needsHumanReason, needsHumanWhere, type NeedsHumanReason } from "./needs-human";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const UPCOMING_DAYS = 14;
@@ -151,6 +151,8 @@ export type AffairMonitoringPanel = {
     nextReviewAtAfter: Date | null;
   }[];
   reason: NeedsHumanReason | null;
+  /** Publiée et DIRECT : un suivi inactif hors de ce périmètre reprend à la publication. */
+  inScope: boolean;
 };
 
 export async function getAffairMonitoringPanel(
@@ -188,5 +190,6 @@ export async function getAffairMonitoringPanel(
     monitoring,
     checks,
     reason: needsHumanReason({ ...monitoring, flaggedReason, affair }, parisDay(now)),
+    inScope: isInScope(affair),
   };
 }
