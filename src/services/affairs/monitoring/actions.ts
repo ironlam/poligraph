@@ -15,7 +15,7 @@ const AFFAIR_SELECT = {
   status: true,
   publicationStatus: true,
   involvement: true,
-  monitoring: { select: { id: true, dueReason: true } },
+  monitoring: { select: { id: true, active: true, dueReason: true } },
 } as const;
 
 /**
@@ -85,7 +85,9 @@ export async function markReviewedNoChange(input: {
     const affair = await lockAndLoad(tx, input.affairId);
     if (!affair) return { ok: false, reason: "not_found" };
     if (!affair.monitoring) return { ok: false, reason: "no_monitoring" };
+    // After the duplicate check: replaying a review that closed the follow-up stays deduped.
     await assertNewCheck(tx, checkKey, input.affairId);
+    if (!affair.monitoring.active) return { ok: false, reason: "no_monitoring" };
 
     // A terminal affair past its appeal window leaves the follow-up for good.
     const deactivate =

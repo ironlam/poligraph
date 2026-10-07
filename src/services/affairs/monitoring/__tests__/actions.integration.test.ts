@@ -126,6 +126,8 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     const res = await markReviewedNoChange(input);
 
     expect(res).toEqual({ ok: true, deduped: false });
+    // The replay finds the follow-up closed, and still reports the first request as done.
+    expect(await markReviewedNoChange(input)).toEqual({ ok: true, deduped: true });
     const m = await db.affairMonitoring.findUniqueOrThrow({
       where: { affairId: affair.id },
       include: { checks: true },
@@ -157,6 +159,40 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     expect(m.dueReason).toBe("CADENCE");
     expect(m.dateOrigin).toBe("CADENCE");
     expect(m.dueNote).toBeNull();
+  });
+
+  it("refuse « rien de neuf » sur un suivi inactif, sans rien écrire", async () => {
+    const affair = await createAffair("PROCES_EN_COURS", "DRAFT");
+    const nextReviewAt = new Date(parisDay(new Date()).getTime() + 10 * DAY_MS);
+    await db.affairMonitoring.create({
+      data: {
+        affairId: affair.id,
+        active: false,
+        nextReviewAt,
+        dueReason: "DELIBERE",
+        dueNote: "Délibéré annoncé",
+        dateOrigin: "HUMAN",
+        statusAtSchedule: "PROCES_EN_COURS",
+      },
+    });
+
+    const res = await markReviewedNoChange({
+      affairId: affair.id,
+      requestKey: crypto.randomUUID(),
+      actorId: "admin",
+    });
+
+    expect(res).toEqual({ ok: false, reason: "no_monitoring" });
+    const m = await db.affairMonitoring.findUniqueOrThrow({
+      where: { affairId: affair.id },
+      include: { checks: true },
+    });
+    expect(m.checks).toHaveLength(0);
+    expect(m.version).toBe(0);
+    expect(m.lastCheckedAt).toBeNull();
+    expect(m.active).toBe(false);
+    expect(m.nextReviewAt).toEqual(nextReviewAt);
+    expect(m.dueNote).toBe("Délibéré annoncé");
   });
 
   it("refuse la revue sans suivi et sur affaire inconnue", async () => {
