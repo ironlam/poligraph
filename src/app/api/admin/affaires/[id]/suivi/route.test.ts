@@ -86,6 +86,13 @@ describe("POST /api/admin/affaires/[id]/suivi", () => {
     expect(await res.json()).toMatchObject({ reason: "date_not_future" });
   });
 
+  it("traduit key_conflict en 409", async () => {
+    h.markReviewedNoChange.mockResolvedValue({ ok: false, reason: "key_conflict" });
+    const res = await call({ action: "NO_CHANGE", requestKey: KEY });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ reason: "key_conflict" });
+  });
+
   it("traduit no_monitoring et not_found en 404", async () => {
     h.markReviewedNoChange.mockResolvedValueOnce({ ok: false, reason: "no_monitoring" });
     expect((await call({ action: "NO_CHANGE", requestKey: KEY })).status).toBe(404);

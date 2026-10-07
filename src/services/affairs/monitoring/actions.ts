@@ -9,7 +9,7 @@ import { isInScope } from "@/lib/affairs/monitoring/needs-human";
 
 export type MonitoringActionResult =
   | { ok: true; deduped: boolean }
-  | { ok: false; reason: "not_found" | "no_monitoring" | "date_not_future" };
+  | { ok: false; reason: "not_found" | "no_monitoring" | "date_not_future" | "key_conflict" };
 
 const AFFAIR_SELECT = {
   status: true,
@@ -32,6 +32,14 @@ async function lockAndLoad(tx: DbTransactionClient, affairId: string) {
 }
 
 class DuplicateCheck extends Error {}
+class KeyConflict extends Error {}
+
+function targetsCheckKey(error: Prisma.PrismaClientKnownRequestError): boolean {
+  const target = error.meta?.target;
+  return Array.isArray(target)
+    ? target.includes("checkKey")
+    : String(target ?? "").includes("checkKey");
+}
 
 /** Runs the writes in one transaction; a duplicate check key rolls everything back. */
 async function runIdempotent(
@@ -40,23 +48,29 @@ async function runIdempotent(
   try {
     return await db.$transaction(work);
   } catch (error) {
+    if (error instanceof DuplicateCheck) return { ok: true, deduped: true };
+    if (error instanceof KeyConflict) return { ok: false, reason: "key_conflict" };
+    // Requests on one affair are serialized by its lock, so a unique violation on the
+    // key can only come from a concurrent request on another affair.
     if (
-      error instanceof DuplicateCheck ||
-      (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002" &&
+      targetsCheckKey(error)
     ) {
-      return { ok: true, deduped: true };
+      return { ok: false, reason: "key_conflict" };
     }
     throw error;
   }
 }
 
 /** Under the affair lock, so no second write can slip in after a duplicate is seen. */
-async function assertNewCheck(tx: DbTransactionClient, checkKey: string) {
+async function assertNewCheck(tx: DbTransactionClient, checkKey: string, affairId: string) {
   const existing = await tx.affairMonitoringCheck.findUnique({
     where: { checkKey },
-    select: { id: true },
+    select: { monitoring: { select: { affairId: true } } },
   });
-  if (existing) throw new DuplicateCheck();
+  if (!existing) return;
+  throw existing.monitoring.affairId === affairId ? new DuplicateCheck() : new KeyConflict();
 }
 
 export async function markReviewedNoChange(input: {
@@ -71,7 +85,7 @@ export async function markReviewedNoChange(input: {
     const affair = await lockAndLoad(tx, input.affairId);
     if (!affair) return { ok: false, reason: "not_found" };
     if (!affair.monitoring) return { ok: false, reason: "no_monitoring" };
-    await assertNewCheck(tx, checkKey);
+    await assertNewCheck(tx, checkKey, input.affairId);
 
     // A terminal affair past its appeal window leaves the follow-up for good.
     const deactivate =
@@ -123,7 +137,7 @@ export async function deferReview(input: {
   return runIdempotent(async (tx) => {
     const affair = await lockAndLoad(tx, input.affairId);
     if (!affair) return { ok: false, reason: "not_found" };
-    await assertNewCheck(tx, checkKey);
+    await assertNewCheck(tx, checkKey, input.affairId);
 
     const state = {
       nextReviewAt: input.nextReviewAt,
@@ -138,7 +152,7 @@ export async function deferReview(input: {
     const monitoring = affair.monitoring
       ? await tx.affairMonitoring.update({
           where: { affairId: input.affairId },
-          data: { ...state, version: { increment: 1 } },
+          data: { ...state, active: isInScope(affair), version: { increment: 1 } },
           select: { id: true },
         })
       : await tx.affairMonitoring.create({

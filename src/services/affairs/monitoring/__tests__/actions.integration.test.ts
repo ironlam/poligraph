@@ -233,4 +233,56 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     expect(m.dateOrigin).toBe("HUMAN");
     expect(m.nextReviewAt).toEqual(target);
   });
+
+  it("refuse une clé déjà utilisée sur une autre affaire, sans rien écrire", async () => {
+    const a = await createAffair("PROCES_EN_COURS");
+    const b = await createAffair("PROCES_EN_COURS");
+    await createMonitoring(a.id, "PROCES_EN_COURS");
+    await createMonitoring(b.id, "PROCES_EN_COURS");
+    const requestKey = crypto.randomUUID();
+
+    expect(await markReviewedNoChange({ affairId: a.id, requestKey, actorId: "admin" })).toEqual({
+      ok: true,
+      deduped: false,
+    });
+    const res = await markReviewedNoChange({ affairId: b.id, requestKey, actorId: "admin" });
+
+    expect(res).toEqual({ ok: false, reason: "key_conflict" });
+    const m = await db.affairMonitoring.findUniqueOrThrow({
+      where: { affairId: b.id },
+      include: { checks: true },
+    });
+    expect(m.checks).toHaveLength(0);
+    expect(m.version).toBe(0);
+    expect(m.lastCheckedAt).toBeNull();
+  });
+
+  it("réactive un suivi désactivé quand un humain reporte la revue", async () => {
+    const affair = await createAffair("RELAXE");
+    await db.affairMonitoring.create({
+      data: {
+        affairId: affair.id,
+        active: false,
+        nextReviewAt: parisDay(new Date(Date.now() - DAY_MS)),
+        dueReason: "DELAI_RECOURS",
+        dateOrigin: "CADENCE",
+        statusAtSchedule: "RELAXE",
+      },
+    });
+    const target = new Date(parisDay(new Date()).getTime() + 30 * DAY_MS);
+
+    const res = await deferReview({
+      affairId: affair.id,
+      requestKey: crypto.randomUUID(),
+      actorId: "admin",
+      nextReviewAt: target,
+      dueReason: "AUDIENCE",
+    });
+
+    expect(res).toEqual({ ok: true, deduped: false });
+    const m = await db.affairMonitoring.findUniqueOrThrow({ where: { affairId: affair.id } });
+    expect(m.active).toBe(true);
+    expect(m.dateOrigin).toBe("HUMAN");
+    expect(m.nextReviewAt).toEqual(target);
+  });
 });

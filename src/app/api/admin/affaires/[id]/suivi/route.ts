@@ -54,6 +54,12 @@ export const POST = withAdminAuth(async (request, { params }) => {
       { status: 422 }
     );
   }
+  if (result.reason === "key_conflict") {
+    return NextResponse.json(
+      { error: "Cette requête a déjà servi pour une autre affaire.", reason: result.reason },
+      { status: 409 }
+    );
+  }
   return NextResponse.json(
     {
       error:
