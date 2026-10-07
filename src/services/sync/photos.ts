@@ -4,6 +4,8 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { WIKIDATA_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { PHOTO_SOURCE_PRIORITY, shouldUpdatePhoto } from "@/config/photos";
 import { COMMONS_STORED_WIDTH, commonsThumbnailUrl } from "@/lib/photos/commons";
+import { identifyPhoto } from "@/lib/photos/source-photo";
+import { uploadSourcePhotoCopy } from "@/lib/photos/blob";
 
 const wikidataClient = new HTTPClient({ rateLimitMs: WIKIDATA_RATE_LIMIT_MS });
 
@@ -16,15 +18,46 @@ interface PhotoSyncResult {
   errors: string[];
 }
 
+type PhotoFetch =
+  | { kind: "photo"; buffer: Buffer; contentType: string }
+  /** Downloaded fine, but the bytes are a placeholder or a web page. */
+  | { kind: "not-a-photo" }
+  /** Error status or network failure: says nothing about the photo itself. */
+  | { kind: "unreachable" };
+
 /**
- * Check if a photo URL is valid (returns 200)
+ * Download a photo and check the bytes. A HEAD request used to be enough here,
+ * which let NosSénateurs placeholders (a 200 with a black 129-byte PNG) count as
+ * valid photos.
  */
-async function isPhotoUrlValid(url: string): Promise<boolean> {
+async function fetchPhoto(url: string): Promise<PhotoFetch> {
+  let buffer: Buffer;
   try {
-    const { ok } = await wikidataClient.head(url);
-    return ok;
+    const { ok, data } = await wikidataClient.getBuffer(url);
+    if (!ok) return { kind: "unreachable" };
+    buffer = data;
   } catch {
-    return false;
+    return { kind: "unreachable" };
+  }
+  const photo = identifyPhoto(buffer);
+  return photo
+    ? { kind: "photo", buffer, contentType: photo.contentType }
+    : { kind: "not-a-photo" };
+}
+
+/**
+ * Copy the photo to Vercel Blob so pages do not depend on the source host: the
+ * image optimizer answers 502 on some of them. A failed upload (no token on a
+ * local run, Blob outage) leaves the copy empty, as before.
+ */
+async function copyToBlob(
+  politicianId: string,
+  photo: { buffer: Buffer; contentType: string }
+): Promise<string | null> {
+  try {
+    return await uploadSourcePhotoCopy(politicianId, photo.buffer, photo.contentType);
+  } catch {
+    return null;
   }
 }
 
@@ -187,6 +220,7 @@ export async function syncPhotos(
         fullName: true,
         photoUrl: true,
         photoSource: true,
+        blobPhotoUrl: true,
         externalIds: {
           select: { source: true, externalId: true },
         },
@@ -202,12 +236,20 @@ export async function syncPhotos(
       result.checked++;
 
       // If validating existing photos, check if current URL is valid
+      let currentIsNotAPhoto = false;
       if (validateExisting && politician.photoUrl) {
-        const isValid = await isPhotoUrlValid(politician.photoUrl);
-        if (isValid) {
+        const current = await fetchPhoto(politician.photoUrl);
+        if (current.kind === "photo") {
           result.validated++;
+          if (!politician.blobPhotoUrl) {
+            const blobPhotoUrl = await copyToBlob(politician.id, current);
+            if (blobPhotoUrl) {
+              await db.politician.update({ where: { id: politician.id }, data: { blobPhotoUrl } });
+            }
+          }
           continue;
         }
+        currentIsNotAPhoto = current.kind === "not-a-photo";
         result.invalidUrls++;
         console.log(`Invalid photo URL for ${politician.fullName}: ${politician.photoUrl}`);
       }
@@ -225,16 +267,17 @@ export async function syncPhotos(
       // Try each URL until one works
       let stamped = false;
       for (const { url, source } of potentialUrls) {
-        const isValid = await isPhotoUrlValid(url);
-        if (isValid) {
+        const candidate = await fetchPhoto(url);
+        if (candidate.kind === "photo") {
           // Check if this is a better source than current
-          if (shouldUpdatePhoto(politician.photoSource, source)) {
+          // A real photo beats a placeholder whatever its source rank.
+          if (currentIsNotAPhoto || shouldUpdatePhoto(politician.photoSource, source)) {
             await db.politician.update({
               where: { id: politician.id },
               data: {
                 photoUrl: url,
                 photoSource: source,
-                blobPhotoUrl: null, // Force re-download on next access
+                blobPhotoUrl: await copyToBlob(politician.id, candidate),
                 photoCheckedAt: new Date(),
               },
             });
@@ -249,10 +292,16 @@ export async function syncPhotos(
       // Stamp the rotation cursor even when no photo was found, so the next
       // bounded run advances past this politician instead of retrying it.
       // Done per-row (not in one final batch) so progress survives a timeout.
+      // A current photo that downloads fine but is not one (placeholder, web
+      // page) is removed when nothing replaced it, so the profile shows initials
+      // rather than a black box. An unreachable source is left alone: a timeout
+      // says nothing about the photo.
       if (!stamped) {
         await db.politician.update({
           where: { id: politician.id },
-          data: { photoCheckedAt: new Date() },
+          data: currentIsNotAPhoto
+            ? { photoUrl: null, photoSource: null, blobPhotoUrl: null, photoCheckedAt: new Date() }
+            : { photoCheckedAt: new Date() },
         });
       }
 

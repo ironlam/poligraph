@@ -31,6 +31,27 @@ export async function uploadCroppedPortrait(politicianId: string, buffer: Buffer
 }
 
 /**
+ * Store a raw copy of a source photo on Vercel Blob, at a fresh URL.
+ *
+ * Same reason as `uploadCroppedPortrait` for the random suffix: a new photo
+ * written over a fixed pathname would keep serving the old bytes from the CDN
+ * for up to thirty days. The previous copy is left behind, which costs a few
+ * kilobytes.
+ */
+export async function uploadSourcePhotoCopy(
+  politicianId: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<string> {
+  const { url } = await put(`politicians/${politicianId}`, buffer, {
+    access: "public",
+    contentType,
+    addRandomSuffix: true,
+  });
+  return url;
+}
+
+/**
  * Delete a portrait we previously uploaded, once nothing points at it any more.
  *
  * Guarded on the `-portrait` marker: `blobPhotoUrl` may also hold a raw cached
