@@ -8,7 +8,8 @@ vi.mock("@vercel/blob", () => ({
   put: (...args: unknown[]) => put(...args),
 }));
 
-const { uploadCroppedPortrait, deleteCroppedPortrait } = await import("../blob");
+const { uploadCroppedPortrait, deleteCroppedPortrait, uploadSourcePhotoCopy } =
+  await import("../blob");
 
 const BLOB_HOST = "https://example.public.blob.vercel-storage.com";
 
@@ -66,5 +67,22 @@ describe("deleteCroppedPortrait", () => {
     await expect(
       deleteCroppedPortrait(`${BLOB_HOST}/politicians/abc-portrait-Xy7.jpg`)
     ).resolves.toBe(false);
+  });
+});
+
+describe("uploadSourcePhotoCopy", () => {
+  it("uploads a raw copy to a fresh pathname, with its own content type", async () => {
+    put.mockResolvedValue({ url: `${BLOB_HOST}/politicians/abc-Zq1` });
+
+    const url = await uploadSourcePhotoCopy("abc", Buffer.from("png"), "image/png");
+
+    expect(url).toBe(`${BLOB_HOST}/politicians/abc-Zq1`);
+    const [pathname, , options] = put.mock.calls[0]! as [string, unknown, Record<string, unknown>];
+    expect(pathname).toBe("politicians/abc");
+    expect(options).toMatchObject({
+      access: "public",
+      contentType: "image/png",
+      addRandomSuffix: true,
+    });
   });
 });

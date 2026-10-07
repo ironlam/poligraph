@@ -20,16 +20,19 @@ import { GET } from "./route";
 const context = { params: Promise.resolve({ id: "politician-1" }) };
 const request = new NextRequest("https://poligraph.fr/api/images/politician-1");
 
-/**
- * Corps en octets et non en chaîne : le constructeur `Response` ajoute de lui-même
- * `text/plain;charset=UTF-8` sur une chaîne sans en-tête, si bien que le cas « aucun en-tête »
- * testait en réalité `text/plain`. Avec des octets, l'en-tête reste bien absent.
- */
-function sourceRepond(contentType: string | null) {
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(5000)]);
+const HTML = Buffer.from("<!DOCTYPE html><html><body>Accès refusé</body></html>".padEnd(5000, " "));
+/** Réponse de NosSénateurs quand le portrait manque : un PNG noir de 129 octets, en 200. */
+const PLACEHOLDER = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(121),
+]);
+
+function sourceRepond(body: Buffer, contentType: string | null) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
-      new Response(new Uint8Array([1, 2, 3]), {
+      new Response(new Uint8Array(body), {
         status: 200,
         headers: contentType === null ? {} : { "content-type": contentType },
       })
@@ -40,7 +43,8 @@ function sourceRepond(contentType: string | null) {
 /**
  * Le défaut mesuré en production : 136 photos sur 1428 étaient des pages HTML. Les sites publics
  * français répondent 200 avec un interstitiel, la route stockait ce corps tel quel, et la branche
- * de cache y redirigeait ensuite sans jamais revérifier.
+ * de cache y redirigeait ensuite sans jamais revérifier. Les octets décident désormais, pas
+ * l'en-tête.
  */
 describe("GET /api/images/[id]", () => {
   beforeEach(() => {
@@ -49,31 +53,37 @@ describe("GET /api/images/[id]", () => {
       photoUrl: "https://www.assemblee-nationale.fr/photo.jpg",
       blobPhotoUrl: null,
     });
-    mocks.put.mockResolvedValue({ url: "https://blob.example/politicians/politician-1" });
+    mocks.put.mockResolvedValue({ url: "https://blob.example/politicians/politician-1-Xy7" });
   });
 
   it.each([
-    { envoye: "image/jpeg", cas: "le cas nominal" },
-    { envoye: "IMAGE/JPEG", cas: "un type en capitales, légal car insensible à la casse" },
-    { envoye: " image/jpeg ; charset=binary", cas: "un paramètre et des espaces" },
-  ])("met en cache une vraie image annoncée $envoye ($cas)", async ({ envoye }) => {
-    sourceRepond(envoye);
+    { contentType: "image/jpeg", cas: "le cas nominal" },
+    { contentType: "text/plain", cas: "un en-tête faux" },
+    { contentType: null, cas: "aucun en-tête" },
+  ])("met en cache une vraie image JPEG ($cas)", async ({ contentType }) => {
+    sourceRepond(JPEG, contentType);
 
     const response = await GET(request, context);
 
     expect(mocks.put).toHaveBeenCalledOnce();
-    // Le type stocké est normalisé, pas recopié tel quel.
-    expect(mocks.put.mock.calls[0]![2]).toMatchObject({ contentType: "image/jpeg" });
-    expect(mocks.update).toHaveBeenCalledOnce();
+    // Le type stocké vient des octets, à une adresse neuve.
+    expect(mocks.put.mock.calls[0]![2]).toMatchObject({
+      contentType: "image/jpeg",
+      addRandomSuffix: true,
+    });
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: "politician-1" },
+      data: { blobPhotoUrl: "https://blob.example/politicians/politician-1-Xy7" },
+    });
     expect(response.status).toBe(302);
   });
 
   it.each([
-    { contentType: "text/html; charset=utf-8", cas: "une page d'interstitiel renvoyée en 200" },
-    { contentType: "application/json", cas: "une erreur structurée renvoyée en 200" },
-    { contentType: null, cas: "aucun en-tête, que l'ancien code étiquetait image/jpeg" },
-  ])("ne met rien en cache quand la source répond $contentType ($cas)", async ({ contentType }) => {
-    sourceRepond(contentType);
+    { body: HTML, contentType: "text/html; charset=utf-8", cas: "une page d'interstitiel en 200" },
+    { body: HTML, contentType: "image/jpeg", cas: "une page HTML annoncée comme image" },
+    { body: PLACEHOLDER, contentType: "image/png", cas: "le PNG noir de NosSénateurs" },
+  ])("ne met rien en cache pour $cas", async ({ body, contentType }) => {
+    sourceRepond(body, contentType);
 
     const response = await GET(request, context);
 
