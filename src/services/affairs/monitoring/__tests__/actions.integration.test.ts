@@ -202,6 +202,7 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     expect(m.statusAtSchedule).toBe("PROCES_EN_COURS");
     expect(m.checks).toHaveLength(1);
     expect(m.checks[0]?.nextReviewAtAfter).toEqual(target);
+    expect(m.checks[0]).toMatchObject({ outcome: "DEFERRED", note: "Délibéré annoncé" });
   });
 
   it("reporte un suivi existant et dédoublonne la même clé", async () => {
@@ -232,6 +233,7 @@ describeIfDisposableDb("actions humaines du suivi des affaires", () => {
     expect(m.consecutiveAutoDeferrals).toBe(0);
     expect(m.dateOrigin).toBe("HUMAN");
     expect(m.nextReviewAt).toEqual(target);
+    expect(m.checks[0]).toMatchObject({ outcome: "DEFERRED", note: null });
   });
 
   it("refuse une clé déjà utilisée sur une autre affaire, sans rien écrire", async () => {

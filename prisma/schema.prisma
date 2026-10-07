@@ -801,6 +801,7 @@ enum MonitoringCheckOutcome {
   SIGNAL
   UPDATED
   FAILED
+  DEFERRED
 }
 
 enum AffairEventType {

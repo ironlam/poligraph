@@ -166,7 +166,8 @@ export async function deferReview(input: {
         checkKey,
         actor: "HUMAN",
         actorId: input.actorId,
-        outcome: "NO_CHANGE",
+        outcome: "DEFERRED",
+        note: input.dueNote ?? null,
         nextReviewAtAfter: input.nextReviewAt,
       },
     });

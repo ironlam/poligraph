@@ -17,7 +17,7 @@ CREATE TYPE "MonitoringFlag" AS ENUM ('SIGNAL', 'GARDE_FOU');
 CREATE TYPE "MonitoringActor" AS ENUM ('HUMAN', 'AUTO');
 
 -- CreateEnum
-CREATE TYPE "MonitoringCheckOutcome" AS ENUM ('NO_CHANGE', 'NO_RESULT', 'DATE_ANNOUNCED', 'SIGNAL', 'UPDATED', 'FAILED');
+CREATE TYPE "MonitoringCheckOutcome" AS ENUM ('NO_CHANGE', 'NO_RESULT', 'DATE_ANNOUNCED', 'SIGNAL', 'UPDATED', 'FAILED', 'DEFERRED');
 
 -- CreateTable
 CREATE TABLE "AffairMonitoring" (
