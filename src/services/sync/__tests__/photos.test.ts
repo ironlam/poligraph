@@ -160,3 +160,30 @@ describe("syncPhotos --validate", () => {
     }
   });
 });
+
+describe("syncPhotos : sélection", () => {
+  const where = () => h.findMany.mock.calls[0]![0].where;
+
+  beforeEach(() => h.findMany.mockResolvedValue([]));
+
+  // A validate run used to walk all 49 667 politicians, 47 600 of them without a
+  // photo, and query Wikidata for each: 3 h 24 on 2026-10-07. Finding missing
+  // photos is the job of the default mode.
+  it("--validate only reads politicians who have a photo", async () => {
+    await syncPhotos({ validateExisting: true });
+
+    expect(where()).toEqual({ AND: [{ photoUrl: { not: null } }, { photoUrl: { not: "" } }] });
+  });
+
+  it("without --validate, keeps looking for missing photos", async () => {
+    await syncPhotos();
+
+    expect(where()).toEqual({ OR: [{ photoUrl: null }, { photoUrl: "" }] });
+  });
+
+  it("--slug targets the named politicians, with or without a photo", async () => {
+    await syncPhotos({ validateExisting: true, slugs: ["jordan-bardella", "bally-bagayoko"] });
+
+    expect(where()).toEqual({ slug: { in: ["jordan-bardella", "bally-bagayoko"] } });
+  });
+});

@@ -190,9 +190,9 @@ async function getPotentialPhotoUrls(politician: {
  * Sync photos for all politicians without photos or with invalid photos
  */
 export async function syncPhotos(
-  options: { validateExisting?: boolean; limit?: number } = {}
+  options: { validateExisting?: boolean; limit?: number; slugs?: string[] } = {}
 ): Promise<PhotoSyncResult> {
-  const { validateExisting = false, limit } = options;
+  const { validateExisting = false, limit, slugs } = options;
 
   const result: PhotoSyncResult = {
     success: false,
@@ -208,9 +208,15 @@ export async function syncPhotos(
 
     // Get politicians who need photos
     const politicians = await db.politician.findMany({
-      where: validateExisting
-        ? {} // Check all
-        : { OR: [{ photoUrl: null }, { photoUrl: "" }] }, // Only those without photos
+      // Validation only reads politicians who have a photo: walking the 47 600
+      // without one queried Wikidata for each and took over three hours. Finding
+      // missing photos is the default mode's job. --slug targets named
+      // politicians whatever their photo.
+      where: slugs?.length
+        ? { slug: { in: slugs } }
+        : validateExisting
+          ? { AND: [{ photoUrl: { not: null } }, { photoUrl: { not: "" } }] }
+          : { OR: [{ photoUrl: null }, { photoUrl: "" }] },
       // Rotation cursor: process the least-recently-checked first so a bounded
       // (--limit) run eventually covers everyone across successive syncs.
       orderBy: { photoCheckedAt: { sort: "asc", nulls: "first" } },
