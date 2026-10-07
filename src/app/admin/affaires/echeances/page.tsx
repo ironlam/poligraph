@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AffairMonitoringActions } from "@/components/admin/AffairMonitoringActions";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import {
   getMonitoringQueue,
   type MonitoringQueueRow,
 } from "@/lib/affairs/monitoring/queries";
+import { isAuthenticated } from "@/lib/auth";
 import { formatDateShort } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +56,8 @@ function QueueRow({
 }
 
 export default async function AdminMonitoringQueuePage() {
+  if (!(await isAuthenticated())) redirect("/admin/login");
+
   const { toHandle, upcoming, toHandleTotal, upcomingTotal } = await getMonitoringQueue();
   const tomorrow = dayKey(new Date(parisDay(new Date()).getTime() + 24 * 60 * 60 * 1000));
 
