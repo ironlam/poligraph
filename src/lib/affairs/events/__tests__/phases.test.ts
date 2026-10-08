@@ -19,6 +19,22 @@ describe("PHASE_LABELS", () => {
 });
 
 describe("buildPhaseTrail", () => {
+  it("relaxe en appel : pas de retour en phase de jugement", () => {
+    expect(buildPhaseTrail(held("PROCES", "JUGEMENT", "APPEL", "ARRET_APPEL"), "RELAXE")).toEqual([
+      { phase: "JUGEMENT", current: false },
+      { phase: "APPEL", current: false },
+    ]);
+  });
+
+  it("non-lieu : aucune phase marquée courante", () => {
+    expect(
+      buildPhaseTrail(held("PLAINTE", "INFORMATION_JUDICIAIRE", "NON_LIEU"), "NON_LIEU")
+    ).toEqual([
+      { phase: "ENQUETE", current: false },
+      { phase: "INSTRUCTION", current: false },
+    ]);
+  });
+
   it("citation directe : pas d'instruction affichée", () => {
     expect(
       buildPhaseTrail(

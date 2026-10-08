@@ -5,7 +5,7 @@ import type { AffairEventType } from "@/generated/prisma";
  * jugement avant appel). Explicite : l'ordre de déclaration de l'enum ne suit pas la procédure,
  * les types récents y ont été ajoutés à la fin.
  */
-const CANONICAL_ORDER: readonly AffairEventType[] = [
+const CANONICAL_ORDER = [
   "FAITS",
   "PLAINTE",
   "REVELATION",
@@ -38,7 +38,12 @@ const CANONICAL_ORDER: readonly AffairEventType[] = [
   "DECISION_DEFINITIVE",
   "PRESCRIPTION",
   "AUTRE",
-];
+] as const satisfies readonly AffairEventType[];
+
+// Fails to compile when a new enum value is missing from the canonical order.
+type MissingFromOrder = Exclude<AffairEventType, (typeof CANONICAL_ORDER)[number]>;
+const ORDER_IS_EXHAUSTIVE: [MissingFromOrder] extends [never] ? true : MissingFromOrder = true;
+void ORDER_IS_EXHAUSTIVE;
 
 export const EVENT_TYPE_ORDER = Object.fromEntries(
   CANONICAL_ORDER.map((type, i) => [type, i])

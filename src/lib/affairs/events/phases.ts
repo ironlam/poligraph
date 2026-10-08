@@ -52,16 +52,18 @@ export const EVENT_TYPE_PHASE: Record<AffairEventType, Phase | "INHERIT" | null>
 
 export const STATUS_PHASE: Record<AffairStatus, Phase | null> = {
   ENQUETE_PRELIMINAIRE: "ENQUETE",
-  CLASSEMENT_SANS_SUITE: "ENQUETE",
   INSTRUCTION: "INSTRUCTION",
   MISE_EN_EXAMEN: "INSTRUCTION",
   INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "INSTRUCTION",
-  NON_LIEU: "INSTRUCTION",
   RENVOI_TRIBUNAL: "JUGEMENT",
   PROCES_EN_COURS: "JUGEMENT",
   CONDAMNATION_PREMIERE_INSTANCE: "JUGEMENT",
-  RELAXE: "JUGEMENT",
-  ACQUITTEMENT: "JUGEMENT",
+  // Final outcomes can be reached at any stage (a relaxe on appeal, a non-lieu after an
+  // appeal of the chambre de l'instruction): the status alone does not say which phase ended.
+  CLASSEMENT_SANS_SUITE: null,
+  NON_LIEU: null,
+  RELAXE: null,
+  ACQUITTEMENT: null,
   APPEL_EN_COURS: "APPEL",
   POURVOI_EN_CASSATION: "CASSATION",
   CONDAMNATION_DEFINITIVE: null,
