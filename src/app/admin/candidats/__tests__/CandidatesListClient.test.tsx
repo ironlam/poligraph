@@ -310,4 +310,73 @@ describe("CandidatesListClient", () => {
       "Texte refusé par le contrôle : tiret_long."
     );
   });
+
+  it("replie chaque candidature et résume son état sur une ligne", () => {
+    const { container } = render(<CandidatesListClient rows={[row()]} />);
+
+    const details = container.querySelector("details");
+    expect(details).not.toHaveAttribute("open");
+    const summary = container.querySelector("summary");
+    expect(summary).toHaveTextContent("Alix Démonstration");
+    expect(summary).toHaveTextContent("Fiche en brouillon");
+    expect(summary).toHaveTextContent("26 mesures");
+    expect(summary).toHaveTextContent("À traiter : mesures retenues");
+  });
+
+  it("filtre la liste par nom", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CandidatesListClient
+        rows={[row(), row({ candidacyId: "cand-2", candidateName: "Basile Exemple" })]}
+      />
+    );
+
+    await user.type(
+      screen.getByRole("searchbox", { name: "Rechercher une candidature" }),
+      "basile"
+    );
+
+    const summaries = [...container.querySelectorAll("details.group > summary")].map(
+      (node) => node.textContent
+    );
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toContain("Basile Exemple");
+    expect(screen.getByText("1 sur 2 candidatures")).toBeInTheDocument();
+  });
+
+  it("ne garde que les candidatures à traiter quand on le demande", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CandidatesListClient
+        rows={[
+          row(),
+          row({
+            candidacyId: "cand-2",
+            candidateName: "Basile Exemple",
+            publicationStatus: "PUBLISHED",
+          }),
+        ]}
+      />
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "À traiter seulement" }));
+
+    const summaries = [...container.querySelectorAll("details.group > summary")].map(
+      (node) => node.textContent
+    );
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toContain("Alix Démonstration");
+  });
+
+  it("dit pourquoi aucune candidature ne s'affiche", async () => {
+    const user = userEvent.setup();
+    render(<CandidatesListClient rows={[row()]} />);
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Filtrer par statut" }),
+      "RETIRE"
+    );
+
+    expect(screen.getByText("Aucune candidature ne correspond à ces filtres.")).toBeInTheDocument();
+  });
 });
