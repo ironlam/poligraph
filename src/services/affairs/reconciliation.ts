@@ -422,21 +422,63 @@ export interface MergeAffairsResult {
  * Keying on the short triple dropped the absorbed one along with its source.
  * When anything differs, both are kept — merging their prose is a human call.
  */
-function eventKey(event: {
+type MergeEvent = {
+  id: string;
+  status: string;
   date: Date;
   type: string;
   title: string;
   description: string | null;
   sourceUrl: string | null;
   sourceTitle: string | null;
-}): string {
+  identityKey: string | null;
+  datePrecision?: string | null;
+  dateEnd?: Date | null;
+  occurrence?: string | null;
+  outcome?: string | null;
+  court?: string | null;
+  incidental?: boolean | null;
+  corroborationUrl?: string | null;
+  sourceKind?: string | null;
+};
+
+const MERGE_EVENT_SELECT = {
+  id: true,
+  status: true,
+  date: true,
+  type: true,
+  title: true,
+  description: true,
+  sourceUrl: true,
+  sourceTitle: true,
+  identityKey: true,
+  datePrecision: true,
+  dateEnd: true,
+  occurrence: true,
+  outcome: true,
+  court: true,
+  incidental: true,
+  corroborationUrl: true,
+  sourceKind: true,
+} as const;
+
+/** Every field a public step shows: two steps differing on any of them are two steps. */
+function eventKey(event: MergeEvent): string {
   return [
     event.date.toISOString(),
+    event.datePrecision ?? "",
+    event.dateEnd?.toISOString() ?? "",
     event.type,
+    event.occurrence ?? "",
+    event.outcome ?? "",
     event.title,
+    event.court ?? "",
+    event.incidental ? "1" : "",
     event.description ?? "",
     event.sourceUrl ?? "",
     event.sourceTitle ?? "",
+    event.sourceKind ?? "",
+    event.corroborationUrl ?? "",
   ].join("|");
 }
 
@@ -572,70 +614,40 @@ export async function mergeAffairsInTransaction(
     }
 
     // --- Events: no unique constraint, so deduplicate on their semantic key.
-    const existingEvents = await tx.affairEvent.findMany({
+    // `survivors` is the live view of the steps on the kept affair, updated after every move
+    // and every replacement, so the result does not depend on the order the rows come back in.
+    const survivors: MergeEvent[] = await tx.affairEvent.findMany({
       where: { affairId: keepId },
-      select: {
-        id: true,
-        status: true,
-        date: true,
-        type: true,
-        title: true,
-        description: true,
-        sourceUrl: true,
-        sourceTitle: true,
-        identityKey: true,
-      },
+      select: MERGE_EVENT_SELECT,
     });
-    const existingEventKeys = new Set(existingEvents.map(eventKey));
-    const existingEventIdentities = new Set(
-      existingEvents.flatMap((event) => (event.identityKey ? [event.identityKey] : []))
-    );
-
-    const eventsToTransfer = await tx.affairEvent.findMany({
+    const eventsToTransfer: MergeEvent[] = await tx.affairEvent.findMany({
       where: { affairId: removeId },
-      select: {
-        id: true,
-        status: true,
-        date: true,
-        type: true,
-        title: true,
-        description: true,
-        sourceUrl: true,
-        sourceTitle: true,
-        identityKey: true,
-      },
+      select: MERGE_EVENT_SELECT,
+      orderBy: { id: "asc" },
     });
-    let eventsMoved = 0;
-    const deletedEventIds = new Set<string>();
+    const movedEventIds = new Set<string>();
     for (const event of eventsToTransfer) {
       const key = eventKey(event);
-      if (
-        existingEventKeys.has(key) ||
-        (event.identityKey !== null && existingEventIdentities.has(event.identityKey))
-      ) {
-        // A published step wins over an unpublished duplicate on the survivor: drop the
-        // duplicate (draft or retracted) so the public step is not lost with the absorbed affair.
-        const duplicates = existingEvents.filter(
-          (e) =>
-            !deletedEventIds.has(e.id) &&
-            (eventKey(e) === key ||
-              (event.identityKey !== null && e.identityKey === event.identityKey))
-        );
+      const duplicates = survivors.filter(
+        (e) => eventKey(e) === key || (!!event.identityKey && e.identityKey === event.identityKey)
+      );
+      if (duplicates.length > 0) {
+        // A published step wins over unpublished duplicates (draft or retracted), wherever they
+        // came from: drop them so the public step is not lost with the absorbed affair.
         const replaceable =
-          event.status === "PUBLISHED" &&
-          duplicates.length > 0 &&
-          duplicates.every((e) => e.status !== "PUBLISHED");
+          event.status === "PUBLISHED" && duplicates.every((e) => e.status !== "PUBLISHED");
         if (!replaceable) continue;
         for (const duplicate of duplicates) {
           await tx.affairEvent.delete({ where: { id: duplicate.id } });
-          deletedEventIds.add(duplicate.id);
+          survivors.splice(survivors.indexOf(duplicate), 1);
+          movedEventIds.delete(duplicate.id);
         }
       }
       await tx.affairEvent.update({ where: { id: event.id }, data: { affairId: keepId } });
-      existingEventKeys.add(key);
-      if (event.identityKey) existingEventIdentities.add(event.identityKey);
-      eventsMoved++;
+      survivors.push(event);
+      movedEventIds.add(event.id);
     }
+    const eventsMoved = movedEventIds.size;
 
     // --- Press links: unique on (articleId, affairId), so a blanket move would throw.
     const existingLinks = await tx.pressArticleAffair.findMany({
