@@ -141,9 +141,14 @@ pas une source recevable.
 
 Un article de presse que la candidate republie sur son site officiel ou son compte est un contenu qu'elle
 assume. Ce que l'article met entre guillemets compte comme ses propres mots : la source est enregistrée en
-`PRIMARY`, avec la nature `INTERVIEW_PRESSE` ou `ARTICLE_PRESSE`, et le média d'origine est nommé. La
-reprise ne change pas la nature du reste de l'article. Une paraphrase du journaliste ne devient pas un
-engagement de la candidate, et une mesure qui ne repose que sur elle n'entre pas.
+`PRIMARY`, avec la nature `INTERVIEW_PRESSE` ou `ARTICLE_PRESSE`, et le média d'origine doit être
+identifiable depuis la page citée (titre ou mention de la reprise). La reprise ne change pas la nature du
+reste de l'article. Une paraphrase du journaliste ne devient pas un engagement de la candidate, et une
+mesure qui ne repose que sur elle n'entre pas.
+
+Une mesure déjà publiée qui ne repose que sur une paraphrase reste en ligne : elle est rattrapée dès
+qu'une source donne la proposition dans les mots de la candidate (interview, programme, discours), par
+une nouvelle révision qui remplace la source. Elle n'est pas dépubliée au seul motif de cette règle.
 
 ### Documents de parti et documents antérieurs à la campagne (arbitré le 2026-10-08)
 
