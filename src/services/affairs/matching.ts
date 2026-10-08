@@ -205,6 +205,7 @@ export interface MatchResult {
  * them properly.
  */
 const PRE_DECISION_STATUSES = new Set<string>([
+  "PLAINTE_DEPOSEE",
   "ENQUETE_PRELIMINAIRE",
   "INSTRUCTION",
   "MISE_EN_EXAMEN",

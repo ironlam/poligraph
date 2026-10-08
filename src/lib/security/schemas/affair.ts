@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 // fail at the database. `PROCES` and `APPEL` used to sit in this list; both belong to
 // `AffairEventType`, not to `AffairStatus`. Guarded by a test (#511).
 export const VALID_STATUSES = [
+  "PLAINTE_DEPOSEE",
   "ENQUETE_PRELIMINAIRE",
   "INSTRUCTION",
   "INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN",

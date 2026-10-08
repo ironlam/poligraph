@@ -888,6 +888,9 @@ enum EventSourceKind {
 }
 
 enum AffairStatus {
+  // A complaint has been filed (e.g. before the Cour de justice de la République) and no
+  // inquiry is known yet. Earlier than ENQUETE_PRELIMINAIRE: no parquet has opened anything.
+  PLAINTE_DEPOSEE
   ENQUETE_PRELIMINAIRE
   INSTRUCTION
   // Instruction closed with no mise en examen: article 175 CPP avis de fin

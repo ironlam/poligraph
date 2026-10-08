@@ -28,6 +28,7 @@ const CERTAINTY_STATUSES: Record<CertaintyLevel, string[]> = {
   ETABLI: ["Condamnation définitive"],
   PRONONCE: ["Condamnation en première instance", "Appel en cours"],
   EN_COURS: [
+    "Plainte déposée",
     "Enquête préliminaire",
     "Instruction",
     "Mise en examen",

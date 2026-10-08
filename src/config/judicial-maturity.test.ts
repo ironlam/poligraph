@@ -105,6 +105,12 @@ describe("AGGREGATE_STATUSES", () => {
     expect(AGGREGATE_STATUSES).not.toContain("ENQUETE_PRELIMINAIRE");
   });
 
+  it("excludes PLAINTE_DEPOSEE: a complaint alone is never a mise en cause", () => {
+    expect(AGGREGATE_STATUSES).not.toContain("PLAINTE_DEPOSEE");
+    expect(getJudicialMaturity("PLAINTE_DEPOSEE")).toBe("ENQUETE");
+    expect(isJudiciallyValidated("PLAINTE_DEPOSEE")).toBe(false);
+  });
+
   it("excludes all Tier 4 statuses", () => {
     const tier4: AffairStatus[] = [
       "RELAXE",

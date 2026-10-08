@@ -339,6 +339,7 @@ function orderedWordOverlap(quote: string[], source: string[]): number {
  * guard that reads only what the model wrote guards nothing.
  */
 const STATUS_KEYWORDS: Record<AffairStatus, readonly string[]> = {
+  PLAINTE_DEPOSEE: ["plainte", "porte plainte", "depose plainte"],
   ENQUETE_PRELIMINAIRE: ["enquete", "garde a vue", "signalement", "plainte", "soupcon", "vise par"],
   INSTRUCTION: ["instruction", "information judiciaire"],
   INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: [
