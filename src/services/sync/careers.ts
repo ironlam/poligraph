@@ -11,6 +11,7 @@ import { parseDate } from "@/lib/parsing";
 import { db } from "@/lib/db";
 import { MandateType, DataSource, PartyRole } from "@/generated/prisma";
 import { setCurrentParty, setPartyRole } from "@/services/politician";
+import { isCurrentChair } from "./careers-chair";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { isDuplicateMandateCandidate } from "./careers-dedup";
 
@@ -322,6 +323,7 @@ export async function syncCareers(options?: {
         partyWikidataId: string;
         chairpersonWikidataId: string;
         startDate: Date | null;
+        partyDissolvedDate: Date | null;
         partyWebsite: string | null;
       }> = [];
 
@@ -356,6 +358,7 @@ export async function syncCareers(options?: {
             partyWikidataId: ext.externalId,
             chairpersonWikidataId: val.id as string,
             startDate: chairStartDate,
+            partyDissolvedDate: ext.party.dissolvedDate ?? null,
             partyWebsite: ext.party.website || null,
           });
         }
@@ -377,9 +380,22 @@ export async function syncCareers(options?: {
               externalId: data.chairpersonWikidataId,
               politicianId: { not: null },
             },
+            include: { politician: { select: { deathDate: true } } },
           });
 
           if (!politicianExt?.politicianId) continue;
+
+          if (
+            !isCurrentChair({
+              startDate: data.startDate,
+              partyDissolvedDate: data.partyDissolvedDate,
+              politicianDeathDate: politicianExt.politician?.deathDate ?? null,
+            })
+          ) {
+            stats.mandatesSkipped++;
+            continue;
+          }
+          const chairStart = data.startDate!;
 
           // Never overwrite manual entries
           const manualEntry = await db.mandate.findFirst({
@@ -427,7 +443,7 @@ export async function syncCareers(options?: {
                 institution: data.partyName,
                 partyId: data.partyId,
                 source: DataSource.WIKIDATA,
-                startDate: data.startDate ?? new Date(),
+                startDate: chairStart,
                 isCurrent: true,
                 sourceUrl: `https://www.wikidata.org/wiki/${data.partyWikidataId}`,
                 officialUrl: data.partyWebsite || null,
@@ -435,7 +451,7 @@ export async function syncCareers(options?: {
               },
             });
             await setCurrentParty(politicianExt.politicianId, data.partyId, {
-              startDate: data.startDate ?? new Date(),
+              startDate: chairStart,
             });
             stats.mandatesCreated++;
             stats.partyPresidentsCreated++;
