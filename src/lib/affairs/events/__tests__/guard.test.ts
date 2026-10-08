@@ -300,7 +300,7 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://france3-regions.blog.francetvinfo.fr/a",
   ])("refuse %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toContain(
-      "Ce média ne figure pas dans la liste des sources de presse admises."
+      "Ce média ne figure pas encore dans la liste des sources de presse admises : si c'est une rédaction professionnelle, l'ajouter (src/lib/affairs/events/sources.ts)."
     );
   });
 
@@ -327,5 +327,14 @@ describe("checkEventPublishable : listes blanches de sources", () => {
         corroborationUrl: "https://www.aol.com/b",
       })
     ).toContain("La seconde source ne figure pas dans la liste des sources admises.");
+  });
+});
+
+describe("listes de sources", () => {
+  it("ne contiennent ni doublon ni domaine présent dans les deux listes", async () => {
+    const { PRESS_SOURCE_HOSTS, OFFICIAL_SOURCE_HOSTS } = await import("../sources");
+    expect(new Set(PRESS_SOURCE_HOSTS).size).toBe(PRESS_SOURCE_HOSTS.length);
+    expect(new Set(OFFICIAL_SOURCE_HOSTS).size).toBe(OFFICIAL_SOURCE_HOSTS.length);
+    expect(PRESS_SOURCE_HOSTS.filter((h) => OFFICIAL_SOURCE_HOSTS.includes(h))).toEqual([]);
   });
 });

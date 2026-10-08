@@ -212,7 +212,9 @@ export function checkEventPublishable(e: EventGuardInput, today: Date = new Date
       );
     }
     if (e.sourceKind === "PRESS" && !isAcceptedPressUrl(e.sourceUrl)) {
-      errors.push("Ce média ne figure pas dans la liste des sources de presse admises.");
+      errors.push(
+        "Ce média ne figure pas encore dans la liste des sources de presse admises : si c'est une rédaction professionnelle, l'ajouter (src/lib/affairs/events/sources.ts)."
+      );
     }
   }
 

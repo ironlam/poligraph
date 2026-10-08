@@ -3,8 +3,10 @@
  * refusé. Un domaine couvre ses sous-domaines (`france3-regions.franceinfo.fr`), sauf un
  * sous-domaine de blog hébergé chez un média (`france3-regions.blog.francetvinfo.fr`).
  *
- * Choix éditorial, revu par Lamine le 2026-10-08. Ajouter un titre ici est une décision de
- * rédaction, pas un correctif technique.
+ * Critère : une rédaction professionnelle identifiable, quelle que soit sa ligne éditoriale.
+ * Ce qui est refusé n'est pas de la presse : agrégateurs, blogs, encyclopédies, réseaux sociaux,
+ * sites de partis ou d'associations parties prenantes. La liste doit s'étendre : un titre légitime
+ * absent s'ajoute ici (une ligne), le garde l'indique à l'admin au moment de publier.
  */
 
 /** Juridictions, administrations et assemblées : seules adresses acceptées en « source officielle ». */
@@ -49,6 +51,18 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lecanardenchaine.fr",
   "lesjours.fr",
   "politico.eu",
+  "lejdd.fr",
+  "valeursactuelles.com",
+  "lopinion.fr",
+  "latribune.fr",
+  "lesinrocks.com",
+  "courrierinternational.com",
+  "alternatives-economiques.fr",
+  // Presse spécialisée (justice, droit, santé, collectivités)
+  "dalloz-actualite.fr",
+  "lagazettedescommunes.com",
+  "acteurspublics.fr",
+  "apmnews.com",
   // Audiovisuel
   "franceinfo.fr",
   "francetvinfo.fr",
@@ -60,6 +74,9 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "tf1info.fr",
   "europe1.fr",
   "rtl.fr",
+  "cnews.fr",
+  "lci.fr",
+  "francetv.fr",
   "publicsenat.fr",
   "lcp.fr",
   "france24.com",
@@ -98,6 +115,19 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "paris-normandie.fr",
   "charentelibre.fr",
   "larepubliquedespyrenees.fr",
+  "actu.fr",
+  "lyonmag.com",
+  "petit-bulletin.fr",
+  "corsenetinfos.corsica",
+  // Médias locaux d'enquête en ligne
+  "marsactu.fr",
+  "mediacites.fr",
+  "rue89lyon.fr",
+  "rue89strasbourg.com",
+  "placegrenet.fr",
+  "streetpress.com",
+  "blast-info.fr",
+  "lepoulpe.info",
   // Outre-mer (la1ere est un sous-domaine de franceinfo et francetvinfo)
   "franceantilles.fr",
   "clicanoo.re",
@@ -115,6 +145,12 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "theguardian.com",
   "nytimes.com",
   "euronews.com",
+  "lavenir.net",
+  "rtl.be",
+  "aljazeera.com",
+  "dw.com",
+  "elpais.com",
+  "touteleurope.eu",
 ];
 
 function hostnameOf(url: string): string | null {
