@@ -290,7 +290,7 @@
     "playwright": "^1.58.1",
     "prettier": "^3.8.1",
     "prisma": "^7.9.0",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "storybook": "^10.5.5",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
