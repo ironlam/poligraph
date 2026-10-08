@@ -713,11 +713,26 @@ model AffairEvent {
   sourceUrl   String?
   sourceTitle String?
 
+  status           AffairEventStatus @default(DRAFT)
+  datePrecision    DatePrecision     @default(DAY)
+  dateEnd          DateTime? // Only for FAITS: end of a period
+  occurrence       EventOccurrence   @default(HELD)
+  outcome          EventOutcome?
+  court            String?
+  incidental       Boolean           @default(false)
+  corroborationUrl String?
+  sourceKind       EventSourceKind?
+  publishedAt      DateTime?
+  retractedAt      DateTime?
+  retractionReason String?
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([affairId, identityKey])
   @@index([affairId])
   @@index([date])
+  @@index([affairId, status, date])
 }
 
 // Private editorial follow-up of a published affair: when to look at it next.
@@ -830,6 +845,46 @@ enum AffairEventType {
   PRESCRIPTION // Prescription
   NON_LIEU // Non-lieu
   AUTRE // Autre événement
+  TEMOIN_ASSISTE // Placement sous le statut de témoin assisté
+  CLASSEMENT_SANS_SUITE // Classement sans suite
+  CONVOCATION_TRIBUNAL // Citation ou convocation devant le tribunal
+  COMPARUTION_IMMEDIATE // Comparution immédiate
+  CRPC // Comparution sur reconnaissance préalable de culpabilité
+  RENVOI_AUDIENCE // Report d'audience
+  DECISION_DEFINITIVE // Décision devenue définitive
+}
+
+enum AffairEventStatus {
+  DRAFT
+  PUBLISHED
+  RETRACTED
+}
+
+enum DatePrecision {
+  DAY
+  MONTH
+  YEAR
+}
+
+enum EventOccurrence {
+  HELD
+  SCHEDULED
+}
+
+enum EventOutcome {
+  CONDAMNATION
+  RELAXE
+  RELAXE_PARTIELLE
+  ACQUITTEMENT
+  CASSATION_RENVOI
+  CASSATION_SANS_RENVOI
+  REJET_POURVOI
+  AUTRE
+}
+
+enum EventSourceKind {
+  OFFICIAL
+  PRESS
 }
 
 enum AffairStatus {

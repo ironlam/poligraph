@@ -7,6 +7,8 @@ import type {
   DataSource,
   PoliticalPosition,
   AffairEventType,
+  EventOutcome,
+  EventSourceKind,
   VotePosition,
   VotingResult,
   Chamber,
@@ -582,7 +584,7 @@ export const AFFAIR_EVENT_TYPE_LABELS: Record<AffairEventType, string> = {
   DETENTION_PROVISOIRE: "Détention provisoire",
   RENVOI_TRIBUNAL: "Renvoi devant le tribunal",
   PROCES: "Procès",
-  REQUISITOIRE: "Réquisitoire",
+  REQUISITOIRE: "Réquisitions du parquet",
   JUGEMENT: "Jugement",
   APPEL: "Appel interjeté",
   PROCES_APPEL: "Procès en appel",
@@ -595,6 +597,13 @@ export const AFFAIR_EVENT_TYPE_LABELS: Record<AffairEventType, string> = {
   PRESCRIPTION: "Prescription",
   NON_LIEU: "Non-lieu",
   AUTRE: "Autre événement",
+  TEMOIN_ASSISTE: "Placement sous le statut de témoin assisté",
+  CLASSEMENT_SANS_SUITE: "Classement sans suite",
+  CONVOCATION_TRIBUNAL: "Citation ou convocation devant le tribunal",
+  COMPARUTION_IMMEDIATE: "Comparution immédiate",
+  CRPC: "Comparution sur reconnaissance préalable de culpabilité",
+  RENVOI_AUDIENCE: "Report d'audience",
+  DECISION_DEFINITIVE: "Décision devenue définitive",
 };
 
 // Event type colors for timeline display
@@ -624,7 +633,37 @@ export const AFFAIR_EVENT_TYPE_COLORS: Record<AffairEventType, string> = {
   PRESCRIPTION: "bg-gray-400",
   NON_LIEU: "bg-gray-500",
   AUTRE: "bg-gray-600",
+  TEMOIN_ASSISTE: "bg-red-300",
+  CLASSEMENT_SANS_SUITE: "bg-gray-400",
+  CONVOCATION_TRIBUNAL: "bg-purple-400",
+  COMPARUTION_IMMEDIATE: "bg-purple-500",
+  CRPC: "bg-purple-500",
+  RENVOI_AUDIENCE: "bg-purple-300",
+  DECISION_DEFINITIVE: "bg-slate-600",
 };
+
+export const EVENT_OUTCOME_LABELS: Record<EventOutcome, string> = {
+  CONDAMNATION: "Condamnation",
+  RELAXE: "Relaxe",
+  RELAXE_PARTIELLE: "Relaxe partielle",
+  ACQUITTEMENT: "Acquittement",
+  CASSATION_RENVOI: "Cassation avec renvoi",
+  CASSATION_SANS_RENVOI: "Cassation sans renvoi",
+  REJET_POURVOI: "Pourvoi rejeté",
+  AUTRE: "Autre issue",
+};
+
+export const EVENT_SOURCE_KIND_LABELS: Record<EventSourceKind, string> = {
+  OFFICIAL: "Source officielle",
+  PRESS: "Presse",
+};
+
+// Types kept for historical events; new events carry the verdict in `outcome`
+export const LEGACY_EVENT_TYPES: readonly AffairEventType[] = [
+  "CONDAMNATION",
+  "RELAXE",
+  "ACQUITTEMENT",
+];
 
 // ============================================
 // PARLIAMENTARY VOTES
