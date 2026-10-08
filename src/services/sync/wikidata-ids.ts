@@ -10,6 +10,7 @@ import { WikidataService } from "@/lib/api";
 import { db } from "@/lib/db";
 import { WIKIDATA_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { DataSource } from "@/generated/prisma";
+import { findBestMatch, type WikidataCandidate } from "./wikidata-ids-match";
 
 export interface WikidataIdsSyncResult {
   processed: number;
@@ -18,61 +19,6 @@ export interface WikidataIdsSyncResult {
   noMatch: number;
   multipleMatches: number;
   errors: string[];
-}
-
-interface CandidateInfo {
-  id: string;
-  label: string;
-  isFrench: boolean;
-  isPolitician: boolean;
-  birthDate: Date | null;
-}
-
-function datesMatch(date1: Date | null, date2: Date | null, toleranceDays = 5): boolean {
-  if (!date1 || !date2) return true;
-  const diff = Math.abs(date1.getTime() - date2.getTime());
-  const daysDiff = diff / (1000 * 60 * 60 * 24);
-  return daysDiff <= toleranceDays;
-}
-
-function findBestMatch(
-  candidates: CandidateInfo[],
-  politicianBirthDate: Date | null
-): CandidateInfo | null {
-  if (candidates.length === 1) {
-    return candidates[0] ?? null;
-  }
-
-  // Strategy 1: Match by birth date
-  for (const candidate of candidates) {
-    if (candidate.birthDate && politicianBirthDate) {
-      if (datesMatch(politicianBirthDate, candidate.birthDate)) {
-        return candidate;
-      }
-    }
-  }
-
-  // Strategy 2: Filter to only politicians
-  const politicianCandidates = candidates.filter((c) => c.isPolitician);
-
-  if (politicianCandidates.length === 1) {
-    return politicianCandidates[0] ?? null;
-  }
-
-  if (politicianCandidates.length > 1 && politicianBirthDate) {
-    for (const candidate of politicianCandidates) {
-      if (candidate.birthDate && datesMatch(politicianBirthDate, candidate.birthDate)) {
-        return candidate;
-      }
-    }
-  }
-
-  // Strategy 3: If only one French person, take it
-  if (candidates.length === 1) {
-    return candidates[0] ?? null;
-  }
-
-  return null;
 }
 
 export async function syncWikidataIds(options?: {
@@ -135,7 +81,7 @@ export async function syncWikidataIds(options?: {
       const candidateDetails = await wikidata.checkFrenchPoliticians(candidateIds);
 
       // Build candidate info list
-      const candidates: CandidateInfo[] = [];
+      const candidates: WikidataCandidate[] = [];
       candidateDetails.forEach((details, id) => {
         const searchResult = searchResults.find((r) => r.id === id);
         if (details.isFrench) {
