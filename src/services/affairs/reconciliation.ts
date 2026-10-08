@@ -575,6 +575,8 @@ export async function mergeAffairsInTransaction(
     const existingEvents = await tx.affairEvent.findMany({
       where: { affairId: keepId },
       select: {
+        id: true,
+        status: true,
         date: true,
         type: true,
         title: true,
@@ -593,6 +595,7 @@ export async function mergeAffairsInTransaction(
       where: { affairId: removeId },
       select: {
         id: true,
+        status: true,
         date: true,
         type: true,
         title: true,
@@ -603,13 +606,30 @@ export async function mergeAffairsInTransaction(
       },
     });
     let eventsMoved = 0;
+    const deletedEventIds = new Set<string>();
     for (const event of eventsToTransfer) {
       const key = eventKey(event);
       if (
         existingEventKeys.has(key) ||
         (event.identityKey !== null && existingEventIdentities.has(event.identityKey))
       ) {
-        continue;
+        // A published step wins over an unpublished duplicate on the survivor: drop the
+        // duplicate (draft or retracted) so the public step is not lost with the absorbed affair.
+        const duplicates = existingEvents.filter(
+          (e) =>
+            !deletedEventIds.has(e.id) &&
+            (eventKey(e) === key ||
+              (event.identityKey !== null && e.identityKey === event.identityKey))
+        );
+        const replaceable =
+          event.status === "PUBLISHED" &&
+          duplicates.length > 0 &&
+          duplicates.every((e) => e.status !== "PUBLISHED");
+        if (!replaceable) continue;
+        for (const duplicate of duplicates) {
+          await tx.affairEvent.delete({ where: { id: duplicate.id } });
+          deletedEventIds.add(duplicate.id);
+        }
       }
       await tx.affairEvent.update({ where: { id: event.id }, data: { affairId: keepId } });
       existingEventKeys.add(key);

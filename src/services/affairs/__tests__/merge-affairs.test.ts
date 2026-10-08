@@ -13,7 +13,11 @@ type TxRecorder = {
     delete: ReturnType<typeof vi.fn>;
   };
   source: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
-  affairEvent: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+  affairEvent: {
+    findMany: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
   pressArticleAffair: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   publicIdRedirect: { upsert: ReturnType<typeof vi.fn> };
   affairPairDecision: { upsert: ReturnType<typeof vi.fn> };
@@ -28,7 +32,7 @@ type TxRecorder = {
 const tx: TxRecorder = {
   affair: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
   source: { findMany: vi.fn(), update: vi.fn() },
-  affairEvent: { findMany: vi.fn(), update: vi.fn() },
+  affairEvent: { findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
   pressArticleAffair: { findMany: vi.fn(), update: vi.fn() },
   publicIdRedirect: { upsert: vi.fn() },
   affairPairDecision: { upsert: vi.fn() },
@@ -789,5 +793,39 @@ describe("mergeAffairs — snapshot de l'affaire absorbée (#534)", () => {
     const readOrder = tx.affair.findUnique.mock.invocationCallOrder[0] ?? Infinity;
     const deleteOrder = tx.affair.delete.mock.invocationCallOrder[0] ?? -Infinity;
     expect(readOrder).toBeLessThan(deleteOrder);
+  });
+});
+
+describe("mergeAffairs : la déduplication des étapes garde la version publiée (L13)", () => {
+  const date = new Date("2024-03-01T00:00:00Z");
+  const base = { date, type: "JUGEMENT", title: "Jugement", identityKey: "idk_1" };
+
+  it("remplace un doublon brouillon de l'affaire conservée par l'étape publiée absorbée", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([{ id: "k1", status: "DRAFT", ...base }])
+      .mockResolvedValueOnce([{ id: "e1", status: "PUBLISHED", ...base }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).toHaveBeenCalledWith({ where: { id: "k1" } });
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "e1" },
+      data: { affairId: "keep" },
+    });
+    expect(result.eventsMoved).toBe(1);
+  });
+
+  it("garde l'étape publiée de l'affaire conservée face à un doublon brouillon", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([{ id: "k1", status: "PUBLISHED", ...base }])
+      .mockResolvedValueOnce([{ id: "e1", status: "DRAFT", ...base }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+    expect(result.eventsMoved).toBe(0);
   });
 });
