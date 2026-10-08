@@ -99,6 +99,12 @@ connue, `withdrewReason`. Un retrait de candidature n'efface pas la candidature 
 source ou de statut, nous corrigeons la source ou le statut sur pièce, nous n'inventons pas la pièce
 manquante.
 
+**Retour de `DECLARE` à `PRESSENTI` (arbitré le 2026-10-08).** Une candidature qu'une correction de
+statut fait repasser en `PRESSENTI` garde ses mesures déjà publiées : les retirer du site après plusieurs
+semaines de présence serait plus risqué que de les laisser en ligne, d'autant qu'il s'agit des
+propositions de la personne elle-même. Aucune nouvelle mesure ne lui est rattachée tant qu'elle n'est pas redevenue
+`DECLARE`, la garde du hub l'impose déjà à la création.
+
 ---
 
 ## 2. Quand une mesure peut entrer
