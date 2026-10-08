@@ -5,7 +5,6 @@
  * YEAR impose le 1er janvier. La date n'est jamais affichée sans passer par ce formateur.
  */
 import type { AffairEventType, DatePrecision, EventOccurrence } from "@/generated/prisma";
-import { parisDay } from "@/lib/affairs/monitoring/cadence";
 
 const MONTHS = [
   "janvier",
@@ -21,6 +20,19 @@ const MONTHS = [
   "novembre",
   "décembre",
 ] as const;
+
+// Own copy rather than an import of the private follow-up module (affair-monitoring-private guard).
+const PARIS_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Paris",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Calendar day in Paris, at 00:00 UTC. */
+export function parisDay(now: Date): Date {
+  return new Date(`${PARIS_DAY.format(now)}T00:00:00Z`);
+}
 
 const INPUT_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 

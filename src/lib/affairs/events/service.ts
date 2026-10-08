@@ -13,8 +13,7 @@ import type {
   Prisma,
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
-import { parisDay } from "@/lib/affairs/monitoring/cadence";
-import { normalizeEventDate } from "./dates";
+import { normalizeEventDate, parisDay } from "./dates";
 import { checkEventPublishable, checkEventShape } from "./guard";
 
 export type EventDraftInput = {
