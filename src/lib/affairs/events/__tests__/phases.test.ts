@@ -124,4 +124,39 @@ describe("buildPhaseTrail", () => {
       { phase: "JUGEMENT", current: false },
     ]);
   });
+
+  it("statut en retard sur les étapes : pas de retour en première instance (M1)", () => {
+    expect(buildPhaseTrail(held("JUGEMENT", "APPEL"), "CONDAMNATION_PREMIERE_INSTANCE")).toEqual([
+      { phase: "JUGEMENT", current: false },
+      { phase: "APPEL", current: false },
+    ]);
+  });
+
+  it("procès ouvert, statut resté à la mise en examen : pas de retour à l'instruction (M1)", () => {
+    expect(buildPhaseTrail(held("MISE_EN_EXAMEN", "PROCES"), "MISE_EN_EXAMEN")).toEqual([
+      { phase: "INSTRUCTION", current: false },
+      { phase: "JUGEMENT", current: false },
+    ]);
+  });
+
+  it("procès en cours derrière un appel déjà saisi : aucune phase courante (M1)", () => {
+    expect(buildPhaseTrail(held("JUGEMENT", "APPEL"), "PROCES_EN_COURS")).toEqual([
+      { phase: "JUGEMENT", current: false },
+      { phase: "APPEL", current: false },
+    ]);
+  });
+
+  it("cassation avec renvoi sans nouvelle étape d'appel : la phase d'appel revient", () => {
+    expect(
+      buildPhaseTrail(
+        held("JUGEMENT", "APPEL", "ARRET_APPEL", "POURVOI_CASSATION", "ARRET_CASSATION"),
+        "APPEL_EN_COURS"
+      )
+    ).toEqual([
+      { phase: "JUGEMENT", current: false },
+      { phase: "APPEL", current: false },
+      { phase: "CASSATION", current: false },
+      { phase: "APPEL", current: true },
+    ]);
+  });
 });

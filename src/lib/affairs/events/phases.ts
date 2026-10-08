@@ -1,6 +1,7 @@
 /**
  * Barre de phases d'une affaire : seules les phases traversées par une étape tenue, dans leur
- * ordre d'apparition, plus la phase courante dérivée du statut si elle manque.
+ * ordre d'apparition, plus la phase courante dérivée du statut si elle manque (ou le retour en
+ * appel après une cassation).
  */
 import type { AffairEventType, AffairStatus, EventOccurrence } from "@/generated/prisma";
 
@@ -86,10 +87,21 @@ export function buildPhaseTrail(
     if (phases[phases.length - 1] !== own) phases.push(own);
   }
 
+  // The status phase is added only when no step reached it: a status lagging behind the steps
+  // (appeal entered, status still at first instance) must not draw a return to an earlier phase.
+  // Exception: after a cassation, an appeal status means the case went back to an appeal court.
   const statusPhase = STATUS_PHASE[status];
-  if (statusPhase !== null && phases[phases.length - 1] !== statusPhase) phases.push(statusPhase);
+  const lastPhase = phases[phases.length - 1];
+  if (
+    statusPhase !== null &&
+    (!phases.includes(statusPhase) || (lastPhase === "CASSATION" && statusPhase === "APPEL"))
+  ) {
+    phases.push(statusPhase);
+  }
   if (phases.length < 2) return [];
 
+  // Only the last phase can be current, and only when the status confirms it. A lagging status
+  // leaves no phase marked current rather than pointing back at a phase already left.
   const last = phases.length - 1;
   return phases.map((phase, i) => ({ phase, current: i === last && phase === statusPhase }));
 }
