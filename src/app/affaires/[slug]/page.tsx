@@ -34,7 +34,7 @@ import {
 import { LinkedAffairBanner } from "@/components/affairs/LinkedAffairBanner";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
 import { StatusTooltip } from "@/components/affairs/StatusTooltip";
-import { AffairTimeline } from "@/components/affairs/AffairTimeline";
+import { AffairChronology } from "@/components/affairs/AffairChronology";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { AffairStickyBar } from "@/components/affairs/AffairStickyBar";
 import { AffairContextBand } from "@/components/affairs/AffairContextBand";
@@ -627,7 +627,7 @@ export default async function AffairDetailPage({ params }: PageProps) {
               <h2 className="text-lg font-semibold">Chronologie</h2>
             </CardHeader>
             <CardContent>
-              <AffairTimeline events={affair.events} />
+              <AffairChronology events={affair.events} status={affair.status} today={new Date()} />
             </CardContent>
           </Card>
         )}
