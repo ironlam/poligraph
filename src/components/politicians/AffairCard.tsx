@@ -12,7 +12,7 @@ import { isAccusedInvolvement } from "@/config/certainty";
 import type { AffairStatus, AffairCategory, Involvement } from "@/types";
 import { ensureContrast } from "@/lib/contrast";
 import { SentenceDetails } from "@/components/affairs/SentenceDetails";
-import { AffairTimeline } from "@/components/affairs/AffairTimeline";
+import { ChronologySummary } from "@/components/affairs/ChronologySummary";
 import { AffairStatusNotice } from "@/components/affairs/AffairStatusNotice";
 import { CiteAnchor } from "@/components/ui/CiteAnchor";
 import { citeAnchorId } from "@/lib/cite";
@@ -30,6 +30,10 @@ function present(value: unknown): value is string {
 
 export function AffairCard({ affair, variant }: AffairCardProps) {
   const accused = isAccusedInvolvement(affair.involvement as Involvement);
+  const today = new Date();
+  const hasChronology =
+    Array.isArray(affair.events) &&
+    affair.events.some((e: { status?: string }) => e.status === "PUBLISHED");
   const borderClass =
     variant === "critique"
       ? "border-red-200 bg-red-50/30 dark:border-red-900/50 dark:bg-red-950/20"
@@ -167,10 +171,17 @@ export function AffairCard({ affair, variant }: AffairCardProps) {
         <SentenceDetails affair={affair} involvement={affair.involvement} />
       </div>
 
-      {/* Timeline */}
-      {affair.events && affair.events.length > 0 && (
-        <div className="mb-3 border-t pt-3">
-          <AffairTimeline events={affair.events} />
+      {/* Résumé de la chronologie */}
+      {hasChronology && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 border-t pt-3">
+          <ChronologySummary events={affair.events} today={today} />
+          <Link
+            href={`/affaires/${affair.slug || affair.id}`}
+            className="inline-flex min-h-11 items-center text-sm text-primary underline-offset-2 hover:underline"
+            prefetch={false}
+          >
+            Voir la chronologie
+          </Link>
         </div>
       )}
 
