@@ -627,7 +627,12 @@ export default async function AffairDetailPage({ params }: PageProps) {
               <h2 className="text-lg font-semibold">Chronologie</h2>
             </CardHeader>
             <CardContent>
-              <AffairChronology events={affair.events} status={affair.status} today={new Date()} />
+              <AffairChronology
+                events={affair.events}
+                status={affair.status}
+                today={new Date()}
+                involvement={affair.involvement}
+              />
             </CardContent>
           </Card>
         )}

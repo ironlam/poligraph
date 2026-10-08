@@ -49,6 +49,7 @@ describe("AffairChronology", () => {
         events={[draft, noStatus as PublicAffairEvent, published]}
         status="ENQUETE_PRELIMINAIRE"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(screen.queryByText("Brouillon interne")).toBeNull();
@@ -62,6 +63,7 @@ describe("AffairChronology", () => {
         events={[ev({ status: "DRAFT" })]}
         status="ENQUETE_PRELIMINAIRE"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(container).toBeEmptyDOMElement();
@@ -82,6 +84,7 @@ describe("AffairChronology", () => {
         ]}
         status="ENQUETE_PRELIMINAIRE"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     const markers = Array.from(container.querySelectorAll("[data-marker]"));
@@ -122,6 +125,7 @@ describe("AffairChronology", () => {
         ]}
         status="PROCES_EN_COURS"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(screen.getByText(/Prévu le 1er juin 2026, non confirmé à ce jour/)).toBeInTheDocument();
@@ -150,6 +154,7 @@ describe("AffairChronology", () => {
         ]}
         status="PROCES_EN_COURS"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     const box = screen.getByRole("region", { name: "Prochaine étape annoncée" });
@@ -173,6 +178,7 @@ describe("AffairChronology", () => {
         ]}
         status="RENVOI_TRIBUNAL"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     const bar = screen.getByRole("list", { name: "Phases de la procédure" });
@@ -191,6 +197,7 @@ describe("AffairChronology", () => {
         ]}
         status="PROCES_EN_COURS"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     const bar = screen.getByRole("list", { name: "Phases de la procédure" });
@@ -204,6 +211,7 @@ describe("AffairChronology", () => {
         events={[ev({ type: "PERQUISITION" })]}
         status="ENQUETE_PRELIMINAIRE"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(screen.queryByRole("list", { name: "Phases de la procédure" })).toBeNull();
@@ -212,7 +220,12 @@ describe("AffairChronology", () => {
   it("au delà de 8 étapes, montre la première et les 4 dernières puis déplie au clic", async () => {
     const user = userEvent.setup();
     const { container } = render(
-      <AffairChronology events={dayEvents(10)} status="ENQUETE_PRELIMINAIRE" today={TODAY} />
+      <AffairChronology
+        events={dayEvents(10)}
+        status="ENQUETE_PRELIMINAIRE"
+        today={TODAY}
+        involvement="DIRECT"
+      />
     );
     expect(renderedSteps(container)).toHaveLength(5);
     expect(screen.getByText("Acte 1")).toBeInTheDocument();
@@ -232,7 +245,12 @@ describe("AffairChronology", () => {
 
   it("jusqu'à 8 étapes, tout est affiché sans bouton", () => {
     const { container } = render(
-      <AffairChronology events={dayEvents(8)} status="ENQUETE_PRELIMINAIRE" today={TODAY} />
+      <AffairChronology
+        events={dayEvents(8)}
+        status="ENQUETE_PRELIMINAIRE"
+        today={TODAY}
+        involvement="DIRECT"
+      />
     );
     expect(renderedSteps(container)).toHaveLength(8);
     expect(screen.queryByRole("button")).toBeNull();
@@ -254,6 +272,7 @@ describe("AffairChronology", () => {
         ]}
         status="MISE_EN_EXAMEN"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(screen.getByText("Cassation avec renvoi")).toBeInTheDocument();
@@ -272,6 +291,7 @@ describe("AffairChronology", () => {
         events={[ev({ sourceUrl: "javascript:alert(1)", sourceKind: "PRESS" })]}
         status="ENQUETE_PRELIMINAIRE"
         today={TODAY}
+        involvement="DIRECT"
       />
     );
     expect(screen.queryByRole("link")).toBeNull();
@@ -298,10 +318,43 @@ describe("AffairChronology", () => {
       ev({ type: "JUGEMENT", outcome: "RELAXE", incidental: true }),
     ];
     const { container } = render(
-      <AffairChronology events={events} status="PROCES_EN_COURS" today={TODAY} />
+      <AffairChronology
+        events={events}
+        status="PROCES_EN_COURS"
+        today={TODAY}
+        involvement="DIRECT"
+      />
     );
     expect(container.textContent).not.toMatch(/[—–]/);
     await user.click(screen.getByRole("button", { name: /Afficher les \d+ étapes/ }));
     expect(container.textContent).not.toMatch(/[—–]/);
   });
+
+  it("affiche l'issue quand la personne est mise en cause (M2)", () => {
+    render(
+      <AffairChronology
+        events={[ev({ type: "JUGEMENT", outcome: "CONDAMNATION" })]}
+        status="CONDAMNATION_PREMIERE_INSTANCE"
+        today={TODAY}
+        involvement="DIRECT"
+      />
+    );
+    expect(screen.getByText("Condamnation")).toBeInTheDocument();
+  });
+
+  it.each(["INDIRECT", "VICTIM", "PLAINTIFF", "MENTIONED_ONLY"] as const)(
+    "masque l'issue quand l'implication est %s (M2)",
+    (involvement) => {
+      render(
+        <AffairChronology
+          events={[ev({ type: "JUGEMENT", outcome: "CONDAMNATION", title: "Jugement rendu" })]}
+          status="CONDAMNATION_PREMIERE_INSTANCE"
+          today={TODAY}
+          involvement={involvement}
+        />
+      );
+      expect(screen.getByText("Jugement rendu")).toBeInTheDocument();
+      expect(screen.queryByText("Condamnation")).toBeNull();
+    }
+  );
 });

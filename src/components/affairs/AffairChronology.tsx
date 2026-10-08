@@ -1,10 +1,11 @@
 import { ExternalLink } from "lucide-react";
-import type { AffairEvent, AffairStatus } from "@/generated/prisma";
+import type { AffairEvent, AffairStatus, Involvement } from "@/generated/prisma";
 import {
   AFFAIR_EVENT_TYPE_LABELS,
   EVENT_OUTCOME_LABELS,
   EVENT_SOURCE_KIND_LABELS,
 } from "@/config/labels";
+import { isAccusedInvolvement } from "@/config/certainty";
 import { describeEventDate, formatEventDate, isUpcoming } from "@/lib/affairs/events/dates";
 import { buildPhaseTrail, PHASE_LABELS } from "@/lib/affairs/events/phases";
 import { sortEvents } from "@/lib/affairs/events/order";
@@ -33,6 +34,8 @@ interface AffairChronologyProps {
   events: PublicAffairEvent[];
   status: AffairStatus;
   today: Date;
+  /** Hors implication directe, l'issue d'une décision ne concerne pas la personne : masquée. */
+  involvement: Involvement;
 }
 
 type Marker = "held" | "scheduled" | "revelation";
@@ -115,7 +118,15 @@ function NextStep({ event }: { event: PublicAffairEvent }) {
   );
 }
 
-function StepItem({ event, today }: { event: PublicAffairEvent; today: Date }) {
+function StepItem({
+  event,
+  today,
+  showOutcome,
+}: {
+  event: PublicAffairEvent;
+  today: Date;
+  showOutcome: boolean;
+}) {
   const marker = markerOf(event);
   const { text: dateText, unconfirmed } = describeEventDate(event, today);
   return (
@@ -139,7 +150,7 @@ function StepItem({ event, today }: { event: PublicAffairEvent; today: Date }) {
             Étape annoncée
           </span>
         )}
-        {event.outcome && (
+        {showOutcome && event.outcome && (
           <span className="rounded-md border bg-muted px-2 py-0.5 text-xs font-semibold">
             {EVENT_OUTCOME_LABELS[event.outcome]}
           </span>
@@ -163,12 +174,13 @@ function StepItem({ event, today }: { event: PublicAffairEvent; today: Date }) {
  * Les étapes non publiées sont écartées ici aussi (un instantané antérieur au filtre des loaders
  * peut encore en porter).
  */
-export function AffairChronology({ events, status, today }: AffairChronologyProps) {
+export function AffairChronology({ events, status, today, involvement }: AffairChronologyProps) {
   const published = sortEvents(events.filter((e) => e.status === "PUBLISHED"));
   if (published.length === 0) return null;
 
   const trail = buildPhaseTrail(published, status);
   const next = published.find((e) => isUpcoming(e, today));
+  const showOutcome = isAccusedInvolvement(involvement);
 
   return (
     <div className="space-y-5">
@@ -177,7 +189,7 @@ export function AffairChronology({ events, status, today }: AffairChronologyProp
       <ChronologyFold
         className="ml-2 space-y-5 border-l-2 border-border"
         items={published.map((e) => (
-          <StepItem key={e.id} event={e} today={today} />
+          <StepItem key={e.id} event={e} today={today} showOutcome={showOutcome} />
         ))}
       />
     </div>
