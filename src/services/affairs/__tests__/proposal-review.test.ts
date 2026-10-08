@@ -17,14 +17,10 @@ const h = vi.hoisted(() => ({
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
-  trackStatusChange: vi.fn(),
   verifyProposalOfficialEvidence: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ db: h.db }));
-vi.mock("@/services/affairs/status-tracking", () => ({
-  trackStatusChange: h.trackStatusChange,
-}));
 vi.mock("@/lib/affairs/monitoring/reconcile", () => ({
   reconcileAffairMonitoring: vi.fn(),
 }));
@@ -150,7 +146,7 @@ beforeEach(() => {
   db.affair.update.mockResolvedValue({});
   db.affairEvent.findUnique.mockResolvedValue(null);
   db.affairEvent.findMany.mockResolvedValue([]);
-  db.affairEvent.create.mockResolvedValue({ id: "event_1" });
+  db.affairEvent.create.mockResolvedValue({ id: "event_1", status: "PUBLISHED" });
   db.source.upsert.mockResolvedValue({ id: "source_1" });
   db.pressArticleAffair.upsert.mockResolvedValue({ id: "link_1", role: "UPDATE" });
   db.pressArticleAffair.update.mockResolvedValue({});
@@ -163,7 +159,6 @@ beforeEach(() => {
   db.auditLog.create.mockResolvedValue({});
   db.$queryRaw.mockResolvedValue([{ id: "aff_1" }]);
   db.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(db));
-  h.trackStatusChange.mockResolvedValue(undefined);
   h.verifyProposalOfficialEvidence.mockResolvedValue(null);
 });
 
@@ -324,26 +319,14 @@ describe("acceptProposal", () => {
     expect(db.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it("alimente la chronologie quand le statut change", async () => {
+  it("n'écrit aucune étape de chronologie quand le statut change", async () => {
     db.affairUpdateProposal.findUnique.mockResolvedValue(pendingProposal());
-
-    await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
-
-    expect(h.trackStatusChange).toHaveBeenCalledWith(
-      "aff_1",
-      "APPEL_EN_COURS",
-      "CONDAMNATION_DEFINITIVE",
-      expect.objectContaining({ type: "JUDILIBRE" })
-    );
-  });
-
-  it("un échec de chronologie ne fait pas échouer l'acceptation", async () => {
-    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingProposal());
-    h.trackStatusChange.mockRejectedValue(new Error("timeline down"));
 
     const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
 
     expect(result.ok).toBe(true);
+    expect(db.affair.update).toHaveBeenCalled();
+    expect(db.affairEvent.create).not.toHaveBeenCalled();
   });
 
   it("passe en CONFLICT sans rien écrire quand la valeur en base a bougé", async () => {
@@ -461,6 +444,10 @@ describe("acceptProposal", () => {
           type: "REVELATION",
           title: AFFAIR_EVOLUTION_REVELATION_TITLE,
           description: null,
+          datePrecision: "DAY",
+          sourceKind: "PRESS",
+          status: "PUBLISHED",
+          publishedAt: expect.any(Date),
         }),
       })
     );
@@ -481,7 +468,6 @@ describe("acceptProposal", () => {
       where: { id: "decision_1", affairId: null },
       data: { affairId: "aff_1" },
     });
-    expect(h.trackStatusChange).not.toHaveBeenCalled();
   });
 
   it("passe en conflit si le même événement est apparu après le dépôt", async () => {

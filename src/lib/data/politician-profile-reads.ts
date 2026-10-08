@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
 import {
   computePoliticianVotingStats,
   buildPoliticianParliamentaryCard,
@@ -149,6 +150,7 @@ export async function readPoliticianDossier(where: PoliticianWhere) {
             },
           },
           events: {
+            where: PUBLIC_EVENT_WHERE,
             orderBy: { date: "asc" },
           },
           linkedAffair: {

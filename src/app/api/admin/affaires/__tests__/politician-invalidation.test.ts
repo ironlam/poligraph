@@ -55,7 +55,6 @@ vi.mock("@/lib/security", () => ({
       fn(req, ctx, await req.json()),
   getRequestMeta: () => ({ ip: "127.0.0.1", userAgent: "test" }),
 }));
-vi.mock("@/services/affairs/status-tracking", () => ({ trackStatusChange: vi.fn() }));
 vi.mock("@/lib/affairs/publish-guard", () => ({
   assertPublishable: vi.fn(),
   PublishGuardError: class PublishGuardError extends Error {},

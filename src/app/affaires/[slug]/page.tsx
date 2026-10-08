@@ -4,6 +4,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -127,6 +128,7 @@ const affairInclude = {
     orderBy: { publishedAt: "desc" as const },
   },
   events: {
+    where: PUBLIC_EVENT_WHERE,
     orderBy: { date: "asc" as const },
   },
   linkedAffair: {

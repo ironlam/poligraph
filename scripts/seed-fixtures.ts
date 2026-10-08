@@ -638,10 +638,14 @@ async function seed() {
       data: {
         affairId: affair.id,
         date: a.startDate,
+        datePrecision: "DAY",
         type: "REVELATION",
         title: "Révélation médiatique",
         sourceUrl: a.sources[0]!.url,
         sourceTitle: a.sources[0]!.title,
+        sourceKind: "PRESS",
+        status: "PUBLISHED",
+        publishedAt: new Date(),
       },
     });
   }

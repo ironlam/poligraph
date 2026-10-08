@@ -13,7 +13,6 @@ vi.mock("@/lib/politicians/profile-snapshot/moderation", () => ({
   refreshProfilesForModeration: vi.fn(),
 }));
 vi.mock("@/lib/utils", () => ({ generateAffairSlug: vi.fn() }));
-vi.mock("@/services/affairs/status-tracking", () => ({ trackStatusChange: vi.fn() }));
 vi.mock("@/lib/affairs/publish-guard", () => ({
   assertPublishable: vi.fn(),
   PublishGuardError: class PublishGuardError extends Error {},
