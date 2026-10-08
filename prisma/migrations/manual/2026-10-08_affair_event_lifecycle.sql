@@ -57,7 +57,7 @@ ALTER TABLE "AffairEvent" ADD CONSTRAINT "AffairEvent_retracted_check"
   CHECK ("status" <> 'RETRACTED' OR ("retractionReason" IS NOT NULL AND "retractedAt" IS NOT NULL));
 
 ALTER TABLE "AffairEvent" ADD CONSTRAINT "AffairEvent_published_check"
-  CHECK ("status" = 'DRAFT' OR ("publishedAt" IS NOT NULL AND "sourceUrl" IS NOT NULL AND "sourceKind" IS NOT NULL));
+  CHECK ("status" <> 'PUBLISHED' OR ("publishedAt" IS NOT NULL AND "sourceUrl" IS NOT NULL AND "sourceKind" IS NOT NULL));
 
 ALTER TABLE "AffairEvent" ADD CONSTRAINT "AffairEvent_outcome_check"
   CHECK ("outcome" IS NULL OR ("occurrence" = 'HELD' AND "type" IN ('JUGEMENT', 'ARRET_APPEL', 'ARRET_CASSATION')));
