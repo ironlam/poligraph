@@ -117,6 +117,19 @@ describe("AffairEventsCard", () => {
     );
   });
 
+  it("« Confirmer la tenue » attend la date annoncée", () => {
+    renderCard([
+      event({
+        id: "future",
+        status: "PUBLISHED",
+        type: "JUGEMENT",
+        occurrence: "SCHEDULED",
+        date: "2999-01-15T00:00:00.000Z",
+      }),
+    ]);
+    expect(screen.queryByRole("button", { name: "Confirmer la tenue…" })).toBeNull();
+  });
+
   it("« Confirmer la tenue » n'apparaît que sur une étape publiée et annoncée", async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { eventId: "ev_1" }));
     renderCard([

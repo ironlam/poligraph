@@ -19,7 +19,7 @@ import {
   EVENT_SOURCE_KIND_LABELS,
 } from "@/config/labels";
 import { ALLOWED_OUTCOMES, checkEventPublishable } from "@/lib/affairs/events/guard";
-import { formatEventDate } from "@/lib/affairs/events/dates";
+import { formatEventDate, parisDay } from "@/lib/affairs/events/dates";
 import {
   AffairEventForm,
   CORROBORATION_HINT,
@@ -109,6 +109,8 @@ function EventRow({
   const gaps = event.status === "DRAFT" ? guardGaps(event) : [];
   const decision = isDecision(event.type);
   const confirmCorroboration = needsCorroboration(event.type, confirm.outcome, confirm.sourceKind);
+  // The server refuses a confirmation before the announced date: no button until then.
+  const dateReached = new Date(event.date).getTime() <= parisDay(new Date()).getTime();
   const toggle = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
 
   async function act(method: string, body?: Record<string, unknown>) {
@@ -116,107 +118,117 @@ function EventRow({
   }
 
   return (
-    <li className="space-y-2 py-3">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-sm text-muted-foreground">
-          {formatEventDate({
-            date: new Date(event.date),
-            datePrecision: event.datePrecision,
-            dateEnd: event.dateEnd ? new Date(event.dateEnd) : null,
-          })}
-        </span>
-        <span className="text-sm font-medium">{AFFAIR_EVENT_TYPE_LABELS[event.type]}</span>
-        <Badge variant={badge.variant}>{badge.label}</Badge>
-        {event.occurrence === "SCHEDULED" && <Badge variant="outline">Annoncée</Badge>}
-        {event.outcome && <Badge variant="outline">{EVENT_OUTCOME_LABELS[event.outcome]}</Badge>}
-        {event.incidental && (
-          <span className="text-xs text-muted-foreground">recours sur un acte de procédure</span>
-        )}
-      </div>
-      <p className="text-sm">{event.title}</p>
-      {event.sourceUrl ? (
-        <p className="text-xs text-muted-foreground">
-          <SourceLink url={event.sourceUrl}>{event.sourceTitle || event.sourceUrl}</SourceLink>
-          {event.sourceKind && ` (${EVENT_SOURCE_KIND_LABELS[event.sourceKind]})`}
-          {event.corroborationUrl && (
+    <li className="space-y-2 py-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-sm text-muted-foreground">
+              {formatEventDate({
+                date: new Date(event.date),
+                datePrecision: event.datePrecision,
+                dateEnd: event.dateEnd ? new Date(event.dateEnd) : null,
+              })}
+            </span>
+            <span className="text-sm font-medium">{AFFAIR_EVENT_TYPE_LABELS[event.type]}</span>
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+            {event.occurrence === "SCHEDULED" && <Badge variant="outline">Annoncée</Badge>}
+            {event.outcome && (
+              <Badge variant="outline">{EVENT_OUTCOME_LABELS[event.outcome]}</Badge>
+            )}
+            {event.incidental && (
+              <span className="text-xs text-muted-foreground">
+                recours sur un acte de procédure
+              </span>
+            )}
+          </div>
+          <p className="text-sm">{event.title}</p>
+          {event.sourceUrl ? (
+            <p className="text-xs text-muted-foreground">
+              <SourceLink url={event.sourceUrl}>{event.sourceTitle || event.sourceUrl}</SourceLink>
+              {event.sourceKind && ` (${EVENT_SOURCE_KIND_LABELS[event.sourceKind]})`}
+              {event.corroborationUrl && (
+                <>
+                  {", seconde source : "}
+                  <SourceLink url={event.corroborationUrl}>{event.corroborationUrl}</SourceLink>
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Source non renseignée</p>
+          )}
+          {event.status === "RETRACTED" && event.retractionReason && (
+            <p className="text-xs text-muted-foreground">
+              Motif du retrait : {event.retractionReason}
+            </p>
+          )}
+          {gaps.length > 0 && (
+            <div className="text-sm text-amber-800 dark:text-amber-300">
+              <p>À compléter avant publication :</p>
+              <ul className="list-disc pl-5">
+                {gaps.map((g) => (
+                  <li key={g}>{g}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {event.status === "DRAFT" && (
             <>
-              {", seconde source : "}
-              <SourceLink url={event.corroborationUrl}>{event.corroborationUrl}</SourceLink>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                aria-expanded={panel === "edit"}
+                onClick={() => toggle("edit")}
+              >
+                Modifier
+              </Button>
+              <Button
+                type="button"
+                className="min-h-11"
+                disabled={pending}
+                onClick={() => act("POST", { action: "PUBLISH" })}
+              >
+                Publier
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="min-h-11"
+                disabled={pending}
+                onClick={() => {
+                  if (window.confirm("Supprimer ce brouillon d'étape ?")) void act("DELETE");
+                }}
+              >
+                Supprimer
+              </Button>
             </>
           )}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Source non renseignée</p>
-      )}
-      {event.status === "RETRACTED" && event.retractionReason && (
-        <p className="text-xs text-muted-foreground">Motif du retrait : {event.retractionReason}</p>
-      )}
-      {gaps.length > 0 && (
-        <div className="text-sm text-amber-800 dark:text-amber-300">
-          <p>À compléter avant publication :</p>
-          <ul className="list-disc pl-5">
-            {gaps.map((g) => (
-              <li key={g}>{g}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {event.status === "DRAFT" && (
-          <>
+          {event.status === "PUBLISHED" && (
             <Button
               type="button"
               variant="outline"
               className="min-h-11"
-              aria-expanded={panel === "edit"}
-              onClick={() => toggle("edit")}
+              aria-expanded={panel === "retract"}
+              onClick={() => toggle("retract")}
             >
-              Modifier
+              Retirer…
             </Button>
+          )}
+          {event.status === "PUBLISHED" && event.occurrence === "SCHEDULED" && dateReached && (
             <Button
               type="button"
+              variant="outline"
               className="min-h-11"
-              disabled={pending}
-              onClick={() => act("POST", { action: "PUBLISH" })}
+              aria-expanded={panel === "confirm"}
+              onClick={() => toggle("confirm")}
             >
-              Publier
+              Confirmer la tenue…
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="min-h-11"
-              disabled={pending}
-              onClick={() => {
-                if (window.confirm("Supprimer ce brouillon d'étape ?")) void act("DELETE");
-              }}
-            >
-              Supprimer
-            </Button>
-          </>
-        )}
-        {event.status === "PUBLISHED" && (
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            aria-expanded={panel === "retract"}
-            onClick={() => toggle("retract")}
-          >
-            Retirer…
-          </Button>
-        )}
-        {event.status === "PUBLISHED" && event.occurrence === "SCHEDULED" && (
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            aria-expanded={panel === "confirm"}
-            onClick={() => toggle("confirm")}
-          >
-            Confirmer la tenue…
-          </Button>
-        )}
+          )}
+        </div>
       </div>
 
       {panel === "edit" && (
