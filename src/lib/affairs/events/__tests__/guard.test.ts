@@ -234,8 +234,8 @@ describe("checkEventPublishable : seconde source du même média (L4)", () => {
   });
 
   it.each([
-    ["https://www.justice.gouv.fr/a", "https://www.interieur.gouv.fr/b"],
-    ["https://www.bbc.co.uk/a", "https://www.theguardian.co.uk/b"],
+    ["https://www.bbc.co.uk/a", "https://www.theguardian.com/b"],
+    ["https://www.bbc.co.uk/a", "https://www.legifrance.gouv.fr/b"],
   ])("accepte %s puis %s (suffixe public à deux niveaux)", (sourceUrl, corroborationUrl) => {
     expect(checkEventPublishable({ ...pressConviction, sourceUrl, corroborationUrl })).toEqual([]);
   });
@@ -262,5 +262,70 @@ describe("checkEventPublishable : tirets longs hors du titre (L6)", () => {
     const errors = checkEventPublishable({ ...valid, [f]: "Tribunal — Paris" });
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/tiret long/);
+  });
+});
+
+describe("checkEventPublishable : listes blanches de sources", () => {
+  const held = {
+    type: "MISE_EN_EXAMEN" as const,
+    occurrence: "HELD" as const,
+    date: new Date("2024-05-13T00:00:00Z"),
+    datePrecision: "DAY" as const,
+    title: "Mise en examen",
+  };
+
+  it("refuse un article de presse déclaré comme source officielle", () => {
+    expect(
+      checkEventPublishable({
+        ...held,
+        sourceUrl: "https://www.lemonde.fr/a",
+        sourceKind: "OFFICIAL",
+      })
+    ).toContain(
+      "Cette adresse n'est pas celle d'une juridiction, d'une administration ou d'une assemblée : choisir « Presse »."
+    );
+  });
+
+  it.each([
+    "https://www.legifrance.gouv.fr/juri/id/X",
+    "https://www.cours-appel.justice.fr/paris/a",
+  ])("accepte %s comme source officielle", (sourceUrl) => {
+    expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "OFFICIAL" })).toEqual([]);
+  });
+
+  it.each([
+    "https://www.aol.com/news/a",
+    "https://fr.news.yahoo.com/a",
+    "https://monblog.example.fr/a",
+    "https://france3-regions.blog.francetvinfo.fr/a",
+  ])("refuse %s comme presse", (sourceUrl) => {
+    expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toContain(
+      "Ce média ne figure pas dans la liste des sources de presse admises."
+    );
+  });
+
+  it.each([
+    "https://www.franceinfo.fr/a",
+    "https://france3-regions.franceinfo.fr/a",
+    "https://la1ere.franceinfo.fr/a",
+    "https://www.sudouest.fr/a",
+  ])("accepte %s comme presse", (sourceUrl) => {
+    expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
+  });
+
+  it("refuse une seconde source hors liste", () => {
+    expect(
+      checkEventPublishable({
+        type: "JUGEMENT",
+        occurrence: "HELD",
+        outcome: "CONDAMNATION",
+        date: new Date("2024-05-13T00:00:00Z"),
+        datePrecision: "DAY",
+        title: "Jugement",
+        sourceUrl: "https://www.lemonde.fr/a",
+        sourceKind: "PRESS",
+        corroborationUrl: "https://www.aol.com/b",
+      })
+    ).toContain("La seconde source ne figure pas dans la liste des sources admises.");
   });
 });

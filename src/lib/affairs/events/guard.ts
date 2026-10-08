@@ -11,6 +11,7 @@ import type {
 } from "@/generated/prisma";
 import { LEGACY_EVENT_TYPES } from "@/config/labels";
 import { matchesHost } from "@/lib/url-host";
+import { isAcceptedPressUrl, isOfficialSourceUrl } from "./sources";
 import { isDateConsistent, parisDay } from "./dates";
 
 type DecisionType = "JUGEMENT" | "ARRET_APPEL" | "ARRET_CASSATION";
@@ -202,6 +203,17 @@ export function checkEventPublishable(e: EventGuardInput, today: Date = new Date
     errors.push("La nature de la source (officielle ou presse) est obligatoire.");
   } else if (e.type === "REVELATION" && e.sourceKind !== "PRESS") {
     errors.push("Une révélation se source par un article de presse.");
+  } else if (e.sourceUrl && !checkSourceUrl(e.sourceUrl, "La source")) {
+    // The declared kind must match the address: an article marked « officielle » would
+    // otherwise escape the two-source rule for a conviction.
+    if (e.sourceKind === "OFFICIAL" && !isOfficialSourceUrl(e.sourceUrl)) {
+      errors.push(
+        "Cette adresse n'est pas celle d'une juridiction, d'une administration ou d'une assemblée : choisir « Presse »."
+      );
+    }
+    if (e.sourceKind === "PRESS" && !isAcceptedPressUrl(e.sourceUrl)) {
+      errors.push("Ce média ne figure pas dans la liste des sources de presse admises.");
+    }
   }
 
   const title = e.title.trim();
@@ -232,6 +244,11 @@ export function checkEventPublishable(e: EventGuardInput, today: Date = new Date
       const corroborationError = checkSourceUrl(e.corroborationUrl, "La seconde source");
       if (corroborationError) {
         errors.push(corroborationError);
+      } else if (
+        !isAcceptedPressUrl(e.corroborationUrl) &&
+        !isOfficialSourceUrl(e.corroborationUrl)
+      ) {
+        errors.push("La seconde source ne figure pas dans la liste des sources admises.");
       } else if (
         e.sourceUrl &&
         URL.canParse(e.sourceUrl) &&
