@@ -99,6 +99,12 @@ connue, `withdrewReason`. Un retrait de candidature n'efface pas la candidature 
 source ou de statut, nous corrigeons la source ou le statut sur pièce, nous n'inventons pas la pièce
 manquante.
 
+**Retour de `DECLARE` à `PRESSENTI` (arbitré le 2026-10-08).** Une candidature qu'une correction de
+statut fait repasser en `PRESSENTI` garde ses mesures déjà publiées : les retirer du site après plusieurs
+semaines de présence serait plus risqué que de les laisser en ligne, d'autant qu'il s'agit des
+propositions de la personne elle-même. Aucune nouvelle mesure ne lui est rattachée tant qu'elle n'est pas redevenue
+`DECLARE`, la garde du hub l'impose déjà à la création.
+
 ---
 
 ## 2. Quand une mesure peut entrer
@@ -135,9 +141,14 @@ pas une source recevable.
 
 Un article de presse que la candidate republie sur son site officiel ou son compte est un contenu qu'elle
 assume. Ce que l'article met entre guillemets compte comme ses propres mots : la source est enregistrée en
-`PRIMARY`, avec la nature `INTERVIEW_PRESSE` ou `ARTICLE_PRESSE`, et le média d'origine est nommé. La
-reprise ne change pas la nature du reste de l'article. Une paraphrase du journaliste ne devient pas un
-engagement de la candidate, et une mesure qui ne repose que sur elle n'entre pas.
+`PRIMARY`, avec la nature `INTERVIEW_PRESSE` ou `ARTICLE_PRESSE`, et le média d'origine doit être
+identifiable depuis la page citée (titre ou mention de la reprise). La reprise ne change pas la nature du
+reste de l'article. Une paraphrase du journaliste ne devient pas un engagement de la candidate, et une
+mesure qui ne repose que sur elle n'entre pas.
+
+Une mesure déjà publiée qui ne repose que sur une paraphrase reste en ligne : elle est rattrapée dès
+qu'une source donne la proposition dans les mots de la candidate (interview, programme, discours), par
+une nouvelle révision qui remplace la source. Elle n'est pas dépubliée au seul motif de cette règle.
 
 ### Documents de parti et documents antérieurs à la campagne (arbitré le 2026-10-08)
 
