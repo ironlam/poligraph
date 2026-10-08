@@ -19,6 +19,10 @@ import { involvementRequiresNote } from "@/lib/affairs/involvement-note";
 import { AffairMergePanel } from "@/components/admin/AffairMergePanel";
 import type { BlockingDecision as BlockingDecisionPayload } from "@/lib/affairs/blocking-decisions";
 import { PublicationStatus } from "@/generated/prisma";
+import { AffairMonitoringCard } from "@/components/admin/AffairMonitoringCard";
+import { parisDay } from "@/lib/affairs/monitoring/cadence";
+import { dayKey } from "@/lib/affairs/monitoring/labels";
+import { getAffairMonitoringPanel } from "@/lib/affairs/monitoring/queries";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -159,7 +163,11 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const siblings = await getSiblingAffairs(affair.politician.id, affair.id);
+  const [siblings, monitoringPanel] = await Promise.all([
+    getSiblingAffairs(affair.politician.id, affair.id),
+    getAffairMonitoringPanel(affair.id),
+  ]);
+  const tomorrow = dayKey(new Date(parisDay(new Date()).getTime() + 24 * 60 * 60 * 1000));
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -287,6 +295,8 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
           </div>
         </CardContent>
       </Card>
+
+      <AffairMonitoringCard affairId={affair.id} panel={monitoringPanel} minDate={tomorrow} />
 
       <Card>
         <CardHeader>

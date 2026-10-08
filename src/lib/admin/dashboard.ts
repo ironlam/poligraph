@@ -6,6 +6,7 @@ import {
   countRecentPressRejections,
 } from "@/lib/admin/queue-counts";
 import { getPipelineHealthAll } from "@/lib/data/pipelines";
+import { countMonitoringToHandle } from "@/lib/affairs/monitoring/queries";
 import { findPotentialDuplicates } from "@/services/affairs/reconciliation";
 
 export async function getDashboardCounts() {
@@ -37,14 +38,21 @@ export async function getDashboardCounts() {
   const published = Number(c.published_politicians);
   const withoutPhoto = Number(c.without_photo);
   const withoutBio = Number(c.without_bio);
-  const [proposalsPending, proposalsConflict, reviewsPending, decisionsPending, articlesPending] =
-    await Promise.all([
-      db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
-      db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
-      db.moderationReview.count({ where: { appliedAt: null } }),
-      db.affairPoliticianDecision.count({ where: { judgment: "UNDECIDED", reviewedAt: null } }),
-      countArticlesToLink(),
-    ]);
+  const [
+    proposalsPending,
+    proposalsConflict,
+    reviewsPending,
+    decisionsPending,
+    articlesPending,
+    monitoringToHandle,
+  ] = await Promise.all([
+    db.affairUpdateProposal.count({ where: { status: "PENDING" } }),
+    db.affairUpdateProposal.count({ where: { status: "CONFLICT" } }),
+    db.moderationReview.count({ where: { appliedAt: null } }),
+    db.affairPoliticianDecision.count({ where: { judgment: "UNDECIDED", reviewedAt: null } }),
+    countArticlesToLink(),
+    countMonitoringToHandle(),
+  ]);
   return {
     totalPoliticians: Number(c.total_politicians),
     totalAffairs: Number(c.total_affairs),
@@ -62,6 +70,7 @@ export async function getDashboardCounts() {
       reviewsPending,
       decisionsPending,
       articlesPending,
+      monitoringToHandle,
     },
   };
 }

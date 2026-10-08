@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   invalidateAffectedPoliticians: vi.fn(),
   assertPublishable: vi.fn(),
   refreshProfilesForModeration: vi.fn(),
+  reconcileAffairMonitoring: vi.fn(),
   db: {
     $transaction: vi.fn(),
     affair: { findUnique: vi.fn(), update: vi.fn() },
@@ -39,6 +40,9 @@ vi.mock("@/lib/security", () => ({
   getRequestMeta: () => ({ ip: "127.0.0.1", userAgent: "test" }),
 }));
 vi.mock("@/services/affairs/status-tracking", () => ({ trackStatusChange: vi.fn() }));
+vi.mock("@/lib/affairs/monitoring/reconcile", () => ({
+  reconcileAffairMonitoring: h.reconcileAffairMonitoring,
+}));
 vi.mock("@/lib/affairs/publish-guard", () => ({
   assertPublishable: h.assertPublishable,
   // Mirrors the real signature: the route reads err.reasons to build its 422.
@@ -86,18 +90,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.affair.findUnique.mockResolvedValue(PUBLISHED_AFFAIR);
   db.auditLog.create.mockResolvedValue({});
-  db.$transaction.mockResolvedValue([{ id: "aff-1" }, {}]);
+  db.affair.update.mockResolvedValue({ id: "aff-1" });
+  // Interactive transaction: the callback runs with the mocked client as `tx`.
+  db.$transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) => fn(db));
 });
 
 describe("depublication commits before it invalidates", () => {
-  it("writes the row and the audit trail in one transaction", async () => {
+  it("writes the row, the audit trail and the monitoring in one transaction", async () => {
     await quickUpdatePATCH(req({ publicationStatus: "DRAFT" }), ctx());
 
-    // Prisma's array form builds both PrismaPromises eagerly and executes them
-    // at commit, so what matters is that both are handed to $transaction and
-    // that neither is awaited on its own.
     expect(db.$transaction).toHaveBeenCalledTimes(1);
-    expect(db.$transaction.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(db.$transaction.mock.calls[0]?.[0]).toBeTypeOf("function");
+    expect(h.reconcileAffairMonitoring).toHaveBeenCalledWith(db, "aff-1");
     expect(db.affair.update).toHaveBeenCalledWith({
       where: { id: "aff-1" },
       data: { publicationStatus: "DRAFT" },

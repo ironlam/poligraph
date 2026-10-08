@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 import type { Prisma } from "@/generated/prisma";
 import type { Involvement } from "@/types";
 import { isHumanReview } from "@/lib/affairs/review-provenance";
@@ -262,5 +263,6 @@ export async function assertPublishable(
         verifiedBy,
       },
     });
+    await reconcileAffairMonitoring(tx, affairId);
   });
 }

@@ -13,6 +13,9 @@ vi.mock("@/lib/db", () => {
     },
   };
 });
+vi.mock("@/lib/affairs/monitoring/reconcile", () => ({
+  reconcileAffairMonitoring: vi.fn(),
+}));
 
 import { db } from "@/lib/db";
 import {

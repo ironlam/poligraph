@@ -5,6 +5,7 @@ import { withValidation, getRequestMeta } from "@/lib/security";
 import { quickUpdateAffairSchema } from "@/lib/security/schemas/affair";
 import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
 import { trackStatusChange } from "@/services/affairs/status-tracking";
 import {
@@ -81,7 +82,11 @@ export const PATCH = withAdminAuth(
       // run after the field edits of the same request, so its audit row can only
       // be written once the guard has accepted.
       if (Object.keys(updateData).length > 0) {
-        updated = await db.affair.update({ where: { id }, data: updateData });
+        updated = await db.$transaction(async (tx) => {
+          const row = await tx.affair.update({ where: { id }, data: updateData });
+          await reconcileAffairMonitoring(tx, id!);
+          return row;
+        });
       }
 
       try {
@@ -118,9 +123,9 @@ export const PATCH = withAdminAuth(
       // together. A half-applied change would leave the affair altered with no
       // trace, and the invalidation below would advertise a state that the audit
       // log cannot account for (#572).
-      const [row] = await db.$transaction([
-        db.affair.update({ where: { id }, data: updateData }),
-        db.auditLog.create({
+      updated = await db.$transaction(async (tx) => {
+        const row = await tx.affair.update({ where: { id }, data: updateData });
+        await tx.auditLog.create({
           data: {
             action: "UPDATE",
             entityType: "Affair",
@@ -129,9 +134,10 @@ export const PATCH = withAdminAuth(
             ipAddress: meta.ip,
             userAgent: meta.userAgent,
           },
-        }),
-      ]);
-      updated = row;
+        });
+        await reconcileAffairMonitoring(tx, id!);
+        return row;
+      });
     }
 
     if (!updated) {

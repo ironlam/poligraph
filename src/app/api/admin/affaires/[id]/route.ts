@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { withAdminAuth } from "@/lib/api/with-admin-auth";
 import { invalidateEntity } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
+import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
 import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import { generateAffairSlug } from "@/lib/utils";
@@ -107,53 +108,57 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
   const mandateRelated = data.isRelatedToMandate ?? isInherentlyMandateCategory(data.category);
   const severity = computeSeverity(data.category, mandateRelated);
 
-  // Update affair
-  const affair = await db.affair.update({
-    where: { id },
-    data: {
-      politicianId: data.politicianId,
-      title: data.title,
-      ...(newSlug && { slug: newSlug }),
-      ...(oldSlugToSave && { oldSlugs: { push: oldSlugToSave } }),
-      description: data.description,
-      status: data.status,
-      category: data.category,
-      // Le PUT remplace la fiche : omettre le champ le laisserait à sa valeur
-      // précédente sans que le formulaire ait pu le changer. Défaut explicite.
-      jurisdictionOrder: data.jurisdictionOrder ?? "PENAL",
-      severity,
-      isRelatedToMandate: mandateRelated,
-      involvement: data.involvement || "DIRECT",
-      subjectLabel: data.subjectLabel?.trim() || null,
-      subjectKind: data.subjectKind || null,
-      subjectNote: data.subjectNote?.trim() || null,
-      involvementNote: data.involvementNote?.trim() || null,
-      // RGPD art. 10 : la transition vers PUBLISHED passe exclusivement par
-      // le guard (après application des champs et des sources). Les autres
-      // statuts (dépublication) restent des écritures directes.
-      ...(data.publicationStatus &&
-        data.publicationStatus !== PUBLISHED_STATUS && {
-          publicationStatus: data.publicationStatus,
-        }),
-      factsDate: data.factsDate ? new Date(data.factsDate) : null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      verdictDate: data.verdictDate ? new Date(data.verdictDate) : null,
-      sentence: data.sentence || null,
-      appeal: data.appeal || false,
-      // Detailed sentence
-      prisonMonths: data.prisonMonths ?? null,
-      prisonFirmMonths: data.prisonFirmMonths ?? null,
-      fineAmount: data.fineAmount ?? null,
-      ineligibilityMonths: data.ineligibilityMonths ?? null,
-      ineligibilityFirmMonths: data.ineligibilityFirmMonths ?? null,
-      communityService: data.communityService ?? null,
-      otherSentence: data.otherSentence || null,
-      // Jurisdiction
-      court: data.court || null,
-      caseNumber: data.caseNumber || null,
-      // Judicial identifiers
-      linkedAffairId: data.linkedAffairId ?? null,
-    },
+  // Update affair, and its monitoring in the same transaction
+  const affair = await db.$transaction(async (tx) => {
+    const updated = await tx.affair.update({
+      where: { id },
+      data: {
+        politicianId: data.politicianId,
+        title: data.title,
+        ...(newSlug && { slug: newSlug }),
+        ...(oldSlugToSave && { oldSlugs: { push: oldSlugToSave } }),
+        description: data.description,
+        status: data.status,
+        category: data.category,
+        // Le PUT remplace la fiche : omettre le champ le laisserait à sa valeur
+        // précédente sans que le formulaire ait pu le changer. Défaut explicite.
+        jurisdictionOrder: data.jurisdictionOrder ?? "PENAL",
+        severity,
+        isRelatedToMandate: mandateRelated,
+        involvement: data.involvement || "DIRECT",
+        subjectLabel: data.subjectLabel?.trim() || null,
+        subjectKind: data.subjectKind || null,
+        subjectNote: data.subjectNote?.trim() || null,
+        involvementNote: data.involvementNote?.trim() || null,
+        // RGPD art. 10 : la transition vers PUBLISHED passe exclusivement par
+        // le guard (après application des champs et des sources). Les autres
+        // statuts (dépublication) restent des écritures directes.
+        ...(data.publicationStatus &&
+          data.publicationStatus !== PUBLISHED_STATUS && {
+            publicationStatus: data.publicationStatus,
+          }),
+        factsDate: data.factsDate ? new Date(data.factsDate) : null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        verdictDate: data.verdictDate ? new Date(data.verdictDate) : null,
+        sentence: data.sentence || null,
+        appeal: data.appeal || false,
+        // Detailed sentence
+        prisonMonths: data.prisonMonths ?? null,
+        prisonFirmMonths: data.prisonFirmMonths ?? null,
+        fineAmount: data.fineAmount ?? null,
+        ineligibilityMonths: data.ineligibilityMonths ?? null,
+        ineligibilityFirmMonths: data.ineligibilityFirmMonths ?? null,
+        communityService: data.communityService ?? null,
+        otherSentence: data.otherSentence || null,
+        // Jurisdiction
+        court: data.court || null,
+        caseNumber: data.caseNumber || null,
+        // Judicial identifiers
+        linkedAffairId: data.linkedAffairId ?? null,
+      },
+    });
+    await reconcileAffairMonitoring(tx, id!);
+    return updated;
   });
 
   // Track status change for audit trail

@@ -22,6 +22,7 @@ import {
   type ParsedAffairProposal,
 } from "@/lib/security/schemas/affair-proposal";
 import { AffairNotFoundError, lockAffair } from "@/services/affairs/lock";
+import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 
 // Affaires v2, lot 1: human review of importer proposals.
 //
@@ -427,6 +428,8 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
           },
         },
       });
+
+      await reconcileAffairMonitoring(tx, affairId, now);
 
       return {
         kind: "applied" as const,

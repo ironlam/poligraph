@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   rejections: vi.fn(),
   failedSyncs: vi.fn(),
   duplicates: vi.fn(),
+  monitoring: vi.fn(),
   pipelines: vi.fn(),
   activity: vi.fn(),
   history: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/admin/queue-counts", () => ({
   countRecentPressRejections: h.rejections,
   countRecentFailedSyncs: h.failedSyncs,
 }));
+vi.mock("@/lib/affairs/monitoring/queries", () => ({ countMonitoringToHandle: h.monitoring }));
 vi.mock("@/lib/data/pipelines", () => ({ getPipelineHealthAll: h.pipelines }));
 vi.mock("@/services/affairs/reconciliation", () => ({ findPotentialDuplicates: h.duplicates }));
 
@@ -51,6 +53,7 @@ beforeEach(() => {
   h.articles.mockResolvedValue(0);
   h.rejections.mockResolvedValue(0);
   h.failedSyncs.mockResolvedValue(0);
+  h.monitoring.mockResolvedValue(3);
   h.duplicates.mockResolvedValue([{ id: "a" }, { id: "b" }]);
   h.pipelines.mockResolvedValue([]);
   h.activity.mockResolvedValue([]);
@@ -58,6 +61,11 @@ beforeEach(() => {
 });
 
 describe("dashboard data boundaries", () => {
+  it("expose le compteur des affaires à revoir", async () => {
+    const data = await getDashboardCounts();
+    expect(data.queues.monitoringToHandle).toBe(3);
+  });
+
   it("does not run duplicate detection on the critical dashboard path", async () => {
     await getDashboardCounts();
     expect(h.duplicates).not.toHaveBeenCalled();
