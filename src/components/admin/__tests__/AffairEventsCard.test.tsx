@@ -287,4 +287,37 @@ describe("AffairEventsCard", () => {
       expect.objectContaining({ method: "DELETE" })
     );
   });
+
+  it("signale une étape tenue datée dans le futur (H1)", () => {
+    renderCard([event({ date: "2099-01-15T00:00:00.000Z" })]);
+    expect(
+      screen.getByText(
+        "Une étape tenue ne peut pas être datée dans le futur : la marquer comme annoncée."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("préremplit la date en UTC, quel que soit le fuseau du navigateur (M4)", async () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      renderCard([event({ date: "2024-03-01T00:00:00.000Z" })]);
+      await userEvent.click(screen.getByRole("button", { name: "Modifier" }));
+      expect(screen.getByLabelText("Jour")).toHaveValue("2024-03-01");
+      await userEvent.selectOptions(screen.getByLabelText("Précision de la date"), "MONTH");
+      expect(screen.getByLabelText("Mois")).toHaveValue("2024-03");
+    } finally {
+      process.env.TZ = previousTz;
+    }
+  });
+
+  it("indique le format attendu des champs mois et année (L14)", async () => {
+    renderCard([event({ datePrecision: "MONTH", date: "2024-03-01T00:00:00.000Z" })]);
+    await userEvent.click(screen.getByRole("button", { name: "Modifier" }));
+    const month = screen.getByLabelText("Mois");
+    expect(month).toHaveAttribute("placeholder", "AAAA-MM");
+    expect(month).toHaveAttribute("pattern", "\\d{4}-\\d{2}");
+    await userEvent.selectOptions(screen.getByLabelText("Précision de la date"), "YEAR");
+    expect(screen.getByLabelText("Année")).toHaveAttribute("placeholder", "AAAA");
+  });
 });

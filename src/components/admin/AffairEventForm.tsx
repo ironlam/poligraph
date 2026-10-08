@@ -75,6 +75,18 @@ function fitToPrecision(value: string, precision: DatePrecision): string {
   return value.length >= len ? value.slice(0, len) : "";
 }
 
+/**
+ * Valeur de champ pour une date stockée à 00:00 UTC. Getters UTC seulement : un getter local
+ * décalerait la date d'un jour dans un fuseau à l'ouest de Greenwich.
+ */
+export function toDateInputValue(iso: string, precision: DatePrecision): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+  const value = `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  return value.slice(0, PRECISION_LENGTH[precision]);
+}
+
 function DateField({
   id,
   label,
@@ -113,6 +125,8 @@ function DateField({
         <input
           id={id}
           type={precision === "DAY" ? "date" : "month"}
+          // Firefox and desktop Safari render type="month" as a plain text field.
+          {...(precision === "MONTH" ? { placeholder: "AAAA-MM", pattern: "\\d{4}-\\d{2}" } : {})}
           required={required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -128,8 +142,8 @@ function initialState(e?: SerializedAffairEvent) {
   return {
     type: (e?.type ?? "") as AffairEventType | "",
     precision,
-    date: e ? fitToPrecision(e.date, precision) : "",
-    dateEnd: e?.dateEnd ? fitToPrecision(e.dateEnd, precision) : "",
+    date: e ? toDateInputValue(e.date, precision) : "",
+    dateEnd: e?.dateEnd ? toDateInputValue(e.dateEnd, precision) : "",
     occurrence: (e?.occurrence ?? "HELD") as EventOccurrence,
     outcome: (e?.outcome ?? "") as EventOutcome | "",
     title: e?.title ?? "",
