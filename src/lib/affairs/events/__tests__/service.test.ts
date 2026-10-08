@@ -449,3 +449,76 @@ describe("createProposalRevelationInTx", () => {
     expect(data.publishedAt).toBeNull();
   });
 });
+
+describe("régressions de la revue finale", () => {
+  it("le verrou d'étape porte l'identifiant de l'étape et celui de l'affaire (L1)", async () => {
+    db.$queryRaw.mockResolvedValueOnce([]);
+    await updateDraftEvent("aff_2", "evt_1", draftInput, META);
+    const [strings, ...values] = db.$queryRaw.mock.calls[0]!;
+    expect((strings as string[]).join("?")).toMatch(/"affairId" = \?/);
+    expect(values).toEqual(expect.arrayContaining(["evt_1", "aff_2"]));
+  });
+
+  it("refuse de publier une étape tenue datée dans le futur (H1)", async () => {
+    db.affairEvent.findUnique.mockResolvedValue(storedEvent({ date: d("2026-12-01") }));
+    const result = await publishEvent("aff_1", "evt_1", META, NOW);
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(result.ok === false && result.messages).toContain(
+      "Une étape tenue ne peut pas être datée dans le futur : la marquer comme annoncée."
+    );
+    expectNoWrite();
+  });
+
+  it.each([
+    "http://www.lemonde.fr/annonce-proces",
+    "https://WWW.LEMONDE.FR/annonce-proces/",
+    "https://www.lemonde.fr/annonce-proces?utm_source=x",
+    "https://www.lemonde.fr/annonce-proces#haut",
+  ])("refuse la même source sous une autre écriture : %s (L3)", async (sourceUrl) => {
+    db.affairEvent.findUnique.mockResolvedValue(
+      storedEvent({
+        status: "PUBLISHED",
+        occurrence: "SCHEDULED",
+        date: d("2026-10-01"),
+        sourceUrl: "https://www.lemonde.fr/annonce-proces",
+        sourceKind: "PRESS",
+      })
+    );
+    const result = await confirmEvent(
+      "aff_1",
+      "evt_1",
+      { sourceUrl, sourceKind: "PRESS" },
+      META,
+      NOW
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      messages: [
+        "La confirmation exige une nouvelle source, différente de celle qui annonçait l'étape.",
+      ],
+    });
+    expectNoWrite();
+  });
+
+  it("lève une erreur, donc annule la transaction, si l'affaire disparaît après l'écriture (L10)", async () => {
+    db.affair.findUnique.mockResolvedValue(null);
+    await expect(createDraftEvent("aff_1", draftInput, META)).rejects.toThrow();
+  });
+
+  it("date une révélation au jour de Paris (L12)", async () => {
+    db.affairEvent.create.mockResolvedValue({ id: "evt_rev", status: "PUBLISHED" });
+    await createProposalRevelationInTx(
+      db as unknown as DbTransactionClient,
+      "aff_1",
+      {
+        identityKey: null,
+        date: new Date("2026-09-30T22:30:00Z"),
+        title: "Révélation par la presse",
+        sourceUrl: "https://www.mediapart.fr/article",
+      },
+      NOW
+    );
+    expect(db.affairEvent.create.mock.calls[0]![0].data.date).toEqual(d("2026-10-01"));
+  });
+});

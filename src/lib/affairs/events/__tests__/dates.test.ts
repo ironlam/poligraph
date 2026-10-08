@@ -154,3 +154,14 @@ describe("normalizeEventDate et isDateConsistent", () => {
     expect(isDateConsistent(d("2024-05-01"), "YEAR")).toBe(false);
   });
 });
+
+describe("parseEventDateInput : bornes d'année (L7)", () => {
+  const max = new Date().getUTCFullYear() + 10;
+  it.each(["0024-05-13", "0099", "1899-12", `${max + 1}`])("refuse %s", (s) => {
+    expect(parseEventDateInput(s)).toBeNull();
+  });
+  it("accepte 1900 et l'année courante + 10", () => {
+    expect(parseEventDateInput("1900-01-01")).toEqual({ date: d("1900-01-01"), precision: "DAY" });
+    expect(parseEventDateInput(`${max}`)?.date.getUTCFullYear()).toBe(max);
+  });
+});

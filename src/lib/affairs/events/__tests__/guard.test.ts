@@ -173,3 +173,94 @@ describe("checkEventShape", () => {
     expect(checkEventShape({ ...valid, outcome: "RELAXE" })).toHaveLength(1);
   });
 });
+
+describe("checkEventPublishable : étape tenue datée dans le futur (H1)", () => {
+  const TODAY = new Date("2026-10-08T10:00:00Z");
+  const FUTURE_MESSAGE =
+    "Une étape tenue ne peut pas être datée dans le futur : la marquer comme annoncée.";
+
+  it("refuse un jour futur", () => {
+    expect(checkEventPublishable({ ...valid, date: d("2026-12-01") }, TODAY)).toContain(
+      FUTURE_MESSAGE
+    );
+  });
+
+  it("refuse le mois prochain", () => {
+    expect(
+      checkEventPublishable({ ...valid, date: d("2026-11-01"), datePrecision: "MONTH" }, TODAY)
+    ).toContain(FUTURE_MESSAGE);
+  });
+
+  it("refuse l'année prochaine", () => {
+    expect(
+      checkEventPublishable({ ...valid, date: d("2027-01-01"), datePrecision: "YEAR" }, TODAY)
+    ).toContain(FUTURE_MESSAGE);
+  });
+
+  it("accepte le mois et l'année en cours", () => {
+    expect(
+      checkEventPublishable({ ...valid, date: d("2026-10-01"), datePrecision: "MONTH" }, TODAY)
+    ).toEqual([]);
+    expect(
+      checkEventPublishable({ ...valid, date: d("2026-01-01"), datePrecision: "YEAR" }, TODAY)
+    ).toEqual([]);
+  });
+
+  it("compte le jour à Paris : le 9 octobre est atteint à 00:30 heure de Paris", () => {
+    expect(
+      checkEventPublishable({ ...valid, date: d("2026-10-09") }, new Date("2026-10-08T22:30:00Z"))
+    ).toEqual([]);
+    expect(
+      checkEventPublishable({ ...valid, date: d("2026-10-09") }, new Date("2026-10-08T21:30:00Z"))
+    ).toContain(FUTURE_MESSAGE);
+  });
+
+  it("accepte une étape annoncée dans le futur", () => {
+    expect(
+      checkEventPublishable({ ...valid, occurrence: "SCHEDULED", date: d("2026-12-01") }, TODAY)
+    ).toEqual([]);
+  });
+});
+
+describe("checkEventPublishable : seconde source du même média (L4)", () => {
+  it.each([
+    ["https://www.lemonde.fr/a", "https://abonnes.lemonde.fr/b"],
+    ["https://amp.liberation.fr/a", "https://www.liberation.fr/b"],
+    ["https://www.bbc.co.uk/a", "https://news.bbc.co.uk/b"],
+  ])("refuse %s puis %s", (sourceUrl, corroborationUrl) => {
+    expect(checkEventPublishable({ ...pressConviction, sourceUrl, corroborationUrl })).toContain(
+      "La seconde source doit venir d'un autre média que la première."
+    );
+  });
+
+  it.each([
+    ["https://www.justice.gouv.fr/a", "https://www.interieur.gouv.fr/b"],
+    ["https://www.bbc.co.uk/a", "https://www.theguardian.co.uk/b"],
+  ])("accepte %s puis %s (suffixe public à deux niveaux)", (sourceUrl, corroborationUrl) => {
+    expect(checkEventPublishable({ ...pressConviction, sourceUrl, corroborationUrl })).toEqual([]);
+  });
+});
+
+describe("checkEventPublishable : hôtes interdits ajoutés (L5)", () => {
+  it.each([
+    "linkedin.com",
+    "bsky.app",
+    "threads.net",
+    "youtu.be",
+    "t.co",
+    "reddit.com",
+    "t.me",
+    "wikiwand.com",
+  ])("refuse une source sur %s", (host) => {
+    const errors = checkEventPublishable({ ...valid, sourceUrl: `https://www.${host}/x` });
+    expect(errors.some((e) => e.includes(host))).toBe(true);
+  });
+});
+
+describe("checkEventPublishable : tirets longs hors du titre (L6)", () => {
+  it.each(["court", "description", "sourceTitle"] as const)("refuse un tiret long dans %s", (f) => {
+    const errors = checkEventPublishable({ ...valid, [f]: "Tribunal — Paris" });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/tiret long/);
+  });
+});

@@ -36,19 +36,33 @@ export function parisDay(now: Date): Date {
 
 const INPUT_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
-/** Lit `YYYY`, `YYYY-MM` ou `YYYY-MM-DD` ; `null` si la forme ou le jour n'existe pas. */
+const MIN_INPUT_YEAR = 1900;
+const MAX_YEARS_AHEAD = 10;
+
+/** 00:00 UTC du jour donné ; `setUTCFullYear` évite que `Date.UTC` lise 0..99 comme 19xx. */
+function utcDate(year: number, monthIndex: number, day: number): Date {
+  const date = new Date(0);
+  date.setUTCFullYear(year, monthIndex, day);
+  return date;
+}
+
+/**
+ * Lit `YYYY`, `YYYY-MM` ou `YYYY-MM-DD` ; `null` si la forme ou le jour n'existe pas, ou si
+ * l'année sort de 1900 à l'année courante + 10 (une coquille, pas une date d'étape).
+ */
 export function parseEventDateInput(s: string): { date: Date; precision: DatePrecision } | null {
   const m = INPUT_PATTERN.exec(s.trim());
   if (!m) return null;
   const year = Number(m[1]);
-  if (m[2] === undefined) return { date: new Date(Date.UTC(year, 0, 1)), precision: "YEAR" };
+  if (year < MIN_INPUT_YEAR || year > new Date().getUTCFullYear() + MAX_YEARS_AHEAD) return null;
+  if (m[2] === undefined) return { date: utcDate(year, 0, 1), precision: "YEAR" };
   const month = Number(m[2]);
   if (month < 1 || month > 12) return null;
   if (m[3] === undefined) {
-    return { date: new Date(Date.UTC(year, month - 1, 1)), precision: "MONTH" };
+    return { date: utcDate(year, month - 1, 1), precision: "MONTH" };
   }
   const day = Number(m[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  const date = utcDate(year, month - 1, day);
   if (day < 1 || date.getUTCMonth() !== month - 1) return null;
   return { date, precision: "DAY" };
 }

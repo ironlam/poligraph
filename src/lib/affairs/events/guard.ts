@@ -11,7 +11,7 @@ import type {
 } from "@/generated/prisma";
 import { LEGACY_EVENT_TYPES } from "@/config/labels";
 import { matchesHost } from "@/lib/url-host";
-import { isDateConsistent } from "./dates";
+import { isDateConsistent, parisDay } from "./dates";
 
 type DecisionType = "JUGEMENT" | "ARRET_APPEL" | "ARRET_CASSATION";
 
@@ -43,6 +43,14 @@ export const BLOCKED_SOURCE_HOSTS: readonly string[] = [
   "instagram.com",
   "tiktok.com",
   "youtube.com",
+  "youtu.be",
+  "linkedin.com",
+  "bsky.app",
+  "threads.net",
+  "t.co",
+  "reddit.com",
+  "t.me",
+  "wikiwand.com",
 ];
 
 export const EVENT_TITLE_MAX = 120;
@@ -55,7 +63,10 @@ export type EventGuardInput = {
   dateEnd?: Date | null;
   outcome?: EventOutcome | null;
   title: string;
+  court?: string | null;
+  description?: string | null;
   sourceUrl?: string | null;
+  sourceTitle?: string | null;
   sourceKind?: EventSourceKind | null;
   corroborationUrl?: string | null;
 };
@@ -98,9 +109,50 @@ export function checkEventShape(e: EventGuardInput): string[] {
   return errors;
 }
 
-function hostOf(url: string): string {
-  return new URL(url).hostname.replace(/\.$/, "").replace(/^www\./, "");
+/** Suffixes publics à deux niveaux : le média se lit alors sur les trois derniers libellés. */
+const TWO_LEVEL_SUFFIXES: ReadonlySet<string> = new Set([
+  "gouv.fr",
+  "asso.fr",
+  "com.fr",
+  "co.uk",
+  "org.uk",
+  "ac.uk",
+  "gov.uk",
+  "com.au",
+  "co.jp",
+]);
+
+/** Domaine du média : `abonnes.lemonde.fr` et `www.lemonde.fr` donnent `lemonde.fr`. */
+function mediaOf(url: string): string {
+  const labels = new URL(url).hostname.replace(/\.$/, "").toLowerCase().split(".");
+  const lastTwo = labels.slice(-2).join(".");
+  return TWO_LEVEL_SUFFIXES.has(lastTwo) ? labels.slice(-3).join(".") : lastTwo;
 }
+
+/**
+ * Clé de comparaison d'une source : hôte en minuscules et chemin sans `/` final. Le protocole,
+ * la requête et l'ancre ne distinguent pas deux sources.
+ */
+function sourceKey(url: string): string {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    return `${parsed.host.toLowerCase()}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+export function isSameSourceUrl(a: string, b: string): boolean {
+  return sourceKey(a) === sourceKey(b);
+}
+
+const DASH_FIELDS = [
+  ["title", "Le titre"],
+  ["court", "La juridiction"],
+  ["description", "La description"],
+  ["sourceTitle", "Le titre de la source"],
+] as const;
 
 /** Message si l'URL n'est pas une source acceptable, sinon `null`. */
 function checkSourceUrl(url: string, label: string): string | null {
@@ -116,9 +168,18 @@ function checkSourceUrl(url: string, label: string): string | null {
   return null;
 }
 
-/** Forme, plus tout ce qu'exige une publication. */
-export function checkEventPublishable(e: EventGuardInput): string[] {
+/**
+ * Forme, plus tout ce qu'exige une publication. `today` sert à refuser une étape tenue datée
+ * après le jour courant à Paris (début de sa période).
+ */
+export function checkEventPublishable(e: EventGuardInput, today: Date = new Date()): string[] {
   const errors = checkEventShape(e);
+
+  if (e.occurrence === "HELD" && e.date.getTime() > parisDay(today).getTime()) {
+    errors.push(
+      "Une étape tenue ne peut pas être datée dans le futur : la marquer comme annoncée."
+    );
+  }
 
   if (LEGACY_EVENT_TYPES.includes(e.type)) {
     errors.push(
@@ -149,10 +210,12 @@ export function checkEventPublishable(e: EventGuardInput): string[] {
   } else if (title.length > EVENT_TITLE_MAX) {
     errors.push(`Le titre dépasse ${EVENT_TITLE_MAX} caractères.`);
   }
-  if (/[–—]/.test(e.title)) {
-    errors.push(
-      "Le titre ne doit pas contenir de tiret long : utiliser une virgule ou deux-points."
-    );
+  for (const [field, label] of DASH_FIELDS) {
+    if (/[–—]/.test(e[field] ?? "")) {
+      errors.push(
+        `${label} ne doit pas contenir de tiret long : utiliser une virgule ou deux-points.`
+      );
+    }
   }
 
   const needsCorroboration =
@@ -172,7 +235,7 @@ export function checkEventPublishable(e: EventGuardInput): string[] {
       } else if (
         e.sourceUrl &&
         URL.canParse(e.sourceUrl) &&
-        hostOf(e.sourceUrl) === hostOf(e.corroborationUrl)
+        mediaOf(e.sourceUrl) === mediaOf(e.corroborationUrl)
       ) {
         errors.push("La seconde source doit venir d'un autre média que la première.");
       }

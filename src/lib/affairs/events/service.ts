@@ -14,7 +14,7 @@ import type {
 } from "@/generated/prisma";
 import { db, type DbTransactionClient } from "@/lib/db";
 import { normalizeEventDate, parisDay } from "./dates";
-import { checkEventPublishable, checkEventShape } from "./guard";
+import { checkEventPublishable, checkEventShape, isSameSourceUrl } from "./guard";
 
 export type EventDraftInput = {
   type: AffairEventType;
@@ -110,13 +110,17 @@ async function loadSlugs(tx: DbTransactionClient, affairId: string) {
   return { affairSlug: affair.slug, politicianSlug: affair.politician.slug };
 }
 
+/**
+ * Fin d'une action qui a écrit. L'affaire est verrouillée, elle ne peut pas manquer ici : si
+ * c'est le cas, l'exception annule la transaction plutôt que de valider une écriture orpheline.
+ */
 async function done(
   tx: DbTransactionClient,
   affairId: string,
   eventId: string
 ): Promise<EventActionResult> {
   const slugs = await loadSlugs(tx, affairId);
-  if (!slugs) return NOT_FOUND;
+  if (!slugs) throw new Error(`Affaire ${affairId} introuvable après écriture de l'étape`);
   return { ok: true, eventId, ...slugs };
 }
 
@@ -213,7 +217,7 @@ export async function publishEvent(
     if (!event) return NOT_FOUND;
     if (event.status !== "DRAFT") return { ok: false, reason: "not_draft" };
 
-    const messages = checkEventPublishable(event);
+    const messages = checkEventPublishable(event, now);
     if (messages.length > 0) return { ok: false, reason: "invalid", messages };
 
     await tx.affairEvent.update({
@@ -280,7 +284,7 @@ export async function confirmEvent(
     }
 
     const sourceUrl = input.sourceUrl.trim();
-    if (sourceUrl === (event.sourceUrl ?? "").trim()) {
+    if (event.sourceUrl && isSameSourceUrl(sourceUrl, event.sourceUrl)) {
       return {
         ok: false,
         reason: "invalid",
@@ -298,7 +302,7 @@ export async function confirmEvent(
       outcome: input.outcome ?? null,
       corroborationUrl: input.corroborationUrl?.trim() || null,
     };
-    const messages = checkEventPublishable({ ...event, ...data });
+    const messages = checkEventPublishable({ ...event, ...data }, now);
     if (messages.length > 0) return { ok: false, reason: "invalid", messages };
 
     await tx.affairEvent.update({ where: { id: eventId }, data });
@@ -334,7 +338,7 @@ export async function createProposalRevelationInTx(
 ): Promise<{ id: string; status: AffairEventStatus }> {
   const event = {
     type: "REVELATION" as const,
-    date: normalizeEventDate(data.date, "DAY"),
+    date: parisDay(data.date),
     datePrecision: "DAY" as const,
     occurrence: "HELD" as const,
     title: data.title,
@@ -343,7 +347,7 @@ export async function createProposalRevelationInTx(
     sourceTitle: data.sourceTitle ?? null,
     sourceKind: "PRESS" as const,
   };
-  const publishable = checkEventPublishable(event).length === 0;
+  const publishable = checkEventPublishable(event, now).length === 0;
   return tx.affairEvent.create({
     data: {
       affairId,
