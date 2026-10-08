@@ -117,6 +117,21 @@ describe("AffairEventsCard", () => {
     );
   });
 
+  it("affiche les messages d'une saisie refusée par la validation", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, {
+        error: "Validation error",
+        issues: [
+          { path: ["date"], message: "Date invalide : attendu AAAA, AAAA-MM ou AAAA-MM-JJ." },
+        ],
+      })
+    );
+    renderCard([event({ id: "d1", status: "DRAFT" })]);
+    await userEvent.click(screen.getByRole("button", { name: "Publier" }));
+    expect(await screen.findByText("Erreur : Saisie invalide")).toBeTruthy();
+    expect(screen.getByText(/Date invalide : attendu AAAA/)).toBeTruthy();
+  });
+
   it("« Confirmer la tenue » attend la date annoncée", () => {
     renderCard([
       event({

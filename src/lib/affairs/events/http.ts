@@ -21,7 +21,3 @@ export function eventFailureResponse(result: Failure, invalidError: string) {
       );
   }
 }
-
-export function invalidBodyResponse(details: unknown) {
-  return NextResponse.json({ error: "Requête invalide", details }, { status: 400 });
-}

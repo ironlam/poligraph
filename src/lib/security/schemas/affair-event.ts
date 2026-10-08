@@ -87,21 +87,76 @@ const optDateString = z
   .nullish()
   .transform((v) => (v ? v : null));
 
-export const eventDraftSchema = z.object({
-  type: typeEnum,
-  date: dateString,
-  dateEnd: optDateString,
-  occurrence: occurrenceEnum,
-  outcome: outcomeEnum.nullish().transform((v) => v ?? null),
-  title: z.string().trim().min(1).max(120),
-  court: optText(120),
-  description: optText(1000),
-  sourceUrl: optUrl,
-  sourceTitle: optText(200),
-  sourceKind: sourceKindEnum.nullish().transform((v) => v ?? null),
-  incidental: z.boolean().optional(),
-  corroborationUrl: optUrl,
-});
+const DATE_FORMAT_HINT = "attendu AAAA, AAAA-MM ou AAAA-MM-JJ.";
+
+/**
+ * Corps d'un brouillon. Les dates sont converties ici (précision comprise), si bien que la route
+ * passe par `withValidation` et reçoit directement l'entrée du service.
+ */
+export const eventDraftSchema = z
+  .object({
+    type: typeEnum,
+    date: dateString,
+    dateEnd: optDateString,
+    occurrence: occurrenceEnum,
+    outcome: outcomeEnum.nullish().transform((v) => v ?? null),
+    title: z.string().trim().min(1).max(120),
+    court: optText(120),
+    description: optText(1000),
+    sourceUrl: optUrl,
+    sourceTitle: optText(200),
+    sourceKind: sourceKindEnum.nullish().transform((v) => v ?? null),
+    incidental: z.boolean().optional(),
+    corroborationUrl: optUrl,
+  })
+  .transform((body, ctx): EventDraftInput => {
+    const start = parseEventDateInput(body.date);
+    if (!start) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["date"],
+        message: `Date invalide : ${DATE_FORMAT_HINT}`,
+      });
+      return z.NEVER;
+    }
+    let dateEnd: Date | null = null;
+    if (body.dateEnd) {
+      const end = parseEventDateInput(body.dateEnd);
+      if (!end) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dateEnd"],
+          message: `Date de fin invalide : ${DATE_FORMAT_HINT}`,
+        });
+        return z.NEVER;
+      }
+      if (end.precision !== start.precision) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dateEnd"],
+          message: "La date de fin doit avoir la même précision que la date.",
+        });
+        return z.NEVER;
+      }
+      dateEnd = end.date;
+    }
+    return {
+      type: body.type,
+      date: start.date,
+      datePrecision: start.precision,
+      dateEnd,
+      occurrence: body.occurrence,
+      outcome: body.outcome,
+      title: body.title,
+      court: body.court,
+      description: body.description,
+      sourceUrl: body.sourceUrl,
+      sourceTitle: body.sourceTitle,
+      sourceKind: body.sourceKind,
+      incidental: body.incidental,
+      corroborationUrl: body.corroborationUrl,
+    };
+  });
 
 export const eventActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("PUBLISH") }),
@@ -118,45 +173,3 @@ export const eventActionSchema = z.discriminatedUnion("action", [
     corroborationUrl: optUrl,
   }),
 ]);
-
-export type EventDraftBody = z.infer<typeof eventDraftSchema>;
-
-/** Convertit le corps validé en entrée du service ; `error` est un message français pour un 400. */
-export function toDraftInput(
-  body: EventDraftBody
-): { ok: true; input: EventDraftInput } | { ok: false; error: string } {
-  const start = parseEventDateInput(body.date);
-  if (!start) {
-    return { ok: false, error: "Date invalide : attendu AAAA, AAAA-MM ou AAAA-MM-JJ." };
-  }
-  let dateEnd: Date | null = null;
-  if (body.dateEnd) {
-    const end = parseEventDateInput(body.dateEnd);
-    if (!end) {
-      return { ok: false, error: "Date de fin invalide : attendu AAAA, AAAA-MM ou AAAA-MM-JJ." };
-    }
-    if (end.precision !== start.precision) {
-      return { ok: false, error: "La date de fin doit avoir la même précision que la date." };
-    }
-    dateEnd = end.date;
-  }
-  return {
-    ok: true,
-    input: {
-      type: body.type,
-      date: start.date,
-      datePrecision: start.precision,
-      dateEnd,
-      occurrence: body.occurrence,
-      outcome: body.outcome,
-      title: body.title,
-      court: body.court,
-      description: body.description,
-      sourceUrl: body.sourceUrl,
-      sourceTitle: body.sourceTitle,
-      sourceKind: body.sourceKind,
-      incidental: body.incidental,
-      corroborationUrl: body.corroborationUrl,
-    },
-  };
-}

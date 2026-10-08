@@ -408,10 +408,16 @@ export function AffairEventsCard({
         const payload = (await res.json().catch(() => null)) as {
           error?: string;
           reasons?: string[];
+          issues?: { message: string }[];
         } | null;
+        // `issues` comes from withValidation (malformed body), `reasons` from the guard.
+        const issues = payload?.issues?.map((i) => i.message) ?? [];
         setFailure({
-          error: payload?.error ?? "L'enregistrement a échoué.",
-          reasons: payload?.reasons ?? [],
+          error:
+            issues.length > 0
+              ? "Saisie invalide"
+              : (payload?.error ?? "L'enregistrement a échoué."),
+          reasons: payload?.reasons ?? issues,
         });
         return false;
       }

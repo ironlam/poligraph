@@ -4,7 +4,7 @@ vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { AffairEventType } from "@/generated/prisma";
 import { LEGACY_EVENT_TYPES } from "@/config/labels";
-import { EVENT_TYPE_VALUES, eventDraftSchema, toDraftInput } from "../affair-event";
+import { EVENT_TYPE_VALUES, eventDraftSchema } from "../affair-event";
 
 describe("affair-event schema", () => {
   it("accepte exactement les types Prisma non hérités", () => {
@@ -15,15 +15,38 @@ describe("affair-event schema", () => {
   });
 
   it("refuse une précision de fin différente", () => {
-    const body = eventDraftSchema.parse({
-      type: "PROCES",
+    const r = eventDraftSchema.safeParse({
+      type: "FAITS",
       date: "2024-05",
       dateEnd: "2024-06-02",
       occurrence: "HELD",
+      title: "Faits",
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.path).toEqual(["dateEnd"]);
+  });
+
+  it("refuse une date impossible avec un message en français", () => {
+    const r = eventDraftSchema.safeParse({
+      type: "PROCES",
+      date: "2026-02-30",
+      occurrence: "HELD",
       title: "Procès",
     });
-    const r = toDraftInput(body);
-    expect(r.ok).toBe(false);
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toMatch(/^Date invalide/);
+  });
+
+  it("convertit la date et sa précision pour le service", () => {
+    const input = eventDraftSchema.parse({
+      type: "MISE_EN_EXAMEN",
+      date: "2024-05",
+      occurrence: "HELD",
+      title: "Mise en examen",
+    });
+    expect(input.date).toEqual(new Date("2024-05-01T00:00:00Z"));
+    expect(input.datePrecision).toBe("MONTH");
+    expect(input.dateEnd).toBeNull();
   });
 
   it("transforme les chaînes vides en null", () => {
