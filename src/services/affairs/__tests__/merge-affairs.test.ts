@@ -13,7 +13,11 @@ type TxRecorder = {
     delete: ReturnType<typeof vi.fn>;
   };
   source: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
-  affairEvent: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+  affairEvent: {
+    findMany: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
   pressArticleAffair: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   publicIdRedirect: { upsert: ReturnType<typeof vi.fn> };
   affairPairDecision: { upsert: ReturnType<typeof vi.fn> };
@@ -28,7 +32,7 @@ type TxRecorder = {
 const tx: TxRecorder = {
   affair: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
   source: { findMany: vi.fn(), update: vi.fn() },
-  affairEvent: { findMany: vi.fn(), update: vi.fn() },
+  affairEvent: { findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
   pressArticleAffair: { findMany: vi.fn(), update: vi.fn() },
   publicIdRedirect: { upsert: vi.fn() },
   affairPairDecision: { upsert: vi.fn() },
@@ -789,5 +793,127 @@ describe("mergeAffairs — snapshot de l'affaire absorbée (#534)", () => {
     const readOrder = tx.affair.findUnique.mock.invocationCallOrder[0] ?? Infinity;
     const deleteOrder = tx.affair.delete.mock.invocationCallOrder[0] ?? -Infinity;
     expect(readOrder).toBeLessThan(deleteOrder);
+  });
+});
+
+describe("mergeAffairs : la déduplication des étapes garde la version publiée (L13)", () => {
+  const date = new Date("2024-03-01T00:00:00Z");
+  const base = { date, type: "JUGEMENT", title: "Jugement", identityKey: "idk_1" };
+
+  it("remplace un doublon brouillon de l'affaire conservée par l'étape publiée absorbée", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([{ id: "k1", status: "DRAFT", ...base }])
+      .mockResolvedValueOnce([{ id: "e1", status: "PUBLISHED", ...base }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).toHaveBeenCalledWith({ where: { id: "k1" } });
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "e1" },
+      data: { affairId: "keep" },
+    });
+    expect(result.eventsMoved).toBe(1);
+  });
+
+  it("garde l'étape publiée de l'affaire conservée face à un doublon brouillon", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([{ id: "k1", status: "PUBLISHED", ...base }])
+      .mockResolvedValueOnce([{ id: "e1", status: "DRAFT", ...base }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).not.toHaveBeenCalled();
+    expect(result.eventsMoved).toBe(0);
+  });
+});
+
+describe("mergeAffairs : la déduplication des étapes lit les champs de chronologie", () => {
+  const date = new Date("2012-01-01T00:00:00Z");
+  const legacy = { date, type: "FAITS", title: "Faits reprochés", identityKey: null };
+
+  it("garde deux étapes qui ne diffèrent que par leur précision ou leur période", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([
+        { id: "k1", status: "PUBLISHED", ...legacy, datePrecision: "DAY", dateEnd: null },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "e1",
+          status: "PUBLISHED",
+          ...legacy,
+          datePrecision: "YEAR",
+          dateEnd: new Date("2014-01-01T00:00:00Z"),
+        },
+      ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "e1" },
+      data: { affairId: "keep" },
+    });
+    expect(result.eventsMoved).toBe(1);
+  });
+
+  it("garde deux décisions qui ne diffèrent que par leur issue", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    const decision = { date, type: "ARRET_APPEL", title: "Arrêt", identityKey: null };
+    tx.affairEvent.findMany
+      .mockResolvedValueOnce([
+        { id: "k1", status: "PUBLISHED", ...decision, outcome: "CONDAMNATION" },
+      ])
+      .mockResolvedValueOnce([{ id: "e1", status: "PUBLISHED", ...decision, outcome: "RELAXE" }]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(result.eventsMoved).toBe(1);
+  });
+});
+
+describe("mergeAffairs : la priorité de la version publiée ne dépend pas de l'ordre", () => {
+  const base = {
+    date: new Date("2024-03-01T00:00:00Z"),
+    type: "JUGEMENT",
+    title: "Jugement",
+    identityKey: "idk_1",
+  };
+
+  it("brouillon puis publiée dans l'absorbée : la publiée remplace le brouillon transféré", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: "d1", status: "DRAFT", ...base },
+      { id: "p1", status: "PUBLISHED", ...base },
+    ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).toHaveBeenCalledWith({ where: { id: "d1" } });
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "p1" },
+      data: { affairId: "keep" },
+    });
+    expect(result.eventsMoved).toBe(1);
+  });
+
+  it("publiée puis brouillon dans l'absorbée : seule la publiée est transférée", async () => {
+    stub(affair({ id: "keep" }), affair({ id: "remove", slug: "absorbee" }));
+    tx.affairEvent.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: "p1", status: "PUBLISHED", ...base },
+      { id: "d1", status: "DRAFT", ...base },
+    ]);
+
+    const result = await mergeAffairs("keep", "remove");
+
+    expect(tx.affairEvent.delete).not.toHaveBeenCalled();
+    expect(tx.affairEvent.update).toHaveBeenCalledTimes(1);
+    expect(tx.affairEvent.update).toHaveBeenCalledWith({
+      where: { id: "p1" },
+      data: { affairId: "keep" },
+    });
+    expect(result.eventsMoved).toBe(1);
   });
 });

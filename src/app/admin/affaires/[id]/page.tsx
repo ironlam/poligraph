@@ -20,6 +20,7 @@ import { AffairMergePanel } from "@/components/admin/AffairMergePanel";
 import type { BlockingDecision as BlockingDecisionPayload } from "@/lib/affairs/blocking-decisions";
 import { PublicationStatus } from "@/generated/prisma";
 import { AffairMonitoringCard } from "@/components/admin/AffairMonitoringCard";
+import { AffairEventsCard } from "@/components/admin/AffairEventsCard";
 import { parisDay } from "@/lib/affairs/monitoring/cadence";
 import { dayKey } from "@/lib/affairs/monitoring/labels";
 import { getAffairMonitoringPanel } from "@/lib/affairs/monitoring/queries";
@@ -41,6 +42,33 @@ async function getAffair(id: string) {
         orderBy: { createdAt: "asc" },
       },
     },
+  });
+}
+
+/** Every step of the procedure, whatever its status: drafts and retractions are edited here. */
+async function getAffairEvents(affairId: string) {
+  return db.affairEvent.findMany({
+    where: { affairId },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      date: true,
+      datePrecision: true,
+      dateEnd: true,
+      occurrence: true,
+      outcome: true,
+      title: true,
+      court: true,
+      description: true,
+      sourceUrl: true,
+      sourceTitle: true,
+      sourceKind: true,
+      incidental: true,
+      corroborationUrl: true,
+      retractionReason: true,
+    },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
   });
 }
 
@@ -163,9 +191,10 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [siblings, monitoringPanel] = await Promise.all([
+  const [siblings, monitoringPanel, events] = await Promise.all([
     getSiblingAffairs(affair.politician.id, affair.id),
     getAffairMonitoringPanel(affair.id),
+    getAffairEvents(affair.id),
   ]);
   const tomorrow = dayKey(new Date(parisDay(new Date()).getTime() + 24 * 60 * 60 * 1000));
 
@@ -245,6 +274,24 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
               <p className="text-sm text-muted-foreground">Slug</p>
               <p className="font-mono text-sm">{affair.slug}</p>
             </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Date des faits</p>
+              <p className="font-medium">
+                {affair.factsDate ? formatDate(affair.factsDate) : "non renseignée"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Date de révélation</p>
+              <p className="font-medium">
+                {affair.startDate ? formatDate(affair.startDate) : "non renseignée"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Date du verdict</p>
+              <p className="font-medium">
+                {affair.verdictDate ? formatDate(affair.verdictDate) : "non renseignée"}
+              </p>
+            </div>
           </div>
 
           {affair.involvement !== "DIRECT" && (
@@ -298,33 +345,14 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
 
       <AffairMonitoringCard affairId={affair.id} panel={monitoringPanel} minDate={tomorrow} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Chronologie</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-3 gap-4">
-            <div>
-              <dt className="text-sm text-muted-foreground">Date des faits</dt>
-              <dd className="font-medium">
-                {affair.factsDate ? formatDate(affair.factsDate) : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Date de révélation</dt>
-              <dd className="font-medium">
-                {affair.startDate ? formatDate(affair.startDate) : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Date du verdict</dt>
-              <dd className="font-medium">
-                {affair.verdictDate ? formatDate(affair.verdictDate) : "—"}
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+      <AffairEventsCard
+        affairId={affair.id}
+        events={events.map((e) => ({
+          ...e,
+          date: e.date.toISOString(),
+          dateEnd: e.dateEnd?.toISOString() ?? null,
+        }))}
+      />
 
       {(affair.sentence || affair.appeal) && (
         <Card>

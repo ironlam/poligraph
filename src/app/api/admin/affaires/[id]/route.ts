@@ -7,7 +7,6 @@ import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
 import { resolveProfileTargets } from "@/lib/politicians/profile-snapshot/request";
 import { generateAffairSlug } from "@/lib/utils";
-import { trackStatusChange } from "@/services/affairs/status-tracking";
 import { updateAffairSchema } from "@/lib/validations/affairs";
 import { computeSeverity, isInherentlyMandateCategory } from "@/config/labels";
 import {
@@ -160,14 +159,6 @@ export const PUT = withAdminAuth(async (request: NextRequest, context) => {
     await reconcileAffairMonitoring(tx, id!);
     return updated;
   });
-
-  // Track status change for audit trail
-  if (existing.status !== data.status) {
-    await trackStatusChange(id!, existing.status, data.status, {
-      type: "MANUAL",
-      title: "Modification manuelle via l'admin",
-    });
-  }
 
   // Handle sources: delete old ones and create new ones
   // (simpler than diffing for MVP)

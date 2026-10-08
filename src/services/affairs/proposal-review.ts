@@ -1,7 +1,7 @@
 import { db, type DbTransactionClient } from "@/lib/db";
 import type { AffairStatus, ProposalStatus } from "@/generated/prisma";
 import { isValidSentenceSplit } from "@/lib/affairs/sentence-split";
-import { trackStatusChange } from "@/services/affairs/status-tracking";
+import { createProposalRevelationInTx } from "@/lib/affairs/events/service";
 import {
   isAcceptableOfficialDecisionVerification,
   verifyProposalOfficialEvidence,
@@ -358,10 +358,19 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
           }
         }
 
-        const createdEvent = await tx.affairEvent.create({
-          data: { affairId, identityKey: context.identityKey, ...context.event },
-          select: { id: true },
-        });
+        const createdEvent = await createProposalRevelationInTx(
+          tx,
+          affairId,
+          {
+            identityKey: context.identityKey,
+            date: context.event.date,
+            title: context.event.title,
+            description: context.event.description,
+            sourceUrl: context.event.sourceUrl,
+            sourceTitle: context.event.sourceTitle,
+          },
+          now
+        );
         eventId = createdEvent.id;
 
         await tx.source.upsert({
@@ -455,25 +464,6 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
 
   if (outcome.kind === "conflict") {
     return { ok: false, reason: "conflict", conflictDetail: outcome.drift };
-  }
-
-  // Timeline event, outside the transaction. It is display-only: the audit trail
-  // already committed, so a failure here must not fail the acceptance.
-  const newStatus =
-    parsed.kind === "PATCH" ? (parsed.patch.status as AffairStatus | null | undefined) : null;
-  if (newStatus && newStatus !== outcome.previousStatus) {
-    try {
-      await trackStatusChange(affairId, outcome.previousStatus, newStatus, {
-        type: proposal.source,
-        url: proposal.sourceUrl ?? undefined,
-        title: `Proposition ${proposal.importer} acceptée`,
-      });
-    } catch (error) {
-      console.warn(
-        `[proposals] trackStatusChange failed for affair ${affairId}:`,
-        error instanceof Error ? error.message : error
-      );
-    }
   }
 
   return {

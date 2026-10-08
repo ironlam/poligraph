@@ -106,3 +106,36 @@ describe("AffairCard — navigation vers la fiche de l'affaire", () => {
     expect(container.querySelector('a[href="/affaires/a1"]')).toBeTruthy();
   });
 });
+
+describe("AffairCard : résumé de chronologie", () => {
+  const event = {
+    id: "e1",
+    status: "PUBLISHED",
+    incidental: false,
+    type: "JUGEMENT",
+    date: new Date("2024-06-12T00:00:00Z"),
+    datePrecision: "DAY",
+    dateEnd: null,
+    occurrence: "HELD",
+  };
+
+  it("affiche le résumé et le lien vers la chronologie", () => {
+    const { getByText, getByRole } = render(
+      <AffairCard affair={makeAffair({ events: [event] })} variant="other" />
+    );
+    expect(getByText(/1 étape · dernière : Jugement, 12 juin 2024/)).toBeTruthy();
+    expect(getByRole("link", { name: "Voir la chronologie" }).getAttribute("href")).toBe(
+      "/affaires/affaire-de-test"
+    );
+  });
+
+  it("n'affiche ni résumé ni lien sans étape publiée", () => {
+    const { queryByText } = render(
+      <AffairCard
+        affair={makeAffair({ events: [{ ...event, status: undefined }] })}
+        variant="other"
+      />
+    );
+    expect(queryByText("Voir la chronologie")).toBeNull();
+  });
+});

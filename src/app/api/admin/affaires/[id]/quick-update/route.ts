@@ -7,14 +7,12 @@ import { invalidateEntity, invalidateAffectedPoliticians } from "@/lib/cache";
 import { closeModerationReviews } from "@/lib/affairs/close-moderation-reviews";
 import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 import { refreshProfilesForModeration } from "@/lib/politicians/profile-snapshot/moderation";
-import { trackStatusChange } from "@/services/affairs/status-tracking";
 import {
   assertPublishable,
   PublishGuardError,
   VERIFIED_BY_MODERATION,
   PUBLISHED_STATUS,
 } from "@/lib/affairs/publish-guard";
-import type { AffairStatus } from "@/generated/prisma";
 import type { z } from "zod/v4";
 
 type QuickUpdateBody = z.infer<typeof quickUpdateAffairSchema>;
@@ -64,14 +62,6 @@ export const PATCH = withAdminAuth(
 
     if (Object.keys(updateData).length === 0 && !wantsPublish) {
       return NextResponse.json({ error: "Aucun champ à mettre à jour" }, { status: 400 });
-    }
-
-    // Track status change if applicable
-    if (updateData.status && updateData.status !== affair.status) {
-      await trackStatusChange(affair.id, affair.status, updateData.status as AffairStatus, {
-        type: "MANUAL",
-        title: "Modification manuelle depuis l'admin",
-      });
     }
 
     const meta = getRequestMeta(request);

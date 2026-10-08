@@ -894,6 +894,14 @@ export const ALLOWED: AllowedOccurrence[] = [
       "Périmètre du suivi privé (publiée et DIRECT), filtre de la liste « à venir » de la file admin ; rien n'est affiché ni compté publiquement.",
   },
   {
+    path: "src/lib/affairs/events/service.ts",
+    snippet: "const locked = await tx.$queryRaw<{ id: string }[]>`",
+    count: 1,
+    nature: "identity-check",
+    reason:
+      "Étapes de procédure : verrou de la ligne d'affaire avant la création d'un brouillon admin ; rien n'est affiché ni compté.",
+  },
+  {
     path: "src/lib/affairs/monitoring/reconcile.ts",
     snippet: "const locked = await tx.$queryRaw<{ id: string }[]>`",
     count: 1,
