@@ -282,97 +282,100 @@ export async function applyBackfill(plan: BackfillPlan, db: typeof Db): Promise<
   for (const g of plan.governments) {
     const links = plan.memberships.filter((m) => m.governmentSlug === g.slug);
     try {
-      const partial = await db.$transaction(async (tx) => {
-        const out = {
-          gov: "unchanged" as "created" | "updated" | "unchanged",
-          updated: 0,
-          unchanged: 0,
-        };
-        const existing = await tx.government.findUnique({ where: { slug: g.slug } });
-        let governmentId: string;
-        if (!existing) {
-          const created = await tx.government.create({
-            data: {
-              slug: g.slug,
-              name: g.name,
-              sequence: g.sequence,
-              primeMinisterId: g.primeMinisterId,
-              primeMinisterAppointedAt: asDate(g.primeMinisterAppointedAt)!,
-              primeMinisterAppointedEvidence: "DERIVED",
-              formedAt: asDate(g.formedAt),
-              formedEvidence: "DERIVED",
-              endedAt: asDate(g.endedAt),
-              endedEvidence: g.endedAt ? "DERIVED" : null,
-              completeness: "PARTIAL",
-              publicationStatus: "DRAFT",
-            },
-          });
-          governmentId = created.id;
-          out.gov = "created";
-        } else {
-          governmentId = existing.id;
-          const data: Record<string, unknown> = {};
-          if (existing.name !== g.name) data.name = g.name;
-          if (existing.sequence !== g.sequence) data.sequence = g.sequence;
-          if (existing.primeMinisterAppointedEvidence !== "ACT") {
-            if (existing.primeMinisterId !== g.primeMinisterId) {
-              data.primeMinisterId = g.primeMinisterId;
+      const partial = await db.$transaction(
+        async (tx) => {
+          const out = {
+            gov: "unchanged" as "created" | "updated" | "unchanged",
+            updated: 0,
+            unchanged: 0,
+          };
+          const existing = await tx.government.findUnique({ where: { slug: g.slug } });
+          let governmentId: string;
+          if (!existing) {
+            const created = await tx.government.create({
+              data: {
+                slug: g.slug,
+                name: g.name,
+                sequence: g.sequence,
+                primeMinisterId: g.primeMinisterId,
+                primeMinisterAppointedAt: asDate(g.primeMinisterAppointedAt)!,
+                primeMinisterAppointedEvidence: "DERIVED",
+                formedAt: asDate(g.formedAt),
+                formedEvidence: "DERIVED",
+                endedAt: asDate(g.endedAt),
+                endedEvidence: g.endedAt ? "DERIVED" : null,
+                completeness: "PARTIAL",
+                publicationStatus: "DRAFT",
+              },
+            });
+            governmentId = created.id;
+            out.gov = "created";
+          } else {
+            governmentId = existing.id;
+            const data: Record<string, unknown> = {};
+            if (existing.name !== g.name) data.name = g.name;
+            if (existing.sequence !== g.sequence) data.sequence = g.sequence;
+            if (existing.primeMinisterAppointedEvidence !== "ACT") {
+              if (existing.primeMinisterId !== g.primeMinisterId) {
+                data.primeMinisterId = g.primeMinisterId;
+              }
+              if (
+                !sameDay(existing.primeMinisterAppointedAt, g.primeMinisterAppointedAt) ||
+                existing.primeMinisterAppointedEvidence !== "DERIVED"
+              ) {
+                data.primeMinisterAppointedAt = asDate(g.primeMinisterAppointedAt);
+                data.primeMinisterAppointedEvidence = "DERIVED";
+              }
             }
             if (
-              !sameDay(existing.primeMinisterAppointedAt, g.primeMinisterAppointedAt) ||
-              existing.primeMinisterAppointedEvidence !== "DERIVED"
+              existing.formedEvidence !== "ACT" &&
+              (!sameDay(existing.formedAt, g.formedAt) || existing.formedEvidence !== "DERIVED")
             ) {
-              data.primeMinisterAppointedAt = asDate(g.primeMinisterAppointedAt);
-              data.primeMinisterAppointedEvidence = "DERIVED";
+              data.formedAt = asDate(g.formedAt);
+              data.formedEvidence = "DERIVED";
+            }
+            const endEvidence = g.endedAt ? "DERIVED" : null;
+            if (
+              existing.endedEvidence !== "ACT" &&
+              (!sameDay(existing.endedAt, g.endedAt) || existing.endedEvidence !== endEvidence)
+            ) {
+              data.endedAt = asDate(g.endedAt);
+              data.endedEvidence = endEvidence;
+            }
+            if (Object.keys(data).length > 0) {
+              await tx.government.update({ where: { id: existing.id }, data });
+              out.gov = "updated";
             }
           }
-          if (
-            existing.formedEvidence !== "ACT" &&
-            (!sameDay(existing.formedAt, g.formedAt) || existing.formedEvidence !== "DERIVED")
-          ) {
-            data.formedAt = asDate(g.formedAt);
-            data.formedEvidence = "DERIVED";
-          }
-          const endEvidence = g.endedAt ? "DERIVED" : null;
-          if (
-            existing.endedEvidence !== "ACT" &&
-            (!sameDay(existing.endedAt, g.endedAt) || existing.endedEvidence !== endEvidence)
-          ) {
-            data.endedAt = asDate(g.endedAt);
-            data.endedEvidence = endEvidence;
-          }
-          if (Object.keys(data).length > 0) {
-            await tx.government.update({ where: { id: existing.id }, data });
-            out.gov = "updated";
-          }
-        }
 
-        const current = await tx.mandateGovernment.findMany({
-          where: { id: { in: links.map((m) => m.membershipId) } },
-          select: { id: true, governmentId: true, startEvidence: true, endEvidence: true },
-        });
-        const currentById = new Map(current.map((c) => [c.id, c]));
-        for (const m of links) {
-          const cur = currentById.get(m.membershipId);
-          if (!cur) throw new Error(`fonction ${m.membershipId} introuvable`);
-          const data: Record<string, unknown> = {};
-          if (cur.governmentId !== governmentId) data.governmentId = governmentId;
-          if (cur.startEvidence !== "ACT" && cur.startEvidence !== "DATASET") {
-            data.startEvidence = "DATASET";
+          const current = await tx.mandateGovernment.findMany({
+            where: { id: { in: links.map((m) => m.membershipId) } },
+            select: { id: true, governmentId: true, startEvidence: true, endEvidence: true },
+          });
+          const currentById = new Map(current.map((c) => [c.id, c]));
+          for (const m of links) {
+            const cur = currentById.get(m.membershipId);
+            if (!cur) throw new Error(`fonction ${m.membershipId} introuvable`);
+            const data: Record<string, unknown> = {};
+            if (cur.governmentId !== governmentId) data.governmentId = governmentId;
+            if (cur.startEvidence !== "ACT" && cur.startEvidence !== "DATASET") {
+              data.startEvidence = "DATASET";
+            }
+            const wantedEnd = m.hasEnd ? "DATASET" : null;
+            if (cur.endEvidence !== "ACT" && cur.endEvidence !== wantedEnd) {
+              data.endEvidence = wantedEnd;
+            }
+            if (Object.keys(data).length > 0) {
+              await tx.mandateGovernment.update({ where: { id: m.membershipId }, data });
+              out.updated += 1;
+            } else {
+              out.unchanged += 1;
+            }
           }
-          const wantedEnd = m.hasEnd ? "DATASET" : null;
-          if (cur.endEvidence !== "ACT" && cur.endEvidence !== wantedEnd) {
-            data.endEvidence = wantedEnd;
-          }
-          if (Object.keys(data).length > 0) {
-            await tx.mandateGovernment.update({ where: { id: m.membershipId }, data });
-            out.updated += 1;
-          } else {
-            out.unchanged += 1;
-          }
-        }
-        return out;
-      });
+          return out;
+        },
+        { timeout: 60_000 }
+      );
       result.governments[partial.gov] += 1;
       result.memberships.updated += partial.updated;
       result.memberships.unchanged += partial.unchanged;
