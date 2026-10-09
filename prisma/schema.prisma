@@ -110,6 +110,7 @@ model Politician {
   newsletterEditions        NewsletterEdition[] // Weeks featured as "politician of the week"
   dossierAuthors            DossierAuthor[] // Dossiers authored/initiated by this politician
   measures                  Measure[] // Programme measures attributed to this politician (lot 1)
+  primeMinisterOf           Government[] // Gouvernements dirigés (Premier ministre)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -437,12 +438,96 @@ model MandateLocal {
 
 // Government mandate extension — 1:1 with Mandate for government-specific fields
 model MandateGovernment {
-  id             String   @id @default(cuid())
-  mandate        Mandate  @relation(fields: [mandateId], references: [id], onDelete: Cascade)
-  mandateId      String   @unique
+  id             String  @id @default(cuid())
+  mandate        Mandate @relation(fields: [mandateId], references: [id], onDelete: Cascade)
+  mandateId      String  @unique
   governmentName String // "Gouvernement Borne", etc.
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  // Rattachement à l'entité Government (nullable pendant la phase expand)
+  government   Government? @relation(fields: [governmentId], references: [id], onDelete: Restrict)
+  governmentId String?
+
+  // Preuve des dates de la fonction
+  startEvidence  DateEvidence? // preuve de Mandate.startDate
+  startSourceUrl String?
+  endEvidence    DateEvidence? // preuve de Mandate.endDate
+  endSourceUrl   String?
+  endKind        GovernmentFunctionEnd? // null tant que la fin n'est pas qualifiée
+
+  // Remplacement établi par un acte : cette fonction succède à `predecessor` le même jour
+  // (autre personne sur le même portefeuille, ou même personne avec un nouvel intitulé).
+  predecessor             MandateGovernment? @relation("GovernmentSuccession", fields: [predecessorId], references: [id], onDelete: SetNull)
+  predecessorId           String?            @unique
+  successor               MandateGovernment? @relation("GovernmentSuccession")
+  // true seulement si l'acte établit que le prédécesseur a cessé avant l'entrée en fonction.
+  // false = ordre non établi.
+  sameDayOrderEstablished Boolean            @default(false)
+  sameDayOrderSourceUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([governmentId])
+}
+
+/// Niveau de preuve d'une date.
+enum DateEvidence {
+  ACT // acte officiel lu et référencé (décret au JO, communiqué officiel)
+  DATASET // date reprise d'un jeu de données, acte non vérifié
+  DERIVED // date calculée (minimum ou maximum des fonctions) : estimation
+}
+
+/// Nature de la fin d'une fonction gouvernementale.
+enum GovernmentFunctionEnd {
+  INDIVIDUAL // départ individuel : la fonction cesse à la date de fin
+  COLLECTIVE_RESIGNATION // cessation collective : affaires courantes jusqu'à la fin du gouvernement
+}
+
+enum GovernmentCompleteness {
+  COMPLETE
+  PARTIAL
+}
+
+// Gouvernement de la Ve République (un par Premier ministre nommé)
+model Government {
+  id       String @id @default(cuid())
+  slug     String @unique // "lecornu-2", "philippe-1", "castex"
+  name     String // "Gouvernement Sébastien Lecornu II"
+  sequence Int    @unique // ordre chronologique dans la Ve République, 1 = Debré
+
+  primeMinister   Politician @relation(fields: [primeMinisterId], references: [id])
+  primeMinisterId String
+
+  // Chaque date a son niveau de preuve et sa source. Null = non établie.
+  primeMinisterAppointedAt        DateTime      @db.Date // nomination du Premier ministre
+  primeMinisterAppointedEvidence  DateEvidence
+  primeMinisterAppointedSourceUrl String?
+  formedAt                        DateTime?     @db.Date // nomination de l'équipe
+  formedEvidence                  DateEvidence?
+  formedSourceUrl                 String?
+  resignedAt                      DateTime?     @db.Date // acceptation de la démission (cessation collective)
+  resignedEvidence                DateEvidence?
+  resignedSourceUrl               String?
+  endedAt                         DateTime?     @db.Date // fin des affaires courantes (nomination de l'équipe suivante)
+  endedEvidence                   DateEvidence?
+  endedSourceUrl                  String?
+
+  completeness   GovernmentCompleteness @default(PARTIAL)
+  pendingChanges Int? // changements connus restant à sourcer
+  coverageNote   String? // limite affichée telle quelle au lecteur
+
+  // Composition complète vérifiée à une date, contre une source officielle.
+  // Ne certifie rien d'autre : ni les dates passées, ni la continuité au-delà.
+  compositionVerifiedAt        DateTime? @db.Date
+  compositionVerifiedSourceUrl String?
+
+  publicationStatus PublicationStatus @default(DRAFT)
+
+  memberships MandateGovernment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([publicationStatus, sequence])
 }
 
 // Parliamentary mandate extension - 1:1 with Mandate for parliamentary group membership
