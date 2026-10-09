@@ -64,8 +64,15 @@ function baseCategory(gov: GovernmentDates, ep: Episode, date: string): Category
 
   if (ep.end !== null) {
     if (date <= ep.end) return derivedBound ? "undocumented" : "established";
-    if (ep.endKind === "COLLECTIVE_RESIGNATION" && gov.endedAt && date <= gov.endedAt) {
-      return gov.resignedEvidence === "ACT" ? "currentAffairs" : "undocumented";
+    if (ep.endKind === "COLLECTIVE_RESIGNATION") {
+      // Avec endedAt, les jours au-delà ont été écartés plus haut.
+      if (gov.endedAt) return gov.resignedEvidence === "ACT" ? "currentAffairs" : "undocumented";
+      // Successeur pas encore nommé : affaires courantes établies jusqu'à la composition vérifiée.
+      const verified =
+        gov.resignedEvidence === "ACT" &&
+        gov.compositionVerifiedAt !== null &&
+        date <= gov.compositionVerifiedAt;
+      return verified ? "currentAffairs" : "undocumented";
     }
     return null;
   }
@@ -248,9 +255,10 @@ export function documentedChanges(gov: GovernmentDates, episodes: Episode[]): Ch
 
     const transition = touching.filter((ep) => categoryAt(gov, ep, date, sameDay) === "transition");
     if (transition.length > 0) {
-      const evidences = transition.map((ep) =>
-        sameDay.entries.has(ep.membershipId) ? ep.startEvidence : ep.endEvidence
-      );
+      const evidences = transition.flatMap((ep) => [
+        ...(sameDay.entries.has(ep.membershipId) ? [ep.startEvidence] : []),
+        ...(sameDay.exits.has(ep.membershipId) ? [ep.endEvidence] : []),
+      ]);
       changes.push({
         date,
         kind: "transition",
@@ -280,7 +288,7 @@ export function documentedChanges(gov: GovernmentDates, episodes: Episode[]): Ch
         membershipIds: [previous.membershipId, entry.membershipId],
         evidence: weakest([previous.endEvidence, entry.startEvidence]),
         sourceUrl:
-          entry.sameDayOrderSourceUrl ??
+          (previous === linked ? entry.sameDayOrderSourceUrl : null) ??
           commonSource([previous.endSourceUrl, entry.startSourceUrl]),
       });
       handled.add(previous.membershipId);

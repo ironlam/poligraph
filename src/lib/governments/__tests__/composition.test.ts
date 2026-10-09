@@ -361,6 +361,24 @@ describe("compositionAt et categoryAt", () => {
     expect(ids(r2.byCategory.established)).toEqual(["min-2", "pm-2"]);
     expect(r2.byCategory.currentAffairs).toEqual([]);
   });
+  it("affaires courantes, successeur pas encore nommé", () => {
+    const resigned = gov({ endedAt: null, compositionVerifiedAt: "2024-08-01" });
+    const resigning = ep("res", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+    });
+    const r = ok(compositionAt(resigned, [resigning], "2024-07-20"));
+    expect(categoryOf(r, "res")).toBe("currentAffairs");
+    expect(r.establishedPersons).toBe(1);
+    expect(r.caretaker).toBe(true);
+
+    const dataset = { ...resigned, resignedEvidence: "DATASET" as const };
+    const r2 = ok(compositionAt(dataset, [resigning], "2024-07-20"));
+    expect(categoryOf(r2, "res")).toBe("undocumented");
+    expect(r2.establishedPersons).toBe(0);
+    expect(r2.caretaker).toBe(false);
+  });
 });
 
 describe("overlapsPeriod", () => {
@@ -440,5 +458,115 @@ describe("documentedChanges", () => {
         sourceUrl: null,
       },
     ]);
+  });
+
+  it("transition : un épisode qui entre et sort le même jour apporte ses deux preuves", () => {
+    const all = [
+      ep("x", {
+        start: D,
+        startEvidence: "ACT",
+        end: D,
+        endEvidence: "DATASET",
+        endKind: "INDIVIDUAL",
+      }),
+      ep("y", { start: D }),
+      ep("z", { end: D, endEvidence: "ACT", endKind: "INDIVIDUAL" }),
+    ];
+    const transition = documentedChanges(gov({ resignedAt: null }), all).find(
+      (c) => c.kind === "transition"
+    );
+    expect(transition?.membershipIds).toEqual(["x", "y"]);
+    expect(transition?.evidence).toBe("DATASET");
+  });
+
+  it("changement d'intitulé lié, ordre établi : source de l'ordre", () => {
+    const all = [
+      ep("old", {
+        politicianId: "p-same",
+        end: D,
+        endEvidence: "ACT",
+        endSourceUrl: "https://legifrance.gouv.fr/fin",
+        endKind: "INDIVIDUAL",
+      }),
+      ep("new", {
+        politicianId: "p-same",
+        start: D,
+        startSourceUrl: "https://legifrance.gouv.fr/debut",
+        predecessorMembershipId: "old",
+        sameDayOrderEstablished: true,
+        sameDayOrderSourceUrl: "https://legifrance.gouv.fr/ordre",
+      }),
+    ];
+    const changes = documentedChanges(gov({ resignedAt: null }), all).filter((c) => c.date === D);
+    expect(changes).toEqual([
+      {
+        date: D,
+        kind: "titleChange",
+        membershipIds: ["old", "new"],
+        evidence: "ACT",
+        sourceUrl: "https://legifrance.gouv.fr/ordre",
+      },
+    ]);
+  });
+
+  it("remplacement lié par une autre personne, ordre établi : sortie et entrée", () => {
+    const all = [
+      ep("pred", {
+        end: D,
+        endEvidence: "ACT",
+        endSourceUrl: "https://legifrance.gouv.fr/fin",
+        endKind: "INDIVIDUAL",
+      }),
+      ep("succ", {
+        start: D,
+        startSourceUrl: "https://legifrance.gouv.fr/debut",
+        predecessorMembershipId: "pred",
+        sameDayOrderEstablished: true,
+        sameDayOrderSourceUrl: "https://legifrance.gouv.fr/ordre",
+      }),
+    ];
+    const changes = documentedChanges(gov({ resignedAt: null }), all).filter((c) => c.date === D);
+    expect(changes).toEqual([
+      {
+        date: D,
+        kind: "exit",
+        membershipIds: ["pred"],
+        evidence: "ACT",
+        sourceUrl: "https://legifrance.gouv.fr/fin",
+      },
+      {
+        date: D,
+        kind: "entry",
+        membershipIds: ["succ"],
+        evidence: "ACT",
+        sourceUrl: "https://legifrance.gouv.fr/debut",
+      },
+    ]);
+  });
+
+  it("changement d'intitulé non lié : la source d'ordre d'un autre remplacement n'est pas reprise", () => {
+    const all = [
+      ep("pred", { end: D, endEvidence: "ACT", endKind: "INDIVIDUAL" }),
+      ep("old", {
+        politicianId: "p-same",
+        end: D,
+        endEvidence: "ACT",
+        endSourceUrl: "https://legifrance.gouv.fr/meme",
+        endKind: "INDIVIDUAL",
+      }),
+      ep("new", {
+        politicianId: "p-same",
+        start: D,
+        startSourceUrl: "https://legifrance.gouv.fr/meme",
+        predecessorMembershipId: "pred",
+        sameDayOrderEstablished: true,
+        sameDayOrderSourceUrl: "https://legifrance.gouv.fr/ordre",
+      }),
+    ];
+    const titleChange = documentedChanges(gov({ resignedAt: null }), all).find(
+      (c) => c.kind === "titleChange"
+    );
+    expect(titleChange?.membershipIds).toEqual(["old", "new"]);
+    expect(titleChange?.sourceUrl).toBe("https://legifrance.gouv.fr/meme");
   });
 });
