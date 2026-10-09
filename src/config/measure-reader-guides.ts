@@ -107,7 +107,7 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "Le compte professionnel de prévention (C2P) vise à réduire les effets de l’exposition " +
       "des salariés à certains risques professionnels. Il leur permet de se former ou d’engager " +
       "une reconversion pour accéder à un emploi moins exposé ou non exposé.",
-    aliases: ["C2P", "compte professionnel de prévention", "pénibilité", "compte pénibilité"],
+    aliases: ["C2P", "compte professionnel de prévention"],
     sourceUrl: "https://www.service-public.gouv.fr/particuliers/vosdroits/F15504",
     sourceLabel: "Compte professionnel de prévention (C2P)",
     sourcePublisher: "Service Public",

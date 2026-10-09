@@ -18,4 +18,15 @@ describe("catalogue des repères citoyens", () => {
       }
     }
   });
+  it("ne rattache pas le C2P au terme générique de pénibilité", () => {
+    // A measure about hardship in general, or one replacing the account, must not show the C2P.
+    const guide = MEASURE_READER_GUIDES.find(
+      (entry) => entry.slug === "compte-professionnel-prevention"
+    );
+    const terms = [guide?.label, ...(guide?.aliases ?? [])].map((term) =>
+      term?.toLocaleLowerCase("fr")
+    );
+    expect(terms).not.toContain("pénibilité");
+    expect(terms).not.toContain("compte pénibilité");
+  });
 });
