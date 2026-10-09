@@ -62,8 +62,13 @@ jobs:
         timeout-minutes: 15
         continue-on-error: true
 
+      # The Blob token lets the sync copy each new photo to Vercel Blob. Without it the photo is
+      # stored without a copy and pages fall back to the source host, which the image optimizer
+      # answers with a 502 for some of them (European Parliament).
       - name: Sync Photos
         id: sync-photos
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
         run: npm run sync:photos -- --limit=2000
         timeout-minutes: 15
         continue-on-error: true
