@@ -14,11 +14,13 @@ import { setCurrentParty, setPartyRole } from "@/services/politician";
 import { isCurrentChair } from "./careers-chair";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { isDuplicateMandateCandidate } from "./careers-dedup";
+import { GOVERNMENT_SYNC_FROZEN, isGovernmentFunctionType } from "./government-sync-guard";
 
 export interface CareersSyncResult {
   processed: number;
   mandatesCreated: number;
   mandatesSkipped: number;
+  governmentFunctionsSkipped: number;
   partyPresidentsCreated: number;
   foundersCreated: number;
   errors: string[];
@@ -124,6 +126,7 @@ export async function syncCareers(options?: {
     processed: 0,
     mandatesCreated: 0,
     mandatesSkipped: 0,
+    governmentFunctionsSkipped: 0,
     partyPresidentsCreated: 0,
     foundersCreated: 0,
     errors: [],
@@ -248,6 +251,12 @@ export async function syncCareers(options?: {
         const mandateInfo = POSITION_MAPPING[pos.positionId];
         if (!mandateInfo) continue;
 
+        // Gel : les fonctions gouvernementales ne s'importent pas pendant la migration
+        if (GOVERNMENT_SYNC_FROZEN && isGovernmentFunctionType(mandateInfo.type)) {
+          stats.governmentFunctionsSkipped++;
+          continue;
+        }
+
         const positionLabel = labels.get(pos.positionId) || pos.positionId;
 
         // Guard: PRESIDENT_REPUBLIQUE must mention France
@@ -296,6 +305,12 @@ export async function syncCareers(options?: {
           stats.errors.push(`${politician.fullName}: ${error}`);
         }
       }
+    }
+
+    if (stats.governmentFunctionsSkipped > 0) {
+      console.log(
+        `Gel gouvernement : ${stats.governmentFunctionsSkipped} fonction(s) gouvernementale(s) ignorée(s)`
+      );
     }
 
     // ========================================

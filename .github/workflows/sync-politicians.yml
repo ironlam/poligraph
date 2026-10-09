@@ -53,12 +53,6 @@ jobs:
         timeout-minutes: 15
         continue-on-error: true
 
-      - name: Sync Gouvernement (Ministers)
-        id: sync-gouvernement
-        run: npm run sync:gouvernement
-        timeout-minutes: 5
-        continue-on-error: true
-
       # Bounded per-run: process the least-recently-checked slice, then stamp a
       # rotation cursor so successive weekly runs cover everyone (see the
       # careerCheckedAt / photoCheckedAt columns). Full scans blew the timeout.
@@ -91,7 +85,6 @@ jobs:
           FAILED=""
           [ "${{ steps.sync-assemblee.outcome }}" = "failure" ] && FAILED="$FAILED assemblee"
           [ "${{ steps.sync-senat.outcome }}" = "failure" ] && FAILED="$FAILED senat"
-          [ "${{ steps.sync-gouvernement.outcome }}" = "failure" ] && FAILED="$FAILED gouvernement"
           [ "${{ steps.sync-careers.outcome }}" = "failure" ] && FAILED="$FAILED careers"
           [ "${{ steps.sync-photos.outcome }}" = "failure" ] && FAILED="$FAILED photos"
           [ "${{ steps.sync-deceased.outcome }}" = "failure" ] && FAILED="$FAILED deceased"

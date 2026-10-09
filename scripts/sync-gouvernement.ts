@@ -21,6 +21,11 @@ const handler: SyncHandler = {
       type: "boolean",
       description: "Sync all historical governments (Ve République)",
     },
+    {
+      name: "--allow-during-government-migration",
+      type: "boolean",
+      description: "Lever le gel du sync gouvernement pendant la migration",
+    },
   ],
 
   showHelp() {
@@ -45,7 +50,7 @@ Data source: data.gouv.fr - Historique des Gouvernements de la Ve République
   },
 
   async sync(options): Promise<SyncResult> {
-    const { dryRun = false, all = false } = options;
+    const { dryRun = false, all = false, allowDuringGovernmentMigration = false } = options;
 
     if (dryRun) {
       console.log(`[DRY-RUN] Would sync ${all ? "all historical" : "current"} government`);
@@ -54,7 +59,10 @@ Data source: data.gouv.fr - Historique des Gouvernements de la Ve République
 
     console.log(`Mode: ${all ? "All historical governments" : "Current government only"}`);
 
-    const result = await syncGouvernement({ currentOnly: !all });
+    const result = await syncGouvernement({
+      currentOnly: !all,
+      allowDuringGovernmentMigration: allowDuringGovernmentMigration === true,
+    });
 
     return {
       success: result.success,

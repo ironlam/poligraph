@@ -15,6 +15,7 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { generateSlug } from "@/lib/utils";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
+import { GOVERNMENT_SYNC_FROZEN, isGovernmentFunctionType } from "./government-sync-guard";
 import {
   parseSparqlBindings,
   type SparqlPoliticianBinding,
@@ -291,6 +292,12 @@ export async function syncWikidataPoliticians(options?: {
         for (const m of candidate.mandates) {
           const mapping = POSITION_MAP[m.positionQid];
           if (!mapping) continue;
+
+          // Gel : les fonctions gouvernementales ne s'importent pas pendant la migration
+          if (GOVERNMENT_SYNC_FROZEN && isGovernmentFunctionType(mapping.type)) {
+            console.log(`  Gel gouvernement : ${candidate.wikidataId} ${mapping.type} ignoré`);
+            continue;
+          }
 
           await db.mandate.create({
             data: {
