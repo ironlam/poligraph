@@ -5,27 +5,24 @@
 -- Les nouvelles colonnes sont toutes nullables ou ont une valeur par défaut, donc les lignes
 -- existantes restent valides sans backfill.
 --
--- Idempotent : peut être rejoué sans erreur. Les noms de tables, colonnes, contraintes et
--- index sont ceux que Prisma génère, pour qu'un `prisma migrate diff` ne voie aucune dérive.
+-- Les noms de tables, colonnes, contraintes et index sont ceux que Prisma génère, pour qu'un
+-- `prisma migrate diff` ne voie aucune dérive.
+--
+-- Pas de bloc DO pour rendre CREATE TYPE et ADD CONSTRAINT idempotents : SEC-06 les interdit
+-- dans les migrations. Le fichier s'exécute donc une seule fois, dans une transaction : rejoué,
+-- il échoue au premier CREATE TYPE sans rien modifier, au lieu d'avaler l'erreur.
 --
 -- À exécuter avec `prisma db execute --file` (pas de db:push tant que le diff porte la
 -- suppression de l'index HNSW SearchEmbedding_embedding_hnsw_idx). .env pointe sur la production.
 
+BEGIN;
+
 -- Énumérations
-DO $$ BEGIN
-  CREATE TYPE "DateEvidence" AS ENUM ('ACT', 'DATASET', 'DERIVED');
-EXCEPTION WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "DateEvidence" AS ENUM ('ACT', 'DATASET', 'DERIVED');
 
-DO $$ BEGIN
-  CREATE TYPE "GovernmentFunctionEnd" AS ENUM ('INDIVIDUAL', 'COLLECTIVE_RESIGNATION');
-EXCEPTION WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "GovernmentFunctionEnd" AS ENUM ('INDIVIDUAL', 'COLLECTIVE_RESIGNATION');
 
-DO $$ BEGIN
-  CREATE TYPE "GovernmentCompleteness" AS ENUM ('COMPLETE', 'PARTIAL');
-EXCEPTION WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "GovernmentCompleteness" AS ENUM ('COMPLETE', 'PARTIAL');
 
 -- Table Government
 CREATE TABLE IF NOT EXISTS "Government" (
@@ -76,24 +73,14 @@ ALTER TABLE "MandateGovernment"
 CREATE UNIQUE INDEX IF NOT EXISTS "MandateGovernment_predecessorId_key" ON "MandateGovernment"("predecessorId");
 CREATE INDEX IF NOT EXISTS "MandateGovernment_governmentId_idx" ON "MandateGovernment"("governmentId");
 
--- Clés étrangères (gardées par nom : ADD CONSTRAINT n'a pas de IF NOT EXISTS)
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Government_primeMinisterId_fkey') THEN
-    ALTER TABLE "Government" ADD CONSTRAINT "Government_primeMinisterId_fkey"
-      FOREIGN KEY ("primeMinisterId") REFERENCES "Politician"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-  END IF;
-END $$;
+-- Clés étrangères
+ALTER TABLE "Government" ADD CONSTRAINT "Government_primeMinisterId_fkey"
+  FOREIGN KEY ("primeMinisterId") REFERENCES "Politician"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'MandateGovernment_governmentId_fkey') THEN
-    ALTER TABLE "MandateGovernment" ADD CONSTRAINT "MandateGovernment_governmentId_fkey"
-      FOREIGN KEY ("governmentId") REFERENCES "Government"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-  END IF;
-END $$;
+ALTER TABLE "MandateGovernment" ADD CONSTRAINT "MandateGovernment_governmentId_fkey"
+  FOREIGN KEY ("governmentId") REFERENCES "Government"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'MandateGovernment_predecessorId_fkey') THEN
-    ALTER TABLE "MandateGovernment" ADD CONSTRAINT "MandateGovernment_predecessorId_fkey"
-      FOREIGN KEY ("predecessorId") REFERENCES "MandateGovernment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-  END IF;
-END $$;
+ALTER TABLE "MandateGovernment" ADD CONSTRAINT "MandateGovernment_predecessorId_fkey"
+  FOREIGN KEY ("predecessorId") REFERENCES "MandateGovernment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+COMMIT;
