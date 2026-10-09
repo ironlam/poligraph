@@ -9,10 +9,12 @@ import { DataSource, DossierStatus, Prisma } from "@/generated/prisma";
 import type { DossierTimelineEntry } from "@/types/legislation";
 import * as fs from "fs";
 import * as path from "path";
+import { createHash } from "crypto";
 import { mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
 import { extractZip } from "@/lib/parsing/unzip";
 import { downloadFileWithRetry } from "@/lib/download-file";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import { classifyDossierOrigin } from "@/lib/legislation/origine";
 
 const DEFAULT_LEGISLATURE = 17;
 const TEMP_DIR = "/tmp/dossiers-legislatifs-an";
@@ -37,6 +39,7 @@ export interface LegislationSyncResult {
   dossiersProcessed: number;
   dossiersCreated: number;
   dossiersUpdated: number;
+  dossiersWouldUpdate: number;
   dossiersSkipped: number;
   errors: string[];
 }
@@ -279,6 +282,10 @@ export async function syncLegislation(options?: {
   todayOnly?: boolean;
   sinceDays?: number;
   limit?: number;
+  /** Update origin fields on existing dossiers without touching other fields. */
+  originOnly?: boolean;
+  /** Preview without writing to the database. */
+  dryRun?: boolean;
 }): Promise<LegislationSyncResult> {
   const {
     legislature = DEFAULT_LEGISLATURE,
@@ -286,12 +293,15 @@ export async function syncLegislation(options?: {
     todayOnly = false,
     sinceDays,
     limit,
+    originOnly = false,
+    dryRun = false,
   } = options ?? {};
 
   const stats: LegislationSyncResult = {
     dossiersProcessed: 0,
     dossiersCreated: 0,
     dossiersUpdated: 0,
+    dossiersWouldUpdate: 0,
     dossiersSkipped: 0,
     errors: [],
   };
@@ -308,6 +318,7 @@ export async function syncLegislation(options?: {
     mkdirSync(TEMP_DIR, { recursive: true });
 
     await downloadFileWithRetry(zipUrl, zipPath);
+    const sourceFetchedAt = new Date();
     console.log("Downloaded ZIP file");
 
     // Extract ZIP (system tool, not Node.js script spawn)
@@ -320,12 +331,8 @@ export async function syncLegislation(options?: {
       throw new Error(`Directory not found: ${jsonDir}`);
     }
 
-    let jsonFiles = readdirSync(jsonDir).filter((f) => f.endsWith(".json"));
-    jsonFiles = jsonFiles.filter((f) => f.includes(`L${legislature}`));
-
-    if (limit) {
-      jsonFiles = jsonFiles.slice(0, limit);
-    }
+    const jsonFiles = readdirSync(jsonDir).filter((f) => f.endsWith(".json"));
+    let eligibleDossiers = 0;
 
     console.log(`Found ${jsonFiles.length} dossiers to process`);
 
@@ -351,16 +358,30 @@ export async function syncLegislation(options?: {
           continue;
         }
 
+        // A carried-over dossier can retain an older legislature in its UID.
+        // The payload field, not the filename, defines the archive population.
+        const dossierLeg = Number.parseInt(dp.legislature, 10);
+        if (!Number.isInteger(dossierLeg) || dossierLeg !== legislature) {
+          stats.dossiersSkipped++;
+          continue;
+        }
+        if (limit !== undefined && eligibleDossiers >= limit) break;
+        eligibleDossiers++;
+
         const externalId = dp.uid;
         const title = dp.titreDossier?.titre || "Sans titre";
+        const sourceHash = createHash("sha256").update(content).digest("hex");
         const shortTitle = generateShortTitle(title);
         const number = extractNumber(data);
         const procedure = dp.procedureParlementaire?.libelle || "";
         const category = getCategory(procedure);
+        const origin = classifyDossierOrigin(dp);
+        // Keep the existing expose source behavior separate from the new
+        // origin provenance fields. The content sync still relies on this
+        // legacy reference until it is migrated explicitly.
         const documentExternalId = findFirstDocumentRef(dp.actesLegislatifs?.acteLegislatif);
 
         const allCodes = findAllCodes(dp.actesLegislatifs?.acteLegislatif);
-        const dossierLeg = parseInt(dp.legislature, 10) || legislature;
         const status = determineStatus(allCodes, dossierLeg);
 
         const activeStatuses: DossierStatus[] = [
@@ -369,7 +390,7 @@ export async function syncLegislation(options?: {
           "EN_COURS",
           "CONSEIL_CONSTITUTIONNEL",
         ];
-        if (activeOnly && !activeStatuses.includes(status)) {
+        if (!originOnly && activeOnly && !activeStatuses.includes(status)) {
           stats.dossiersSkipped++;
           continue;
         }
@@ -378,7 +399,7 @@ export async function syncLegislation(options?: {
           (a, b) => a.getTime() - b.getTime()
         );
 
-        if (sinceDays !== undefined && allDates.length > 0) {
+        if (!originOnly && sinceDays !== undefined && allDates.length > 0) {
           const cutoff = Date.now() - sinceDays * 24 * 60 * 60 * 1000;
           if (allDates[allDates.length - 1]!.getTime() < cutoff) {
             stats.dossiersSkipped++;
@@ -386,7 +407,7 @@ export async function syncLegislation(options?: {
           }
         }
 
-        if (todayOnly && allDates.length > 0) {
+        if (!originOnly && todayOnly && allDates.length > 0) {
           const today = new Date().toISOString().split("T")[0];
           const mostRecent = allDates[allDates.length - 1]!.toISOString().split("T")[0];
           if (mostRecent !== today) {
@@ -414,6 +435,65 @@ export async function syncLegislation(options?: {
           where: { externalId },
         });
 
+        if (originOnly) {
+          // An origin backfill is intentionally additive. It never creates a
+          // dossier, regenerates a slug, rewrites the timeline, or resolves
+          // authors. Production execution can therefore be resumed safely.
+          if (!existing) {
+            stats.dossiersSkipped++;
+            continue;
+          }
+
+          const originEvidence =
+            origin.originEvidence || origin.candidateDocumentRefs.length > 0
+              ? ({
+                  initialDeposit: origin.originEvidence,
+                  candidateDocumentRefs: origin.candidateDocumentRefs,
+                } as Prisma.InputJsonValue)
+              : Prisma.DbNull;
+          if (dryRun) {
+            stats.dossiersWouldUpdate++;
+          } else {
+            await db.legislativeDossier.update({
+              where: { id: existing.id },
+              data: {
+                origin: origin.origin,
+                originDocumentRef: origin.originDocumentRef,
+                originReason: origin.originReason,
+                originEvidence,
+                originSourceHash: sourceHash,
+                originSourceUrl: zipUrl,
+                originFetchedAt: sourceFetchedAt,
+              },
+            });
+            stats.dossiersUpdated++;
+          }
+          stats.dossiersProcessed++;
+          continue;
+        }
+
+        if (dryRun) {
+          if (existing) stats.dossiersUpdated++;
+          else stats.dossiersCreated++;
+          stats.dossiersProcessed++;
+          continue;
+        }
+
+        const originData = {
+          origin: origin.origin,
+          originDocumentRef: origin.originDocumentRef,
+          originReason: origin.originReason,
+          originEvidence:
+            origin.originEvidence || origin.candidateDocumentRefs.length > 0
+              ? ({
+                  initialDeposit: origin.originEvidence,
+                  candidateDocumentRefs: origin.candidateDocumentRefs,
+                } as Prisma.InputJsonValue)
+              : Prisma.DbNull,
+          originSourceHash: sourceHash,
+          originSourceUrl: zipUrl,
+          originFetchedAt: sourceFetchedAt,
+        };
         const dossierData = {
           externalId,
           title,
@@ -447,7 +527,7 @@ export async function syncLegislation(options?: {
         } else {
           const slug = await generateUniqueDossierSlug(filingDate!, shortTitle || title);
           const created = await db.legislativeDossier.create({
-            data: { ...dossierData, slug },
+            data: { ...dossierData, ...originData, slug },
           });
           dossierId = created.id;
           stats.dossiersCreated++;
