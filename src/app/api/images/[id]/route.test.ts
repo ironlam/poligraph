@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   update: vi.fn(),
   put: vi.fn(),
+  lookup: vi.fn(),
 }));
+
+vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup, default: { lookup: mocks.lookup } }));
 
 vi.mock("@/lib/api/with-public-route", () => ({
   withPublicRoute: <T extends (...args: never[]) => unknown>(handler: T) => handler,
@@ -54,6 +57,7 @@ describe("GET /api/images/[id]", () => {
       blobPhotoUrl: null,
     });
     mocks.put.mockResolvedValue({ url: "https://blob.example/politicians/politician-1-Xy7" });
+    mocks.lookup.mockResolvedValue([{ address: "185.15.58.224" }]);
   });
 
   it.each([
@@ -90,5 +94,79 @@ describe("GET /api/images/[id]", () => {
     expect(mocks.put).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
     expect(response.status).toBe(404);
+  });
+
+  /**
+   * La route est publique : sans garde, une `photoUrl` saisie dans l'admin ou une redirection de la
+   * source menait le serveur vers une adresse interne (#1008).
+   */
+  describe("protection SSRF", () => {
+    /** Imite `fetch` : sans `redirect: "manual"`, la redirection est suivie sans contrôle. */
+    function sourceRedirige(location: string) {
+      let redirected = false;
+      const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        if (redirected || init?.redirect !== "manual") {
+          return new Response(new Uint8Array(JPEG), { status: 200 });
+        }
+        redirected = true;
+        return new Response(null, { status: 302, headers: { location } });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
+    it("refuse un hôte qui pointe vers une adresse interne, sans le contacter", async () => {
+      mocks.lookup.mockResolvedValue([{ address: "169.254.169.254" }]);
+      sourceRepond(JPEG, "image/jpeg");
+
+      const response = await GET(request, context);
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mocks.put).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
+    });
+
+    it("refuse une redirection vers une adresse interne", async () => {
+      const fetchMock = sourceRedirige("https://127.0.0.1/latest/meta-data/");
+
+      const response = await GET(request, context);
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(mocks.put).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
+    });
+
+    it("refuse une adresse en http", async () => {
+      mocks.findUnique.mockResolvedValue({
+        photoUrl: "http://www.assemblee-nationale.fr/photo.jpg",
+        blobPhotoUrl: null,
+      });
+      sourceRepond(JPEG, "image/jpeg");
+
+      const response = await GET(request, context);
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
+    });
+
+    it("suit une redirection vers un hôte public", async () => {
+      const fetchMock = sourceRedirige("https://upload.wikimedia.org/photo.jpg");
+
+      const response = await GET(request, context);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(mocks.put).toHaveBeenCalledOnce();
+      expect(response.status).toBe(302);
+    });
+
+    it("renvoie vers la source quand elle est injoignable", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+
+      const response = await GET(request, context);
+
+      expect(mocks.put).not.toHaveBeenCalled();
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("https://www.assemblee-nationale.fr/photo.jpg");
+    });
   });
 });
