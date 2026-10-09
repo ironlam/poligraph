@@ -26,6 +26,10 @@ import { db } from "../src/lib/db";
 import { MandateType, DataSource, PartyRole } from "../src/generated/prisma";
 import { setCurrentParty, setPartyRole } from "../src/services/politician";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "../src/config/rate-limits";
+import {
+  GOVERNMENT_SYNC_FROZEN,
+  isGovernmentFunctionType,
+} from "../src/services/sync/government-sync-guard";
 
 // Mapping from Wikidata position IDs to our MandateType
 const POSITION_MAPPING: Record<string, { type: MandateType; institution: string }> = {
@@ -160,6 +164,7 @@ Features:
       processed: 0,
       mandatesCreated: 0,
       mandatesSkipped: 0,
+      governmentFunctionsSkipped: 0,
       partyPresidentsCreated: 0,
       foundersCreated: 0,
     };
@@ -342,6 +347,12 @@ Features:
           // Regular mandate position
           const mandateInfo = POSITION_MAPPING[pos.positionId];
           if (!mandateInfo) continue;
+
+          // Gel : les fonctions gouvernementales ne s'importent pas pendant la migration
+          if (GOVERNMENT_SYNC_FROZEN && isGovernmentFunctionType(mandateInfo.type)) {
+            stats.governmentFunctionsSkipped++;
+            continue;
+          }
 
           // Generate title
           const positionLabel = labels.get(pos.positionId) || pos.positionId;
