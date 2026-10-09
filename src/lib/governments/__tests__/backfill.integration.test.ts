@@ -243,4 +243,49 @@ describeIfDisposableDb("backfill des gouvernements", () => {
     const castex = await db.government.findUniqueOrThrow({ where: { slug: "castex" } });
     expect(castex.formedAt).toEqual(d("2020-07-06"));
   });
+
+  it("annule le gouvernement fautif seul, garde les précédents, et un second passage termine", async () => {
+    await db.mandateGovernment.updateMany({
+      where: { id: { in: Object.values(ids) } },
+      data: { governmentId: null, startEvidence: null, endEvidence: null },
+    });
+    await db.government.deleteMany({ where: { primeMinisterId: { in: politicianIds } } });
+    const plan = planBackfill(await fetchRows());
+    const broken = {
+      ...plan,
+      memberships: [
+        ...plan.memberships,
+        { membershipId: "inexistant", governmentSlug: "lecornu-1", hasEnd: false },
+      ],
+    };
+    const { BackfillGovernmentError } = await import("../backfill");
+    let error: unknown;
+    try {
+      await applyBackfill(broken, db);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(BackfillGovernmentError);
+    expect((error as InstanceType<typeof BackfillGovernmentError>).slug).toBe("lecornu-1");
+    // Ordre par sequence : valls-1 et castex déjà écrits, lecornu-1 annulé, lecornu-2 jamais atteint.
+    expect(await db.government.findUnique({ where: { slug: "valls-1" } })).not.toBeNull();
+    expect(await db.government.findUnique({ where: { slug: "castex" } })).not.toBeNull();
+    expect(await db.government.findUnique({ where: { slug: "lecornu-1" } })).toBeNull();
+    expect(await db.government.findUnique({ where: { slug: "lecornu-2" } })).toBeNull();
+
+    const ok = await applyBackfill(planBackfill(await fetchRows()), db);
+    expect(ok.governments.created).toBe(2);
+    expect(await db.government.findUnique({ where: { slug: "lecornu-2" } })).not.toBeNull();
+  });
+
+  it("n'écrase pas le Premier ministre d'un gouvernement dont la nomination est en preuve ACT", async () => {
+    const other = await person("autre-pm");
+    await db.government.update({
+      where: { slug: "castex" },
+      data: { primeMinisterId: other, primeMinisterAppointedEvidence: "ACT" },
+    });
+    await applyBackfill(planBackfill(await fetchRows()), db);
+    const castex = await db.government.findUniqueOrThrow({ where: { slug: "castex" } });
+    expect(castex.primeMinisterId).toBe(other);
+  });
 });
