@@ -129,24 +129,26 @@ export async function syncDeceasedFromWikidata(): Promise<DeceasedSyncResult> {
 }
 
 /**
- * Mark mandates as not current for deceased politicians
+ * Close the current mandates of deceased politicians.
+ *
+ * The death date becomes the end date, so a closure can be told apart from any other and undone
+ * if the death date proves wrong. A mandate that started after the recorded death is left open:
+ * that death date is the error, not the mandate. A wrong Wikidata link once gave 113 living
+ * mayors the death date of a namesake, and this pass closed their mandates without a trace.
  */
 export async function updateDeceasedMandates(): Promise<number> {
-  // Find deceased politicians with current mandates
-  const result = await db.mandate.updateMany({
-    where: {
-      isCurrent: true,
-      politician: {
-        deathDate: { not: null },
-      },
-    },
-    data: {
-      isCurrent: false,
-    },
-  });
+  const count = await db.$executeRaw`
+    UPDATE "Mandate" m
+    SET "isCurrent" = false, "endDate" = COALESCE(m."endDate", p."deathDate")
+    FROM "Politician" p
+    WHERE p.id = m."politicianId"
+      AND m."isCurrent" = true
+      AND p."deathDate" IS NOT NULL
+      AND p."deathDate" >= m."startDate"
+  `;
 
-  console.log(`Marked ${result.count} mandates as not current for deceased politicians`);
-  return result.count;
+  console.log(`Marked ${count} mandates as not current for deceased politicians`);
+  return count;
 }
 
 /**
