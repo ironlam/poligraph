@@ -14,7 +14,12 @@
  *   npx tsx --env-file=.env scripts/governments-backfill.ts --apply --confirm-production
  */
 import { db } from "@/lib/db";
-import { applyBackfill, planBackfill, type BackfillRow } from "@/lib/governments/backfill";
+import {
+  applyBackfill,
+  BackfillGovernmentError,
+  planBackfill,
+  type BackfillRow,
+} from "@/lib/governments/backfill";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -32,13 +37,22 @@ async function main() {
       id: true,
       mandateId: true,
       governmentName: true,
-      mandate: { select: { politicianId: true, type: true, startDate: true, endDate: true } },
+      mandate: {
+        select: {
+          politician: { select: { fullName: true } },
+          politicianId: true,
+          type: true,
+          startDate: true,
+          endDate: true,
+        },
+      },
     },
   });
   const rows: BackfillRow[] = memberships.map((m) => ({
     membershipId: m.id,
     mandateId: m.mandateId,
     politicianId: m.mandate.politicianId,
+    politicianName: m.mandate.politician.fullName,
     governmentName: m.governmentName,
     type: m.mandate.type,
     startDate: m.mandate.startDate,
@@ -55,6 +69,11 @@ async function main() {
         ` | personnes ${String(r.persons).padStart(3)} | sans fin ${String(r.withoutEnd).padStart(3)}` +
         ` | jours d'entrée ${String(r.entryDays).padStart(2)} | jours de sortie ${String(r.exitDays).padStart(2)}` +
         ` | formé ${g.formedAt} | fin ${g.endedAt ?? "-"}`
+    );
+    const pm = g.primeMinister;
+    console.log(
+      `     PM : ${pm.name ?? "?"} (${pm.politicianId}) | fonction ${pm.functionStart} -> ${pm.functionEnd ?? "-"}` +
+        ` | personnes en PREMIER_MINISTRE : ${pm.distinctPersons}${pm.distinctPersons > 1 ? "  ATTENTION" : ""}`
     );
   }
 
@@ -80,6 +99,12 @@ async function main() {
 
 main()
   .catch((e) => {
+    if (e instanceof BackfillGovernmentError) {
+      console.error(
+        `Échec sur le gouvernement ${e.slug} : sa transaction est annulée, les gouvernements précédents sont écrits. ` +
+          "Relancer le script est sans risque (idempotent)."
+      );
+    }
     console.error(e);
     process.exitCode = 1;
   })

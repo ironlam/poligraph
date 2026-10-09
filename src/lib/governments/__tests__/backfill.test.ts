@@ -125,4 +125,43 @@ describe("planBackfill", () => {
     ];
     expect(planBackfill(rows)).toEqual(planBackfill([...rows].reverse()));
   });
+
+  it("signale plusieurs Premiers ministres sous un libellé et garde le plus ancien", () => {
+    const plan = planBackfill([
+      row({
+        governmentName: "Gouvernement Jean Castex",
+        type: "PREMIER_MINISTRE",
+        politicianId: "late",
+        politicianName: "Tard Venu",
+        startDate: d("2020-08-01"),
+      }),
+      row({
+        governmentName: "Gouvernement Jean Castex",
+        type: "PREMIER_MINISTRE",
+        politicianId: "early",
+        politicianName: "Premier Arrivé",
+        startDate: d("2020-07-03"),
+        endDate: d("2020-07-30"),
+      }),
+    ]);
+    const g = plan.governments[0]!;
+    expect(g.primeMinisterId).toBe("early");
+    expect(g.primeMinister).toEqual({
+      politicianId: "early",
+      name: "Premier Arrivé",
+      functionStart: "2020-07-03",
+      functionEnd: "2020-07-30",
+      distinctPersons: 2,
+    });
+    expect(
+      plan.unresolved.some((u) => u.kind === "multiple-prime-ministers" && u.slug === "castex")
+    ).toBe(true);
+  });
+
+  it("n'avertit pas pour un seul Premier ministre", () => {
+    const plan = planBackfill([
+      row({ governmentName: "Gouvernement Jean Castex", type: "PREMIER_MINISTRE" }),
+    ]);
+    expect(plan.unresolved.some((u) => u.kind === "multiple-prime-ministers")).toBe(false);
+  });
 });
