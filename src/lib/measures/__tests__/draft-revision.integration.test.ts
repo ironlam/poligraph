@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
-import { draftInput, seedMeasureWithDraft, withIndexingRejected } from "./helpers";
+import {
+  draftInput,
+  publishSeededMeasure,
+  seedMeasureWithDraft,
+  withIndexingRejected,
+} from "./helpers";
 
 // Two deferred imports: `@/lib/db` throws at module load when DATABASE_URL is unset, and
 // `../transitions` imports it as a value, so a static import of either fails the whole
@@ -157,5 +162,115 @@ describeIfDisposableDb("draftMeasureRevision", () => {
     await expect(draftMeasureRevision(draftInput("mesure-inexistante", "Texte."))).rejects.toThrow(
       /not found/i
     );
+  });
+
+  /** A published measure whose revision carries one approved subtopic and one approved guide. */
+  async function seedEnrichedPublishedMeasure() {
+    const seeded = await publishSeededMeasure();
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const subtopic = await db.measureSubtopic.create({
+      data: {
+        slug: `loyers-${suffix}`,
+        label: "Loyers",
+        description: "Niveau et encadrement des loyers.",
+        theme: "LOGEMENT_URBANISME",
+      },
+    });
+    const guide = await db.measureReaderGuide.create({
+      data: {
+        slug: `zone-tendue-${suffix}`,
+        label: "Zone tendue",
+        definition: "Définition écrite par un humain.",
+        sourceKind: "OFFICIAL_INSTITUTION",
+        sourceUrl: "https://example.org/zone-tendue",
+        sourceLabel: "Service public",
+        sourcePublisher: "Service public",
+        publicationStatus: "PUBLISHED",
+      },
+    });
+    await db.measureRevisionSubtopic.create({
+      data: {
+        revisionId: seeded.revisionId,
+        subtopicId: subtopic.id,
+        status: "APPROVED",
+        method: "llm",
+        classifierVersion: "test",
+        taxonomyVersion: "test",
+        reviewedAt: new Date("2027-01-02T00:00:00Z"),
+        reviewedBy: "relecteur",
+      },
+    });
+    await db.measureRevisionReaderGuide.create({
+      data: {
+        revisionId: seeded.revisionId,
+        guideId: guide.id,
+        term: "zones tendues",
+        normalizedTerm: "zones tendues",
+        evidenceSpan: "zones tendues",
+        reason: "Notion administrative.",
+        confidence: 0.9,
+        status: "APPROVED",
+        method: "llm",
+        detectorVersion: "test",
+        reviewedAt: new Date("2027-01-02T00:00:00Z"),
+        reviewedBy: "relecteur",
+      },
+    });
+    return { ...seeded, subtopicId: subtopic.id, guideId: guide.id };
+  }
+
+  it("reporte en suggestion les sous-thèmes et repères approuvés quand le texte change", async () => {
+    const { measureId, subtopicId, guideId } = await seedEnrichedPublishedMeasure();
+
+    const { revisionId } = await draftMeasureRevision(
+      draftInput(measureId, "Encadrer strictement les loyers dans les zones tendues.")
+    );
+
+    const subtopics = await db.measureRevisionSubtopic.findMany({ where: { revisionId } });
+    expect(subtopics).toEqual([
+      expect.objectContaining({
+        subtopicId,
+        status: "SUGGESTED",
+        reviewedBy: null,
+        method: "carried-forward",
+      }),
+    ]);
+    const guides = await db.measureRevisionReaderGuide.findMany({ where: { revisionId } });
+    expect(guides).toEqual([
+      expect.objectContaining({
+        guideId,
+        status: "SUGGESTED",
+        reviewedBy: null,
+        evidenceSpan: "zones tendues",
+      }),
+    ]);
+  });
+
+  it("garde l'approbation quand le texte est identique", async () => {
+    const { measureId, subtopicId, guideId } = await seedEnrichedPublishedMeasure();
+
+    const { revisionId } = await draftMeasureRevision(
+      draftInput(measureId, "Encadrer les loyers dans les zones tendues.")
+    );
+
+    const subtopics = await db.measureRevisionSubtopic.findMany({ where: { revisionId } });
+    expect(subtopics).toEqual([
+      expect.objectContaining({ subtopicId, status: "APPROVED", reviewedBy: "relecteur" }),
+    ]);
+    const guides = await db.measureRevisionReaderGuide.findMany({ where: { revisionId } });
+    expect(guides).toEqual([expect.objectContaining({ guideId, status: "APPROVED" })]);
+  });
+
+  it("ne reporte pas un repère dont l'extrait a disparu du nouveau texte", async () => {
+    const { measureId, subtopicId } = await seedEnrichedPublishedMeasure();
+
+    const { revisionId } = await draftMeasureRevision(
+      draftInput(measureId, "Plafonner les loyers dans les grandes agglomérations.")
+    );
+
+    expect(await db.measureRevisionReaderGuide.count({ where: { revisionId } })).toBe(0);
+    expect(await db.measureRevisionSubtopic.findMany({ where: { revisionId } })).toEqual([
+      expect.objectContaining({ subtopicId, status: "SUGGESTED" }),
+    ]);
   });
 });
