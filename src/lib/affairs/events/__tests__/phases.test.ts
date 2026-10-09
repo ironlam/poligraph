@@ -160,3 +160,10 @@ describe("buildPhaseTrail", () => {
     ]);
   });
 });
+
+describe("buildPhaseTrail : plainte déposée", () => {
+  it("place une plainte devant la CJR dans la phase d'enquête", async () => {
+    const { STATUS_PHASE } = await import("../phases");
+    expect(STATUS_PHASE.PLAINTE_DEPOSEE).toBe("ENQUETE");
+  });
+});

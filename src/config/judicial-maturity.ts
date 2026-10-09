@@ -22,6 +22,7 @@ const STATUS_TO_MATURITY: Record<AffairStatus, JudicialMaturity> = {
   RENVOI_TRIBUNAL: "PROCEDURE_VALIDEE",
   PROCES_EN_COURS: "PROCEDURE_VALIDEE",
   // Tier 3: Enquete (complaint-stage, no judicial validation)
+  PLAINTE_DEPOSEE: "ENQUETE",
   ENQUETE_PRELIMINAIRE: "ENQUETE",
   // Tier 3bis: Instruction close sans mise en examen (see INSTRUCTION_CLOSE doc above)
   INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: "INSTRUCTION_CLOSE",

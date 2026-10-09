@@ -27,6 +27,7 @@ export const COLORS = {
 
   // Affair status colors — blue shades + muted red for condamnation
   affairStatus: {
+    PLAINTE_DEPOSEE: { light: "#88a4c6", dark: "#5a7eaa", tailwind: "bg-blue-300" },
     ENQUETE_PRELIMINAIRE: { light: "#88a4c6", dark: "#5a7eaa", tailwind: "bg-blue-300" },
     INSTRUCTION: { light: "#7090b8", dark: "#5a7eaa", tailwind: "bg-blue-400" },
     INSTRUCTION_CLOTUREE_SANS_MISE_EN_EXAMEN: {

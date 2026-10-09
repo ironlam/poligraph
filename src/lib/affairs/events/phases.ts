@@ -52,6 +52,7 @@ export const EVENT_TYPE_PHASE: Record<AffairEventType, Phase | "INHERIT" | null>
 };
 
 export const STATUS_PHASE: Record<AffairStatus, Phase | null> = {
+  PLAINTE_DEPOSEE: "ENQUETE",
   ENQUETE_PRELIMINAIRE: "ENQUETE",
   INSTRUCTION: "INSTRUCTION",
   MISE_EN_EXAMEN: "INSTRUCTION",
