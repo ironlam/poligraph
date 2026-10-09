@@ -164,6 +164,7 @@ export interface GouvernementSyncResult {
   membersUpdated: number;
   mandatesCreated: number;
   errors: string[];
+  skipped?: string;
 }
 
 // ============================================

@@ -13,6 +13,7 @@ import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { upsertPoliticianExternalId } from "@/lib/prisma-helpers";
 import { sanitizeGovernmentTitle } from "./government-title";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import { GOVERNMENT_SYNC_FROZEN } from "./government-sync-guard";
 
 const client = new HTTPClient({ rateLimitMs: DATA_GOUV_RATE_LIMIT_MS });
 
@@ -278,8 +279,22 @@ async function syncGouvernementMember(
  * Main sync function - imports current government members
  */
 export async function syncGouvernement(
-  options: { currentOnly?: boolean } = {}
+  options: { currentOnly?: boolean; allowDuringGovernmentMigration?: boolean } = {}
 ): Promise<GouvernementSyncResult> {
+  if (GOVERNMENT_SYNC_FROZEN && !options.allowDuringGovernmentMigration) {
+    console.log(
+      "Sync gouvernement gelé pendant la migration des gouvernements (option --allow-during-government-migration pour forcer)."
+    );
+    return {
+      success: true,
+      membersCreated: 0,
+      membersUpdated: 0,
+      mandatesCreated: 0,
+      errors: [],
+      skipped: "government-migration-freeze",
+    };
+  }
+
   const { currentOnly = true } = options;
 
   const result: GouvernementSyncResult = {
