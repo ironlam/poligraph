@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { identifyPhoto } from "@/lib/photos/source-photo";
 import { uploadSourcePhotoCopy } from "@/lib/photos/blob";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { fetchPublicPhoto } from "@/lib/api/fetch-public-photo";
 
 export const dynamic = "force-dynamic";
 
@@ -28,28 +28,20 @@ export const GET = withPublicRoute(async (_req, { params }) => {
     });
   }
 
-  // Cache miss — download from source, upload to Blob
+  // Cache miss — download from source, upload to Blob. The route is public, so the download goes
+  // through the SSRF guard: https only, no internal address, every redirect checked again.
+  //
+  // A 200 does not mean an image. Public French institutional sites answer an interstitial or a
+  // blocking page with a 200 and an HTML body, and this route used to store that body verbatim.
+  // Once written, the cache-hit branch above redirects to it forever without ever looking again.
+  // Measured on production before the first guard: 136 of 1428 cached photos were HTML. The bytes
+  // are identified by their signature, which also rejects the NosSénateurs placeholder.
+  const fetched = await fetchPublicPhoto(politician.photoUrl);
+  if (fetched.kind === "unreachable") return redirectToSource(politician.photoUrl);
+  if (fetched.kind !== "photo") return new NextResponse(null, { status: 404 });
+
   try {
-    const sourceResponse = await fetch(politician.photoUrl, {
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!sourceResponse.ok) {
-      return new NextResponse(null, { status: 404 });
-    }
-
-    // A 200 does not mean an image. Public French institutional sites answer an interstitial or a
-    // blocking page with a 200 and an HTML body, and this route used to store that body verbatim.
-    // Once written, the cache-hit branch above redirects to it forever without ever looking again.
-    // Measured on production before the first guard: 136 of 1428 cached photos were HTML. The bytes
-    // are now identified by their signature, which also rejects the NosSénateurs placeholder.
-    const buffer = Buffer.from(await sourceResponse.arrayBuffer());
-    const photo = identifyPhoto(buffer);
-    if (!photo) {
-      return new NextResponse(null, { status: 404 });
-    }
-
-    const blobUrl = await uploadSourcePhotoCopy(id!, buffer, photo.contentType);
+    const blobUrl = await uploadSourcePhotoCopy(id!, fetched.buffer, fetched.contentType);
 
     // Save Blob URL to DB
     await db.politician.update({
@@ -64,12 +56,16 @@ export const GET = withPublicRoute(async (_req, { params }) => {
       },
     });
   } catch {
-    // Source download failed — fall back to source URL directly
-    return NextResponse.redirect(politician.photoUrl, {
-      status: 302,
-      headers: {
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
+    // Blob upload failed — fall back to source URL directly
+    return redirectToSource(politician.photoUrl);
   }
 });
+
+function redirectToSource(photoUrl: string) {
+  return NextResponse.redirect(photoUrl, {
+    status: 302,
+    headers: {
+      "Cache-Control": "public, max-age=3600",
+    },
+  });
+}

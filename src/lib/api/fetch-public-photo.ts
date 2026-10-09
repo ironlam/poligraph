@@ -3,7 +3,8 @@ import { isIP } from "node:net";
 import { identifyPhoto } from "@/lib/photos/source-photo";
 
 /**
- * Download a photo from a URL typed by an administrator, server side.
+ * Download a photo server side, from a URL typed by an administrator or stored by a sync and
+ * fetched again by the public `/api/images/[id]` route.
  *
  * Any public host is allowed on purpose: pasting a town hall's URL and copying
  * it to Blob is the documented way to give a mayor a photo. What is refused is
@@ -11,8 +12,9 @@ import { identifyPhoto } from "@/lib/photos/source-photo";
  * link-local ranges, including after a redirect.
  *
  * Residual risk: the host is resolved here and again by `fetch`, so a hostile
- * DNS server could answer differently the second time (DNS rebinding). The
- * route is behind admin authentication, which bounds who could try.
+ * DNS server could answer differently the second time (DNS rebinding). Only
+ * an administrator or a sync writes the URL; a visitor of the public route
+ * picks a politician, never a URL, which bounds who could try.
  */
 
 export type PublicPhotoFetch =
