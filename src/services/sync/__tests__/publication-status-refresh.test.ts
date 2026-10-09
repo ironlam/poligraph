@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   findMany: vi.fn(),
+  mandateFindMany: vi.fn().mockResolvedValue([]),
   updateMany: vi.fn(),
   requestProfileRefresh: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { politician: { findMany: h.findMany, updateMany: h.updateMany } },
+  db: {
+    politician: { findMany: h.findMany, updateMany: h.updateMany },
+    mandate: { findMany: h.mandateFindMany },
+  },
 }));
 vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
   requestProfileRefresh: h.requestProfileRefresh,

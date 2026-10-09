@@ -16,6 +16,8 @@ import { determineStatus, type PoliticianRow } from "./publication-status-rules"
 
 export interface PublicationStatusOptions {
   dryRun?: boolean;
+  /** Restrict the pass to these politicians (publication lots). */
+  politicianIds?: string[];
 }
 
 export interface PublicationStatusStats {
@@ -32,9 +34,10 @@ export interface PublicationStatusStats {
 export async function assignPublicationStatus(
   options: PublicationStatusOptions = {}
 ): Promise<PublicationStatusStats> {
-  const { dryRun = false } = options;
+  const { dryRun = false, politicianIds } = options;
 
   const politicians = await db.politician.findMany({
+    where: politicianIds ? { id: { in: politicianIds } } : undefined,
     select: {
       id: true,
       birthDate: true,
@@ -74,6 +77,18 @@ export async function assignPublicationStatus(
     },
   });
 
+  // Rule 3d: government functions whose start is proved by an official act. Separate
+  // query because `mandates` above is already filtered on isCurrent.
+  const verified = await db.mandate.findMany({
+    where: {
+      governmentData: { is: { startEvidence: "ACT" } },
+      ...(politicianIds ? { politicianId: { in: politicianIds } } : {}),
+    },
+    select: { politicianId: true },
+    distinct: ["politicianId"],
+  });
+  const verifiedIds = new Set(verified.map((m) => m.politicianId));
+
   const changes: Map<PublicationStatus, string[]> = new Map();
   let skippedOverride = 0;
   let unchanged = 0;
@@ -91,6 +106,7 @@ export async function assignPublicationStatus(
       hasCurrentMandate: p.mandates.length > 0,
       hasPublishedDirectAffair: p.affairs.length > 0,
       hasPublishedPresidentialCandidacy: p.candidacies.length > 0,
+      hasVerifiedGovernmentFunction: verifiedIds.has(p.id),
     };
 
     const targetStatus = determineStatus(row);

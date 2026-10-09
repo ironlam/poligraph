@@ -14,6 +14,7 @@ function row(over: Partial<PoliticianRow> = {}): PoliticianRow {
     hasCurrentMandate: false,
     hasPublishedDirectAffair: false,
     hasPublishedPresidentialCandidacy: false,
+    hasVerifiedGovernmentFunction: false,
     ...over,
   };
 }

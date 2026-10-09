@@ -18,6 +18,8 @@ export type PoliticianRow = {
   hasCurrentMandate: boolean;
   hasPublishedDirectAffair: boolean;
   hasPublishedPresidentialCandidacy: boolean;
+  /** Une fonction gouvernementale dont le début est prouvé par un acte (startEvidence = ACT). */
+  hasVerifiedGovernmentFunction: boolean;
 };
 
 export function determineStatus(p: PoliticianRow): PublicationStatus | null {
@@ -57,6 +59,14 @@ export function determineStatus(p: PoliticianRow): PublicationStatus | null {
   // has already been taken. Placed after the exclusion rules so a published
   // affair cannot drag a pre-1958 figure back into scope.
   if (p.hasPublishedDirectAffair) return PublicationStatus.PUBLISHED;
+
+  // Rule 3d: A government function proved by an official act, with a photo or a
+  // biography, publishes the profile. The government's own publication status plays
+  // no part: publishing a person and publishing a team are separate decisions.
+  // Placed after the exclusion rules and statusOverride, which stay in charge.
+  if (p.hasVerifiedGovernmentFunction && (p.photoUrl || p.biography)) {
+    return PublicationStatus.PUBLISHED;
+  }
 
   // Rule 4: Has current mandate → PUBLISHED
   if (p.hasCurrentMandate) return PublicationStatus.PUBLISHED;

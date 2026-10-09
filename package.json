@@ -70,6 +70,7 @@
     "maires:promote": "tsx scripts/promote-maires.ts",
     "sync:history:stats": "tsx scripts/sync-mandate-history.ts --stats",
     "sync:daily": "tsx scripts/sync-daily.ts",
+    "publish:government-profiles": "tsx --env-file=.env scripts/publish-government-profiles.ts",
     "cache:revalidate": "tsx scripts/revalidate-cache.ts",
     "sync:full": "tsx scripts/sync-full.ts",
     "sync:scrutins-an": "tsx scripts/sync-scrutins-an.ts",

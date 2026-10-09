@@ -38,7 +38,7 @@ export const FROZEN_TAGS = ["elections-municipales-2026"] as const;
  * expensive to regenerate. Held out of `revalidateAll()`: a full purge already
  * covers them through their parent tag.
  */
-export const NARROW_TAGS = ["votes-key", "homepage"] as const;
+export const NARROW_TAGS = ["votes-key", "homepage", "gouvernements"] as const;
 
 /** Every tag an operator may name explicitly (admin endpoint, cron endpoint). */
 export const SELECTABLE_TAGS = [...ALL_TAGS, ...FROZEN_TAGS, ...NARROW_TAGS] as const;

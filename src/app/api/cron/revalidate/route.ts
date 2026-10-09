@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
+import { revalidatePathsSchema } from "@/lib/security/schemas/admin";
 import { requestProfileReconcile } from "@/lib/politicians/profile-snapshot/events";
 
 const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
@@ -15,7 +17,8 @@ type CronAllowedTag = SelectableCacheTag;
  * Invalidate Next.js cache after sync operations.
  * Protected by CRON_SECRET (same as other cron endpoints).
  *
- * Body: { tags: ["votes", "politicians"] } or { all: true }
+ * Body: { tags: ["votes", "politicians"] } or { all: true }, and/or
+ * { paths: ["/politiques/<slug>"] } (at most 10, profile and government paths only).
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -39,7 +42,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ revalidated: "all", deprecated: true });
     }
 
-    if (Array.isArray(body.tags) && body.tags.length > 0) {
+    const hasPaths = body.paths !== undefined;
+    const hasTags = Array.isArray(body.tags) && body.tags.length > 0;
+
+    let revalidatedPaths: string[] | undefined;
+    if (hasPaths) {
+      const parsed = revalidatePathsSchema.safeParse(body.paths);
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            error:
+              "paths: 1 to 10 entries, /politiques/<slug> or /politiques/gouvernements[/<slug>]",
+          },
+          { status: 400 }
+        );
+      }
+      revalidatedPaths = parsed.data;
+    }
+
+    if (hasTags) {
       const tags = body.tags.filter(
         (t: unknown): t is CronAllowedTag =>
           typeof t === "string" && (CRON_ALLOWED_TAGS as readonly string[]).includes(t)
@@ -52,15 +73,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Paths first: a request mixing both applies the narrow purge before the tag one.
+      for (const path of revalidatedPaths ?? []) revalidatePath(path);
       revalidateTags(tags);
       if (tags.some((tag: string) => PROFILE_TAGS.includes(tag))) {
         await requestProfileReconcile(`cron:${tags.join(",")}`);
       }
-      return NextResponse.json({ revalidated: tags });
+      return NextResponse.json(
+        revalidatedPaths ? { revalidated: tags, revalidatedPaths } : { revalidated: tags }
+      );
+    }
+
+    if (revalidatedPaths) {
+      for (const path of revalidatedPaths) revalidatePath(path);
+      return NextResponse.json({ revalidatedPaths });
     }
 
     return NextResponse.json(
-      { error: "Body must contain { all: true } or { tags: string[] }" },
+      { error: "Body must contain { all: true }, { tags: string[] } or { paths: string[] }" },
       { status: 400 }
     );
   } catch {
