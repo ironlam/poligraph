@@ -107,5 +107,6 @@ else
     src/lib/affairs/monitoring/__tests__/queries.integration.test.ts \
     src/services/affairs/monitoring/__tests__/actions.integration.test.ts \
     src/lib/governments/__tests__/backfill.integration.test.ts \
+    src/lib/governments/__tests__/merge-mandates.integration.test.ts \
     src/test/__tests__/db-guard.test.ts
 fi
