@@ -6,6 +6,15 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(1024),
 });
 
+/** Profile pages and the government section only: nothing broader may be revalidated by path. */
+export const REVALIDATE_PATH_PATTERN =
+  /^\/politiques\/(?:[a-z0-9-]+|gouvernements(?:\/[a-z0-9-]+)?)$/;
+
+export const revalidatePathsSchema = z
+  .array(z.string().regex(REVALIDATE_PATH_PATTERN))
+  .min(1)
+  .max(10);
+
 export const revalidateCacheSchema = z.union([
   z.object({ all: z.literal(true) }),
   z.object({ tags: z.array(z.enum(SELECTABLE_TAGS)).min(1) }),

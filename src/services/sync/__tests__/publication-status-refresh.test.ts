@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   findMany: vi.fn(),
+  mandateFindMany: vi.fn().mockResolvedValue([]),
   updateMany: vi.fn(),
   requestProfileRefresh: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
-  db: { politician: { findMany: h.findMany, updateMany: h.updateMany } },
+  db: {
+    politician: { findMany: h.findMany, updateMany: h.updateMany },
+    mandate: { findMany: h.mandateFindMany },
+  },
 }));
 vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
   requestProfileRefresh: h.requestProfileRefresh,
@@ -71,5 +75,23 @@ describe("assignPublicationStatus et les fiches précalculées", () => {
     await assignPublicationStatus({ dryRun: true });
 
     expect(h.requestProfileRefresh).not.toHaveBeenCalled();
+  });
+
+  it("expose les bascules décidées, y compris hors publication", async () => {
+    h.findMany.mockResolvedValue([
+      politician("p-archive", "DRAFT", false),
+      politician("p-publie", "ARCHIVED", true),
+    ]);
+
+    const stats = await assignPublicationStatus({
+      dryRun: true,
+      politicianIds: ["p-archive", "p-publie"],
+    });
+
+    expect(stats.transitions).toEqual([
+      { id: "p-archive", from: "DRAFT", to: "ARCHIVED" },
+      { id: "p-publie", from: "ARCHIVED", to: "PUBLISHED" },
+    ]);
+    expect(h.findMany.mock.calls[0]?.[0].where).toEqual({ id: { in: ["p-archive", "p-publie"] } });
   });
 });
