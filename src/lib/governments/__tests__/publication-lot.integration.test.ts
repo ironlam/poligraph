@@ -104,12 +104,15 @@ describeIfDisposableDb("lots de publication", () => {
 
   it("ignore une fiche que le lot n'a pas modifiée", async () => {
     const a = await person("PUBLISHED");
+    const b = await person();
     const lotId = `test-lot-${Date.now()}-${++seq}`;
-    await lot.snapshotStatuses(db, [a], lotId);
+    await lot.snapshotStatuses(db, [a, b], lotId);
+    await db.politician.update({ where: { id: b }, data: { publicationStatus: "PUBLISHED" } });
+    await lot.recordApplied(db, lotId, [{ id: b, publicationStatus: "PUBLISHED" }]);
 
     const res = await lot.rollbackLot(db, lotId);
 
-    expect(res.restored).toEqual([]);
+    expect(res.restored).toEqual([b]);
     expect(res.skipped.map((s) => s.id)).toEqual([a]);
     expect(await state(a)).toEqual({ publicationStatus: "PUBLISHED", statusOverride: false });
   });
@@ -119,5 +122,25 @@ describeIfDisposableDb("lots de publication", () => {
     const lotId = `test-lot-${Date.now()}-${++seq}`;
     await lot.snapshotStatuses(db, [a], lotId);
     await expect(lot.snapshotStatuses(db, [a], lotId)).rejects.toThrow(/déjà un instantané/);
+  });
+
+  it("signale un lot interrompu (instantané sans APPLIED) sans rien restaurer", async () => {
+    const a = await person();
+    const b = await person();
+    const lotId = `test-lot-${Date.now()}-${++seq}`;
+    await lot.snapshotStatuses(db, [a, b], lotId);
+    await db.politician.update({ where: { id: a }, data: { publicationStatus: "PUBLISHED" } });
+
+    const res = await lot.rollbackLot(db, lotId);
+
+    expect(res.restored).toEqual([]);
+    expect(res.skipped).toEqual([]);
+    expect(res.incomplete?.snapshotted).toBe(2);
+    expect(res.incomplete?.message).toMatch(/aucune ligne APPLIED/);
+    const byId = Object.fromEntries(res.incomplete!.politicians.map((p) => [p.id, p]));
+    expect(byId[a]).toMatchObject({ before: "DRAFT", current: "PUBLISHED" });
+    expect(byId[b]).toMatchObject({ before: "DRAFT", current: "DRAFT" });
+    expect(await state(a)).toEqual({ publicationStatus: "PUBLISHED", statusOverride: false });
+    expect(await db.auditLog.count({ where: { action: lot.LOT_ROLLBACK, entityId: a } })).toBe(0);
   });
 });

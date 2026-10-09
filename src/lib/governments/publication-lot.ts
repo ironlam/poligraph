@@ -64,10 +64,40 @@ export async function recordApplied(
   });
 }
 
-export async function rollbackLot(
-  db: typeof Db,
-  lotId: string
-): Promise<{ restored: string[]; skipped: { id: string; reason: string }[] }> {
+type Transition = { id: string; from: PublicationStatus; to: PublicationStatus };
+
+/** Un lot ne publie que : les autres bascules calculées sont hors lot. */
+export function splitTransitions(transitions: Transition[]): {
+  concerned: Transition[];
+  notConcerned: Transition[];
+} {
+  return {
+    concerned: transitions.filter((t) => t.to === "PUBLISHED"),
+    notConcerned: transitions.filter((t) => t.to !== "PUBLISHED"),
+  };
+}
+
+/** Écart entre les fiches prévues et les fiches réellement basculées. */
+export function diffPrediction(predictedIds: string[], changedIds: string[]) {
+  const predicted = new Set(predictedIds);
+  const changed = new Set(changedIds);
+  const missing = predictedIds.filter((id) => !changed.has(id));
+  const unexpected = changedIds.filter((id) => !predicted.has(id));
+  return { ok: missing.length === 0 && unexpected.length === 0, missing, unexpected };
+}
+
+export type RollbackResult = {
+  restored: string[];
+  skipped: { id: string; reason: string }[];
+  /** Présent quand le lot a un instantané mais aucune ligne APPLIED : application interrompue. */
+  incomplete?: {
+    snapshotted: number;
+    message: string;
+    politicians: { id: string; before: PublicationStatus; current: PublicationStatus | null }[];
+  };
+};
+
+export async function rollbackLot(db: typeof Db, lotId: string): Promise<RollbackResult> {
   const lotRows = await db.auditLog.findMany({
     where: {
       action: { in: [LOT_SNAPSHOT, LOT_APPLIED] },
@@ -88,6 +118,29 @@ export async function rollbackLot(
     if (r.action === LOT_APPLIED && c?.after) after.set(r.entityId, c.after.publicationStatus);
   }
   if (before.size === 0) throw new Error(`Aucun instantané pour le lot ${lotId}.`);
+
+  if (after.size === 0) {
+    const current = await db.politician.findMany({
+      where: { id: { in: [...before.keys()] } },
+      select: { id: true, publicationStatus: true },
+    });
+    const now = new Map(current.map((c) => [c.id, c.publicationStatus]));
+    return {
+      restored: [],
+      skipped: [],
+      incomplete: {
+        snapshotted: before.size,
+        message:
+          `Le lot ${lotId} a un instantané mais aucune ligne APPLIED : l'application ne s'est pas terminée. ` +
+          "Rien n'a été restauré automatiquement. Comparer le statut actuel à l'ancien statut et décider fiche par fiche.",
+        politicians: [...before].map(([id, snap]) => ({
+          id,
+          before: snap.publicationStatus,
+          current: now.get(id) ?? null,
+        })),
+      },
+    };
+  }
 
   const restored: string[] = [];
   const skipped: { id: string; reason: string }[] = [];

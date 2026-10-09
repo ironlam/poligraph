@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { revalidateProfilePaths } from "../publication-lot";
+import { diffPrediction, revalidateProfilePaths, splitTransitions } from "../publication-lot";
 
 function deps() {
   const calls: unknown[] = [];
@@ -43,5 +43,31 @@ describe("revalidateProfilePaths", () => {
     const { d } = deps();
     d.fetchImpl = vi.fn(async () => new Response("no", { status: 401 })) as unknown as typeof fetch;
     await expect(revalidateProfilePaths(["a"], d)).rejects.toThrow(/401/);
+  });
+});
+
+describe("splitTransitions", () => {
+  it("ne retient que les publications, le reste est hors lot", () => {
+    const { concerned, notConcerned } = splitTransitions([
+      { id: "a", from: "DRAFT", to: "PUBLISHED" },
+      { id: "b", from: "DRAFT", to: "ARCHIVED" },
+      { id: "c", from: "ARCHIVED", to: "EXCLUDED" },
+    ]);
+    expect(concerned.map((t) => t.id)).toEqual(["a"]);
+    expect(notConcerned.map((t) => t.id)).toEqual(["b", "c"]);
+  });
+});
+
+describe("diffPrediction", () => {
+  it("accepte des listes identiques dans un autre ordre", () => {
+    expect(diffPrediction(["a", "b"], ["b", "a"]).ok).toBe(true);
+  });
+
+  it("signale les fiches prévues non basculées et les basculées imprévues", () => {
+    expect(diffPrediction(["a", "b"], ["b", "c"])).toEqual({
+      ok: false,
+      missing: ["a"],
+      unexpected: ["c"],
+    });
   });
 });

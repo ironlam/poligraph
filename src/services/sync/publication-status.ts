@@ -25,6 +25,8 @@ export interface PublicationStatusStats {
   skippedOverride: number;
   unchanged: number;
   changes: Record<string, number>;
+  /** Every status change decided by this pass (applied unless dryRun). */
+  transitions: { id: string; from: PublicationStatus; to: PublicationStatus }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,7 @@ export async function assignPublicationStatus(
   const changes: Map<PublicationStatus, string[]> = new Map();
   let skippedOverride = 0;
   let unchanged = 0;
+  const transitions: PublicationStatusStats["transitions"] = [];
 
   for (const p of politicians) {
     const row: PoliticianRow = {
@@ -124,6 +127,7 @@ export async function assignPublicationStatus(
     const ids = changes.get(targetStatus) ?? [];
     ids.push(p.id);
     changes.set(targetStatus, ids);
+    transitions.push({ id: p.id, from: p.publicationStatus, to: targetStatus });
   }
 
   // Apply batch updates
@@ -152,5 +156,6 @@ export async function assignPublicationStatus(
     skippedOverride,
     unchanged,
     changes: changeStats,
+    transitions,
   };
 }
