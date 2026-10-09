@@ -121,6 +121,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -185,6 +190,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -256,6 +266,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -324,6 +339,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -436,10 +456,21 @@ jobs:
     name: SEC-02 role contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        # The contract scripts pull postgres:17-alpine with docker run. Skipped without secrets
+        # (Dependabot, forks): the pull is then anonymous, as before.
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Verify public and server database roles
         run: npm run test:security:data-path
@@ -448,10 +479,21 @@ jobs:
     name: SEC-03 least-privilege contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        # The contract scripts pull postgres:17-alpine with docker run. Skipped without secrets
+        # (Dependabot, forks): the pull is then anonymous, as before.
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Verify application database privileges
         run: npm run test:security:least-privilege
@@ -460,10 +502,21 @@ jobs:
     name: SEC-06 function privilege contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        # The contract scripts pull postgres:17-alpine with docker run. Skipped without secrets
+        # (Dependabot, forks): the pull is then anonymous, as before.
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Verify application function privileges
         run: npm run test:security:function-privileges
@@ -475,6 +528,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: alias_test
           POSTGRES_PASSWORD: alias_test
@@ -517,6 +575,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
@@ -589,6 +652,11 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg17
+        # Authenticated pull: anonymous pulls share the runners' IPs and hit Docker Hub's rate
+        # limit. With empty secrets (Dependabot, forks) the runner falls back to an anonymous pull.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: poligraph_test
           POSTGRES_PASSWORD: poligraph_test
