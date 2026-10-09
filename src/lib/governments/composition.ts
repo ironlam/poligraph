@@ -279,9 +279,14 @@ export function documentedChanges(gov: GovernmentDates, episodes: Episode[]): Ch
         linked && linked.politicianId === entry.politicianId
           ? linked
           : [...sameDay.exits.values()].find(
-              (x) => x.politicianId === entry.politicianId && !handled.has(x.membershipId)
+              (x) =>
+                x.membershipId !== entry.membershipId &&
+                x.politicianId === entry.politicianId &&
+                !handled.has(x.membershipId)
             );
-      if (!previous || handled.has(previous.membershipId)) continue;
+      // Un épisode d'un seul jour n'est jamais son propre prédécesseur.
+      if (!previous || previous.membershipId === entry.membershipId) continue;
+      if (handled.has(previous.membershipId)) continue;
       changes.push({
         date,
         kind: "titleChange",

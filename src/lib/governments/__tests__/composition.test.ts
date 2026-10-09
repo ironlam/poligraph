@@ -569,4 +569,19 @@ describe("documentedChanges", () => {
     expect(titleChange?.membershipIds).toEqual(["old", "new"]);
     expect(titleChange?.sourceUrl).toBe("https://legifrance.gouv.fr/meme");
   });
+
+  it("épisode d'un seul jour : jamais apparié à lui-même", () => {
+    const all = [
+      ep("x", {
+        start: D,
+        startEvidence: "ACT",
+        end: D,
+        endEvidence: "ACT",
+        endKind: "INDIVIDUAL",
+      }),
+    ];
+    const changes = documentedChanges(gov({ resignedAt: null }), all).filter((c) => c.date === D);
+    expect(changes.map((c) => c.kind)).toEqual(["exit", "entry"]);
+    expect(changes.map((c) => c.membershipIds)).toEqual([["x"], ["x"]]);
+  });
 });
