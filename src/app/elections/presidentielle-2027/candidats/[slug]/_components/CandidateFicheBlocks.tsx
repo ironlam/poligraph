@@ -1,9 +1,11 @@
 import Link from "next/link";
-import type { CandidacyStatus } from "@/generated/prisma";
+import type { CandidacyStatus, ThemeCategory } from "@/generated/prisma";
 import { ArrowRight, ChevronDown, ExternalLink } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { THEME_ACCENT_BAR, THEME_CATEGORY_LABELS, VOTE_POSITION_LABELS } from "@/config/labels";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
+import type { CandidateReaderGuideLink } from "@/lib/presidentielle/candidate-fiche-links";
+import { presidentialReaderGuidePath } from "@/lib/presidentielle/reader-guide-paths";
 import { THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -206,18 +208,23 @@ function CandidateMeasure({
   );
 }
 
+const NO_COMPARABLE_THEMES: ReadonlySet<ThemeCategory> = new Set();
+
 export function CandidateThemes({
   themes,
   electionSlug,
   candidateSlug,
   measureCount,
   lastReviewedAt,
+  comparableThemes = NO_COMPARABLE_THEMES,
 }: {
   themes: CandidateFicheDetail["themes"];
   electionSlug: string;
   candidateSlug: string;
   measureCount: number;
   lastReviewedAt: Date | null;
+  /** Themes whose subject page is indexable: the only ones the fiche links to. */
+  comparableThemes?: ReadonlySet<ThemeCategory>;
 }) {
   if (themes.length === 0) return null;
 
@@ -357,6 +364,17 @@ export function CandidateThemes({
                     <ArrowRight aria-hidden="true" />
                   </Link>
                 </div>
+              )}
+              {comparableThemes.has(t.theme) && (
+                <Link
+                  href={`/elections/${electionSlug}/themes/${t.slug}`}
+                  prefetch={false}
+                  className={cn(MEASURE_ACTION_CLASS_NAME, "mt-1")}
+                >
+                  Comparer les candidats sur ce thème
+                  <span className="sr-only"> : {THEME_CATEGORY_LABELS[t.theme]}</span>
+                  <ArrowRight aria-hidden="true" />
+                </Link>
               )}
             </li>
           );
@@ -563,6 +581,34 @@ export function CandidateTransparency({
       >
         Voir le détail sur sa fiche
       </Link>
+    </section>
+  );
+}
+
+/**
+ * Reader guides mentioned by the candidate's public measures. The page passes only indexable
+ * guides, so no chip leads to a page held out of the index.
+ */
+export function CandidateReaderGuides({ guides }: { guides: readonly CandidateReaderGuideLink[] }) {
+  if (guides.length === 0) return null;
+  return (
+    <section aria-labelledby="reperes" className="space-y-3 rounded-xl border bg-card p-4 md:p-6">
+      <h2 id="reperes" className="font-display text-lg font-bold tracking-tight">
+        Repères pour comprendre ces mesures
+      </h2>
+      <ul className="flex flex-wrap gap-2">
+        {guides.map((guide) => (
+          <li key={guide.slug}>
+            <Link
+              href={presidentialReaderGuidePath(guide.slug)}
+              prefetch={false}
+              className="inline-flex min-h-11 items-center rounded-full border border-border bg-muted/40 px-3 text-sm hover:border-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {guide.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

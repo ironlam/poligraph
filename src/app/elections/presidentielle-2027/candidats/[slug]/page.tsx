@@ -18,11 +18,18 @@ import {
   getCandidateFicheDetail,
   getPoliticianPresidentialCandidacy,
 } from "@/lib/data/politician-candidacy";
+import { getPresidentialReaderGuideIndex } from "@/lib/data/presidential-reader-guides";
+import { getThemesIndex } from "@/lib/data/themes-index";
+import {
+  selectCandidateReaderGuides,
+  selectComparableThemes,
+} from "@/lib/presidentielle/candidate-fiche-links";
 import { CandidacyStatusBadge } from "../../_components/CandidacyStatusBadge";
 import { PartyLogo } from "../../_components/PartyLogo";
 import { CandidacyBackBar } from "./_components/CandidacyBackBar";
 import {
   CandidateTransparency,
+  CandidateReaderGuides,
   CandidateRecentVotes,
   CandidateStats,
   CandidateSynthesis,
@@ -119,9 +126,15 @@ export default async function CandidateFichePage({ params }: PageProps) {
     verifiedMeasuresWithPrimarySource: candidacy.primarySourceMeasureCount,
   });
 
-  const detail = hasProgramme
-    ? await getCandidateFicheDetail(candidacy.candidacyId, politician.id)
-    : null;
+  // The two indexes are the ones the sitemap and the target pages read, so a link from the fiche
+  // appears exactly when its target is indexable.
+  const [detail, themesIndex, readerGuideIndex] = hasProgramme
+    ? await Promise.all([
+        getCandidateFicheDetail(candidacy.candidacyId, politician.id),
+        getThemesIndex(candidacy.electionSlug),
+        getPresidentialReaderGuideIndex(candidacy.electionSlug),
+      ])
+    : [null, null, []];
 
   return (
     <>
@@ -247,7 +260,10 @@ export default async function CandidateFichePage({ params }: PageProps) {
               candidateSlug={slug}
               measureCount={candidacy.publishedMeasureCount}
               lastReviewedAt={candidacy.lastReviewedAt}
+              comparableThemes={selectComparableThemes(themesIndex)}
             />
+
+            <CandidateReaderGuides guides={selectCandidateReaderGuides(readerGuideIndex, slug)} />
 
             <CandidateStats
               measureCount={candidacy.publishedMeasureCount}

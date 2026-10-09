@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { CandidateFicheDetail } from "@/lib/data/politician-candidacy";
 import {
+  CandidateReaderGuides,
   CandidateSynthesis,
   CandidateThemes,
   CandidateTransparency,
@@ -381,6 +382,38 @@ describe("CandidateThemes", () => {
         lastReviewedAt={null}
       />
     );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("relie la page thème seulement quand elle est indexable", () => {
+    render(
+      <CandidateThemes
+        themes={[theme(), theme({ theme: "SOCIAL_TRAVAIL", slug: "social-travail" })]}
+        electionSlug="presidentielle-2027"
+        candidateSlug="camille-riviere"
+        measureCount={2}
+        lastReviewedAt={null}
+        comparableThemes={new Set(["SANTE"])}
+      />
+    );
+
+    const liens = screen.getAllByRole("link", { name: /Comparer les candidats sur ce thème/ });
+    expect(liens).toHaveLength(1);
+    expect(liens[0]).toHaveAttribute("href", "/elections/presidentielle-2027/themes/sante");
+  });
+});
+
+describe("CandidateReaderGuides", () => {
+  it("relie chaque repère à sa page et ne rend rien sans repère", () => {
+    const { container, rerender } = render(
+      <CandidateReaderGuides guides={[{ slug: "parquet", label: "Parquet (ministère public)" }]} />
+    );
+    expect(screen.getByRole("link", { name: "Parquet (ministère public)" })).toHaveAttribute(
+      "href",
+      "/elections/presidentielle-2027/reperes/parquet"
+    );
+
+    rerender(<CandidateReaderGuides guides={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
