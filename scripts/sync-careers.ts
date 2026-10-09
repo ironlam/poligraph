@@ -30,6 +30,7 @@ import {
   GOVERNMENT_SYNC_FROZEN,
   isGovernmentFunctionType,
 } from "../src/services/sync/government-sync-guard";
+import { isCurrentChair } from "../src/services/sync/careers-chair";
 
 // Mapping from Wikidata position IDs to our MandateType
 const POSITION_MAPPING: Record<string, { type: MandateType; institution: string }> = {
@@ -461,6 +462,7 @@ Features:
           partyWikidataId: string;
           chairpersonWikidataId: string;
           startDate: Date | null;
+          partyDissolvedDate: Date | null;
           partyWebsite: string | null;
         }> = [];
 
@@ -499,6 +501,7 @@ Features:
               partyWikidataId: ext.externalId,
               chairpersonWikidataId: val.id as string,
               startDate,
+              partyDissolvedDate: ext.party.dissolvedDate ?? null,
               partyWebsite: ext.party.website || null,
             });
           }
@@ -521,6 +524,7 @@ Features:
                 externalId: data.chairpersonWikidataId,
                 politicianId: { not: null },
               },
+              include: { politician: { select: { deathDate: true } } },
             });
 
             if (!politicianExt?.politicianId) {
@@ -531,6 +535,20 @@ Features:
               }
               continue;
             }
+
+            // Same rule as the service (#1001): no undated leadership, no dissolved party, no
+            // dead politician. This CLI is what the weekly workflow runs.
+            if (
+              !isCurrentChair({
+                startDate: data.startDate,
+                partyDissolvedDate: data.partyDissolvedDate,
+                politicianDeathDate: politicianExt.politician?.deathDate ?? null,
+              })
+            ) {
+              stats.mandatesSkipped++;
+              continue;
+            }
+            const chairStart = data.startDate!;
 
             // Never overwrite manual entries
             const manualEntry = await db.mandate.findFirst({
@@ -585,7 +603,7 @@ Features:
                     institution: data.partyName,
                     partyId: data.partyId,
                     source: DataSource.WIKIDATA,
-                    startDate: data.startDate ?? new Date(),
+                    startDate: chairStart,
                     isCurrent: true,
                     sourceUrl: `https://www.wikidata.org/wiki/${data.partyWikidataId}`,
                     officialUrl: data.partyWebsite || null,
@@ -594,7 +612,7 @@ Features:
                 });
                 // Also set current party affiliation (idempotent)
                 await setCurrentParty(politicianExt.politicianId, data.partyId, {
-                  startDate: data.startDate ?? new Date(),
+                  startDate: chairStart,
                 });
                 stats.mandatesCreated++;
                 stats.partyPresidentsCreated++;
