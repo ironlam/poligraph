@@ -464,10 +464,26 @@ model MandateGovernment {
   sameDayOrderEstablished Boolean            @default(false)
   sameDayOrderSourceUrl   String?
 
+  // Actes qui justifient les dates de la fonction, avec leur mode de détermination.
+  startAct                       GovernmentAct?     @relation("MembershipStartAct", fields: [startActId], references: [id], onDelete: Restrict)
+  startActId                     String?
+  startDetermination             DateDetermination?
+  endAct                         GovernmentAct?     @relation("MembershipEndAct", fields: [endActId], references: [id], onDelete: Restrict)
+  endActId                       String?
+  endDetermination               DateDetermination?
+  // Fin propre des affaires courantes de cette fonction (borne individuelle).
+  currentAffairsEndedAt          DateTime?          @db.Date
+  currentAffairsEndAct           GovernmentAct?     @relation("MembershipCurrentAffairsEndAct", fields: [currentAffairsEndActId], references: [id], onDelete: Restrict)
+  currentAffairsEndActId         String?
+  currentAffairsEndDetermination DateDetermination?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([governmentId])
+  @@index([startActId])
+  @@index([endActId])
+  @@index([currentAffairsEndActId])
 }
 
 /// Niveau de preuve d'une date.
@@ -486,6 +502,47 @@ enum GovernmentFunctionEnd {
 enum GovernmentCompleteness {
   COMPLETE
   PARTIAL
+}
+
+enum GovernmentActKind {
+  PRIME_MINISTER_APPOINTMENT
+  COMPOSITION // décret relatif à la composition du Gouvernement (nomination ou modification)
+  CESSATION // cessation des fonctions du Premier ministre et du Gouvernement
+  CURRENT_AFFAIRS // acte qui atteste, précise ou restreint les affaires courantes (ex. décharge)
+  COMMUNIQUE // communiqué officiel (Élysée, Matignon)
+  OTHER
+}
+
+/// Mode de détermination d'une date retenue.
+enum DateDetermination {
+  EXPLICIT // l'acte énonce la date ou l'effet
+  CONVENTION // date de signature par défaut
+  DEDUCTION // raisonnement (ex. fonction qui prend fin implicitement lors d'une renomination)
+}
+
+/// Registre des actes officiels qui justifient les dates des gouvernements.
+model GovernmentAct {
+  id                 String            @id @default(cuid())
+  kind               GovernmentActKind
+  label              String // « Décret du 26 février 2026 relatif à la composition du Gouvernement »
+  signedAt           DateTime          @db.Date
+  effectiveAt        DateTime?         @db.Date // date d'effet énoncée par l'acte, si différente
+  journalPublishedAt DateTime?         @db.Date
+  journalNumber      String? // « JORF n° 0050 »
+  inForceAt          DateTime?         @db.Date // date de vigueur indiquée par Légifrance
+  url                String
+  jorfId             String?           @unique // « JORFTEXT000053586369 »
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  governmentsPrimeMinisterAppointed Government[]        @relation("GovernmentPrimeMinisterAppointedAct")
+  governmentsFormed                 Government[]        @relation("GovernmentFormedAct")
+  governmentsResigned               Government[]        @relation("GovernmentResignedAct")
+  governmentsEnded                  Government[]        @relation("GovernmentEndedAct")
+  governmentsCurrentAffairs         Government[]        @relation("GovernmentCurrentAffairsAct")
+  membershipsStarted                MandateGovernment[] @relation("MembershipStartAct")
+  membershipsEnded                  MandateGovernment[] @relation("MembershipEndAct")
+  membershipsCurrentAffairsEnded    MandateGovernment[] @relation("MembershipCurrentAffairsEndAct")
 }
 
 // Gouvernement de la Ve République (un par Premier ministre nommé)
@@ -518,8 +575,26 @@ model Government {
 
   // Composition complète vérifiée à une date, contre une source officielle.
   // Ne certifie rien d'autre : ni les dates passées, ni la continuité au-delà.
-  compositionVerifiedAt        DateTime? @db.Date
+  compositionVerifiedAt        DateTime? @db.Date // composition documentée jusqu'au
   compositionVerifiedSourceUrl String?
+  compositionCheckedAt         DateTime? @db.Date // date à laquelle la vérification a été effectuée
+
+  // Actes qui justifient chaque date, avec son mode de détermination.
+  primeMinisterAppointedAct           GovernmentAct?     @relation("GovernmentPrimeMinisterAppointedAct", fields: [primeMinisterAppointedActId], references: [id], onDelete: Restrict)
+  primeMinisterAppointedActId         String?
+  primeMinisterAppointedDetermination DateDetermination?
+  formedAct                           GovernmentAct?     @relation("GovernmentFormedAct", fields: [formedActId], references: [id], onDelete: Restrict)
+  formedActId                         String?
+  formedDetermination                 DateDetermination?
+  resignedAct                         GovernmentAct?     @relation("GovernmentResignedAct", fields: [resignedActId], references: [id], onDelete: Restrict)
+  resignedActId                       String?
+  resignedDetermination               DateDetermination?
+  endedAct                            GovernmentAct?     @relation("GovernmentEndedAct", fields: [endedActId], references: [id], onDelete: Restrict)
+  endedActId                          String?
+  endedDetermination                  DateDetermination?
+  // Acte qui atteste le régime d'affaires courantes du gouvernement démissionnaire.
+  currentAffairsAct                   GovernmentAct?     @relation("GovernmentCurrentAffairsAct", fields: [currentAffairsActId], references: [id], onDelete: Restrict)
+  currentAffairsActId                 String?
 
   publicationStatus PublicationStatus @default(DRAFT)
 
@@ -528,6 +603,11 @@ model Government {
   updatedAt   DateTime            @updatedAt
 
   @@index([publicationStatus, sequence])
+  @@index([primeMinisterAppointedActId])
+  @@index([formedActId])
+  @@index([resignedActId])
+  @@index([endedActId])
+  @@index([currentAffairsActId])
 }
 
 // Parliamentary mandate extension - 1:1 with Mandate for parliamentary group membership

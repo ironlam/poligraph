@@ -49,3 +49,74 @@ describe("schéma Government", () => {
     expect(line(block("model", "Politician"), "primeMinisterOf")).toContain("Government[]");
   });
 });
+
+describe("schéma GovernmentAct", () => {
+  const act = block("model", "GovernmentAct");
+  const government = block("model", "Government");
+  const membership = block("model", "MandateGovernment");
+
+  it("jorfId est unique et nullable", () => {
+    const l = line(act, "jorfId");
+    expect(l).toContain("@unique");
+    expect(l).toMatch(/String\?/);
+  });
+
+  it("signedAt est une date non nulle", () => {
+    const l = line(act, "signedAt");
+    expect(l).toContain("@db.Date");
+    expect(l).not.toMatch(/DateTime\?/);
+  });
+
+  it("les énumérations d'acte existent", () => {
+    expect(block("enum", "GovernmentActKind")).toContain("CURRENT_AFFAIRS");
+    expect(block("enum", "DateDetermination")).toContain("DEDUCTION");
+  });
+
+  const governmentFks = [
+    "primeMinisterAppointedActId",
+    "formedActId",
+    "resignedActId",
+    "endedActId",
+    "currentAffairsActId",
+  ];
+  const membershipFks = ["startActId", "endActId", "currentAffairsEndActId"];
+
+  it.each(governmentFks)("Government.%s est une FK nullable indexée", (field) => {
+    expect(line(government, field)).toMatch(/String\?/);
+    expect(government).toContain(`@@index([${field}])`);
+  });
+
+  it.each(membershipFks)("MandateGovernment.%s est une FK nullable indexée", (field) => {
+    expect(line(membership, field)).toMatch(/String\?/);
+    expect(membership).toContain(`@@index([${field}])`);
+  });
+
+  it("toutes les FK vers GovernmentAct sont en Restrict", () => {
+    const refs = [government, membership]
+      .flatMap((b) => b.split("\n"))
+      .filter((l) => l.includes("GovernmentAct?"));
+    expect(refs).toHaveLength(8);
+    for (const l of refs) expect(l).toContain("onDelete: Restrict");
+  });
+
+  it.each([
+    "primeMinisterAppointedDetermination",
+    "formedDetermination",
+    "resignedDetermination",
+    "endedDetermination",
+  ])("Government.%s est un DateDetermination nullable", (field) => {
+    expect(line(government, field)).toMatch(/DateDetermination\?/);
+  });
+
+  it.each(["startDetermination", "endDetermination", "currentAffairsEndDetermination"])(
+    "MandateGovernment.%s est un DateDetermination nullable",
+    (field) => {
+      expect(line(membership, field)).toMatch(/DateDetermination\?/);
+    }
+  );
+
+  it("compositionCheckedAt et currentAffairsEndedAt sont des dates nullables", () => {
+    expect(line(government, "compositionCheckedAt")).toMatch(/DateTime\?\s+@db\.Date/);
+    expect(line(membership, "currentAffairsEndedAt")).toMatch(/DateTime\?\s+@db\.Date/);
+  });
+});
