@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const lookup = vi.hoisted(() => vi.fn());
 vi.mock("node:dns/promises", () => ({ lookup, default: { lookup } }));
 
-import { fetchPublicPhoto, isPublicAddress } from "../fetch-public-photo";
+import { fetchPublicPhoto, isPublicAddress, MAX_PHOTO_DOWNLOAD_BYTES } from "../fetch-public-photo";
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(5000)]);
 const PLACEHOLDER = Buffer.concat([
@@ -116,6 +116,43 @@ describe("fetchPublicPhoto", () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
 
     expect(await fetchPublicPhoto("https://www.europarl.europa.eu/mepphoto/1.jpg")).toEqual({
+      kind: "unreachable",
+    });
+  });
+
+  it("rejects an IPv4-mapped IPv6 literal in its canonical hexadecimal form", async () => {
+    expect(new URL("https://[::ffff:127.0.0.1]/").hostname).toBe("[::ffff:7f00:1]");
+    expect(isPublicAddress("::ffff:7f00:1")).toBe(false);
+    expect(isPublicAddress("::ffff:a00:5")).toBe(false);
+
+    expect(await fetchPublicPhoto("https://[::ffff:127.0.0.1]/photo.jpg")).toMatchObject({
+      kind: "forbidden",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a body that fails while streaming as unreachable", async () => {
+    const body = new ReadableStream({
+      pull(c) {
+        c.error(new Error("reset"));
+      },
+    });
+    fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+
+    expect(await fetchPublicPhoto("https://www.colombes.fr/maire.jpg")).toEqual({
+      kind: "unreachable",
+    });
+  });
+
+  it("does not buffer a body larger than the photo cap", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array(16), {
+        status: 200,
+        headers: { "content-length": String(MAX_PHOTO_DOWNLOAD_BYTES + 1) },
+      })
+    );
+
+    expect(await fetchPublicPhoto("https://www.colombes.fr/maire.jpg")).toEqual({
       kind: "unreachable",
     });
   });

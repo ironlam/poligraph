@@ -4,7 +4,8 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { WIKIDATA_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { PHOTO_SOURCE_PRIORITY, shouldUpdatePhoto } from "@/config/photos";
 import { COMMONS_STORED_WIDTH, commonsThumbnailUrl } from "@/lib/photos/commons";
-import { identifyPhoto } from "@/lib/photos/source-photo";
+import { classifyPhotoBytes } from "@/lib/photos/source-photo";
+import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
 import { uploadSourcePhotoCopy } from "@/lib/photos/blob";
 
 const wikidataClient = new HTTPClient({ rateLimitMs: WIKIDATA_RATE_LIMIT_MS });
@@ -42,10 +43,11 @@ async function fetchPhoto(url: string): Promise<PhotoFetch> {
   } catch {
     return { kind: "unreachable" };
   }
-  const photo = identifyPhoto(buffer);
-  return photo
-    ? { kind: "photo", buffer, contentType: photo.contentType }
-    : { kind: "not-a-photo" };
+  // Only a real image too small to be a portrait proves the source has none. Any other body (an
+  // HTML interstitial served with a 200) says nothing about the photo.
+  const bytes = classifyPhotoBytes(buffer);
+  if (bytes.kind === "photo") return { kind: "photo", buffer, contentType: bytes.contentType };
+  return bytes.kind === "placeholder" ? { kind: "not-a-photo" } : { kind: "unreachable" };
 }
 
 /**
@@ -59,7 +61,10 @@ async function copyToBlob(
 ): Promise<string | null> {
   try {
     return await uploadSourcePhotoCopy(politicianId, photo.buffer, photo.contentType);
-  } catch {
+  } catch (error) {
+    // With a token, a failed upload is an outage or an expired token: abort rather than store
+    // photos without their copy. Without one (a local run), keep the photo and skip the copy.
+    if (process.env.BLOB_READ_WRITE_TOKEN) throw error;
     return null;
   }
 }
@@ -202,6 +207,7 @@ export async function syncPhotos(
     invalidUrls: 0,
     errors: [],
   };
+  const changed = new Set<string>();
 
   try {
     console.log("Starting photo sync...");
@@ -254,6 +260,7 @@ export async function syncPhotos(
             const blobPhotoUrl = await copyToBlob(politician.id, current);
             if (blobPhotoUrl) {
               await db.politician.update({ where: { id: politician.id }, data: { blobPhotoUrl } });
+              changed.add(politician.id);
             }
           }
           continue;
@@ -291,6 +298,7 @@ export async function syncPhotos(
               },
             });
             stamped = true;
+            changed.add(politician.id);
             result.updated++;
             console.log(`Updated photo for ${politician.fullName} (${source})`);
           }
@@ -312,6 +320,7 @@ export async function syncPhotos(
             ? { photoUrl: null, photoSource: null, blobPhotoUrl: null, photoCheckedAt: new Date() }
             : { photoCheckedAt: new Date() },
         });
+        if (currentIsNotAPhoto) changed.add(politician.id);
       }
 
       // Progress logging every 100 politicians
@@ -327,6 +336,12 @@ export async function syncPhotos(
   } catch (error) {
     result.errors.push(String(error));
     console.error("Photo sync failed:", error);
+  }
+
+  // Profile pages render a precomputed document that carries the photo fields. Refresh the rows
+  // written, even when the run stopped early, or their avatar keeps the old URL.
+  if (changed.size > 0) {
+    await requestProfileRefresh({ politicianIds: [...changed] }, "sync:photos");
   }
 
   return result;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const h = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   getBuffer: vi.fn(),
   get: vi.fn(),
   uploadSourcePhotoCopy: vi.fn(),
+  requestProfileRefresh: vi.fn(async () => ({ sent: 1, mode: "targeted" })),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -18,6 +19,9 @@ vi.mock("@/lib/api/http-client", () => ({
   },
 }));
 vi.mock("@/lib/photos/blob", () => ({ uploadSourcePhotoCopy: h.uploadSourcePhotoCopy }));
+vi.mock("@/lib/politicians/profile-snapshot/request", () => ({
+  requestProfileRefresh: h.requestProfileRefresh,
+}));
 
 import { syncPhotos } from "../photos";
 
@@ -185,5 +189,54 @@ describe("syncPhotos : sélection", () => {
     await syncPhotos({ validateExisting: true, slugs: ["jordan-bardella", "bally-bagayoko"] });
 
     expect(where()).toEqual({ slug: { in: ["jordan-bardella", "bally-bagayoko"] } });
+  });
+});
+
+describe("syncPhotos : suites de la revue Codex", () => {
+  const HTML_INTERSTITIAL = Buffer.from(
+    "<!DOCTYPE html><html>Vérification en cours</html>".padEnd(5000)
+  );
+
+  afterEach(() => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+  });
+
+  // A 200 anti-bot page is not evidence that the source has no portrait.
+  it("keeps a working photo and its copy when the source answers an HTML page", async () => {
+    h.findMany.mockResolvedValue([
+      politician({ blobPhotoUrl: "https://abc.public.blob.vercel-storage.com/politicians/pol-1" }),
+    ]);
+    sources({ nossenateurs: HTML_INTERSTITIAL });
+
+    await syncPhotos({ validateExisting: true });
+
+    for (const [args] of h.update.mock.calls) {
+      expect(args.data).not.toHaveProperty("photoUrl");
+      expect(args.data).not.toHaveProperty("blobPhotoUrl");
+    }
+  });
+
+  it("refreshes the profile documents of the politicians it changed", async () => {
+    h.findMany.mockResolvedValue([politician()]);
+    sources({ nossenateurs: photo() });
+
+    await syncPhotos({ validateExisting: true });
+
+    expect(h.requestProfileRefresh).toHaveBeenCalledWith(
+      { politicianIds: ["pol-1"] },
+      "sync:photos"
+    );
+  });
+
+  it("aborts instead of storing a photo without its copy when a token is set", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "token";
+    h.findMany.mockResolvedValue([politician()]);
+    sources({ nossenateurs: NOSSENATEURS_PLACEHOLDER, "Jeanne_Martin.jpg": photo() });
+    h.uploadSourcePhotoCopy.mockRejectedValue(new Error("expired token"));
+
+    const result = await syncPhotos({ validateExisting: true });
+
+    expect(result.success).toBe(false);
+    for (const [args] of h.update.mock.calls) expect(args.data).not.toHaveProperty("photoUrl");
   });
 });

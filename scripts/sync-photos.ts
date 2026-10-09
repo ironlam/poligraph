@@ -74,6 +74,11 @@ Photo sources (priority order):
       ?.split(",")
       .map((s) => s.trim())
       .filter(Boolean);
+    // An explicit but empty selector (an unset --slug="$SLUG") must not fall back to a scan of
+    // the whole base.
+    if (slug !== undefined && !slugs?.length) {
+      throw new Error("--slug donné sans aucun slug : rien n'est lancé.");
+    }
 
     if (dryRun) {
       console.log(`[DRY-RUN] Would sync photos ${validate ? "with validation" : ""}`);

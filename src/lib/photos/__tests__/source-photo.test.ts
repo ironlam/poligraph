@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { identifyPhoto, MIN_PHOTO_BYTES } from "../source-photo";
+import { classifyPhotoBytes, identifyPhoto, MIN_PHOTO_BYTES } from "../source-photo";
 
 function withHeader(header: number[] | string, size = 5000): Buffer {
   const head = typeof header === "string" ? Buffer.from(header, "latin1") : Buffer.from(header);
@@ -30,5 +30,19 @@ describe("identifyPhoto", () => {
 
   it("rejects an HTML page served with a 200", () => {
     expect(identifyPhoto(withHeader("<!DOCTYPE html><html>"))).toBeNull();
+  });
+});
+
+describe("classifyPhotoBytes", () => {
+  it("separates a small image (placeholder) from a page that is not an image", () => {
+    expect(classifyPhotoBytes(withHeader(PNG, 129))).toEqual({ kind: "placeholder" });
+    expect(classifyPhotoBytes(withHeader("<!DOCTYPE html><html>"))).toEqual({
+      kind: "not-an-image",
+    });
+    expect(classifyPhotoBytes(Buffer.alloc(0))).toEqual({ kind: "not-an-image" });
+    expect(classifyPhotoBytes(withHeader(PNG))).toEqual({
+      kind: "photo",
+      contentType: "image/png",
+    });
   });
 });

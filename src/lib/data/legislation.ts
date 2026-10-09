@@ -76,6 +76,7 @@ export async function getPPLStats(): Promise<PPLStats> {
         p.slug,
         p."fullName",
         p."photoUrl",
+        p."blobPhotoUrl",
         pa."shortName" AS "partyShortName",
         pa.color AS "partyColor",
         COUNT(*)::int AS count
@@ -83,7 +84,7 @@ export async function getPPLStats(): Promise<PPLStats> {
       JOIN "Politician" p ON p.id = da."politicianId"
       LEFT JOIN "Party" pa ON pa.id = p."currentPartyId"
       WHERE da.role IN ('AUTEUR', 'COSIGNATAIRE') OR da.role IS NULL
-      GROUP BY p.id, p.slug, p."fullName", p."photoUrl", pa."shortName", pa.color
+      GROUP BY p.id, p.slug, p."fullName", p."photoUrl", p."blobPhotoUrl", pa."shortName", pa.color
       ORDER BY count DESC
       LIMIT 10
     `),
