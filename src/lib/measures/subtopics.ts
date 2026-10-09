@@ -5,6 +5,7 @@ import {
 } from "@/generated/prisma";
 import {
   getMeasureSubtopicsForTheme,
+  MAX_SUBTOPICS_PER_REVISION,
   MEASURE_SUBTOPIC_TAXONOMY_VERSION,
   MEASURE_SUBTOPICS,
 } from "@/config/measure-subtopics";
@@ -17,7 +18,6 @@ import { createSubtopicDeltaSourceFingerprint } from "@/lib/measures/subtopic-de
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 
 const CLASSIFIER_MODEL = "mistral-small-latest";
-const MAX_SUBTOPICS_PER_REVISION = 3;
 
 function sanitizeMeasureText(value: string): string {
   return value

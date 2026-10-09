@@ -1,6 +1,9 @@
 import type { ThemeCategory } from "@/generated/prisma";
 
 export const MEASURE_SUBTOPIC_TAXONOMY_VERSION = "2026-08-30-v4";
+
+/** A reviewer approves at most this many subtopics on one revision. */
+export const MAX_SUBTOPICS_PER_REVISION = 3;
 export const MEASURE_SUBTOPIC_PREVIOUS_TAXONOMY_VERSION = "2026-08-29-v3";
 
 export type MeasureSubtopicDefinition = {

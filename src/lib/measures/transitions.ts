@@ -6,9 +6,11 @@ import type {
   MeasureReviewReadiness,
   MeasureReviewWarning,
   MeasureSourceKind,
+  Prisma,
   SourceTier,
   ThemeCategory,
 } from "@/generated/prisma";
+import { MAX_SUBTOPICS_PER_REVISION } from "@/config/measure-subtopics";
 import { db, type DbTransactionClient } from "@/lib/db";
 import {
   GENERATED_CONTEXT_DRAFT_ACTION,
@@ -416,6 +418,12 @@ export async function draftMeasureRevision(
       });
     }
 
+    await carryForwardEnrichment(tx, {
+      sourceRevisionIds: [measure.latestRevisionId, measure.publishedRevisionId],
+      targetRevisionId: revision.id,
+      targetText: revision.text,
+    });
+
     await tx.measure.update({
       where: { id: input.measureId },
       data: { latestRevisionId: revision.id },
@@ -429,6 +437,110 @@ export async function draftMeasureRevision(
 
     return { revisionId: revision.id };
   });
+}
+
+/**
+ * Subtopics and reader guides hang off a revision, so without this a correction silently drops
+ * the ones a reviewer approved on the version it replaces (seen on three published measures on
+ * 2026-10-08). When the text is unchanged (a regenerated context), the approval still describes
+ * the same formulation and is kept. When the text changed, the approval was given to other words:
+ * it comes back as a suggestion and goes through review again. A reader guide follows only if its
+ * evidence span is still in the new text.
+ */
+async function carryForwardEnrichment(
+  tx: DbTransactionClient,
+  input: { sourceRevisionIds: Array<string | null>; targetRevisionId: string; targetText: string }
+): Promise<void> {
+  const sourceIds = [...new Set(input.sourceRevisionIds)].filter(
+    (id): id is string => id !== null && id !== input.targetRevisionId
+  );
+  if (sourceIds.length === 0) return;
+
+  const sources = await tx.measureRevision.findMany({
+    where: { id: { in: sourceIds } },
+    select: {
+      id: true,
+      text: true,
+      subtopics: {
+        where: { status: "APPROVED" },
+        select: {
+          subtopicId: true,
+          confidence: true,
+          taxonomyVersion: true,
+          reviewedAt: true,
+          reviewedBy: true,
+        },
+      },
+      readerGuideMentions: {
+        where: { status: "APPROVED" },
+        select: {
+          guideId: true,
+          term: true,
+          normalizedTerm: true,
+          evidenceSpan: true,
+          reason: true,
+          confidence: true,
+          reviewedAt: true,
+          reviewedBy: true,
+        },
+      },
+    },
+  });
+
+  const subtopics = new Map<string, Prisma.MeasureRevisionSubtopicCreateManyInput>();
+  const guides = new Map<string, Prisma.MeasureRevisionReaderGuideCreateManyInput>();
+  for (const source of sources) {
+    const keepsApproval = source.text === input.targetText;
+    const review = (item: { reviewedAt: Date | null; reviewedBy: string | null }) =>
+      keepsApproval
+        ? { status: "APPROVED" as const, reviewedAt: item.reviewedAt, reviewedBy: item.reviewedBy }
+        : { status: "SUGGESTED" as const, reviewedAt: null, reviewedBy: null };
+
+    for (const item of source.subtopics) {
+      if (subtopics.get(item.subtopicId)?.status === "APPROVED") continue;
+      subtopics.set(item.subtopicId, {
+        revisionId: input.targetRevisionId,
+        subtopicId: item.subtopicId,
+        confidence: item.confidence,
+        method: "carried-forward",
+        classifierVersion: `carried-from:${source.id}`,
+        taxonomyVersion: item.taxonomyVersion,
+        ...review(item),
+      });
+    }
+    for (const item of source.readerGuideMentions) {
+      if (!input.targetText.includes(item.evidenceSpan)) continue;
+      if (guides.get(item.normalizedTerm)?.status === "APPROVED") continue;
+      guides.set(item.normalizedTerm, {
+        revisionId: input.targetRevisionId,
+        guideId: item.guideId,
+        term: item.term,
+        normalizedTerm: item.normalizedTerm,
+        evidenceSpan: item.evidenceSpan,
+        reason: item.reason,
+        confidence: item.confidence,
+        method: "carried-forward",
+        detectorVersion: `carried-from:${source.id}`,
+        ...review(item),
+      });
+    }
+  }
+
+  // Two sources with the same text could together exceed the review limit; the extras go back to
+  // review instead of breaking the invariant reviewMeasureRevisionSubtopic enforces.
+  [...subtopics.values()]
+    .filter((item) => item.status === "APPROVED")
+    .slice(MAX_SUBTOPICS_PER_REVISION)
+    .forEach((item) =>
+      Object.assign(item, { status: "SUGGESTED", reviewedAt: null, reviewedBy: null })
+    );
+
+  if (subtopics.size > 0) {
+    await tx.measureRevisionSubtopic.createMany({ data: [...subtopics.values()] });
+  }
+  if (guides.size > 0) {
+    await tx.measureRevisionReaderGuide.createMany({ data: [...guides.values()] });
+  }
 }
 
 /**
