@@ -14,6 +14,8 @@ export type GovernmentDates = {
   resignedEvidence: DateEvidence | null;
   endedAt: string | null;
   compositionVerifiedAt: string | null;
+  // Un acte atteste le régime d'affaires courantes (`currentAffairsActId` renseigné).
+  currentAffairsAttested: boolean;
   hasDerivedDate: boolean;
 };
 
@@ -36,6 +38,8 @@ export type Episode = {
   predecessorMembershipId: string | null;
   sameDayOrderEstablished: boolean;
   sameDayOrderSourceUrl: string | null;
+  // Fin propre des affaires courantes de cette fonction (décharge, renomination ailleurs).
+  currentAffairsEndedAt: string | null;
 };
 
 export type Category = "established" | "currentAffairs" | "transition" | "undocumented";

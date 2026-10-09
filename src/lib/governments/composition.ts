@@ -65,14 +65,18 @@ function baseCategory(gov: GovernmentDates, ep: Episode, date: string): Category
   if (ep.end !== null) {
     if (date <= ep.end) return derivedBound ? "undocumented" : "established";
     if (ep.endKind === "COLLECTIVE_RESIGNATION") {
-      // Avec endedAt, les jours au-delà ont été écartés plus haut.
-      if (gov.endedAt) return gov.resignedEvidence === "ACT" ? "currentAffairs" : "undocumented";
-      // Successeur pas encore nommé : affaires courantes établies jusqu'à la composition vérifiée.
-      const verified =
+      // Révision 3 (§13.4). Borne individuelle d'abord : au-delà, la fonction est absente.
+      // Les jours après endedAt ont été écartés plus haut, la borne ne les prolonge donc jamais.
+      if (ep.currentAffairsEndedAt !== null && date > ep.currentAffairsEndedAt) return null;
+      // Sinon la fin du gouvernement, et à défaut la composition documentée. Au-delà de cette
+      // dernière, une borne inconnue ne devient pas certaine.
+      const bound = ep.currentAffairsEndedAt ?? gov.endedAt ?? gov.compositionVerifiedAt;
+      const established =
         gov.resignedEvidence === "ACT" &&
-        gov.compositionVerifiedAt !== null &&
-        date <= gov.compositionVerifiedAt;
-      return verified ? "currentAffairs" : "undocumented";
+        gov.currentAffairsAttested &&
+        bound !== null &&
+        date <= bound;
+      return established ? "currentAffairs" : "undocumented";
     }
     return null;
   }
@@ -188,9 +192,13 @@ export function overlapsPeriod(
   from: string,
   to: string
 ): "established" | "undocumented" | null {
-  const bounds = [ep.start, ep.end, ep.lastConfirmedAt, gov.endedAt].filter(
-    (d): d is string => d !== null
-  );
+  const bounds = [
+    ep.start,
+    ep.end,
+    ep.lastConfirmedAt,
+    ep.currentAffairsEndedAt,
+    gov.endedAt,
+  ].filter((d): d is string => d !== null);
   const days = new Set<string>([from]);
   for (const b of bounds) {
     for (const d of [b, addDays(b, 1)]) if (d > from && d <= to) days.add(d);

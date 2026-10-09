@@ -21,6 +21,7 @@ function gov(overrides: Partial<GovernmentDates> = {}): GovernmentDates {
     resignedEvidence: "ACT",
     endedAt: "2024-09-21",
     compositionVerifiedAt: null,
+    currentAffairsAttested: false,
     hasDerivedDate: false,
     ...overrides,
   };
@@ -46,6 +47,7 @@ function ep(membershipId: string, overrides: Partial<Episode> = {}): Episode {
     predecessorMembershipId: null,
     sameDayOrderEstablished: false,
     sameDayOrderSourceUrl: null,
+    currentAffairsEndedAt: null,
     ...overrides,
   };
 }
@@ -179,25 +181,26 @@ describe("compositionAt et categoryAt", () => {
       endKind: "COLLECTIVE_RESIGNATION",
     });
 
-    const lastDay = ok(compositionAt(gov(), [resigning], "2024-07-16"));
+    const attested = gov({ currentAffairsAttested: true });
+    const lastDay = ok(compositionAt(attested, [resigning], "2024-07-16"));
     expect(categoryOf(lastDay, "res")).toBe("established");
     expect(lastDay.caretaker).toBe(false);
 
-    const caretaking = ok(compositionAt(gov(), [resigning], "2024-08-01"));
+    const caretaking = ok(compositionAt(attested, [resigning], "2024-08-01"));
     expect(categoryOf(caretaking, "res")).toBe("currentAffairs");
     expect(caretaking.caretaker).toBe(true);
     expect(caretaking.establishedPersons).toBe(1);
 
-    const onEnd = ok(compositionAt(gov(), [resigning], "2024-09-21"));
+    const onEnd = ok(compositionAt(attested, [resigning], "2024-09-21"));
     expect(categoryOf(onEnd, "res")).toBe("currentAffairs");
 
-    const dataset = gov({ resignedEvidence: "DATASET" });
+    const dataset = gov({ resignedEvidence: "DATASET", currentAffairsAttested: true });
     const unproven = ok(compositionAt(dataset, [resigning], "2024-08-01"));
     expect(categoryOf(unproven, "res")).toBe("undocumented");
     expect(unproven.caretaker).toBe(false);
     expect(unproven.establishedPersons).toBe(0);
 
-    expect(alone(gov(), resigning, "2024-09-22")).toBeNull();
+    expect(alone(attested, resigning, "2024-09-22")).toBeNull();
   });
 
   it("fin inconnue", () => {
@@ -312,6 +315,7 @@ describe("compositionAt et categoryAt", () => {
       formedAt: "2025-10-05",
       resignedAt: "2025-10-06",
       endedAt: "2025-10-12",
+      currentAffairsAttested: true,
     });
     const l2 = gov({
       id: "lecornu-2",
@@ -362,7 +366,11 @@ describe("compositionAt et categoryAt", () => {
     expect(r2.byCategory.currentAffairs).toEqual([]);
   });
   it("affaires courantes, successeur pas encore nommé", () => {
-    const resigned = gov({ endedAt: null, compositionVerifiedAt: "2024-08-01" });
+    const resigned = gov({
+      endedAt: null,
+      compositionVerifiedAt: "2024-08-01",
+      currentAffairsAttested: true,
+    });
     const resigning = ep("res", {
       end: "2024-07-16",
       endEvidence: "ACT",
@@ -379,6 +387,147 @@ describe("compositionAt et categoryAt", () => {
     expect(r2.establishedPersons).toBe(0);
     expect(r2.caretaker).toBe(false);
   });
+
+  it("affaires courantes non attestées", () => {
+    const resigning = ep("res", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+    });
+    const notAttested = gov({ currentAffairsAttested: false });
+    expect(alone(notAttested, resigning, "2024-07-16")).toBe("established");
+    const r = ok(compositionAt(notAttested, [resigning], "2024-08-01"));
+    expect(categoryOf(r, "res")).toBe("undocumented");
+    expect(r.caretaker).toBe(false);
+    expect(r.establishedPersons).toBe(0);
+    expect(alone(notAttested, resigning, "2024-09-21")).toBe("undocumented");
+
+    const inProgress = gov({
+      endedAt: null,
+      compositionVerifiedAt: "2024-08-01",
+      currentAffairsAttested: false,
+    });
+    expect(alone(inProgress, resigning, "2024-07-20")).toBe("undocumented");
+  });
+
+  it("décharge individuelle", () => {
+    const g = gov({ currentAffairsAttested: true });
+    const discharged = ep("le-maire", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+      currentAffairsEndedAt: "2024-07-16",
+    });
+    const other = ep("other", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+    });
+    const all = [discharged, other];
+
+    const lastDay = ok(compositionAt(g, all, "2024-07-16"));
+    expect(ids(lastDay.byCategory.established)).toEqual(["le-maire", "other"]);
+
+    const next = ok(compositionAt(g, all, "2024-07-17"));
+    expect(categoryOf(next, "le-maire")).toBeNull();
+    expect(categoryOf(next, "other")).toBe("currentAffairs");
+    expect(next.establishedPersons).toBe(1);
+
+    const onEnd = ok(compositionAt(g, all, "2024-09-21"));
+    expect(categoryOf(onEnd, "le-maire")).toBeNull();
+    expect(categoryOf(onEnd, "other")).toBe("currentAffairs");
+  });
+
+  it("borne individuelle avant la fin du gouvernement", () => {
+    const l1 = gov({
+      id: "lecornu-1",
+      slug: "lecornu-1",
+      primeMinisterAppointedAt: "2025-09-09",
+      formedAt: "2025-10-05",
+      resignedAt: "2025-10-06",
+      endedAt: "2025-10-12",
+      currentAffairsAttested: true,
+    });
+    const l2 = gov({
+      id: "lecornu-2",
+      slug: "lecornu-2",
+      primeMinisterAppointedAt: "2025-10-10",
+      formedAt: "2025-10-12",
+      resignedAt: null,
+      resignedEvidence: null,
+      endedAt: null,
+      compositionVerifiedAt: "2025-11-01",
+    });
+    const pm1 = ep("pm-1", {
+      governmentId: "lecornu-1",
+      politicianId: "p-lecornu",
+      type: "PREMIER_MINISTRE",
+      start: "2025-09-10",
+      end: "2025-10-06",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+      currentAffairsEndedAt: "2025-10-10",
+    });
+    const min1 = ep("min-1", {
+      governmentId: "lecornu-1",
+      start: "2025-10-05",
+      end: "2025-10-06",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+    });
+    const pm2 = ep("pm-2", {
+      governmentId: "lecornu-2",
+      politicianId: "p-lecornu",
+      type: "PREMIER_MINISTRE",
+      start: "2025-10-10",
+      lastConfirmedAt: "2025-11-01",
+    });
+    const min2 = ep("min-2", {
+      governmentId: "lecornu-2",
+      start: "2025-10-12",
+      lastConfirmedAt: "2025-11-01",
+    });
+    const all = [pm1, min1, pm2, min2];
+
+    const bound = ok(compositionAt(l1, all, "2025-10-10"));
+    expect(ids(bound.byCategory.currentAffairs)).toEqual(["min-1", "pm-1"]);
+    expect(bound.establishedPersons).toBe(2);
+
+    const after = ok(compositionAt(l1, all, "2025-10-11"));
+    expect(categoryOf(after, "pm-1")).toBeNull();
+    expect(ids(after.byCategory.currentAffairs)).toEqual(["min-1"]);
+    expect(after.establishedPersons).toBe(1);
+    expect(alone(l2, pm2, "2025-10-11")).toBe("established");
+
+    const r2 = ok(compositionAt(l2, all, "2025-10-20"));
+    expect(ids(r2.byCategory.established)).toEqual(["min-2", "pm-2"]);
+    expect(r2.establishedPersons).toBe(2);
+
+    // Une borne individuelle ne prolonge jamais la présence au-delà de la fin du gouvernement.
+    const late = { ...pm1, currentAffairsEndedAt: "2025-10-20" };
+    expect(alone(l1, late, "2025-10-12")).toBe("currentAffairs");
+    expect(alone(l1, late, "2025-10-13")).toBeNull();
+  });
+
+  it("borne inconnue", () => {
+    const resigned = gov({
+      endedAt: null,
+      compositionVerifiedAt: "2024-08-01",
+      currentAffairsAttested: true,
+    });
+    const resigning = ep("res", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+    });
+    expect(alone(resigned, resigning, "2024-08-01")).toBe("currentAffairs");
+    expect(alone(resigned, resigning, "2024-08-02")).toBe("undocumented");
+
+    // Borne individuelle connue et dépassée : absente, même dans la période documentée.
+    const bounded = { ...resigning, currentAffairsEndedAt: "2024-07-20" };
+    expect(alone(resigned, bounded, "2024-07-20")).toBe("currentAffairs");
+    expect(alone(resigned, bounded, "2024-07-21")).toBeNull();
+  });
 });
 
 describe("overlapsPeriod", () => {
@@ -391,6 +540,25 @@ describe("overlapsPeriod", () => {
     const closed = ep("closed", { end: D, endEvidence: "ACT", endKind: "INDIVIDUAL" });
     expect(overlapsPeriod(gov(), closed, "2024-03-05", "2024-04-01")).toBe("established");
     expect(overlapsPeriod(gov(), closed, "2024-03-06", "2024-04-01")).toBeNull();
+  });
+
+  it("période après une borne individuelle", () => {
+    const g = gov({ currentAffairsAttested: true });
+    const discharged = ep("le-maire", {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+      currentAffairsEndedAt: "2024-07-20",
+    });
+    expect(overlapsPeriod(g, discharged, "2024-07-21", "2024-09-21")).toBeNull();
+    expect(overlapsPeriod(g, discharged, "2024-07-18", "2024-09-21")).toBe("established");
+
+    // Régime non attesté : non établi jusqu'à la borne, absent au-delà.
+    const notAttested = gov({ currentAffairsAttested: false });
+    expect(overlapsPeriod(notAttested, discharged, "2024-07-18", "2024-09-21")).toBe(
+      "undocumented"
+    );
+    expect(overlapsPeriod(notAttested, discharged, "2024-07-21", "2024-09-21")).toBeNull();
   });
 });
 
