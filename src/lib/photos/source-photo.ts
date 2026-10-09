@@ -33,6 +33,25 @@ const SIGNATURES: Array<{ contentType: string; matches: (b: Buffer) => boolean }
   },
 ];
 
+export type PhotoBytes =
+  | { kind: "photo"; contentType: string }
+  /** An image, but too small to be a portrait: a placeholder. */
+  | { kind: "placeholder" }
+  /** Not an image at all: an HTML interstitial, an error page, an empty body. */
+  | { kind: "not-an-image" };
+
+/**
+ * Tell a placeholder apart from a page that is not an image. Only the first is evidence that the
+ * source has no portrait; a 200 HTML page may be a temporary anti-bot interstitial and must never
+ * cause a working photo to be removed.
+ */
+export function classifyPhotoBytes(buffer: Buffer): PhotoBytes {
+  const signature = SIGNATURES.find((s) => s.matches(buffer));
+  if (!signature) return { kind: "not-an-image" };
+  if (buffer.length < MIN_PHOTO_BYTES) return { kind: "placeholder" };
+  return { kind: "photo", contentType: signature.contentType };
+}
+
 export function identifyPhoto(buffer: Buffer): { contentType: string } | null {
   if (buffer.length < MIN_PHOTO_BYTES) return null;
   const signature = SIGNATURES.find((s) => s.matches(buffer));

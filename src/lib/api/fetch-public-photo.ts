@@ -25,6 +25,29 @@ export type PublicPhotoFetch =
   | { kind: "unreachable" };
 
 const MAX_REDIRECTS = 3;
+/** Above this, the body is not read: a portrait never weighs this much. */
+export const MAX_PHOTO_DOWNLOAD_BYTES = 15 * 1024 * 1024;
+
+/** Read a body up to `limit` bytes; null when it is larger. */
+async function readCapped(response: Response, limit: number): Promise<Buffer | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (declared > limit) return null;
+  if (!response.body) return Buffer.alloc(0);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 const TIMEOUT_MS = 10_000;
 
 function ipv4ToNumber(ip: string): number {
@@ -41,9 +64,25 @@ const PRIVATE_IPV4: Array<[string, number]> = [
   ["192.168.0.0", 16],
 ];
 
+/**
+ * The IPv4 embedded in an IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible (`::a.b.c.d`) IPv6
+ * address, in dotted or hexadecimal form. `new URL()` canonicalises `[::ffff:127.0.0.1]` to
+ * `::ffff:7f00:1`, which a dotted-only pattern lets through.
+ */
+function embeddedIpv4(ip: string): string | null {
+  const lower = ip.toLowerCase();
+  const dotted = lower.match(/^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) return dotted[1]!;
+  const hex = lower.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!hex) return null;
+  const high = parseInt(hex[1]!, 16);
+  const low = parseInt(hex[2]!, 16);
+  return [high >> 8, high & 255, low >> 8, low & 255].join(".");
+}
+
 export function isPublicAddress(ip: string): boolean {
-  const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPublicAddress(mapped[1]!);
+  const embedded = embeddedIpv4(ip);
+  if (embedded) return isPublicAddress(embedded);
 
   if (isIP(ip) === 4) {
     const n = ipv4ToNumber(ip);
@@ -111,8 +150,13 @@ export async function fetchPublicPhoto(raw: string): Promise<PublicPhotoFetch> {
     // challenge (the European Parliament answers 202, empty) is not a fake one.
     if (response.status !== 200) return { kind: "unreachable" };
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0) return { kind: "unreachable" };
+    let buffer: Buffer | null;
+    try {
+      buffer = await readCapped(response, MAX_PHOTO_DOWNLOAD_BYTES);
+    } catch {
+      return { kind: "unreachable" };
+    }
+    if (!buffer || buffer.length === 0) return { kind: "unreachable" };
     const photo = identifyPhoto(buffer);
     return photo
       ? { kind: "photo", buffer, contentType: photo.contentType }
