@@ -40,15 +40,15 @@ const PROGRAM_SOURCE_KINDS = [
   "PROPOSITIONS_CANDIDAT",
 ] as const;
 
-function findGuide(term: string, canonicalLabel: string, guides: GuideMatch[]): GuideMatch | null {
-  const candidates = new Set([
-    normalizeReaderGuideTerm(term),
-    normalizeReaderGuideTerm(canonicalLabel),
-  ]);
+// Matches on the term actually found in the text, never on the model's canonical label: a generic
+// word the model maps to a guide's label (« pénibilité » to the C2P) would otherwise attach that
+// guide. Finalization resolves the same way, by term, label or alias only.
+function findGuide(term: string, guides: GuideMatch[]): GuideMatch | null {
+  const normalizedTerm = normalizeReaderGuideTerm(term);
   return (
     guides.find((guide) =>
-      [guide.label, ...guide.aliases].some((alias) =>
-        candidates.has(normalizeReaderGuideTerm(alias))
+      [guide.label, ...guide.aliases].some(
+        (alias) => normalizeReaderGuideTerm(alias) === normalizedTerm
       )
     ) ?? null
   );
@@ -152,7 +152,7 @@ export async function detectReaderGuidesForRevision(revisionId: string): Promise
     measureId: revision.measure.id,
     electionId: revision.measure.electionId,
     proposals: detections.map((detection) => {
-      const guide = findGuide(detection.term, detection.canonicalLabel, guides);
+      const guide = findGuide(detection.term, guides);
       return {
         ...detection,
         normalizedTerm: normalizeReaderGuideTerm(detection.term),

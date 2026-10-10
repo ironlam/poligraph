@@ -111,6 +111,35 @@ describe("workflow des repères citoyens", () => {
     expect(mocks.tx.measureReaderGuideDetectionRun.upsert).toHaveBeenCalledTimes(2);
   });
 
+  it("ne rattache pas un terme générique au repère que le modèle lui associe", async () => {
+    mocks.measureReaderGuide.findMany.mockResolvedValue([
+      {
+        id: "guide-c2p",
+        slug: "compte-professionnel-prevention",
+        label: "Compte professionnel de prévention (C2P)",
+        aliases: ["C2P", "compte professionnel de prévention"],
+        publicationStatus: "PUBLISHED",
+      },
+    ]);
+    mocks.detect.mockResolvedValue([
+      {
+        term: "pénibilité",
+        canonicalLabel: "Compte professionnel de prévention (C2P)",
+        evidenceSpan: "travailleurs exposés à des facteurs de pénibilité",
+        needsExplanation: true,
+        reason: "Notion du droit du travail",
+        confidence: 0.9,
+      },
+    ]);
+    const { detectReaderGuidesForRevision } = await import("./reader-guides");
+
+    const detection = await detectReaderGuidesForRevision("revision-1");
+
+    expect(detection.proposals).toEqual([
+      expect.objectContaining({ term: "pénibilité", guideId: null, guideSlug: null }),
+    ]);
+  });
+
   it("mémorise aussi une analyse sans suggestion", async () => {
     mocks.detect.mockResolvedValue([]);
     const { proposeReaderGuidesForRevision } = await import("./reader-guides");
