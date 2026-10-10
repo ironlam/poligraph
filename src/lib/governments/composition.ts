@@ -400,3 +400,26 @@ export function documentedChanges(gov: GovernmentDates, episodes: Episode[]): Ch
       (a.membershipIds[0] ?? "").localeCompare(b.membershipIds[0] ?? "")
   );
 }
+
+/**
+ * Date d'ouverture par défaut (§4, §13) : la plus récente date consultable où au moins une
+ * personne est présente de façon établie. Candidats, du plus récent au plus ancien : fin de la
+ * période, démission, chaque jour de changement documenté, formation. Repli sur la fin de la
+ * période quand aucune date n'a de présence établie. `null` sans période consultable.
+ */
+export function defaultCompositionDate(gov: GovernmentDates, episodes: Episode[]): string | null {
+  const range = consultableRange(gov);
+  if (!range) return null;
+  const candidates = new Set<string>([range.to, range.from]);
+  if (gov.resignedAt && gov.resignedAt >= range.from && gov.resignedAt <= range.to) {
+    candidates.add(gov.resignedAt);
+  }
+  for (const change of documentedChanges(gov, episodes)) {
+    if (change.date >= range.from && change.date <= range.to) candidates.add(change.date);
+  }
+  for (const date of [...candidates].sort().reverse()) {
+    const result = compositionAt(gov, episodes, date);
+    if (result.status === "ok" && result.establishedPersons > 0) return date;
+  }
+  return range.to;
+}

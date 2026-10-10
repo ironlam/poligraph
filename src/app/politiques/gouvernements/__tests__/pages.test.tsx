@@ -386,6 +386,61 @@ describe("détail d'un gouvernement", () => {
   });
 });
 
+describe("composition par défaut", () => {
+  const E = gov({
+    id: "ge",
+    slug: "gouvernement-e",
+    name: "Gouvernement Echo",
+    primeMinisterAppointedAt: "2024-09-05",
+    formedAt: "2024-09-21",
+    resignedAt: "2024-12-05",
+    resignedEvidence: "ACT",
+    endedAt: "2025-10-05",
+    compositionVerifiedAt: "2025-10-05",
+    currentAffairsAttested: false,
+    primeMinister: { slug: "denis-quart", fullName: "Denis Quart", gender: "M" },
+    participantCount: 1,
+  });
+  const resigned = ep({
+    governmentId: "ge",
+    politicianId: "denis-quart",
+    type: "PREMIER_MINISTRE",
+    title: "Premier ministre",
+    start: "2024-09-21",
+    end: "2024-12-05",
+    endEvidence: "ACT",
+    endKind: "COLLECTIVE_RESIGNATION",
+  });
+
+  function use(eps: GovernmentEpisode[]) {
+    vi.mocked(getPublishedGovernments).mockResolvedValue([E]);
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes: eps, people });
+  }
+
+  it("ouvre à la date de démission et n'affiche aucune fausse absence", async () => {
+    use([resigned]);
+    const t = text(await html(detail("gouvernement-e")));
+    expect(t).toContain("Dernière composition documentée, au");
+    expect(t).toContain("1 personne présente de façon établie au 5 décembre 2024");
+    expect(t).not.toContain("Absence établie");
+  });
+
+  it("à la fin d'une période non attestée : présence non établie, pas absence établie", async () => {
+    use([resigned]);
+    const t = text(await html(detail("gouvernement-e", { date: "2025-10-05" })));
+    expect(t).toContain("Aucune présence établie au 5 octobre 2025");
+    expect(t).toContain("Période à préciser");
+    expect(t).not.toContain("Absence établie");
+    expect(t).toContain("Fin des affaires courantes");
+  });
+
+  it("garde « Absence établie » pour une composition réellement vide", async () => {
+    use([]);
+    const t = text(await html(detail("gouvernement-e", { date: "2025-10-05" })));
+    expect(t).toContain("Absence établie");
+  });
+});
+
 describe("répertoire", () => {
   it("liste les gouvernements publiés avec un lien vers chaque composition", async () => {
     const markup = await html(DirectoryPage({ searchParams: sp() }));

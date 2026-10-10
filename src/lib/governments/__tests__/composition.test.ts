@@ -4,6 +4,7 @@ import {
   categoryAt,
   compositionAt,
   consultableRange,
+  defaultCompositionDate,
   documentedChanges,
   overlapsPeriod,
 } from "../composition";
@@ -839,5 +840,49 @@ describe("documentedChanges", () => {
     const changes = documentedChanges(gov({ resignedAt: null }), all).filter((c) => c.date === D);
     expect(changes.map((c) => c.kind)).toEqual(["exit", "entry"]);
     expect(changes.map((c) => c.membershipIds)).toEqual([["x"], ["x"]]);
+  });
+});
+
+describe("defaultCompositionDate", () => {
+  const resigned = (id: string) =>
+    ep(id, {
+      end: "2024-07-16",
+      endEvidence: "ACT",
+      endKind: "COLLECTIVE_RESIGNATION",
+      lastConfirmedAt: null,
+    });
+
+  it("affaires courantes non attestées : la démission, pas la fin du gouvernement", () => {
+    const g = gov({ currentAffairsAttested: false });
+    const eps = [resigned("a"), resigned("b")];
+    expect(ok(compositionAt(g, eps, "2024-09-21")).establishedPersons).toBe(0);
+    expect(defaultCompositionDate(g, eps)).toBe("2024-07-16");
+    expect(ok(compositionAt(g, eps, "2024-07-16")).establishedPersons).toBe(2);
+  });
+
+  it("affaires courantes attestées : la fin de la période", () => {
+    const g = gov({ currentAffairsAttested: true });
+    expect(defaultCompositionDate(g, [resigned("a"), resigned("b")])).toBe("2024-09-21");
+  });
+
+  it("gouvernement en exercice : la date de dernière vérification", () => {
+    const g = gov({
+      resignedAt: null,
+      resignedEvidence: null,
+      endedAt: null,
+      compositionVerifiedAt: "2024-06-01",
+    });
+    expect(defaultCompositionDate(g, [ep("a", { lastConfirmedAt: "2024-06-01" })])).toBe(
+      "2024-06-01"
+    );
+  });
+
+  it("repli sur la fin de la période quand rien n'est établi nulle part", () => {
+    const g = gov({ currentAffairsAttested: false });
+    expect(defaultCompositionDate(g, [])).toBe("2024-09-21");
+  });
+
+  it("renvoie null sans période consultable", () => {
+    expect(defaultCompositionDate(gov({ formedAt: null }), [])).toBeNull();
   });
 });

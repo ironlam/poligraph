@@ -8,6 +8,7 @@ import { ItemListJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import {
   EstablishedAbsenceState,
+  NoEstablishedPresenceLine,
   NotEstablishedState,
   OutOfRangeState,
 } from "@/components/governments/CompositionStates";
@@ -35,7 +36,12 @@ import {
 import { groupVisible, type PersonGroup } from "@/components/governments/view";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { compositionAt, consultableRange, documentedChanges } from "@/lib/governments/composition";
+import {
+  compositionAt,
+  consultableRange,
+  defaultCompositionDate,
+  documentedChanges,
+} from "@/lib/governments/composition";
 import type {
   ActRef,
   GovernmentEpisode,
@@ -267,7 +273,8 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   const byId = new Map(own.map((e) => [e.membershipId, e]));
   const range = consultableRange(gov);
   const requested = parseCompositionDate(first(sp.date));
-  const date = requested ?? range?.to ?? null;
+  const defaultDate = defaultCompositionDate(gov, own);
+  const date = requested ?? defaultDate;
 
   // Every dated case goes through compositionAt; only a missing date needs a hand-built state.
   const result: CompositionResult = date
@@ -303,7 +310,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
     shortcuts.push({ date: range.from, label: "Formation" });
     const days = new Map<string, Set<Change["kind"]>>();
     for (const c of changes) {
-      if (c.date <= range.from || c.date >= range.to) continue;
+      if (c.date <= range.from || c.date >= range.to || c.date === defaultDate) continue;
       days.set(c.date, (days.get(c.date) ?? new Set()).add(c.kind));
     }
     for (const [day, kinds] of [...days].sort(([a], [b]) => a.localeCompare(b))) {
@@ -316,8 +323,14 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
             : "Changement",
       });
     }
-    if (range.to !== range.from) {
-      shortcuts.push({ date: range.to, label: "Dernière composition documentée" });
+    if (defaultDate && defaultDate !== range.from) {
+      shortcuts.push({ date: defaultDate, label: "Dernière composition documentée" });
+    }
+    if (range.to !== range.from && range.to !== defaultDate) {
+      shortcuts.push({
+        date: range.to,
+        label: gov.resignedAt ? "Fin des affaires courantes" : "Fin du gouvernement",
+      });
     }
   }
 
@@ -516,7 +529,9 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                     min={range.from}
                     max={range.to}
                     label={
-                      date === range.to ? "Dernière composition documentée, au" : "Composition au"
+                      date === defaultDate
+                        ? "Dernière composition documentée, au"
+                        : "Composition au"
                     }
                   />
                 ) : (
@@ -595,22 +610,36 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                       {gov.resignedAt ? ` (démission le ${formatDay(gov.resignedAt)}).` : "."}
                     </div>
                   )}
-                  <p>
-                    <span className="font-display text-[22px] font-extrabold">
-                      {partial ? "au moins " : ""}
-                      {plural(
-                        establishedVisible.length,
-                        "personne présente",
-                        "personnes présentes"
-                      )}
-                    </span>{" "}
-                    <span className="text-sm text-muted-foreground">
-                      de façon établie au {formatDay(ok.date)}
-                    </span>
-                  </p>
-
-                  {establishedVisible.length === 0 && (
-                    <EstablishedAbsenceState date={ok.date} partial={partial} />
+                  {establishedVisible.length === 0 ? (
+                    transitionGroups.length === 0 && undocumentedGroups.length === 0 ? (
+                      <>
+                        <p>
+                          <span className="font-display text-[22px] font-extrabold">
+                            {partial ? "au moins " : ""}0 personne présente
+                          </span>{" "}
+                          <span className="text-sm text-muted-foreground">
+                            de façon établie au {formatDay(ok.date)}
+                          </span>
+                        </p>
+                        <EstablishedAbsenceState date={ok.date} partial={partial} />
+                      </>
+                    ) : (
+                      <NoEstablishedPresenceLine date={ok.date} />
+                    )
+                  ) : (
+                    <p>
+                      <span className="font-display text-[22px] font-extrabold">
+                        {partial ? "au moins " : ""}
+                        {plural(
+                          establishedVisible.length,
+                          "personne présente",
+                          "personnes présentes"
+                        )}
+                      </span>{" "}
+                      <span className="text-sm text-muted-foreground">
+                        de façon établie au {formatDay(ok.date)}
+                      </span>
+                    </p>
                   )}
 
                   {FUNCTION_ORDER.map((type) => {
