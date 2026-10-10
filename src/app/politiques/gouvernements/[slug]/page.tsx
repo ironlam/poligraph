@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, ChevronRight, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, Download, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import {
   EstablishedAbsenceState,
@@ -529,6 +530,14 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                 )}
                 <div className="flex flex-wrap gap-2 border-t pt-4">
                   <CopyLinkButton />
+                  {date && (
+                    <Button asChild variant="outline" className="min-h-11">
+                      <a href={`/api/export/gouvernements/${gov.slug}?date=${date}`}>
+                        <Download aria-hidden="true" />
+                        Exporter cette composition
+                      </a>
+                    </Button>
+                  )}
                 </div>
               </div>
 

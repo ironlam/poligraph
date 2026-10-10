@@ -10,6 +10,7 @@ export const EXPORT_CACHE_TAGS = {
   politicians: "export:politicians",
   factchecks: "export:factchecks",
   votes: "export:votes",
+  governments: "export:governments",
 } as const;
 
 /**

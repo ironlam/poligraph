@@ -168,6 +168,14 @@ describe("purge des exports depuis invalidateEntity, revalidateAll et revalidate
     expect(dangerouslyDeleteByTag).not.toHaveBeenCalled();
   });
 
+  it("hard-deletes the governments export when the gouvernements tag is refreshed", async () => {
+    revalidateTags(["gouvernements"]);
+    await flushAfter();
+    expect(dangerouslyDeleteByTag.mock.calls.map((call) => call[0])).toEqual([
+      "export:governments",
+    ]);
+  });
+
   // The two lookup tables are keyed on different vocabularies (entity type vs cache tag
   // name) and are therefore kept separate. Nothing but this test stops them from drifting:
   // a dependency added to one and forgotten in the other would purge on an admin write but

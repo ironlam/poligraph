@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { Button } from "@/components/ui/button";
 import { MissingData } from "@/components/ui/MissingData";
@@ -117,6 +117,14 @@ function currentUrl(raw: Record<string, string | undefined>): string {
   for (const [k, v] of Object.entries(raw)) if (v !== undefined) params.append(k, v);
   const qs = params.toString();
   return qs ? `${PATH}?${qs}` : PATH;
+}
+
+/** Export URL carrying the filters of the page (the page number does not apply to a file). */
+function exportHref(kind: "personnes" | "fonctions", selfUrl: string): string {
+  const params = new URLSearchParams(selfUrl.split("?")[1] ?? "");
+  params.delete("page");
+  const qs = params.toString();
+  return `/api/export/gouvernements/${kind}${qs ? `?${qs}` : ""}`;
 }
 
 export default async function MembresPage({ searchParams }: PageProps) {
@@ -445,9 +453,26 @@ export default async function MembresPage({ searchParams }: PageProps) {
                   : asideSummary(transitionRows.length, undocumentedRows.length)}
                 {anyPartial ? " Couverture partielle : le total peut être incomplet." : ""}
               </p>
-              <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <CopyLinkButton />
+                <Button asChild variant="outline" className="min-h-11">
+                  <a href={exportHref("personnes", selfUrl)}>
+                    <Download aria-hidden="true" />
+                    Exporter les personnes
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="min-h-11">
+                  <a href={exportHref("fonctions", selfUrl)}>
+                    <Download aria-hidden="true" />
+                    Exporter les fonctions
+                  </a>
+                </Button>
               </div>
+              <p className="text-[12.5px] text-muted-foreground">
+                « Exporter les personnes » : une ligne par personne. « Exporter les fonctions » :
+                une ligne par épisode de fonction, avec dates et sources. Les deux suivent les
+                filtres appliqués.
+              </p>
             </div>
 
             <section aria-label="Résultats" className="flex flex-col gap-5">
