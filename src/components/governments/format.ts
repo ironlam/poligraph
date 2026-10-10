@@ -2,6 +2,7 @@
 // client components. Dates are `YYYY-MM-DD` calendar days already resolved by the mapping layer,
 // so they are formatted in UTC to avoid shifting them a second time.
 
+import { addDays, lastCaretakerDay } from "@/lib/governments/composition";
 import { formatDateFrUTC } from "@/lib/utils";
 import type { GovernmentEpisode, PublishedGovernment } from "@/lib/governments/mapping";
 import type { FunctionType } from "@/lib/governments/types";
@@ -18,12 +19,6 @@ export function formatMonth(day: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
-}
-
-function addDays(day: string, days: number): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 /** Neutral « Nomination le … » (no per-civility agreement). */
@@ -63,22 +58,8 @@ export function episodeDates(
 ): string {
   if (ep.end) {
     let text = `du ${formatDay(ep.start)} au ${formatDay(ep.end)}`;
-    // Same rule as the composition: the regime must be attested by an act, resignation included.
-    if (
-      ep.endKind === "COLLECTIVE_RESIGNATION" &&
-      gov?.currentAffairsAttested &&
-      gov.resignedEvidence === "ACT" &&
-      gov.endedAt
-    ) {
-      // Same bound as the composition: caretaker presence stops the day before the successor
-      // team's appointment, and an individual discharge can only shorten it.
-      const lastDay = addDays(gov.endedAt, -1);
-      const bound =
-        ep.currentAffairsEndedAt && ep.currentAffairsEndedAt < lastDay
-          ? ep.currentAffairsEndedAt
-          : lastDay;
-      text += `, puis affaires courantes jusqu'au ${formatDay(bound)}`;
-    }
+    const caretakerEnd = gov ? lastCaretakerDay(gov, ep) : null;
+    if (caretakerEnd) text += `, puis affaires courantes jusqu'au ${formatDay(caretakerEnd)}`;
     return text;
   }
   const head = appointedOn(ep.start);

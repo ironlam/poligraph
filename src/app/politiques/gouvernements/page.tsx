@@ -49,7 +49,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description,
     alternates: { canonical: PATH },
     openGraph: {
-      title,
+      title: `${title} | Poligraph`,
       description,
       url: PATH,
       type: "website",

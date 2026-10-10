@@ -75,7 +75,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description,
     alternates: { canonical: PATH },
     openGraph: {
-      title,
+      title: `${title} | Poligraph`,
       description,
       url: PATH,
       type: "website",
@@ -442,7 +442,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
               </Button>
             </div>
             <p id="membres-dates-aide" className="mt-2 text-[12.5px] text-muted-foreground">
-              En mode « Présents au », seule la date « Présents au » compte.
+              En mode « Présents à une date », seule la date « Présents au » compte.
             </p>
           </FiltersPanel>
         </form>

@@ -42,6 +42,8 @@ import {
   consultableRange,
   defaultCompositionDate,
   documentedChanges,
+  addDays,
+  lastCaretakerDay,
 } from "@/lib/governments/composition";
 import type {
   ActRef,
@@ -67,12 +69,6 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function addDays(day: string, days: number): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
   const gov = (await getPublishedGovernments()).find((g) => g.slug === slug);
@@ -88,7 +84,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     description,
     alternates: { canonical },
     openGraph: {
-      title,
+      title: `${title} | Poligraph`,
       description,
       url: canonical,
       type: "website",
@@ -340,7 +336,9 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
       shortcuts.push({ date: defaultDate, label: "Dernière composition documentée" });
     }
     // On endedAt the successor team is appointed: the last caretaker day is the day before.
-    const lastDay = gov.endedAt && gov.currentAffairsAttested ? addDays(range.to, -1) : range.to;
+    const lastDay =
+      lastCaretakerDay(gov, { endKind: "COLLECTIVE_RESIGNATION", currentAffairsEndedAt: null }) ??
+      range.to;
     if (lastDay !== range.from && lastDay !== defaultDate) {
       shortcuts.push({
         date: lastDay,

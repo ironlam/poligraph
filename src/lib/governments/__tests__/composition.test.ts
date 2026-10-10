@@ -6,6 +6,7 @@ import {
   consultableRange,
   defaultCompositionDate,
   documentedChanges,
+  lastCaretakerDay,
   overlapsPeriod,
 } from "../composition";
 import type { Category, CompositionResult, Episode, GovernmentDates } from "../types";
@@ -898,5 +899,32 @@ describe("defaultCompositionDate", () => {
 
   it("renvoie null sans période consultable", () => {
     expect(defaultCompositionDate(gov({ formedAt: null }), [])).toBeNull();
+  });
+});
+
+describe("lastCaretakerDay", () => {
+  const g = {
+    currentAffairsAttested: true,
+    resignedEvidence: "ACT" as const,
+    endedAt: "2024-09-21",
+  };
+  const collective = { endKind: "COLLECTIVE_RESIGNATION" as const, currentAffairsEndedAt: null };
+
+  it("la veille de la fin du gouvernement", () => {
+    expect(lastCaretakerDay(g, collective)).toBe("2024-09-20");
+  });
+  it("la borne individuelle ne peut que raccourcir", () => {
+    expect(lastCaretakerDay(g, { ...collective, currentAffairsEndedAt: "2024-08-01" })).toBe(
+      "2024-08-01"
+    );
+    expect(lastCaretakerDay(g, { ...collective, currentAffairsEndedAt: "2024-10-01" })).toBe(
+      "2024-09-20"
+    );
+  });
+  it("null hors régime attesté, sans fin connue ou pour une fin individuelle", () => {
+    expect(lastCaretakerDay({ ...g, currentAffairsAttested: false }, collective)).toBeNull();
+    expect(lastCaretakerDay({ ...g, resignedEvidence: "DATASET" }, collective)).toBeNull();
+    expect(lastCaretakerDay({ ...g, endedAt: null }, collective)).toBeNull();
+    expect(lastCaretakerDay(g, { ...collective, endKind: "INDIVIDUAL" })).toBeNull();
   });
 });

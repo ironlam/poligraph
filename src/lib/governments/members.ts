@@ -2,7 +2,7 @@
 // Aucune présence n'est décidée ici : tout passe par `overlapsPeriod` et `compositionAt`.
 
 import { normalizeText } from "@/lib/name-matching";
-import { compositionAt, consultableRange, overlapsPeriod } from "./composition";
+import { addDays, compositionAt, consultableRange, overlapsPeriod } from "./composition";
 import type { GovernmentEpisode, PersonCard } from "./mapping";
 import type { MembersFunctionFilter, MembersQuery } from "./params";
 import type { Category, Episode, FunctionType, GovernmentDates } from "./types";
@@ -35,12 +35,6 @@ const FUNCTION_TYPE: Record<MembersFunctionFilter, FunctionType> = {
   delegue: "MINISTRE_DELEGUE",
   secretaire: "SECRETAIRE_ETAT",
 };
-
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function normalizeSearch(text: string): string {
   return normalizeText(text).replace(/\s+/g, " ");
