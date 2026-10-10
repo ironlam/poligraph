@@ -66,8 +66,8 @@ export default function MediaSourcesMethodologyPage() {
             <p>
               Une source officielle émane d&apos;une juridiction, d&apos;une administration ou
               d&apos;une assemblée : une décision publiée par une cour d&apos;appel, un arrêt du
-              Conseil d&apos;État, une délibération de la HATVP. Quand elle existe, elle prévaut sur
-              la presse.
+              Conseil d&apos;État, une délibération de la HATVP. Quand nous en disposons, nous la
+              citons de préférence à un article de presse.
             </p>
             <p>
               Un article de presse doit venir d&apos;un média de la liste publiée plus bas. La

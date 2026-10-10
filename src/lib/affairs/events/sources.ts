@@ -121,6 +121,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lyonmag.com",
   "petit-bulletin.fr",
   "corsenetinfos.corsica",
+  "mesinfos.fr", // GIE Mesinfos, SPEL reconnu CPPAP : Affiches Parisiennes, Tout Lyon, TPBM
   // Médias locaux d'enquête en ligne
   "marsactu.fr",
   "mediacites.fr",
