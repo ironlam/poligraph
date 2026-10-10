@@ -4,7 +4,6 @@ import { generateSlug } from "@/lib/utils";
 import { MandateType, DataSource, type DateEvidence } from "@/generated/prisma";
 import { parse } from "csv-parse/sync";
 import { GouvernementCSV, GouvernementSyncResult, GOUV_FUNCTION_MAPPING } from "./types";
-import { politicianService } from "@/services/politician";
 import { parseFrenchDate as parseCanonicalFrenchDate } from "@/lib/parsing";
 import * as fs from "fs";
 import * as path from "path";
@@ -33,6 +32,8 @@ export const DATA_GOUV_CSV_URL =
   "https://static.data.gouv.fr/resources/historique-des-gouvernements-de-la-veme-republique/20250313-105416/liste-membres-gouvernements-5eme-republique.csv";
 
 const COMPOSITION_URL = "https://www.info.gouv.fr/composition-du-gouvernement";
+
+const UNKNOWN_PERSON = "personne inconnue, création manuelle requise";
 
 const GOVERNMENT_FUNCTION_TYPES = [
   MandateType.PREMIER_MINISTRE,
@@ -126,7 +127,8 @@ export interface SyncInput {
   politiciansByFullName: Map<string, ExistingPolitician[]>;
   /** Personne retrouvée pour chaque entrée newMembers (clé `slug`). */
   politicianByNewMemberSlug: Map<string, ExistingPolitician | null>;
-  partyIdByName: Map<string, string | null>;
+  /** Personne qui détient déjà chaque identifiant source GOUVERNEMENT lu. */
+  externalIdOwners: Map<string, string>;
 }
 
 // ── Plan ──────────────────────────────────────────────────────────────────
@@ -148,19 +150,10 @@ export interface PlannedFunction {
   endEvidence: DateEvidence | null;
 }
 
-export interface NewPolitician {
-  slug: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  civility: string | null;
-  birthDay: string | null;
-  partyId: string | null;
-}
-
 export interface CreateOp {
   label: string;
-  politician: { kind: "existing"; id: string } | { kind: "new"; data: NewPolitician };
+  /** Toujours une personne existante : le sync ne crée jamais de personne. */
+  politician: { kind: "existing"; id: string };
   mandate: PlannedFunction;
   /** Identifiant source à rattacher à la personne (ExternalId GOUVERNEMENT). */
   externalId: string | null;
@@ -215,6 +208,8 @@ export interface SyncPlan {
   skippedActVerified: string[];
   /** Sources écartées parce que plus anciennes que la composition vérifiée. */
   staleSources: string[];
+  /** Identifiants source déjà détenus par une autre personne : non réattribués. */
+  conflicts: string[];
   errors: string[];
 }
 
@@ -227,6 +222,7 @@ export function emptyPlan(): SyncPlan {
     unresolvedLabels: [],
     skippedActVerified: [],
     staleSources: [],
+    conflicts: [],
     errors: [],
   };
 }
@@ -402,10 +398,22 @@ export async function loadSyncInput(
     },
   });
 
+  const externalIdOwners = new Map<string, string>();
+  const sourceIds = records.flatMap((r) => {
+    const day = parseFrenchDay(r.date_debut_fonction);
+    return day ? [`gouv-${r.id}-${r.code_fonction}-${day}`] : [];
+  });
+  if (sourceIds.length > 0) {
+    const owned = await db.externalId.findMany({
+      where: { source: DataSource.GOUVERNEMENT, externalId: { in: sourceIds } },
+      select: { externalId: true, politicianId: true },
+    });
+    for (const o of owned) if (o.politicianId) externalIdOwners.set(o.externalId, o.politicianId);
+  }
+
   const corrections = readCorrections(options.correctionsPath ?? CORRECTIONS_FILE);
   const politiciansByFullName = new Map<string, ExistingPolitician[]>();
   const politicianByNewMemberSlug = new Map<string, ExistingPolitician | null>();
-  const partyIdByName = new Map<string, string | null>();
   if (corrections) {
     const names = [
       ...(corrections.endMandates ?? []).map((e) => e.politicianName),
@@ -437,18 +445,6 @@ export async function loadSyncInput(
         });
       }
       politicianByNewMemberSlug.set(slug, toExisting(found));
-      if (m.party && !partyIdByName.has(m.party)) {
-        const party = await db.party.findFirst({
-          where: {
-            OR: [
-              { name: { contains: m.party, mode: "insensitive" } },
-              { shortName: { equals: m.party, mode: "insensitive" } },
-            ],
-          },
-          select: { id: true },
-        });
-        partyIdByName.set(m.party, party?.id ?? null);
-      }
     }
   }
 
@@ -476,7 +472,7 @@ export async function loadSyncInput(
     corrections,
     politiciansByFullName,
     politicianByNewMemberSlug,
-    partyIdByName,
+    externalIdOwners,
   };
 }
 
@@ -490,15 +486,19 @@ function functionLabel(fullName: string, m: { type: MandateType; title: string }
   return `${fullName} : ${m.title} (${m.type}, depuis le ${day})`;
 }
 
-/** Une source est périmée si elle est antérieure à la composition vérifiée en exercice. */
-function staleAgainst(
-  sourceDay: string | null,
-  inOffice: SyncInput["inOffice"]
-): string | null | false {
-  const verified = inOffice?.compositionVerifiedDay;
-  if (!verified) return false;
-  if (!sourceDay || sourceDay < verified) return verified;
-  return false;
+/**
+ * Raison de tenir une source pour périmée, ou null. Fermé par défaut : sans gouvernement en
+ * exercice, sans composition vérifiée ou sans date de source, rien n'est écrit.
+ */
+function staleReason(sourceDay: string | null, inOffice: SyncInput["inOffice"]): string | null {
+  if (!inOffice) return "aucun gouvernement en exercice dans la base";
+  const verified = inOffice.compositionVerifiedDay;
+  if (!verified) return `composition de ${inOffice.slug} jamais vérifiée`;
+  if (!sourceDay) return "date de la source inconnue";
+  if (sourceDay < verified) {
+    return `antérieure à la composition vérifiée de ${inOffice.slug} (${verified})`;
+  }
+  return null;
 }
 
 export function planSync(input: SyncInput): SyncPlan {
@@ -517,7 +517,6 @@ export function planSync(input: SyncInput): SyncPlan {
 
   // Fonctions prévues par personne existante, pour ne pas créer deux fois la même.
   const planned = new Map<string, Array<{ type: MandateType; startDay: string }>>();
-  const plannedNew = new Set<string>();
   const sameFunction = (
     a: { type: MandateType; startDay: string },
     type: MandateType,
@@ -525,10 +524,10 @@ export function planSync(input: SyncInput): SyncPlan {
   ) => a.type === type && Math.abs(Date.parse(a.startDay) - Date.parse(day)) < 3 * 86_400_000;
 
   // 1. CSV
-  const csvStale = staleAgainst(input.sourcePublishedDay, input.inOffice);
+  const csvStale = staleReason(input.sourcePublishedDay, input.inOffice);
   if (csvStale) {
     plan.staleSources.push(
-      `CSV data.gouv publié le ${input.sourcePublishedDay ?? "?"}, antérieur à la composition vérifiée de ${input.inOffice?.slug} (${csvStale}) : fonctions en cours ignorées`
+      `CSV data.gouv publié le ${input.sourcePublishedDay ?? "?"} : ${csvStale}, fonctions en cours ignorées`
     );
   }
   const matchedPoliticianIds = new Set<string>();
@@ -571,26 +570,15 @@ export function planSync(input: SyncInput): SyncPlan {
     const label = functionLabel(fullName, fn, startDay);
 
     if (!existing) {
-      if (plannedNew.has(`${slug}|${type}|${startDay}`)) continue;
-      plannedNew.add(`${slug}|${type}|${startDay}`);
-      plan.creates.push({
-        label,
-        politician: {
-          kind: "new",
-          data: {
-            slug,
-            firstName: member.prenom,
-            lastName: member.nom,
-            fullName,
-            civility: null,
-            birthDay: null,
-            partyId: null,
-          },
-        },
-        mandate: fn,
-        externalId,
-      });
+      plan.toVerify.push(`${label} : ${UNKNOWN_PERSON}`);
       continue;
+    }
+
+    // Identifiant source déjà détenu par une autre personne : jamais réattribué.
+    const owner = input.externalIdOwners.get(externalId);
+    const conflict = owner !== undefined && owner !== existing.id;
+    if (conflict) {
+      plan.conflicts.push(`${label} : identifiant ${externalId} déjà rattaché à ${owner}`);
     }
 
     const match =
@@ -607,7 +595,7 @@ export function planSync(input: SyncInput): SyncPlan {
         label,
         politician: { kind: "existing", id: existing.id },
         mandate: fn,
-        externalId,
+        externalId: conflict ? null : externalId,
       });
       continue;
     }
@@ -618,7 +606,7 @@ export function planSync(input: SyncInput): SyncPlan {
     }
 
     planFunctionUpdate(plan, match, fn, label);
-    if (!existing.gouvExternalIds.includes(externalId)) {
+    if (!conflict && !existing.gouvExternalIds.includes(externalId)) {
       plan.links.push({ kind: "externalId", label, politicianId: existing.id, externalId });
     }
   }
@@ -673,10 +661,10 @@ function planFunctionUpdate(
   ] as const) {
     if (current[key] !== fn[key]) Object.assign(changes, { [key]: fn[key] });
   }
-  if (current.endDay !== null && fn.endDay === null) {
-    // La source dit « en cours », la base dit « close » : on ne rouvre jamais.
+  if (fn.endDay === null && (current.endDay !== null || !current.isCurrent)) {
+    // La source dit « en cours », la base dit « terminée » : on ne rouvre jamais.
     plan.toVerify.push(
-      `${label} : close le ${current.endDay} dans la base, en cours dans la source`
+      `${label} : ${current.endDay ? `close le ${current.endDay}` : "marquée terminée sans date de fin"} dans la base, en cours dans la source`
     );
   } else {
     if (current.endDay !== fn.endDay) changes.endDay = fn.endDay;
@@ -718,10 +706,10 @@ function planCorrections(
   resolveGovernment: (label: string) => string | null
 ) {
   const corrections = input.corrections!;
-  const stale = staleAgainst(isoDay(corrections._updated), input.inOffice);
+  const stale = staleReason(isoDay(corrections._updated), input.inOffice);
   if (stale) {
     plan.staleSources.push(
-      `Corrections locales mises à jour le ${corrections._updated ?? "?"}, antérieures à la composition vérifiée de ${input.inOffice?.slug} (${stale}) : ignorées`
+      `Corrections locales mises à jour le ${corrections._updated ?? "?"} : ${stale}, ignorées`
     );
     return;
   }
@@ -757,7 +745,7 @@ function planCorrections(
     }
   }
 
-  // newMembers : création seulement ; une fonction close n'est jamais rouverte.
+  // newMembers : fonction ajoutée à une personne connue ; jamais de réouverture ni de personne créée.
   for (const n of corrections.newMembers ?? []) {
     if (!n.firstName) continue;
     const slug = generateSlug(`${n.firstName}-${n.lastName}`);
@@ -787,23 +775,7 @@ function planCorrections(
     const label = functionLabel(n.fullName, fn, startDay);
     const existing = input.politicianByNewMemberSlug.get(slug) ?? null;
     if (!existing) {
-      plan.creates.push({
-        label,
-        politician: {
-          kind: "new",
-          data: {
-            slug,
-            firstName: n.firstName,
-            lastName: n.lastName,
-            fullName: n.fullName,
-            civility: n.civility ?? null,
-            birthDay: isoDay(n.birthDate),
-            partyId: n.party ? (input.partyIdByName.get(n.party) ?? null) : null,
-          },
-        },
-        mandate: fn,
-        externalId: null,
-      });
+      plan.toVerify.push(`${label} : ${UNKNOWN_PERSON}`);
       continue;
     }
     const match = existing.mandates.find(
@@ -888,6 +860,29 @@ function changesData(c: MandateChanges) {
   };
 }
 
+/**
+ * Rattache un identifiant source à une personne sans jamais le retirer à une autre.
+ * Renvoie la description du conflit, ou null.
+ */
+async function linkExternalId(
+  client: Db,
+  politicianId: string,
+  externalId: string
+): Promise<string | null> {
+  const key = { source: DataSource.GOUVERNEMENT, externalId };
+  const owner = await client.externalId.findUnique({
+    where: { source_externalId: key },
+    select: { politicianId: true },
+  });
+  if (owner) {
+    return owner.politicianId === politicianId
+      ? null
+      : `conflit : identifiant ${externalId} déjà rattaché à ${owner.politicianId}, non réattribué`;
+  }
+  await client.externalId.create({ data: { ...key, politicianId, url: COMPOSITION_URL } });
+  return null;
+}
+
 export async function applySync(
   plan: SyncPlan,
   client: Db = db
@@ -895,35 +890,10 @@ export async function applySync(
   Pick<GouvernementSyncResult, "membersCreated" | "membersUpdated" | "mandatesCreated" | "errors">
 > {
   const out = { membersCreated: 0, membersUpdated: 0, mandatesCreated: 0, errors: [] as string[] };
-  const createdBySlug = new Map<string, string>();
 
   for (const op of plan.creates) {
     try {
-      let politicianId: string;
-      if (op.politician.kind === "existing") {
-        politicianId = op.politician.id;
-      } else {
-        const data = op.politician.data;
-        const known = createdBySlug.get(data.slug);
-        if (known) {
-          politicianId = known;
-        } else {
-          const created = await client.politician.create({
-            data: {
-              slug: data.slug,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              fullName: data.fullName,
-              civility: data.civility,
-              birthDate: data.birthDay ? new Date(`${data.birthDay}T00:00:00Z`) : null,
-            },
-          });
-          politicianId = created.id;
-          createdBySlug.set(data.slug, politicianId);
-          out.membersCreated++;
-          if (data.partyId) await politicianService.setCurrentParty(politicianId, data.partyId);
-        }
-      }
+      const politicianId = op.politician.id;
       const fn = op.mandate;
       await client.mandate.create({
         data: {
@@ -941,18 +911,8 @@ export async function applySync(
       });
       out.mandatesCreated++;
       if (op.externalId) {
-        await client.externalId.upsert({
-          where: {
-            source_externalId: { source: DataSource.GOUVERNEMENT, externalId: op.externalId },
-          },
-          create: {
-            politicianId,
-            source: DataSource.GOUVERNEMENT,
-            externalId: op.externalId,
-            url: COMPOSITION_URL,
-          },
-          update: { politicianId, url: COMPOSITION_URL },
-        });
+        const conflict = await linkExternalId(client, politicianId, op.externalId);
+        if (conflict) out.errors.push(`${op.label} : ${conflict}`);
       }
     } catch (e) {
       out.errors.push(`${op.label} : ${e}`);
@@ -1015,18 +975,8 @@ export async function applySync(
           data: { governmentId: op.governmentId },
         });
       } else {
-        await client.externalId.upsert({
-          where: {
-            source_externalId: { source: DataSource.GOUVERNEMENT, externalId: op.externalId },
-          },
-          create: {
-            politicianId: op.politicianId,
-            source: DataSource.GOUVERNEMENT,
-            externalId: op.externalId,
-            url: COMPOSITION_URL,
-          },
-          update: { politicianId: op.politicianId, url: COMPOSITION_URL },
-        });
+        const conflict = await linkExternalId(client, op.politicianId, op.externalId);
+        if (conflict) out.errors.push(`${op.label} : ${conflict}`);
       }
     } catch (e) {
       out.errors.push(`${op.label} : ${e}`);
@@ -1067,6 +1017,7 @@ export function formatSyncPlan(plan: SyncPlan): string {
   section("À vérifier (jamais clos par le sync)", plan.toVerify);
   section("Libellés sans gouvernement", plan.unresolvedLabels);
   section("Fonctions prouvées par un acte, laissées intactes", plan.skippedActVerified);
+  section("Identifiants source détenus par une autre personne", plan.conflicts);
   section("Erreurs", plan.errors);
   return lines.join("\n");
 }

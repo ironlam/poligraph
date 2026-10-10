@@ -76,13 +76,13 @@ function input(over: Partial<SyncInput> = {}): SyncInput {
     records: [],
     sourcePublishedDay: "2025-03-13",
     governments: GOVS,
-    inOffice: { slug: "lecornu-2", compositionVerifiedDay: null },
+    inOffice: { slug: "lecornu-2", compositionVerifiedDay: "2025-01-01" },
     politicianByRecord: new Map(),
     currentFunctions: [],
     corrections: null,
     politiciansByFullName: new Map(),
     politicianByNewMemberSlug: new Map(),
-    partyIdByName: new Map(),
+    externalIdOwners: new Map(),
     ...over,
   };
 }
@@ -182,16 +182,18 @@ describe("planSync", () => {
       input({
         records: [legacy, current, unknown],
         politicianByRecord: new Map([
-          [recordKey(legacy), null],
-          [recordKey(current), null],
-          [recordKey(unknown), null],
+          [recordKey(legacy), person({ id: "p-legacy", mandates: [], gouvExternalIds: [] })],
+          [recordKey(current), person({ id: "p-current", mandates: [], gouvExternalIds: [] })],
+          [recordKey(unknown), person({ id: "p-unknown", mandates: [], gouvExternalIds: [] })],
         ]),
       })
     );
-    const byName = Object.fromEntries(plan.creates.map((c) => [c.label.split(" :")[0], c]));
-    expect(byName["A Legacy"]!.mandate.governmentId).toBe("gov-bayrou");
-    expect(byName["B Actuel"]!.mandate.governmentId).toBe("gov-l2");
-    expect(byName["C Inconnu"]!.mandate.governmentId).toBeNull();
+    const byId = Object.fromEntries(
+      plan.creates.map((c) => [c.politician.kind === "existing" ? c.politician.id : "", c])
+    );
+    expect(byId["p-legacy"]!.mandate.governmentId).toBe("gov-bayrou");
+    expect(byId["p-current"]!.mandate.governmentId).toBe("gov-l2");
+    expect(byId["p-unknown"]!.mandate.governmentId).toBeNull();
     expect(plan.unresolvedLabels).toEqual(["Gouvernement Test Inconnu"]);
   });
 
@@ -210,10 +212,85 @@ describe("planSync", () => {
   it("ne porte jamais lastConfirmedAt", () => {
     const r = row({ prenom: "Zoé", nom: "Neuve" });
     const plan = planSync(
-      input({ records: [r], politicianByRecord: new Map([[recordKey(r), null]]) })
+      input({
+        records: [r],
+        politicianByRecord: new Map([
+          [recordKey(r), person({ mandates: [], gouvExternalIds: [] })],
+        ]),
+      })
     );
     expect(plan.creates).toHaveLength(1);
     expect(JSON.stringify(plan)).not.toContain("lastConfirmedAt");
+  });
+
+  it("traite comme périmée une source sans gouvernement en exercice ou sans composition vérifiée", () => {
+    const r = row({ date_debut_fonction: "mardi 24 décembre 2024", fonction: "Autre" });
+    for (const inOffice of [null, { slug: "lecornu-2", compositionVerifiedDay: null }]) {
+      const plan = planSync(
+        input({
+          records: [r],
+          politicianByRecord: new Map([[recordKey(r), person()]]),
+          inOffice,
+          corrections: {
+            _updated: "2026-10-11",
+            updateMembers: [{ politicianName: "Anne Test", updates: { civility: "Mme" } }],
+          },
+          politiciansByFullName: new Map([["anne test", [person()]]]),
+        })
+      );
+      expect(plan.creates).toEqual([]);
+      expect(plan.updates).toEqual([]);
+      expect(plan.links).toEqual([]);
+      expect(plan.staleSources).toHaveLength(2);
+    }
+  });
+
+  it("ne crée jamais une personne inconnue depuis le CSV", () => {
+    const r = row({ prenom: "Zoé", nom: "Neuve" });
+    const plan = planSync(
+      input({ records: [r], politicianByRecord: new Map([[recordKey(r), null]]) })
+    );
+    expect(plan.creates).toEqual([]);
+    expect(plan.toVerify).toEqual([expect.stringContaining("Zoé Neuve")]);
+    expect(plan.toVerify[0]).toContain("personne inconnue, création manuelle requise");
+  });
+
+  it("ne repasse pas en cours une fonction isCurrent=false sans date de fin", () => {
+    const r = row();
+    const stopped = person({ mandates: [fn({ isCurrent: false, endDate: null })] });
+    const plan = planSync(
+      input({ records: [r], politicianByRecord: new Map([[recordKey(r), stopped]]) })
+    );
+    expect(plan.updates).toEqual([]);
+    expect(plan.toVerify).toHaveLength(1);
+  });
+
+  it("ne réattribue pas un identifiant source détenu par une autre personne", () => {
+    const r = row();
+    const p = person({ gouvExternalIds: [] });
+    const fresh = row({
+      prenom: "Anne",
+      nom: "Test",
+      date_debut_fonction: "jeudi 1 mai 2025",
+      id: "601",
+    });
+    const plan = planSync(
+      input({
+        records: [r, fresh],
+        politicianByRecord: new Map([
+          [recordKey(r), p],
+          [recordKey(fresh), p],
+        ]),
+        externalIdOwners: new Map([
+          ["gouv-600-M-2024-12-23", "p-autre"],
+          ["gouv-601-M-2025-05-01", "p-autre"],
+        ]),
+      })
+    );
+    expect(plan.links.filter((l) => l.kind === "externalId")).toEqual([]);
+    expect(plan.creates).toHaveLength(1);
+    expect(plan.creates[0]!.externalId).toBeNull();
+    expect(plan.conflicts).toHaveLength(2);
   });
 
   describe("corrections locales", () => {
@@ -259,9 +336,39 @@ describe("planSync", () => {
           politicianByNewMemberSlug: new Map([["anne-test", closed]]),
         })
       );
+      expect(plan.conflicts).toEqual([]);
       expect(plan.updates).toEqual([]);
       expect(plan.creates).toEqual([]);
       expect(plan.toVerify).toHaveLength(1);
+    });
+
+    it("ne crée jamais une personne inconnue listée dans newMembers", () => {
+      const plan = planSync(
+        input({
+          corrections: {
+            ...base,
+            newMembers: [
+              {
+                firstName: "Yves",
+                lastName: "Inconnu",
+                fullName: "Yves Inconnu",
+                mandate: {
+                  type: "MINISTRE",
+                  title: "Ministre",
+                  startDate: "2025-10-12",
+                  government: "Sébastien Lecornu II",
+                },
+              },
+            ],
+          },
+          politicianByNewMemberSlug: new Map([["yves-inconnu", null]]),
+        })
+      );
+      expect(plan.creates).toEqual([]);
+      expect(plan.toVerify).toEqual([
+        expect.stringContaining("personne inconnue, création manuelle requise"),
+      ]);
+      expect(plan.toVerify[0]).toContain("Yves Inconnu");
     });
 
     it("ne clôt pas une fonction prouvée par un acte", () => {

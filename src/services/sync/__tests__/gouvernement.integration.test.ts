@@ -122,7 +122,8 @@ describeIfDisposableDb("sync gouvernement (base jetable)", () => {
     const ids = await ourPoliticianIds();
     await db.mandate.deleteMany({ where: { politicianId: { in: ids } } });
     await db.externalId.deleteMany({ where: { politicianId: { in: ids } } });
-    await setVerified(null);
+    // Composition vérifiée avant la publication du CSV (2025-03-13) : source à jour.
+    await setVerified("2025-01-01");
   });
 
   afterAll(async () => {
@@ -195,13 +196,16 @@ describeIfDisposableDb("sync gouvernement (base jetable)", () => {
     const result = await sync.syncGouvernement({ dryRun: true });
 
     expect(result.skipped).toBeUndefined();
-    expect(result.plan.creates.length).toBeGreaterThan(0);
+    expect(result.plan.toVerify.some((t) => t.includes("Chloé Synctest"))).toBe(true);
     expect(await tableCounts()).toEqual(before);
     expect(fs.statSync(correctionsFile).mtimeMs).toBe(statBefore.mtimeMs);
     expect(fs.readFileSync(correctionsFile, "utf-8")).toBe(contentBefore);
   });
 
   it("crée avec rattachement legacy ou nom actuel, dates à minuit Paris, sans lastConfirmedAt ; seconde passe vide", async () => {
+    await person("emile", "Émile", "Synctest");
+    await person("fanny", "Fanny", "Synctest");
+    await person("gaston", "Gaston", "Synctest");
     getTextMock.mockResolvedValue({
       data: csv(
         "904;François Bayrou;M;Émile;Synctest;Ministre de test;lundi 23 décembre 2024;",
@@ -335,5 +339,113 @@ describeIfDisposableDb("sync gouvernement (base jetable)", () => {
     expect(openAfter.lastConfirmedAt).toBeNull();
     const politician = await db.politician.findUniqueOrThrow({ where: { id: pid } });
     expect(politician.slug).toBe(`${PREFIX}close`);
+  });
+
+  it("sans composition vérifiée du gouvernement en exercice, n'écrit rien", async () => {
+    await setVerified(null);
+    const pid = await person("ferme", "Jules", "Synctest");
+    getTextMock.mockResolvedValue({
+      data: csv("910;François Bayrou;M;Jules;Synctest;Ministre;lundi 23 décembre 2024;"),
+    });
+    const before = await tableCounts();
+
+    const result = await sync.syncGouvernement({ allowDuringGovernmentMigration: true });
+
+    expect(result.plan.staleSources.some((r) => r.includes("jamais vérifiée"))).toBe(true);
+    expect(await tableCounts()).toEqual(before);
+    expect(await db.mandate.count({ where: { politicianId: pid } })).toBe(0);
+  });
+
+  it("ne crée aucune personne inconnue, ni depuis le CSV ni depuis newMembers", async () => {
+    getTextMock.mockResolvedValue({
+      data: csv("911;François Bayrou;M;Karim;Synctest;Ministre;lundi 23 décembre 2024;"),
+    });
+    const corrections = writeCorrections({
+      _updated: "2026-10-11",
+      newMembers: [
+        {
+          firstName: "Léa",
+          lastName: "Synctest",
+          fullName: "Léa Synctest",
+          mandate: {
+            type: "MINISTRE",
+            title: "Ministre",
+            startDate: "2025-10-12",
+            government: "Test Sync En Exercice",
+          },
+        },
+      ],
+    });
+    const before = await db.politician.count();
+
+    const { plan, applied } = await runReal(corrections);
+
+    expect(applied.membersCreated).toBe(0);
+    expect(await db.politician.count()).toBe(before);
+    const unknown = plan.toVerify.filter((t) =>
+      t.includes("personne inconnue, création manuelle requise")
+    );
+    expect(unknown.some((t) => t.includes("Karim Synctest"))).toBe(true);
+    expect(unknown.some((t) => t.includes("Léa Synctest"))).toBe(true);
+  });
+
+  it("ne repasse pas en cours une fonction terminée sans date de fin", async () => {
+    const pid = await person("stoppee", "Marc", "Synctest");
+    const m = await db.mandate.create({
+      data: {
+        politicianId: pid,
+        type: "MINISTRE",
+        title: "Ministre",
+        institution: "Gouvernement François Bayrou",
+        startDate: parisMidnight("2024-12-23"),
+        isCurrent: false,
+        governmentData: { create: { governmentName: "Gouvernement François Bayrou" } },
+      },
+    });
+    getTextMock.mockResolvedValue({
+      data: csv("912;François Bayrou;M;Marc;Synctest;Ministre;lundi 23 décembre 2024;"),
+    });
+
+    const { plan } = await runReal(writeCorrections({ _updated: "2026-10-11" }));
+
+    const after = await db.mandate.findUniqueOrThrow({ where: { id: m.id } });
+    expect(after.isCurrent).toBe(false);
+    expect(after.endDate).toBeNull();
+    expect(plan.toVerify.some((t) => t.includes("Marc Synctest"))).toBe(true);
+  });
+
+  it("ne réattribue jamais un identifiant source détenu par une autre personne", async () => {
+    const owner = await person("proprio", "Nadia", "Synctest");
+    const pid = await person("autre", "Olivier", "Synctest");
+    await db.externalId.create({
+      data: { politicianId: owner, source: "GOUVERNEMENT", externalId: "gouv-913-M-2024-12-23" },
+    });
+    getTextMock.mockResolvedValue({
+      data: csv("913;François Bayrou;M;Olivier;Synctest;Ministre;lundi 23 décembre 2024;"),
+    });
+
+    const { plan, applied } = await runReal(writeCorrections({ _updated: "2026-10-11" }));
+
+    expect(plan.conflicts).toHaveLength(1);
+    expect(applied.mandatesCreated).toBe(1);
+    const row = await db.externalId.findUniqueOrThrow({
+      where: {
+        source_externalId: { source: "GOUVERNEMENT", externalId: "gouv-913-M-2024-12-23" },
+      },
+    });
+    expect(row.politicianId).toBe(owner);
+
+    // Seconde ligne de défense : un plan qui force le rattachement est refusé à l'écriture.
+    const forced = sync.emptyPlan();
+    forced.links.push({
+      kind: "externalId",
+      label: "forcé",
+      politicianId: pid,
+      externalId: "gouv-913-M-2024-12-23",
+    });
+    const res = await sync.applySync(forced, db);
+    expect(res.errors).toEqual([expect.stringContaining("conflit")]);
+    const again = await db.externalId.findUniqueOrThrow({ where: { id: row.id } });
+    expect(again.politicianId).toBe(owner);
   });
 });

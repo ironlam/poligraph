@@ -30,7 +30,11 @@ const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
         update: w.politicianUpdate,
       },
       government: { findMany: read(), findFirst: vi.fn().mockResolvedValue(null) },
-      externalId: { findFirst: vi.fn().mockResolvedValue(null), upsert: w.externalIdUpsert },
+      externalId: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: read(),
+        upsert: w.externalIdUpsert,
+      },
       party: { findFirst: vi.fn().mockResolvedValue(null) },
       mandateGovernment: { update: w.mandateGovernmentUpdate },
     },
@@ -77,7 +81,7 @@ describe("garde du sync gouvernement", () => {
     expect(result.skipped).toBeUndefined();
     expect(result.success).toBe(true);
     expect(getTextMock).toHaveBeenCalledTimes(1);
-    expect(result.plan.creates.length).toBeGreaterThan(0);
+    expect(result.plan.staleSources.length).toBeGreaterThan(0);
     for (const fn of writeMocks) expect(fn).not.toHaveBeenCalled();
   });
 
