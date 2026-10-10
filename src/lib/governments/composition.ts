@@ -47,6 +47,33 @@ export function buildSameDayContext(episodes: Episode[], date: string): SameDayC
 }
 
 /**
+ * Changement de fonction de la même personne, dans le même gouvernement, par un même acte
+ * (§13.1) : l'acte clôt la fonction sortante et ouvre la fonction entrante, l'ordre est donc
+ * établi, quel que soit le lien de remplacement de la fonction entrante.
+ * Renvoie l'autre moitié du couple, ou `undefined`.
+ */
+function sameActCounterpart(ep: Episode, sameDay: SameDayContext): Episode | undefined {
+  if (sameDay.exits.has(ep.membershipId) && ep.endActId !== null) {
+    const entry = [...sameDay.entries.values()].find(
+      (e) =>
+        e.membershipId !== ep.membershipId &&
+        e.politicianId === ep.politicianId &&
+        e.startActId === ep.endActId
+    );
+    if (entry) return entry;
+  }
+  if (sameDay.entries.has(ep.membershipId) && ep.startActId !== null) {
+    return [...sameDay.exits.values()].find(
+      (x) =>
+        x.membershipId !== ep.membershipId &&
+        x.politicianId === ep.politicianId &&
+        x.endActId === ep.startActId
+    );
+  }
+  return undefined;
+}
+
+/**
  * Règles 3, 5 et 6, sans tenir compte des autres changements du jour.
  *
  * Règle 6 (date DERIVED), version simple : une borne estimée ne décide rien le jour même.
@@ -106,6 +133,14 @@ export function categoryAt(
   // Règle 4 : seulement si le jour porte au moins une entrée ET au moins une sortie.
   // Le jour de formation sans sortie n'est donc jamais une transition.
   if ((isEntry || isExit) && sameDay.entries.size > 0 && sameDay.exits.size > 0) {
+    // Changement de fonction par un même acte : la fonction sortante est absente, l'entrante
+    // suit la règle 3.
+    const counterpart = sameActCounterpart(ep, sameDay);
+    if (counterpart) {
+      return sameDay.exits.has(ep.membershipId) && !sameDay.entries.has(ep.membershipId)
+        ? null
+        : baseCategory(gov, ep, date);
+    }
     // Successeur lié à une sortie du même jour.
     if (isEntry && ep.predecessorMembershipId && sameDay.exits.has(ep.predecessorMembershipId)) {
       if (!ep.sameDayOrderEstablished) return "transition";
@@ -283,15 +318,18 @@ export function documentedChanges(gov: GovernmentDates, episodes: Episode[]): Ch
       const linked = entry.predecessorMembershipId
         ? sameDay.exits.get(entry.predecessorMembershipId)
         : undefined;
+      const sameAct = sameActCounterpart(entry, sameDay);
       const previous =
-        linked && linked.politicianId === entry.politicianId
-          ? linked
-          : [...sameDay.exits.values()].find(
-              (x) =>
-                x.membershipId !== entry.membershipId &&
-                x.politicianId === entry.politicianId &&
-                !handled.has(x.membershipId)
-            );
+        sameAct && !handled.has(sameAct.membershipId)
+          ? sameAct
+          : linked && linked.politicianId === entry.politicianId
+            ? linked
+            : [...sameDay.exits.values()].find(
+                (x) =>
+                  x.membershipId !== entry.membershipId &&
+                  x.politicianId === entry.politicianId &&
+                  !handled.has(x.membershipId)
+              );
       // Un épisode d'un seul jour n'est jamais son propre prédécesseur.
       if (!previous || previous.membershipId === entry.membershipId) continue;
       if (handled.has(previous.membershipId)) continue;

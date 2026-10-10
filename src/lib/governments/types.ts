@@ -40,6 +40,10 @@ export type Episode = {
   sameDayOrderSourceUrl: string | null;
   // Fin propre des affaires courantes de cette fonction (décharge, renomination ailleurs).
   currentAffairsEndedAt: string | null;
+  // Actes référencés de début et de fin. Un même acte qui clôt une fonction et en ouvre une autre
+  // pour la même personne établit l'ordre de ce changement de fonction (§13.1).
+  startActId: string | null;
+  endActId: string | null;
 };
 
 export type Category = "established" | "currentAffairs" | "transition" | "undocumented";

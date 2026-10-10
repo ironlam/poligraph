@@ -51,6 +51,8 @@ function ep(
     sameDayOrderEstablished: false,
     sameDayOrderSourceUrl: null,
     currentAffairsEndedAt: null,
+    startActId: null,
+    endActId: null,
     currentAffairsEndSourceUrl: null,
     startDetermination: null,
     endDetermination: null,

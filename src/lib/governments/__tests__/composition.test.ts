@@ -48,6 +48,8 @@ function ep(membershipId: string, overrides: Partial<Episode> = {}): Episode {
     sameDayOrderEstablished: false,
     sameDayOrderSourceUrl: null,
     currentAffairsEndedAt: null,
+    startActId: null,
+    endActId: null,
     ...overrides,
   };
 }
@@ -527,6 +529,92 @@ describe("compositionAt et categoryAt", () => {
     const bounded = { ...resigning, currentAffairsEndedAt: "2024-07-20" };
     expect(alone(resigned, bounded, "2024-07-20")).toBe("currentAffairs");
     expect(alone(resigned, bounded, "2024-07-21")).toBeNull();
+  });
+});
+
+describe("changement de fonction d'une même personne par un même acte", () => {
+  // Cas David Amiel, 22 février 2026 : un seul décret met fin à sa fonction de ministre délégué
+  // et le nomme ministre, en remplacement d'Amélie de Montchalin (ordre établi par l'acte).
+  const DAY = "2026-02-22";
+  const g = gov({
+    primeMinisterAppointedAt: "2025-10-10",
+    formedAt: "2025-10-12",
+    resignedAt: null,
+    resignedEvidence: null,
+    endedAt: null,
+    compositionVerifiedAt: "2026-09-30",
+  });
+  const stable = ep("stable", { start: "2025-10-12", lastConfirmedAt: "2026-09-30" });
+  const amielEnd = (endActId: string | null) =>
+    ep("amiel-delegue", {
+      politicianId: "p-amiel",
+      type: "MINISTRE_DELEGUE",
+      start: "2025-10-12",
+      end: DAY,
+      endEvidence: "ACT",
+      endKind: "INDIVIDUAL",
+      endActId,
+      endSourceUrl: "https://legifrance.gouv.fr/decret-22-02",
+    });
+  const montchalin = ep("montchalin", {
+    politicianId: "p-montchalin",
+    start: "2025-10-12",
+    end: DAY,
+    endEvidence: "ACT",
+    endKind: "INDIVIDUAL",
+    endActId: "act-22-02",
+  });
+  const amielMinistre = (startActId: string | null) =>
+    ep("amiel-ministre", {
+      politicianId: "p-amiel",
+      start: DAY,
+      startEvidence: "ACT",
+      startActId,
+      startSourceUrl: "https://legifrance.gouv.fr/decret-22-02",
+      lastConfirmedAt: "2026-09-30",
+      predecessorMembershipId: "montchalin",
+      sameDayOrderEstablished: true,
+    });
+
+  it("même acte : seule la nouvelle fonction est établie, comptée une fois", () => {
+    const all = [stable, montchalin, amielEnd("act-22-02"), amielMinistre("act-22-02")];
+    const r = ok(compositionAt(g, all, DAY));
+    expect(ids(r.byCategory.established)).toEqual(["amiel-ministre", "stable"]);
+    expect(categoryOf(r, "amiel-delegue")).toBeNull();
+    expect(categoryOf(r, "montchalin")).toBeNull();
+    expect(r.byCategory.transition).toEqual([]);
+    expect(r.establishedPersons).toBe(2);
+
+    const changes = documentedChanges(g, all).filter((c) => c.date === DAY);
+    expect(changes.map((c) => [c.kind, c.membershipIds])).toEqual([
+      ["exit", ["montchalin"]],
+      ["titleChange", ["amiel-delegue", "amiel-ministre"]],
+    ]);
+  });
+
+  it("actes différents : comportement inchangé, l'ancienne fonction reste établie le jour même", () => {
+    const all = [stable, montchalin, amielEnd("act-autre"), amielMinistre("act-22-02")];
+    const r = ok(compositionAt(g, all, DAY));
+    expect(categoryOf(r, "amiel-delegue")).toBe("established");
+    expect(categoryOf(r, "amiel-ministre")).toBe("established");
+    expect(categoryOf(r, "montchalin")).toBeNull();
+  });
+
+  it("acte de fin inconnu : comportement inchangé", () => {
+    const all = [stable, montchalin, amielEnd(null), amielMinistre(null)];
+    const r = ok(compositionAt(g, all, DAY));
+    expect(categoryOf(r, "amiel-delegue")).toBe("established");
+    expect(categoryOf(r, "amiel-ministre")).toBe("established");
+  });
+
+  it("même acte sans lien de remplacement ni preuve ACT partout : pas de transition", () => {
+    // Une sortie DATASET d'une autre personne le même jour rendrait l'entrée « transition »
+    // sans la règle ; le même acte établit l'ordre du changement de fonction.
+    const other = ep("other", { end: DAY, endEvidence: "DATASET", endKind: "INDIVIDUAL" });
+    const entry = { ...amielMinistre("act-22-02"), predecessorMembershipId: null };
+    const r = ok(compositionAt(g, [stable, other, amielEnd("act-22-02"), entry], DAY));
+    expect(categoryOf(r, "amiel-ministre")).toBe("established");
+    expect(categoryOf(r, "amiel-delegue")).toBeNull();
   });
 });
 
