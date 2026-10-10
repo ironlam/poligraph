@@ -31,7 +31,7 @@ export function CoverageSummary({
       body:
         partial > 0
           ? `Partielle : ${plural(partial, "gouvernement comporte", "gouvernements comportent")} des changements ou des personnes encore à documenter.`
-          : "Complète pour les gouvernements publiés.",
+          : "Indiquée gouvernement par gouvernement.",
     },
     {
       title: "Vérification",

@@ -14,10 +14,33 @@ import type {
 
 const CATEGORIES: Category[] = ["established", "currentAffairs", "transition", "undocumented"];
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Last caretaker day of a function: a collective resignation in an attested regime (resignation
+ * proved by an act) with a known government end. Caretaker presence stops the day before the
+ * successor team's appointment; an individual bound can only shorten it. Null otherwise.
+ */
+export function lastCaretakerDay(
+  gov: Pick<GovernmentDates, "currentAffairsAttested" | "resignedEvidence" | "endedAt">,
+  ep: Pick<Episode, "endKind" | "currentAffairsEndedAt">
+): string | null {
+  if (
+    ep.endKind !== "COLLECTIVE_RESIGNATION" ||
+    !gov.currentAffairsAttested ||
+    gov.resignedEvidence !== "ACT" ||
+    !gov.endedAt
+  ) {
+    return null;
+  }
+  const lastDay = addDays(gov.endedAt, -1);
+  return ep.currentAffairsEndedAt && ep.currentAffairsEndedAt < lastDay
+    ? ep.currentAffairsEndedAt
+    : lastDay;
 }
 
 /**
@@ -98,11 +121,11 @@ function baseCategory(gov: GovernmentDates, ep: Episode, date: string): Category
       // Sinon la fin du gouvernement, et à défaut la composition documentée. Au-delà de cette
       // dernière, une borne inconnue ne devient pas certaine.
       const bound = ep.currentAffairsEndedAt ?? gov.endedAt ?? gov.compositionVerifiedAt;
-      const established =
-        gov.resignedEvidence === "ACT" &&
-        gov.currentAffairsAttested &&
-        bound !== null &&
-        date <= bound;
+      const regimeAttested = gov.resignedEvidence === "ACT" && gov.currentAffairsAttested;
+      // Caretaker presence stops the day BEFORE the successor team's appointment: on `endedAt`
+      // itself nobody is in current affairs for this government.
+      if (regimeAttested && gov.endedAt && date >= gov.endedAt) return null;
+      const established = regimeAttested && bound !== null && date <= bound;
       return established ? "currentAffairs" : "undocumented";
     }
     return null;
@@ -411,6 +434,8 @@ export function defaultCompositionDate(gov: GovernmentDates, episodes: Episode[]
   const range = consultableRange(gov);
   if (!range) return null;
   const candidates = new Set<string>([range.to, range.from]);
+  // Last caretaker day when the period ends on the successor team's appointment.
+  if (gov.endedAt && range.to === gov.endedAt) candidates.add(addDays(range.to, -1));
   if (gov.resignedAt && gov.resignedAt >= range.from && gov.resignedAt <= range.to) {
     candidates.add(gov.resignedAt);
   }

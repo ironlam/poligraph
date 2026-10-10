@@ -23,6 +23,7 @@ import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav"
 import { RememberReturn, ReturnScrollRestorer } from "@/components/governments/RememberReturn";
 import {
   appointedOn,
+  displayTitle,
   episodeDates,
   formatDay,
   FUNCTION_ORDER,
@@ -41,6 +42,8 @@ import {
   consultableRange,
   defaultCompositionDate,
   documentedChanges,
+  addDays,
+  lastCaretakerDay,
 } from "@/lib/governments/composition";
 import type {
   ActRef,
@@ -66,12 +69,6 @@ function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function addDays(day: string, days: number): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
   const gov = (await getPublishedGovernments()).find((g) => g.slug === slug);
@@ -79,10 +76,22 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   // A historical composition is not a duplicate of the latest one (spec §8): a valid `date`
   // stays in the canonical. An invalid one is ignored by the page, so is the canonical.
   const date = parseCompositionDate(first(sp.date));
+  const title = `${gov.name} : composition et ministres`;
+  const description = `Composition du ${gov.name} date par date, avec l'acte officiel de chaque nomination, les changements documentés et la liste des participants.`;
+  const canonical = `${BASE}/${gov.slug}${date ? `?date=${date}` : ""}`;
   return {
-    title: `${gov.name} : composition et ministres`,
-    description: `Composition du ${gov.name} date par date, avec la source officielle de chaque nomination, les changements documentés et la liste des participants.`,
-    alternates: { canonical: `${BASE}/${gov.slug}${date ? `?date=${date}` : ""}` },
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: `${title} | Poligraph`,
+      description,
+      url: canonical,
+      type: "website",
+      siteName: "Poligraph",
+      locale: "fr_FR",
+    },
+    twitter: { card: "summary_large_image", title, description },
     ...listingRobotsMetadata(
       hasActiveListingFilter({ date: first(sp.date) }, GOUVERNEMENT_DETAIL_FILTER_KEYS)
     ),
@@ -196,21 +205,21 @@ function describeChange(
       const ep = eps[0];
       if (!ep) return "Entrée au gouvernement.";
       return names[0]
-        ? `${names[0]} entre au gouvernement : ${ep.title}.`
-        : `Entrée au gouvernement : ${ep.title}.`;
+        ? `${names[0]} entre au gouvernement : ${displayTitle(ep.title)}.`
+        : `Entrée au gouvernement : ${displayTitle(ep.title)}.`;
     }
     case "exit": {
       const ep = eps[0];
       if (!ep) return "Sortie du gouvernement.";
       return names[0]
-        ? `${names[0]} quitte la fonction : ${ep.title}.`
-        : `Fin de la fonction : ${ep.title}.`;
+        ? `${names[0]} quitte la fonction : ${displayTitle(ep.title)}.`
+        : `Fin de la fonction : ${displayTitle(ep.title)}.`;
     }
     case "titleChange": {
       const [before, after] = eps;
       if (!before || !after) return "Changement d'intitulé.";
       const who = names[0] ? `${names[0]} : ` : "";
-      return `${who}« ${before.title} » devient « ${after.title} ».`;
+      return `${who}« ${displayTitle(before.title)} » devient « ${displayTitle(after.title)} ».`;
     }
     case "transition":
       return `Changements du même jour qu'aucun acte ne relie${names.length ? ` (${joinNames(names)})` : ""}. L'ordre n'est pas établi par les sources : ils sont signalés sans heure ni simultanéité supposées.`;
@@ -226,7 +235,7 @@ function describeChange(
 function previousTitle(ep: GovernmentEpisode, byId: Map<string, GovernmentEpisode>): string | null {
   const prev = ep.predecessorMembershipId ? byId.get(ep.predecessorMembershipId) : undefined;
   return prev && prev.politicianId === ep.politicianId && prev.title !== ep.title
-    ? prev.title
+    ? displayTitle(prev.title)
     : null;
 }
 
@@ -237,7 +246,7 @@ function MemberGrid({
   returnLabel,
 }: {
   groups: PersonGroup[];
-  fn: (ep: GovernmentEpisode, person: PersonCard) => MemberCardFunction;
+  fn: (ep: GovernmentEpisode) => MemberCardFunction;
   returnUrl: string;
   returnLabel: string;
 }) {
@@ -247,7 +256,7 @@ function MemberGrid({
         <GovernmentMemberCard
           key={g.person.id}
           person={g.person}
-          functions={g.episodes.map((ep) => fn(ep, g.person))}
+          functions={g.episodes.map((ep) => fn(ep))}
           returnUrl={returnUrl}
           returnLabel={returnLabel}
         />
@@ -326,9 +335,13 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
     if (defaultDate && defaultDate !== range.from) {
       shortcuts.push({ date: defaultDate, label: "Dernière composition documentée" });
     }
-    if (range.to !== range.from && range.to !== defaultDate) {
+    // On endedAt the successor team is appointed: the last caretaker day is the day before.
+    const lastDay =
+      lastCaretakerDay(gov, { endKind: "COLLECTIVE_RESIGNATION", currentAffairsEndedAt: null }) ??
+      range.to;
+    if (lastDay !== range.from && lastDay !== defaultDate) {
       shortcuts.push({
-        date: range.to,
+        date: lastDay,
         label: gov.resignedAt ? "Fin des affaires courantes" : "Fin du gouvernement",
       });
     }
@@ -372,13 +385,13 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
 
   const composedFn =
     (category: "established" | "transition" | "undocumented") =>
-    (ep: GovernmentEpisode, person: PersonCard): MemberCardFunction => {
+    (ep: GovernmentEpisode): MemberCardFunction => {
       if (category === "established") {
         const previous = previousTitle(ep, byId);
         return {
           key: ep.membershipId,
-          title: ep.title,
-          detail: `${appointedOn(person.gender, ep.start)}${previous ? ` · intitulé précédent : ${previous}` : ""}`,
+          title: displayTitle(ep.title),
+          detail: `${appointedOn(ep.start)}${previous ? ` · intitulé précédent : ${previous}` : ""}`,
           badge: currentAffairsIds.has(ep.membershipId) ? (
             <StatusBadge tone="neutral">Affaires courantes</StatusBadge>
           ) : undefined,
@@ -386,8 +399,8 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
       }
       return {
         key: ep.membershipId,
-        title: ep.title,
-        detail: episodeDates(ep, person.gender, gov),
+        title: displayTitle(ep.title),
+        detail: episodeDates(ep, gov),
         badge:
           category === "transition" ? (
             <StatusBadge tone="warning">
@@ -420,7 +433,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
           items={[
             { label: "Politiques", href: "/politiques" },
             { label: "Gouvernements", href: BASE },
-            { label: gov.name },
+            { label: gov.name, href: selfUrl },
           ]}
         />
 
@@ -564,9 +577,9 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                 )}
                 {range && date === range.to && (
                   <p className="text-[13px] text-muted-foreground">
-                    Cette date est la dernière couverte par la documentation ; elle ne décrit pas
-                    forcément l&apos;état présent. Les membres partis avant cette date figurent dans
-                    « Tous les participants ».
+                    {gov.endedAt === null
+                      ? "Cette date est la dernière couverte par la documentation ; elle ne décrit pas forcément l'état présent. Les membres partis avant cette date figurent dans « Tous les participants »."
+                      : "Dernière date couverte. Les membres partis avant cette date figurent dans « Tous les participants »."}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2 border-t pt-4">
@@ -921,10 +934,10 @@ function ParticipantList({
             ) : (
               <strong>{person.fullName}</strong>
             )}{" "}
-            · {episodes.map((e) => e.title).join(" ; ")}
+            · {episodes.map((e) => displayTitle(e.title)).join(" ; ")}
           </span>
           <span className="text-[13px] text-muted-foreground sm:text-right">
-            {episodes.map((e) => episodeDates(e, person.gender, gov)).join(" ; ")}
+            {episodes.map((e) => episodeDates(e, gov)).join(" ; ")}
           </span>
         </li>
       ))}

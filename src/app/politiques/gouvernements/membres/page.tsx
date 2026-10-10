@@ -18,6 +18,7 @@ import {
 import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
 import { ReturnScrollRestorer } from "@/components/governments/RememberReturn";
 import {
+  displayTitle,
   episodeDates,
   formatDay,
   formatMonth,
@@ -66,11 +67,22 @@ function flatten(sp: SearchParams): Record<string, string | undefined> {
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const sp = await searchParams;
+  const title = "Membres des gouvernements";
+  const description =
+    "Toutes les personnes ayant exercé une fonction dans un gouvernement publié, avec leurs fonctions, leurs dates et les sources officielles.";
   return {
-    title: "Membres des gouvernements",
-    description:
-      "Toutes les personnes ayant exercé une fonction dans un gouvernement publié, avec leurs fonctions, leurs dates et les sources officielles.",
+    title,
+    description,
     alternates: { canonical: PATH },
+    openGraph: {
+      title: `${title} | Poligraph`,
+      description,
+      url: PATH,
+      type: "website",
+      siteName: "Poligraph",
+      locale: "fr_FR",
+    },
+    twitter: { card: "summary_large_image", title, description },
     ...listingRobotsMetadata(
       hasActiveListingFilter(flatten(sp), GOUVERNEMENTS_MEMBRES_FILTER_KEYS)
     ),
@@ -109,13 +121,11 @@ function functionBadge(fn: MemberFunction) {
   return undefined;
 }
 
-function asideSummary(transitions: number, undocumented: number): string {
+function asideSummary(transitions: number, undocumented: number): string | null {
   const parts: string[] = [];
   if (transitions > 0) parts.push(`${personsLabel(transitions)} en transition à préciser`);
   if (undocumented > 0) parts.push(`${personsLabel(undocumented)} dont la période est à préciser`);
-  return parts.length > 0
-    ? `Listées à part : ${parts.join(" et ")}.`
-    : "Aucune présence à préciser à cette date.";
+  return parts.length > 0 ? `Listées à part : ${parts.join(" et ")}.` : null;
 }
 
 /** Current URL as the browser shows it (form submissions keep empty fields), for the return. */
@@ -153,7 +163,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
       items={[
         { label: "Politiques", href: "/politiques" },
         { label: "Gouvernements", href: "/politiques/gouvernements" },
-        { label: "Membres" },
+        { label: "Membres", href: PATH },
       ]}
     />
   );
@@ -240,12 +250,25 @@ export default async function MembresPage({ searchParams }: PageProps) {
     letters.set(l, [...(letters.get(l) ?? []), row]);
   }
 
+  // The period count only adds information when some people are not established; the present
+  // summary is hidden when nothing is listed apart.
+  const summaryLine =
+    query.mode === "periode"
+      ? !ok
+        ? null
+        : ok.undocumentedCount > 0
+          ? `${plural(ok.establishedCount, "personne a", "personnes ont")} une fonction établie dans la période ; pour ${plural(ok.undocumentedCount, "autre", "autres")}, la période est à préciser (signalée sur la fiche).`
+          : ok.establishedCount === main.length
+            ? null
+            : `${plural(ok.establishedCount, "personne a", "personnes ont")} une fonction établie dans la période.`
+      : asideSummary(transitionRows.length, undocumentedRows.length);
+
   const toFunctions = (row: MemberRow): MemberCardFunction[] =>
     row.functions.map((fn) => {
       const gov = govById.get(fn.episode.governmentId);
       return {
         key: fn.episode.membershipId,
-        title: fn.episode.title,
+        title: displayTitle(fn.episode.title),
         detail: (
           <>
             {gov ? (
@@ -259,7 +282,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
                 ·{" "}
               </>
             ) : null}
-            {episodeDates(fn.episode, row.person.gender, gov)}
+            {episodeDates(fn.episode, gov)}
           </>
         ),
         badge: functionBadge(fn),
@@ -419,7 +442,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
               </Button>
             </div>
             <p id="membres-dates-aide" className="mt-2 text-[12.5px] text-muted-foreground">
-              En mode « Présents à une date », seule la seconde date compte.
+              En mode « Présents à une date », seule la date « Présents au » compte.
             </p>
           </FiltersPanel>
         </form>
@@ -473,16 +496,12 @@ export default async function MembresPage({ searchParams }: PageProps) {
                     : `ayant exercé une fonction entre le ${formatDay(query.du)} et le ${formatDay(query.au)}.`}
                 </span>
               </p>
-              <p className="text-sm text-muted-foreground">
-                {query.mode === "periode"
-                  ? `${plural(ok!.establishedCount, "personne a", "personnes ont")} une fonction établie dans la période${
-                      ok!.undocumentedCount > 0
-                        ? ` ; pour ${plural(ok!.undocumentedCount, "autre", "autres")}, la période est à préciser (signalée sur la fiche).`
-                        : "."
-                    }`
-                  : asideSummary(transitionRows.length, undocumentedRows.length)}
-                {anyPartial ? " Couverture partielle : le total peut être incomplet." : ""}
-              </p>
+              {(summaryLine || anyPartial) && (
+                <p className="text-sm text-muted-foreground">
+                  {summaryLine}
+                  {anyPartial ? " Couverture partielle : le total peut être incomplet." : ""}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <CopyLinkButton />
                 <Button asChild variant="outline" className="min-h-11">

@@ -3,7 +3,7 @@
 
 import { SITE_URL } from "@/config/site";
 import { normalizeText } from "@/lib/name-matching";
-import { compositionAt } from "./composition";
+import { compositionAt, lastCaretakerDay } from "./composition";
 import type { GovernmentEpisode, PersonCard, PublishedGovernment } from "./mapping";
 import { filterMembers, membersCoverage, type MemberRow, type MembersData } from "./members";
 import { parseMembersQuery, type MembersQuery } from "./params";
@@ -135,13 +135,8 @@ export function functionRow(
   gov: PublishedGovernment | undefined,
   category?: Category
 ): FunctionExportRow {
-  // Caretaker end: the function's own end if recorded, else the government's end when an act
-  // attests the regime and the function ended with the collective resignation.
-  const attested = gov?.currentAffairsAttested === true && gov.resignedEvidence === "ACT";
-  const caretakerEnd =
-    attested && episode.endKind === "COLLECTIVE_RESIGNATION"
-      ? (episode.currentAffairsEndedAt ?? gov.endedAt)
-      : null;
+  // Same last caretaker day as the composition and the pages.
+  const caretakerEnd = gov ? lastCaretakerDay(gov, episode) : null;
   return {
     ma_id: episode.mandatePublicId ?? "",
     pg_id: person.publicId ?? "",

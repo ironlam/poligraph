@@ -307,8 +307,23 @@ describe("export des fonctions", () => {
     expect(individual[19]).toBe("");
     const collective = rows.find((r) => r.includes("Secrétaire d'État"))!.split(",");
     expect(collective[18]).toBe("cessation collective");
-    // Régime attesté : fin du gouvernement.
-    expect(collective[19]).toBe("2024-02-01");
+    // Régime attesté : la veille de la fin du gouvernement.
+    expect(collective[19]).toBe("2024-01-31");
+  });
+
+  it.each([
+    ["borne individuelle plus courte", "2024-01-20", "2024-01-20"],
+    ["borne individuelle au-delà de la veille, plafonnée", "2024-02-10", "2024-01-31"],
+  ])("affaires_courantes_jusqu_au : %s", async (_label, bound, expected) => {
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+      episodes: episodes.map((e) =>
+        e.title === "Secrétaire d'État" ? { ...e, currentAffairsEndedAt: bound } : e
+      ),
+      people,
+    });
+    const { rows } = await lines(await call(getFonctions, `${BASE}/fonctions`));
+    const collective = rows.find((r) => r.includes("Secrétaire d'État"))!.split(",");
+    expect(collective[19]).toBe(expected);
   });
 
   it("laisse affaires_courantes_jusqu_au vide quand le régime n'est pas attesté", async () => {

@@ -2,8 +2,9 @@
 // client components. Dates are `YYYY-MM-DD` calendar days already resolved by the mapping layer,
 // so they are formatted in UTC to avoid shifting them a second time.
 
+import { addDays, lastCaretakerDay } from "@/lib/governments/composition";
 import { formatDateFrUTC } from "@/lib/utils";
-import type { Gender, GovernmentEpisode, PublishedGovernment } from "@/lib/governments/mapping";
+import type { GovernmentEpisode, PublishedGovernment } from "@/lib/governments/mapping";
 import type { FunctionType } from "@/lib/governments/types";
 
 /** « 1er janvier 2017 », « 7 janvier 2024 ». */
@@ -20,14 +21,18 @@ export function formatMonth(day: string): string {
   });
 }
 
+/** Neutral « Nomination le … » (no per-civility agreement). */
+export function appointedOn(day: string): string {
+  return `Nomination le ${formatDay(day)}`;
+}
+
 /**
- * « Nommé le … » / « Nommée le … » from the person's civility. Unknown civility: « Nomination le … »
- * (no inclusive-writing fallback).
+ * Display form of a function title: « d'Etat » becomes « d'État » and the first letter is
+ * uppercased. Other casing is left alone. Display only, never used for exports.
  */
-export function appointedOn(gender: Gender, day: string, capitalize = true): string {
-  const word = gender === "F" ? "nommée" : gender === "M" ? "nommé" : "nomination";
-  const head = capitalize ? word.charAt(0).toUpperCase() + word.slice(1) : word;
-  return `${head} le ${formatDay(day)}`;
+export function displayTitle(title: string): string {
+  const fixed = title.replace(/d(['\u2019])Etat/g, "d$1État");
+  return fixed.charAt(0).toUpperCase() + fixed.slice(1);
 }
 
 export function plural(n: number, one: string, many: string): string {
@@ -47,23 +52,17 @@ export function episodeDates(
     GovernmentEpisode,
     "start" | "end" | "endKind" | "currentAffairsEndedAt" | "lastConfirmedAt"
   >,
-  gender: Gender,
-  gov: Pick<PublishedGovernment, "currentAffairsAttested" | "resignedEvidence"> | undefined
+  gov:
+    | Pick<PublishedGovernment, "currentAffairsAttested" | "resignedEvidence" | "endedAt">
+    | undefined
 ): string {
   if (ep.end) {
     let text = `du ${formatDay(ep.start)} au ${formatDay(ep.end)}`;
-    // Same rule as the composition: the regime must be attested by an act, resignation included.
-    if (
-      ep.endKind === "COLLECTIVE_RESIGNATION" &&
-      ep.currentAffairsEndedAt &&
-      gov?.currentAffairsAttested &&
-      gov.resignedEvidence === "ACT"
-    ) {
-      text += `, puis affaires courantes jusqu'au ${formatDay(ep.currentAffairsEndedAt)}`;
-    }
+    const caretakerEnd = gov ? lastCaretakerDay(gov, ep) : null;
+    if (caretakerEnd) text += `, puis affaires courantes jusqu'au ${formatDay(caretakerEnd)}`;
     return text;
   }
-  const head = appointedOn(gender, ep.start);
+  const head = appointedOn(ep.start);
   return ep.lastConfirmedAt
     ? `${head} ; fonction confirmée au ${formatDay(ep.lastConfirmedAt)}`
     : `${head} ; fin de fonction non documentée`;
@@ -118,12 +117,14 @@ export function governmentDatesLine(gov: PublishedGovernment): string {
   else line = `${pm}, équipe nommée le ${formatDay(gov.formedAt)}`;
 
   if (gov.endedAt) {
-    line += ` · fin des fonctions le ${formatDay(gov.endedAt)}`;
-    if (gov.resignedAt && gov.resignedAt !== gov.endedAt) {
-      line += `. Démission le ${formatDay(gov.resignedAt)}`;
-      if (gov.currentAffairsAttested)
-        line += `, affaires courantes jusqu'au ${formatDay(gov.endedAt)}`;
-      line += ".";
+    const resignedFirst = gov.resignedAt && gov.resignedAt !== gov.endedAt;
+    if (resignedFirst && !gov.currentAffairsAttested) {
+      line += `. Démission le ${formatDay(gov.resignedAt!)}, remplacé le ${formatDay(gov.endedAt)}.`;
+    } else {
+      line += ` · fin des fonctions le ${formatDay(gov.endedAt)}`;
+      if (resignedFirst) {
+        line += `. Démission le ${formatDay(gov.resignedAt!)}, affaires courantes jusqu'au ${formatDay(addDays(gov.endedAt, -1))}.`;
+      }
     }
   } else if (gov.resignedAt) {
     line += ` · démission le ${formatDay(gov.resignedAt)}`;
