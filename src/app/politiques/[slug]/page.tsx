@@ -4,6 +4,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PoliticianHeader } from "./_components/PoliticianHeader";
@@ -82,6 +83,7 @@ export default async function PoliticianPage({ params }: PageProps) {
         <Breadcrumb
           items={[{ label: "Politiques", href: "/politiques" }, { label: politician.fullName }]}
         />
+        <ProfileReturnLink slug={politician.slug} />
 
         {/* Header */}
         <PoliticianHeader politician={politician} currentGroup={model.currentGroup} />
