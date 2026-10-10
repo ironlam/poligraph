@@ -17,7 +17,11 @@ import {
   plural,
 } from "@/components/governments/format";
 import { groupVisible } from "@/components/governments/view";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import {
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+  type GovernmentEpisodesData,
+} from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { compositionAt } from "@/lib/governments/composition";
 import type { PublishedGovernment } from "@/lib/governments/mapping";
@@ -73,10 +77,7 @@ function groupOf(g: PublishedGovernment) {
  * Complement for the government in office: people present in an established way at the date
  * the composition is documented to. Hidden people are left out, hence « au moins » when any.
  */
-function presentLine(
-  g: PublishedGovernment,
-  data: Awaited<ReturnType<typeof getGovernmentEpisodes>>
-): string | null {
+function presentLine(g: PublishedGovernment, data: GovernmentEpisodesData): string | null {
   if (g.endedAt || !g.compositionVerifiedAt) return null;
   const result = compositionAt(g, data.episodes, g.compositionVerifiedAt);
   if (result.status !== "ok") return null;
@@ -94,7 +95,14 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
   if (!(await isFeatureEnabled("gouvernements"))) notFound();
 
   const sp = await searchParams;
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const govs = await getPublishedGovernments();
+  // Only the government in office shows a « présentes » count: read its functions alone.
+  const inOffice = govs.filter((g) => !g.endedAt && g.compositionVerifiedAt);
+  const inOfficeData = new Map(
+    await Promise.all(
+      inOffice.map(async (g) => [g.id, await getGovernmentEpisodesFor(g.id)] as const)
+    )
+  );
 
   const q = first(sp.q).trim().slice(0, MAX_QUERY_LENGTH);
   // Presidencies with at least one published government, most recent first. The former `annee`
@@ -252,7 +260,8 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
                   </h2>
                   <div className="grid gap-3 md:grid-cols-2">
                     {group.list.map((g) => {
-                      const present = presentLine(g, data);
+                      const data = inOfficeData.get(g.id);
+                      const present = data ? presentLine(g, data) : null;
                       return (
                         <article
                           key={g.id}

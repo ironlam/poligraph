@@ -15,7 +15,11 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-import { getGovernmentEpisodes, getPublishedGovernments } from "../governments";
+import {
+  getGovernmentEpisodes,
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+} from "../governments";
 
 const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
 
@@ -33,10 +37,15 @@ const politician = {
   statusOverride: false,
 };
 
-function membershipRow(id: string, politicianId: string) {
+function membershipRow(
+  id: string,
+  politicianId: string,
+  governmentId = "g1",
+  start = "2025-10-12"
+) {
   return {
     id,
-    governmentId: "g1",
+    governmentId,
     startEvidence: "ACT",
     startSourceUrl: null,
     endEvidence: null,
@@ -65,7 +74,7 @@ function membershipRow(id: string, politicianId: string) {
       publicId: null,
       type: "MINISTRE",
       title: "Ministre",
-      startDate: d("2025-10-12"),
+      startDate: d(start),
       endDate: null,
       lastConfirmedAt: d("2026-09-30"),
       politician: { ...politician, id: politicianId },
@@ -114,38 +123,45 @@ beforeEach(() => {
 });
 
 describe("getPublishedGovernments", () => {
-  it("une seule requête, limitée aux gouvernements publiés, sous le tag gouvernements", async () => {
+  it("une seule requête sur les gouvernements, limitée aux publiés, sous le tag gouvernements", async () => {
     governmentFindMany.mockResolvedValue([]);
     membershipFindMany.mockResolvedValue([]);
     await getPublishedGovernments();
     expect(governmentFindMany).toHaveBeenCalledTimes(1);
     expect(governmentFindMany.mock.calls[0]![0].where).toEqual({ publicationStatus: "PUBLISHED" });
+    expect(membershipFindMany).not.toHaveBeenCalled();
     expect(cacheTag).toHaveBeenCalledWith("gouvernements");
     expect(cacheLife).toHaveBeenCalledWith("synced");
   });
 
-  it("ne recharge pas les fonctions : les compteurs viennent du lecteur des fonctions", async () => {
+  it("compte les personnes sur les fonctions lues gouvernement par gouvernement", async () => {
     governmentFindMany.mockResolvedValue([governmentRow]);
     membershipFindMany.mockResolvedValue([membershipRow("mg1", "p1"), membershipRow("mg2", "p1")]);
     const [g] = await getPublishedGovernments();
     const select = governmentFindMany.mock.calls[0]![0].select;
     expect(select.memberships).toBeUndefined();
     expect(JSON.stringify(select)).not.toContain("biography");
-    expect(JSON.stringify(membershipFindMany.mock.calls[0]![0].select)).toContain("biography");
     expect(membershipFindMany).toHaveBeenCalledTimes(1);
+    expect(membershipFindMany.mock.calls[0]![0].where).toEqual({
+      governmentId: "g1",
+      government: { publicationStatus: "PUBLISHED" },
+    });
     expect(g).toMatchObject({ slug: "lecornu-2", participantCount: 1, hiddenCount: 0 });
   });
 });
 
-describe("getGovernmentEpisodes", () => {
-  it("une seule requête sur les fonctions des gouvernements publiés", async () => {
+describe("getGovernmentEpisodesFor", () => {
+  it("une requête limitée au gouvernement demandé, s'il est publié", async () => {
     membershipFindMany.mockResolvedValue([membershipRow("mg1", "p1")]);
-    const { episodes, people } = await getGovernmentEpisodes();
+    const { episodes, people } = await getGovernmentEpisodesFor("g1");
     expect(membershipFindMany).toHaveBeenCalledTimes(1);
     expect(membershipFindMany.mock.calls[0]![0].where).toEqual({
+      governmentId: "g1",
       government: { publicationStatus: "PUBLISHED" },
     });
+    expect(JSON.stringify(membershipFindMany.mock.calls[0]![0].select)).toContain("biography");
     expect(cacheTag).toHaveBeenCalledWith("gouvernements");
+    expect(cacheLife).toHaveBeenCalledWith("synced");
     expect(episodes).toHaveLength(1);
     expect(episodes[0]!).toMatchObject({
       start: "2025-10-12",
@@ -153,5 +169,24 @@ describe("getGovernmentEpisodes", () => {
       lastConfirmedAt: "2026-09-30",
     });
     expect(people.p1).toMatchObject({ slug: "jean-test", visibility: "pending" });
+  });
+});
+
+describe("getGovernmentEpisodes", () => {
+  it("assemble les gouvernements publiés, triés par jour de début, ordre interne conservé", async () => {
+    governmentFindMany.mockResolvedValue([governmentRow, { ...governmentRow, id: "g2" }]);
+    membershipFindMany.mockImplementation(async ({ where }: { where: { governmentId: string } }) =>
+      where.governmentId === "g1"
+        ? [
+            membershipRow("b", "p1", "g1", "2025-10-12"),
+            membershipRow("a", "p2", "g1", "2025-10-12"),
+          ]
+        : [membershipRow("c", "p3", "g2", "2025-10-05")]
+    );
+    const { episodes, people } = await getGovernmentEpisodes();
+    expect(governmentFindMany).toHaveBeenCalledTimes(1);
+    expect(membershipFindMany).toHaveBeenCalledTimes(2);
+    expect(episodes.map((e) => e.membershipId)).toEqual(["c", "b", "a"]);
+    expect(Object.keys(people).sort()).toEqual(["p1", "p2", "p3"]);
   });
 });

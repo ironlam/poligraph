@@ -35,7 +35,7 @@ import {
   safeExternalUrl,
 } from "@/components/governments/format";
 import { groupVisible, type PersonGroup } from "@/components/governments/view";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentEpisodesFor, getPublishedGovernments } from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   compositionAt,
@@ -271,14 +271,17 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   if (!(await isFeatureEnabled("gouvernements"))) notFound();
 
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const govs = await getPublishedGovernments();
   const index = govs.findIndex((g) => g.slug === slug);
   if (index === -1) notFound();
   const gov = govs[index]!;
   const prev = govs[index - 1];
   const next = govs[index + 1];
 
-  const own = data.episodes.filter((e) => e.governmentId === gov.id);
+  // Only this government's functions: the composition rules, the changes and the participant
+  // list never look at another government.
+  const data = await getGovernmentEpisodesFor(gov.id);
+  const own = data.episodes;
   const byId = new Map(own.map((e) => [e.membershipId, e]));
   const range = consultableRange(gov);
   const requested = parseCompositionDate(first(sp.date));

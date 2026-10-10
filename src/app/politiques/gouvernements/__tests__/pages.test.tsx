@@ -7,6 +7,7 @@ vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: vi.fn() }));
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
+  getGovernmentEpisodesFor: vi.fn(),
 }));
 vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -19,7 +20,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import {
+  getGovernmentEpisodes,
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+} from "@/lib/data/governments";
 import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import DirectoryPage from "../page";
 import DetailPage from "../[slug]/page";
@@ -276,6 +281,16 @@ beforeEach(() => {
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue(GOVS);
   vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  // Same shape as the real per-government entry: its own functions and only their people.
+  vi.mocked(getGovernmentEpisodesFor).mockImplementation(async (id) => {
+    const all = await getGovernmentEpisodes();
+    const own = all.episodes.filter((e) => e.governmentId === id);
+    const ids = new Set(own.map((e) => e.politicianId));
+    return {
+      episodes: own,
+      people: Object.fromEntries(Object.entries(all.people).filter(([pid]) => ids.has(pid))),
+    };
+  });
   vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
     "karim-public": { definitive: 1, nonDefinitive: 0, ongoing: 2 },
     "pascal-sortant": { definitive: 0, nonDefinitive: 0, ongoing: 1 },
