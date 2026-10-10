@@ -194,8 +194,12 @@ describe("compositionAt et categoryAt", () => {
     expect(caretaking.caretaker).toBe(true);
     expect(caretaking.establishedPersons).toBe(1);
 
+    // Caretaker period ends the day before the successor team's appointment (endedAt).
+    const dayBefore = ok(compositionAt(attested, [resigning], "2024-09-20"));
+    expect(categoryOf(dayBefore, "res")).toBe("currentAffairs");
     const onEnd = ok(compositionAt(attested, [resigning], "2024-09-21"));
-    expect(categoryOf(onEnd, "res")).toBe("currentAffairs");
+    expect(categoryOf(onEnd, "res")).toBeNull();
+    expect(onEnd.caretaker).toBe(false);
 
     const dataset = gov({ resignedEvidence: "DATASET", currentAffairsAttested: true });
     const unproven = ok(compositionAt(dataset, [resigning], "2024-08-01"));
@@ -436,9 +440,11 @@ describe("compositionAt et categoryAt", () => {
     expect(categoryOf(next, "other")).toBe("currentAffairs");
     expect(next.establishedPersons).toBe(1);
 
+    const dayBefore = ok(compositionAt(g, all, "2024-09-20"));
+    expect(categoryOf(dayBefore, "le-maire")).toBeNull();
+    expect(categoryOf(dayBefore, "other")).toBe("currentAffairs");
     const onEnd = ok(compositionAt(g, all, "2024-09-21"));
-    expect(categoryOf(onEnd, "le-maire")).toBeNull();
-    expect(categoryOf(onEnd, "other")).toBe("currentAffairs");
+    expect(categoryOf(onEnd, "other")).toBeNull();
   });
 
   it("borne individuelle avant la fin du gouvernement", () => {
@@ -508,8 +514,15 @@ describe("compositionAt et categoryAt", () => {
 
     // Une borne individuelle ne prolonge jamais la présence au-delà de la fin du gouvernement.
     const late = { ...pm1, currentAffairsEndedAt: "2025-10-20" };
-    expect(alone(l1, late, "2025-10-12")).toBe("currentAffairs");
+    expect(alone(l1, late, "2025-10-11")).toBe("currentAffairs");
+    expect(alone(l1, late, "2025-10-12")).toBeNull();
     expect(alone(l1, late, "2025-10-13")).toBeNull();
+
+    // Lecornu I ends on 2025-10-12: nobody that day, the non-reconducted on the day before.
+    expect(ids(ok(compositionAt(l1, all, "2025-10-12")).byCategory.currentAffairs)).toEqual([]);
+    expect(ids(ok(compositionAt(l1, all, "2025-10-11")).byCategory.currentAffairs)).toEqual([
+      "min-1",
+    ]);
   });
 
   it("borne inconnue", () => {
@@ -862,7 +875,8 @@ describe("defaultCompositionDate", () => {
 
   it("affaires courantes attestées : la fin de la période", () => {
     const g = gov({ currentAffairsAttested: true });
-    expect(defaultCompositionDate(g, [resigned("a"), resigned("b")])).toBe("2024-09-21");
+    // endedAt is the successor's appointment day: the last caretaker day is the day before.
+    expect(defaultCompositionDate(g, [resigned("a"), resigned("b")])).toBe("2024-09-20");
   });
 
   it("gouvernement en exercice : la date de dernière vérification", () => {
