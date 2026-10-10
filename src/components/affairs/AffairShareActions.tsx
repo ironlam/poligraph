@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Link2, Check, Share2 } from "lucide-react";
+import { shareOrCopy } from "@/lib/share";
 
 /**
  * Citer / Partager actions for the sticky bar, folded in from the former
@@ -34,20 +35,9 @@ export function AffairShareActions({ title, shareUrl, shareText }: AffairShareAc
   }
 
   async function handleShare() {
-    if (typeof navigator !== "undefined" && "share" in navigator) {
-      try {
-        await navigator.share({ title, text: shareText, url: shareUrl });
-        return;
-      } catch {
-        // Cancelled or unsupported: fall through to copy.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Lien copié, à coller où vous voulez");
-    } catch {
-      toast.error("Impossible de partager le lien");
-    }
+    const outcome = await shareOrCopy({ title, text: shareText, url: shareUrl });
+    if (outcome === "copied") toast.success("Lien copié, à coller où vous voulez");
+    if (outcome === "failed") toast.error("Impossible de partager le lien");
   }
 
   return (

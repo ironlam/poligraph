@@ -3,6 +3,7 @@
 import { Compass } from "lucide-react";
 import { CommandPaletteTrigger, CommandPaletteTriggerCompact } from "@/components/search";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { PageShareButton } from "@/components/ui/PageShareButton";
 import type { NavItem } from "@/config/navigation";
 
 interface NavIconBarProps {
@@ -15,6 +16,7 @@ export function NavIconBar({ tools: _tools, boussoleEnabled = false }: NavIconBa
     <div className="flex items-center gap-1">
       <CommandPaletteTrigger />
       <CommandPaletteTriggerCompact />
+      <PageShareButton />
       <ThemeToggle />
       {boussoleEnabled && (
         <a
