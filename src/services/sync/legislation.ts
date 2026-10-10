@@ -10,14 +10,17 @@ import type { DossierTimelineEntry } from "@/types/legislation";
 import * as fs from "fs";
 import * as path from "path";
 import { createHash } from "crypto";
-import { mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from "fs";
+import { tmpdir } from "os";
 import { extractZip } from "@/lib/parsing/unzip";
 import { downloadFileWithRetry } from "@/lib/download-file";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { classifyDossierOrigin } from "@/lib/legislation/origine";
 
 const DEFAULT_LEGISLATURE = 17;
-const TEMP_DIR = "/tmp/dossiers-legislatifs-an";
+// Each run extracts into its own directory: a fixed path let one run delete the
+// archive another was still reading.
+const TEMP_DIR_PREFIX = "dossiers-legislatifs-an-";
 const ZIP_URL_TEMPLATE =
   "https://data.assemblee-nationale.fr/static/openData/repository/{leg}/loi/dossiers_legislatifs/Dossiers_Legislatifs.json.zip";
 
@@ -306,27 +309,24 @@ export async function syncLegislation(options?: {
     errors: [],
   };
 
+  const tempDir = mkdtempSync(path.join(tmpdir(), TEMP_DIR_PREFIX));
+
   try {
     // Download ZIP
     console.log("Downloading dossiers ZIP...");
     const zipUrl = ZIP_URL_TEMPLATE.replace("{leg}", String(legislature));
-    const zipPath = path.join(TEMP_DIR, "dossiers.zip");
-
-    if (fs.existsSync(TEMP_DIR)) {
-      rmSync(TEMP_DIR, { recursive: true });
-    }
-    mkdirSync(TEMP_DIR, { recursive: true });
+    const zipPath = path.join(tempDir, "dossiers.zip");
 
     await downloadFileWithRetry(zipUrl, zipPath);
     const sourceFetchedAt = new Date();
     console.log("Downloaded ZIP file");
 
     // Extract ZIP (system tool, not Node.js script spawn)
-    extractZip(zipPath, TEMP_DIR);
+    extractZip(zipPath, tempDir);
     console.log("Extracted ZIP file");
 
     // List JSON files
-    const jsonDir = path.join(TEMP_DIR, "json", "dossierParlementaire");
+    const jsonDir = path.join(tempDir, "json", "dossierParlementaire");
     if (!fs.existsSync(jsonDir)) {
       throw new Error(`Directory not found: ${jsonDir}`);
     }
@@ -546,7 +546,7 @@ export async function syncLegislation(options?: {
   } finally {
     // Always clean the temp dir, even on a fatal error mid-run.
     try {
-      if (fs.existsSync(TEMP_DIR)) rmSync(TEMP_DIR, { recursive: true });
+      rmSync(tempDir, { recursive: true, force: true });
     } catch {
       // best-effort cleanup
     }

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   download: vi.fn(),
   extract: vi.fn(),
+  mkdtempSync: vi.fn(),
+  rmSync: vi.fn(),
 }));
 
 const records: Record<string, unknown> = {
@@ -80,7 +82,8 @@ vi.mock("fs", () => {
   const mockedFs = {
     existsSync: () => true,
     mkdirSync: () => undefined,
-    rmSync: () => undefined,
+    mkdtempSync: mocks.mkdtempSync,
+    rmSync: mocks.rmSync,
     readdirSync: () => Object.keys(records),
     readFileSync: (file: string) => JSON.stringify(records[file.split(/[\\/]/).at(-1)!]),
   };
@@ -96,6 +99,20 @@ describe("origin-only legislative backfill", () => {
       id: where.externalId,
     }));
     mocks.update.mockResolvedValue({});
+    let run = 0;
+    mocks.mkdtempSync.mockImplementation((prefix: string) => `${prefix}run${++run}`);
+  });
+
+  // A fixed /tmp path let one run delete the archive another was still reading.
+  it("extracts each run into its own directory and removes only that one", async () => {
+    await Promise.all([
+      syncLegislation({ legislature: 17, originOnly: true, dryRun: true }),
+      syncLegislation({ legislature: 17, originOnly: true, dryRun: true }),
+    ]);
+    const dirs = mocks.mkdtempSync.mock.results.map((r) => r.value as string);
+    expect(new Set(dirs).size).toBe(2);
+    expect(mocks.extract.mock.calls.map((c) => c[1])).toEqual(expect.arrayContaining(dirs));
+    expect(mocks.rmSync.mock.calls.map((c) => c[0]).sort()).toEqual([...dirs].sort());
   });
 
   it("filters on the payload legislature, not on the dossier UID", async () => {
