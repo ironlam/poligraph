@@ -39,7 +39,7 @@ export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions
 export const GOUVERNEMENTS_LISTING_FILTER_KEYS = ["q", "annee"] as const;
 
 /**
- * /politiques/gouvernements/[slug]: any `date` (valid or not) shows a historical composition, a
+ * /politiques/gouvernements/[slug] : every `date` (valid or not) shows a historical composition, a
  * utility view of the same page. Self canonical, not the latest composition (spec §8).
  */
 export const GOUVERNEMENT_DETAIL_FILTER_KEYS = ["date"] as const;
