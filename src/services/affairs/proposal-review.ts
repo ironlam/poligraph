@@ -1,7 +1,10 @@
 import { db, type DbTransactionClient } from "@/lib/db";
-import type { AffairStatus, ProposalStatus } from "@/generated/prisma";
+import type { AffairEventStatus, AffairStatus, ProposalStatus } from "@/generated/prisma";
 import { isValidSentenceSplit } from "@/lib/affairs/sentence-split";
 import { createProposalRevelationInTx } from "@/lib/affairs/events/service";
+import { isAcceptedPressUrl, isOfficialSourceUrl } from "@/lib/affairs/events/sources";
+import { suggestEventForStatus } from "@/lib/affairs/events/status-event";
+import type { EventPrefill } from "@/lib/affairs/events/prefill";
 import {
   isAcceptableOfficialDecisionVerification,
   verifyProposalOfficialEvidence,
@@ -36,6 +39,44 @@ import { reconcileAffairMonitoring } from "@/lib/affairs/monitoring/reconcile";
 //    and the route invalidates after the commit, so a rollback never leaves a
 //    purged cache behind.
 
+export type AcceptedEvent = { id: string; status: AffairEventStatus; reasons: string[] };
+
+/**
+ * Préremplissage de l'étape qui correspond au nouveau statut. La date de l'acte reste à saisir :
+ * celle de la proposition est celle de sa détection, pas celle de l'acte.
+ */
+export type StatusChange = {
+  from: AffairStatus;
+  to: AffairStatus;
+  prefill: EventPrefill;
+};
+
+function statusChangeOf(
+  from: AffairStatus,
+  to: AffairStatus | null,
+  sourceUrl: string | null
+): StatusChange | null {
+  if (!to || to === from) return null;
+  const suggestion = suggestEventForStatus(to, from);
+  const sourceKind = !sourceUrl
+    ? null
+    : isOfficialSourceUrl(sourceUrl)
+      ? "OFFICIAL"
+      : isAcceptedPressUrl(sourceUrl)
+        ? "PRESS"
+        : null;
+  return {
+    from,
+    to,
+    prefill: {
+      type: suggestion?.type ?? null,
+      outcome: suggestion?.outcome ?? null,
+      sourceUrl,
+      sourceKind,
+    },
+  };
+}
+
 export type AcceptResult =
   | {
       ok: true;
@@ -43,6 +84,10 @@ export type AcceptResult =
       affairSlug: string;
       politicianSlug: string;
       appliedFields: string[];
+      /** Changement de statut appliqué : il ne crée pas d'étape, l'admin l'ajoute ensuite. */
+      statusChange: StatusChange | null;
+      /** Révélation créée par une proposition ADD_EVENT, publiée ou restée en brouillon. */
+      event: AcceptedEvent | null;
     }
   | { ok: false; reason: "not_found" }
   | { ok: false; reason: "orphaned" }
@@ -243,6 +288,8 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
         affairSlug: string;
         politicianSlug: string;
         previousStatus: AffairStatus;
+        newStatus: AffairStatus | null;
+        event: AcceptedEvent | null;
       }
     | { kind: "conflict"; drift: ConflictDetail };
   try {
@@ -269,6 +316,7 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
       if (!live) throw new RollbackSignal("affair_gone");
 
       let eventId: string | null = null;
+      let event: AcceptedEvent | null = null;
       if (parsed.kind === "PATCH") {
         const drift = detectDrift(observedValues, live as unknown as Record<string, unknown>);
         if (drift) return markConflict(tx, proposal, input, drift);
@@ -372,6 +420,7 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
           now
         );
         eventId = createdEvent.id;
+        event = createdEvent;
 
         await tx.source.upsert({
           where: { affairId_url: { affairId, url: context.event.sourceUrl } },
@@ -445,6 +494,8 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
         affairSlug: live.slug,
         politicianSlug: live.politician.slug,
         previousStatus: live.status,
+        newStatus: parsed.kind === "PATCH" ? (parsed.patch.status ?? null) : null,
+        event,
       };
     });
   } catch (error) {
@@ -472,6 +523,8 @@ export async function acceptProposal(input: ReviewInput): Promise<AcceptResult> 
     affairSlug: outcome.affairSlug,
     politicianSlug: outcome.politicianSlug,
     appliedFields: fields,
+    statusChange: statusChangeOf(outcome.previousStatus, outcome.newStatus, proposal.sourceUrl),
+    event: outcome.event,
   };
 }
 

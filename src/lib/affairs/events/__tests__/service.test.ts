@@ -414,7 +414,7 @@ describe("createProposalRevelationInTx", () => {
       },
       NOW
     );
-    expect(result).toEqual({ id: "evt_rev", status: "PUBLISHED" });
+    expect(result).toEqual({ id: "evt_rev", status: "PUBLISHED", reasons: [] });
     const data = db.affairEvent.create.mock.calls[0]![0].data;
     expect(data).toMatchObject({
       affairId: "aff_1",
@@ -433,7 +433,7 @@ describe("createProposalRevelationInTx", () => {
 
   it("laisse en brouillon une révélation dont la source est en http", async () => {
     db.affairEvent.create.mockResolvedValue({ id: "evt_rev", status: "DRAFT" });
-    await createProposalRevelationInTx(
+    const result = await createProposalRevelationInTx(
       tx(),
       "aff_1",
       {
@@ -447,6 +447,8 @@ describe("createProposalRevelationInTx", () => {
     const data = db.affairEvent.create.mock.calls[0]![0].data;
     expect(data.status).toBe("DRAFT");
     expect(data.publishedAt).toBeNull();
+    // Les raisons du garde remontent jusqu'à l'admin qui a accepté la proposition (#1005).
+    expect(result.reasons.length).toBeGreaterThan(0);
   });
 });
 

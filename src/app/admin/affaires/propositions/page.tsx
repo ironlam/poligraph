@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
 import type { OfficialDecisionVerificationStatus } from "@/lib/affairs/official-decision-verification";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AFFAIR_EVENT_TYPE_LABELS } from "@/config/labels";
+import type { AffairEventType } from "@/generated/prisma";
+import { acceptFeedback, type AcceptResponse, type Feedback } from "./accept-feedback";
 
 // Affaires v2, lot 1: review queue for importer-proposed affair changes.
 // Every automated write to an existing affair lands here first.
@@ -82,6 +85,12 @@ interface ProposalRow {
     politician: { fullName: string; slug: string };
   } | null;
 }
+
+const FEEDBACK_CLASSES: Record<Feedback["kind"], string> = {
+  error: "border-destructive/40 bg-destructive/10 text-destructive",
+  success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  warning: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+};
 
 interface ListResponse {
   rows: ProposalRow[];
@@ -207,9 +216,7 @@ export default function PropositionsPage() {
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const [feedback, setFeedback] = useState<{ kind: "error" | "success"; message: string } | null>(
-    null
-  );
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -244,7 +251,7 @@ export default function PropositionsPage() {
         error?: string;
         conflictDetail?: Record<string, { expected: string; actual: string }>;
         verification?: { issues?: string[] };
-      };
+      } & Partial<AcceptResponse>;
       if (!res.ok) {
         setFeedback({
           kind: "error",
@@ -256,10 +263,11 @@ export default function PropositionsPage() {
                   .join(" : ") || "Action refusée",
         });
       } else {
-        setFeedback({
-          kind: "success",
-          message: action === "accept" ? "Proposition appliquée." : "Proposition rejetée.",
-        });
+        setFeedback(
+          action === "accept"
+            ? acceptFeedback(payload as AcceptResponse)
+            : { kind: "success", message: "Proposition rejetée." }
+        );
       }
       await load();
     } catch (error) {
@@ -308,13 +316,24 @@ export default function PropositionsPage() {
         <div
           role="status"
           aria-live="polite"
-          className={
-            feedback.kind === "error"
-              ? "border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-4 py-3 text-sm"
-              : "rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400"
-          }
+          className={`space-y-2 rounded-md border px-4 py-3 text-sm ${FEEDBACK_CLASSES[feedback.kind]}`}
         >
-          {feedback.message}
+          <p>{feedback.message}</p>
+          {feedback.reasons && feedback.reasons.length > 0 && (
+            <ul className="list-disc pl-4">
+              {feedback.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+          {feedback.link && (
+            <Link
+              href={feedback.link.href}
+              className="inline-flex min-h-11 items-center font-medium underline"
+            >
+              {feedback.link.label}
+            </Link>
+          )}
         </div>
       )}
 
@@ -392,7 +411,10 @@ export default function PropositionsPage() {
                         <dt className="text-muted-foreground">Date</dt>
                         <dd>{formatValue(row.eventPreview.date)}</dd>
                         <dt className="text-muted-foreground">Type</dt>
-                        <dd>{row.eventPreview.type}</dd>
+                        <dd>
+                          {AFFAIR_EVENT_TYPE_LABELS[row.eventPreview.type as AffairEventType] ??
+                            row.eventPreview.type}
+                        </dd>
                         <dt className="text-muted-foreground">Titre public</dt>
                         <dd>{row.eventPreview.title}</dd>
                         <dt className="text-muted-foreground">Source</dt>

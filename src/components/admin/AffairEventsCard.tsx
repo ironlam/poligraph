@@ -20,6 +20,7 @@ import {
 } from "@/config/labels";
 import { ALLOWED_OUTCOMES, checkEventPublishable } from "@/lib/affairs/events/guard";
 import { formatEventDate, parisDay } from "@/lib/affairs/events/dates";
+import type { EventPrefill } from "@/lib/affairs/events/prefill";
 import {
   AffairEventForm,
   CORROBORATION_HINT,
@@ -386,12 +387,15 @@ function EventRow({
 export function AffairEventsCard({
   affairId,
   events,
+  prefill = null,
 }: {
   affairId: string;
   events: SerializedAffairEvent[];
+  /** Formulaire d'ajout ouvert et prérempli, depuis une proposition acceptée. */
+  prefill?: EventPrefill | null;
 }) {
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(prefill !== null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
 
@@ -432,7 +436,7 @@ export function AffairEventsCard({
   }
 
   return (
-    <Card>
+    <Card id="etapes">
       <CardHeader>
         <CardTitle>Étapes de la procédure</CardTitle>
       </CardHeader>
@@ -463,6 +467,7 @@ export function AffairEventsCard({
         {adding ? (
           <AffairEventForm
             idPrefix={`etape-nouvelle-${affairId}`}
+            prefill={prefill}
             pending={pending}
             onSubmit={async (body) => {
               if (await send(`/api/admin/affaires/${affairId}/etapes`, "POST", body)) {

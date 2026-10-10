@@ -335,7 +335,7 @@ export async function createProposalRevelationInTx(
     sourceTitle?: string | null;
   },
   now: Date
-): Promise<{ id: string; status: AffairEventStatus }> {
+): Promise<{ id: string; status: AffairEventStatus; reasons: string[] }> {
   const event = {
     type: "REVELATION" as const,
     date: parisDay(data.date),
@@ -347,8 +347,9 @@ export async function createProposalRevelationInTx(
     sourceTitle: data.sourceTitle ?? null,
     sourceKind: "PRESS" as const,
   };
-  const publishable = checkEventPublishable(event, now).length === 0;
-  return tx.affairEvent.create({
+  const reasons = checkEventPublishable(event, now);
+  const publishable = reasons.length === 0;
+  const created = await tx.affairEvent.create({
     data: {
       affairId,
       identityKey: data.identityKey,
@@ -358,4 +359,5 @@ export async function createProposalRevelationInTx(
     },
     select: { id: true, status: true },
   });
+  return { ...created, reasons };
 }

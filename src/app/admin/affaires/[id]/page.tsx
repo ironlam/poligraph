@@ -24,9 +24,11 @@ import { AffairEventsCard } from "@/components/admin/AffairEventsCard";
 import { parisDay } from "@/lib/affairs/monitoring/cadence";
 import { dayKey } from "@/lib/affairs/monitoring/labels";
 import { getAffairMonitoringPanel } from "@/lib/affairs/monitoring/queries";
+import { parseEventPrefill } from "@/lib/affairs/events/prefill";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 async function getAffair(id: string) {
@@ -183,8 +185,9 @@ async function updatePublicationStatus(
   return { ok: true };
 }
 
-export default async function AdminAffairDetailPage({ params }: PageProps) {
+export default async function AdminAffairDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const prefill = parseEventPrefill(await searchParams);
   const affair = await getAffair(id);
 
   if (!affair) {
@@ -347,6 +350,7 @@ export default async function AdminAffairDetailPage({ params }: PageProps) {
 
       <AffairEventsCard
         affairId={affair.id}
+        prefill={prefill}
         events={events.map((e) => ({
           ...e,
           date: e.date.toISOString(),

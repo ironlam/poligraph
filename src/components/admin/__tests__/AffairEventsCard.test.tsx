@@ -336,3 +336,31 @@ describe("AffairEventsCard", () => {
     expect(screen.getByLabelText("Année")).toHaveAttribute("placeholder", "AAAA");
   });
 });
+
+describe("ajout prérempli depuis une proposition acceptée (#1005)", () => {
+  it("ouvre le formulaire avec le type, l'issue et la source, la date restant à saisir", () => {
+    render(
+      <AffairEventsCard
+        affairId="aff_1"
+        events={[]}
+        prefill={{
+          type: "JUGEMENT",
+          outcome: "CONDAMNATION",
+          sourceUrl: "https://www.lemonde.fr/article",
+          sourceKind: "PRESS",
+        }}
+      />
+    );
+    expect(screen.getByLabelText("Type")).toHaveValue("JUGEMENT");
+    expect(screen.getByLabelText("Issue")).toHaveValue("CONDAMNATION");
+    expect(screen.getByLabelText("Source (URL)")).toHaveValue("https://www.lemonde.fr/article");
+    expect(screen.getByLabelText("Nature de la source")).toHaveValue("PRESS");
+    expect(screen.getByLabelText("Jour")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Ajouter une étape" })).not.toBeInTheDocument();
+  });
+
+  it("reste fermé sans préremplissage", () => {
+    renderCard([]);
+    expect(screen.getByRole("button", { name: "Ajouter une étape" })).toBeInTheDocument();
+  });
+});
