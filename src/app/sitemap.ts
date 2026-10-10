@@ -10,6 +10,7 @@ import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affai
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
+import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { STATS_SECTIONS, STATS_TABS } from "@/config/routes";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
@@ -236,6 +237,13 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/espace-presse`,
+      // Static content: its date only moves when the mentions or credits change.
+      lastModified: new Date(PRESS_SPACE_UPDATED_AT),
+      changeFrequency: "monthly",
+      priority: 0.5,
     },
     {
       url: `${SITE_URL}/soutenir`,
