@@ -120,6 +120,20 @@ describe("fiche politicien : lecture du document précalculé", () => {
     );
   });
 
+  it("n'expose plus les lectures de fiche remplacées par le document", () => {
+    const source = withoutComments(read("src/lib/data/politicians.ts"));
+    expect(source).not.toMatch(/\bgetPoliticianIdentity\b/);
+    expect(source).not.toMatch(/\bgetPoliticianDossier\b/);
+  });
+
+  it("les pages candidat lisent le document de fiche", () => {
+    for (const file of [CANDIDATE_PAGE, CANDIDATE_MEASURES_PAGE]) {
+      const source = withoutComments(read(file));
+      expect(source).toMatch(/getPoliticianProfile\(/);
+      expect(source).not.toMatch(/getPoliticianIdentity\(/);
+    }
+  });
+
   it("la page et ses métadonnées lisent le document, la candidature reste une lecture à part", () => {
     const page = withoutComments(read(PAGE));
     const pageData = withoutComments(read(PAGE_DATA));
