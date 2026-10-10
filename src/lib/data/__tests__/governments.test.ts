@@ -15,6 +15,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+import { GOVERNMENT_SELECT } from "@/lib/governments/mapping";
 import {
   getGovernmentEpisodes,
   getGovernmentEpisodesFor,
@@ -124,12 +125,13 @@ beforeEach(() => {
 
 describe("getPublishedGovernments", () => {
   it("une seule requête sur les gouvernements, limitée aux publiés, sous le tag gouvernements", async () => {
-    governmentFindMany.mockResolvedValue([]);
+    governmentFindMany.mockResolvedValue([governmentRow, { ...governmentRow, id: "g2" }]);
     membershipFindMany.mockResolvedValue([]);
     await getPublishedGovernments();
     expect(governmentFindMany).toHaveBeenCalledTimes(1);
     expect(governmentFindMany.mock.calls[0]![0].where).toEqual({ publicationStatus: "PUBLISHED" });
-    expect(membershipFindMany).not.toHaveBeenCalled();
+    // One functions read per government, never a read of every published government at once.
+    expect(membershipFindMany.mock.calls.map((c) => c[0].where.governmentId)).toEqual(["g1", "g2"]);
     expect(cacheTag).toHaveBeenCalledWith("gouvernements");
     expect(cacheLife).toHaveBeenCalledWith("synced");
   });
@@ -138,8 +140,9 @@ describe("getPublishedGovernments", () => {
     governmentFindMany.mockResolvedValue([governmentRow]);
     membershipFindMany.mockResolvedValue([membershipRow("mg1", "p1"), membershipRow("mg2", "p1")]);
     const [g] = await getPublishedGovernments();
+    // The governments query selects GOVERNMENT_SELECT only: no functions, no biographies.
     const select = governmentFindMany.mock.calls[0]![0].select;
-    expect(select.memberships).toBeUndefined();
+    expect(select).toBe(GOVERNMENT_SELECT);
     expect(JSON.stringify(select)).not.toContain("biography");
     expect(membershipFindMany).toHaveBeenCalledTimes(1);
     expect(membershipFindMany.mock.calls[0]![0].where).toEqual({
@@ -188,5 +191,25 @@ describe("getGovernmentEpisodes", () => {
     expect(membershipFindMany).toHaveBeenCalledTimes(2);
     expect(episodes.map((e) => e.membershipId)).toEqual(["c", "b", "a"]);
     expect(Object.keys(people).sort()).toEqual(["p1", "p2", "p3"]);
+  });
+});
+
+describe("lecture des entrées par gouvernement", () => {
+  it("jamais plus de quatre lectures en parallèle", async () => {
+    governmentFindMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, i) => ({ ...governmentRow, id: `g${i}` }))
+    );
+    let running = 0;
+    let peak = 0;
+    membershipFindMany.mockImplementation(async () => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running--;
+      return [];
+    });
+    await getGovernmentEpisodes();
+    expect(membershipFindMany).toHaveBeenCalledTimes(10);
+    expect(peak).toBe(4);
   });
 });

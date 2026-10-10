@@ -23,6 +23,22 @@ export type GovernmentEpisodesData = {
 // Le cache est découpé par gouvernement : un seul jeu pour les 48 gouvernements de la Ve
 // République dépasserait 2 Mo sérialisé. Chaque entrée reste à quelques dizaines de Kio.
 
+const MAX_CONCURRENT_READS = 4;
+
+/** Reads each government's entry, at most four at a time (pool connections, remote cache). */
+async function episodesByGovernment(ids: string[]): Promise<GovernmentEpisodesData[]> {
+  const out: GovernmentEpisodesData[] = new Array(ids.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < ids.length) {
+      const i = next++;
+      out[i] = await getGovernmentEpisodesFor(ids[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_READS, ids.length) }, worker));
+  return out;
+}
+
 /** Lignes des gouvernements publiés, ordre chronologique. Une requête, sans les fonctions. */
 async function getPublishedGovernmentRows(): Promise<GovernmentRow[]> {
   "use cache";
@@ -46,7 +62,7 @@ export async function getPublishedGovernments(): Promise<PublishedGovernment[]> 
   cacheLife("synced");
 
   const rows = await getPublishedGovernmentRows();
-  const parts = await Promise.all(rows.map((row) => getGovernmentEpisodesFor(row.id)));
+  const parts = await episodesByGovernment(rows.map((row) => row.id));
   return rows.map((row, i) => toPublishedGovernment(row, countParticipants(parts[i]!).get(row.id)));
 }
 
@@ -87,7 +103,7 @@ export async function getGovernmentEpisodesFor(
  */
 export async function getGovernmentEpisodes(): Promise<GovernmentEpisodesData> {
   const rows = await getPublishedGovernmentRows();
-  const parts = await Promise.all(rows.map((row) => getGovernmentEpisodesFor(row.id)));
+  const parts = await episodesByGovernment(rows.map((row) => row.id));
   const episodes = parts
     .flatMap((part) => part.episodes)
     .sort((a, b) => a.start.localeCompare(b.start));

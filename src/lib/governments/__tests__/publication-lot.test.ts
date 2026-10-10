@@ -29,7 +29,7 @@ describe("revalidateProfilePaths", () => {
 
     const bodies = calls.map((c) => (c as { body: unknown }).body) as Record<string, string[]>[];
     expect(bodies.map((b) => b.paths?.length)).toEqual([10, 10, 3, undefined]);
-    expect(bodies[3]).toEqual({ tags: ["gouvernements"] });
+    expect(bodies[3]).toEqual({ tags: ["gouvernements"], expireNow: true });
     expect(bodies[0]?.paths?.[0]).toBe("/politiques/p-0");
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(30_000);

@@ -3,7 +3,7 @@ import { createCSVResponse, toCSV } from "@/lib/csv";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentEpisodesFor, getPublishedGovernments } from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { consultableRange } from "@/lib/governments/composition";
 import { COMPOSITION_COLUMNS, compositionRows } from "@/lib/governments/export";
@@ -45,7 +45,7 @@ export const GET = withPublicRoute(async (request, context) => {
   if (!(await isFeatureEnabled("gouvernements"))) return notFound();
 
   const { slug } = await context.params;
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const govs = await getPublishedGovernments();
   const gov = govs.find((g) => g.slug === slug);
   if (!gov) return notFound();
 
@@ -55,7 +55,8 @@ export const GET = withPublicRoute(async (request, context) => {
     consultableRange(gov)?.to ??
     null;
 
-  const rows = date ? compositionRows(gov, data.episodes, data.people, date) : [];
+  const data = date ? await getGovernmentEpisodesFor(gov.id) : null;
+  const rows = data && date ? compositionRows(gov, data.episodes, data.people, date) : [];
   const csv = toCSV(rows, COMPOSITION_COLUMNS, { neutralizeFormulas: true });
   const filename = `membres-gouvernement-${gov.slug}-${date ?? new Date().toISOString().split("T")[0]}.csv`;
 

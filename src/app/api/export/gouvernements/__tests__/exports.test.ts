@@ -9,10 +9,15 @@ vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
+  getGovernmentEpisodesFor: vi.fn(),
 }));
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import {
+  getGovernmentEpisodes,
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+} from "@/lib/data/governments";
 import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { GET as getPersonnes } from "../personnes/route";
 import { GET as getFonctions } from "../fonctions/route";
@@ -179,6 +184,10 @@ beforeEach(() => {
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue([G]);
   vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  vi.mocked(getGovernmentEpisodesFor).mockImplementation(async (id) => {
+    const all = await getGovernmentEpisodes();
+    return { episodes: all.episodes.filter((e) => e.governmentId === id), people: all.people };
+  });
   vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({});
 });
 
