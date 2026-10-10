@@ -4,6 +4,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { filteredMembers, FUNCTION_COLUMNS, functionRows } from "@/lib/governments/export";
 
@@ -31,10 +32,14 @@ export const GET = withPublicRoute(async (request) => {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
 
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const [govs, data, affairs] = await Promise.all([
+    getPublishedGovernments(),
+    getGovernmentEpisodes(),
+    getGovernmentMemberAffairs(),
+  ]);
   const govById = new Map(govs.map((g) => [g.id, g]));
   const raw = Object.fromEntries(request.nextUrl.searchParams.entries());
-  const found = filteredMembers(govs, data, raw);
+  const found = filteredMembers(govs, data, raw, affairs);
 
   const rows = found ? functionRows(found.rows, govById) : [];
   const csv = toCSV(rows, FUNCTION_COLUMNS, { neutralizeFormulas: true });

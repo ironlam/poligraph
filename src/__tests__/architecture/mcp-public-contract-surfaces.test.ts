@@ -206,6 +206,10 @@ const AFFAIR_SURFACES = [
   "src/app/api/chat/route.ts",
   "src/app/api/elections/senatoriales-2026/commune/route.ts",
   "src/app/api/export/affaires/route.ts",
+  // Filtre « Affaires judiciaires » des membres des gouvernements, via
+  // src/lib/data/government-affairs.ts (getAdverseAffairWhere + PUBLIC_POLITICIAN_WHERE).
+  "src/app/api/export/gouvernements/fonctions/route.ts",
+  "src/app/api/export/gouvernements/personnes/route.ts",
   "src/app/api/export/politiques/route.ts",
   "src/app/api/partis/[slug]/route.ts",
   "src/app/api/politiques/[slug]/affaires/route.ts",
@@ -238,6 +242,7 @@ const AFFAIR_SURFACES = [
   "src/app/politiques/[slug]/page.tsx",
   "src/app/politiques/[slug]/relations/page.tsx",
   "src/app/politiques/[slug]/votes/page.tsx",
+  "src/app/politiques/gouvernements/membres/page.tsx",
   "src/app/politiques/page.tsx",
   "src/app/procedures-baillons/page.tsx",
   "src/app/recap/[week]/opengraph-image.tsx",
@@ -347,6 +352,12 @@ describe("MCP-01 public contract surfaces", () => {
   const compareData = readSource("src/lib/data/compare.ts");
   const maturity = readSource("src/config/judicial-maturity.ts");
   const schemas = read("src/lib/openapi/schemas.ts");
+
+  it("counts government members' affairs with the public adverse predicate only", () => {
+    const governmentAffairs = readSource("src/lib/data/government-affairs.ts");
+    expect(governmentAffairs).toContain("...getAdverseAffairWhere()");
+    expect(governmentAffairs).toContain("...PUBLIC_POLITICIAN_WHERE");
+  });
 
   it("routes every changed public fact-check surface through the canonical predicate", () => {
     const staticParams = section(

@@ -8,6 +8,7 @@ vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
 }));
+vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi.fn() }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -19,6 +20,7 @@ vi.mock("next/navigation", () => ({
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import DirectoryPage from "../page";
 import DetailPage from "../[slug]/page";
 import MembersPage from "../membres/page";
@@ -274,6 +276,10 @@ beforeEach(() => {
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue(GOVS);
   vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
+    "karim-public": { definitive: 1, nonDefinitive: 0, ongoing: 2 },
+    "pascal-sortant": { definitive: 0, nonDefinitive: 0, ongoing: 1 },
+  });
 });
 
 async function html(element: Promise<React.ReactElement>): Promise<string> {
@@ -460,6 +466,30 @@ describe("répertoire", () => {
 });
 
 describe("membres", () => {
+  it("n'affiche aucune affaire sans le filtre", async () => {
+    const t = text(await html(MembersPage({ searchParams: sp() })));
+    expect(t).not.toContain("1 condamnation définitive");
+    expect(t).not.toContain("procédures en cours");
+    expect(t).not.toContain("Voir les affaires");
+    expect(t).not.toContain("présumée innocente");
+  });
+
+  it("filtre par affaires en distinguant condamnation et procédure en cours", async () => {
+    const all = text(await html(MembersPage({ searchParams: sp({ affaires: "toutes" }) })));
+    expect(all).toContain("Karim Public");
+    expect(all).toContain("Pascal Sortant");
+    expect(all).not.toContain("Inès Entrante");
+    expect(all).toContain("1 condamnation définitive");
+    expect(all).toContain("2 procédures en cours");
+    expect(all).toContain("présumée innocente");
+
+    const convicted = text(
+      await html(MembersPage({ searchParams: sp({ affaires: "condamnation" }) }))
+    );
+    expect(convicted).toContain("Karim Public");
+    expect(convicted).not.toContain("Pascal Sortant");
+  });
+
   it("lie les fiches publiées, jamais les fiches en attente ni cachées", async () => {
     const markup = await html(MembersPage({ searchParams: sp() }));
     expect(markup).toContain('href="/politiques/karim-public"');

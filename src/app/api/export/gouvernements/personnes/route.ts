@@ -4,6 +4,7 @@ import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { SITE_URL } from "@/config/site";
 import { filteredMembers, PERSON_COLUMNS, personRows } from "@/lib/governments/export";
@@ -11,7 +12,7 @@ import { filteredMembers, PERSON_COLUMNS, personRows } from "@/lib/governments/e
 export const dynamic = "force-dynamic";
 
 /** Filters carried over to the per-person detail link (`personne` is set to the row's slug). */
-const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "q"] as const;
+const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "affaires", "q"] as const;
 
 /**
  * @openapi
@@ -20,7 +21,7 @@ const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "q"] as con
  *     summary: Export CSV des membres des gouvernements, une ligne par personne
  *     description: >
  *       Mêmes paramètres que la page /politiques/gouvernements/membres (mode, du, au,
- *       gouvernement, fonction, q, personne). Les fiches cachées n'apparaissent pas ; une fiche non
+ *       gouvernement, fonction, affaires, q, personne). Les fiches cachées n'apparaissent pas ; une fiche non
  *       publiée apparaît sans url_profil.
  *     tags: [Exports]
  *     responses:
@@ -36,10 +37,14 @@ export const GET = withPublicRoute(async (request) => {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
 
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const [govs, data, affairs] = await Promise.all([
+    getPublishedGovernments(),
+    getGovernmentEpisodes(),
+    getGovernmentMemberAffairs(),
+  ]);
   const govById = new Map(govs.map((g) => [g.id, g]));
   const raw = Object.fromEntries(request.nextUrl.searchParams.entries());
-  const found = filteredMembers(govs, data, raw);
+  const found = filteredMembers(govs, data, raw, affairs);
 
   // The detail link is the functions export narrowed to one person (exact slug) and otherwise
   // carrying the same filters. Rebuilt from known parameters only: nothing else is copied.

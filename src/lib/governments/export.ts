@@ -5,6 +5,7 @@ import { SITE_URL } from "@/config/site";
 import { normalizeText } from "@/lib/name-matching";
 import { compositionAt, lastCaretakerDay } from "./composition";
 import type { GovernmentEpisode, PersonCard, PublishedGovernment } from "./mapping";
+import type { MemberAffairsMap } from "./affairs";
 import { filterMembers, membersCoverage, type MemberRow, type MembersData } from "./members";
 import { parseMembersQuery, type MembersQuery } from "./params";
 import type { Category, DateEvidence, FunctionType } from "./types";
@@ -246,11 +247,12 @@ export function compositionRows(
 export function filteredMembers(
   govs: PublishedGovernment[],
   data: MembersData,
-  raw: Record<string, string | undefined>
+  raw: Record<string, string | undefined>,
+  affairs: MemberAffairsMap = {}
 ): { rows: MemberRow[]; query: MembersQuery } | null {
   const coverage = membersCoverage(govs);
   if (!coverage) return null;
   const { query } = parseMembersQuery(raw, coverage, new Set(govs.map((g) => g.slug)));
-  const result = filterMembers(govs, data, query);
+  const result = filterMembers(govs, data, query, affairs);
   return { rows: result.status === "ok" ? result.persons : [], query };
 }

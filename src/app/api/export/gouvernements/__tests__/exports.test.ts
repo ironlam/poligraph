@@ -5,6 +5,7 @@ import { compositionAt, consultableRange } from "@/lib/governments/composition";
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: vi.fn() }));
+vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi.fn() }));
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("@/lib/data/governments", () => ({
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { GET as getPersonnes } from "../personnes/route";
 import { GET as getFonctions } from "../fonctions/route";
 import { GET as getComposition } from "../[slug]/route";
@@ -175,6 +177,7 @@ beforeEach(() => {
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue([G]);
   vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({});
 });
 
 const BASE = "https://poligraph.fr/api/export/gouvernements";
@@ -238,6 +241,19 @@ describe("export des personnes", () => {
     const { rows } = await lines(await call(getPersonnes, `${BASE}/personnes?fonction=pm`));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toContain("Alix Premiere");
+  });
+
+  it("suit le filtre affaires de la page et le garde dans le lien de détail", async () => {
+    vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
+      p5: { definitive: 1, nonDefinitive: 0, ongoing: 0 },
+    });
+    const { rows } = await lines(
+      await call(getPersonnes, `${BASE}/personnes?affaires=condamnation-definitive`)
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Eli Sorti");
+    const detail = new URL(rows[0]!.split(",")[9]!);
+    expect(detail.searchParams.get("affaires")).toBe("condamnation-definitive");
   });
 
   it("neutralise les formules dans les noms", async () => {
