@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { presidencyOfGovernment } from "@/config/presidencies";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronRight, Download, FileText } from "lucide-react";
@@ -377,6 +378,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   const shownParticipants = participants.slice(0, 10);
   const moreParticipants = participants.slice(10);
 
+  const presidency = presidencyOfGovernment(gov);
   const pmPerson = Object.values(data.people).find((p) => p.slug === gov.primeMinister.slug);
   const pmLinked = pmPerson?.visibility === "published";
 
@@ -446,6 +448,16 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
           <h1 className="text-balance font-display text-3xl font-extrabold tracking-tight md:text-4xl">
             {gov.name}
           </h1>
+          {presidency && (
+            <p className="text-sm">
+              <Link
+                href={`${BASE}#presidence-${presidency.slug}`}
+                className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {presidency.heading}
+              </Link>
+            </p>
+          )}
           <p className="text-sm">
             {gov.primeMinister.gender === "F" ? "Première ministre" : "Premier ministre"} :{" "}
             {pmLinked ? (

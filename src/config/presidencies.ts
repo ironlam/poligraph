@@ -2,7 +2,11 @@
 // Les intérims d'Alain Poher (1969, 1974) ne sont pas des présidences : aucun Premier ministre
 // n'y a été nommé. Bornes en jours calendaires `YYYY-MM-DD`, incluses ; le jour de passation
 // figure dans les deux présidences et revient au président entrant (voir `presidencyOn`).
-// Sources : page de chaque président sur elysee.fr (vérifiées le 2026-10-10).
+// `from`/`to` sont les dates de prise et de fin de fonction. `sourceUrl` pointe vers la
+// proclamation des résultats de l'élection par le Conseil constitutionnel quand elle a pu être
+// vérifiée (le 2026-10-10) : elle établit l'élection, pas le jour de prise de fonction. Les
+// autres sources sont à compléter (le site du Conseil a cessé de répondre pendant la
+// vérification) ; `null` plutôt qu'une URL non vérifiée.
 
 export type Presidency = {
   slug: string;
@@ -23,7 +27,7 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de Charles de Gaulle",
     from: "1959-01-08",
     to: "1969-04-28",
-    sourceUrl: "https://www.elysee.fr/charles-de-gaulle",
+    sourceUrl: null,
   },
   {
     slug: "pompidou",
@@ -31,7 +35,8 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de Georges Pompidou",
     from: "1969-06-20",
     to: "1974-04-02",
-    sourceUrl: "https://www.elysee.fr/georges-pompidou",
+    // Décision n° 69-22 PDR du 19 juin 1969.
+    sourceUrl: "https://www.conseil-constitutionnel.fr/decision/1969/6922pdr.htm",
   },
   {
     slug: "giscard-d-estaing",
@@ -39,7 +44,8 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de Valéry Giscard d'Estaing",
     from: "1974-05-27",
     to: "1981-05-21",
-    sourceUrl: "https://www.elysee.fr/valery-giscard-d-estaing",
+    // Décision n° 74-32 PDR du 24 mai 1974.
+    sourceUrl: "https://www.conseil-constitutionnel.fr/decision/1974/7432pdr.htm",
   },
   {
     slug: "mitterrand",
@@ -47,7 +53,7 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de François Mitterrand",
     from: "1981-05-21",
     to: "1995-05-17",
-    sourceUrl: "https://www.elysee.fr/francois-mitterrand",
+    sourceUrl: null,
   },
   {
     slug: "chirac",
@@ -55,7 +61,7 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de Jacques Chirac",
     from: "1995-05-17",
     to: "2007-05-16",
-    sourceUrl: "https://www.elysee.fr/jacques-chirac",
+    sourceUrl: null,
   },
   {
     slug: "sarkozy",
@@ -63,7 +69,7 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de Nicolas Sarkozy",
     from: "2007-05-16",
     to: "2012-05-15",
-    sourceUrl: "https://www.elysee.fr/nicolas-sarkozy",
+    sourceUrl: null,
   },
   {
     slug: "hollande",
@@ -71,7 +77,7 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence de François Hollande",
     from: "2012-05-15",
     to: "2017-05-14",
-    sourceUrl: "https://www.elysee.fr/francois-hollande",
+    sourceUrl: null,
   },
   {
     slug: "macron",
@@ -79,13 +85,13 @@ export const PRESIDENCIES: readonly Presidency[] = [
     heading: "Présidence d'Emmanuel Macron",
     from: "2017-05-14",
     to: null,
-    sourceUrl: "https://www.elysee.fr/emmanuel-macron",
+    sourceUrl: null,
   },
 ];
 
 /**
  * Présidence en cours au jour `day`, bornes incluses. Un jour de passation appartient au
- * président entrant (Ayrault, Juppé, Mauroy ont été nommés le jour même de l'investiture).
+ * président entrant : un Premier ministre nommé ce jour-là l'est par le nouveau président.
  * `null` hors de toute présidence (avant 1959, intérims).
  */
 export function presidencyOn(day: string): Presidency | null {

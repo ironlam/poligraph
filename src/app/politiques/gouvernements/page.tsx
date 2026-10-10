@@ -47,7 +47,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const params = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, first(v)]));
   const title = "Gouvernements français : composition et ministres";
   const description =
-    "Composition de chaque gouvernement publié, date par date : qui a exercé quelle fonction, avec la source officielle de chaque nomination.";
+    "Composition de chaque gouvernement publié : qui a exercé quelle fonction et à quelles dates, avec l'acte officiel de chaque nomination.";
   return {
     title,
     description,
@@ -149,9 +149,8 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
             Gouvernements
           </h1>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-            Retrouvez qui a exercé quelle fonction, dans quel gouvernement et à quelle date, puis
-            ouvrez la fiche de chaque personne. Chaque nomination et chaque fin de fonction renvoie
-            à son acte officiel quand il existe.
+            Qui a exercé quelle fonction, dans quel gouvernement, avec l&apos;acte officiel de
+            chaque nomination.
           </p>
         </div>
 
@@ -192,24 +191,26 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
               className="h-11 rounded-[10px] border border-input bg-background px-3 text-sm"
             />
           </div>
-          <div className="flex flex-col gap-1 sm:min-w-[220px]">
-            <label htmlFor="gouv-presidence" className="text-sm font-medium">
-              Présidence
-            </label>
-            <select
-              id="gouv-presidence"
-              name="presidence"
-              defaultValue={presidence}
-              className="h-11 rounded-[10px] border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Toutes</option>
-              {presidencies.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {presidencies.length > 1 && (
+            <div className="flex flex-col gap-1 sm:min-w-[220px]">
+              <label htmlFor="gouv-presidence" className="text-sm font-medium">
+                Présidence
+              </label>
+              <select
+                id="gouv-presidence"
+                name="presidence"
+                defaultValue={presidence}
+                className="h-11 rounded-[10px] border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Toutes</option>
+                {presidencies.map((p) => (
+                  <option key={p.slug} value={p.slug}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <Button type="submit" className="min-h-11">
             Filtrer
           </Button>
@@ -233,16 +234,19 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
           ) : (
             <>
               {groups.size > 1 && (
-                <nav aria-label="Aller à une présidence" className="flex flex-wrap gap-2">
-                  {[...groups.values()].map((group) => (
-                    <a
-                      key={group.slug}
-                      href={`#presidence-${group.slug}`}
-                      className="inline-flex min-h-11 items-center rounded-full border bg-card px-4 text-sm font-medium hover:border-primary/40 hover:bg-muted/50"
-                    >
-                      {group.name}
-                    </a>
-                  ))}
+                <nav id="presidences" aria-label="Aller à une présidence" className="scroll-mt-24">
+                  <ul className="flex flex-wrap gap-2">
+                    {[...groups.values()].map((group) => (
+                      <li key={group.slug}>
+                        <a
+                          href={`#presidence-${group.slug}`}
+                          className="inline-flex min-h-11 items-center rounded-full border bg-card px-4 text-sm font-medium hover:border-primary/40 hover:bg-muted/50"
+                        >
+                          {group.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </nav>
               )}
               {[...groups.values()].map((group) => (
@@ -292,6 +296,14 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
                       );
                     })}
                   </div>
+                  {groups.size > 1 && (
+                    <a
+                      href="#presidences"
+                      className="inline-flex min-h-11 items-center self-start text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      Toutes les présidences
+                    </a>
+                  )}
                 </section>
               ))}
             </>
