@@ -148,7 +148,8 @@ export default async function CondamnationsPage({ searchParams }: PageProps) {
           <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">{h1}</h1>
           <p className="text-muted-foreground mb-6">
             Répartition des responsables politiques condamnés définitivement par leur parti d{"'"}
-            appartenance. Sources vérifiables.
+            appartenance. Sources vérifiables. Les condamnations encore susceptibles de recours ne
+            sont pas comptées dans ce taux.
           </p>
           <CondamnationsFilters
             current={{

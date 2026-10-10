@@ -66,7 +66,8 @@ export function buildCanonical(input: CanonicalInput): string {
 
   const params = new URLSearchParams();
   if (mandat) params.set("mandat", mandat);
-  if (certainty !== "tous") params.set("certainty", certainty);
+  // The per-party rate counts final convictions only (#957).
+  if (certainty !== "tous" && view !== "stats") params.set("certainty", certainty);
   if (partiSlug) params.set("parti", partiSlug);
   if (view === "stats") params.set("view", "stats");
 
