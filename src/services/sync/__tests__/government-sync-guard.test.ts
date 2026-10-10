@@ -7,6 +7,8 @@ const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
     mandateUpdateMany: vi.fn(),
     politicianCreate: vi.fn(),
     politicianUpdate: vi.fn(),
+    externalIdUpsert: vi.fn(),
+    mandateGovernmentUpdate: vi.fn(),
   };
   const read = () => vi.fn().mockResolvedValue([]);
   return {
@@ -27,6 +29,10 @@ const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
         create: w.politicianCreate,
         update: w.politicianUpdate,
       },
+      government: { findMany: read(), findFirst: vi.fn().mockResolvedValue(null) },
+      externalId: { findFirst: vi.fn().mockResolvedValue(null), upsert: w.externalIdUpsert },
+      party: { findFirst: vi.fn().mockResolvedValue(null) },
+      mandateGovernment: { update: w.mandateGovernmentUpdate },
     },
   };
 });
@@ -59,6 +65,20 @@ describe("garde du sync gouvernement", () => {
     expect(result.membersCreated + result.membersUpdated + result.mandatesCreated).toBe(0);
     for (const fn of writeMocks) expect(fn).not.toHaveBeenCalled();
     expect(getTextMock).not.toHaveBeenCalled();
+  });
+
+  it("permet le dry-run pendant le gel, sans aucune écriture", async () => {
+    getTextMock.mockResolvedValue({
+      data:
+        "id;gouvernement;code_fonction;prenom;nom;fonction;date_debut_fonction;date_fin_fonction\n" +
+        "600;François Bayrou;M;Anne;Test;Ministre de test;lundi 23 décembre 2024;\n",
+    });
+    const result = await syncGouvernement({ dryRun: true });
+    expect(result.skipped).toBeUndefined();
+    expect(result.success).toBe(true);
+    expect(getTextMock).toHaveBeenCalledTimes(1);
+    expect(result.plan.creates.length).toBeGreaterThan(0);
+    for (const fn of writeMocks) expect(fn).not.toHaveBeenCalled();
   });
 
   it("l'option explicite lève la garde", async () => {

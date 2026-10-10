@@ -109,5 +109,6 @@ else
     src/lib/governments/__tests__/backfill.integration.test.ts \
     src/lib/governments/__tests__/merge-mandates.integration.test.ts \
     src/lib/governments/__tests__/publication-lot.integration.test.ts \
+    src/services/sync/__tests__/gouvernement.integration.test.ts \
     src/test/__tests__/db-guard.test.ts
 fi

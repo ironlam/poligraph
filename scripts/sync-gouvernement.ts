@@ -5,6 +5,7 @@
  *   npm run sync:gouvernement              # Sync current government only
  *   npm run sync:gouvernement -- --all     # Sync all historical governments
  *   npm run sync:gouvernement -- --stats   # Show current stats
+ *   npm run sync:gouvernement -- --dry-run # Imprime le plan sans rien écrire (permis pendant le gel)
  */
 
 import "dotenv/config";
@@ -52,15 +53,12 @@ Data source: data.gouv.fr - Historique des Gouvernements de la Ve République
   async sync(options): Promise<SyncResult> {
     const { dryRun = false, all = false, allowDuringGovernmentMigration = false } = options;
 
-    if (dryRun) {
-      console.log(`[DRY-RUN] Would sync ${all ? "all historical" : "current"} government`);
-      return { success: true, duration: 0, stats: {}, errors: [] };
-    }
-
     console.log(`Mode: ${all ? "All historical governments" : "Current government only"}`);
 
+    // Le dry-run passe par le service : mêmes lectures et décisions, aucune écriture.
     const result = await syncGouvernement({
       currentOnly: !all,
+      dryRun: dryRun === true,
       allowDuringGovernmentMigration: allowDuringGovernmentMigration === true,
     });
 
@@ -71,6 +69,12 @@ Data source: data.gouv.fr - Historique des Gouvernements de la Ve République
         membersCreated: result.membersCreated,
         membersUpdated: result.membersUpdated,
         mandatesCreated: result.mandatesCreated,
+        planCreates: result.plan.creates.length,
+        planUpdates: result.plan.updates.length,
+        planLinks: result.plan.links.length,
+        toVerify: result.plan.toVerify.length,
+        unresolvedLabels: result.plan.unresolvedLabels.length,
+        skippedActVerified: result.plan.skippedActVerified.length,
       },
       errors: result.errors,
     };
