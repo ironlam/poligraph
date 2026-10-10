@@ -2,7 +2,7 @@
 -- Additive migration, can run before the code. RLS enabled with no policy (blocks anon/authenticated keys)
 -- Prisma connects as postgres role which bypasses RLS, so this is safe
 -- Run with: npx prisma db execute --file prisma/migrations/manual/2026-10-07_affair_monitoring.sql
--- Applied: not yet
+-- Applied: 2026-10-08 (production)
 
 BEGIN;
 
