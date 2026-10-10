@@ -125,6 +125,8 @@ function person(
     photoUrl: null,
     blobPhotoUrl: null,
     visibility,
+    pendingReason: visibility === "pending" ? "draft" : null,
+    lifespan: null,
   };
 }
 
@@ -613,6 +615,41 @@ describe("membres", () => {
   it("n'affiche pas de raccourci quand une seule présidence est couverte", async () => {
     const t = text(await html(MembersPage({ searchParams: sp() })));
     expect(t).not.toContain("Sous la présidence de");
+  });
+
+  it("distingue l'ancien ministre sans fiche du brouillon, années comprises", async () => {
+    const ancien: PersonCard = {
+      ...person("henri-rey", "Henri Rey", "pending"),
+      pendingReason: "ageExcluded",
+      lifespan: "1903-1985",
+    };
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+      episodes: [
+        ...episodes,
+        ep({ governmentId: "ga", politicianId: "henri-rey", title: "Ministre d'État" }),
+        // Brouillon dont la seule fonction commence sur une date du jeu de données.
+        ep({
+          governmentId: "gb",
+          politicianId: "noemie-attente",
+          title: "Ministre déléguée",
+          start: "2024-01-09",
+          startEvidence: "DATASET",
+        }),
+      ],
+      people: { ...people, "henri-rey": ancien },
+    });
+    const div = document.createElement("div");
+    div.innerHTML = await html(MembersPage({ searchParams: sp({ q: "rey" }) }));
+    expect(div.textContent).toContain("Henri Rey (1903-1985)");
+    expect(div.textContent).toContain("Pas de fiche détaillée sur Poligraph.");
+    expect(div.textContent).not.toContain("vérifiées");
+    expect(div.querySelector('a[href="/politiques/henri-rey"]')).toBeNull();
+
+    const draft = text(
+      await html(MembersPage({ searchParams: sp({ q: "noemie", gouvernement: "gouvernement-b" }) }))
+    );
+    expect(draft).toContain("Profil public en cours de constitution.");
+    expect(draft).not.toContain("vérifiées");
   });
 
   it("filtre par nom", async () => {

@@ -332,6 +332,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
           key={row.person.id}
           person={row.person}
           functions={toFunctions(row)}
+          startVerified={row.functions.some((f) => f.episode.startEvidence === "ACT")}
           returnUrl={selfUrl}
           returnLabel={RETURN_LABEL}
           nameClassName="font-display text-[17px] font-bold"

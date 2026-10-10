@@ -80,6 +80,8 @@ function person(
     photoUrl: null,
     blobPhotoUrl: null,
     visibility,
+    pendingReason: visibility === "pending" ? "draft" : null,
+    lifespan: null,
   };
 }
 

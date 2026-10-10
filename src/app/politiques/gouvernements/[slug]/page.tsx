@@ -17,6 +17,7 @@ import { CopyLinkButton } from "@/components/governments/CopyLinkButton";
 import { GovernmentBadges, StatusBadge } from "@/components/governments/GovernmentBadges";
 import {
   GovernmentMemberCard,
+  Lifespan,
   type MemberCardFunction,
 } from "@/components/governments/GovernmentMemberCard";
 import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
@@ -257,6 +258,7 @@ function MemberGrid({
           key={g.person.id}
           person={g.person}
           functions={g.episodes.map((ep) => fn(ep))}
+          startVerified={g.episodes.some((ep) => ep.startEvidence === "ACT")}
           returnUrl={returnUrl}
           returnLabel={returnLabel}
         />
@@ -935,7 +937,10 @@ function ParticipantList({
                 {person.fullName}
               </RememberReturn>
             ) : (
-              <strong>{person.fullName}</strong>
+              <>
+                <strong>{person.fullName}</strong>
+                <Lifespan person={person} />
+              </>
             )}{" "}
             · {episodes.map((e) => displayTitle(e.title)).join(" ; ")}
           </span>
