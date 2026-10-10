@@ -452,7 +452,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
             <p className="text-sm">
               <Link
                 href={`${BASE}#presidence-${presidency.slug}`}
-                className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex min-h-11 items-center font-medium text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary"
               >
                 {presidency.heading}
               </Link>
