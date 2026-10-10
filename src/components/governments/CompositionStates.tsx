@@ -114,6 +114,16 @@ export function EstablishedAbsenceState({ date, partial }: { date: string; parti
   );
 }
 
+/** Nobody is established, but some people are in transition or to be clarified: not an absence. */
+export function NoEstablishedPresenceLine({ date }: { date: string }) {
+  return (
+    <p>
+      <span className="font-display text-[22px] font-extrabold">Aucune présence établie</span>{" "}
+      <span className="text-sm text-muted-foreground">au {formatDay(date)}</span>
+    </p>
+  );
+}
+
 export function NoResultsState({ q, resetHref }: { q: string; resetHref: string }) {
   return (
     <StateCard
