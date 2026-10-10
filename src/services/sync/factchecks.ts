@@ -24,6 +24,30 @@ import { generateDateSlug, generateUniqueSlug, sleep } from "@/lib/utils";
 import { loadMentionBlocklist, type MentionBlocklist } from "@/lib/identity/mention-blocklist";
 import { syncMetadata } from "@/lib/sync";
 import { requestProfileRefresh } from "@/lib/politicians/profile-snapshot/request";
+import { SITE_HOSTNAME } from "@/config/site";
+
+/**
+ * Hosts serving our own pages. The production domain is listed literally
+ * because SITE_HOSTNAME follows NEXT_PUBLIC_SITE_URL, which is localhost when
+ * the sync is run from a laptop.
+ */
+const OWN_SITE_HOSTNAMES = ["poligraph.fr", SITE_HOSTNAME];
+
+/**
+ * Whether a review URL points at our own site (or a subdomain of it). Google
+ * indexes the ClaimReview JSON-LD of our fact-check pages and hands them back
+ * as if Poligraph were the fact-checker; importing them only duplicates the
+ * outlet's review. An unparseable URL is not ours.
+ */
+export function isOwnSiteUrl(url: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return OWN_SITE_HOSTNAMES.some((own) => hostname === own || hostname.endsWith(`.${own}`));
+}
 
 /**
  * Publishable when the publisher is on the allow-list, compared on the
@@ -90,6 +114,8 @@ export interface FactcheckSyncStats {
   claimsFound: number;
   factChecksCreated: number;
   factChecksSkipped: number;
+  /** Reviews ignored because they point at our own fact-check pages. */
+  ownSiteSkipped: number;
   mentionsCreated: number;
   mentionsBlocked: number;
   apiErrors: number;
@@ -147,6 +173,7 @@ export async function syncFactchecks(
     claimsFound: 0,
     factChecksCreated: 0,
     factChecksSkipped: 0,
+    ownSiteSkipped: 0,
     mentionsCreated: 0,
     mentionsBlocked: 0,
     apiErrors: 0,
@@ -230,6 +257,11 @@ export async function syncFactchecks(
 
       for (const claim of claims) {
         for (const review of claim.claimReview) {
+          if (isOwnSiteUrl(review.url)) {
+            stats.ownSiteSkipped++;
+            continue;
+          }
+
           // Check if already exists by URL
           if (!force) {
             const existing = await db.factCheck.findUnique({
