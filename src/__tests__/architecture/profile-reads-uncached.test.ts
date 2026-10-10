@@ -34,7 +34,7 @@ describe("lectures brutes de la fiche politicien", () => {
       .filter((file) =>
         /\b(?:readPoliticianIdentity|readPoliticianDossier)\(/.test(withoutComments(read(file)))
       )
-      .filter((file) => !file.endsWith("politician-profile-reads.ts"));
+      .filter((file) => file !== "src/lib/data/politician-profile-reads.ts");
     expect(callers).toEqual(["src/lib/politicians/profile-snapshot/build.ts"]);
   });
 

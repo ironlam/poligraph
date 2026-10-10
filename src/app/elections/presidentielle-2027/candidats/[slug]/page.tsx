@@ -11,7 +11,9 @@ import { hasPublishedProgramme, isFicheCandidatPublishable } from "@/config/publ
 import { SITE_URL } from "@/config/site";
 // The precomputed profile document, the read /politiques/[slug] serves: one row instead of the
 // identity tree, and the same cache entry as the fiche (same function, same argument). Its identity
-// carries every field this page uses, under the same public predicates.
+// carries every field this page uses, under the same public predicates. Tagged `politician:<slug>`
+// only, like the fiche: the global `politicians` tag no longer marks it stale, the document refresh
+// does.
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
 import {
   getCandidateFicheDetail,
