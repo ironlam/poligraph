@@ -41,7 +41,9 @@ export function CondamnationsFilters({
       const params = new URLSearchParams();
       const next = { ...current, ...patch };
       if (next.mandat) params.set("mandat", next.mandat);
-      if (next.certainty && next.certainty !== "tous") params.set("certainty", next.certainty);
+      // The per-party rate counts final convictions only (#957).
+      if (next.view !== "stats" && next.certainty && next.certainty !== "tous")
+        params.set("certainty", next.certainty);
       if (next.parti) params.set("parti", next.parti);
       if (next.view === "stats") params.set("view", "stats");
       const qs = params.toString();
@@ -58,12 +60,14 @@ export function CondamnationsFilters({
         currentKey={current.mandat ?? ""}
         onHref={(key) => buildHref({ mandat: key || undefined })}
       />
-      <FilterGroup
-        legend="Niveau de décision"
-        options={CERTAINTY_OPTIONS}
-        currentKey={current.certainty}
-        onHref={(key) => buildHref({ certainty: key })}
-      />
+      {current.view !== "stats" && (
+        <FilterGroup
+          legend="Niveau de décision"
+          options={CERTAINTY_OPTIONS}
+          currentKey={current.certainty}
+          onHref={(key) => buildHref({ certainty: key })}
+        />
+      )}
       <FilterGroup
         legend="Mode d'affichage"
         options={VIEW_OPTIONS}

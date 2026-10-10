@@ -55,6 +55,12 @@ describe("buildCanonical", () => {
     );
   });
 
+  it("drops certainty from the stats canonical, which counts final convictions only (#957)", () => {
+    expect(buildCanonical({ certainty: "prononcee", view: "stats" })).toBe(
+      "/affaires/condamnations?view=stats"
+    );
+  });
+
   it("redirects parti-only canonical to /affaires/parti/[slug]", () => {
     expect(buildCanonical({ certainty: "tous", view: "list", partiSlug: "rn" })).toBe(
       "/affaires/parti/rn"
