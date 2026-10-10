@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("react", () => ({ cache: <T extends (...args: never[]) => unknown>(fn: T) => fn }));
-vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findUnique: vi.fn() },
@@ -10,7 +8,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { db } from "@/lib/db";
-import { getPoliticianDossier, getPoliticianIdentity } from "./politicians";
+import { readPoliticianDossier, readPoliticianIdentity } from "./politician-profile-reads";
 
 /**
  * The profile read is split in two (identity above the fold, dossier in the tab bodies) and the
@@ -63,7 +61,7 @@ describe("lectures de fiche, frontières des partis non publics", () => {
       ],
     } as never);
 
-    const politician = await getPoliticianIdentity("alice-publique");
+    const politician = await readPoliticianIdentity({ slug: "alice-publique" });
 
     expect(politician).not.toBeNull();
     expect(politician?.mandates).toEqual([
@@ -128,7 +126,7 @@ describe("lectures de fiche, frontières des partis non publics", () => {
       _count: { affairs: 2, factCheckMentions: 5 },
     } as never);
 
-    const politician = await getPoliticianIdentity("alice-publique");
+    const politician = await readPoliticianIdentity({ slug: "alice-publique" });
     expect(politician?._count).toEqual({ affairs: 2, factCheckMentions: 5 });
 
     // The counters feed the SEO richness predicate. Counting rows the dossier read would not list
@@ -168,7 +166,7 @@ describe("lectures de fiche, frontières des partis non publics", () => {
       dossierAuthors: [],
     } as never);
 
-    const dossier = await getPoliticianDossier("alice-publique");
+    const dossier = await readPoliticianDossier({ slug: "alice-publique" });
 
     expect(dossier?.affairs).toEqual([
       expect.objectContaining({
@@ -188,7 +186,7 @@ describe("lectures de fiche, frontières des partis non publics", () => {
 
   it("rend null quand la personnalité n'est pas publique, sur les deux lectures", async () => {
     vi.mocked(db.politician.findUnique).mockResolvedValue(null as never);
-    await expect(getPoliticianIdentity("inconnue")).resolves.toBeNull();
-    await expect(getPoliticianDossier("inconnue")).resolves.toBeNull();
+    await expect(readPoliticianIdentity({ slug: "inconnue" })).resolves.toBeNull();
+    await expect(readPoliticianDossier({ slug: "inconnue" })).resolves.toBeNull();
   });
 });

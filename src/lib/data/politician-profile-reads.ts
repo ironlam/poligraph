@@ -28,9 +28,8 @@ type PoliticianWhere = { slug: string } | { id: string };
  * two are filtered `_count`s here, under the same public predicates as the rows they count, so the
  * figures the robots predicate sees are unchanged.
  *
- * `/politiques/[slug]` no longer calls it directly: the profile document builder does
- * (`profile-snapshot/build.ts`), and the page reads the stored document. The candidate routes
- * still read it through `getPoliticianIdentity`.
+ * No page calls it directly: the profile document builder does (`profile-snapshot/build.ts`), and
+ * `/politiques/[slug]` and the candidate routes read the stored document.
  */
 export async function readPoliticianIdentity(where: PoliticianWhere) {
   const politician = await db.politician.findUnique({

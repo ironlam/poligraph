@@ -35,8 +35,8 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: vi.fn(),
   getCandidateFicheDetail: vi.fn(),
 }));
-vi.mock("@/lib/data/politicians", () => ({
-  getPoliticianIdentity: vi.fn(),
+vi.mock("@/lib/data/politician-profile", () => ({
+  getPoliticianProfile: vi.fn(),
 }));
 
 import { generateMetadata as votesGenerateMetadata } from "@/app/parlement/votes/page";
@@ -46,7 +46,7 @@ import { metadata as presidentialComparisonMetadata } from "@/app/elections/pres
 import { metadata as presidentialMeasuresMethodologyMetadata } from "@/app/methodologie/mesures-presidentielle-2027/page";
 import { generateMetadata as candidateFicheGenerateMetadata } from "@/app/elections/presidentielle-2027/candidats/[slug]/page";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
-import { getPoliticianIdentity } from "@/lib/data/politicians";
+import { getPoliticianProfile } from "@/lib/data/politician-profile";
 
 // Living map of the index-bloat doctrine. If any representative surface flips, this
 // file fails: a strong page must never become noindex, a thin one must never become
@@ -111,10 +111,9 @@ describe("doctrine — strong surfaces stay indexable", () => {
   // names it in those words, and withholding the page read as a verdict on the candidate. The
   // measure count is left at zero here on purpose, because that is the case that used to fail.
   it("sourced presidential candidacy with no published measure stays indexable", async () => {
-    vi.mocked(getPoliticianIdentity).mockResolvedValue({
-      id: "p1",
-      fullName: "Camille Rivière",
-    } as unknown as Awaited<ReturnType<typeof getPoliticianIdentity>>);
+    vi.mocked(getPoliticianProfile).mockResolvedValue({
+      identity: { id: "p1", fullName: "Camille Rivière" },
+    } as unknown as Awaited<ReturnType<typeof getPoliticianProfile>>);
     vi.mocked(getPoliticianPresidentialCandidacy).mockResolvedValue({
       primarySourceMeasureCount: 0,
     } as unknown as Awaited<ReturnType<typeof getPoliticianPresidentialCandidacy>>);

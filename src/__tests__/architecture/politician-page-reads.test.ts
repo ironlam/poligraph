@@ -14,14 +14,19 @@ function withoutComments(source: string): string {
 const PAGE = "src/app/politiques/[slug]/page.tsx";
 const PAGE_DATA = "src/app/politiques/[slug]/page-data.ts";
 const BODY = "src/app/politiques/[slug]/_components/PoliticianProfileBody.tsx";
+const CANDIDATE_PAGE = "src/app/elections/presidentielle-2027/candidats/[slug]/page.tsx";
+const CANDIDATE_MEASURES_PAGE =
+  "src/app/elections/presidentielle-2027/candidats/[slug]/mesures/page.tsx";
 
 /**
- * The files that receive a value read from the profile document: the page, its helpers and every
- * component or politician helper they import, transitively. The read and write layers
+ * The files that receive a value read from the profile document: the fiche, the two candidate pages
+ * that read its identity, their helpers and every component or politician helper they import,
+ * transitively. The read and write layers
  * (`profile-snapshot/`, `lib/data/`) are left out: they serialize the document, they do not render it.
  */
 const DOCUMENT_FED_SCOPE = [
   "src/app/politiques/[slug]/",
+  "src/app/elections/presidentielle-2027/candidats/[slug]/",
   "src/components/",
   "src/lib/politicians/",
 ] as const;
@@ -30,7 +35,7 @@ const OUT_OF_SCOPE = ["src/lib/politicians/profile-snapshot/"] as const;
 function documentFedFiles(): string[] {
   const host = createFileSystemSourceHost();
   const seen = new Set<string>();
-  const queue = [PAGE, PAGE_DATA, BODY];
+  const queue = [PAGE, PAGE_DATA, BODY, CANDIDATE_PAGE, CANDIDATE_MEASURES_PAGE];
   while (queue.length > 0) {
     const file = queue.shift()!;
     if (seen.has(file)) continue;
@@ -113,6 +118,20 @@ describe("fiche politicien : lecture du document précalculé", () => {
     expect(sources).not.toMatch(
       /getPoliticianIdentity\(|getPoliticianDossier\(|getProfileVoteStats\(/
     );
+  });
+
+  it("n'expose plus les lectures de fiche remplacées par le document", () => {
+    const source = withoutComments(read("src/lib/data/politicians.ts"));
+    expect(source).not.toMatch(/\bgetPoliticianIdentity\b/);
+    expect(source).not.toMatch(/\bgetPoliticianDossier\b/);
+  });
+
+  it("les pages candidat lisent le document de fiche", () => {
+    for (const file of [CANDIDATE_PAGE, CANDIDATE_MEASURES_PAGE]) {
+      const source = withoutComments(read(file));
+      expect(source).toMatch(/getPoliticianProfile\(/);
+      expect(source).not.toMatch(/getPoliticianIdentity\(/);
+    }
   });
 
   it("la page et ses métadonnées lisent le document, la candidature reste une lecture à part", () => {
