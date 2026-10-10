@@ -25,17 +25,6 @@ export default function Image() {
       >
         <span
           style={{
-            fontSize: 24,
-            fontWeight: 700,
-            letterSpacing: 4,
-            textTransform: "uppercase",
-            color: "#7dd3fc",
-          }}
-        >
-          Gouvernements
-        </span>
-        <span
-          style={{
             fontSize: 72,
             fontWeight: 800,
             lineHeight: 1.05,
@@ -43,10 +32,11 @@ export default function Image() {
             color: "white",
           }}
         >
-          Qui était au gouvernement, et quand ?
+          Gouvernements français
         </span>
         <span style={{ fontSize: 30, color: "#cbd5e1" }}>
-          La composition jour par jour, chaque nomination sourcée par le Journal officiel.
+          Composition et ministres, jour par jour. Chaque nomination renvoie à l'acte publié au
+          Journal officiel.
         </span>
       </div>
     </OgLayout>,
