@@ -272,7 +272,17 @@ function KeyNumbers() {
 }
 
 export default async function InstitutionsPage() {
-  if (!(await isFeatureEnabled("INSTITUTIONS_SECTION"))) notFound();
+  const [institutionsEnabled, governmentsEnabled] = await Promise.all([
+    isFeatureEnabled("INSTITUTIONS_SECTION"),
+    isFeatureEnabled("gouvernements"),
+  ]);
+  if (!institutionsEnabled) notFound();
+  // The Government card points at the governments directory once that section is live.
+  const executive = governmentsEnabled
+    ? FRENCH_EXECUTIVE.map((inst) =>
+        inst.name === "Gouvernement" ? { ...inst, link: "/politiques/gouvernements" } : inst
+      )
+    : FRENCH_EXECUTIVE;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -331,7 +341,7 @@ export default async function InstitutionsPage() {
           Pouvoir exécutif
         </h2>
         <div className="grid gap-4 md:grid-cols-3">
-          {FRENCH_EXECUTIVE.map((inst) => (
+          {executive.map((inst) => (
             <InstitutionCard key={inst.name} institution={inst} />
           ))}
         </div>

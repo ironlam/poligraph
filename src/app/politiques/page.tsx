@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -19,6 +20,8 @@ import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { parsePageParam } from "@/lib/data/query-params";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
 
 // Minimum members to show a party in filters (avoid cluttering with old/small parties)
 const MIN_PARTY_MEMBERS = 2;
@@ -453,19 +456,21 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const sortOption: SortOption = rawSort in SORT_CONFIGS ? (rawSort as SortOption) : "prominence";
   const page = parsePageParam(params.page);
 
-  const [{ politicians, total, totalPages }, parties, counts] = await Promise.all([
-    getPoliticians(
-      search,
-      partyFilter,
-      convictionFilter,
-      financingFilter,
-      mandateFilter,
-      sortOption,
-      page
-    ),
-    getParties(),
-    getFilterCounts(),
-  ]);
+  const [{ politicians, total, totalPages }, parties, counts, governmentsEnabled] =
+    await Promise.all([
+      getPoliticians(
+        search,
+        partyFilter,
+        convictionFilter,
+        financingFilter,
+        mandateFilter,
+        sortOption,
+        page
+      ),
+      getParties(),
+      getFilterCounts(),
+      isFeatureEnabled("gouvernements"),
+    ]);
 
   // Count active filters
   const activeFilterCount = [partyFilter, convictionFilter, financingFilter, mandateFilter].filter(
@@ -480,6 +485,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
         url={`${SITE_URL}/politiques`}
         numberOfItems={total}
       />
+      {governmentsEnabled && <PolitiquesLocalNav current="personnes" />}
       <div className="container mx-auto px-4 pt-4 pb-8">
         <Breadcrumb items={[{ label: "Politiques" }]} />
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -512,6 +518,19 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
             sortOption={sortOption}
           />
         </div>
+
+        {governmentsEnabled && mandateFilter === "gouvernement" && (
+          <p className="mb-6 text-sm text-muted-foreground">
+            Ce filtre porte sur les fonctions en cours. Pour l&apos;historique, consultez les{" "}
+            <Link
+              href="/politiques/gouvernements"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              gouvernements
+            </Link>
+            .
+          </p>
+        )}
 
         {/* Filters, grid, and pagination with loading states */}
         <PoliticiansGrid

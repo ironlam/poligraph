@@ -14,7 +14,8 @@ export const SITEMAP_SHARD_TAGS = {
   // Static pages + indexable politicians. A profile can be indexable solely
   // because it carries a published affair or a fact-check, so those tags
   // belong here as much as "politicians" does.
-  0: ["politicians", "affairs", "factchecks"],
+  // "gouvernements": the published governments listed at the end of the shard.
+  0: ["politicians", "affairs", "factchecks", "gouvernements"],
   // Affair pages, party pages, elections, departments.
   1: ["affairs", "parties", "elections"],
   2: ["dossiers"],

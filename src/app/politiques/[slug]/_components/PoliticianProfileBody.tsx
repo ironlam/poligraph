@@ -54,6 +54,8 @@ export interface PoliticianProfileBodyProps {
   currentGroup: { code: string; name: string; color: string | null } | null;
   isActiveParliamentarian: boolean;
   isChamberPresident: boolean;
+  /** « gouvernements » feature flag: links ministerial mandates to their government page. */
+  governmentsEnabled?: boolean;
 }
 
 export function PoliticianProfileBody({
@@ -64,6 +66,7 @@ export function PoliticianProfileBody({
   currentGroup,
   isActiveParliamentarian,
   isChamberPresident,
+  governmentsEnabled = false,
 }: PoliticianProfileBodyProps) {
   const { affairs, factCheckMentions, dossierAuthors } = dossier;
 
@@ -242,6 +245,7 @@ export function PoliticianProfileBody({
                       <MandateTimeline
                         mandates={politician.mandates}
                         civility={politician.civility}
+                        governmentsEnabled={governmentsEnabled}
                       />
                     </CardContent>
                   </Card>

@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 vi.mock("@/lib/db", () => ({
   db: {
     politician: { findMany: mocks.politicianFindMany, count: mocks.politicianCount },

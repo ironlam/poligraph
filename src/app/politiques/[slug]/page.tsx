@@ -6,6 +6,7 @@ import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PoliticianHeader } from "./_components/PoliticianHeader";
 import { PoliticianProfileBody } from "./_components/PoliticianProfileBody";
@@ -51,7 +52,10 @@ export default async function PoliticianPage({ params }: PageProps) {
   // One precomputed document holds the identity, the tab bodies and the vote stats together, so
   // there is no split read left that could find the identity but not the dossier: a missing or
   // non-public person is a 404, never a profile served with an empty dossier.
-  const data = await loadPoliticianPage(slug);
+  const [data, governmentsEnabled] = await Promise.all([
+    loadPoliticianPage(slug),
+    isFeatureEnabled("gouvernements"),
+  ]);
 
   if (!data) {
     notFound();
@@ -102,7 +106,7 @@ export default async function PoliticianPage({ params }: PageProps) {
         )}
 
         {/* The tab bodies render from the document already in hand: nothing left to stream. */}
-        <PoliticianProfileBody {...model.body} />
+        <PoliticianProfileBody {...model.body} governmentsEnabled={governmentsEnabled} />
 
         <aside className="mt-12 p-4 rounded-lg border bg-muted/30">
           <p className="text-sm text-muted-foreground">

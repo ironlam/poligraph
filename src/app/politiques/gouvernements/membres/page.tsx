@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ItemListJsonLd } from "@/components/seo/JsonLd";
+import { SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import { MissingData } from "@/components/ui/MissingData";
 import { NoResultsState, StateCard } from "@/components/governments/CompositionStates";
@@ -39,6 +41,8 @@ import {
   type MembersQuery,
 } from "@/lib/governments/params";
 import { normalizeText } from "@/lib/name-matching";
+import { GOUVERNEMENTS_MEMBRES_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 
 const PATH = "/politiques/gouvernements/membres";
 const RETURN_LABEL = "Retour à « Membres des gouvernements »";
@@ -67,7 +71,9 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description:
       "Toutes les personnes ayant exercé une fonction dans un gouvernement publié, avec leurs fonctions, leurs dates et les sources officielles.",
     alternates: { canonical: PATH },
-    ...(Object.keys(sp).length > 0 ? { robots: { index: false, follow: true } } : {}),
+    ...listingRobotsMetadata(
+      hasActiveListingFilter(flatten(sp), GOUVERNEMENTS_MEMBRES_FILTER_KEYS)
+    ),
   };
 }
 
@@ -268,8 +274,23 @@ export default async function MembresPage({ searchParams }: PageProps) {
 
   const fieldClass = "h-11 w-full rounded-[10px] border border-input bg-background px-3 text-sm";
 
+  // People listed on this page whose profile is published: a pending person has no page.
+  const memberProfiles = shown
+    .filter((row) => row.person.visibility === "published")
+    .map((row) => ({
+      name: row.person.fullName,
+      url: `${SITE_URL}/politiques/${row.person.slug}`,
+    }));
+
   return (
     <>
+      {memberProfiles.length > 0 && (
+        <ItemListJsonLd
+          name="Membres des gouvernements"
+          url={`${SITE_URL}${PATH}`}
+          items={memberProfiles}
+        />
+      )}
       {header}
       <div className="container mx-auto flex flex-col gap-6 px-4 pb-10 pt-4">
         {breadcrumb}

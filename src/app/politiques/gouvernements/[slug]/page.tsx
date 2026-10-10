@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronRight, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { ItemListJsonLd } from "@/components/seo/JsonLd";
+import { SITE_URL } from "@/config/site";
 import {
   EstablishedAbsenceState,
   NotEstablishedState,
@@ -41,6 +43,8 @@ import type {
   PublishedGovernment,
 } from "@/lib/governments/mapping";
 import { parseCompositionDate } from "@/lib/governments/params";
+import { GOUVERNEMENT_DETAIL_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import type { Change, CompositionResult, DateEvidence } from "@/lib/governments/types";
 
 const BASE = "/politiques/gouvernements";
@@ -70,7 +74,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
     title: `${gov.name} : composition et ministres`,
     description: `Composition du ${gov.name} date par date, avec la source officielle de chaque nomination, les changements documentés et la liste des participants.`,
     alternates: { canonical: `${BASE}/${gov.slug}` },
-    ...(Object.keys(sp).length > 0 ? { robots: { index: false, follow: true } } : {}),
+    ...listingRobotsMetadata(
+      hasActiveListingFilter({ date: first(sp.date) }, GOUVERNEMENT_DETAIL_FILTER_KEYS)
+    ),
   };
 }
 
@@ -372,8 +378,20 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
       };
     };
 
+  // Only published profiles: a pending person has no page to point to.
+  const memberProfiles = participants
+    .filter((g) => g.person.visibility === "published")
+    .map((g) => ({ name: g.person.fullName, url: `${SITE_URL}/politiques/${g.person.slug}` }));
+
   return (
     <>
+      {memberProfiles.length > 0 && (
+        <ItemListJsonLd
+          name={`Membres du ${gov.name}`}
+          url={`${SITE_URL}${selfUrl}`}
+          items={memberProfiles}
+        />
+      )}
       <PolitiquesLocalNav current="gouvernements" />
       <ReturnScrollRestorer />
       <div className="container mx-auto flex flex-col gap-6 px-4 pb-10 pt-4">

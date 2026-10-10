@@ -12,6 +12,8 @@ export interface NavItem {
   highlight?: boolean;
   /** If true, link opens in a new tab with rel="noopener noreferrer" */
   external?: boolean;
+  /** Sub-links, rendered by the mobile menu only (the desktop header ignores them) */
+  children?: NavItem[];
 }
 
 export interface NavGroup {
@@ -35,6 +37,19 @@ export const NAV_PRIMARY: NavItem[] = [
     label: "Politiques",
     icon: "users",
     description: "Députés, sénateurs, ministres, eurodéputés",
+    children: [
+      { href: "/politiques", label: "Personnes", featureFlag: "gouvernements" },
+      {
+        href: "/politiques/gouvernements",
+        label: "Gouvernements",
+        featureFlag: "gouvernements",
+      },
+      {
+        href: "/politiques/gouvernements/membres",
+        label: "Membres des gouvernements",
+        featureFlag: "gouvernements",
+      },
+    ],
   },
   {
     href: "/affaires",
@@ -56,6 +71,20 @@ export const NAV_PRIMARY: NavItem[] = [
     description: "Scrutins et positions des élus",
   },
 ];
+
+/**
+ * Items whose feature flag is enabled (or that carry none), children filtered the same way.
+ * An item left with no visible child loses its `children` key.
+ */
+export function filterNavItems(items: NavItem[], enabledFlags: ReadonlySet<string>): NavItem[] {
+  const visible = (item: NavItem) => !item.featureFlag || enabledFlags.has(item.featureFlag);
+  return items.filter(visible).map((item) => {
+    if (!item.children) return item;
+    const { children, ...rest } = item;
+    const shown = children.filter(visible);
+    return shown.length > 0 ? { ...rest, children: shown } : rest;
+  });
+}
 
 // Secondary links shown as pills in mobile menu
 export const NAV_SECONDARY: NavItem[] = [
@@ -215,6 +244,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
     title: "Représentants",
     links: [
       { href: "/politiques", label: "Tous les représentants" },
+      { href: "/politiques/gouvernements", label: "Gouvernements", featureFlag: "gouvernements" },
       { href: "/partis", label: "Partis politiques" },
       { href: "/affaires", label: "Affaires judiciaires" },
       { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },

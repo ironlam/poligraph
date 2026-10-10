@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Prisma } from "@/generated/prisma";
 import { SITEMAP_SHARD_TAGS } from "@/lib/seo/sitemap-tags";
 import { db } from "@/lib/db";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getPublishedAffairSqlWhere, getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
@@ -318,7 +319,55 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
     });
   }
 
-  return [...staticPages, ...recapPages, ...politicianPages];
+  return [...staticPages, ...recapPages, ...politicianPages, ...(await buildGovernmentPages())];
+}
+
+// « Gouvernements » section, only while its flag is on (the pages 404 otherwise). Directory,
+// members list and each PUBLISHED government; a government's lastmod is the latest change of the
+// government itself or of one of its functions. Called from inside the shard-0 cache entry:
+// tagging it "feature-flags" lets the flag toggle (which purges that tag) refresh the shard.
+async function buildGovernmentPages(): Promise<MetadataRoute.Sitemap> {
+  cacheTag("feature-flags");
+  if (!(await isFeatureEnabled("gouvernements"))) return [];
+
+  const governments = await db.government.findMany({
+    where: { publicationStatus: "PUBLISHED" },
+    select: {
+      slug: true,
+      updatedAt: true,
+      memberships: { select: { updatedAt: true }, orderBy: { updatedAt: "desc" }, take: 1 },
+    },
+    orderBy: { sequence: "asc" },
+  });
+  if (governments.length === 0) return [];
+
+  const lastmods = governments.map((g) => {
+    const latestMembership = g.memberships[0]?.updatedAt;
+    return latestMembership && latestMembership > g.updatedAt ? latestMembership : g.updatedAt;
+  });
+  const pages: MetadataRoute.Sitemap = governments.map((g, i) => ({
+    url: `${SITE_URL}/politiques/gouvernements/${g.slug}`,
+    lastModified: lastmods[i],
+    changeFrequency: "weekly" as const,
+    priority: 0.7,
+  }));
+  const sectionLastmod = new Date(Math.max(...lastmods.map((d) => d.getTime())));
+
+  return [
+    {
+      url: `${SITE_URL}/politiques/gouvernements`,
+      lastModified: sectionLastmod,
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/politiques/gouvernements/membres`,
+      lastModified: sectionLastmod,
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    ...pages,
+  ];
 }
 
 // Sitemap 1: Affairs + parties + elections + departments (priority 0.6-0.7)

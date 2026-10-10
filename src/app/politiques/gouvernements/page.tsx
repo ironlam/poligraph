@@ -23,6 +23,8 @@ import type { PublishedGovernment } from "@/lib/governments/mapping";
 import { membersCoverage } from "@/lib/governments/members";
 import { MAX_QUERY_LENGTH } from "@/lib/governments/params";
 import { normalizeText } from "@/lib/name-matching";
+import { GOUVERNEMENTS_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
+import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 
 const PATH = "/politiques/gouvernements";
 
@@ -38,13 +40,13 @@ function first(value: string | string[] | undefined): string {
 
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const sp = await searchParams;
-  const filtered = Object.keys(sp).length > 0;
+  const params = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, first(v)]));
   return {
     title: "Gouvernements de la Ve République",
     description:
       "Composition de chaque gouvernement publié, date par date : qui a exercé quelle fonction, avec la source officielle de chaque nomination.",
     alternates: { canonical: PATH },
-    ...(filtered ? { robots: { index: false, follow: true } } : {}),
+    ...listingRobotsMetadata(hasActiveListingFilter(params, GOUVERNEMENTS_LISTING_FILTER_KEYS)),
   };
 }
 
