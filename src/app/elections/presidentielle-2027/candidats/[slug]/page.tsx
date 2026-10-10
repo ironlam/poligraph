@@ -86,7 +86,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // what the policy is read from, and a reader should not have to chase the where clause for it.
   const publishable = candidacy !== null && isFicheCandidatPublishable({ statusSourced: true });
 
-  const title = `${politician.fullName}, candidature à la présidentielle 2027 | Poligraph`;
+  // The root layout's template appends " | Poligraph" to `title`; the share titles are not
+  // templated, so they carry the suffix themselves.
+  const title = `${politician.fullName}, candidature à la présidentielle 2027`;
+  const shareTitle = `${title} | Poligraph`;
   const description = `Les mesures documentées de ${politician.fullName} pour la présidentielle 2027, par thème, avec leurs sources.`;
 
   return {
@@ -101,12 +104,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     // naming a second image would let the two drift. `summary_large_image` is what that 1200x630
     // card is drawn for, and X falls back to `og:image` since we ship no `twitter-image` route.
     openGraph: {
-      title,
+      title: shareTitle,
       description,
       type: "profile",
       url: fichePath(slug),
     },
-    twitter: { card: "summary_large_image", title, description },
+    twitter: { card: "summary_large_image", title: shareTitle, description },
   };
 }
 
