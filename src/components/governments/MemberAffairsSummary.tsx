@@ -9,7 +9,15 @@ import { plural } from "./format";
  * is active. Three separate pills, never one total: a definitive conviction, a conviction still
  * open to appeal and a pending proceeding do not weigh the same. Colours are the fiche's own
  * status colours; the words carry the meaning.
+ *
+ * The link must open the profile's affairs tab: `#affaires` alone targets a card that only exists
+ * while that tab is active, so the page kept the list's scroll position and landed on the footer.
+ * `DeepLinkHighlighter` then waits for the card and brings it into view.
  */
+export function memberAffairsHref(slug: string): string {
+  return `/politiques/${slug}?tab=affaires#affaires`;
+}
+
 export function MemberAffairsSummary({
   affairs,
   slug,
@@ -55,7 +63,7 @@ export function MemberAffairsSummary({
         </span>
       ))}
       <Link
-        href={`/politiques/${slug}#affaires`}
+        href={memberAffairsHref(slug)}
         className="inline-flex min-h-11 items-center text-[13px] font-bold text-primary underline-offset-4 hover:underline"
       >
         Voir les affaires

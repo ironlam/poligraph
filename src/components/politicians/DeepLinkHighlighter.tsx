@@ -24,7 +24,10 @@ export function DeepLinkHighlighter() {
     function reveal(id: string): boolean {
       const el = document.getElementById(id);
       if (!el) return false;
-      el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+      // Centring a target taller than the viewport hides its top (a whole affairs section on a
+      // phone): align such a target to the top instead, under its scroll margin.
+      const block = el.getBoundingClientRect().height > window.innerHeight ? "start" : "center";
+      el.scrollIntoView({ block, behavior: reduceMotion ? "auto" : "smooth" });
       el.setAttribute("tabindex", "-1");
       el.focus({ preventScroll: true });
       el.classList.add(HIGHLIGHT_CLASS);
