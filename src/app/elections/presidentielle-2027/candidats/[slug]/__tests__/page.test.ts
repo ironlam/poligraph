@@ -332,6 +332,21 @@ describe("page présidentielle d'une personne", () => {
     );
   });
 
+  it("laisse le gabarit du layout ajouter la marque, une seule fois", async () => {
+    mockGetCandidacy.mockResolvedValue(candidacy());
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata.title).toBe("Camille Rivière, candidature à la présidentielle 2027");
+    expect(metadata.openGraph?.title).toBe(
+      "Camille Rivière, candidature à la présidentielle 2027 | Poligraph"
+    );
+    expect(metadata.twitter?.title).toBe(
+      "Camille Rivière, candidature à la présidentielle 2027 | Poligraph"
+    );
+  });
+
   it("décrit la fiche pour les aperçus de partage", async () => {
     mockGetCandidacy.mockResolvedValue(candidacy({ primarySourceMeasureCount: 20 }));
     const { generateMetadata } = await import("../page");
