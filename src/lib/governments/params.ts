@@ -58,7 +58,8 @@ export function parseMembersQuery(
   };
   let du = readDate("du") ?? coverage.from;
   let au = readDate("au") ?? coverage.to;
-  if (du > au) {
+  // `du` ne sert qu'en mode période : « Présents au » ne lit que `au`.
+  if (mode === "periode" && du > au) {
     invalid = true;
     du = coverage.from;
     au = coverage.to;

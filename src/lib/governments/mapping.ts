@@ -1,13 +1,21 @@
 // Conversion des lignes Prisma de la rubrique « Gouvernements » vers les types purs.
 // Fonctions pures, sans accès à la base : la lecture vit dans `src/lib/data/governments.ts`.
 
-import type { Prisma, PublicationStatus } from "@/generated/prisma";
+import type { DateDetermination, Prisma, PublicationStatus } from "@/generated/prisma";
 import type { DateEvidence, Episode, FunctionType, GovernmentDates } from "./types";
 
 // --- Sélections -------------------------------------------------------------
 
 const ACT_SELECT = {
-  select: { label: true, url: true, signedAt: true, journalPublishedAt: true },
+  select: {
+    label: true,
+    url: true,
+    signedAt: true,
+    effectiveAt: true,
+    journalPublishedAt: true,
+    journalNumber: true,
+    jorfId: true,
+  },
 } as const;
 
 // Champs nécessaires à la visibilité d'une personne et à sa carte.
@@ -33,15 +41,19 @@ export const GOVERNMENT_SELECT = {
   primeMinister: { select: { slug: true, fullName: true, civility: true } },
   primeMinisterAppointedAt: true,
   primeMinisterAppointedEvidence: true,
+  primeMinisterAppointedDetermination: true,
   formedAt: true,
   formedEvidence: true,
   formedSourceUrl: true,
+  formedDetermination: true,
   resignedAt: true,
   resignedEvidence: true,
   resignedSourceUrl: true,
+  resignedDetermination: true,
   endedAt: true,
   endedEvidence: true,
   endedSourceUrl: true,
+  endedDetermination: true,
   completeness: true,
   pendingChanges: true,
   coverageNote: true,
@@ -55,7 +67,6 @@ export const GOVERNMENT_SELECT = {
   currentAffairsAct: ACT_SELECT,
   currentAffairsActId: true,
   updatedAt: true,
-  memberships: { select: { mandate: { select: { politician: { select: PERSON_SELECT } } } } },
 } satisfies Prisma.GovernmentSelect;
 
 export const EPISODE_SELECT = {
@@ -70,9 +81,12 @@ export const EPISODE_SELECT = {
   sameDayOrderEstablished: true,
   sameDayOrderSourceUrl: true,
   currentAffairsEndedAt: true,
-  startAct: { select: { url: true } },
-  endAct: { select: { url: true } },
-  currentAffairsEndAct: { select: { url: true } },
+  startDetermination: true,
+  endDetermination: true,
+  currentAffairsEndDetermination: true,
+  startAct: ACT_SELECT,
+  endAct: ACT_SELECT,
+  currentAffairsEndAct: ACT_SELECT,
   mandate: {
     select: {
       id: true,
@@ -90,17 +104,22 @@ export const EPISODE_SELECT = {
 export type GovernmentRow = Prisma.GovernmentGetPayload<{ select: typeof GOVERNMENT_SELECT }>;
 export type EpisodeRow = Prisma.MandateGovernmentGetPayload<{ select: typeof EPISODE_SELECT }>;
 type PersonRow = Prisma.PoliticianGetPayload<{ select: typeof PERSON_SELECT }>;
-type ActRow = { label: string; url: string; signedAt: Date; journalPublishedAt: Date | null };
+type ActRow = NonNullable<GovernmentRow["formedAct"]>;
 
 // --- Types publics ----------------------------------------------------------
 
 export type Gender = "F" | "M" | null;
 
+// Acte du registre (§13.2). La date retenue d'un fait est `effectiveAt` s'il est renseigné,
+// sinon `signedAt` ; la publication au JO ne sert qu'à l'affichage de la source.
 export type ActRef = {
   label: string;
   url: string;
   signedAt: string;
+  effectiveAt: string | null;
   journalPublishedAt: string | null;
+  journalNumber: string | null;
+  jorfId: string | null;
 };
 
 export type PublishedGovernment = GovernmentDates & {
@@ -122,8 +141,17 @@ export type PublishedGovernment = GovernmentDates & {
     ended: ActRef | null;
     currentAffairs: ActRef | null;
   };
+  // Mode de détermination de chaque date (§13.1).
+  determinations: {
+    primeMinisterAppointed: DateDetermination | null;
+    formed: DateDetermination | null;
+    resigned: DateDetermination | null;
+    ended: DateDetermination | null;
+  };
   // Personnes distinctes ayant exercé une fonction, fiches cachées exclues (§5.7).
   participantCount: number;
+  // Personnes distinctes cachées : au-dessus de 0, le compteur s'affiche « au moins X ».
+  hiddenCount: number;
   updatedAt: string;
 };
 
@@ -141,8 +169,19 @@ export type PersonCard = {
   visibility: PersonVisibility;
 };
 
-// Épisode avec la source de la fin propre des affaires courantes, que `Episode` ne porte pas.
-export type GovernmentEpisode = Episode & { currentAffairsEndSourceUrl: string | null };
+// Épisode enrichi de ce que l'affichage demande et que les règles pures n'utilisent pas :
+// actes référencés, modes de détermination, source de la fin propre des affaires courantes.
+export type GovernmentEpisode = Episode & {
+  currentAffairsEndSourceUrl: string | null;
+  startDetermination: DateDetermination | null;
+  endDetermination: DateDetermination | null;
+  currentAffairsEndDetermination: DateDetermination | null;
+  startAct: ActRef | null;
+  endAct: ActRef | null;
+  currentAffairsEndAct: ActRef | null;
+};
+
+export type ParticipantCounts = { participantCount: number; hiddenCount: number };
 
 // --- Conversions ------------------------------------------------------------
 
@@ -165,7 +204,10 @@ function toActRef(act: ActRow | null): ActRef | null {
     label: act.label,
     url: act.url,
     signedAt: toDay(act.signedAt),
+    effectiveAt: toDayOrNull(act.effectiveAt),
     journalPublishedAt: toDayOrNull(act.journalPublishedAt),
+    journalNumber: act.journalNumber,
+    jorfId: act.jorfId,
   };
 }
 
@@ -224,12 +266,36 @@ export function toGovernmentDates(row: GovernmentRow): GovernmentDates {
   };
 }
 
-export function toPublishedGovernment(row: GovernmentRow): PublishedGovernment {
-  const participants = new Set<string>();
-  for (const m of row.memberships) {
-    const p = m.mandate.politician;
-    if (personVisibility(p) !== "hidden") participants.add(p.id);
+/**
+ * Personnes distinctes par gouvernement, calculées sur les fonctions déjà lues : visibles
+ * (publiées ou en attente) d'un côté, cachées de l'autre.
+ */
+export function countParticipants(data: {
+  episodes: Episode[];
+  people: Record<string, PersonCard>;
+}): Map<string, ParticipantCounts> {
+  const sets = new Map<string, { visible: Set<string>; hidden: Set<string> }>();
+  for (const ep of data.episodes) {
+    let entry = sets.get(ep.governmentId);
+    if (!entry) {
+      entry = { visible: new Set(), hidden: new Set() };
+      sets.set(ep.governmentId, entry);
+    }
+    const hidden = (data.people[ep.politicianId]?.visibility ?? "hidden") === "hidden";
+    (hidden ? entry.hidden : entry.visible).add(ep.politicianId);
   }
+  return new Map(
+    [...sets].map(([id, e]) => [
+      id,
+      { participantCount: e.visible.size, hiddenCount: e.hidden.size },
+    ])
+  );
+}
+
+export function toPublishedGovernment(
+  row: GovernmentRow,
+  counts: ParticipantCounts = { participantCount: 0, hiddenCount: 0 }
+): PublishedGovernment {
   return {
     ...toGovernmentDates(row),
     name: row.name,
@@ -256,7 +322,14 @@ export function toPublishedGovernment(row: GovernmentRow): PublishedGovernment {
       ended: toActRef(row.endedAct),
       currentAffairs: toActRef(row.currentAffairsAct),
     },
-    participantCount: participants.size,
+    determinations: {
+      primeMinisterAppointed: row.primeMinisterAppointedDetermination,
+      formed: row.formedDetermination,
+      resigned: row.resignedDetermination,
+      ended: row.endedDetermination,
+    },
+    participantCount: counts.participantCount,
+    hiddenCount: counts.hiddenCount,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -297,5 +370,11 @@ export function toEpisode(row: EpisodeRow): GovernmentEpisode | null {
     sameDayOrderSourceUrl: row.sameDayOrderSourceUrl,
     currentAffairsEndedAt: toDayOrNull(row.currentAffairsEndedAt),
     currentAffairsEndSourceUrl: row.currentAffairsEndAct?.url ?? null,
+    startDetermination: row.startDetermination,
+    endDetermination: row.endDetermination,
+    currentAffairsEndDetermination: row.currentAffairsEndDetermination,
+    startAct: toActRef(row.startAct),
+    endAct: toActRef(row.endAct),
+    currentAffairsEndAct: toActRef(row.currentAffairsEndAct),
   };
 }

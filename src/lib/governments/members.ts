@@ -3,13 +3,13 @@
 
 import { normalizeText } from "@/lib/name-matching";
 import { compositionAt, consultableRange, overlapsPeriod } from "./composition";
-import type { PersonCard } from "./mapping";
+import type { GovernmentEpisode, PersonCard } from "./mapping";
 import type { MembersFunctionFilter, MembersQuery } from "./params";
 import type { Category, Episode, FunctionType, GovernmentDates } from "./types";
 
-export type MembersData = { episodes: Episode[]; people: Record<string, PersonCard> };
+export type MembersData = { episodes: GovernmentEpisode[]; people: Record<string, PersonCard> };
 
-export type MemberFunction = { episode: Episode; status: Category };
+export type MemberFunction = { episode: GovernmentEpisode; status: Category };
 
 export type MemberRow = {
   person: PersonCard;
@@ -103,7 +103,7 @@ export function filterMembers(
   query: MembersQuery
 ): MembersResult {
   const scope = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
-  const byGov = new Map<string, Episode[]>(scope.map((g) => [g.id, []]));
+  const byGov = new Map<string, GovernmentEpisode[]>(scope.map((g) => [g.id, []]));
   for (const ep of data.episodes) byGov.get(ep.governmentId)?.push(ep);
 
   const categorized: MemberFunction[] = [];
@@ -117,11 +117,17 @@ export function filterMembers(
   } else {
     let consultable = false;
     for (const g of scope) {
-      const result = compositionAt(g, byGov.get(g.id) ?? [], query.au);
+      const own = byGov.get(g.id) ?? [];
+      const result = compositionAt(g, own, query.au);
       if (result.status !== "ok") continue;
       consultable = true;
+      // compositionAt renvoie les mêmes objets, typés `Episode` : on retrouve l'épisode enrichi.
+      const byId = new Map(own.map((e) => [e.membershipId, e]));
       for (const [status, list] of Object.entries(result.byCategory) as [Category, Episode[]][]) {
-        for (const episode of list) categorized.push({ episode, status });
+        for (const { membershipId } of list) {
+          const episode = byId.get(membershipId);
+          if (episode) categorized.push({ episode, status });
+        }
       }
     }
     if (!consultable) return { status: "not_established" };

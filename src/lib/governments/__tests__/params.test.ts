@@ -69,6 +69,16 @@ describe("parseMembersQuery", () => {
     expect(query.au).toBe(coverage.to);
   });
 
+  it("en mode « Présents au », du n'intervient pas : pas de contrôle du > au", () => {
+    const { query, invalid } = parseMembersQuery(
+      { mode: "present", du: "2024-01-01", au: "2020-01-01" },
+      coverage,
+      slugs
+    );
+    expect(invalid).toBe(false);
+    expect(query.au).toBe("2020-01-01");
+  });
+
   it("borne la page à 100", () => {
     const { query } = parseMembersQuery({ page: "999999" }, coverage, slugs);
     expect(query.page).toBe(MAX_MEMBERS_PAGE);

@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { filterMembers, membersCoverage, type MembersData } from "../members";
-import type { PersonCard } from "../mapping";
+import type { GovernmentEpisode, PersonCard } from "../mapping";
 import type { MembersQuery } from "../params";
-import type { Episode, GovernmentDates } from "../types";
+import type { GovernmentDates } from "../types";
 
 // --- Fixtures ---------------------------------------------------------------
 
@@ -26,7 +26,11 @@ function gov(id: string, overrides: Partial<GovernmentDates> = {}): GovernmentDa
   };
 }
 
-function ep(membershipId: string, politicianId: string, overrides: Partial<Episode> = {}): Episode {
+function ep(
+  membershipId: string,
+  politicianId: string,
+  overrides: Partial<GovernmentEpisode> = {}
+): GovernmentEpisode {
   return {
     membershipId,
     mandateId: `m-${membershipId}`,
@@ -47,6 +51,13 @@ function ep(membershipId: string, politicianId: string, overrides: Partial<Episo
     sameDayOrderEstablished: false,
     sameDayOrderSourceUrl: null,
     currentAffairsEndedAt: null,
+    currentAffairsEndSourceUrl: null,
+    startDetermination: null,
+    endDetermination: null,
+    currentAffairsEndDetermination: null,
+    startAct: null,
+    endAct: null,
+    currentAffairsEndAct: null,
     ...overrides,
   };
 }

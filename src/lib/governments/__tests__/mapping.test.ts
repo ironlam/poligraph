@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countParticipants,
   personVisibility,
   toEpisode,
   toPersonCard,
@@ -15,7 +16,10 @@ function act(id: string, overrides: Partial<NonNullable<GovernmentRow["formedAct
     label: `Décret ${id}`,
     url: `https://www.legifrance.gouv.fr/jorf/id/${id}`,
     signedAt: d("2025-10-12"),
+    effectiveAt: null,
     journalPublishedAt: d("2025-10-13"),
+    journalNumber: "JORF n° 0238",
+    jorfId: `JORFTEXT${id}`,
     ...overrides,
   };
 }
@@ -43,15 +47,19 @@ function govRow(overrides: Partial<GovernmentRow> = {}): GovernmentRow {
     primeMinister: { slug: "sebastien-lecornu", fullName: "Sébastien Lecornu", civility: "M." },
     primeMinisterAppointedAt: d("2025-10-10"),
     primeMinisterAppointedEvidence: "ACT",
+    primeMinisterAppointedDetermination: "CONVENTION",
     formedAt: d("2025-10-12"),
     formedEvidence: "ACT",
     formedSourceUrl: "https://legacy/formed",
+    formedDetermination: "EXPLICIT",
     resignedAt: null,
     resignedEvidence: null,
     resignedSourceUrl: "https://legacy/resigned",
+    resignedDetermination: null,
     endedAt: null,
     endedEvidence: null,
     endedSourceUrl: null,
+    endedDetermination: null,
     completeness: "COMPLETE",
     pendingChanges: null,
     coverageNote: null,
@@ -65,7 +73,6 @@ function govRow(overrides: Partial<GovernmentRow> = {}): GovernmentRow {
     currentAffairsAct: null,
     currentAffairsActId: null,
     updatedAt: new Date("2026-10-10T08:30:00.000Z"),
-    memberships: [],
     ...overrides,
   };
 }
@@ -96,9 +103,21 @@ describe("toPublishedGovernment", () => {
       label: "Décret F",
       url: "https://www.legifrance.gouv.fr/jorf/id/F",
       signedAt: "2025-10-12",
+      effectiveAt: null,
       journalPublishedAt: "2025-10-13",
+      journalNumber: "JORF n° 0238",
+      jorfId: "JORFTEXTF",
     });
     expect(g.acts.resigned).toBeNull();
+    expect(g.determinations).toEqual({
+      primeMinisterAppointed: "CONVENTION",
+      formed: "EXPLICIT",
+      resigned: null,
+      ended: null,
+    });
+    // Sans compteurs fournis, aucun participant n'est inventé.
+    expect(g.participantCount).toBe(0);
+    expect(g.hiddenCount).toBe(0);
   });
 
   it("le régime d'affaires courantes est attesté par la présence de l'acte", () => {
@@ -114,21 +133,43 @@ describe("toPublishedGovernment", () => {
     ).toBe(true);
   });
 
-  it("compte les personnes distinctes, sans les fiches cachées", () => {
-    const m = (p: Partial<typeof politician>) => ({
-      mandate: { politician: { ...politician, ...p } },
+  it("reprend les compteurs calculés sur les fonctions", () => {
+    const g = toPublishedGovernment(govRow(), { participantCount: 3, hiddenCount: 1 });
+    expect(g).toMatchObject({ participantCount: 3, hiddenCount: 1 });
+  });
+});
+
+describe("countParticipants", () => {
+  it("compte les personnes distinctes par gouvernement, cachées à part", () => {
+    const card = (id: string, visibility: "published" | "pending" | "hidden") => ({
+      ...toPersonCard({ ...politician, id }),
+      visibility,
     });
-    const g = toPublishedGovernment(
-      govRow({
-        memberships: [
-          m({ id: "p1" }),
-          m({ id: "p1" }),
-          m({ id: "p2", publicationStatus: "DRAFT" }),
-          m({ id: "p3", publicationStatus: "EXCLUDED" }),
-        ],
-      })
-    );
-    expect(g.participantCount).toBe(2);
+    const people = {
+      p1: card("p1", "published"),
+      p2: card("p2", "pending"),
+      p3: card("p3", "hidden"),
+    };
+    const e = (membershipId: string, governmentId: string, politicianId: string) => ({
+      ...toEpisode(episodeRow())!,
+      membershipId,
+      governmentId,
+      politicianId,
+    });
+    const counts = countParticipants({
+      episodes: [
+        e("a", "g1", "p1"),
+        e("b", "g1", "p1"),
+        e("c", "g1", "p2"),
+        e("d", "g1", "p3"),
+        e("e", "g1", "p3"),
+        e("f", "g2", "p1"),
+      ],
+      people,
+    });
+    expect(counts.get("g1")).toEqual({ participantCount: 2, hiddenCount: 1 });
+    expect(counts.get("g2")).toEqual({ participantCount: 1, hiddenCount: 0 });
+    expect(counts.get("g3")).toBeUndefined();
   });
 });
 
@@ -169,9 +210,12 @@ function episodeRow(overrides: Partial<EpisodeRow> = {}): EpisodeRow {
     sameDayOrderEstablished: true,
     sameDayOrderSourceUrl: "https://order",
     currentAffairsEndedAt: d("2025-10-06"),
+    startDetermination: "CONVENTION",
+    endDetermination: "EXPLICIT",
+    currentAffairsEndDetermination: "DEDUCTION",
     startAct: null,
-    endAct: { url: "https://act/end" },
-    currentAffairsEndAct: { url: "https://act/ca" },
+    endAct: act("END"),
+    currentAffairsEndAct: act("CA", { signedAt: d("2025-10-06") }),
     mandate: {
       id: "m1",
       publicId: "MA-000001",
@@ -201,14 +245,28 @@ describe("toEpisode", () => {
       startSourceUrl: "https://legacy/start",
       end: "2025-09-09",
       endEvidence: "ACT",
-      endSourceUrl: "https://act/end",
+      endSourceUrl: "https://www.legifrance.gouv.fr/jorf/id/END",
       endKind: "COLLECTIVE_RESIGNATION",
       lastConfirmedAt: null,
       predecessorMembershipId: "mg0",
       sameDayOrderEstablished: true,
       sameDayOrderSourceUrl: "https://order",
       currentAffairsEndedAt: "2025-10-06",
-      currentAffairsEndSourceUrl: "https://act/ca",
+      currentAffairsEndSourceUrl: "https://www.legifrance.gouv.fr/jorf/id/CA",
+      startDetermination: "CONVENTION",
+      endDetermination: "EXPLICIT",
+      currentAffairsEndDetermination: "DEDUCTION",
+      startAct: null,
+      endAct: {
+        label: "Décret END",
+        url: "https://www.legifrance.gouv.fr/jorf/id/END",
+        signedAt: "2025-10-12",
+        effectiveAt: null,
+        journalPublishedAt: "2025-10-13",
+        journalNumber: "JORF n° 0238",
+        jorfId: "JORFTEXTEND",
+      },
+      currentAffairsEndAct: expect.objectContaining({ signedAt: "2025-10-06" }),
     });
   });
 
