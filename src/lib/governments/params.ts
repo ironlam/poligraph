@@ -4,6 +4,8 @@
 export const MAX_MEMBERS_PAGE = 100;
 export const MEMBERS_PAGE_SIZE = 50;
 export const MAX_QUERY_LENGTH = 100;
+export const MAX_PERSON_SLUG_LENGTH = 120;
+const PERSON_SLUG = /^[a-z0-9-]+$/;
 
 export type MembersFunctionFilter = "pm" | "ministre" | "delegue" | "secretaire";
 
@@ -14,6 +16,8 @@ export type MembersQuery = {
   gouvernement: string | null;
   fonction: MembersFunctionFilter | null;
   q: string;
+  /** Exact person slug (export detail link); `null` when absent or invalid. */
+  personne: string | null;
   page: number;
 };
 
@@ -90,5 +94,13 @@ export function parseMembersQuery(
 
   const q = (sp.q ?? "").trim().slice(0, MAX_QUERY_LENGTH);
 
-  return { query: { mode, du, au, gouvernement, fonction, q, page }, invalid };
+  let personne: string | null = null;
+  const rawPerson = present("personne");
+  if (rawPerson !== undefined) {
+    if (rawPerson.length <= MAX_PERSON_SLUG_LENGTH && PERSON_SLUG.test(rawPerson)) {
+      personne = rawPerson;
+    } else invalid = true;
+  }
+
+  return { query: { mode, du, au, gouvernement, fonction, q, personne, page }, invalid };
 }

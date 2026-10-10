@@ -10,6 +10,9 @@ import { filteredMembers, PERSON_COLUMNS, personRows } from "@/lib/governments/e
 
 export const dynamic = "force-dynamic";
 
+/** Filters carried over to the per-person detail link (`personne` is set to the row's slug). */
+const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "q"] as const;
+
 /**
  * @openapi
  * /api/export/gouvernements/personnes:
@@ -17,7 +20,7 @@ export const dynamic = "force-dynamic";
  *     summary: Export CSV des membres des gouvernements, une ligne par personne
  *     description: >
  *       Mêmes paramètres que la page /politiques/gouvernements/membres (mode, du, au,
- *       gouvernement, fonction, q). Les fiches cachées n'apparaissent pas ; une fiche non
+ *       gouvernement, fonction, q, personne). Les fiches cachées n'apparaissent pas ; une fiche non
  *       publiée apparaît sans url_profil.
  *     tags: [Exports]
  *     responses:
@@ -38,12 +41,15 @@ export const GET = withPublicRoute(async (request) => {
   const raw = Object.fromEntries(request.nextUrl.searchParams.entries());
   const found = filteredMembers(govs, data, raw);
 
-  // The detail link is the functions export narrowed to one person (search on the slug) and
-  // otherwise carrying the same filters.
+  // The detail link is the functions export narrowed to one person (exact slug) and otherwise
+  // carrying the same filters. Rebuilt from known parameters only: nothing else is copied.
   const detailUrl = (slug: string): string => {
-    const params = new URLSearchParams(request.nextUrl.searchParams);
-    params.set("q", slug);
-    params.delete("page");
+    const params = new URLSearchParams();
+    for (const key of DETAIL_KEYS) {
+      const value = request.nextUrl.searchParams.get(key);
+      if (value) params.set(key, value);
+    }
+    params.set("personne", slug);
     return `${SITE_URL}/api/export/gouvernements/fonctions?${params.toString()}`;
   };
 

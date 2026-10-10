@@ -140,6 +140,7 @@ export function filterMembers(
     if (type && fn.episode.type !== type) continue;
     const person = data.people[fn.episode.politicianId];
     if (!person || person.visibility === "hidden") continue;
+    if (query.personne !== null && person.slug !== query.personne) continue;
     if (needle) {
       const haystack = `${normalizeSearch(person.fullName)} ${normalizeSearch(person.slug)}`;
       if (!haystack.includes(needle)) continue;

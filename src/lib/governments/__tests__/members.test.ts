@@ -99,6 +99,7 @@ function query(overrides: Partial<MembersQuery> = {}): MembersQuery {
     gouvernement: null,
     fonction: null,
     q: "",
+    personne: null,
     page: 1,
     ...overrides,
   };
@@ -318,5 +319,23 @@ describe("membersCoverage", () => {
       to: "2026-09-01",
     });
     expect(membersCoverage([unverified])).toBeNull();
+  });
+});
+
+describe("filterMembers, filtre exact par personne", () => {
+  const homonyms: Record<string, PersonCard> = {
+    pJ: person("pJ", "Jean Martin", "Martin"),
+    pK: person("pK", "Jean Martin Dupont", "Dupont"),
+  };
+  const data: MembersData = { episodes: [ep("j1", "pJ"), ep("k1", "pK")], people: homonyms };
+
+  it("jean-martin ne ramène pas jean-martin-dupont", () => {
+    const result = okResult(filterMembers([g1], data, query({ personne: "jean-martin" })));
+    expect(result.persons.map((p) => p.person.slug)).toEqual(["jean-martin"]);
+  });
+
+  it("la recherche q, elle, ramène les deux (raison du filtre exact)", () => {
+    const result = okResult(filterMembers([g1], data, query({ q: "jean-martin" })));
+    expect(result.persons).toHaveLength(2);
   });
 });

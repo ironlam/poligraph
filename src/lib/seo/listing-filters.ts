@@ -52,4 +52,5 @@ export const GOUVERNEMENTS_MEMBRES_FILTER_KEYS = [
   "gouvernement",
   "fonction",
   "q",
+  "personne",
 ] as const;

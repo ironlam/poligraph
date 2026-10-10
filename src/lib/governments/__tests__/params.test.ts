@@ -39,6 +39,7 @@ describe("parseMembersQuery", () => {
         gouvernement: null,
         fonction: null,
         q: "",
+        personne: null,
         page: 1,
       },
       invalid: false,
@@ -126,5 +127,27 @@ describe("parseMembersQuery", () => {
     );
     expect(invalid).toBe(false);
     expect(query).toMatchObject({ du: coverage.from, au: coverage.to, page: 1 });
+  });
+});
+
+describe("parseMembersQuery, personne", () => {
+  it("garde un slug valide", () => {
+    const { query, invalid } = parseMembersQuery({ personne: "jean-martin" }, coverage, slugs);
+    expect(query.personne).toBe("jean-martin");
+    expect(invalid).toBe(false);
+  });
+
+  it.each(["Jean-Martin", "jean martin", "jean_martin", "../x", "a".repeat(121)])(
+    "refuse %s",
+    (personne) => {
+      const { query, invalid } = parseMembersQuery({ personne }, coverage, slugs);
+      expect(query.personne).toBeNull();
+      expect(invalid).toBe(true);
+    }
+  );
+
+  it("accepte 120 caractères", () => {
+    const personne = "a".repeat(120);
+    expect(parseMembersQuery({ personne }, coverage, slugs).query.personne).toBe(personne);
   });
 });

@@ -221,7 +221,17 @@ describe("export des personnes", () => {
     expect(alix[6]).toBe(""); // fin inconnue
     expect(alix[8]).toBe("https://example.org/decret");
     expect(alix[9]).toContain("/api/export/gouvernements/fonctions?");
-    expect(alix[9]).toContain("q=p1");
+    expect(alix[9]).toContain("personne=p1");
+    expect(alix[9]).not.toContain("q=p1");
+  });
+
+  it("reconstruit le lien de détail à partir des seuls paramètres connus", async () => {
+    const { rows } = await lines(
+      await call(getPersonnes, `${BASE}/personnes?fonction=pm&utm_source=x&page=3&evil=%3D1`)
+    );
+    const detail = new URL(rows.find((r) => r.includes("Alix Premiere"))!.split(",")[9]!);
+    expect([...detail.searchParams.keys()].sort()).toEqual(["fonction", "personne"]);
+    expect(detail.searchParams.get("fonction")).toBe("pm");
   });
 
   it("suit les mêmes filtres que la page (fonction)", async () => {

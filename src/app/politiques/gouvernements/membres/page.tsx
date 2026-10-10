@@ -86,6 +86,7 @@ function hrefFor(query: MembersQuery, coverage: { from: string; to: string }): s
   if (query.gouvernement) params.set("gouvernement", query.gouvernement);
   if (query.fonction) params.set("fonction", query.fonction);
   if (query.q) params.set("q", query.q);
+  if (query.personne) params.set("personne", query.personne);
   if (query.page > 1) params.set("page", String(query.page));
   const qs = params.toString();
   return qs ? `${PATH}?${qs}` : PATH;
@@ -212,6 +213,12 @@ export default async function MembresPage({ searchParams }: PageProps) {
     chips.push({
       label: `Recherche : « ${query.q} »`,
       href: hrefFor({ ...query, q: "", page: 1 }, coverage),
+    });
+  }
+  if (query.personne) {
+    chips.push({
+      label: `Personne : ${query.personne}`,
+      href: hrefFor({ ...query, personne: null, page: 1 }, coverage),
     });
   }
 
