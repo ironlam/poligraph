@@ -9,10 +9,15 @@ vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
+  getGovernmentEpisodesFor: vi.fn(),
 }));
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import {
+  getGovernmentEpisodes,
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+} from "@/lib/data/governments";
 import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import { GET as getPersonnes } from "../personnes/route";
 import { GET as getFonctions } from "../fonctions/route";
@@ -105,6 +110,8 @@ function person(
     photoUrl: null,
     blobPhotoUrl: null,
     visibility,
+    pendingReason: visibility === "pending" ? "draft" : null,
+    lifespan: null,
   };
 }
 
@@ -177,6 +184,10 @@ beforeEach(() => {
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue([G]);
   vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  vi.mocked(getGovernmentEpisodesFor).mockImplementation(async (id) => {
+    const all = await getGovernmentEpisodes();
+    return { episodes: all.episodes.filter((e) => e.governmentId === id), people: all.people };
+  });
   vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({});
 });
 
@@ -241,6 +252,17 @@ describe("export des personnes", () => {
     const { rows } = await lines(await call(getPersonnes, `${BASE}/personnes?fonction=pm`));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toContain("Alix Premiere");
+  });
+
+  it("suit le filtre présidence et le garde dans le lien de détail", async () => {
+    const none = await lines(await call(getPersonnes, `${BASE}/personnes?presidence=hollande`));
+    expect(none.rows.filter(Boolean)).toHaveLength(0);
+    const { rows } = await lines(
+      await call(getPersonnes, `${BASE}/personnes?presidence=macron&fonction=pm`)
+    );
+    expect(rows[0]).toContain("Alix Premiere");
+    const detail = new URL(rows[0]!.split(",")[9]!);
+    expect(detail.searchParams.get("presidence")).toBe("macron");
   });
 
   it("suit le filtre affaires de la page et le garde dans le lien de détail", async () => {

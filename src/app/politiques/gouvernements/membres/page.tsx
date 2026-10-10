@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Download, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ItemListJsonLd } from "@/components/seo/JsonLd";
+import { PRESIDENCIES, presidencyOfGovernment } from "@/config/presidencies";
 import { SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import { MissingData } from "@/components/ui/MissingData";
@@ -34,6 +35,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   filterMembers,
   membersCoverage,
+  membersScope,
   type MemberFunction,
   type MemberRow,
 } from "@/lib/governments/members";
@@ -45,6 +47,7 @@ import {
   type MembersQuery,
 } from "@/lib/governments/params";
 import { normalizeText } from "@/lib/name-matching";
+import { cn } from "@/lib/utils";
 import { GOUVERNEMENTS_MEMBRES_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 
@@ -105,6 +108,7 @@ function hrefFor(query: MembersQuery, coverage: { from: string; to: string }): s
   if (query.mode === "periode" && query.du !== coverage.from) params.set("du", query.du);
   if (query.au !== coverage.to) params.set("au", query.au);
   if (query.gouvernement) params.set("gouvernement", query.gouvernement);
+  if (query.presidence) params.set("presidence", query.presidence);
   if (query.fonction) params.set("fonction", query.fonction);
   if (query.affaires) params.set("affaires", query.affaires);
   if (query.q) params.set("q", query.q);
@@ -203,7 +207,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
   const { query } = parseMembersQuery(raw, coverage, new Set(govs.map((g) => g.slug)));
   const result = filterMembers(govs, data, query, affairs);
   // Partial coverage is judged on the governments actually in scope.
-  const scopeGovs = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
+  const scopeGovs = membersScope(govs, query);
   const anyPartial = scopeGovs.some(isPartial);
   const selfUrl = currentUrl(raw);
   const reset = PATH;
@@ -241,6 +245,13 @@ export default async function MembresPage({ searchParams }: PageProps) {
     });
   }
   const filterCount = chips.length;
+  const selectedPresidency = PRESIDENCIES.find((p) => p.slug === query.presidence);
+  if (selectedPresidency) {
+    chips.push({
+      label: `Présidence : ${selectedPresidency.name}`,
+      href: hrefFor({ ...query, presidence: null, page: 1 }, coverage),
+    });
+  }
   if (query.q) {
     chips.push({
       label: `Recherche : « ${query.q} »`,
@@ -253,6 +264,30 @@ export default async function MembresPage({ searchParams }: PageProps) {
       href: hrefFor({ ...query, personne: null, page: 1 }, coverage),
     });
   }
+
+  // Presidency shortcuts: governments whose Prime Minister was appointed under each presidency
+  // (same rule as the directory), not an overlap of dates. Shown from two presidencies on.
+  const presidencyShortcuts = PRESIDENCIES.filter((p) =>
+    govs.some((g) => presidencyOfGovernment(g)?.slug === p.slug)
+  )
+    .reverse()
+    .map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      active: query.presidence === p.slug,
+      href: hrefFor(
+        {
+          ...query,
+          mode: "periode",
+          du: coverage.from,
+          au: coverage.to,
+          gouvernement: null,
+          presidence: p.slug,
+          page: 1,
+        },
+        coverage
+      ),
+    }));
 
   const ok = result.status === "ok" ? result : null;
   const main =
@@ -316,6 +351,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
           key={row.person.id}
           person={row.person}
           functions={toFunctions(row)}
+          startVerified={row.functions.some((f) => f.episode.startEvidence === "ACT")}
           returnUrl={selfUrl}
           returnLabel={RETURN_LABEL}
           nameClassName="font-display text-[17px] font-bold"
@@ -384,6 +420,8 @@ export default async function MembresPage({ searchParams }: PageProps) {
               className={fieldClass}
             />
           </div>
+          {/* Set by the « Présidences » row, kept when the form is submitted. */}
+          {query.presidence && <input type="hidden" name="presidence" value={query.presidence} />}
           <FiltersPanel activeCount={filterCount}>
             <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr_1fr_1.3fr_auto] md:items-end">
               <div className="flex flex-col gap-1">
@@ -489,6 +527,25 @@ export default async function MembresPage({ searchParams }: PageProps) {
             </p>
           </FiltersPanel>
         </form>
+
+        {presidencyShortcuts.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Présidences :</span>
+            {presidencyShortcuts.map((p) => (
+              <Link
+                key={p.slug}
+                href={p.href}
+                className={cn(
+                  "inline-flex min-h-11 items-center rounded-full border px-3 hover:bg-muted",
+                  p.active ? "border-primary bg-primary/10 font-bold text-primary" : "bg-card"
+                )}
+              >
+                {p.name}
+                {p.active && <span className="sr-only"> (filtre appliqué)</span>}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {chips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">

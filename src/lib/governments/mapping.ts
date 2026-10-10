@@ -2,6 +2,7 @@
 // Fonctions pures, sans accès à la base : la lecture vit dans `src/lib/data/governments.ts`.
 
 import type { DateDetermination, Prisma, PublicationStatus } from "@/generated/prisma";
+import { STATUS_RULES } from "@/config/prominence";
 import { parisDay } from "./dates";
 import type { DateEvidence, Episode, FunctionType, GovernmentDates } from "./types";
 
@@ -30,6 +31,8 @@ export const PERSON_SELECT = {
   photoUrl: true,
   blobPhotoUrl: true,
   biography: true,
+  birthDate: true,
+  deathDate: true,
   publicationStatus: true,
   statusOverride: true,
 } satisfies Prisma.PoliticianSelect;
@@ -160,6 +163,12 @@ export type PublishedGovernment = GovernmentDates & {
 
 export type PersonVisibility = "published" | "pending" | "hidden";
 
+/**
+ * Why a person is a text-only entry: `draft` (profile not yet published) or `ageExcluded`
+ * (automatic age exclusion, never published). `null` for published and hidden people.
+ */
+export type PendingReason = "draft" | "ageExcluded";
+
 export type PersonCard = {
   id: string;
   publicId: string | null;
@@ -170,6 +179,9 @@ export type PersonCard = {
   photoUrl: string | null;
   blobPhotoUrl: string | null;
   visibility: PersonVisibility;
+  pendingReason: PendingReason | null;
+  /** « 1903-1985 », « né en 1903 » : text-only entries only, to tell namesakes apart. */
+  lifespan: string | null;
 };
 
 // Épisode enrichi de ce que l'affichage demande et que les règles pures n'utilisent pas :
@@ -214,27 +226,71 @@ function toActRef(act: ActRow | null): ActRef | null {
   };
 }
 
+type VisibilityInput = Pick<
+  PersonRow,
+  | "publicationStatus"
+  | "statusOverride"
+  | "photoUrl"
+  | "blobPhotoUrl"
+  | "biography"
+  | "birthDate"
+  | "deathDate"
+> & { publicationStatus: PublicationStatus };
+
+/**
+ * Exclusion par la règle d'âge de `publication-status-rules.ts` (né avant 1920), recalculée ici :
+ * `EXCLUDED` ne dit pas pourquoi. Une exclusion par la règle des décès d'avant 1958, ou faite à la
+ * main dans l'admin (qui ne pose pas d'override), n'est pas reconnue et reste cachée. Mêmes
+ * années que la règle (`getFullYear`).
+ */
+function isAgeExcluded(p: VisibilityInput): boolean {
+  return (
+    p.publicationStatus === "EXCLUDED" &&
+    !p.statusOverride &&
+    p.birthDate !== null &&
+    p.birthDate.getFullYear() < STATUS_RULES.excludeBornBeforeYear &&
+    !(p.deathDate && p.deathDate.getFullYear() < STATUS_RULES.excludeDeathBeforeYear)
+  );
+}
+
+function pendingReason(p: VisibilityInput): PendingReason | null {
+  if (p.publicationStatus === "PUBLISHED" || p.statusOverride) return null;
+  if (isAgeExcluded(p)) return "ageExcluded";
+  const draftLike = p.publicationStatus === "DRAFT" || p.publicationStatus === "ARCHIVED";
+  const hasContent = Boolean(p.photoUrl || p.blobPhotoUrl || p.biography?.trim());
+  return draftLike && !hasContent ? "draft" : null;
+}
+
 /**
  * Visibilité d'une personne dans la rubrique (§5.7).
  * - `published` : fiche publiée.
- * - `pending` : brouillon ou archive sans décision éditoriale, ni photo ni biographie. Entrée
- *   textuelle sans lien.
- * - `hidden` : tout le reste. Exclusion, décision éditoriale, ou fiche avec photo ou biographie
- *   en attente de la règle 3d. Jamais affichée comme entrée de composition.
+ * - `pending` : entrée textuelle sans lien ni photo. Brouillon ou archive sans décision
+ *   éditoriale, ni photo ni biographie ; ou ancien ministre exclu par la seule règle d'âge
+ *   (né avant 1920, voir `isAgeExcluded`), qui reste membre de son gouvernement sans fiche.
+ * - `hidden` : tout le reste. Toute autre exclusion, décision éditoriale (`statusOverride`, ex.
+ *   doublon fusionné), rejet, ou fiche avec photo ou biographie en attente de la règle 3d.
+ *   Jamais affichée comme entrée de composition.
  */
-export function personVisibility(
-  p: Pick<
-    PersonRow,
-    "publicationStatus" | "statusOverride" | "photoUrl" | "blobPhotoUrl" | "biography"
-  > & { publicationStatus: PublicationStatus }
-): PersonVisibility {
+export function personVisibility(p: VisibilityInput): PersonVisibility {
   if (p.publicationStatus === "PUBLISHED") return "published";
-  const draftLike = p.publicationStatus === "DRAFT" || p.publicationStatus === "ARCHIVED";
-  const hasContent = Boolean(p.photoUrl || p.blobPhotoUrl || p.biography?.trim());
-  return draftLike && !p.statusOverride && !hasContent ? "pending" : "hidden";
+  return pendingReason(p) ? "pending" : "hidden";
 }
 
+function lifespan(p: PersonRow): string | null {
+  const birth = p.birthDate ? Number(parisDay(p.birthDate).slice(0, 4)) : undefined;
+  const death = p.deathDate ? Number(parisDay(p.deathDate).slice(0, 4)) : undefined;
+  if (birth && death) return `${birth}-${death}`;
+  if (birth) {
+    const gender = genderOf(p.civility);
+    return `${gender === "F" ? "née" : gender === "M" ? "né" : "naissance"} en ${birth}`;
+  }
+  return death ? `mort en ${death}` : null;
+}
+
+/** Photo seulement pour une fiche publiée : une entrée en attente reste textuelle. */
 export function toPersonCard(p: PersonRow): PersonCard {
+  const visibility = personVisibility(p);
+  const published = visibility === "published";
   return {
     id: p.id,
     publicId: p.publicId,
@@ -242,9 +298,11 @@ export function toPersonCard(p: PersonRow): PersonCard {
     fullName: p.fullName,
     lastName: p.lastName,
     gender: genderOf(p.civility),
-    photoUrl: p.photoUrl,
-    blobPhotoUrl: p.blobPhotoUrl,
-    visibility: personVisibility(p),
+    photoUrl: published ? p.photoUrl : null,
+    blobPhotoUrl: published ? p.blobPhotoUrl : null,
+    visibility,
+    pendingReason: visibility === "pending" ? pendingReason(p) : null,
+    lifespan: visibility === "pending" ? lifespan(p) : null,
   };
 }
 

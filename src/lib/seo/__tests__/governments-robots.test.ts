@@ -46,11 +46,14 @@ describe("/politiques/gouvernements", () => {
     expect(m.alternates?.canonical).toBe("/politiques/gouvernements");
   });
 
-  it.each([{ q: "lecornu" }, { annee: "2025" }])("avec %o : noindex, follow", async (sp) => {
-    const m = await directory(sp);
-    expect(m.robots).toEqual(NOINDEX_FOLLOW);
-    expect(m.alternates?.canonical).toBe("/politiques/gouvernements");
-  });
+  it.each([{ q: "lecornu" }, { presidence: "macron" }, { annee: "2025" }])(
+    "avec %o : noindex, follow",
+    async (sp) => {
+      const m = await directory(sp);
+      expect(m.robots).toEqual(NOINDEX_FOLLOW);
+      expect(m.alternates?.canonical).toBe("/politiques/gouvernements");
+    }
+  );
 
   it("un paramètre vide ne compte pas comme filtre", async () => {
     expect(isNoindex(await directory({ q: "" }))).toBe(false);

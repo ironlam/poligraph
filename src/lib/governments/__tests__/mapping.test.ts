@@ -34,6 +34,8 @@ const politician: EpisodeRow["mandate"]["politician"] = {
   photoUrl: null,
   blobPhotoUrl: null,
   biography: null,
+  birthDate: null,
+  deathDate: null,
   publicationStatus: "PUBLISHED",
   statusOverride: false,
 };
@@ -187,8 +189,23 @@ describe("personVisibility", () => {
     expect(v({ publicationStatus: "DRAFT", biography: "   " })).toBe("pending");
   });
 
+  it("en attente : exclusion par la seule règle d'âge, même avec photo ou biographie", () => {
+    const old = { publicationStatus: "EXCLUDED" as const, birthDate: d("1903-04-02") };
+    expect(v(old)).toBe("pending");
+    expect(v({ ...old, deathDate: d("1985-01-01") })).toBe("pending");
+    expect(v({ ...old, photoUrl: "https://x", biography: "Bio." })).toBe("pending");
+  });
+
   it("cachée dans tous les autres cas", () => {
+    // Exclusion à la main (sans override), règle des décès d'avant 1958, décision éditoriale.
     expect(v({ publicationStatus: "EXCLUDED" })).toBe("hidden");
+    expect(v({ publicationStatus: "EXCLUDED", birthDate: d("1950-01-01") })).toBe("hidden");
+    expect(
+      v({ publicationStatus: "EXCLUDED", birthDate: d("1890-01-01"), deathDate: d("1950-01-01") })
+    ).toBe("hidden");
+    expect(
+      v({ publicationStatus: "EXCLUDED", birthDate: d("1903-01-01"), statusOverride: true })
+    ).toBe("hidden");
     expect(v({ publicationStatus: "REJECTED" })).toBe("hidden");
     expect(v({ publicationStatus: "DRAFT", statusOverride: true })).toBe("hidden");
     expect(v({ publicationStatus: "DRAFT", photoUrl: "https://x" })).toBe("hidden");
@@ -313,6 +330,40 @@ describe("toPersonCard", () => {
       photoUrl: null,
       blobPhotoUrl: null,
       visibility: "published",
+      pendingReason: null,
+      lifespan: null,
     });
+  });
+
+  it("ne transmet jamais la photo d'une entrée non publiée", () => {
+    const card = toPersonCard({
+      ...politician,
+      publicationStatus: "EXCLUDED",
+      birthDate: d("1903-04-02"),
+      photoUrl: "https://photo",
+      blobPhotoUrl: "https://blob",
+    });
+    expect(card.visibility).toBe("pending");
+    expect(card.photoUrl).toBeNull();
+    expect(card.blobPhotoUrl).toBeNull();
+  });
+
+  it("donne la raison et les années des seules entrées textuelles", () => {
+    const old = toPersonCard({
+      ...politician,
+      publicationStatus: "EXCLUDED",
+      birthDate: d("1903-04-02"),
+      deathDate: d("1985-07-01"),
+    });
+    expect(old).toMatchObject({ pendingReason: "ageExcluded", lifespan: "1903-1985" });
+    const draft = toPersonCard({
+      ...politician,
+      civility: "Mme",
+      publicationStatus: "DRAFT",
+      birthDate: d("1960-01-01"),
+    });
+    expect(draft).toMatchObject({ pendingReason: "draft", lifespan: "née en 1960" });
+    const published = toPersonCard({ ...politician, birthDate: d("1960-01-01") });
+    expect(published).toMatchObject({ pendingReason: null, lifespan: null });
   });
 });

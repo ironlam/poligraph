@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { presidencyOfGovernment } from "@/config/presidencies";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, ChevronRight, Download, FileText } from "lucide-react";
@@ -17,6 +18,7 @@ import { CopyLinkButton } from "@/components/governments/CopyLinkButton";
 import { GovernmentBadges, StatusBadge } from "@/components/governments/GovernmentBadges";
 import {
   GovernmentMemberCard,
+  Lifespan,
   type MemberCardFunction,
 } from "@/components/governments/GovernmentMemberCard";
 import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
@@ -35,7 +37,7 @@ import {
   safeExternalUrl,
 } from "@/components/governments/format";
 import { groupVisible, type PersonGroup } from "@/components/governments/view";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentEpisodesFor, getPublishedGovernments } from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   compositionAt,
@@ -257,6 +259,7 @@ function MemberGrid({
           key={g.person.id}
           person={g.person}
           functions={g.episodes.map((ep) => fn(ep))}
+          startVerified={g.episodes.some((ep) => ep.startEvidence === "ACT")}
           returnUrl={returnUrl}
           returnLabel={returnLabel}
         />
@@ -271,14 +274,17 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   if (!(await isFeatureEnabled("gouvernements"))) notFound();
 
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const govs = await getPublishedGovernments();
   const index = govs.findIndex((g) => g.slug === slug);
   if (index === -1) notFound();
   const gov = govs[index]!;
   const prev = govs[index - 1];
   const next = govs[index + 1];
 
-  const own = data.episodes.filter((e) => e.governmentId === gov.id);
+  // Only this government's functions: the composition rules, the changes and the participant
+  // list never look at another government.
+  const data = await getGovernmentEpisodesFor(gov.id);
+  const own = data.episodes;
   const byId = new Map(own.map((e) => [e.membershipId, e]));
   const range = consultableRange(gov);
   const requested = parseCompositionDate(first(sp.date));
@@ -372,6 +378,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   const shownParticipants = participants.slice(0, 10);
   const moreParticipants = participants.slice(10);
 
+  const presidency = presidencyOfGovernment(gov);
   const pmPerson = Object.values(data.people).find((p) => p.slug === gov.primeMinister.slug);
   const pmLinked = pmPerson?.visibility === "published";
 
@@ -441,6 +448,16 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
           <h1 className="text-balance font-display text-3xl font-extrabold tracking-tight md:text-4xl">
             {gov.name}
           </h1>
+          {presidency && (
+            <p className="text-sm">
+              <Link
+                href={`${BASE}#presidence-${presidency.slug}`}
+                className="inline-flex min-h-11 items-center font-medium text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary"
+              >
+                {presidency.heading}
+              </Link>
+            </p>
+          )}
           <p className="text-sm">
             {gov.primeMinister.gender === "F" ? "Première ministre" : "Premier ministre"} :{" "}
             {pmLinked ? (
@@ -932,7 +949,10 @@ function ParticipantList({
                 {person.fullName}
               </RememberReturn>
             ) : (
-              <strong>{person.fullName}</strong>
+              <>
+                <strong>{person.fullName}</strong>
+                <Lifespan person={person} />
+              </>
             )}{" "}
             · {episodes.map((e) => displayTitle(e.title)).join(" ; ")}
           </span>

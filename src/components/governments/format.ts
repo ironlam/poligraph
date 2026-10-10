@@ -132,6 +132,52 @@ export function governmentDatesLine(gov: PublishedGovernment): string {
   return line;
 }
 
+/**
+ * Short period of a government for the directory cards: « Du 5 au 12 octobre 2025 », « Du 21
+ * septembre au 23 décembre 2024 », « Du 6 décembre 2016 au 10 mai 2017 », or « Équipe nommée le
+ * 12 octobre 2025 » while in office. The start is the team date, else the Prime Minister's
+ * appointment. `null` when one of the government's dates is estimated (DERIVED): the card then
+ * shows only its « Dates estimées » badge, never an estimate written as a fact. The full dates
+ * line stays on the government page.
+ */
+export function governmentPeriod(
+  gov: Pick<
+    PublishedGovernment,
+    | "formedAt"
+    | "primeMinisterAppointedAt"
+    | "endedAt"
+    | "resignedAt"
+    | "primeMinister"
+    | "hasDerivedDate"
+  >
+): string | null {
+  if (gov.hasDerivedDate) return null;
+  if (gov.endedAt) {
+    const start = gov.formedAt ?? gov.primeMinisterAppointedAt;
+    const sameYear = start.slice(0, 4) === gov.endedAt.slice(0, 4);
+    const sameMonth = start.slice(0, 7) === gov.endedAt.slice(0, 7);
+    const from = sameMonth
+      ? formatDay(start).split(" ")[0]!
+      : sameYear
+        ? formatDay(start).replace(/ \d{4}$/, "")
+        : formatDay(start);
+    return `Du ${from} au ${formatDay(gov.endedAt)}`;
+  }
+  let line: string;
+  if (gov.formedAt) line = `Équipe nommée le ${formatDay(gov.formedAt)}`;
+  else {
+    const head =
+      gov.primeMinister.gender === "F"
+        ? "Première ministre nommée le"
+        : gov.primeMinister.gender === "M"
+          ? "Premier ministre nommé le"
+          : "Nomination du Premier ministre le";
+    line = `${head} ${formatDay(gov.primeMinisterAppointedAt)}`;
+  }
+  if (gov.resignedAt) line += `, démission le ${formatDay(gov.resignedAt)}`;
+  return line;
+}
+
 /** Source URLs come from the database: only http(s) links are rendered as links. */
 export function safeExternalUrl(url: string | null | undefined): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null;

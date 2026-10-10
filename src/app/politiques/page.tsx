@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { ArrowRight, Landmark } from "lucide-react";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -505,6 +506,21 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
               />
             </div>
           </div>
+          {governmentsEnabled && (
+            <Link
+              href="/politiques/gouvernements"
+              className="flex min-h-11 items-center gap-3 rounded-xl border bg-card px-4 py-2.5 transition-colors hover:border-primary/40 hover:bg-muted/50 md:shrink-0"
+            >
+              <Landmark className="size-5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold">Gouvernements</span>
+                <span className="block text-[13px] text-muted-foreground">
+                  Compositions et ministres
+                </span>
+              </span>
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          )}
         </div>
 
         {/* Search with autocomplete */}

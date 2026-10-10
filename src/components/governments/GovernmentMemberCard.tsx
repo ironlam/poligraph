@@ -5,6 +5,23 @@ import { RememberReturn } from "./RememberReturn";
 
 export const PENDING_PROFILE_NOTE =
   "Identité et fonction vérifiées ; profil public en cours de constitution.";
+/** Draft whose functions all start on a non-act date: nothing to call verified. */
+export const DRAFT_PROFILE_NOTE = "Profil public en cours de constitution.";
+/** Former minister excluded by the age rule: no profile, and none planned. */
+export const NO_PROFILE_NOTE = "Pas de fiche détaillée sur Poligraph.";
+
+export function pendingNote(person: PersonCard, startVerified: boolean): string {
+  if (person.pendingReason === "ageExcluded") return NO_PROFILE_NOTE;
+  return startVerified ? PENDING_PROFILE_NOTE : DRAFT_PROFILE_NOTE;
+}
+
+/** « (1903-1985) » after a text-only name, to tell namesakes apart. */
+export function Lifespan({ person }: { person: PersonCard }) {
+  if (person.visibility !== "pending" || !person.lifespan) return null;
+  return (
+    <span className="text-[13px] font-normal text-muted-foreground"> ({person.lifespan})</span>
+  );
+}
 
 export type MemberCardFunction = {
   key: string;
@@ -16,7 +33,8 @@ export type MemberCardFunction = {
 /**
  * One person in a composition or a member list. A published profile is a real link that
  * remembers the page of origin; a pending one is plain text with its note. Hidden people never
- * reach this component (filtered by the caller).
+ * reach this component (filtered by the caller). `startVerified`: at least one of the listed
+ * functions starts on an act, the only case where the note may say « fonction vérifiée ».
  */
 export function GovernmentMemberCard({
   person,
@@ -25,8 +43,10 @@ export function GovernmentMemberCard({
   returnLabel,
   nameClassName = "font-display text-base font-bold",
   aside,
+  startVerified,
 }: {
   person: PersonCard;
+  startVerified: boolean;
   functions: MemberCardFunction[];
   returnUrl: string;
   returnLabel: string;
@@ -54,7 +74,10 @@ export function GovernmentMemberCard({
               {person.fullName}
             </RememberReturn>
           ) : (
-            <span>{person.fullName}</span>
+            <>
+              <span>{person.fullName}</span>
+              <Lifespan person={person} />
+            </>
           )}
         </p>
         {aside}
@@ -68,7 +91,9 @@ export function GovernmentMemberCard({
           ))}
         </ul>
         {person.visibility === "pending" && (
-          <p className="mt-2 text-[13px] text-muted-foreground">{PENDING_PROFILE_NOTE}</p>
+          <p className="mt-2 text-[13px] text-muted-foreground">
+            {pendingNote(person, startVerified)}
+          </p>
         )}
       </div>
     </article>

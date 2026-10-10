@@ -37,6 +37,7 @@ describe("parseMembersQuery", () => {
         du: "2017-05-17",
         au: "2026-09-30",
         gouvernement: null,
+        presidence: null,
         fonction: null,
         affaires: null,
         q: "",
@@ -44,6 +45,17 @@ describe("parseMembersQuery", () => {
         page: 1,
       },
       invalid: false,
+    });
+  });
+
+  it("accepte une présidence connue, signale une valeur inconnue", () => {
+    expect(parseMembersQuery({ presidence: "chirac" }, coverage, slugs)).toMatchObject({
+      query: { presidence: "chirac" },
+      invalid: false,
+    });
+    expect(parseMembersQuery({ presidence: "poher" }, coverage, slugs)).toMatchObject({
+      query: { presidence: null },
+      invalid: true,
     });
   });
 

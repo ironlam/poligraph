@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
   revalidateTags: vi.fn(),
   revalidateAll: vi.fn(),
   requestProfileReconcile: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: h.revalidatePath }));
+vi.mock("next/cache", () => ({
+  revalidatePath: h.revalidatePath,
+  revalidateTag: h.revalidateTag,
+}));
 vi.mock("@/lib/cache", () => ({
   revalidateTags: h.revalidateTags,
   revalidateAll: h.revalidateAll,
@@ -58,6 +62,20 @@ describe("POST /api/cron/revalidate : chemins", () => {
     expect(res.status).toBe(200);
     expect(h.revalidatePath).toHaveBeenCalledTimes(1);
     expect(h.revalidateTags).toHaveBeenCalledWith(["gouvernements"]);
+  });
+
+  it("expire immédiatement « gouvernements » sur demande, et aucun autre tag", async () => {
+    const res = await POST(req({ tags: ["gouvernements", "politicians"], expireNow: true }));
+
+    expect(res.status).toBe(200);
+    expect(h.revalidateTags).toHaveBeenCalledWith(["gouvernements", "politicians"]);
+    expect(h.revalidateTag).toHaveBeenCalledTimes(1);
+    expect(h.revalidateTag).toHaveBeenCalledWith("gouvernements", { expire: 0 });
+  });
+
+  it("n'expire rien sans expireNow", async () => {
+    await POST(req({ tags: ["gouvernements"] }));
+    expect(h.revalidateTag).not.toHaveBeenCalled();
   });
 
   it.each([

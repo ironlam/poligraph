@@ -209,7 +209,11 @@ async function post(deps: RevalidateDeps, body: unknown) {
   if (!res.ok) throw new Error(`Revalidation refusée (${res.status}) pour ${JSON.stringify(body)}`);
 }
 
-/** Chemins par lots de 10 espacés, puis le seul tag « gouvernements ». Jamais de tag large. */
+/**
+ * Chemins par lots de 10 espacés, puis le seul tag « gouvernements », expiré tout de suite
+ * (`expireNow`) : le cache imbriqué de la rubrique ne doit pas être recalculé depuis des entrées
+ * périmées. Jamais de tag large.
+ */
 export async function revalidateProfilePaths(slugs: string[], deps: RevalidateDeps): Promise<void> {
   const size = Math.min(deps.batchSize ?? 10, 10);
   const delay = deps.delayMs ?? 30_000;
@@ -217,5 +221,5 @@ export async function revalidateProfilePaths(slugs: string[], deps: RevalidateDe
     if (i > 0) await deps.sleep(delay);
     await post(deps, { paths: slugs.slice(i, i + size).map((s) => `/politiques/${s}`) });
   }
-  await post(deps, { tags: ["gouvernements"] });
+  await post(deps, { tags: ["gouvernements"], expireNow: true });
 }

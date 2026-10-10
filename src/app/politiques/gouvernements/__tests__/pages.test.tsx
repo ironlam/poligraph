@@ -7,6 +7,7 @@ vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: vi.fn() }));
 vi.mock("@/lib/data/governments", () => ({
   getPublishedGovernments: vi.fn(),
   getGovernmentEpisodes: vi.fn(),
+  getGovernmentEpisodesFor: vi.fn(),
 }));
 vi.mock("@/lib/data/government-affairs", () => ({ getGovernmentMemberAffairs: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -19,7 +20,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import {
+  getGovernmentEpisodes,
+  getGovernmentEpisodesFor,
+  getPublishedGovernments,
+} from "@/lib/data/governments";
 import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
 import DirectoryPage from "../page";
 import DetailPage from "../[slug]/page";
@@ -120,6 +125,8 @@ function person(
     photoUrl: null,
     blobPhotoUrl: null,
     visibility,
+    pendingReason: visibility === "pending" ? "draft" : null,
+    lifespan: null,
   };
 }
 
@@ -272,10 +279,24 @@ const episodes: GovernmentEpisode[] = [
 
 const GOVS = [A, B, C, D];
 
+/** Same data behind both readers; the per-government one returns its own functions and people. */
+function setData(all: { episodes: GovernmentEpisode[]; people: Record<string, PersonCard> }) {
+  vi.mocked(getGovernmentEpisodes).mockResolvedValue(all);
+  vi.mocked(getGovernmentEpisodesFor).mockImplementation(async (id) => {
+    const own = all.episodes.filter((e) => e.governmentId === id);
+    const ids = new Set(own.map((e) => e.politicianId));
+    return {
+      episodes: own,
+      people: Object.fromEntries(Object.entries(all.people).filter(([pid]) => ids.has(pid))),
+    };
+  });
+}
+
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(isFeatureEnabled).mockResolvedValue(true);
   vi.mocked(getPublishedGovernments).mockResolvedValue(GOVS);
-  vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes, people });
+  setData({ episodes, people });
   vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
     "karim-public": { definitive: 1, nonDefinitive: 0, ongoing: 2 },
     "pascal-sortant": { definitive: 0, nonDefinitive: 0, ongoing: 1 },
@@ -309,6 +330,14 @@ describe("drapeau gouvernements", () => {
 });
 
 describe("détail d'un gouvernement", () => {
+  it("ne lit que son gouvernement et renvoie vers sa présidence", async () => {
+    const markup = await html(detail("gouvernement-a"));
+    expect(getGovernmentEpisodes).not.toHaveBeenCalled();
+    expect(vi.mocked(getGovernmentEpisodesFor).mock.calls).toEqual([["ga"]]);
+    expect(markup).toContain('href="/politiques/gouvernements#presidence-macron"');
+    expect(text(markup)).toContain("Présidence d'Emmanuel Macron");
+  });
+
   it("renvoie notFound pour un slug inconnu ou non publié", async () => {
     await expect(detail("inconnu")).rejects.toThrow("NEXT_NOT_FOUND");
     // Un gouvernement DRAFT n'est jamais renvoyé par getPublishedGovernments.
@@ -341,7 +370,7 @@ describe("détail d'un gouvernement", () => {
   });
 
   it("ne révèle pas l'intitulé d'une fonction d'une personne cachée dans les changements", async () => {
-    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+    setData({
       episodes: [
         ...episodes,
         ep({
@@ -420,7 +449,7 @@ describe("composition par défaut", () => {
 
   function use(eps: GovernmentEpisode[]) {
     vi.mocked(getPublishedGovernments).mockResolvedValue([E]);
-    vi.mocked(getGovernmentEpisodes).mockResolvedValue({ episodes: eps, people });
+    setData({ episodes: eps, people });
   }
 
   it("ouvre à la date de démission et n'affiche aucune fausse absence", async () => {
@@ -456,6 +485,85 @@ describe("répertoire", () => {
     expect(t).toContain("5 personnes ont participé");
     expect(t).toContain("au moins 1 personne documentée");
     expect(t.toLowerCase()).not.toContain("depuis");
+  });
+
+  it("groupe par présidence, avec une ancre par présidence et un seul lien par carte", async () => {
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      formedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+      compositionVerifiedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    const markup = await html(DirectoryPage({ searchParams: sp() }));
+    const div = document.createElement("div");
+    div.innerHTML = markup;
+    const headings = [...div.querySelectorAll("h2")].map((h) => h.textContent);
+    expect(headings).toEqual(["Présidence d'Emmanuel Macron", "Présidence de François Hollande"]);
+    expect(markup).toContain('href="#presidence-hollande"');
+    expect(div.querySelector("#presidence-hollande")?.textContent).toContain("Gouvernement Hôtel");
+    for (const card of div.querySelectorAll("article")) {
+      expect(card.querySelectorAll("a")).toHaveLength(1);
+    }
+    const t = text(markup);
+    expect(t).toContain("Du 6 décembre 2016 au 15 mai 2017");
+    expect(t).toContain("Du 21 septembre au 23 décembre 2024");
+    expect(t).toContain("Équipe nommée le 12 octobre 2025");
+    expect(t).not.toContain("Terminé");
+    expect(t).not.toContain("Première ministre :");
+    // Ancres en liste, retour vers elles en fin de section, filtre visible (deux présidences).
+    expect(div.querySelectorAll('nav#presidences li a[href^="#presidence-"]')).toHaveLength(2);
+    expect(div.querySelectorAll('a[href="#presidences"]')).toHaveLength(2);
+    expect(div.querySelector("select#gouv-presidence")).not.toBeNull();
+  });
+
+  it("masque le filtre et les ancres tant qu'une seule présidence est publiée", async () => {
+    const div = document.createElement("div");
+    div.innerHTML = await html(DirectoryPage({ searchParams: sp() }));
+    expect(div.querySelector("select#gouv-presidence")).toBeNull();
+    expect(div.querySelector("nav#presidences")).toBeNull();
+    expect(div.querySelector('a[href="#presidences"]')).toBeNull();
+  });
+
+  it("ne lit que les fonctions du gouvernement en exercice vérifié", async () => {
+    const Dv = { ...D, compositionVerifiedAt: "2025-10-12" };
+    vi.mocked(getPublishedGovernments).mockResolvedValue([A, B, C, Dv]);
+    const t = text(await html(DirectoryPage({ searchParams: sp() })));
+    expect(getGovernmentEpisodes).not.toHaveBeenCalled();
+    expect(vi.mocked(getGovernmentEpisodesFor).mock.calls).toEqual([["gd"]]);
+    expect(t).toContain("dont 1 présente à cette date");
+  });
+
+  it("n'écrit aucune période pour un gouvernement aux dates estimées", async () => {
+    vi.mocked(getPublishedGovernments).mockResolvedValue([A, { ...B, hasDerivedDate: true }, C, D]);
+    const div = document.createElement("div");
+    div.innerHTML = await html(DirectoryPage({ searchParams: sp() }));
+    const card = [...div.querySelectorAll("article")].find((a) =>
+      a.textContent?.includes("Gouvernement Bravo")
+    )!;
+    expect(card.textContent).toContain("Dates estimées");
+    expect(card.textContent).not.toMatch(/Du \d/);
+  });
+
+  it("filtre par présidence et ignore l'ancien paramètre année", async () => {
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    const t = text(await html(DirectoryPage({ searchParams: sp({ presidence: "hollande" }) })));
+    expect(t).toContain("Gouvernement Hôtel");
+    expect(t).not.toContain("Gouvernement Alpha");
+    const all = text(await html(DirectoryPage({ searchParams: sp({ annee: "2016" }) })));
+    expect(all).toContain("Gouvernement Alpha");
   });
 
   it("filtre par nom sans tenir compte des accents", async () => {
@@ -518,6 +626,106 @@ describe("membres", () => {
     expect(t).not.toContain("au moins");
   });
 
+  it("filtre par présidence de nomination, pas par chevauchement de dates", async () => {
+    // Gouvernement Hôtel : nommé sous Hollande, terminé après l'investiture de Macron.
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      formedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+      compositionVerifiedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    setData({
+      episodes: [
+        ...episodes,
+        ep({
+          governmentId: "gh",
+          politicianId: "karim-public",
+          title: "Ministre de l'Intérieur",
+          start: "2016-12-06",
+          end: "2017-05-15",
+          endEvidence: "ACT",
+        }),
+      ],
+      people,
+    });
+    const markup = await html(
+      MembersPage({
+        searchParams: sp({
+          fonction: "ministre",
+          gouvernement: "gouvernement-a",
+          du: "2017-01-01",
+        }),
+      })
+    );
+    const div = document.createElement("div");
+    div.innerHTML = markup;
+    expect(div.textContent).toContain("Présidences :");
+    const links = [...div.querySelectorAll("a")];
+    const hollande = links.find((a) => a.textContent === "François Hollande");
+    // Retire gouvernement, du et au ; garde les autres filtres.
+    expect(hollande?.getAttribute("href")).toBe(
+      "/politiques/gouvernements/membres?presidence=hollande&fonction=ministre"
+    );
+
+    const macron = text(await html(MembersPage({ searchParams: sp({ presidence: "macron" }) })));
+    expect(macron).toContain("Présidence : Emmanuel Macron");
+    expect(macron).toContain("Emmanuel Macron (filtre appliqué)");
+    // Karim Public a aussi une fonction dans le gouvernement Hôtel : seule celle de Macron reste.
+    expect(macron).toContain("Ministre de l'Économie");
+    expect(macron).not.toContain("Ministre de l'Intérieur");
+
+    const hollandeOnly = text(
+      await html(MembersPage({ searchParams: sp({ presidence: "hollande" }) }))
+    );
+    expect(hollandeOnly).toContain("Ministre de l'Intérieur");
+    expect(hollandeOnly).not.toContain("Inès Entrante");
+  });
+
+  it("n'affiche pas de raccourci quand une seule présidence est couverte", async () => {
+    const t = text(await html(MembersPage({ searchParams: sp() })));
+    expect(t).not.toContain("Présidences :");
+  });
+
+  it("distingue l'ancien ministre sans fiche du brouillon, années comprises", async () => {
+    const ancien: PersonCard = {
+      ...person("henri-rey", "Henri Rey", "pending"),
+      pendingReason: "ageExcluded",
+      lifespan: "1903-1985",
+    };
+    setData({
+      episodes: [
+        ...episodes,
+        ep({ governmentId: "ga", politicianId: "henri-rey", title: "Ministre d'État" }),
+        // Brouillon dont la seule fonction commence sur une date du jeu de données.
+        ep({
+          governmentId: "gb",
+          politicianId: "noemie-attente",
+          title: "Ministre déléguée",
+          start: "2024-01-09",
+          startEvidence: "DATASET",
+        }),
+      ],
+      people: { ...people, "henri-rey": ancien },
+    });
+    const div = document.createElement("div");
+    div.innerHTML = await html(MembersPage({ searchParams: sp({ q: "rey" }) }));
+    expect(div.textContent).toContain("Henri Rey (1903-1985)");
+    expect(div.textContent).toContain("Pas de fiche détaillée sur Poligraph.");
+    expect(div.textContent).not.toContain("vérifiées");
+    expect(div.querySelector('a[href="/politiques/henri-rey"]')).toBeNull();
+
+    const draft = text(
+      await html(MembersPage({ searchParams: sp({ q: "noemie", gouvernement: "gouvernement-b" }) }))
+    );
+    expect(draft).toContain("Profil public en cours de constitution.");
+    expect(draft).not.toContain("vérifiées");
+  });
+
   it("filtre par nom", async () => {
     const t = text(await html(MembersPage({ searchParams: sp({ q: "ines" }) })));
     expect(t).toContain("Inès Entrante");
@@ -530,7 +738,7 @@ describe("membres", () => {
       politicianId: "karim-public",
       title: "Fonction orpheline",
     });
-    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+    setData({
       episodes: [...episodes, orphan],
       people,
     });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { revalidateAll, revalidateTags } from "@/lib/cache";
 import { SELECTABLE_TAGS, type SelectableCacheTag } from "@/lib/cache-tags";
 import { revalidatePathsSchema } from "@/lib/security/schemas/admin";
@@ -11,6 +11,12 @@ const CRON_ALLOWED_TAGS = SELECTABLE_TAGS;
 const PROFILE_TAGS: readonly string[] = ["politicians", "votes", "factchecks"];
 type CronAllowedTag = SelectableCacheTag;
 
+// Tags a caller may expire at once with `expireNow: true` (no stale entry served while the
+// next request recomputes). « gouvernements » only: its "use cache" entries are nested (the
+// list of governments reads one entry per government), so a stale-while-revalidate recompute
+// of the outer entry could rebuild it from inner entries not yet refreshed.
+const EXPIRE_NOW_TAGS: readonly string[] = ["gouvernements"];
+
 /**
  * POST /api/cron/revalidate
  *
@@ -19,6 +25,7 @@ type CronAllowedTag = SelectableCacheTag;
  *
  * Body: { tags: ["votes", "politicians"] } or { all: true }, and/or
  * { paths: ["/politiques/<slug>"] } (at most 10, profile and government paths only).
+ * `expireNow: true` additionally expires the tags of EXPIRE_NOW_TAGS immediately.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -76,6 +83,10 @@ export async function POST(request: NextRequest) {
       // Paths first: a request mixing both applies the narrow purge before the tag one.
       for (const path of revalidatedPaths ?? []) revalidatePath(path);
       revalidateTags(tags);
+      if (body.expireNow === true) {
+        for (const tag of tags)
+          if (EXPIRE_NOW_TAGS.includes(tag)) revalidateTag(tag, { expire: 0 });
+      }
       if (tags.some((tag: string) => PROFILE_TAGS.includes(tag))) {
         await requestProfileReconcile(`cron:${tags.join(",")}`);
       }
