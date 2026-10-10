@@ -1,0 +1,174 @@
+// Liste transversale des membres des gouvernements publiés (spec §6.4).
+// Aucune présence n'est décidée ici : tout passe par `overlapsPeriod` et `compositionAt`.
+
+import { normalizeText } from "@/lib/name-matching";
+import { compositionAt, consultableRange, overlapsPeriod } from "./composition";
+import type { PersonCard } from "./mapping";
+import type { MembersFunctionFilter, MembersQuery } from "./params";
+import type { Category, Episode, FunctionType, GovernmentDates } from "./types";
+
+export type MembersData = { episodes: Episode[]; people: Record<string, PersonCard> };
+
+export type MemberFunction = { episode: Episode; status: Category };
+
+export type MemberRow = {
+  person: PersonCard;
+  // established : au moins une fonction établie (ou en affaires courantes) ; transition (mode
+  // « Présents au » seulement) : aucune établie, au moins une en transition ; sinon undocumented.
+  status: "established" | "transition" | "undocumented";
+  functions: MemberFunction[];
+};
+
+export type MembersResult =
+  | {
+      status: "ok";
+      persons: MemberRow[];
+      establishedCount: number;
+      undocumentedCount: number;
+      episodeCount: number;
+    }
+  | { status: "not_established" };
+
+const FUNCTION_TYPE: Record<MembersFunctionFilter, FunctionType> = {
+  pm: "PREMIER_MINISTRE",
+  ministre: "MINISTRE",
+  delegue: "MINISTRE_DELEGUE",
+  secretaire: "SECRETAIRE_ETAT",
+};
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function normalizeSearch(text: string): string {
+  return normalizeText(text).replace(/\s+/g, " ");
+}
+
+/** De la première formation à la dernière date consultable des gouvernements donnés. */
+export function membersCoverage(govs: GovernmentDates[]): { from: string; to: string } | null {
+  const ranges = govs
+    .map(consultableRange)
+    .filter((r): r is { from: string; to: string } => r !== null);
+  if (ranges.length === 0) return null;
+  return {
+    from: ranges.map((r) => r.from).sort()[0]!,
+    to: ranges
+      .map((r) => r.to)
+      .sort()
+      .at(-1)!,
+  };
+}
+
+/**
+ * Mode période, borné à la période consultable du gouvernement : la règle 3 seule pourrait
+ * établir une présence au-delà de la composition documentée. Hors de cette période, une
+ * fonction qui chevauche la recherche reste « à préciser », jamais établie.
+ */
+function periodCategory(
+  gov: GovernmentDates,
+  ep: Episode,
+  du: string,
+  au: string
+): "established" | "undocumented" | null {
+  const range = consultableRange(gov);
+  const outside: [string, string][] = [];
+  let inside: "established" | "undocumented" | null = null;
+  if (range) {
+    const from = du > range.from ? du : range.from;
+    const to = au < range.to ? au : range.to;
+    if (from <= to) inside = overlapsPeriod(gov, ep, from, to);
+    if (du < range.from) outside.push([du, au < range.from ? au : addDays(range.from, -1)]);
+    if (au > range.to) outside.push([du > range.to ? du : addDays(range.to, 1), au]);
+  } else {
+    outside.push([du, au]);
+  }
+  if (inside) return inside;
+  return outside.some(([from, to]) => overlapsPeriod(gov, ep, from, to) !== null)
+    ? "undocumented"
+    : null;
+}
+
+/**
+ * Personnes ayant exercé une fonction dans les gouvernements donnés (les gouvernements publiés),
+ * selon le mode : chevauchement de la période [du, au], ou présence au jour `au`.
+ * Les catégories sont calculées sur toutes les fonctions du gouvernement, personnes cachées
+ * comprises (une sortie cachée reste une sortie pour la règle 4) ; les filtres viennent ensuite.
+ * Les personnes cachées ne sont jamais listées. Liste triée par nom de famille normalisé.
+ */
+export function filterMembers(
+  govs: GovernmentDates[],
+  data: MembersData,
+  query: MembersQuery
+): MembersResult {
+  const scope = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
+  const byGov = new Map<string, Episode[]>(scope.map((g) => [g.id, []]));
+  for (const ep of data.episodes) byGov.get(ep.governmentId)?.push(ep);
+
+  const categorized: MemberFunction[] = [];
+  if (query.mode === "periode") {
+    for (const g of scope) {
+      for (const ep of byGov.get(g.id) ?? []) {
+        const status = periodCategory(g, ep, query.du, query.au);
+        if (status) categorized.push({ episode: ep, status });
+      }
+    }
+  } else {
+    let consultable = false;
+    for (const g of scope) {
+      const result = compositionAt(g, byGov.get(g.id) ?? [], query.au);
+      if (result.status !== "ok") continue;
+      consultable = true;
+      for (const [status, list] of Object.entries(result.byCategory) as [Category, Episode[]][]) {
+        for (const episode of list) categorized.push({ episode, status });
+      }
+    }
+    if (!consultable) return { status: "not_established" };
+  }
+
+  const type = query.fonction ? FUNCTION_TYPE[query.fonction] : null;
+  const needle = normalizeSearch(query.q);
+  const rows = new Map<string, MemberRow>();
+  for (const fn of categorized) {
+    if (type && fn.episode.type !== type) continue;
+    const person = data.people[fn.episode.politicianId];
+    if (!person || person.visibility === "hidden") continue;
+    if (needle) {
+      const haystack = `${normalizeSearch(person.fullName)} ${normalizeSearch(person.slug)}`;
+      if (!haystack.includes(needle)) continue;
+    }
+    const row = rows.get(person.id);
+    if (row) row.functions.push(fn);
+    else rows.set(person.id, { person, status: "undocumented", functions: [fn] });
+  }
+
+  let episodeCount = 0;
+  for (const row of rows.values()) {
+    row.functions.sort(
+      (a, b) =>
+        a.episode.start.localeCompare(b.episode.start) ||
+        a.episode.membershipId.localeCompare(b.episode.membershipId)
+    );
+    const statuses = new Set(row.functions.map((f) => f.status));
+    row.status =
+      statuses.has("established") || statuses.has("currentAffairs")
+        ? "established"
+        : statuses.has("transition")
+          ? "transition"
+          : "undocumented";
+    episodeCount += row.functions.length;
+  }
+
+  const sortKey = (row: MemberRow) =>
+    `${normalizeSearch(row.person.lastName)}\u0000${normalizeSearch(row.person.fullName)}\u0000${row.person.id}`;
+  const persons = [...rows.values()].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+
+  return {
+    status: "ok",
+    persons,
+    establishedCount: persons.filter((p) => p.status === "established").length,
+    undocumentedCount: persons.filter((p) => p.status === "undocumented").length,
+    episodeCount,
+  };
+}
