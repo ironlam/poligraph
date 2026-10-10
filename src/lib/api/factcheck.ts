@@ -8,6 +8,7 @@
 import type { FactCheckRating } from "@/generated/prisma";
 import { FACTCHECK_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { HTTPClient } from "@/lib/api/http-client";
+import { decodeHtmlEntities } from "@/lib/parsing/html-utils";
 
 const client = new HTTPClient({ rateLimitMs: FACTCHECK_RATE_LIMIT_MS });
 const scraperClient = new HTTPClient({
@@ -50,6 +51,25 @@ export interface SearchClaimsOptions {
 /**
  * Search for fact-checked claims via Google Fact Check Tools API
  */
+/**
+ * Publishers hand us HTML-escaped text ("VÉRIF&#x27;", "Fran&ccedil;ais"). Decode it once here,
+ * where it enters, so the stored title, the slug and the page <title> are all readable. URLs are
+ * left alone: decoding "&amp;" in one would change the page it points to.
+ */
+function decodeClaim(claim: FactCheckClaim): FactCheckClaim {
+  return {
+    ...claim,
+    text: decodeHtmlEntities(claim.text),
+    ...(claim.claimant !== undefined && { claimant: decodeHtmlEntities(claim.claimant) }),
+    claimReview: (claim.claimReview ?? []).map((review) => ({
+      ...review,
+      title: decodeHtmlEntities(review.title),
+      textualRating: decodeHtmlEntities(review.textualRating),
+      publisher: { ...review.publisher, name: decodeHtmlEntities(review.publisher.name) },
+    })),
+  };
+}
+
 export async function searchClaims(
   query: string,
   options: SearchClaimsOptions = {}
@@ -79,7 +99,7 @@ export async function searchClaims(
     const { data } = await client.get<FactCheckSearchResponse>(url);
 
     if (data.claims) {
-      allClaims.push(...data.claims);
+      allClaims.push(...data.claims.map(decodeClaim));
     }
 
     pageToken = data.nextPageToken;
@@ -110,7 +130,9 @@ export async function fetchPageTitle(url: string, fallbackTitle: string): Promis
     const ogTitle = ogMatch?.[1];
     const htmlTitle = titleMatch?.[1];
 
-    const fullTitle = ogTitle || htmlTitle;
+    const rawTitle = ogTitle || htmlTitle;
+    // Compare and return the decoded form: the escaped one looks longer than it reads.
+    const fullTitle = rawTitle ? decodeHtmlEntities(rawTitle) : undefined;
 
     if (fullTitle && fullTitle.trim().length > fallbackTitle.replace(/\.{3}$/, "").trim().length) {
       return fullTitle.trim();
