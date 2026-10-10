@@ -29,13 +29,14 @@ function sourceWithoutComments(relativePath: string): string {
 
 /**
  * Every cached read whose result depends on `CandidacyPresidential.publicationStatus`, directly or
- * through `getPublicPresidentialCandidates`. Adding a fifth one without its tag turns this red.
+ * through `getPublicPresidentialCandidates`. Adding another one without its tag turns this red.
  */
 const CACHED_READS = [
   "src/lib/data/hub.ts",
   "src/lib/data/themes-index.ts",
   "src/lib/data/subject-page.ts",
   "src/lib/data/priorites.ts",
+  "src/lib/data/presidential-reader-guides.ts",
 ];
 
 const MUTATION_ROUTES = [
