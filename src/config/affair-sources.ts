@@ -5,6 +5,7 @@ const VERIFIED_AFFAIR_PRESS_HOSTS = new Set([
   "lefigaro.fr",
   "liberation.fr",
   "francetvinfo.fr",
+  "franceinfo.fr",
   "reuters.com",
   "apnews.com",
 ]);

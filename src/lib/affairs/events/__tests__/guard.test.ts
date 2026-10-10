@@ -309,6 +309,7 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://france3-regions.franceinfo.fr/a",
     "https://la1ere.franceinfo.fr/a",
     "https://www.sudouest.fr/a",
+    "https://mesinfos.fr/auvergne-rhone-alpes/a",
   ])("accepte %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
   });

@@ -19,6 +19,13 @@ describe("sources de presse des événements d’affaire", () => {
     expect(isVerifiedAffairPressUrl("https://lemonde.fr.example.net/article")).toBe(false);
   });
 
+  it("accepte franceinfo sous ses deux domaines", () => {
+    expect(isVerifiedAffairPressUrl("https://www.franceinfo.fr/politique/article.html")).toBe(true);
+    expect(isVerifiedAffairPressUrl("https://www.francetvinfo.fr/politique/article.html")).toBe(
+      true
+    );
+  });
+
   it("exige une date de publication et un extrait explicites", () => {
     expect(findVerifiedAffairPressEventSource([completeSource])).toEqual(completeSource);
     expect(

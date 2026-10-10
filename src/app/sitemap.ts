@@ -239,6 +239,12 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       priority: 0.8,
     },
     {
+      url: `${SITE_URL}/methodologie/sources-medias`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
       url: `${SITE_URL}/espace-presse`,
       // Static content: its date only moves when the mentions or credits change.
       lastModified: new Date(PRESS_SPACE_UPDATED_AT),
