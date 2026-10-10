@@ -7,6 +7,8 @@
  * Ce qui est refusé n'est pas de la presse : agrégateurs, blogs, encyclopédies, réseaux sociaux,
  * sites de partis ou d'associations parties prenantes. La liste doit s'étendre : un titre légitime
  * absent s'ajoute ici (une ligne), le garde l'indique à l'admin au moment de publier.
+ *
+ * La page publique /methodologie/sources-medias affiche ces deux tableaux tels quels.
  */
 
 /** Juridictions, administrations et assemblées : seules adresses acceptées en « source officielle ». */
@@ -119,6 +121,7 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lyonmag.com",
   "petit-bulletin.fr",
   "corsenetinfos.corsica",
+  "mesinfos.fr", // GIE Mesinfos, SPEL reconnu CPPAP : Affiches Parisiennes, Tout Lyon, TPBM
   // Médias locaux d'enquête en ligne
   "marsactu.fr",
   "mediacites.fr",

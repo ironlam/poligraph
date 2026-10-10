@@ -101,6 +101,15 @@ export default function MethodologiePage() {
           </span>
         </Link>
         <Link
+          href="/methodologie/sources-medias"
+          className="rounded-xl border border-border p-4 hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <span className="block font-bold">Médias admis comme sources</span>
+          <span className="mt-1 block text-sm text-muted-foreground">
+            Critères, refus, demandes d{"'"}ajout et liste complète.
+          </span>
+        </Link>
+        <Link
           href="#candidatures-presidentielle-2027"
           className="rounded-xl border border-border p-4 hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
@@ -425,7 +434,12 @@ export default function MethodologiePage() {
             Chaque affaire judiciaire référencée sur Poligraph est documentée par au moins une
             source journalistique vérifiable (Le Monde, Mediapart, AFP, etc.). Les données
             officielles (Assemblée nationale, Sénat, gouvernement) prévalent sur les sources
-            tierces. Pour plus de détails sur nos sources de données, consultez la page{" "}
+            tierces. Chaque étape de la chronologie d{"'"}une affaire cite une source officielle ou
+            l{"'"}un des{" "}
+            <Link href="/methodologie/sources-medias" className="text-primary hover:underline">
+              médias admis comme sources
+            </Link>
+            . Pour plus de détails sur nos sources de données, consultez la page{" "}
             <Link href="/sources" className="text-primary hover:underline">
               Sources et principes éditoriaux
             </Link>
