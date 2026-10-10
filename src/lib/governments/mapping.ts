@@ -277,8 +277,8 @@ export function personVisibility(p: VisibilityInput): PersonVisibility {
 }
 
 function lifespan(p: PersonRow): string | null {
-  const birth = p.birthDate?.getUTCFullYear();
-  const death = p.deathDate?.getUTCFullYear();
+  const birth = p.birthDate ? Number(parisDay(p.birthDate).slice(0, 4)) : undefined;
+  const death = p.deathDate ? Number(parisDay(p.deathDate).slice(0, 4)) : undefined;
   if (birth && death) return `${birth}-${death}`;
   if (birth) {
     const gender = genderOf(p.civility);
