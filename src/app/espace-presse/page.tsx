@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { SourceLine } from "@/components/ui/SourceLine";
-import { publishedContributors, sortedMentions } from "@/config/press-space";
+import { DATAGOUV_REUSES, publishedContributors, sortedMentions } from "@/config/press-space";
 import { BRAND_NAVY, BRAND_PAGE } from "@/config/brand";
 import { formatDateFrUTC } from "@/lib/utils";
 
@@ -106,6 +106,21 @@ export default function EspacePressePage() {
             </li>
           ))}
         </ul>
+
+        <div id="datagouv" className="mt-8 scroll-mt-20">
+          <h3 className="mb-2 text-lg font-semibold">Poligraph sur data.gouv.fr</h3>
+          <p>
+            Le projet a déclaré ses réutilisations des données publiques sur data.gouv.fr, la
+            plateforme des données ouvertes de l&apos;État :
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {DATAGOUV_REUSES.map((reuse) => (
+              <li key={reuse.url}>
+                <ExternalLink href={reuse.url}>{reuse.title}</ExternalLink>
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section id="kit" className="mt-12 scroll-mt-20">

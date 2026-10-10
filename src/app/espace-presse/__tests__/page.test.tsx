@@ -13,7 +13,7 @@ vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 import EspacePressePage, { metadata } from "@/app/espace-presse/page";
 import sitemap from "@/app/sitemap";
 import { FOOTER_SECTIONS } from "@/config/navigation";
-import { PRESS_MENTIONS, PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
+import { DATAGOUV_REUSES, PRESS_MENTIONS, PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { SITE_URL } from "@/config/site";
 
 function render() {
@@ -48,6 +48,16 @@ describe("/espace-presse", () => {
       ).not.toBeNull();
     }
     expect(text).toContain("Consulté le 10 octobre 2026");
+  });
+
+  it("links every data.gouv.fr reuse inside the mentions section", () => {
+    const { document } = render();
+    for (const reuse of DATAGOUV_REUSES) {
+      expect(
+        document.querySelector(`#mentions a[href="${reuse.url}"]`),
+        reuse.title
+      ).not.toBeNull();
+    }
   });
 
   it("names no contributor who has not agreed", () => {
