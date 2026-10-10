@@ -15,9 +15,18 @@ jobs:
     steps:
       - name: Check security headers on production
         run: |
-          HEADERS=$(curl -sI https://poligraph.fr)
+          # The Vercel Firewall challenges non-browser clients on pages, and its
+          # challenge response carries none of the app headers. robots.txt is a
+          # machine path the firewall lets through, and next.config.ts applies the
+          # same headers to every route ("/(.*)").
+          HEADERS=$(curl -sI -A node https://poligraph.fr/robots.txt)
 
           echo "=== Security Headers Check ==="
+
+          echo "$HEADERS" | grep -qi "^x-vercel-mitigated" \
+            && { echo "❌ Response came from the Vercel Firewall, not the app: check the machine-path bypass"; exit 1; }
+          echo "$HEADERS" | head -1 | grep -q " 200" \
+            || { echo "❌ Unexpected status: $(echo "$HEADERS" | head -1)"; exit 1; }
 
           # HSTS
           echo "$HEADERS" | grep -qi "strict-transport-security" \
