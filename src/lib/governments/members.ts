@@ -2,6 +2,7 @@
 // Aucune présence n'est décidée ici : tout passe par `overlapsPeriod` et `compositionAt`.
 
 import { normalizeText } from "@/lib/name-matching";
+import { matchesAffairsFilter, type MemberAffairsMap } from "./affairs";
 import { addDays, compositionAt, consultableRange, overlapsPeriod } from "./composition";
 import type { GovernmentEpisode, PersonCard } from "./mapping";
 import type { MembersFunctionFilter, MembersQuery } from "./params";
@@ -90,11 +91,13 @@ function periodCategory(
  * Les catégories sont calculées sur toutes les fonctions du gouvernement, personnes cachées
  * comprises (une sortie cachée reste une sortie pour la règle 4) ; les filtres viennent ensuite.
  * Les personnes cachées ne sont jamais listées. Liste triée par nom de famille normalisé.
+ * `affairs` ne sert qu'au filtre `affaires` : sans entrée, une personne n'y passe pas.
  */
 export function filterMembers(
   govs: GovernmentDates[],
   data: MembersData,
-  query: MembersQuery
+  query: MembersQuery,
+  affairs: MemberAffairsMap = {}
 ): MembersResult {
   const scope = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
   const byGov = new Map<string, GovernmentEpisode[]>(scope.map((g) => [g.id, []]));
@@ -135,6 +138,7 @@ export function filterMembers(
     const person = data.people[fn.episode.politicianId];
     if (!person || person.visibility === "hidden") continue;
     if (query.personne !== null && person.slug !== query.personne) continue;
+    if (query.affaires && !matchesAffairsFilter(affairs[person.id], query.affaires)) continue;
     if (needle) {
       const haystack = `${normalizeSearch(person.fullName)} ${normalizeSearch(person.slug)}`;
       if (!haystack.includes(needle)) continue;

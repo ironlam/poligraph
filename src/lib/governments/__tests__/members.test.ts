@@ -98,6 +98,7 @@ function query(overrides: Partial<MembersQuery> = {}): MembersQuery {
     au: "2018-01-01",
     gouvernement: null,
     fonction: null,
+    affaires: null,
     q: "",
     personne: null,
     page: 1,
@@ -217,6 +218,21 @@ describe("filterMembers, mode période", () => {
     const byGov = okResult(filterMembers([g1, g2], data, query({ gouvernement: "autre" })));
     expect(byGov.persons.map((p) => p.person.id)).toEqual(["pB"]);
     expect(byGov.persons[0]!.functions.map((f) => f.episode.membershipId)).toEqual(["b2"]);
+  });
+
+  it("filtre par affaires sans rien changer sans le filtre", () => {
+    const data: MembersData = { episodes: [ep("a1", "pA"), ep("b1", "pB")], people };
+    const affairs = { pB: { definitive: 0, nonDefinitive: 1, ongoing: 0 } };
+    const all = okResult(filterMembers([g1], data, query(), affairs));
+    expect(all.persons.map((p) => p.person.id)).toEqual(["pB", "pA"]);
+    const convicted = okResult(
+      filterMembers([g1], data, query({ affaires: "condamnation" }), affairs)
+    );
+    expect(convicted.persons.map((p) => p.person.id)).toEqual(["pB"]);
+    const definitive = okResult(
+      filterMembers([g1], data, query({ affaires: "condamnation-definitive" }), affairs)
+    );
+    expect(definitive.persons).toEqual([]);
   });
 
   it("compte à part les personnes dont la présence est à préciser", () => {

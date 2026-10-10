@@ -10,6 +10,7 @@ import { MissingData } from "@/components/ui/MissingData";
 import { NoResultsState, StateCard } from "@/components/governments/CompositionStates";
 import { CopyLinkButton } from "@/components/governments/CopyLinkButton";
 import { FiltersPanel } from "@/components/governments/FiltersPanel";
+import { MemberAffairsSummary } from "@/components/governments/MemberAffairsSummary";
 import { StatusBadge } from "@/components/governments/GovernmentBadges";
 import {
   GovernmentMemberCard,
@@ -27,6 +28,8 @@ import {
   plural,
 } from "@/components/governments/format";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
+import { getGovernmentMemberAffairs } from "@/lib/data/government-affairs";
+import { AFFAIRS_FILTERS, type MembersAffairsFilter } from "@/lib/governments/affairs";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   filterMembers,
@@ -47,6 +50,12 @@ import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing
 
 const PATH = "/politiques/gouvernements/membres";
 const RETURN_LABEL = "Retour à « Membres des gouvernements »";
+
+const AFFAIRS_LABEL: Record<MembersAffairsFilter, string> = {
+  toutes: "Procédure ou condamnation",
+  condamnation: "Condamnation",
+  "condamnation-definitive": "Condamnation définitive",
+};
 
 const FUNCTION_LABEL: Record<MembersFunctionFilter, string> = {
   pm: "Premier ministre",
@@ -97,6 +106,7 @@ function hrefFor(query: MembersQuery, coverage: { from: string; to: string }): s
   if (query.au !== coverage.to) params.set("au", query.au);
   if (query.gouvernement) params.set("gouvernement", query.gouvernement);
   if (query.fonction) params.set("fonction", query.fonction);
+  if (query.affaires) params.set("affaires", query.affaires);
   if (query.q) params.set("q", query.q);
   if (query.personne) params.set("personne", query.personne);
   if (query.page > 1) params.set("page", String(query.page));
@@ -148,7 +158,11 @@ export default async function MembresPage({ searchParams }: PageProps) {
   if (!(await isFeatureEnabled("gouvernements"))) notFound();
 
   const raw = flatten(await searchParams);
-  const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
+  const [govs, data, affairs] = await Promise.all([
+    getPublishedGovernments(),
+    getGovernmentEpisodes(),
+    getGovernmentMemberAffairs(),
+  ]);
   const coverage = membersCoverage(govs);
   const govById = new Map(govs.map((g) => [g.id, g]));
 
@@ -187,7 +201,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
   }
 
   const { query } = parseMembersQuery(raw, coverage, new Set(govs.map((g) => g.slug)));
-  const result = filterMembers(govs, data, query);
+  const result = filterMembers(govs, data, query, affairs);
   // Partial coverage is judged on the governments actually in scope.
   const scopeGovs = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
   const anyPartial = scopeGovs.some(isPartial);
@@ -218,6 +232,12 @@ export default async function MembresPage({ searchParams }: PageProps) {
     chips.push({
       label: `Fonction : ${FUNCTION_LABEL[query.fonction]}`,
       href: hrefFor({ ...query, fonction: null, page: 1 }, coverage),
+    });
+  }
+  if (query.affaires) {
+    chips.push({
+      label: `Affaires : ${AFFAIRS_LABEL[query.affaires]}`,
+      href: hrefFor({ ...query, affaires: null, page: 1 }, coverage),
     });
   }
   const filterCount = chips.length;
@@ -299,6 +319,11 @@ export default async function MembresPage({ searchParams }: PageProps) {
           returnUrl={selfUrl}
           returnLabel={RETURN_LABEL}
           nameClassName="font-display text-[17px] font-bold"
+          aside={
+            query.affaires && row.person.visibility === "published" ? (
+              <MemberAffairsSummary affairs={affairs[row.person.id]} slug={row.person.slug} />
+            ) : undefined
+          }
         />
       ))}
     </div>
@@ -360,7 +385,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
             />
           </div>
           <FiltersPanel activeCount={filterCount}>
-            <div className="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr_1.2fr_1fr_auto] md:items-end">
+            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr_1fr_1.3fr_auto] md:items-end">
               <div className="flex flex-col gap-1">
                 <label htmlFor="membres-mode" className="text-sm font-medium">
                   Mode
@@ -433,6 +458,24 @@ export default async function MembresPage({ searchParams }: PageProps) {
                   {(Object.keys(FUNCTION_LABEL) as MembersFunctionFilter[]).map((f) => (
                     <option key={f} value={f}>
                       {FUNCTION_LABEL[f]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="membres-affaires" className="text-sm font-medium">
+                  Affaires judiciaires
+                </label>
+                <select
+                  id="membres-affaires"
+                  name="affaires"
+                  defaultValue={query.affaires ?? ""}
+                  className={fieldClass}
+                >
+                  <option value="">Sans filtre</option>
+                  {AFFAIRS_FILTERS.map((f) => (
+                    <option key={f} value={f}>
+                      {AFFAIRS_LABEL[f]}
                     </option>
                   ))}
                 </select>
@@ -523,6 +566,28 @@ export default async function MembresPage({ searchParams }: PageProps) {
                 filtres appliqués.
               </p>
             </div>
+
+            {query.affaires && (
+              <div className="rounded-2xl border bg-muted/40 p-4 text-sm leading-relaxed">
+                <p>
+                  Ce filtre retient les personnes visées par une affaire publiée sur Poligraph : une
+                  procédure validée par un juge (instruction, mise en examen, renvoi, procès) ou une
+                  condamnation pénale. Les enquêtes préliminaires et les procédures closes sans
+                  condamnation n&apos;y figurent pas.
+                </p>
+                <p className="mt-2">
+                  Une procédure en cours ou une condamnation non définitive ne vaut pas culpabilité
+                  : la personne reste présumée innocente. Une affaire peut aussi porter sur des
+                  faits sans lien avec les fonctions gouvernementales.{" "}
+                  <Link
+                    href="/methodologie#affaires-judiciaires"
+                    className="font-bold text-primary underline-offset-4 hover:underline"
+                  >
+                    Notre méthode
+                  </Link>
+                </p>
+              </div>
+            )}
 
             <section aria-label="Résultats" className="flex flex-col gap-5">
               {main.length === 0 ? (

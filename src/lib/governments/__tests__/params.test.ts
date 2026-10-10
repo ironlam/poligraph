@@ -38,6 +38,7 @@ describe("parseMembersQuery", () => {
         au: "2026-09-30",
         gouvernement: null,
         fonction: null,
+        affaires: null,
         q: "",
         personne: null,
         page: 1,
@@ -149,5 +150,14 @@ describe("parseMembersQuery, personne", () => {
   it("accepte 120 caractères", () => {
     const personne = "a".repeat(120);
     expect(parseMembersQuery({ personne }, coverage, slugs).query.personne).toBe(personne);
+  });
+
+  it("lit le filtre affaires et ignore une valeur inconnue", () => {
+    expect(parseMembersQuery({ affaires: "condamnation" }, coverage, slugs).query.affaires).toBe(
+      "condamnation"
+    );
+    const { query, invalid } = parseMembersQuery({ affaires: "oui" }, coverage, slugs);
+    expect(query.affaires).toBeNull();
+    expect(invalid).toBe(true);
   });
 });

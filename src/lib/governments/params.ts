@@ -1,6 +1,8 @@
 // Lecture des paramètres d'URL de la rubrique « Gouvernements » (spec §6.3 et §6.4).
 // Toute valeur invalide est remplacée par son défaut et signalée par `invalid` (page en noindex).
 
+import { AFFAIRS_FILTERS, type MembersAffairsFilter } from "./affairs";
+
 export const MAX_MEMBERS_PAGE = 100;
 export const MEMBERS_PAGE_SIZE = 50;
 export const MAX_QUERY_LENGTH = 100;
@@ -15,6 +17,7 @@ export type MembersQuery = {
   au: string;
   gouvernement: string | null;
   fonction: MembersFunctionFilter | null;
+  affaires: MembersAffairsFilter | null;
   q: string;
   /** Exact person slug (export detail link); `null` when absent or invalid. */
   personne: string | null;
@@ -84,6 +87,14 @@ export function parseMembersQuery(
     else invalid = true;
   }
 
+  let affaires: MembersAffairsFilter | null = null;
+  const rawAffairs = present("affaires");
+  if (rawAffairs !== undefined) {
+    const match = AFFAIRS_FILTERS.find((f) => f === rawAffairs);
+    if (match) affaires = match;
+    else invalid = true;
+  }
+
   let page = 1;
   const rawPage = present("page");
   if (rawPage !== undefined) {
@@ -102,5 +113,5 @@ export function parseMembersQuery(
     } else invalid = true;
   }
 
-  return { query: { mode, du, au, gouvernement, fonction, q, personne, page }, invalid };
+  return { query: { mode, du, au, gouvernement, fonction, affaires, q, personne, page }, invalid };
 }
