@@ -284,6 +284,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/sources", label: "Sources et principes" },
       { href: "/methodologie", label: "Méthodologie" },
       { href: "/docs/api", label: "API" },
+      { href: "/espace-presse", label: "Presse et partenaires" },
       {
         href: "https://boussole.poligraph.fr",
         label: "Boussole",
