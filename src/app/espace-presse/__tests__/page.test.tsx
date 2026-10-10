@@ -60,6 +60,19 @@ describe("/espace-presse", () => {
     }
   });
 
+  // Standalone links need a 44 px touch target (AGENTS.md, accessibility).
+  it("gives standalone links a 44 px touch target", () => {
+    const { document } = render();
+    const standalone = [
+      ...DATAGOUV_REUSES.map((r) => document.querySelector(`a[href="${r.url}"]`)),
+      ...document.querySelectorAll("a[download]"),
+    ];
+    expect(standalone.length).toBeGreaterThan(0);
+    for (const a of standalone) {
+      expect(a?.className, a?.getAttribute("href") ?? "").toContain("min-h-11");
+    }
+  });
+
   it("names no contributor who has not agreed", () => {
     const { text } = render();
     // No entry carries consentedAt yet: the section must stay anonymous.

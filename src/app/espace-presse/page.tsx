@@ -23,13 +23,21 @@ const LOGOS = [
   { file: "/logo-inverse.svg", label: "Logo pour fond sombre", format: "SVG", dark: true },
 ];
 
-function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
+function ExternalLink({
+  href,
+  children,
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="underline hover:text-primary"
+      className={`underline hover:text-primary ${className}`.trim()}
     >
       {children}
       <span className="sr-only"> (nouvel onglet)</span>
@@ -116,7 +124,9 @@ export default function EspacePressePage() {
           <ul className="mt-2 list-disc space-y-1 pl-5">
             {DATAGOUV_REUSES.map((reuse) => (
               <li key={reuse.url}>
-                <ExternalLink href={reuse.url}>{reuse.title}</ExternalLink>
+                <ExternalLink href={reuse.url} className="inline-flex min-h-11 items-center">
+                  {reuse.title}
+                </ExternalLink>
               </li>
             ))}
           </ul>
@@ -155,7 +165,11 @@ export default function EspacePressePage() {
                 <img src={logo.file} alt="" width={56} height={56} />
               </span>
               <span className="text-sm">
-                <a href={logo.file} download className="font-medium underline hover:text-primary">
+                <a
+                  href={logo.file}
+                  download
+                  className="inline-flex min-h-11 items-center font-medium underline hover:text-primary"
+                >
                   {logo.label}
                 </a>
                 <span className="block text-muted-foreground">{logo.format}</span>
