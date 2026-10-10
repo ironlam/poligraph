@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
-import { NAV_ELECTIONS, NAV_PRIMARY, NAV_SECONDARY } from "@/config/navigation";
+import { NAV_ELECTIONS, NAV_PRIMARY, NAV_SECONDARY, filterNavItems } from "@/config/navigation";
 import {
   BarChart3,
   Users,
@@ -67,9 +67,7 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
   const { open: openPalette } = useCommandPalette();
   const flagSet = new Set(enabledFlags);
 
-  const filteredPrimary = NAV_PRIMARY.filter(
-    (item) => !item.featureFlag || flagSet.has(item.featureFlag)
-  );
+  const filteredPrimary = filterNavItems(NAV_PRIMARY, flagSet);
   const filteredSecondary = NAV_SECONDARY.filter(
     (item) => !item.featureFlag || flagSet.has(item.featureFlag)
   );
@@ -258,6 +256,10 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                 {filteredPrimary.map((item) => {
                   const Icon = item.icon ? ICON_MAP[item.icon] : null;
                   const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                  // With sub-links, `aria-current` moves to the most specific matching child.
+                  const activeChildHref = item.children
+                    ?.filter((c) => pathname === c.href || pathname.startsWith(c.href + "/"))
+                    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
                   const className = `flex items-center justify-between px-4 py-4 rounded-xl text-xl font-display font-semibold transition-colors ${
                     item.highlight
                       ? "border border-primary/40 text-primary"
@@ -296,11 +298,34 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
                         <Link
                           href={item.href}
                           onClick={close}
-                          aria-current={isActive ? "page" : undefined}
+                          aria-current={isActive && !item.children ? "page" : undefined}
                           className={className}
                         >
                           {children}
                         </Link>
+                      )}
+                      {item.children && (
+                        <ul className="mt-1 ml-8 space-y-1 border-l border-border pl-3">
+                          {item.children.map((child) => {
+                            const childActive = child.href === activeChildHref;
+                            return (
+                              <li key={child.href}>
+                                <Link
+                                  href={child.href}
+                                  onClick={close}
+                                  aria-current={childActive ? "page" : undefined}
+                                  className={`flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors ${
+                                    childActive
+                                      ? "bg-muted text-foreground"
+                                      : "text-foreground/80 hover:bg-muted hover:text-foreground"
+                                  }`}
+                                >
+                                  {child.label}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       )}
                     </li>
                   );

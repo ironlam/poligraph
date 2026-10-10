@@ -34,3 +34,23 @@ export const VOTES_LISTING_FILTER_KEYS = [
 export const DOSSIERS_LISTING_FILTER_KEYS = ["status", "theme", "sort"] as const;
 
 export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions"] as const;
+
+/** /politiques/gouvernements: search and year filters. */
+export const GOUVERNEMENTS_LISTING_FILTER_KEYS = ["q", "annee"] as const;
+
+/**
+ * /politiques/gouvernements/[slug] : every `date` (valid or not) shows a historical composition, a
+ * utility view of the same page. Self canonical, not the latest composition (spec §8).
+ */
+export const GOUVERNEMENT_DETAIL_FILTER_KEYS = ["date"] as const;
+
+/** /politiques/gouvernements/membres: every filter of the list; `page` via pagination. */
+export const GOUVERNEMENTS_MEMBRES_FILTER_KEYS = [
+  "mode",
+  "du",
+  "au",
+  "gouvernement",
+  "fonction",
+  "q",
+  "personne",
+] as const;

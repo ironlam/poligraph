@@ -8,7 +8,7 @@
  *   npx tsx --env-file=.env scripts/publish-government-profiles.ts --lot <id> --apply --confirm-production
  *   npx tsx --env-file=.env scripts/publish-government-profiles.ts --rollback <id> --confirm-production
  *
- * Env pour --apply et --rollback : SITE_URL (ou NEXT_PUBLIC_SITE_URL), CRON_SECRET.
+ * Env pour --apply et --rollback : NEXT_PUBLIC_SITE_URL, CRON_SECRET.
  * Revalidation : chemins /politiques/<slug> par lots de 10 espacés de 30 s, puis le tag
  * « gouvernements ». Aucune purge de tag large.
  */
@@ -32,12 +32,10 @@ const value = (name: string) => {
 };
 
 function revalidateDeps(): RevalidateDeps {
-  const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const cronSecret = process.env.CRON_SECRET;
   if (!siteUrl || !cronSecret) {
-    throw new Error(
-      "SITE_URL (ou NEXT_PUBLIC_SITE_URL) et CRON_SECRET sont requis. Rien n'a été écrit."
-    );
+    throw new Error("NEXT_PUBLIC_SITE_URL et CRON_SECRET sont requis. Rien n'a été écrit.");
   }
   return {
     fetchImpl: fetch,

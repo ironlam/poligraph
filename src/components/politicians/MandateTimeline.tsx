@@ -4,6 +4,9 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { MANDATE_TYPE_LABELS, feminizeRole } from "@/config/labels";
 import type { SerializedMandate, MandateType } from "@/types";
+import type { ProfileMandateGovernment } from "@/lib/data/politician-profile-reads";
+import { mandateGovernmentLink } from "@/components/governments/profile-link";
+import { formatDay } from "@/components/governments/format";
 
 const MAIRE_TYPES: MandateType[] = ["MAIRE", "ADJOINT_MAIRE", "CONSEILLER_MUNICIPAL"];
 
@@ -26,11 +29,35 @@ interface MandateWithGroup extends SerializedMandate {
   parliamentaryData?: {
     parliamentaryGroup?: { code: string; name: string; color: string | null } | null;
   } | null;
+  /** Absent from profile documents stored before it was read. */
+  governmentData?: ProfileMandateGovernment | null;
 }
 
 interface MandateTimelineProps {
   mandates: MandateWithGroup[];
   civility?: string | null;
+  /** « gouvernements » feature flag, resolved by the server page. */
+  governmentsEnabled?: boolean;
+}
+
+/** Links to the government of a ministerial mandate, when that government is published. */
+function GovernmentLinks({ mandate, enabled }: { mandate: MandateWithGroup; enabled: boolean }) {
+  const link = mandateGovernmentLink(mandate, enabled);
+  if (!link) return null;
+  const linkClass = "inline-flex min-h-11 items-center text-xs text-primary hover:underline";
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 text-xs">
+      <Link href={link.href} className={linkClass} prefetch={false}>
+        {link.name}
+      </Link>
+      <Link href={link.compositionHref} className={linkClass} prefetch={false}>
+        Voir la composition au {formatDay(link.compositionDay)}
+      </Link>
+      {link.currentAffairs && (
+        <span className="text-muted-foreground">puis affaires courantes</span>
+      )}
+    </div>
+  );
 }
 
 // Group mandates by category
@@ -101,7 +128,11 @@ function formatYear(date: Date): string {
   return new Date(date).getFullYear().toString();
 }
 
-export function MandateTimeline({ mandates, civility }: MandateTimelineProps) {
+export function MandateTimeline({
+  mandates,
+  civility,
+  governmentsEnabled = false,
+}: MandateTimelineProps) {
   const currentMandates = mandates.filter((m) => m.isCurrent);
   const pastMandates = mandates.filter((m) => !m.isCurrent);
 
@@ -229,6 +260,7 @@ export function MandateTimeline({ mandates, civility }: MandateTimelineProps) {
                         ) : null;
                       })()}
                     </div>
+                    <GovernmentLinks mandate={mandate} enabled={governmentsEnabled} />
                   </div>
                 </div>
               );
@@ -278,31 +310,31 @@ export function MandateTimeline({ mandates, civility }: MandateTimelineProps) {
                                   : mandate.institution || mandate.constituency || null;
                               const group = mandate.parliamentaryData?.parliamentaryGroup;
                               return (
-                                <div
-                                  key={mandate.id}
-                                  className="flex items-baseline gap-2 text-xs text-muted-foreground"
-                                >
-                                  <span className="shrink-0">
-                                    {formatYear(mandate.startDate)}
-                                    {mandate.endDate && ` - ${formatYear(mandate.endDate)}`}
-                                  </span>
-                                  <span>·</span>
-                                  <span>
-                                    {group && (
-                                      <span
-                                        className="font-medium"
-                                        style={{
-                                          color: group.color || undefined,
-                                        }}
-                                      >
-                                        {group.code}
-                                      </span>
-                                    )}
-                                    {group && " · "}
-                                    {detail
-                                      ? `${detail} · ${formatDuration(mandate.startDate, mandate.endDate)}`
-                                      : formatDuration(mandate.startDate, mandate.endDate)}
-                                  </span>
+                                <div key={mandate.id}>
+                                  <div className="flex items-baseline gap-2 text-xs text-muted-foreground">
+                                    <span className="shrink-0">
+                                      {formatYear(mandate.startDate)}
+                                      {mandate.endDate && ` - ${formatYear(mandate.endDate)}`}
+                                    </span>
+                                    <span>·</span>
+                                    <span>
+                                      {group && (
+                                        <span
+                                          className="font-medium"
+                                          style={{
+                                            color: group.color || undefined,
+                                          }}
+                                        >
+                                          {group.code}
+                                        </span>
+                                      )}
+                                      {group && " · "}
+                                      {detail
+                                        ? `${detail} · ${formatDuration(mandate.startDate, mandate.endDate)}`
+                                        : formatDuration(mandate.startDate, mandate.endDate)}
+                                    </span>
+                                  </div>
+                                  <GovernmentLinks mandate={mandate} enabled={governmentsEnabled} />
                                 </div>
                               );
                             })}

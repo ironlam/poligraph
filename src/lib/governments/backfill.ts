@@ -1,4 +1,4 @@
-// Plan et application du backfill des gouvernements (one-shot, voir scripts/governments-backfill.ts).
+// Plan et application du backfill des gouvernements (exécuté le 2026-10-10 ; le script CLI a été retiré).
 // `planBackfill` est pure : elle ne lit que les lignes qu'on lui donne. `applyBackfill` écrit.
 
 import type { db as Db } from "@/lib/db";

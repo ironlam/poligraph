@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
 vi.mock("next/server", () => ({ connection: h.connection }));
 vi.mock("next/cache", () => ({ cacheTag: h.cacheTag, cacheLife: h.cacheLife }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 
 import ConfidentialitePage, {
   metadata as confidentialiteMetadata,

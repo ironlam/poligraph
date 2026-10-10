@@ -5,12 +5,20 @@
 /**
  * Escape a value for CSV format
  */
-function escapeCSV(value: string | number | boolean | null | undefined): string {
+function escapeCSV(
+  value: string | number | boolean | null | undefined,
+  neutralizeFormulas = false
+): string {
   if (value === null || value === undefined) {
     return "";
   }
 
-  const str = String(value);
+  let str = String(value);
+
+  // A spreadsheet reads a text cell starting with one of these as a formula.
+  if (neutralizeFormulas && typeof value === "string" && /^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
 
   // If the value contains quotes, commas, or newlines, wrap in quotes and escape quotes
   if (str.includes('"') || str.includes(",") || str.includes("\n") || str.includes("\r")) {
@@ -25,7 +33,8 @@ function escapeCSV(value: string | number | boolean | null | undefined): string 
  */
 export function toCSV<T extends Record<string, unknown>>(
   data: T[],
-  columns: { key: keyof T; header: string }[]
+  columns: { key: keyof T; header: string }[],
+  options?: { neutralizeFormulas?: boolean }
 ): string {
   if (data.length === 0) {
     return columns.map((c) => c.header).join(",");
@@ -37,7 +46,12 @@ export function toCSV<T extends Record<string, unknown>>(
   // Data rows
   const rows = data.map((item) =>
     columns
-      .map((c) => escapeCSV(item[c.key] as string | number | boolean | null | undefined))
+      .map((c) =>
+        escapeCSV(
+          item[c.key] as string | number | boolean | null | undefined,
+          options?.neutralizeFormulas
+        )
+      )
       .join(",")
   );
 

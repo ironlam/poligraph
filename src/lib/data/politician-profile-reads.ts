@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { DateEvidence, GovernmentFunctionEnd, PublicationStatus } from "@/generated/prisma";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
@@ -73,6 +74,21 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
               commune: { select: { population: true } },
             },
           },
+          // Link from a ministerial mandate to its government page, when that one is published.
+          governmentData: {
+            select: {
+              endKind: true,
+              government: {
+                select: {
+                  slug: true,
+                  name: true,
+                  publicationStatus: true,
+                  currentAffairsActId: true,
+                  resignedEvidence: true,
+                },
+              },
+            },
+          },
         },
       },
       // Kept on the critical path: `generateMetadata` reads the latest DIA's `details` to build the
@@ -104,10 +120,19 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
   if (!politician) return null;
 
   // A party with no public member is not nameable on a public surface.
-  const mandates = politician.mandates.map((mandate) => ({
+  // `governmentData` is kept only for a PUBLISHED government. Prisma returns `null` for every other
+  // mandate, and a key added to every stored document would change every profile's fingerprint
+  // (mass invalidation). Documents stored before it was read lack the key too.
+  const mandates: Array<
+    Omit<(typeof politician.mandates)[number], "party" | "governmentData"> & {
+      party: { name: string } | null;
+      governmentData?: ProfileMandateGovernment;
+    }
+  > = politician.mandates.map(({ governmentData, ...mandate }) => ({
     ...mandate,
     party:
       mandate.party && mandate.party._count.politicians > 0 ? { name: mandate.party.name } : null,
+    ...(governmentData?.government?.publicationStatus === "PUBLISHED" ? { governmentData } : {}),
   }));
   const partyHistory = politician.partyHistory.flatMap((membership) => {
     if (!membership.party || membership.party._count.politicians === 0) return [];
@@ -125,6 +150,20 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
   });
   return { ...politician, mandates, partyHistory };
 }
+
+/** Government of a ministerial mandate, as stored in the profile document. */
+export type ProfileMandateGovernment = {
+  endKind: GovernmentFunctionEnd | null;
+  government: {
+    slug: string;
+    name: string;
+    publicationStatus: PublicationStatus;
+    /** Act attesting the current-affairs regime of the resigned government; null if none. */
+    currentAffairsActId: string | null;
+    /** Evidence of the resignation date; the regime is attested only with an ACT. */
+    resignedEvidence?: DateEvidence | null;
+  } | null;
+};
 
 /** The non-null shape of the identity read, for components that receive it as a prop. */
 export type PoliticianIdentity = NonNullable<Awaited<ReturnType<typeof readPoliticianIdentity>>>;

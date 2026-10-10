@@ -15,6 +15,7 @@ vi.mock("server-only", () => ({}));
 // The unit CI job has no DATABASE_URL, so the import alone would throw before any test runs.
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/lib/data/politician-profile", () => ({
   getPoliticianProfile: mocks.getPoliticianProfile,

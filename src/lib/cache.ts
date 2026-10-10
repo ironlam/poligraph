@@ -301,6 +301,7 @@ const EXPORT_TAGS_BY_CACHE_TAG: Record<string, readonly string[]> = {
   parties: [EXPORT_CACHE_TAGS.politicians, EXPORT_CACHE_TAGS.affairs, EXPORT_CACHE_TAGS.factchecks],
   factchecks: [EXPORT_CACHE_TAGS.factchecks, EXPORT_CACHE_TAGS.politicians],
   votes: [EXPORT_CACHE_TAGS.votes],
+  gouvernements: [EXPORT_CACHE_TAGS.governments],
 };
 
 /**
