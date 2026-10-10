@@ -175,6 +175,11 @@ function describeChange(
     return p && p.visibility !== "hidden" ? p.fullName : null;
   };
   const names = [...new Set(eps.map(visibleName).filter((n): n is string => n !== null))];
+  // A line about a hidden person must not give away the function title either.
+  const concernsHidden = eps.some((ep) => people[ep.politicianId]?.visibility === "hidden");
+  if (concernsHidden && ["entry", "exit", "titleChange"].includes(change.kind)) {
+    return "Changement non détaillé.";
+  }
 
   switch (change.kind) {
     case "formation":

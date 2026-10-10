@@ -42,7 +42,8 @@ export function mandateGovernmentLink(
     href,
     compositionHref: `${href}?date=${compositionDay}`,
     compositionDay,
-    currentAffairs: collective && government.currentAffairsActId !== null,
+    currentAffairs:
+      collective && government.currentAffairsActId != null && government.resignedEvidence === "ACT",
   };
 }
 
@@ -58,7 +59,7 @@ function compositionDayOf(
   collective: boolean
 ): string {
   const startDay = parisDay(new Date(start));
-  if (end === null) return startDay;
+  if (end == null) return startDay;
   const endDay = parisDay(new Date(end));
   if (collective) return endDay;
   const before = previousDay(endDay);

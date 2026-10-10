@@ -45,6 +45,7 @@ const h = vi.hoisted(() => {
   return { findMany, db: new Proxy({}, fallback), isFeatureEnabled: vi.fn() };
 });
 
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
@@ -102,5 +103,15 @@ describe("sitemap : rubrique Gouvernements", () => {
 
   it("purge le shard 0 avec le tag gouvernements", () => {
     expect(SITEMAP_SHARD_TAGS[0]).toContain("gouvernements");
+  });
+
+  it("ne casse pas le shard 0 quand la lecture des gouvernements échoue", async () => {
+    h.isFeatureEnabled.mockResolvedValue(true);
+    h.findMany.mockRejectedValueOnce(new Error("db down"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const entries = await shard0();
+    expect(entries.length).toBeGreaterThan(0);
+    expect(govUrls(entries)).toEqual([]);
+    spy.mockRestore();
   });
 });

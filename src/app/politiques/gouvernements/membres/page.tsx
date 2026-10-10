@@ -141,7 +141,6 @@ export default async function MembresPage({ searchParams }: PageProps) {
   const [govs, data] = await Promise.all([getPublishedGovernments(), getGovernmentEpisodes()]);
   const coverage = membersCoverage(govs);
   const govById = new Map(govs.map((g) => [g.id, g]));
-  const anyPartial = govs.some(isPartial);
 
   const header = (
     <>
@@ -179,6 +178,9 @@ export default async function MembresPage({ searchParams }: PageProps) {
 
   const { query } = parseMembersQuery(raw, coverage, new Set(govs.map((g) => g.slug)));
   const result = filterMembers(govs, data, query);
+  // Partial coverage is judged on the governments actually in scope.
+  const scopeGovs = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
+  const anyPartial = scopeGovs.some(isPartial);
   const selfUrl = currentUrl(raw);
   const reset = PATH;
 
@@ -460,7 +462,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
               <p>
                 <span className="font-display text-[22px] font-extrabold">
                   {query.mode === "present"
-                    ? plural(main.length, "personne présente", "personnes présentes")
+                    ? `${anyPartial ? "au moins " : ""}${plural(main.length, "personne présente", "personnes présentes")}`
                     : anyPartial
                       ? plural(main.length, "personne documentée", "personnes documentées")
                       : personsLabel(main.length)}

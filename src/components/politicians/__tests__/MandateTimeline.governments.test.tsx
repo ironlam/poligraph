@@ -35,6 +35,7 @@ const published: ProfileMandateGovernment = {
     name: "Gouvernement Exemple I",
     publicationStatus: "PUBLISHED",
     currentAffairsActId: "act-affaires-courantes",
+    resignedEvidence: "ACT",
   },
 };
 
@@ -83,6 +84,40 @@ describe("profil : lien vers le gouvernement d'une fonction ministérielle", () 
     expect(renderTimeline(ministerMandate(unattested), true).textContent).not.toContain(
       "affaires courantes"
     );
+  });
+
+  it("ne dit pas « affaires courantes » si la démission n'est pas prouvée par un acte", () => {
+    for (const resignedEvidence of ["DATASET", "DERIVED", null] as const) {
+      const weak = {
+        ...published,
+        government: { ...published.government!, resignedEvidence },
+      };
+      expect(mandateGovernmentLink(ministerMandate(weak), true)?.currentAffairs).toBe(false);
+    }
+  });
+
+  it("traite un currentAffairsActId absent (undefined) comme non attesté", () => {
+    const missing = {
+      ...published,
+      government: { ...published.government!, currentAffairsActId: undefined },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(mandateGovernmentLink(ministerMandate(missing as any), true)?.currentAffairs).toBe(
+      false
+    );
+  });
+
+  it("une fin undefined est traitée comme une fin absente", () => {
+    const link = mandateGovernmentLink(
+      {
+        startDate: new Date("2025-09-22T22:00:00Z"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        endDate: undefined as any,
+        governmentData: { ...published, endKind: null },
+      },
+      true
+    );
+    expect(link?.compositionDay).toBe("2025-09-23");
   });
 
   it("remplacement individuel : composition la veille de la fin, où la personne figure encore", () => {

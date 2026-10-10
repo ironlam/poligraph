@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { GovernmentFunctionEnd, PublicationStatus } from "@/generated/prisma";
+import type { DateEvidence, GovernmentFunctionEnd, PublicationStatus } from "@/generated/prisma";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
@@ -84,6 +84,7 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
                   name: true,
                   publicationStatus: true,
                   currentAffairsActId: true,
+                  resignedEvidence: true,
                 },
               },
             },
@@ -159,6 +160,8 @@ export type ProfileMandateGovernment = {
     publicationStatus: PublicationStatus;
     /** Act attesting the current-affairs regime of the resigned government; null if none. */
     currentAffairsActId: string | null;
+    /** Evidence of the resignation date; the regime is attested only with an ACT. */
+    resignedEvidence?: DateEvidence | null;
   } | null;
 };
 

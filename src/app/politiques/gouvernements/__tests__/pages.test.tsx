@@ -334,6 +334,29 @@ describe("détail d'un gouvernement", () => {
     expect(t).not.toContain("Cécile Cachée");
   });
 
+  it("ne révèle pas l'intitulé d'une fonction d'une personne cachée dans les changements", async () => {
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+      episodes: [
+        ...episodes,
+        ep({
+          governmentId: "gb",
+          politicianId: "cache-cache",
+          title: "Ministre secrète des Mystères",
+          start: "2024-04-01",
+          startEvidence: "ACT",
+          end: "2024-05-01",
+          endEvidence: "ACT",
+        }),
+      ],
+      people,
+    });
+    const t = text(await html(detail("gouvernement-b")));
+    expect(t).toContain("Changement non détaillé");
+    expect(t).not.toContain("Mystères");
+    expect(t).not.toContain("Ministre cachée");
+    expect(t).not.toContain("Cécile Cachée");
+  });
+
   it("affiche le bandeau des affaires courantes", async () => {
     const t = text(await html(detail("gouvernement-c", { date: "2024-12-10" })));
     expect(t).toContain("Gouvernement démissionnaire chargé des affaires courantes");
@@ -389,6 +412,25 @@ describe("membres", () => {
     expect(text(markup)).toContain("Noémie Attente");
     expect(text(markup)).not.toContain("Cécile Cachée");
     expect(text(markup).toLowerCase()).not.toContain("depuis");
+  });
+
+  it("qualifie « au moins » l'effectif présent quand la couverture est partielle", async () => {
+    const t = text(
+      await html(MembersPage({ searchParams: sp({ mode: "present", au: "2024-03-01" }) }))
+    );
+    expect(t).toMatch(/au moins \d+ personnes? présentes?/);
+  });
+
+  it("ne qualifie pas « au moins » si le gouvernement filtré est complet", async () => {
+    const t = text(
+      await html(
+        MembersPage({
+          searchParams: sp({ mode: "present", au: "2023-06-01", gouvernement: "gouvernement-a" }),
+        })
+      )
+    );
+    expect(t).toMatch(/\d+ personnes? présentes?/);
+    expect(t).not.toContain("au moins");
   });
 
   it("filtre par nom", async () => {

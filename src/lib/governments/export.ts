@@ -137,11 +137,11 @@ export function functionRow(
 ): FunctionExportRow {
   // Caretaker end: the function's own end if recorded, else the government's end when an act
   // attests the regime and the function ended with the collective resignation.
+  const attested = gov?.currentAffairsAttested === true && gov.resignedEvidence === "ACT";
   const caretakerEnd =
-    episode.currentAffairsEndedAt ??
-    (gov?.currentAffairsAttested && episode.endKind === "COLLECTIVE_RESIGNATION"
-      ? gov.endedAt
-      : null);
+    attested && episode.endKind === "COLLECTIVE_RESIGNATION"
+      ? (episode.currentAffairsEndedAt ?? gov.endedAt)
+      : null;
   return {
     ma_id: episode.mandatePublicId ?? "",
     pg_id: person.publicId ?? "",

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { MetadataRoute } from "next";
 import { cacheTag, cacheLife } from "next/cache";
 import { connection } from "next/server";
@@ -328,6 +329,18 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
 // tagging it "feature-flags" lets the flag toggle (which purges that tag) refresh the shard.
 async function buildGovernmentPages(): Promise<MetadataRoute.Sitemap> {
   cacheTag("feature-flags");
+  // A failure here must not take down shard 0 (the rest of the sitemap).
+  try {
+    return await readGovernmentPages();
+  } catch (error) {
+    // eslint-disable-next-line no-console -- deliberate ops signal (Vercel logs)
+    console.error("[sitemap] rubrique Gouvernements ignorée", error);
+    Sentry.captureException(error, { tags: { sitemap: "gouvernements" } });
+    return [];
+  }
+}
+
+async function readGovernmentPages(): Promise<MetadataRoute.Sitemap> {
   if (!(await isFeatureEnabled("gouvernements"))) return [];
 
   const governments = await db.government.findMany({

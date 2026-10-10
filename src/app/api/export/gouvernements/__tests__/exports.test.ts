@@ -318,6 +318,13 @@ describe("export des fonctions", () => {
     expect(collective[19]).toBe("");
   });
 
+  it("laisse affaires_courantes_jusqu_au vide quand la démission n'est pas prouvée par un acte", async () => {
+    vi.mocked(getPublishedGovernments).mockResolvedValue([{ ...G, resignedEvidence: "DATASET" }]);
+    const { rows } = await lines(await call(getFonctions, `${BASE}/fonctions`));
+    const collective = rows.find((r) => r.includes("Secrétaire d'État"))!.split(",");
+    expect(collective[19]).toBe("");
+  });
+
   it("répond 404 quand la rubrique est désactivée", async () => {
     vi.mocked(isFeatureEnabled).mockResolvedValue(false);
     expect((await call(getFonctions, `${BASE}/fonctions`)).status).toBe(404);
