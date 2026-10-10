@@ -33,6 +33,8 @@ describe("cache invalidation scopes", () => {
     invalidateEntity("election", "presidentielle-2027");
     const tags = revalidateTagSpy.mock.calls.map((c) => c[0]);
     expect(tags).toContain("elections");
+    // A literal on purpose, not PRESIDENTIAL_ELECTION_ID_TAG: entries already cached in production
+    // carry this exact string, so a change of the constant's value must fail here.
     expect(revalidateTagSpy).toHaveBeenCalledWith("election-id:presidentielle-2027", "hours");
   });
 
