@@ -187,8 +187,15 @@ describe("personVisibility", () => {
     expect(v({ publicationStatus: "DRAFT", biography: "   " })).toBe("pending");
   });
 
+  it("en attente : exclusion automatique sans override, même avec photo ou biographie", () => {
+    expect(v({ publicationStatus: "EXCLUDED" })).toBe("pending");
+    expect(v({ publicationStatus: "EXCLUDED", photoUrl: "https://x", biography: "Bio." })).toBe(
+      "pending"
+    );
+  });
+
   it("cachée dans tous les autres cas", () => {
-    expect(v({ publicationStatus: "EXCLUDED" })).toBe("hidden");
+    expect(v({ publicationStatus: "EXCLUDED", statusOverride: true })).toBe("hidden");
     expect(v({ publicationStatus: "REJECTED" })).toBe("hidden");
     expect(v({ publicationStatus: "DRAFT", statusOverride: true })).toBe("hidden");
     expect(v({ publicationStatus: "DRAFT", photoUrl: "https://x" })).toBe("hidden");
@@ -314,5 +321,17 @@ describe("toPersonCard", () => {
       blobPhotoUrl: null,
       visibility: "published",
     });
+  });
+
+  it("ne transmet jamais la photo d'une entrée non publiée", () => {
+    const card = toPersonCard({
+      ...politician,
+      publicationStatus: "EXCLUDED",
+      photoUrl: "https://photo",
+      blobPhotoUrl: "https://blob",
+    });
+    expect(card.visibility).toBe("pending");
+    expect(card.photoUrl).toBeNull();
+    expect(card.blobPhotoUrl).toBeNull();
   });
 });

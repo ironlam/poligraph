@@ -217,10 +217,13 @@ function toActRef(act: ActRow | null): ActRef | null {
 /**
  * Visibilité d'une personne dans la rubrique (§5.7).
  * - `published` : fiche publiée.
- * - `pending` : brouillon ou archive sans décision éditoriale, ni photo ni biographie. Entrée
- *   textuelle sans lien.
- * - `hidden` : tout le reste. Exclusion, décision éditoriale, ou fiche avec photo ou biographie
- *   en attente de la règle 3d. Jamais affichée comme entrée de composition.
+ * - `pending` : entrée textuelle sans lien ni photo. Brouillon ou archive sans décision
+ *   éditoriale, ni photo ni biographie ; ou exclusion automatique sans décision éditoriale
+ *   (règles d'âge de `publication-status-rules.ts` : un ancien ministre né avant 1920 reste un
+ *   membre de son gouvernement, même sans fiche publique).
+ * - `hidden` : tout le reste. Exclusion décidée par un humain (`statusOverride`, ex. doublon
+ *   fusionné), rejet, ou fiche avec photo ou biographie en attente de la règle 3d. Jamais
+ *   affichée comme entrée de composition.
  */
 export function personVisibility(
   p: Pick<
@@ -229,12 +232,17 @@ export function personVisibility(
   > & { publicationStatus: PublicationStatus }
 ): PersonVisibility {
   if (p.publicationStatus === "PUBLISHED") return "published";
+  if (p.statusOverride) return "hidden";
+  if (p.publicationStatus === "EXCLUDED") return "pending";
   const draftLike = p.publicationStatus === "DRAFT" || p.publicationStatus === "ARCHIVED";
   const hasContent = Boolean(p.photoUrl || p.blobPhotoUrl || p.biography?.trim());
-  return draftLike && !p.statusOverride && !hasContent ? "pending" : "hidden";
+  return draftLike && !hasContent ? "pending" : "hidden";
 }
 
+/** Photo seulement pour une fiche publiée : une entrée en attente reste textuelle. */
 export function toPersonCard(p: PersonRow): PersonCard {
+  const visibility = personVisibility(p);
+  const published = visibility === "published";
   return {
     id: p.id,
     publicId: p.publicId,
@@ -242,9 +250,9 @@ export function toPersonCard(p: PersonRow): PersonCard {
     fullName: p.fullName,
     lastName: p.lastName,
     gender: genderOf(p.civility),
-    photoUrl: p.photoUrl,
-    blobPhotoUrl: p.blobPhotoUrl,
-    visibility: personVisibility(p),
+    photoUrl: published ? p.photoUrl : null,
+    blobPhotoUrl: published ? p.blobPhotoUrl : null,
+    visibility,
   };
 }
 
