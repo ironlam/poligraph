@@ -51,7 +51,7 @@ describe("isGovernmentFunctionType", () => {
   });
 });
 
-describe("gel de l'import des carrières", () => {
+describe("exclusion permanente des fonctions gouvernementales (import des carrières)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMock.externalId.findMany

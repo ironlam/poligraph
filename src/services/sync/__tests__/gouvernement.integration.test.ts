@@ -181,16 +181,13 @@ describeIfDisposableDb("sync gouvernement (base jetable)", () => {
     expect(await tableCounts()).toEqual(before);
   });
 
-  it("le dry-run pendant le gel n'écrit rien (comptages et fichier de corrections)", async () => {
+  it("le dry-run pendant le gel n'écrit rien (comptages)", async () => {
     getTextMock.mockResolvedValue({
       data: csv(
         "902;François Bayrou;M;Chloé;Synctest;Ministre;lundi 23 décembre 2024;",
         "903;Test Inconnu;M;Denis;Synctest;Ministre;lundi 23 décembre 2024;"
       ),
     });
-    const correctionsFile = path.join(process.cwd(), "data", "government-corrections.json");
-    const statBefore = fs.statSync(correctionsFile);
-    const contentBefore = fs.readFileSync(correctionsFile, "utf-8");
     const before = await tableCounts();
 
     const result = await sync.syncGouvernement({ dryRun: true });
@@ -198,8 +195,6 @@ describeIfDisposableDb("sync gouvernement (base jetable)", () => {
     expect(result.skipped).toBeUndefined();
     expect(result.plan.toVerify.some((t) => t.includes("Chloé Synctest"))).toBe(true);
     expect(await tableCounts()).toEqual(before);
-    expect(fs.statSync(correctionsFile).mtimeMs).toBe(statBefore.mtimeMs);
-    expect(fs.readFileSync(correctionsFile, "utf-8")).toBe(contentBefore);
   });
 
   it("crée avec rattachement legacy ou nom actuel, dates à minuit Paris, sans lastConfirmedAt ; seconde passe vide", async () => {

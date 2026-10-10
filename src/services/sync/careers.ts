@@ -14,7 +14,7 @@ import { setCurrentParty, setPartyRole } from "@/services/politician";
 import { isCurrentChair } from "./careers-chair";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "@/config/rate-limits";
 import { isDuplicateMandateCandidate } from "./careers-dedup";
-import { GOVERNMENT_SYNC_FROZEN, isGovernmentFunctionType } from "./government-sync-guard";
+import { isGovernmentFunctionType } from "./government-sync-guard";
 
 export interface CareersSyncResult {
   processed: number;
@@ -251,8 +251,8 @@ export async function syncCareers(options?: {
         const mandateInfo = POSITION_MAPPING[pos.positionId];
         if (!mandateInfo) continue;
 
-        // Gel : les fonctions gouvernementales ne s'importent pas pendant la migration
-        if (GOVERNMENT_SYNC_FROZEN && isGovernmentFunctionType(mandateInfo.type)) {
+        // Exclusion permanente : les fonctions gouvernementales relèvent du workflow par actes
+        if (isGovernmentFunctionType(mandateInfo.type)) {
           stats.governmentFunctionsSkipped++;
           continue;
         }

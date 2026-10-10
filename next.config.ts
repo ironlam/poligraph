@@ -133,6 +133,12 @@ const nextConfig: NextConfig = {
         destination: "/partis/:slug",
         permanent: true,
       },
+      // Fiches fusionnées (PG-001728 -> PG-001774).
+      {
+        source: "/politiques/sabrina-agresti-roubache",
+        destination: "/politiques/sabrina-roubache",
+        permanent: true,
+      },
       {
         source: "/elections/presidentielle-2027/sujets/:path*",
         destination: "/elections/presidentielle-2027/themes/:path*",

@@ -154,7 +154,6 @@ Les codes de groupes dans ces fichiers sont les mêmes que ceux de l'API (codes 
 - Politiciens : nom, prénom
 - Mandats : `PREMIER_MINISTRE`, `MINISTRE`, `MINISTRE_DELEGUE`, `SECRETAIRE_ETAT`
 - Dates de début/fin, gouvernement associé
-- Corrections manuelles depuis `data/government-corrections.json`
 
 ### Mapping des fonctions
 
