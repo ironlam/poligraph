@@ -1,7 +1,10 @@
 import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 import { after } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import {
+  PRESIDENTIAL_ELECTION_ID_TAG,
+  PRESIDENTIELLE_2027_SLUG,
+} from "@/lib/presidentielle/themes";
 import { ALL_TAGS } from "@/lib/cache-tags";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
 
@@ -233,12 +236,13 @@ export function invalidateEntity(
     case "election":
       revalidateTag("elections", ELECTION_PROFILE);
       // The cached id of the presidential election (`getPresidentialElectionId`), read by every
-      // profile page, so an election recreated, or missing when the entry filled, does not freeze
-      // every profile's candidacy until the entry expires. Purged only when the caller says the
-      // presidential election changed: a write on another election must not stale every profile.
-      // Never in `revalidateAll()`, which runs after every sync.
+      // profile page. Purged only when the caller says the presidential election changed: a write
+      // on another election must not stale every profile. Never in `revalidateAll()`, which runs
+      // after every sync. The callers are the admin candidacy writes; creating or recreating the
+      // election itself happens in seed scripts, which cannot purge, so a recreated election waits
+      // for the next presidential candidacy write or the `synced` expiry of the entry.
       if (slug === PRESIDENTIELLE_2027_SLUG) {
-        revalidateTag("election-id:presidentielle-2027", ELECTION_PROFILE);
+        revalidateTag(PRESIDENTIAL_ELECTION_ID_TAG, ELECTION_PROFILE);
       }
       break;
 

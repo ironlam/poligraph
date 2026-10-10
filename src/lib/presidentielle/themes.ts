@@ -6,6 +6,12 @@ export { themeToSlug } from "@/lib/theme-utils";
 
 export const PRESIDENTIELLE_2027_SLUG = "presidentielle-2027";
 
+/**
+ * Cache tag of the presidential election id read by every profile page. Derived from the slug so
+ * the tag the read sets and the tag `invalidateEntity("election", slug)` purges cannot drift apart.
+ */
+export const PRESIDENTIAL_ELECTION_ID_TAG = `election-id:${PRESIDENTIELLE_2027_SLUG}`;
+
 /** Taxonomie propre aux mesures présidentielles 2027. SOCIAL_TRAVAIL reste parlementaire. */
 export const THEMES_IN_ORDER = [
   "LOGEMENT_URBANISME",
