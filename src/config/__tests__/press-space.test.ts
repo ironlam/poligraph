@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CONTRIBUTORS,
+  DATAGOUV_REUSES,
   PRESS_MENTIONS,
   PRESS_SPACE_UPDATED_AT,
   publishedContributors,
@@ -89,6 +90,13 @@ describe("press space mentions", () => {
 
   it("has a valid update date for the sitemap", () => {
     expect(isIsoDate(PRESS_SPACE_UPDATED_AT)).toBe(true);
+  });
+});
+
+describe("press space data.gouv.fr reuses", () => {
+  it.each(DATAGOUV_REUSES.map((r) => [r.title, r] as const))("%s is well formed", (_, r) => {
+    expect(r.url).toMatch(/^https:\/\/www\.data\.gouv\.fr\/reuses\/[a-z0-9-]+$/);
+    expect(isIsoDate(r.createdAt)).toBe(true);
   });
 });
 

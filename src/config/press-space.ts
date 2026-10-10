@@ -57,6 +57,27 @@ export const PRESS_MENTIONS: PressMention[] = [
   },
 ];
 
+/** Reuses of public data that the project itself declared on data.gouv.fr. */
+export interface DataGouvReuse {
+  title: string;
+  url: string;
+  /** ISO date the reuse was created on data.gouv.fr. */
+  createdAt: string;
+}
+
+export const DATAGOUV_REUSES: DataGouvReuse[] = [
+  {
+    title: "Poligraph - Municipales 2026",
+    url: "https://www.data.gouv.fr/reuses/poligraph-municipales-2026",
+    createdAt: "2026-03-23",
+  },
+  {
+    title: "Poligraph - Municipales 2020",
+    url: "https://www.data.gouv.fr/reuses/poligraph-municipales-2020",
+    createdAt: "2026-03-23",
+  },
+];
+
 export type ContributionVerb = "a contribué" | "a proposé" | "a signalé";
 
 export type ContributionState =
