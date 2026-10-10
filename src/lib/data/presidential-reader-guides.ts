@@ -292,6 +292,9 @@ async function getPresidentialReaderGuideIndexCached(
 ): Promise<PresidentialReaderGuideIndexItem[]> {
   "use cache";
   cacheTag(`election-measures:${electionId}`);
+  // The index keeps only measures of a published candidate fiche, so publishing one must bust it
+  // too, or the new fiche and the repère pages miss its links until the cache expires.
+  cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadPresidentialReaderGuideIndex(electionId);
 }
