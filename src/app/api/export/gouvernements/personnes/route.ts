@@ -12,7 +12,16 @@ import { filteredMembers, PERSON_COLUMNS, personRows } from "@/lib/governments/e
 export const dynamic = "force-dynamic";
 
 /** Filters carried over to the per-person detail link (`personne` is set to the row's slug). */
-const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "affaires", "q"] as const;
+const DETAIL_KEYS = [
+  "mode",
+  "du",
+  "au",
+  "gouvernement",
+  "presidence",
+  "fonction",
+  "affaires",
+  "q",
+] as const;
 
 /**
  * @openapi
@@ -21,7 +30,7 @@ const DETAIL_KEYS = ["mode", "du", "au", "gouvernement", "fonction", "affaires",
  *     summary: Export CSV des membres des gouvernements, une ligne par personne
  *     description: >
  *       Mêmes paramètres que la page /politiques/gouvernements/membres (mode, du, au,
- *       gouvernement, fonction, affaires, q, personne). Les fiches cachées n'apparaissent pas ; une fiche non
+ *       gouvernement, presidence, fonction, affaires, q, personne). Les fiches cachées n'apparaissent pas ; une fiche non
  *       publiée apparaît sans url_profil.
  *     tags: [Exports]
  *     responses:

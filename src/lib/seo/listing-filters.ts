@@ -53,6 +53,7 @@ export const GOUVERNEMENTS_MEMBRES_FILTER_KEYS = [
   "du",
   "au",
   "gouvernement",
+  "presidence",
   "fonction",
   "affaires",
   "q",

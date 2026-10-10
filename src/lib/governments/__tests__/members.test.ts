@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // `normalizeText` vit dans name-matching.ts, qui importe le client Prisma.
 vi.mock("@/lib/db", () => ({ db: {} }));
 
-import { filterMembers, membersCoverage, type MembersData } from "../members";
+import { filterMembers, membersCoverage, membersScope, type MembersData } from "../members";
 import type { GovernmentEpisode, PersonCard } from "../mapping";
 import type { MembersQuery } from "../params";
 import type { GovernmentDates } from "../types";
@@ -99,6 +99,7 @@ function query(overrides: Partial<MembersQuery> = {}): MembersQuery {
     du: "2016-01-02",
     au: "2018-01-01",
     gouvernement: null,
+    presidence: null,
     fonction: null,
     affaires: null,
     q: "",
@@ -355,5 +356,57 @@ describe("filterMembers, filtre exact par personne", () => {
   it("la recherche q, elle, ramène les deux (raison du filtre exact)", () => {
     const result = okResult(filterMembers([g1], data, query({ q: "jean-martin" })));
     expect(result.persons).toHaveLength(2);
+  });
+});
+
+describe("filterMembers, filtre par présidence", () => {
+  // Messmer III, nommé sous Pompidou, dure pendant l'intérim et jusqu'au gouvernement Chirac I,
+  // nommé sous Giscard d'Estaing : le filtre suit la nomination, pas le chevauchement.
+  const messmer = gov("gm", {
+    slug: "messmer-3",
+    primeMinisterAppointedAt: "1974-03-01",
+    formedAt: "1974-03-01",
+    resignedAt: "1974-05-27",
+    endedAt: "1974-05-27",
+  });
+  const chirac = gov("gc", {
+    slug: "chirac-1",
+    primeMinisterAppointedAt: "1974-05-27",
+    formedAt: "1974-05-28",
+    resignedAt: null,
+    resignedEvidence: null,
+    endedAt: "1976-08-25",
+  });
+  const data: MembersData = {
+    episodes: [
+      ep("a", "pA", { governmentId: "gm", start: "1974-03-01", end: "1974-05-27" }),
+      ep("b", "pB", { governmentId: "gc", start: "1974-05-28", end: "1976-08-25" }),
+    ],
+    people,
+  };
+
+  it("ne retient que les gouvernements nommés sous la présidence", () => {
+    const pompidou = okResult(
+      filterMembers(
+        [messmer, chirac],
+        data,
+        query({ du: "1974-03-01", au: "1976-08-25", presidence: "pompidou" })
+      )
+    );
+    expect(pompidou.persons.map((p) => p.person.id)).toEqual(["pA"]);
+    const giscard = okResult(
+      filterMembers(
+        [messmer, chirac],
+        data,
+        query({ du: "1974-03-01", au: "1976-08-25", presidence: "giscard-d-estaing" })
+      )
+    );
+    expect(giscard.persons.map((p) => p.person.id)).toEqual(["pB"]);
+  });
+
+  it("se combine avec le filtre gouvernement", () => {
+    expect(
+      membersScope([messmer, chirac], { gouvernement: "chirac-1", presidence: "pompidou" })
+    ).toEqual([]);
   });
 });

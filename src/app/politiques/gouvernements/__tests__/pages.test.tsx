@@ -582,7 +582,8 @@ describe("membres", () => {
     expect(t).not.toContain("au moins");
   });
 
-  it("propose un raccourci par présidence recoupant la période documentée", async () => {
+  it("filtre par présidence de nomination, pas par chevauchement de dates", async () => {
+    // Gouvernement Hôtel : nommé sous Hollande, terminé après l'investiture de Macron.
     const H = gov({
       id: "gh",
       slug: "gouvernement-h",
@@ -594,27 +595,56 @@ describe("membres", () => {
       compositionVerifiedAt: "2017-05-15",
     });
     vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
-    const markup = await html(MembersPage({ searchParams: sp({ fonction: "ministre" }) }));
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+      episodes: [
+        ...episodes,
+        ep({
+          governmentId: "gh",
+          politicianId: "karim-public",
+          title: "Ministre de l'Intérieur",
+          start: "2016-12-06",
+          end: "2017-05-15",
+          endEvidence: "ACT",
+        }),
+      ],
+      people,
+    });
+    const markup = await html(
+      MembersPage({
+        searchParams: sp({
+          fonction: "ministre",
+          gouvernement: "gouvernement-a",
+          du: "2017-01-01",
+        }),
+      })
+    );
     const div = document.createElement("div");
     div.innerHTML = markup;
+    expect(div.textContent).toContain("Présidences :");
     const links = [...div.querySelectorAll("a")];
     const hollande = links.find((a) => a.textContent === "François Hollande");
-    const macron = links.find((a) => a.textContent === "Emmanuel Macron");
-    // du = début de la couverture (6 décembre 2016), au = fin de la présidence.
+    // Retire gouvernement, du et au ; garde les autres filtres.
     expect(hollande?.getAttribute("href")).toBe(
-      "/politiques/gouvernements/membres?au=2017-05-14&fonction=ministre"
+      "/politiques/gouvernements/membres?presidence=hollande&fonction=ministre"
     );
-    expect(macron?.getAttribute("href")).toContain("du=2017-05-14");
-    expect(macron?.getAttribute("href")).toContain("fonction=ministre");
-    expect(links.some((a) => a.textContent === "Charles de Gaulle")).toBe(false);
 
-    const active = await html(MembersPage({ searchParams: sp({ au: "2017-05-14" }) }));
-    expect(text(active)).toContain("François Hollande (période appliquée)");
+    const macron = text(await html(MembersPage({ searchParams: sp({ presidence: "macron" }) })));
+    expect(macron).toContain("Présidence : Emmanuel Macron");
+    expect(macron).toContain("Emmanuel Macron (filtre appliqué)");
+    // Karim Public a aussi une fonction dans le gouvernement Hôtel : seule celle de Macron reste.
+    expect(macron).toContain("Ministre de l'Économie");
+    expect(macron).not.toContain("Ministre de l'Intérieur");
+
+    const hollandeOnly = text(
+      await html(MembersPage({ searchParams: sp({ presidence: "hollande" }) }))
+    );
+    expect(hollandeOnly).toContain("Ministre de l'Intérieur");
+    expect(hollandeOnly).not.toContain("Inès Entrante");
   });
 
   it("n'affiche pas de raccourci quand une seule présidence est couverte", async () => {
     const t = text(await html(MembersPage({ searchParams: sp() })));
-    expect(t).not.toContain("Sous la présidence de");
+    expect(t).not.toContain("Présidences :");
   });
 
   it("distingue l'ancien ministre sans fiche du brouillon, années comprises", async () => {

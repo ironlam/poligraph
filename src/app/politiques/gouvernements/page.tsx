@@ -10,7 +10,6 @@ import { CoverageSummary } from "@/components/governments/CoverageSummary";
 import { GovernmentBadges } from "@/components/governments/GovernmentBadges";
 import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
 import {
-  formatDay,
   governmentPeriod,
   isPartial,
   participantsLabel,
@@ -88,7 +87,8 @@ function presentLine(g: PublishedGovernment, data: GovernmentEpisodesData): stri
     data.people
   ).length;
   const count = plural(n, "présente", "présentes");
-  return `dont ${isPartial(g) ? `au moins ${count}` : count} de façon établie au ${formatDay(result.date)}`;
+  // « à cette date » : the date of the « composition vérifiée au … » badge just above.
+  return `dont ${isPartial(g) ? `au moins ${count}` : count} à cette date`;
 }
 
 export default async function GouvernementsPage({ searchParams }: PageProps) {
@@ -262,6 +262,7 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
                     {group.list.map((g) => {
                       const data = inOfficeData.get(g.id);
                       const present = data ? presentLine(g, data) : null;
+                      const period = governmentPeriod(g);
                       return (
                         <article
                           key={g.id}
@@ -276,9 +277,9 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
                               {g.name}
                             </Link>
                           </h3>
-                          <p className="mt-1 text-[13px] text-muted-foreground">
-                            {governmentPeriod(g)}
-                          </p>
+                          {period && (
+                            <p className="mt-1 text-[13px] text-muted-foreground">{period}</p>
+                          )}
                           <div className="mt-3 flex flex-wrap items-center gap-3">
                             <GovernmentBadges gov={g} showEnded={false} />
                             <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">

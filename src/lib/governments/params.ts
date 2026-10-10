@@ -1,6 +1,7 @@
 // Lecture des paramètres d'URL de la rubrique « Gouvernements » (spec §6.3 et §6.4).
 // Toute valeur invalide est remplacée par son défaut et signalée par `invalid` (page en noindex).
 
+import { PRESIDENCIES } from "@/config/presidencies";
 import { AFFAIRS_FILTERS, type MembersAffairsFilter } from "./affairs";
 
 export const MAX_MEMBERS_PAGE = 100;
@@ -16,6 +17,8 @@ export type MembersQuery = {
   du: string;
   au: string;
   gouvernement: string | null;
+  /** Slug of `PRESIDENCIES`: governments whose Prime Minister was appointed under it. */
+  presidence: string | null;
   fonction: MembersFunctionFilter | null;
   affaires: MembersAffairsFilter | null;
   q: string;
@@ -79,6 +82,13 @@ export function parseMembersQuery(
     else invalid = true;
   }
 
+  let presidence: string | null = null;
+  const rawPresidency = present("presidence");
+  if (rawPresidency !== undefined) {
+    if (PRESIDENCIES.some((p) => p.slug === rawPresidency)) presidence = rawPresidency;
+    else invalid = true;
+  }
+
   let fonction: MembersFunctionFilter | null = null;
   const rawFunction = present("fonction");
   if (rawFunction !== undefined) {
@@ -113,5 +123,8 @@ export function parseMembersQuery(
     } else invalid = true;
   }
 
-  return { query: { mode, du, au, gouvernement, fonction, affaires, q, personne, page }, invalid };
+  return {
+    query: { mode, du, au, gouvernement, presidence, fonction, affaires, q, personne, page },
+    invalid,
+  };
 }

@@ -122,10 +122,24 @@ describe("governmentPeriod", () => {
     endedAt: "2024-12-23" as string | null,
     resignedAt: null as string | null,
     primeMinister: { slug: "x", fullName: "X", gender: "M" as const },
+    hasDerivedDate: false,
   };
 
   it("omet l'année de début quand elle est celle de la fin", () => {
     expect(governmentPeriod(base)).toBe("Du 21 septembre au 23 décembre 2024");
+  });
+
+  it("omet aussi le mois quand il est celui de la fin", () => {
+    expect(governmentPeriod({ ...base, formedAt: "2025-10-05", endedAt: "2025-10-12" })).toBe(
+      "Du 5 au 12 octobre 2025"
+    );
+    expect(governmentPeriod({ ...base, formedAt: "2025-10-01", endedAt: "2025-10-12" })).toBe(
+      "Du 1er au 12 octobre 2025"
+    );
+  });
+
+  it("n'écrit aucune période quand une date est estimée", () => {
+    expect(governmentPeriod({ ...base, hasDerivedDate: true })).toBeNull();
   });
 
   it("garde les deux années sinon, avec « 1er »", () => {

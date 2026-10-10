@@ -245,6 +245,17 @@ describe("export des personnes", () => {
     expect(rows[0]).toContain("Alix Premiere");
   });
 
+  it("suit le filtre présidence et le garde dans le lien de détail", async () => {
+    const none = await lines(await call(getPersonnes, `${BASE}/personnes?presidence=hollande`));
+    expect(none.rows.filter(Boolean)).toHaveLength(0);
+    const { rows } = await lines(
+      await call(getPersonnes, `${BASE}/personnes?presidence=macron&fonction=pm`)
+    );
+    expect(rows[0]).toContain("Alix Premiere");
+    const detail = new URL(rows[0]!.split(",")[9]!);
+    expect(detail.searchParams.get("presidence")).toBe("macron");
+  });
+
   it("suit le filtre affaires de la page et le garde dans le lien de détail", async () => {
     vi.mocked(getGovernmentMemberAffairs).mockResolvedValue({
       p5: { definitive: 1, nonDefinitive: 0, ongoing: 0 },

@@ -1,6 +1,7 @@
 // Liste transversale des membres des gouvernements publiés (spec §6.4).
 // Aucune présence n'est décidée ici : tout passe par `overlapsPeriod` et `compositionAt`.
 
+import { presidencyOfGovernment } from "@/config/presidencies";
 import { normalizeText } from "@/lib/name-matching";
 import { matchesAffairsFilter, type MemberAffairsMap } from "./affairs";
 import { addDays, compositionAt, consultableRange, overlapsPeriod } from "./composition";
@@ -56,6 +57,18 @@ export function membersCoverage(govs: GovernmentDates[]): { from: string; to: st
   };
 }
 
+/** Governments retained by the `gouvernement` and `presidence` filters (both apply). */
+export function membersScope<G extends GovernmentDates>(
+  govs: G[],
+  query: Pick<MembersQuery, "gouvernement" | "presidence">
+): G[] {
+  return govs.filter(
+    (g) =>
+      (!query.gouvernement || g.slug === query.gouvernement) &&
+      (!query.presidence || presidencyOfGovernment(g)?.slug === query.presidence)
+  );
+}
+
 /**
  * Mode période, borné à la période consultable du gouvernement : la règle 3 seule pourrait
  * établir une présence au-delà de la composition documentée. Hors de cette période, une
@@ -99,7 +112,7 @@ export function filterMembers(
   query: MembersQuery,
   affairs: MemberAffairsMap = {}
 ): MembersResult {
-  const scope = query.gouvernement ? govs.filter((g) => g.slug === query.gouvernement) : govs;
+  const scope = membersScope(govs, query);
   const byGov = new Map<string, GovernmentEpisode[]>(scope.map((g) => [g.id, []]));
   for (const ep of data.episodes) byGov.get(ep.governmentId)?.push(ep);
 
