@@ -47,11 +47,18 @@ export function episodeDates(
     GovernmentEpisode,
     "start" | "end" | "endKind" | "currentAffairsEndedAt" | "lastConfirmedAt"
   >,
-  gender: Gender
+  gender: Gender,
+  gov: Pick<PublishedGovernment, "currentAffairsAttested" | "resignedEvidence"> | undefined
 ): string {
   if (ep.end) {
     let text = `du ${formatDay(ep.start)} au ${formatDay(ep.end)}`;
-    if (ep.endKind === "COLLECTIVE_RESIGNATION" && ep.currentAffairsEndedAt) {
+    // Same rule as the composition: the regime must be attested by an act, resignation included.
+    if (
+      ep.endKind === "COLLECTIVE_RESIGNATION" &&
+      ep.currentAffairsEndedAt &&
+      gov?.currentAffairsAttested &&
+      gov.resignedEvidence === "ACT"
+    ) {
       text += `, puis affaires courantes jusqu'au ${formatDay(ep.currentAffairsEndedAt)}`;
     }
     return text;

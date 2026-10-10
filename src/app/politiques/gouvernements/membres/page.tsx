@@ -259,7 +259,7 @@ export default async function MembresPage({ searchParams }: PageProps) {
                 ·{" "}
               </>
             ) : null}
-            {episodeDates(fn.episode, row.person.gender)}
+            {episodeDates(fn.episode, row.person.gender, gov)}
           </>
         ),
         badge: functionBadge(fn),

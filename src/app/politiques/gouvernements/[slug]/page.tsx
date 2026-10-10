@@ -374,7 +374,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
       return {
         key: ep.membershipId,
         title: ep.title,
-        detail: episodeDates(ep, person.gender),
+        detail: episodeDates(ep, person.gender, gov),
         badge:
           category === "transition" ? (
             <StatusBadge tone="warning">
@@ -748,6 +748,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
               {participants.length > 0 && (
                 <div className="rounded-2xl border bg-card">
                   <ParticipantList
+                    gov={gov}
                     groups={shownParticipants}
                     returnUrl={returnUrl}
                     returnLabel={returnLabel}
@@ -763,6 +764,7 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                         {plural(moreParticipants.length, "autre personne", "autres personnes")}
                       </summary>
                       <ParticipantList
+                        gov={gov}
                         groups={moreParticipants}
                         returnUrl={returnUrl}
                         returnLabel={returnLabel}
@@ -861,10 +863,12 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
 
 function ParticipantList({
   groups,
+  gov,
   returnUrl,
   returnLabel,
 }: {
   groups: PersonGroup[];
+  gov: PublishedGovernment;
   returnUrl: string;
   returnLabel: string;
 }) {
@@ -891,7 +895,7 @@ function ParticipantList({
             · {episodes.map((e) => e.title).join(" ; ")}
           </span>
           <span className="text-[13px] text-muted-foreground sm:text-right">
-            {episodes.map((e) => episodeDates(e, person.gender)).join(" ; ")}
+            {episodes.map((e) => episodeDates(e, person.gender, gov)).join(" ; ")}
           </span>
         </li>
       ))}
