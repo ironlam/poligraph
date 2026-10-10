@@ -298,6 +298,7 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://fr.news.yahoo.com/a",
     "https://monblog.example.fr/a",
     "https://france3-regions.blog.francetvinfo.fr/a",
+    "https://blogs.mediapart.fr/a",
   ])("refuse %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toContain(
       "Ce média ne figure pas encore dans la liste des sources de presse admises : si c'est une rédaction professionnelle, l'ajouter (src/lib/affairs/events/sources.ts)."
@@ -309,7 +310,6 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://france3-regions.franceinfo.fr/a",
     "https://la1ere.franceinfo.fr/a",
     "https://www.sudouest.fr/a",
-    "https://mesinfos.fr/auvergne-rhone-alpes/a",
   ])("accepte %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
   });

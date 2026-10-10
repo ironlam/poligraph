@@ -72,8 +72,8 @@ export default function MediaSourcesMethodologyPage() {
             <p>
               Un article de presse doit venir d&apos;un média de la liste publiée plus bas. La
               révélation d&apos;une affaire se source toujours par un article, puisque c&apos;est la
-              presse qui la rend publique. Une condamnation rapportée par la presse demande une
-              seconde source : un autre média de la liste, ou une source officielle.
+              presse qui la rend publique. Une condamnation rapportée par la presse, même partielle,
+              demande une seconde source : un autre média de la liste, ou une source officielle.
             </p>
           </div>
         </section>
@@ -108,9 +108,9 @@ export default function MediaSourcesMethodologyPage() {
               règles à tout le monde.
             </p>
             <p>
-              Figurer sur la liste ne rend pas un article incontestable. Chaque étape est relue
-              avant publication, et une erreur signalée se corrige comme toute autre information du
-              site.
+              Figurer sur la liste ne rend pas un article incontestable. Aucune étape n&apos;est
+              publiée sans validation humaine, et une erreur signalée se corrige comme toute autre
+              information du site.
             </p>
           </div>
         </section>
@@ -147,14 +147,14 @@ export default function MediaSourcesMethodologyPage() {
           </h2>
           <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
             <p>
-              L&apos;équipe éditoriale de Poligraph tient la liste. Nous préférons une liste qui
-              s&apos;allonge à une liste qui écarte des rédactions légitimes : un titre qui remplit
-              les critères y entre, sans quota ni équilibre recherché.
+              Poligraph tient la liste. Nous préférons une liste qui s&apos;allonge à une liste qui
+              écarte des rédactions légitimes : un titre qui remplit les critères y entre, sans
+              quota ni équilibre recherché.
             </p>
             <p>
-              Quand une étape cite un média absent de la liste, sa publication est bloquée.
-              L&apos;équipe vérifie alors le titre et l&apos;ajoute s&apos;il remplit les critères.
-              Chaque modification reste visible dans l&apos;historique public du{" "}
+              Quand une étape cite un média absent de la liste, sa publication est bloquée. Le titre
+              est alors examiné, puis ajouté s&apos;il remplit les critères. Chaque modification
+              reste visible dans l&apos;historique public du{" "}
               <Link
                 href={SOURCES_FILE_URL}
                 className={linkClass}
@@ -214,8 +214,8 @@ export default function MediaSourcesMethodologyPage() {
               : au moins une source journalistique vérifiable par affaire.
             </p>
             <p>
-              Si nous appliquons un jour ces critères aux fiches, les sources existantes resteront
-              en place et le changement sera documenté ici.
+              Si ces critères s&apos;appliquent un jour aux fiches, les sources existantes resteront
+              en place.
             </p>
           </div>
         </section>
@@ -228,7 +228,8 @@ export default function MediaSourcesMethodologyPage() {
             <p>
               Cette liste est lue directement dans le fichier qui sert au contrôle des étapes. Ce
               que vous lisez ici est donc ce que le site applique. Une adresse couvre ses
-              sous-domaines (lemonde.fr inclut www.lemonde.fr), sauf ceux réservés aux blogs.
+              sous-domaines (lemonde.fr inclut www.lemonde.fr), sauf un sous-domaine de blog comme
+              blogs.mediapart.fr, qui reste refusé.
             </p>
           </div>
 

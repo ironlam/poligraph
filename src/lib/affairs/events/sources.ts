@@ -121,7 +121,6 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lyonmag.com",
   "petit-bulletin.fr",
   "corsenetinfos.corsica",
-  "mesinfos.fr", // hebdomadaires régionaux : Affiches Parisiennes, Le Tout Lyon, TPBM
   // Médias locaux d'enquête en ligne
   "marsactu.fr",
   "mediacites.fr",
