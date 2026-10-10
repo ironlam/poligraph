@@ -87,6 +87,12 @@ export const POST = withAdminAuth(
     invalidateAffectedPoliticians([result.politicianSlug]);
     await requestProfileRefresh({ affairIds: [result.affairId] }, "admin:proposition-acceptée");
 
-    return NextResponse.json({ ok: true, appliedFields: result.appliedFields });
+    return NextResponse.json({
+      ok: true,
+      affairId: result.affairId,
+      appliedFields: result.appliedFields,
+      statusChange: result.statusChange,
+      event: result.event,
+    });
   })
 );

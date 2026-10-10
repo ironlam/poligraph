@@ -125,6 +125,8 @@ describe("admin affair proposal ordinary sources", () => {
 
     expect(await screen.findByText("Nouvel événement")).toBeInTheDocument();
     expect(screen.getByText("Ajout proposé à la chronologie")).toBeInTheDocument();
+    expect(screen.getByText("Révélation médiatique")).toBeInTheDocument();
+    expect(screen.queryByText("REVELATION")).not.toBeInTheDocument();
     expect(screen.getByText("Titre original de l’article")).toBeInTheDocument();
     expect(screen.getByText("Le Monde")).toBeInTheDocument();
     expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();

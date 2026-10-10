@@ -18,6 +18,7 @@ import {
 import { ALLOWED_OUTCOMES, DECISION_EVENT_TYPES } from "@/lib/affairs/events/guard";
 import { EVENT_TYPE_PHASE, PHASE_LABELS, type Phase } from "@/lib/affairs/events/phases";
 import type { SerializedAffairEvent } from "@/components/admin/AffairEventsCard";
+import type { EventPrefill } from "@/lib/affairs/events/prefill";
 
 export const FIELD_CLASS = "min-h-11 w-full rounded-md border bg-background px-3 text-sm";
 
@@ -137,21 +138,21 @@ function DateField({
   );
 }
 
-function initialState(e?: SerializedAffairEvent) {
+function initialState(e?: SerializedAffairEvent, prefill?: EventPrefill | null) {
   const precision = e?.datePrecision ?? "DAY";
   return {
-    type: (e?.type ?? "") as AffairEventType | "",
+    type: (e?.type ?? prefill?.type ?? "") as AffairEventType | "",
     precision,
     date: e ? toDateInputValue(e.date, precision) : "",
     dateEnd: e?.dateEnd ? toDateInputValue(e.dateEnd, precision) : "",
     occurrence: (e?.occurrence ?? "HELD") as EventOccurrence,
-    outcome: (e?.outcome ?? "") as EventOutcome | "",
+    outcome: (e?.outcome ?? prefill?.outcome ?? "") as EventOutcome | "",
     title: e?.title ?? "",
     court: e?.court ?? "",
     description: e?.description ?? "",
-    sourceUrl: e?.sourceUrl ?? "",
+    sourceUrl: e?.sourceUrl ?? prefill?.sourceUrl ?? "",
     sourceTitle: e?.sourceTitle ?? "",
-    sourceKind: (e?.sourceKind ?? "") as EventSourceKind | "",
+    sourceKind: (e?.sourceKind ?? prefill?.sourceKind ?? "") as EventSourceKind | "",
     incidental: e?.incidental ?? false,
     corroborationUrl: e?.corroborationUrl ?? "",
   };
@@ -164,17 +165,20 @@ function initialState(e?: SerializedAffairEvent) {
 export function AffairEventForm({
   idPrefix,
   event,
+  prefill,
   pending,
   onSubmit,
   onCancel,
 }: {
   idPrefix: string;
   event?: SerializedAffairEvent;
+  /** Valeurs d'un ajout prérempli ; ignorées quand on édite une étape existante. */
+  prefill?: EventPrefill | null;
   pending: boolean;
   onSubmit: (body: Record<string, unknown>) => void;
   onCancel: () => void;
 }) {
-  const [s, setS] = useState(() => initialState(event));
+  const [s, setS] = useState(() => initialState(event, prefill));
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
     setS((prev) => ({ ...prev, [key]: value }));
 

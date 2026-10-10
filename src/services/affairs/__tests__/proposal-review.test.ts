@@ -329,6 +329,28 @@ describe("acceptProposal", () => {
     expect(db.affairEvent.create).not.toHaveBeenCalled();
   });
 
+  it("renvoie le changement de statut et le préremplissage de l'étape à ajouter", async () => {
+    db.affairUpdateProposal.findUnique.mockResolvedValue(pendingProposal());
+
+    const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
+
+    // APPEL_EN_COURS → CONDAMNATION_DEFINITIVE : l'acte est ambigu, le type reste à choisir.
+    expect(result).toMatchObject({
+      ok: true,
+      event: null,
+      statusChange: {
+        from: "APPEL_EN_COURS",
+        to: "CONDAMNATION_DEFINITIVE",
+        prefill: {
+          type: null,
+          outcome: null,
+          sourceUrl: "https://www.courdecassation.fr/decision/1",
+          sourceKind: "OFFICIAL",
+        },
+      },
+    });
+  });
+
   it("passe en CONFLICT sans rien écrire quand la valeur en base a bougé", async () => {
     db.affairUpdateProposal.findUnique.mockResolvedValue(pendingProposal());
     // An editor corrected the status by hand since the proposal was filed.
@@ -433,7 +455,12 @@ describe("acceptProposal", () => {
 
     const result = await acceptProposal({ proposalId: "prop_1", reviewedBy: "admin" });
 
-    expect(result).toMatchObject({ ok: true, appliedFields: ["event"] });
+    expect(result).toMatchObject({
+      ok: true,
+      appliedFields: ["event"],
+      statusChange: null,
+      event: { id: "event_1", status: "PUBLISHED", reasons: [] },
+    });
     expect(db.$queryRaw).toHaveBeenCalledTimes(1);
     expect(db.affair.update).not.toHaveBeenCalled();
     expect(db.affairEvent.create).toHaveBeenCalledWith(
