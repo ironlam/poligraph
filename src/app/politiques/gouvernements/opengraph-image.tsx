@@ -35,8 +35,9 @@ export default function Image() {
           Gouvernements français
         </span>
         <span style={{ fontSize: 30, color: "#cbd5e1" }}>
-          Composition et ministres, jour par jour. Chaque nomination renvoie à l'acte publié au
-          Journal officiel.
+          {
+            "Composition et ministres, jour par jour. Chaque nomination renvoie à l'acte publié au Journal officiel."
+          }
         </span>
       </div>
     </OgLayout>,
