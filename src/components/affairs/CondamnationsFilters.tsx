@@ -39,7 +39,11 @@ export function CondamnationsFilters({
   const buildHref = useMemo(
     () => (patch: Partial<FilterValues>) => {
       const params = new URLSearchParams();
-      const next = { ...current, ...patch };
+      // The rate view ignores party and certainty: never carry them out of it, or a
+      // bookmarked ?view=stats&parti=rn would silently filter the list on the way back.
+      const base =
+        current.view === "stats" ? { ...current, certainty: "tous", parti: undefined } : current;
+      const next = { ...base, ...patch };
       if (next.mandat) params.set("mandat", next.mandat);
       // The per-party rate counts final convictions only (#957).
       if (next.view !== "stats" && next.certainty && next.certainty !== "tous")

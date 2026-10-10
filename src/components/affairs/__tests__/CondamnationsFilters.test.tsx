@@ -40,6 +40,18 @@ describe("CondamnationsFilters", () => {
     expect(statsLink.getAttribute("href")).toBe("/affaires/condamnations?view=stats");
   });
 
+  // A bookmarked ?view=stats&parti=rn must not revive hidden filters on the way back.
+  it("clears the hidden party and certainty when leaving the rate view", () => {
+    render(
+      <CondamnationsFilters
+        current={{ certainty: "prononcee", view: "stats", parti: "rn" }}
+        parties={parties}
+      />
+    );
+    const listLink = screen.getByRole("radio", { name: "Liste" });
+    expect(listLink.getAttribute("href")).toBe("/affaires/condamnations");
+  });
+
   it("drops certainty from the link to the per-party rate view", () => {
     render(
       <CondamnationsFilters current={{ certainty: "prononcee", view: "list" }} parties={parties} />
