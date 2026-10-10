@@ -35,8 +35,11 @@ export const DOSSIERS_LISTING_FILTER_KEYS = ["status", "theme", "sort"] as const
 
 export const PRESIDENTIAL_CANDIDATES_FILTER_KEYS = ["q", "statut", "propositions"] as const;
 
-/** /politiques/gouvernements: search and year filters. */
-export const GOUVERNEMENTS_LISTING_FILTER_KEYS = ["q", "annee"] as const;
+/**
+ * /politiques/gouvernements: search and presidency filters. `annee` (former year filter) is no
+ * longer read by the page but stays here so old shared URLs remain noindex,follow.
+ */
+export const GOUVERNEMENTS_LISTING_FILTER_KEYS = ["q", "presidence", "annee"] as const;
 
 /**
  * /politiques/gouvernements/[slug] : every `date` (valid or not) shows a historical composition, a

@@ -4,6 +4,7 @@ import {
   displayTitle,
   episodeDates,
   governmentDatesLine,
+  governmentPeriod,
 } from "@/components/governments/format";
 import type { PublishedGovernment } from "@/lib/governments/mapping";
 
@@ -111,5 +112,37 @@ describe("governmentDatesLine : fin et démission", () => {
     expect(line).toContain(
       "Démission le 16 juillet 2024, affaires courantes jusqu'au 20 septembre 2024."
     );
+  });
+});
+
+describe("governmentPeriod", () => {
+  const base = {
+    formedAt: "2024-09-21" as string | null,
+    primeMinisterAppointedAt: "2024-09-05",
+    endedAt: "2024-12-23" as string | null,
+    resignedAt: null as string | null,
+    primeMinister: { slug: "x", fullName: "X", gender: "M" as const },
+  };
+
+  it("omet l'année de début quand elle est celle de la fin", () => {
+    expect(governmentPeriod(base)).toBe("Du 21 septembre au 23 décembre 2024");
+  });
+
+  it("garde les deux années sinon, avec « 1er »", () => {
+    expect(governmentPeriod({ ...base, formedAt: "2016-12-01", endedAt: "2017-05-10" })).toBe(
+      "Du 1er décembre 2016 au 10 mai 2017"
+    );
+  });
+
+  it("gouvernement en exercice : date de l'équipe", () => {
+    expect(governmentPeriod({ ...base, formedAt: "2025-10-12", endedAt: null })).toBe(
+      "Équipe nommée le 12 octobre 2025"
+    );
+  });
+
+  it("en exercice sans date d'équipe : nomination du Premier ministre, puis démission", () => {
+    expect(
+      governmentPeriod({ ...base, formedAt: null, endedAt: null, resignedAt: "2024-12-05" })
+    ).toBe("Premier ministre nommé le 5 septembre 2024, démission le 5 décembre 2024");
   });
 });

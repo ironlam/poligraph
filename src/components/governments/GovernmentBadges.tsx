@@ -28,22 +28,27 @@ export function StatusBadge({ tone, children }: { tone: Tone; children: ReactNod
 /**
  * Status, completeness and verification of a government, kept as separate statements.
  * `detail` adds what the list view leaves out (complete composition, check date).
+ * `showEnded={false}` drops the « Terminé » pill, noise when every card of a long list has it.
  */
 export function GovernmentBadges({
   gov,
   detail = false,
+  showEnded = true,
 }: {
   gov: PublishedGovernment;
   detail?: boolean;
+  showEnded?: boolean;
 }) {
   const badges: ReactNode[] = [];
 
   if (gov.endedAt) {
-    badges.push(
-      <StatusBadge key="status" tone="neutral">
-        Terminé
-      </StatusBadge>
-    );
+    if (showEnded) {
+      badges.push(
+        <StatusBadge key="status" tone="neutral">
+          Terminé
+        </StatusBadge>
+      );
+    }
     if (detail && gov.compositionVerifiedAt) {
       badges.push(
         <StatusBadge key="verified" tone="success">

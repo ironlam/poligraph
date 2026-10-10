@@ -458,6 +458,53 @@ describe("répertoire", () => {
     expect(t.toLowerCase()).not.toContain("depuis");
   });
 
+  it("groupe par présidence, avec une ancre par présidence et un seul lien par carte", async () => {
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      formedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+      compositionVerifiedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    const markup = await html(DirectoryPage({ searchParams: sp() }));
+    const div = document.createElement("div");
+    div.innerHTML = markup;
+    const headings = [...div.querySelectorAll("h2")].map((h) => h.textContent);
+    expect(headings).toEqual(["Présidence d'Emmanuel Macron", "Présidence de François Hollande"]);
+    expect(markup).toContain('href="#presidence-hollande"');
+    expect(div.querySelector("#presidence-hollande")?.textContent).toContain("Gouvernement Hôtel");
+    for (const card of div.querySelectorAll("article")) {
+      expect(card.querySelectorAll("a")).toHaveLength(1);
+    }
+    const t = text(markup);
+    expect(t).toContain("Du 6 décembre 2016 au 15 mai 2017");
+    expect(t).toContain("Du 21 septembre au 23 décembre 2024");
+    expect(t).toContain("Équipe nommée le 12 octobre 2025");
+    expect(t).not.toContain("Terminé");
+    expect(t).not.toContain("Première ministre :");
+  });
+
+  it("filtre par présidence et ignore l'ancien paramètre année", async () => {
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    const t = text(await html(DirectoryPage({ searchParams: sp({ presidence: "hollande" }) })));
+    expect(t).toContain("Gouvernement Hôtel");
+    expect(t).not.toContain("Gouvernement Alpha");
+    const all = text(await html(DirectoryPage({ searchParams: sp({ annee: "2016" }) })));
+    expect(all).toContain("Gouvernement Alpha");
+  });
+
   it("filtre par nom sans tenir compte des accents", async () => {
     const t = text(await html(DirectoryPage({ searchParams: sp({ q: "chloe" }) })));
     expect(t).toContain("Gouvernement Charlie");
