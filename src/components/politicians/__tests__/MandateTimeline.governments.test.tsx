@@ -34,6 +34,7 @@ const published: ProfileMandateGovernment = {
     slug: "exemple-1",
     name: "Gouvernement Exemple I",
     publicationStatus: "PUBLISHED",
+    currentAffairsActId: "act-affaires-courantes",
   },
 };
 
@@ -49,7 +50,7 @@ describe("profil : lien vers le gouvernement d'une fonction ministérielle", () 
     const c = renderTimeline(ministerMandate(published), true);
     const hrefs = [...c.querySelectorAll("a")].map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/politiques/gouvernements/exemple-1");
-    // End day read in Paris time: 2025-10-04T22:00Z is 5 October in Paris.
+    // Collective resignation: the end day, read in Paris time (2025-10-04T22:00Z is 5 October).
     expect(hrefs).toContain("/politiques/gouvernements/exemple-1?date=2025-10-05");
     expect(c.textContent).toContain("Gouvernement Exemple I");
     expect(c.textContent).toContain("Voir la composition au 5 octobre 2025");
@@ -70,6 +71,40 @@ describe("profil : lien vers le gouvernement d'une fonction ministérielle", () 
     expect(c.querySelector('a[href^="/politiques/gouvernements"]')).toBeNull();
     // The mandate itself is still listed.
     expect(c.textContent).toContain("Ministre de l'Exemple");
+  });
+
+  it("ne dit pas « affaires courantes » si le régime n'est pas attesté par un acte", () => {
+    const unattested = {
+      ...published,
+      government: { ...published.government!, currentAffairsActId: null },
+    };
+    const link = mandateGovernmentLink(ministerMandate(unattested), true);
+    expect(link?.currentAffairs).toBe(false);
+    expect(renderTimeline(ministerMandate(unattested), true).textContent).not.toContain(
+      "affaires courantes"
+    );
+  });
+
+  it("remplacement individuel : composition la veille de la fin, où la personne figure encore", () => {
+    // Replaced on 5 October (Paris): on that day the successor is listed, so link the 4th.
+    const link = mandateGovernmentLink(
+      ministerMandate({ ...published, endKind: "INDIVIDUAL" }),
+      true
+    );
+    expect(link?.compositionHref).toBe("/politiques/gouvernements/exemple-1?date=2025-10-04");
+    expect(link?.currentAffairs).toBe(false);
+  });
+
+  it("fin individuelle le jour même du début : jamais avant le début", () => {
+    const link = mandateGovernmentLink(
+      {
+        startDate: new Date("2025-09-22T22:00:00Z"),
+        endDate: new Date("2025-09-22T22:00:00Z"),
+        governmentData: { ...published, endKind: "INDIVIDUAL" },
+      },
+      true
+    );
+    expect(link?.compositionDay).toBe("2025-09-23");
   });
 
   it("prend le jour de début quand la fin est inconnue, sans mention d'affaires courantes", () => {

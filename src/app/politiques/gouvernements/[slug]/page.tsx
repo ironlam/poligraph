@@ -70,10 +70,13 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const [{ slug }, sp] = await Promise.all([params, searchParams]);
   const gov = (await getPublishedGovernments()).find((g) => g.slug === slug);
   if (!gov) return { title: "Gouvernement introuvable", robots: { index: false, follow: true } };
+  // A historical composition is not a duplicate of the latest one (spec §8): a valid `date`
+  // stays in the canonical. An invalid one is ignored by the page, so is the canonical.
+  const date = parseCompositionDate(first(sp.date));
   return {
     title: `${gov.name} : composition et ministres`,
     description: `Composition du ${gov.name} date par date, avec la source officielle de chaque nomination, les changements documentés et la liste des participants.`,
-    alternates: { canonical: `${BASE}/${gov.slug}` },
+    alternates: { canonical: `${BASE}/${gov.slug}${date ? `?date=${date}` : ""}` },
     ...listingRobotsMetadata(
       hasActiveListingFilter({ date: first(sp.date) }, GOUVERNEMENT_DETAIL_FILTER_KEYS)
     ),

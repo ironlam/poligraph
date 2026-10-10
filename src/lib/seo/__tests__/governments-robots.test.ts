@@ -65,10 +65,16 @@ describe("/politiques/gouvernements/[slug]", () => {
     expect(m.title).toBe("Gouvernement Sébastien Lecornu II : composition et ministres");
   });
 
-  it.each(["2025-10-12", "pas-une-date"])("avec date=%s : noindex, follow", async (date) => {
-    const m = await detail({ date });
+  it("avec une date valide : noindex, follow, canonical avec la date", async () => {
+    const m = await detail({ date: "2025-10-12" });
     expect(m.robots).toEqual(NOINDEX_FOLLOW);
-    // A historical composition is not a duplicate of the latest one: no canonical to it.
+    // A historical composition is not a duplicate of the latest one: it stays its own canonical.
+    expect(m.alternates?.canonical).toBe("/politiques/gouvernements/lecornu-2?date=2025-10-12");
+  });
+
+  it("avec une date invalide : noindex, follow, canonical sans la date (ignorée)", async () => {
+    const m = await detail({ date: "pas-une-date" });
+    expect(m.robots).toEqual(NOINDEX_FOLLOW);
     expect(m.alternates?.canonical).toBe("/politiques/gouvernements/lecornu-2");
   });
 });

@@ -7,10 +7,16 @@ import type { ProfileMandateGovernment } from "@/lib/data/politician-profile-rea
 export type MandateGovernmentLink = {
   name: string;
   href: string;
-  /** Composition on the last day of the function if known, else on its first day. */
+  /**
+   * Individual end: the day before the end (on the end day the successor may already be listed),
+   * never before the start. Collective resignation: the end day. No end: the start day.
+   */
   compositionHref: string;
   compositionDay: string;
-  /** Collective resignation: the function went on under current affairs (no end date claimed). */
+  /**
+   * Collective resignation of a government whose current-affairs regime is attested by an act: the
+   * function went on under current affairs (no end date claimed).
+   */
   currentAffairs: boolean;
 };
 
@@ -29,12 +35,32 @@ export function mandateGovernmentLink(
   const government = mandate.governmentData?.government;
   if (!enabled || !government || government.publicationStatus !== "PUBLISHED") return null;
   const href = `/politiques/gouvernements/${government.slug}`;
-  const compositionDay = parisDay(new Date(mandate.endDate ?? mandate.startDate));
+  const collective = mandate.governmentData?.endKind === "COLLECTIVE_RESIGNATION";
+  const compositionDay = compositionDayOf(mandate.startDate, mandate.endDate, collective);
   return {
     name: government.name,
     href,
     compositionHref: `${href}?date=${compositionDay}`,
     compositionDay,
-    currentAffairs: mandate.governmentData?.endKind === "COLLECTIVE_RESIGNATION",
+    currentAffairs: collective && government.currentAffairsActId !== null,
   };
+}
+
+function previousDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function compositionDayOf(
+  start: Date | string,
+  end: Date | string | null,
+  collective: boolean
+): string {
+  const startDay = parisDay(new Date(start));
+  if (end === null) return startDay;
+  const endDay = parisDay(new Date(end));
+  if (collective) return endDay;
+  const before = previousDay(endDay);
+  return before < startDay ? startDay : before;
 }

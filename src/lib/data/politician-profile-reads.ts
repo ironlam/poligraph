@@ -78,7 +78,14 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
           governmentData: {
             select: {
               endKind: true,
-              government: { select: { slug: true, name: true, publicationStatus: true } },
+              government: {
+                select: {
+                  slug: true,
+                  name: true,
+                  publicationStatus: true,
+                  currentAffairsActId: true,
+                },
+              },
             },
           },
         },
@@ -112,16 +119,19 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
   if (!politician) return null;
 
   // A party with no public member is not nameable on a public surface.
-  // `governmentData` is optional in the type: documents stored before it was read lack the key.
+  // `governmentData` is kept only for a PUBLISHED government. Prisma returns `null` for every other
+  // mandate, and a key added to every stored document would change every profile's fingerprint
+  // (mass invalidation). Documents stored before it was read lack the key too.
   const mandates: Array<
     Omit<(typeof politician.mandates)[number], "party" | "governmentData"> & {
       party: { name: string } | null;
-      governmentData?: ProfileMandateGovernment | null;
+      governmentData?: ProfileMandateGovernment;
     }
-  > = politician.mandates.map((mandate) => ({
+  > = politician.mandates.map(({ governmentData, ...mandate }) => ({
     ...mandate,
     party:
       mandate.party && mandate.party._count.politicians > 0 ? { name: mandate.party.name } : null,
+    ...(governmentData?.government?.publicationStatus === "PUBLISHED" ? { governmentData } : {}),
   }));
   const partyHistory = politician.partyHistory.flatMap((membership) => {
     if (!membership.party || membership.party._count.politicians === 0) return [];
@@ -143,7 +153,13 @@ export async function readPoliticianIdentity(where: PoliticianWhere) {
 /** Government of a ministerial mandate, as stored in the profile document. */
 export type ProfileMandateGovernment = {
   endKind: GovernmentFunctionEnd | null;
-  government: { slug: string; name: string; publicationStatus: PublicationStatus } | null;
+  government: {
+    slug: string;
+    name: string;
+    publicationStatus: PublicationStatus;
+    /** Act attesting the current-affairs regime of the resigned government; null if none. */
+    currentAffairsActId: string | null;
+  } | null;
 };
 
 /** The non-null shape of the identity read, for components that receive it as a prop. */

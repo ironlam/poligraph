@@ -70,6 +70,12 @@ const PARTY_SURFACES = [
   "src/app/api/elections/presidentielle-2027/recherche/route.ts",
   "src/app/api/export/affaires/route.ts",
   "src/app/api/export/factchecks/route.ts",
+  // Gouvernements exports and pages: flagged only through `normalizeText` from `@/lib/name-matching`,
+  // whose module also holds `buildPartyIndex` (db.party). They never call it and read no party
+  // data: the governments readers select person fields only, no party badge is shown (spec §6).
+  "src/app/api/export/gouvernements/[slug]/route.ts",
+  "src/app/api/export/gouvernements/fonctions/route.ts",
+  "src/app/api/export/gouvernements/personnes/route.ts",
   "src/app/api/export/politiques/route.ts",
   "src/app/api/factchecks/route.ts",
   "src/app/api/factchecks/stats/route.ts",
@@ -141,6 +147,9 @@ const PARTY_SURFACES = [
   "src/app/politiques/[slug]/page.tsx",
   "src/app/politiques/[slug]/relations/page.tsx",
   "src/app/politiques/[slug]/votes/page.tsx",
+  // Same reason as the gouvernements exports above: `normalizeText` only, no party read.
+  "src/app/politiques/gouvernements/membres/page.tsx",
+  "src/app/politiques/gouvernements/page.tsx",
   "src/app/politiques/page.tsx",
   "src/app/presse/page.tsx",
   "src/app/programmes/page.tsx",
