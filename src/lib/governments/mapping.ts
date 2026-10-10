@@ -2,6 +2,7 @@
 // Fonctions pures, sans accès à la base : la lecture vit dans `src/lib/data/governments.ts`.
 
 import type { DateDetermination, Prisma, PublicationStatus } from "@/generated/prisma";
+import { parisDay } from "./dates";
 import type { DateEvidence, Episode, FunctionType, GovernmentDates } from "./types";
 
 // --- Sélections -------------------------------------------------------------
@@ -187,7 +188,7 @@ export type ParticipantCounts = { participantCount: number; hiddenCount: number 
 
 // --- Conversions ------------------------------------------------------------
 
-/** Jour calendaire `YYYY-MM-DD` d'une date stockée à minuit UTC. */
+/** Jour calendaire `YYYY-MM-DD` d'une colonne `@db.Date` (revient à 00:00 UTC). */
 export function toDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -359,14 +360,15 @@ export function toEpisode(row: EpisodeRow): GovernmentEpisode | null {
     politicianId: mandate.politician.id,
     type: mandate.type,
     title: mandate.title,
-    start: toDay(mandate.startDate),
+    // Horodatages Mandate : jour à Paris (voir dates.ts).
+    start: parisDay(mandate.startDate),
     startEvidence: row.startEvidence,
     startSourceUrl: row.startAct?.url ?? row.startSourceUrl,
-    end: toDayOrNull(mandate.endDate),
+    end: mandate.endDate ? parisDay(mandate.endDate) : null,
     endEvidence: row.endEvidence,
     endSourceUrl: row.endAct?.url ?? row.endSourceUrl,
     endKind: row.endKind,
-    lastConfirmedAt: toDayOrNull(mandate.lastConfirmedAt),
+    lastConfirmedAt: mandate.lastConfirmedAt ? parisDay(mandate.lastConfirmedAt) : null,
     predecessorMembershipId: row.predecessorId,
     sameDayOrderEstablished: row.sameDayOrderEstablished,
     sameDayOrderSourceUrl: row.sameDayOrderSourceUrl,

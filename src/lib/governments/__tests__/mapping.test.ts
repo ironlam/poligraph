@@ -274,6 +274,24 @@ describe("toEpisode", () => {
     });
   });
 
+  it("lit les dates de la fonction en heure de Paris, les dates d'actes en UTC", () => {
+    const row = episodeRow({
+      currentAffairsEndedAt: d("2025-10-06"),
+      mandate: {
+        ...episodeRow().mandate,
+        startDate: new Date("2020-07-05T22:00:00Z"),
+        endDate: new Date("2024-01-07T23:00:00Z"),
+        lastConfirmedAt: new Date("2025-10-12T00:00:00Z"),
+      },
+    });
+    expect(toEpisode(row)).toMatchObject({
+      start: "2020-07-06",
+      end: "2024-01-08",
+      lastConfirmedAt: "2025-10-12",
+      currentAffairsEndedAt: "2025-10-06",
+    });
+  });
+
   it("ignore une fonction qui n'est pas gouvernementale ou sans gouvernement", () => {
     expect(toEpisode(episodeRow({ governmentId: null }))).toBeNull();
     expect(
