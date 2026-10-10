@@ -16,7 +16,8 @@ import { classifyScrutinTitle } from "@/lib/scrutin-type";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
-import { createWriteStream, mkdirSync, rmSync, readdirSync, readFileSync } from "fs";
+import { createWriteStream, mkdirSync, mkdtempSync, rmSync, readdirSync, readFileSync } from "fs";
+import { tmpdir } from "os";
 import { extractZip } from "@/lib/parsing/unzip";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { createHash } from "crypto";
@@ -30,7 +31,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const LEGISLATURE = 17;
-const TEMP_DIR = "/tmp/scrutins-an";
+// Each run extracts into its own directory: a fixed path let one run delete the
+// archive another was still reading (see the concurrency test).
+const TEMP_DIR_PREFIX = "scrutins-an-";
 const ZIP_URL_TEMPLATE =
   "https://data.assemblee-nationale.fr/static/openData/repository/{leg}/loi/scrutins/Scrutins.json.zip";
 
@@ -425,17 +428,13 @@ export async function syncScrutinsAN(
     ? `official-groups-an-zip:${legislature}`
     : `votes-an-zip:${legislature}`;
 
+  const tempDir = mkdtempSync(path.join(tmpdir(), TEMP_DIR_PREFIX));
+
   try {
     // Step 1: Download ZIP (with ETag for conditional download)
     console.log("Downloading scrutins ZIP from data.assemblee-nationale.fr...");
     const zipUrl = ZIP_URL_TEMPLATE.replace("{leg}", String(legislature));
-    const zipPath = path.join(TEMP_DIR, "scrutins.zip");
-
-    // Clean and create temp dir
-    if (fs.existsSync(TEMP_DIR)) {
-      rmSync(TEMP_DIR, { recursive: true });
-    }
-    mkdirSync(TEMP_DIR, { recursive: true });
+    const zipPath = path.join(tempDir, "scrutins.zip");
 
     // Check ETag from previous sync
     // The separate metadata-only source key prevents it from inheriting the
@@ -469,7 +468,6 @@ export async function syncScrutinsAN(
           etag: downloadResult.etag,
         });
       }
-      rmSync(TEMP_DIR, { recursive: true });
       return stats;
     }
 
@@ -478,9 +476,9 @@ export async function syncScrutinsAN(
 
     // Step 2: Extract ZIP
     console.log("Extracting ZIP...");
-    const jsonDir = path.join(TEMP_DIR, "json");
+    const jsonDir = path.join(tempDir, "json");
     mkdirSync(jsonDir, { recursive: true });
-    extractZip(zipPath, TEMP_DIR);
+    extractZip(zipPath, tempDir);
     console.log("✓ Extracted ZIP file");
 
     // Step 3: List JSON files
@@ -701,9 +699,6 @@ export async function syncScrutinsAN(
 
     progress.finish();
 
-    // Cleanup
-    rmSync(TEMP_DIR, { recursive: true });
-
     // Track sync metadata
     if (!dryRun && (!officialGroupsOnly || stats.errors.length === 0)) {
       await syncMetadata.markCompleted(SOURCE_KEY, {
@@ -714,6 +709,8 @@ export async function syncScrutinsAN(
     }
   } catch (err) {
     stats.errors.push(`Fatal error: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
   }
 
   return stats;

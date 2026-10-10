@@ -1,6 +1,6 @@
 import { Readable } from "stream";
 import { createHash } from "crypto";
-import { mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -139,6 +139,42 @@ describe("syncScrutinsAN official group metadata", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     configureArchiveFixture();
+  });
+
+  // 2026-10-10: a second run (here, the unit suite) deleted the shared /tmp/scrutins-an
+  // while a production backfill was reading it, failing 7 633 scrutins with ENOENT.
+  it("never deletes the archive of a concurrent run", async () => {
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      slug: "scrutin-1",
+      chamber: "AN",
+      type: null,
+      votingDate: new Date("2025-01-01"),
+      votesHash: "same-votes-hash",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: null,
+      libelleTypeVote: null,
+    });
+    const destinations: string[] = [];
+    let concurrent: ReturnType<typeof syncScrutinsAN> | undefined;
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      destinations.push(destination);
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(rawScrutin));
+      // Start a second run just before the first one reads its extracted files.
+      concurrent ??= syncScrutinsAN(17, false, false, false, true);
+    });
+
+    const first = await syncScrutinsAN(17, false, false, false, true);
+    const second = await concurrent!;
+
+    expect(first.errors).toEqual([]);
+    expect(second.errors).toEqual([]);
+    expect(new Set(destinations).size).toBe(2);
+    for (const destination of destinations) expect(existsSync(destination)).toBe(false);
   });
 
   it("keeps the regular sync free of official-group backfill transactions", async () => {

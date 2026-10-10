@@ -1,11 +1,15 @@
 import { db } from "@/lib/db";
 import * as https from "https";
-import { mkdirSync, rmSync, readdirSync, readFileSync, createWriteStream } from "fs";
+import { mkdtempSync, rmSync, readdirSync, readFileSync, createWriteStream } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { extractZip } from "@/lib/parsing/unzip";
 import { extractSeanceFromXml } from "./debate-transcript-parse";
 
 const LEGISLATURE = 17;
-const TEMP_DIR = "/tmp/debate-transcripts";
+// Each run extracts into its own directory: a fixed path let one run delete the
+// archive another was still reading.
+const TEMP_DIR_PREFIX = "debate-transcripts-";
 const SYSERON_ZIP_URL = `https://data.assemblee-nationale.fr/static/openData/repository/${LEGISLATURE}/vp/syceronbrut/syseron.xml.zip`;
 
 interface SyncResult {
@@ -36,10 +40,17 @@ function downloadFile(url: string, dest: string): Promise<void> {
 }
 
 export async function syncDebateTranscripts(): Promise<SyncResult> {
-  const errors: string[] = [];
+  const tempDir = mkdtempSync(join(tmpdir(), TEMP_DIR_PREFIX));
+  try {
+    return await syncFromArchive(tempDir);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
-  mkdirSync(TEMP_DIR, { recursive: true });
-  const zipPath = `${TEMP_DIR}/cr.zip`;
+async function syncFromArchive(tempDir: string): Promise<SyncResult> {
+  const errors: string[] = [];
+  const zipPath = `${tempDir}/cr.zip`;
 
   try {
     await downloadFile(SYSERON_ZIP_URL, zipPath);
@@ -48,12 +59,12 @@ export async function syncDebateTranscripts(): Promise<SyncResult> {
   }
 
   try {
-    extractZip(zipPath, `${TEMP_DIR}/extracted`);
+    extractZip(zipPath, `${tempDir}/extracted`);
   } catch (e) {
     return { downloaded: 0, errors: [`Unzip failed: ${e}`] };
   }
 
-  const extractDir = `${TEMP_DIR}/extracted`;
+  const extractDir = `${tempDir}/extracted`;
   let files: string[] = [];
   try {
     const walk = (dir: string): string[] => {
@@ -118,8 +129,6 @@ export async function syncDebateTranscripts(): Promise<SyncResult> {
       errors.push(`Error processing ${file}: ${e}`);
     }
   }
-
-  rmSync(TEMP_DIR, { recursive: true, force: true });
 
   return { downloaded, errors: errors.slice(0, 10) };
 }
