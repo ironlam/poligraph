@@ -80,7 +80,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
   return (
     <div className="space-y-8">
       {/* Affairs -- Accused / Involved */}
-      <Card id="affaires">
+      <Card id="affaires" className="scroll-mt-20">
         <CardHeader>
           <h2 className="leading-none font-semibold">Affaires judiciaires</h2>
           <p className="text-xs text-muted-foreground">

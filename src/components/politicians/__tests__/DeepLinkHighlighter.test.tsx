@@ -31,6 +31,31 @@ describe("DeepLinkHighlighter", () => {
     el.remove();
   });
 
+  it("centre une cible courte et aligne en haut une cible plus haute que l'écran", () => {
+    const short = document.createElement("div");
+    short.id = "affair-court";
+    short.getBoundingClientRect = () => ({ height: 200 }) as DOMRect;
+    document.body.appendChild(short);
+    window.history.replaceState({}, "", "/politiques/x#affair-court");
+    const first = render(<DeepLinkHighlighter />);
+    expect(short.scrollIntoView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ block: "center" })
+    );
+    first.unmount();
+    short.remove();
+
+    const tall = document.createElement("div");
+    tall.id = "affaires";
+    tall.getBoundingClientRect = () => ({ height: window.innerHeight + 500 }) as DOMRect;
+    document.body.appendChild(tall);
+    window.history.replaceState({}, "", "/politiques/x?tab=affaires#affaires");
+    render(<DeepLinkHighlighter />);
+    expect(tall.scrollIntoView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ block: "start" })
+    );
+    tall.remove();
+  });
+
   it("ne jette pas quand la cible est absente", () => {
     window.history.replaceState({}, "", "/politiques/x#affair-absent");
     expect(() => render(<DeepLinkHighlighter />)).not.toThrow();
