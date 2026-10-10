@@ -12,11 +12,12 @@
  * retires a URL. So automation stops at the published boundary, full stop.
  *
  * It used to stop there *unless* a court-assigned identifier was shared. The first
- * real triage killed that exception (issue #525): two Carignon convictions share a
- * pourvoi number, the facts date, the verdict date and one cassation ruling, and
- * they are still two separate counts, so two affairs. A shared identifier means a
- * shared decision or proceeding, never a shared editorial affair. Nothing crosses
- * the published boundary without a person now.
+ * real triage killed that exception (issue #525): two Carignon fiches shared a
+ * pourvoi number, the facts date, the verdict date and one cassation ruling, yet
+ * each described a separate count. A shared identifier means a shared decision or
+ * proceeding; whether two fiches are one editorial affair stays a reader's call.
+ * (A reader later merged them, in October 2026, so the one proceeding would carry
+ * one chronology.) Nothing crosses the published boundary without a person now.
  *
  * That fix stopped at the published boundary, and the reasoning does not (issue
  * #557). Two *drafts* sharing an ECLI were still merged automatically, although the
