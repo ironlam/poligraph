@@ -2,7 +2,7 @@
 -- Additive migration, can run before the code. RLS of "AffairEvent" is already enabled: untouched.
 -- ADD VALUE statements sit before BEGIN: a new enum value cannot be used in the transaction that adds it.
 -- Run with: npx prisma db execute --file prisma/migrations/manual/2026-10-08_affair_event_lifecycle.sql
--- Applied: not yet
+-- Applied: 2026-10-08 (production)
 
 ALTER TYPE "AffairEventType" ADD VALUE IF NOT EXISTS 'TEMOIN_ASSISTE';
 ALTER TYPE "AffairEventType" ADD VALUE IF NOT EXISTS 'CLASSEMENT_SANS_SUITE';
