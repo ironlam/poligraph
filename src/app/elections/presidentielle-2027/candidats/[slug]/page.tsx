@@ -9,11 +9,10 @@ import { BreadcrumbJsonLd, PersonJsonLd } from "@/components/seo/JsonLd";
 import { candidacyRoleLabel } from "@/config/labels";
 import { hasPublishedProgramme, isFicheCandidatPublishable } from "@/config/publication-gates";
 import { SITE_URL } from "@/config/site";
-// Reuses the established politician authority rather than adding a second, lighter read for three
-// fields: it is cached under `politician:<slug>`, warmed by /politiques/[slug]. That authority is
-// now the identity half of the profile read, which still carries every field this page uses and no
-// longer drags the affairs tree along with them.
-import { getPoliticianIdentity } from "@/lib/data/politicians";
+// The precomputed profile document, the read /politiques/[slug] serves: one row instead of the
+// identity tree, and the same cache entry as the fiche (same function, same argument). Its identity
+// carries every field this page uses, under the same public predicates.
+import { getPoliticianProfile } from "@/lib/data/politician-profile";
 import {
   getCandidateFicheDetail,
   getPoliticianPresidentialCandidacy,
@@ -76,7 +75,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const politician = await getPoliticianIdentity(slug);
+  const politician = (await getPoliticianProfile(slug))?.identity ?? null;
   if (!politician) return { robots: { index: false, follow: true } };
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
@@ -111,7 +110,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CandidateFichePage({ params }: PageProps) {
   const { slug } = await params;
-  const politician = await getPoliticianIdentity(slug);
+  const politician = (await getPoliticianProfile(slug))?.identity ?? null;
   if (!politician) notFound();
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);

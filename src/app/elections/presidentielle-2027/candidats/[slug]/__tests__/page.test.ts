@@ -19,9 +19,9 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
   getCandidateFicheDetail: (candidacyId: string, politicianId: string) =>
     mockGetDetail(candidacyId, politicianId),
 }));
-const mockGetPoliticianIdentity = vi.fn();
-vi.mock("@/lib/data/politicians", () => ({
-  getPoliticianIdentity: (slug: string) => mockGetPoliticianIdentity(slug),
+const mockGetPoliticianProfile = vi.fn();
+vi.mock("@/lib/data/politician-profile", () => ({
+  getPoliticianProfile: (slug: string) => mockGetPoliticianProfile(slug),
 }));
 
 const mockGetThemesIndex = vi.fn();
@@ -58,21 +58,23 @@ const candidacy = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const identity = {
+  id: "p1",
+  slug: "camille-riviere",
+  fullName: "Camille Rivière",
+  firstName: "Camille",
+  lastName: "Rivière",
+  civility: "Mme",
+  photoUrl: null,
+  blobPhotoUrl: null,
+  declarations: [],
+  affairs: [],
+};
+
 describe("page présidentielle d'une personne", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetPoliticianIdentity.mockResolvedValue({
-      id: "p1",
-      slug: "camille-riviere",
-      fullName: "Camille Rivière",
-      firstName: "Camille",
-      lastName: "Rivière",
-      civility: "Mme",
-      photoUrl: null,
-      blobPhotoUrl: null,
-      declarations: [],
-      affairs: [],
-    });
+    mockGetPoliticianProfile.mockImplementation(async () => ({ identity }));
     mockGetDetail.mockResolvedValue({
       themes: [],
       recentVotes: [],
@@ -274,6 +276,25 @@ describe("page présidentielle d'une personne", () => {
     await expect(Page({ params: Promise.resolve({ slug: "camille-riviere" }) })).rejects.toThrow(
       "REDIRECT:/politiques/camille-riviere"
     );
+  });
+
+  it("rend notFound sans lire de candidature quand la personne n'a pas de document public", async () => {
+    mockGetPoliticianProfile.mockResolvedValue(null);
+    const { default: Page } = await import("../page");
+    await expect(Page({ params: Promise.resolve({ slug: "camille-riviere" }) })).rejects.toThrow(
+      "NOT_FOUND"
+    );
+    expect(mockGetCandidacy).not.toHaveBeenCalled();
+  });
+
+  it("désindexe les métadonnées quand la personne n'a pas de document public", async () => {
+    mockGetPoliticianProfile.mockResolvedValue(null);
+    const { generateMetadata } = await import("../page");
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ slug: "camille-riviere" }),
+    });
+    expect(metadata).toEqual({ robots: { index: false, follow: true } });
+    expect(mockGetCandidacy).not.toHaveBeenCalled();
   });
 
   // Decided 2026-10-01: withholding a sourced candidacy from search read as a judgement on the

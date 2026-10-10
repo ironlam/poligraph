@@ -22,7 +22,7 @@ import {
   listPublicPresidentialMeasures,
 } from "@/lib/data/measures";
 import { getPoliticianPresidentialCandidacy } from "@/lib/data/politician-candidacy";
-import { getPoliticianIdentity } from "@/lib/data/politicians";
+import { getPoliticianProfile } from "@/lib/data/politician-profile";
 import { parseThemeSlug, THEMES_IN_ORDER, themeToSlug } from "@/lib/presidentielle/themes";
 import { cn } from "@/lib/utils";
 import { PresidentialSubtopicLink } from "../../../_components/PresidentialSubtopicLink";
@@ -64,7 +64,7 @@ function buildMeasuresUrl(
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const [{ slug }, rawSearchParams] = await Promise.all([params, searchParams]);
-  const politician = await getPoliticianIdentity(slug);
+  const politician = (await getPoliticianProfile(slug))?.identity ?? null;
   if (!politician) return { robots: { index: false, follow: true } };
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);
 
@@ -83,10 +83,11 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
 export default async function CandidateMeasuresPage({ params, searchParams }: PageProps) {
   const [{ slug }, rawSearchParams] = await Promise.all([params, searchParams]);
-  const [politician, election] = await Promise.all([
-    getPoliticianIdentity(slug),
+  const [profile, election] = await Promise.all([
+    getPoliticianProfile(slug),
     getPublicElectionIdentity(ELECTION_SLUG),
   ]);
+  const politician = profile?.identity ?? null;
   if (!politician || !election) notFound();
 
   const candidacy = await getPoliticianPresidentialCandidacy(politician.id);

@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // generateMetadata only reads the identity of the profile document. Stub Prisma so the module
 // imports with no DATABASE_URL, and the cache primitives so nothing runs
 // outside a Next request.
-const getPoliticianIdentity = vi.fn();
+const readIdentity = vi.fn();
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/data/politician-profile", () => ({
   getPoliticianProfile: async (slug: string) => {
-    const identity = await getPoliticianIdentity(slug);
+    const identity = await readIdentity(slug);
     return identity ? { identity } : null;
   },
   readProfileSnapshot: vi.fn(),
@@ -21,11 +21,11 @@ import { generateMetadata } from "@/app/politiques/[slug]/page";
 
 const metadataFor = (slug: string) => generateMetadata({ params: Promise.resolve({ slug }) });
 
-beforeEach(() => getPoliticianIdentity.mockReset());
+beforeEach(() => readIdentity.mockReset());
 
 describe("/politiques/[slug] metadata", () => {
   it("noindex un profil inexistant au lieu de l'offrir à l'indexation", async () => {
-    getPoliticianIdentity.mockResolvedValue(null);
+    readIdentity.mockResolvedValue(null);
 
     const m = await metadataFor("x-bidon");
 
@@ -34,7 +34,7 @@ describe("/politiques/[slug] metadata", () => {
   });
 
   it("laisse intacte la metadata d'un profil existant", async () => {
-    getPoliticianIdentity.mockResolvedValue({
+    readIdentity.mockResolvedValue({
       fullName: "Jean Dupont",
       photoUrl: null,
       biography: "Une biographie substantielle.",

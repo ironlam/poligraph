@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getPoliticianIdentity: vi.fn(),
+  getPoliticianProfile: vi.fn(),
   getCandidacy: vi.fn(),
   getElection: vi.fn(),
   listMeasures: vi.fn(),
@@ -19,8 +19,8 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
   notFound: mocks.notFound,
 }));
-vi.mock("@/lib/data/politicians", () => ({
-  getPoliticianIdentity: mocks.getPoliticianIdentity,
+vi.mock("@/lib/data/politician-profile", () => ({
+  getPoliticianProfile: mocks.getPoliticianProfile,
 }));
 vi.mock("@/lib/data/politician-candidacy", () => ({
   getPoliticianPresidentialCandidacy: mocks.getCandidacy,
@@ -38,10 +38,8 @@ const params = Promise.resolve({ slug: "camille-riviere" });
 describe("page des mesures d'une candidature", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getPoliticianIdentity.mockResolvedValue({
-      id: "politician-1",
-      fullName: "Camille Rivière",
-    });
+    const identity = { id: "politician-1", fullName: "Camille Rivière" };
+    mocks.getPoliticianProfile.mockResolvedValue({ identity });
     mocks.getElection.mockResolvedValue({
       id: "election-1",
       slug: "presidentielle-2027",
@@ -169,6 +167,21 @@ describe("page des mesures d'une candidature", () => {
       "href",
       "/elections/presidentielle-2027/candidats/camille-riviere/mesures?theme=logement-urbanisme&sous-theme=encadrement-loyers"
     );
+  });
+
+  it("rend notFound sans lire de candidature quand la personne n'a pas de document public", async () => {
+    mocks.getPoliticianProfile.mockResolvedValue(null);
+    const { default: Page } = await import("./page");
+    await expect(Page({ params, searchParams: Promise.resolve({}) })).rejects.toThrow("NOT_FOUND");
+    expect(mocks.getCandidacy).not.toHaveBeenCalled();
+  });
+
+  it("désindexe les métadonnées quand la personne n'a pas de document public", async () => {
+    mocks.getPoliticianProfile.mockResolvedValue(null);
+    const { generateMetadata } = await import("./page");
+    const metadata = await generateMetadata({ params, searchParams: Promise.resolve({}) });
+    expect(metadata).toEqual({ robots: { index: false, follow: true } });
+    expect(mocks.getCandidacy).not.toHaveBeenCalled();
   });
 
   it("met les variantes filtrées en noindex tout en gardant la page nue indexable", async () => {

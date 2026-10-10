@@ -180,7 +180,7 @@ The sentence above leaves one box unnamed, and the codebase filled it in three d
 | Talking to something outside?           | `src/lib/api/`             | The only outbound network clients under `src/lib/`. |
 | A pipeline, a sync, a bulk write?       | `src/services/<domain>/`   | Orchestration. External I/O belongs here.           |
 
-Read it as a decision, not a taxonomy: `publish-guard.ts` writes to the DB and is an invariant, so it is `src/lib/affairs/`. `discover-affairs.ts` calls the press, resolves, and writes in bulk, so it is `src/services/sync/`. `getPoliticianIdentity()` renders a page, so it is `src/lib/data/`.
+Read it as a decision, not a taxonomy: `publish-guard.ts` writes to the DB and is an invariant, so it is `src/lib/affairs/`. `discover-affairs.ts` calls the press, resolves, and writes in bulk, so it is `src/services/sync/`. `getPoliticianProfile()` renders a page, so it is `src/lib/data/`.
 
 Two ratchets carry the debt that predates the rule, both frozen lists in the guard file: `NETWORK_EXCEPTIONS` (four `src/lib/` modules that fetch) and `PAGE_DB_DEBT` (nineteen public pages importing `@/lib/db` instead of reading through `src/lib/data/`). Entries come off the lists as code migrates. Adding one fails review.
 
