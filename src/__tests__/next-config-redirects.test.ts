@@ -32,4 +32,14 @@ describe("redirections de compatibilité", () => {
       permanent: true,
     });
   });
+
+  it("redirige durablement la fiche fusionnée de Sabrina Agresti-Roubache", async () => {
+    const redirects = await nextConfig.redirects!();
+
+    expect(redirects).toContainEqual({
+      source: "/politiques/sabrina-agresti-roubache",
+      destination: "/politiques/sabrina-roubache",
+      permanent: true,
+    });
+  });
 });

@@ -26,10 +26,7 @@ import { db } from "../src/lib/db";
 import { MandateType, DataSource, PartyRole } from "../src/generated/prisma";
 import { setCurrentParty, setPartyRole } from "../src/services/politician";
 import { WIKIDATA_SPARQL_RATE_LIMIT_MS } from "../src/config/rate-limits";
-import {
-  GOVERNMENT_SYNC_FROZEN,
-  isGovernmentFunctionType,
-} from "../src/services/sync/government-sync-guard";
+import { isGovernmentFunctionType } from "../src/services/sync/government-sync-guard";
 import { isCurrentChair } from "../src/services/sync/careers-chair";
 
 // Mapping from Wikidata position IDs to our MandateType
@@ -349,8 +346,8 @@ Features:
           const mandateInfo = POSITION_MAPPING[pos.positionId];
           if (!mandateInfo) continue;
 
-          // Gel : les fonctions gouvernementales ne s'importent pas pendant la migration
-          if (GOVERNMENT_SYNC_FROZEN && isGovernmentFunctionType(mandateInfo.type)) {
+          // Exclusion permanente : les fonctions gouvernementales relèvent du workflow par actes
+          if (isGovernmentFunctionType(mandateInfo.type)) {
             stats.governmentFunctionsSkipped++;
             continue;
           }

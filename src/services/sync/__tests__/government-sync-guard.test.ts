@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
+const { getTextMock, writeMocks, dbMock, frozen } = vi.hoisted(() => {
   const w = {
     mandateUpdate: vi.fn(),
     mandateCreate: vi.fn(),
@@ -12,6 +12,7 @@ const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
   };
   const read = () => vi.fn().mockResolvedValue([]);
   return {
+    frozen: { value: false },
     getTextMock: vi.fn(),
     writeMocks: Object.values(w),
     dbMock: {
@@ -41,6 +42,15 @@ const { getTextMock, writeMocks, dbMock } = vi.hoisted(() => {
   };
 });
 
+vi.mock("../government-sync-guard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../government-sync-guard")>();
+  return {
+    ...actual,
+    get GOVERNMENT_SYNC_FROZEN() {
+      return frozen.value;
+    },
+  };
+});
 vi.mock("@/lib/db", () => ({ db: dbMock }));
 vi.mock("@/lib/api/http-client", () => ({
   HTTPClient: class {
@@ -48,16 +58,44 @@ vi.mock("@/lib/api/http-client", () => ({
   },
 }));
 
-import { syncGouvernement } from "../gouvernement";
+import { syncGouvernement, loadSyncInput } from "../gouvernement";
 import { GOVERNMENT_SYNC_FROZEN } from "../government-sync-guard";
 
-describe("garde du sync gouvernement", () => {
+describe("sync gouvernement non gelé", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getTextMock.mockResolvedValue({ data: "" });
   });
 
-  it("est gelé dans ce lot", () => {
+  it("le gel est levé", () => {
+    expect(GOVERNMENT_SYNC_FROZEN).toBe(false);
+  });
+
+  it("s'exécute sans l'option de contournement", async () => {
+    const result = await syncGouvernement();
+    expect(result.skipped).toBeUndefined();
+    expect(getTextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("un fichier de corrections absent donne des corrections vides, sans erreur", async () => {
+    const input = await loadSyncInput({
+      correctionsPath: "/nonexistent/government-corrections.json",
+    });
+    expect(input).toBeDefined();
+  });
+});
+
+describe("garde du sync gouvernement (gel simulé)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTextMock.mockResolvedValue({ data: "" });
+    frozen.value = true;
+  });
+  afterEach(() => {
+    frozen.value = false;
+  });
+
+  it("est gelé quand le drapeau est levé à true", () => {
     expect(GOVERNMENT_SYNC_FROZEN).toBe(true);
   });
 
