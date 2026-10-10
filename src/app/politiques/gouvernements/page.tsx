@@ -41,11 +41,22 @@ function first(value: string | string[] | undefined): string {
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const sp = await searchParams;
   const params = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, first(v)]));
+  const title = "Gouvernements français : composition et ministres";
+  const description =
+    "Composition de chaque gouvernement publié, date par date : qui a exercé quelle fonction, avec la source officielle de chaque nomination.";
   return {
-    title: "Gouvernements de la Ve République",
-    description:
-      "Composition de chaque gouvernement publié, date par date : qui a exercé quelle fonction, avec la source officielle de chaque nomination.",
+    title,
+    description,
     alternates: { canonical: PATH },
+    openGraph: {
+      title,
+      description,
+      url: PATH,
+      type: "website",
+      siteName: "Poligraph",
+      locale: "fr_FR",
+    },
+    twitter: { card: "summary_large_image", title, description },
     ...listingRobotsMetadata(hasActiveListingFilter(params, GOUVERNEMENTS_LISTING_FILTER_KEYS)),
   };
 }
@@ -104,7 +115,10 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
       <PolitiquesLocalNav current="gouvernements" />
       <div className="container mx-auto flex flex-col gap-6 px-4 pb-10 pt-4">
         <Breadcrumb
-          items={[{ label: "Politiques", href: "/politiques" }, { label: "Gouvernements" }]}
+          items={[
+            { label: "Politiques", href: "/politiques" },
+            { label: "Gouvernements", href: PATH },
+          ]}
         />
 
         <div className="max-w-2xl">
@@ -113,7 +127,8 @@ export default async function GouvernementsPage({ searchParams }: PageProps) {
           </h1>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground">
             Retrouvez qui a exercé quelle fonction, dans quel gouvernement et à quelle date, puis
-            ouvrez la fiche de chaque personne. Chaque information renvoie à sa source.
+            ouvrez la fiche de chaque personne. Chaque nomination et chaque fin de fonction renvoie
+            à son acte officiel quand il existe.
           </p>
         </div>
 
