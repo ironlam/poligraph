@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCommandPalette } from "@/components/search";
 import { MobileThemeToggle } from "@/components/theme/MobileThemeToggle";
+import { PageShareButton } from "@/components/ui/PageShareButton";
 import { NAV_ELECTIONS, NAV_PRIMARY, NAV_SECONDARY, filterNavItems } from "@/config/navigation";
 import {
   BarChart3,
@@ -152,6 +153,8 @@ export function MobileMenu({ enabledFlags, pastElectionSlugs }: MobileMenuProps)
         >
           <Search className="h-5 w-5" />
         </button>
+
+        <PageShareButton />
 
         {/* Hamburger */}
         <button

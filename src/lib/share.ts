@@ -41,3 +41,31 @@ export interface ShareData {
   text: string;
   url: string;
 }
+
+export type ShareOutcome = "shared" | "copied" | "cancelled" | "failed";
+
+/**
+ * Native share sheet first, clipboard as fallback. A cancelled sheet is not an
+ * error: copying behind the user's back would overwrite their clipboard.
+ * Installed PWAs have no address bar, so this is the only way out of the app.
+ */
+export async function shareOrCopy(data: {
+  title: string;
+  url: string;
+  text?: string;
+}): Promise<ShareOutcome> {
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share(data);
+      return "shared";
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(data.url);
+    return "copied";
+  } catch {
+    return "failed";
+  }
+}
