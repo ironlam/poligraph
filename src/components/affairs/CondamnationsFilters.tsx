@@ -39,12 +39,17 @@ export function CondamnationsFilters({
   const buildHref = useMemo(
     () => (patch: Partial<FilterValues>) => {
       const params = new URLSearchParams();
-      const next = { ...current, ...patch };
+      // The rate view ignores party and certainty: never carry them out of it, or a
+      // bookmarked ?view=stats&parti=rn would silently filter the list on the way back.
+      const base =
+        current.view === "stats" ? { ...current, certainty: "tous", parti: undefined } : current;
+      const next = { ...base, ...patch };
       if (next.mandat) params.set("mandat", next.mandat);
       // The per-party rate counts final convictions only (#957).
       if (next.view !== "stats" && next.certainty && next.certainty !== "tous")
         params.set("certainty", next.certainty);
-      if (next.parti) params.set("parti", next.parti);
+      // The rate table lists every party, so a party filter does not apply there.
+      if (next.view !== "stats" && next.parti) params.set("parti", next.parti);
       if (next.view === "stats") params.set("view", "stats");
       const qs = params.toString();
       return `/affaires/condamnations${qs ? `?${qs}` : ""}`;
@@ -74,33 +79,35 @@ export function CondamnationsFilters({
         currentKey={current.view}
         onHref={(key) => buildHref({ view: key })}
       />
-      <details className="text-sm">
-        <summary className="cursor-pointer font-medium py-2">Filtrer par parti</summary>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {current.parti && (
-            <Link
-              href={buildHref({ parti: undefined })}
-              className="inline-flex items-center gap-1 h-9 px-3 rounded-full border border-primary bg-primary/10 hover:bg-primary/20 text-sm"
-              aria-label="Retirer le filtre parti"
-            >
-              ✕ {parties.find((p) => p.slug === current.parti)?.shortName ?? current.parti}
-            </Link>
-          )}
-          {parties.slice(0, 20).map((p) => (
-            <Link
-              key={p.slug}
-              href={buildHref({ parti: p.slug })}
-              aria-current={current.parti === p.slug ? "true" : undefined}
-              className={`inline-flex items-center h-9 px-3 rounded-full border text-sm hover:bg-muted ${
-                current.parti === p.slug ? "border-primary bg-primary/10" : ""
-              }`}
-              prefetch={false}
-            >
-              {p.shortName}
-            </Link>
-          ))}
-        </div>
-      </details>
+      {current.view !== "stats" && (
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium py-2">Filtrer par parti</summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {current.parti && (
+              <Link
+                href={buildHref({ parti: undefined })}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-full border border-primary bg-primary/10 hover:bg-primary/20 text-sm"
+                aria-label="Retirer le filtre parti"
+              >
+                ✕ {parties.find((p) => p.slug === current.parti)?.shortName ?? current.parti}
+              </Link>
+            )}
+            {parties.slice(0, 20).map((p) => (
+              <Link
+                key={p.slug}
+                href={buildHref({ parti: p.slug })}
+                aria-current={current.parti === p.slug ? "true" : undefined}
+                className={`inline-flex items-center h-9 px-3 rounded-full border text-sm hover:bg-muted ${
+                  current.parti === p.slug ? "border-primary bg-primary/10" : ""
+                }`}
+                prefetch={false}
+              >
+                {p.shortName}
+              </Link>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

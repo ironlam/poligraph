@@ -68,7 +68,8 @@ export function buildCanonical(input: CanonicalInput): string {
   if (mandat) params.set("mandat", mandat);
   // The per-party rate counts final convictions only (#957).
   if (certainty !== "tous" && view !== "stats") params.set("certainty", certainty);
-  if (partiSlug) params.set("parti", partiSlug);
+  // The rate table lists every party, so a party filter does not apply there.
+  if (partiSlug && view !== "stats") params.set("parti", partiSlug);
   if (view === "stats") params.set("view", "stats");
 
   const qs = params.toString();

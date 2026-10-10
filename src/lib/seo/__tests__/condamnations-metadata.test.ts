@@ -61,6 +61,12 @@ describe("buildCanonical", () => {
     );
   });
 
+  it("drops the party from the stats canonical, which lists every party", () => {
+    expect(buildCanonical({ certainty: "tous", view: "stats", partiSlug: "rn" })).toBe(
+      "/affaires/condamnations?view=stats"
+    );
+  });
+
   it("redirects parti-only canonical to /affaires/parti/[slug]", () => {
     expect(buildCanonical({ certainty: "tous", view: "list", partiSlug: "rn" })).toBe(
       "/affaires/parti/rn"
