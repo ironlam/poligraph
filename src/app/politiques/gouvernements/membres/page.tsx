@@ -25,7 +25,6 @@ import {
 } from "@/components/governments/format";
 import { getGovernmentEpisodes, getPublishedGovernments } from "@/lib/data/governments";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import type { PublishedGovernment } from "@/lib/governments/mapping";
 import {
   filterMembers,
   membersCoverage,
@@ -220,19 +219,24 @@ export default async function MembresPage({ searchParams }: PageProps) {
 
   const toFunctions = (row: MemberRow): MemberCardFunction[] =>
     row.functions.map((fn) => {
-      const gov = govById.get(fn.episode.governmentId) as PublishedGovernment;
+      const gov = govById.get(fn.episode.governmentId);
       return {
         key: fn.episode.membershipId,
         title: fn.episode.title,
         detail: (
           <>
-            <Link
-              href={`/politiques/gouvernements/${gov.slug}`}
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              {gov.name}
-            </Link>{" "}
-            · {episodeDates(fn.episode, row.person.gender)}
+            {gov ? (
+              <>
+                <Link
+                  href={`/politiques/gouvernements/${gov.slug}`}
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  {gov.name}
+                </Link>{" "}
+                ·{" "}
+              </>
+            ) : null}
+            {episodeDates(fn.episode, row.person.gender)}
           </>
         ),
         badge: functionBadge(fn),

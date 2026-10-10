@@ -396,4 +396,28 @@ describe("membres", () => {
     expect(t).toContain("Inès Entrante");
     expect(t).not.toContain("Karim Public");
   });
+
+  it("s'affiche sans erreur quand le gouvernement d'une fonction est absent", async () => {
+    const orphan = ep({
+      governmentId: "absent",
+      politicianId: "karim-public",
+      title: "Fonction orpheline",
+    });
+    vi.mocked(getGovernmentEpisodes).mockResolvedValue({
+      episodes: [...episodes, orphan],
+      people,
+    });
+    const t = text(await html(MembersPage({ searchParams: sp() })));
+    expect(t).toContain("Karim Public");
+    expect(t).not.toContain("Fonction orpheline");
+  });
+
+  it("garde le panneau de filtres utilisable sans JavaScript", async () => {
+    const markup = await html(MembersPage({ searchParams: sp({ fonction: "ministre" }) }));
+    const div = document.createElement("div");
+    div.innerHTML = markup;
+    const details = div.querySelector("form details");
+    expect(details?.querySelector("summary")?.textContent).toContain("Filtres (1)");
+    expect(details?.querySelector('button[type="submit"]')?.textContent).toContain("Appliquer");
+  });
 });

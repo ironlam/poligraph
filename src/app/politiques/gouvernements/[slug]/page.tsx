@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, FileText } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import {
   EstablishedAbsenceState,
@@ -254,15 +254,10 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
   const requested = parseCompositionDate(first(sp.date));
   const date = requested ?? range?.to ?? null;
 
-  const result: CompositionResult =
-    date && range
-      ? compositionAt(gov, own, date)
-      : date && gov.formedAt && gov.primeMinisterAppointedAt <= date && date < gov.formedAt
-        ? { status: "not_established", reason: "before_team" }
-        : {
-            status: "not_established",
-            reason: gov.formedAt ? "not_verified" : "no_formation_date",
-          };
+  // Every dated case goes through compositionAt; only a missing date needs a hand-built state.
+  const result: CompositionResult = date
+    ? compositionAt(gov, own, date)
+    : { status: "not_established", reason: gov.formedAt ? "not_verified" : "no_formation_date" };
 
   const selfUrl = `${BASE}/${gov.slug}`;
   const returnUrl = requested ? `${selfUrl}?date=${requested}` : selfUrl;
@@ -723,8 +718,12 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
                     returnLabel={returnLabel}
                   />
                   {moreParticipants.length > 0 && (
-                    <details className="border-t">
-                      <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-bold text-primary">
+                    <details className="group border-t">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 px-4 text-sm font-bold text-primary [&::-webkit-details-marker]:hidden">
+                        <ChevronRight
+                          className="size-4 shrink-0 transition-transform group-open:rotate-90"
+                          aria-hidden="true"
+                        />
                         Afficher les{" "}
                         {plural(moreParticipants.length, "autre personne", "autres personnes")}
                       </summary>
@@ -781,8 +780,12 @@ export default async function GovernmentPage({ params, searchParams }: PageProps
               </li>
               {gov.coverageNote && <li>{gov.coverageNote}</li>}
             </ul>
-            <details className="mt-3">
-              <summary className="flex min-h-11 cursor-pointer items-center font-bold">
+            <details className="group mt-3">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-bold [&::-webkit-details-marker]:hidden">
+                <ChevronRight
+                  className="size-4 shrink-0 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                />
                 Méthode et conventions de dates
               </summary>
               <div className="space-y-2 text-muted-foreground">

@@ -295,3 +295,17 @@ textarea:focus-visible,
     box-shadow: 0 0 0 3px var(--ring);
   }
 }
+
+/* Members filters (« Gouvernements »): a native disclosure on mobile, always open from md up
+   where the browser exposes the details content slot. */
+@media (min-width: 48rem) {
+  @supports selector(::details-content) {
+    .gouv-filters > summary {
+      display: none;
+    }
+    .gouv-filters::details-content {
+      content-visibility: visible;
+      display: block;
+    }
+  }
+}
