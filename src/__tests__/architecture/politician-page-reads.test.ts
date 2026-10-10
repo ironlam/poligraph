@@ -169,12 +169,16 @@ describe("fiche politicien : lecture du document précalculé", () => {
 
     const electionId = functionBody(CANDIDACY, "getPresidentialElectionId");
     expect(electionId).toMatch(/^\{\s*"use cache";/);
-    expect(electionId).toMatch(/cacheTag\("election-id:presidentielle-2027"\)/);
+    expect(electionId).toMatch(/cacheTag\(PRESIDENTIAL_ELECTION_ID_TAG\)/);
     expect(electionId).toMatch(/cacheLife\("synced"\)/);
     // `elections` is purged after every sync: on this entry it would stale every profile.
     expect([...electionId.matchAll(/cacheTag\(([^)]*)\)/g)].map((m) => m[1])).toEqual([
-      '"election-id:presidentielle-2027"',
+      "PRESIDENTIAL_ELECTION_ID_TAG",
     ]);
+    // The purge reads the same constant: a literal on either side could drift from the other.
+    const cache = withoutComments(read("src/lib/cache.ts"));
+    expect(cache).toMatch(/revalidateTag\(PRESIDENTIAL_ELECTION_ID_TAG,/);
+    expect(cache).not.toMatch(/["'`]election-id:/);
     expect(functionBody(CANDIDACY, "getCandidateFicheDetail")).toMatch(
       /await getPresidentialElectionId\(\)/
     );

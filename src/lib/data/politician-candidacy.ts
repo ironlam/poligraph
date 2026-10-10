@@ -12,7 +12,11 @@ import {
   indexThemeSynthesisMeasures,
   readThemeSynthesisClaims,
 } from "@/lib/presidentielle/candidacy-theme-synthesis";
-import { PRESIDENTIELLE_2027_SLUG, themeToSlug } from "@/lib/presidentielle/themes";
+import {
+  PRESIDENTIAL_ELECTION_ID_TAG,
+  PRESIDENTIELLE_2027_SLUG,
+  themeToSlug,
+} from "@/lib/presidentielle/themes";
 import {
   getPublicMeasureStatsByCandidacy,
   getPublicMeasuresByCandidacy,
@@ -415,13 +419,14 @@ export async function loadPresidentialElectionId(): Promise<string | null> {
  *
  * Its own tag, deliberately not `elections`: that one is purged by `invalidateEntity("election")`
  * and by `revalidateAll()` after every sync, and since every profile reads this entry, sharing the
- * tag would make every profile stale on each sync. Only `invalidateEntity("election")` purges
- * this tag, never `revalidateAll()`: an election recreated, or missing when the entry filled,
- * would otherwise freeze the candidacy until the `synced` backstop.
+ * tag would make every profile stale on each sync. Only `invalidateEntity("election",
+ * PRESIDENTIELLE_2027_SLUG)` purges this tag, never `revalidateAll()`. A presidential election
+ * recreated by a seed script is not purged (a script cannot revalidate): it waits for the next
+ * presidential candidacy write or the `synced` backstop.
  */
 export async function getPresidentialElectionId(): Promise<string | null> {
   "use cache";
-  cacheTag("election-id:presidentielle-2027");
+  cacheTag(PRESIDENTIAL_ELECTION_ID_TAG);
   cacheLife("synced");
   return loadPresidentialElectionId();
 }
