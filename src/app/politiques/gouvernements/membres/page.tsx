@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Download, X } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ItemListJsonLd } from "@/components/seo/JsonLd";
+import { PRESIDENCIES } from "@/config/presidencies";
 import { SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import { MissingData } from "@/components/ui/MissingData";
@@ -45,6 +46,7 @@ import {
   type MembersQuery,
 } from "@/lib/governments/params";
 import { normalizeText } from "@/lib/name-matching";
+import { cn } from "@/lib/utils";
 import { GOUVERNEMENTS_MEMBRES_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 
@@ -253,6 +255,20 @@ export default async function MembresPage({ searchParams }: PageProps) {
       href: hrefFor({ ...query, personne: null, page: 1 }, coverage),
     });
   }
+
+  // Period shortcuts, one per presidency overlapping the documented coverage. A single shortcut
+  // would only repeat the default period, so they appear from two presidencies on.
+  const presidencyShortcuts = PRESIDENCIES.map((p) => {
+    const du = p.from > coverage.from ? p.from : coverage.from;
+    const au = p.to !== null && p.to < coverage.to ? p.to : coverage.to;
+    return { slug: p.slug, name: p.name, du, au };
+  })
+    .filter((p) => p.du <= p.au)
+    .map((p) => ({
+      ...p,
+      active: query.mode === "periode" && query.du === p.du && query.au === p.au,
+      href: hrefFor({ ...query, mode: "periode", du: p.du, au: p.au, page: 1 }, coverage),
+    }));
 
   const ok = result.status === "ok" ? result : null;
   const main =
@@ -489,6 +505,25 @@ export default async function MembresPage({ searchParams }: PageProps) {
             </p>
           </FiltersPanel>
         </form>
+
+        {presidencyShortcuts.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Sous la présidence de :</span>
+            {presidencyShortcuts.map((p) => (
+              <Link
+                key={p.slug}
+                href={p.href}
+                className={cn(
+                  "inline-flex min-h-11 items-center rounded-full border px-3 hover:bg-muted",
+                  p.active ? "border-primary bg-primary/10 font-bold text-primary" : "bg-card"
+                )}
+              >
+                {p.name}
+                {p.active && <span className="sr-only"> (période appliquée)</span>}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {chips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">

@@ -565,6 +565,41 @@ describe("membres", () => {
     expect(t).not.toContain("au moins");
   });
 
+  it("propose un raccourci par présidence recoupant la période documentée", async () => {
+    const H = gov({
+      id: "gh",
+      slug: "gouvernement-h",
+      name: "Gouvernement Hôtel",
+      sequence: 0,
+      primeMinisterAppointedAt: "2016-12-06",
+      formedAt: "2016-12-06",
+      endedAt: "2017-05-15",
+      compositionVerifiedAt: "2017-05-15",
+    });
+    vi.mocked(getPublishedGovernments).mockResolvedValue([H, ...GOVS]);
+    const markup = await html(MembersPage({ searchParams: sp({ fonction: "ministre" }) }));
+    const div = document.createElement("div");
+    div.innerHTML = markup;
+    const links = [...div.querySelectorAll("a")];
+    const hollande = links.find((a) => a.textContent === "François Hollande");
+    const macron = links.find((a) => a.textContent === "Emmanuel Macron");
+    // du = début de la couverture (6 décembre 2016), au = fin de la présidence.
+    expect(hollande?.getAttribute("href")).toBe(
+      "/politiques/gouvernements/membres?au=2017-05-14&fonction=ministre"
+    );
+    expect(macron?.getAttribute("href")).toContain("du=2017-05-14");
+    expect(macron?.getAttribute("href")).toContain("fonction=ministre");
+    expect(links.some((a) => a.textContent === "Charles de Gaulle")).toBe(false);
+
+    const active = await html(MembersPage({ searchParams: sp({ au: "2017-05-14" }) }));
+    expect(text(active)).toContain("François Hollande (période appliquée)");
+  });
+
+  it("n'affiche pas de raccourci quand une seule présidence est couverte", async () => {
+    const t = text(await html(MembersPage({ searchParams: sp() })));
+    expect(t).not.toContain("Sous la présidence de");
+  });
+
   it("filtre par nom", async () => {
     const t = text(await html(MembersPage({ searchParams: sp({ q: "ines" }) })));
     expect(t).toContain("Inès Entrante");
