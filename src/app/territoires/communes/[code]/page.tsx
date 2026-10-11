@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 const ANCHORS = [
-  { href: "#qui-decide", label: "Qui décide ici" },
+  { href: "#qui-decide", label: "Élus et institutions" },
   { href: "#elections", label: "Élections" },
   { href: "#sources", label: "Sources et réutilisation" },
 ];
@@ -101,7 +101,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
               <li key={a.href}>
                 <a
                   href={a.href}
-                  className="inline-flex min-h-11 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="inline-flex min-h-11 items-center rounded-full border border-primary/30 bg-card px-4 text-sm font-medium text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                   {a.label}
                 </a>

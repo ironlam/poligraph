@@ -26,7 +26,7 @@ function SourceLink({ source }: { source: SourceRef }) {
 export function RegionDepartements({ data }: { data: RegionTerritoire }) {
   return (
     <section aria-labelledby="departements-titre" className={CARD}>
-      <h2 id="departements-titre" className="font-display text-xl font-extrabold">
+      <h2 id="departements-titre" className="font-display text-xl font-extrabold text-primary">
         Départements
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">Ordre alphabétique.</p>
@@ -70,7 +70,7 @@ export function RegionCollectivites({ data }: { data: RegionTerritoire }) {
   if (data.collectivitesParticulieres.length === 0) return null;
   return (
     <section aria-labelledby="collectivite-titre" className={CARD}>
-      <h2 id="collectivite-titre" className="font-display text-xl font-extrabold">
+      <h2 id="collectivite-titre" className="font-display text-xl font-extrabold text-primary">
         Collectivité compétente
       </h2>
       <ul className="mt-3 space-y-4">
@@ -98,7 +98,7 @@ export function RegionElections({ elections }: { elections: RegionElection[] }) 
   if (elections.length === 0) return null;
   return (
     <section aria-labelledby="elections-titre" className={CARD}>
-      <h2 id="elections-titre" className="font-display text-xl font-extrabold">
+      <h2 id="elections-titre" className="font-display text-xl font-extrabold text-primary">
         Élections
       </h2>
       <ul className="mt-3 divide-y divide-border">
@@ -129,7 +129,7 @@ export function RegionElections({ elections }: { elections: RegionElection[] }) 
 export function RegionParlement({ data }: { data: RegionTerritoire }) {
   return (
     <section aria-labelledby="parlement-titre" className={CARD}>
-      <h2 id="parlement-titre" className="font-display text-lg font-extrabold">
+      <h2 id="parlement-titre" className="font-display text-lg font-extrabold text-primary">
         Au Parlement
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
@@ -185,7 +185,7 @@ function coverageText(entry: CoverageEntry): string {
 export function RegionCouverture({ data }: { data: RegionTerritoire }) {
   return (
     <section aria-labelledby="couverture-titre" className={CARD}>
-      <h2 id="couverture-titre" className="font-display text-lg font-extrabold">
+      <h2 id="couverture-titre" className="font-display text-lg font-extrabold text-primary">
         Informations disponibles
       </h2>
       <ul className="mt-2 space-y-2 text-sm">
@@ -211,7 +211,7 @@ export function RegionCouverture({ data }: { data: RegionTerritoire }) {
 export function RegionReutiliser({ apiPath }: { apiPath: string }) {
   return (
     <section aria-labelledby="reutiliser-titre" className={CARD}>
-      <h2 id="reutiliser-titre" className="font-display text-lg font-extrabold">
+      <h2 id="reutiliser-titre" className="font-display text-lg font-extrabold text-primary">
         Réutiliser
       </h2>
       <ul className="mt-2 text-sm">

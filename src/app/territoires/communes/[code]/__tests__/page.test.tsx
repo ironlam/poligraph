@@ -216,6 +216,9 @@ describe("/territoires/communes/[code]", () => {
     for (const id of ["qui-decide", "elections", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();
     }
+    expect(anchors[0]?.textContent).toBe("Élus et institutions");
+    expect(document.getElementById("qui-decide-titre")?.textContent).toBe("Élus et institutions");
+    expect(text).not.toContain("Qui décide");
     expect(text).not.toMatch(/Décisions|Socle officiel|Dossier curé|intercommunalit|superficie/i);
     expect(text).toContain(
       "Informations disponibles : maire, population, circonscription législative, sénateurs du département, résultats des municipales 2026."

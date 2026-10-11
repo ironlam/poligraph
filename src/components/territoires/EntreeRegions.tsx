@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Map } from "lucide-react";
 import type { TerritoiresEntry } from "@/lib/data/territoires";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { territoireRegionPath, territoireDepartementPath } from "@/lib/territoires/paths";
@@ -14,9 +14,15 @@ function RegionLink({ region }: { region: EntryRegion }) {
       <Link
         href={territoireRegionPath(region.slug)}
         prefetch={false}
-        className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
-        <span className="min-w-0">
+        <span
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          aria-hidden="true"
+        >
+          <Map className="h-[18px] w-[18px]" />
+        </span>
+        <span className="min-w-0 flex-1">
           <span className="block font-bold">{region.name}</span>
           <span className="block text-sm text-muted-foreground">
             {formatCompte(region.departementCount, "département", "départements")} ·{" "}
@@ -39,7 +45,7 @@ export function EntreeRegions({ entry }: { entry: TerritoiresEntry }) {
 
   return (
     <section id="regions" aria-labelledby="regions-titre" className="scroll-mt-24">
-      <h2 id="regions-titre" className="font-display text-2xl font-extrabold">
+      <h2 id="regions-titre" className="font-display text-2xl font-extrabold text-primary">
         Explorer par région
       </h2>
       <div className="mt-4 space-y-6">

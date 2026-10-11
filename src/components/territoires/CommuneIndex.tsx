@@ -56,7 +56,10 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
       className="flex scroll-mt-20 flex-col gap-4 rounded-2xl border bg-card p-4 sm:p-6"
     >
       <div className="flex flex-col gap-1">
-        <h2 id="communes-titre" className="font-display text-xl font-extrabold sm:text-2xl">
+        <h2
+          id="communes-titre"
+          className="font-display text-xl font-extrabold sm:text-2xl text-primary"
+        >
           {communeCount > 1
             ? `Les ${communeCount.toLocaleString("fr-FR")} communes`
             : communeCount === 1
@@ -80,7 +83,9 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
                 className={cn(
                   CELL,
                   "w-full",
-                  letter === null ? "bg-[#14284a] text-white" : "bg-muted hover:bg-accent"
+                  letter === null
+                    ? "bg-[#14284a] text-white"
+                    : "bg-muted text-primary hover:bg-accent"
                 )}
               >
                 Toutes
@@ -100,7 +105,7 @@ export function CommuneIndex({ slug, territoire }: CommuneIndexProps) {
                       className={cn(
                         CELL,
                         "w-full",
-                        active ? "bg-[#14284a] text-white" : "bg-muted hover:bg-accent"
+                        active ? "bg-[#14284a] text-white" : "bg-muted text-primary hover:bg-accent"
                       )}
                     >
                       {l}

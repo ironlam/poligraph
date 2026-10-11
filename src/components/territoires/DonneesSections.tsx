@@ -14,7 +14,7 @@ import { formatDateFrUTC } from "@/lib/utils";
 const CARD = "rounded-xl border border-border bg-card p-4 sm:p-6";
 const LINK = "underline underline-offset-4 hover:text-primary";
 const TAP = "inline-flex min-h-11 items-center";
-const H2 = "font-display text-xl font-extrabold";
+const H2 = "font-display text-xl font-extrabold text-primary";
 
 export interface DownloadFile {
   label: string;

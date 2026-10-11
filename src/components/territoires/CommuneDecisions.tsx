@@ -249,7 +249,7 @@ export function CommuneDecisionsSections({ data }: { data: CommuneDecisions }) {
 
       {(periods.mayors.length > 0 || periods.unestablished.length > 0) && (
         <section aria-labelledby="periodes" className="space-y-3">
-          <h2 id="periodes" className="font-display text-xl font-bold">
+          <h2 id="periodes" className="font-display text-xl font-bold text-primary">
             Conseil municipal, par période
           </h2>
           {periods.mayors.map((period, i) => (
@@ -277,7 +277,7 @@ export function CommuneDecisionsSections({ data }: { data: CommuneDecisions }) {
 
       {intercommunal.length > 0 && (
         <section aria-labelledby="intercommunales" className="space-y-3">
-          <h2 id="intercommunales" className="font-display text-xl font-bold">
+          <h2 id="intercommunales" className="font-display text-xl font-bold text-primary">
             Décisions intercommunales concernant la commune
           </h2>
           <p className="text-sm text-muted-foreground">

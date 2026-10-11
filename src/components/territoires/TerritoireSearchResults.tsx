@@ -59,7 +59,7 @@ function Group({
       className="overflow-hidden rounded-xl border border-border bg-card"
     >
       <div className="border-b border-border px-4 py-3">
-        <h2 id={id} className="font-display text-lg font-extrabold">
+        <h2 id={id} className="font-display text-lg font-extrabold text-primary">
           {title}
         </h2>
         {intro && <p className="mt-1 text-sm">{intro}</p>}

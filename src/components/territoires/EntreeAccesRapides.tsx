@@ -40,7 +40,7 @@ export function EntreeAccesRapides({ monDepute }: { monDepute: boolean }) {
 
   return (
     <section aria-labelledby="acces-rapides-titre">
-      <h2 id="acces-rapides-titre" className="font-display text-2xl font-extrabold">
+      <h2 id="acces-rapides-titre" className="font-display text-2xl font-extrabold text-primary">
         Accès rapides
       </h2>
       <ul className="mt-4 grid gap-3 md:grid-cols-3">
@@ -51,13 +51,13 @@ export function EntreeAccesRapides({ monDepute }: { monDepute: boolean }) {
               className="flex h-full min-h-11 items-start gap-3 rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <span
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
                 aria-hidden="true"
               >
                 <Icon className="h-5 w-5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-display text-lg font-bold">{title}</span>
+                <span className="block font-display text-lg font-bold text-primary">{title}</span>
                 <span className="mt-1 block text-sm text-muted-foreground">{detail}</span>
               </span>
               <ChevronRight

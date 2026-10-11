@@ -75,7 +75,7 @@ export function SectionCard({
       className="scroll-mt-20 rounded-2xl border bg-card p-5 md:p-6"
     >
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id={headingId} className="font-display text-xl font-bold md:text-2xl">
+        <h2 id={headingId} className="font-display text-xl font-bold md:text-2xl text-primary">
           {title}
         </h2>
         {action}
@@ -101,7 +101,7 @@ function Collapsible({ summary, children }: { summary: string; children: React.R
   );
 }
 
-// ─── Qui décide ici ─────────────────────────────────────────────
+// ─── Élus et institutions ─────────────────────────────────────────────
 
 function MaireBlock({
   maire,
@@ -172,7 +172,7 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
   const { maire, mairesSecteur, identity } = dossier;
   const sansCommune = TERRITOIRES_SANS_COMMUNE.has(identity.territoireHorsRegion?.code ?? "");
   return (
-    <SectionCard id="qui-decide" title="Qui décide ici">
+    <SectionCard id="qui-decide" title="Élus et institutions">
       <MaireBlock maire={maire} communeName={identity.name} />
 
       {mairesSecteur.length > 0 && (
@@ -517,7 +517,7 @@ export function ElectionsSection({ dossier }: { dossier: CommuneDossier }) {
       {!agregatTerritoire &&
         !presidentielles.some((p) => p.electionSlug === PRESIDENTIELLE_2027_SLUG) &&
         !TERRITOIRES_SANS_COMMUNE.has(dossier.identity.territoireHorsRegion?.code ?? "") && (
-          <div className="mt-4 rounded-xl bg-muted/60 p-4 text-sm">
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
             <strong>Présidentielle 2027 :</strong> les résultats de la commune apparaîtront ici
             après leur publication officielle.
           </div>
@@ -531,7 +531,7 @@ export function ElectionsSection({ dossier }: { dossier: CommuneDossier }) {
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border bg-card p-5">
-      <h2 className="mb-3 font-display text-lg font-bold">{title}</h2>
+      <h2 className="mb-3 font-display text-lg font-bold text-primary">{title}</h2>
       {children}
     </section>
   );
