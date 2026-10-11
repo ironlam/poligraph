@@ -117,7 +117,7 @@ describe("page région", () => {
     const list = screen.getByRole("region", { name: "Départements" });
     const links = within(list).getAllByRole("link");
     expect(links).toHaveLength(4);
-    expect(links[0]).toHaveAttribute("href", "/departements/departement-22");
+    expect(links[0]).toHaveAttribute("href", "/territoires/departements/departement-22");
     expect(links[0]).toHaveTextContent("100 communes");
 
     // Parliament: counts are shown, an absence is said, never a zero.

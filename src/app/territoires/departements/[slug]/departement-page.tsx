@@ -9,8 +9,8 @@ import { DepartementConseil } from "@/components/territoires/DepartementConseil"
 import { DepartementParlement } from "@/components/territoires/DepartementParlement";
 
 /**
- * Body shared by `/departements/[slug]` and its commune-list variants
- * (`/departements/[slug]/communes/[lettre]/[page]`, reached through the proxy rewrite of
+ * Body shared by `/territoires/departements/[slug]` and its commune-list variants
+ * (`/territoires/departements/[slug]/communes/[lettre]/[page]`, reached through the proxy rewrite of
  * `?lettre=&page=`). Neither route reads searchParams.
  */
 export async function DepartementPageBody({

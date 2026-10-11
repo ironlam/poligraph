@@ -5,9 +5,10 @@ import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import { parseCommuneListSegments } from "@/lib/territoires/departement-communes";
 import { DepartementPageBody } from "../../../departement-page";
+import { territoireDepartementPath } from "@/lib/territoires/paths";
 
 /**
- * Internal target of `/departements/<slug>?lettre=<A-Z>&page=<n>` (rewritten by src/proxy.ts).
+ * Internal target of `/territoires/departements/<slug>?lettre=<A-Z>&page=<n>` (rewritten by src/proxy.ts).
  * One ISR entry per view of the list, rendered on demand: nothing is prerendered at build.
  * A day rather than the parent's hour: these slices are many, rarely visited, and refreshed by
  * the same cache tags as the bare page.
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `${dept.name} : ${parts.join(", ")}`,
     description: `Communes du département ${dept.name}, par ordre alphabétique.`,
-    alternates: { canonical: `/departements/${slug}` },
+    alternates: { canonical: territoireDepartementPath(slug) },
     ...listingRobotsMetadata(true),
   };
 }

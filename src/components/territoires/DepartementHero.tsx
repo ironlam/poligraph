@@ -2,7 +2,11 @@ import Link from "next/link";
 import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { TerritoryShape } from "@/components/territoires/TerritoryShape";
 import { DEPARTMENT_OUTLINES } from "@/config/territoires-shapes";
-import { TERRITOIRES_PATH, territoireRegionPath } from "@/lib/territoires/paths";
+import {
+  TERRITOIRES_PATH,
+  territoireRegionPath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 import { COMMUNES_ANCHOR } from "@/lib/territoires/departement-communes";
 import type { DepartementTerritoire } from "@/lib/data/territoires";
 import { cn, formatDate } from "@/lib/utils";
@@ -60,7 +64,7 @@ export function DepartementHero({
       <BreadcrumbJsonLd
         items={[{ label: "Accueil", href: "/" }, ...crumbs].map((c) => ({
           name: c.label,
-          url: `${SITE_URL}${c.href ?? `/departements/${slug}`}`,
+          url: `${SITE_URL}${c.href ?? territoireDepartementPath(slug)}`,
         }))}
       />
       <div aria-hidden="true" className="flex h-1">

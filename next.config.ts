@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
     synced: { stale: 3600, revalidate: 86400, expire: 604800 },
   },
   outputFileTracingIncludes: {
-    "/departements/[slug]/opengraph-image": ["./public/data/departements.geojson"],
+    "/territoires/departements/[slug]/opengraph-image": ["./public/data/departements.geojson"],
     "/elections/senatoriales-2026": ["./public/data/departements.geojson"],
     "/elections/municipales-2026/communes/[inseeCode]/opengraph-image": [
       "./public/data/departements.geojson",
@@ -163,6 +163,13 @@ const nextConfig: NextConfig = {
         source: "/assemblee",
         destination: "/parlement/dossiers",
         statusCode: 308,
+      },
+      // Departments moved under the Territoires section (#1052). Next appends the query string
+      // (?lettre=, ?page=) to the destination; an unknown slug 404s at the new address.
+      {
+        source: "/departements/:path*",
+        destination: "/territoires/departements/:path*",
+        permanent: true,
       },
       {
         source: "/partis/ensemble-pour-la-republique",

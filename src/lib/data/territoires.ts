@@ -92,7 +92,7 @@ export interface PersonRef {
 export interface DepartmentRef {
   code: string;
   name: string | null;
-  /** `/departements/<slug>`; null for codes without a department page (984, 989). */
+  /** `/territoires/departements/<slug>`; null for codes without a department page (984, 989). */
   slug: string | null;
 }
 

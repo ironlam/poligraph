@@ -7,7 +7,7 @@ import {
   MANDATE_TYPE_LABELS,
 } from "@/config/labels";
 import { isAccusedInvolvement } from "@/config/certainty";
-import { territoireCommunePath } from "@/lib/territoires/paths";
+import { territoireCommunePath, territoireDepartementPath } from "@/lib/territoires/paths";
 import type { AffairStatus, Involvement } from "@/generated/prisma";
 
 export interface SearchResultCategory {
@@ -210,7 +210,7 @@ export function categorizeResults(data: GlobalSearchResponse, query = ""): Searc
       label: "Territoires",
       results: [
         ...(data.departements ?? []).map((d) => ({
-          href: `/departements/${d.slug}`,
+          href: territoireDepartementPath(d.slug),
           primary: d.name,
           secondary: `Département (${d.code})`,
         })),

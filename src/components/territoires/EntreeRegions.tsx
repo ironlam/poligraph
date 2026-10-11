@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { TerritoiresEntry } from "@/lib/data/territoires";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
-import { territoireRegionPath } from "@/lib/territoires/paths";
+import { territoireRegionPath, territoireDepartementPath } from "@/lib/territoires/paths";
 import { formatDate } from "@/lib/utils";
 import { formatCompte, formatNombre } from "@/lib/territoires/format";
 
@@ -84,7 +84,7 @@ export function EntreeRegions({ entry }: { entry: TerritoiresEntry }) {
                     </span>
                     {slug && t.communeCount > 0 ? (
                       <Link
-                        href={`/departements/${slug}`}
+                        href={territoireDepartementPath(slug)}
                         prefetch={false}
                         className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
                       >

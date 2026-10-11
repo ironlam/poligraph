@@ -79,3 +79,18 @@ describe("sitemap : rubrique Territoires", () => {
     expect(SITEMAP_SHARD_TAGS[5]).toEqual(["politicians", "territoires"]);
   });
 });
+
+describe("sitemap : départements sous /territoires (#1052)", () => {
+  it("annonce la liste et chaque département à leur nouvelle adresse, jamais l'ancienne", async () => {
+    h.queryRaw.mockResolvedValue([]);
+    const urls: string[] = [];
+    for (const id of ["0", "1", "2", "3", "4", "5"]) {
+      urls.push(...(await sitemap({ id: Promise.resolve(id) })).map((e) => path(e.url)));
+    }
+
+    expect(urls).toContain("/territoires/departements");
+    expect(urls).toContain("/territoires/departements/ille-et-vilaine");
+    expect(urls).toContain("/territoires/departements/polynesie-francaise");
+    expect(urls.filter((u) => u.startsWith("/departements"))).toEqual([]);
+  });
+});

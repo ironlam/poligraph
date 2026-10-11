@@ -14,7 +14,11 @@ import {
   maireSince,
   territoireLabel,
 } from "@/lib/territoires/commune-display";
-import { TERRITOIRES_PATH, territoireRegionPath } from "@/lib/territoires/paths";
+import {
+  TERRITOIRES_PATH,
+  territoireRegionPath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 import { formatDate } from "@/lib/utils";
 import { populationVintageLabel } from "@/lib/territoires/population-label";
 
@@ -40,7 +44,9 @@ function crumbsFor(identity: CommuneDossier["identity"]): Crumb[] {
   }
   crumbs.push({
     label: territoireLabel(identity),
-    href: identity.department.slug ? `/departements/${identity.department.slug}` : undefined,
+    href: identity.department.slug
+      ? territoireDepartementPath(identity.department.slug)
+      : undefined,
   });
   crumbs.push({ label: identity.name });
   return crumbs;

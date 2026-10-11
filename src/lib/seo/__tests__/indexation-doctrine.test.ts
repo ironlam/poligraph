@@ -634,7 +634,7 @@ describe("doctrine — politician sub-tabs inherit the profile's indexability", 
   });
 });
 
-describe("doctrine, /departements/[slug] : les vues de la liste des communes restent hors index", () => {
+describe("doctrine, /territoires/departements/[slug] : les vues de la liste des communes restent hors index", () => {
   it("?lettre= et ?page>1 sont des variantes utilitaires, la page nue reste indexable", async () => {
     const { DEPARTEMENT_COMMUNES_FILTER_KEYS } = await import("../listing-filters");
     expect(DEPARTEMENT_COMMUNES_FILTER_KEYS).toContain("lettre");
@@ -647,7 +647,7 @@ describe("doctrine, /departements/[slug] : les vues de la liste des communes res
 
   it("la route des variantes est noindex,follow avec un canonical vers la page nue", async () => {
     const { generateMetadata } =
-      await import("@/app/departements/[slug]/communes/[lettre]/[page]/page");
+      await import("@/app/territoires/departements/[slug]/communes/[lettre]/[page]/page");
     for (const [lettre, page] of [
       ["M", "2"],
       ["E", "1"],
@@ -657,22 +657,22 @@ describe("doctrine, /departements/[slug] : les vues de la liste des communes res
         params: Promise.resolve({ slug: "aisne", lettre: lettre!, page: page! }),
       });
       expect(m.robots, `${lettre}/${page}`).toEqual(NOINDEX_FOLLOW.robots);
-      expect(m.alternates?.canonical).toBe("/departements/aisne");
+      expect(m.alternates?.canonical).toBe("/territoires/departements/aisne");
     }
   });
 
   it("la page nue du département garde son canonical et reste indexable", async () => {
-    const { generateMetadata } = await import("@/app/departements/[slug]/page");
+    const { generateMetadata } = await import("@/app/territoires/departements/[slug]/page");
     const m = await generateMetadata({ params: Promise.resolve({ slug: "aisne" }) });
     expect(m.robots).toBeUndefined();
-    expect(m.alternates?.canonical).toBe("/departements/aisne");
+    expect(m.alternates?.canonical).toBe("/territoires/departements/aisne");
   });
 
   it("aucune des deux routes ne lit searchParams (ISR, AGENTS.md §8)", () => {
     for (const file of [
-      "src/app/departements/[slug]/page.tsx",
-      "src/app/departements/[slug]/communes/[lettre]/[page]/page.tsx",
-      "src/app/departements/[slug]/departement-page.tsx",
+      "src/app/territoires/departements/[slug]/page.tsx",
+      "src/app/territoires/departements/[slug]/communes/[lettre]/[page]/page.tsx",
+      "src/app/territoires/departements/[slug]/departement-page.tsx",
     ]) {
       const code = readFileSync(join(process.cwd(), file), "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")

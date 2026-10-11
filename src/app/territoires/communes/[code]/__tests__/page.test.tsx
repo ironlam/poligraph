@@ -103,7 +103,8 @@ describe("/territoires/communes/[code]", () => {
     expect(text).toContain("Selon votre adresse, une autre circonscription peut s'appliquer");
     expect(document.querySelector('a[href="/mon-depute"]')).not.toBeNull();
     expect(
-      document.querySelector('#parlement a[href="/departements/ille-et-vilaine"]')?.textContent
+      document.querySelector('#parlement a[href="/territoires/departements/ille-et-vilaine"]')
+        ?.textContent
     ).toBe("Ille-et-Vilaine (35) : sénateurs et députés");
     expect(text).not.toMatch(/partie (nord|sud)/);
   });

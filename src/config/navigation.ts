@@ -1,6 +1,10 @@
 // Navigation configuration: primary sections, election block, icon tool rail
 
-import { TERRITOIRES_PATH, TERRITOIRES_REGIONS_ANCHOR } from "@/lib/territoires/paths";
+import {
+  TERRITOIRES_PATH,
+  TERRITOIRES_REGIONS_ANCHOR,
+  TERRITOIRES_DEPARTEMENTS_PATH,
+} from "@/lib/territoires/paths";
 
 export interface NavItem {
   href: string;
@@ -63,7 +67,7 @@ export const NAV_PRIMARY: NavItem[] = [
     description: "Communes, départements, régions et leurs élus",
     children: [
       { href: TERRITOIRES_PATH, label: "Ma commune" },
-      { href: "/departements", label: "Départements" },
+      { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
       { href: TERRITOIRES_REGIONS_ANCHOR, label: "Régions" },
       { href: "/mon-depute", label: "Mon député", featureFlag: "MON_DEPUTE_SECTION" },
     ],
@@ -285,7 +289,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/programmes", label: "Programmes", featureFlag: "PROGRAMMES_ENABLED" },
       { href: "/presse", label: "Revue de presse", featureFlag: "PRESS_SECTION" },
       { href: TERRITOIRES_PATH, label: "Territoires" },
-      { href: "/departements", label: "Départements" },
+      { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
       { href: "/recherche", label: "Recherche" },
       { href: "/mon-observatoire", label: "Mon Observatoire" },
     ],
@@ -369,7 +373,7 @@ export const NAV_LINKS = [
 
 export const FOOTER_LINKS = [
   { href: "/recherche", label: "Recherche avancée" },
-  { href: "/departements", label: "Départements" },
+  { href: TERRITOIRES_DEPARTEMENTS_PATH, label: "Départements" },
   { href: "/institutions", label: "Institutions" },
   { href: "/sources", label: "Sources" },
   { href: "/methodologie", label: "Méthodologie" },

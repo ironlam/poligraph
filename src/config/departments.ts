@@ -181,7 +181,7 @@ export function getDepartmentSlug(name: string) {
  *
  * Null rather than a made-up name for the six communes of the TAAF (984) and Clipperton (989):
  * those territories have no department. Adding them to DEPARTMENTS would be the tempting fix and
- * the wrong one, since that map drives the /departements routes and the sitemap, which would gain
+ * the wrong one, since that map drives the /territoires/departements routes and the sitemap, which would gain
  * two entries that are not departments.
  */
 export function getDepartmentName(code: string | null | undefined): string | null {

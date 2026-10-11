@@ -261,7 +261,9 @@ describe("page département : index A à Z et pagination", () => {
       "M",
     ]);
     expect(index.textContent).toContain("Z : aucune commune");
-    expect(index.querySelector('a[href="/departements/eure?lettre=M#communes"]')).not.toBeNull();
+    expect(
+      index.querySelector('a[href="/territoires/departements/eure?lettre=M#communes"]')
+    ).not.toBeNull();
   });
 
   it("annonce un compteur conforme au filtre actif et aux noms affichés", async () => {
@@ -285,7 +287,7 @@ describe("page département : index A à Z et pagination", () => {
     const nav = doc.querySelector('nav[aria-label="Pages de la liste des communes"]')!;
     expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe("2");
     expect(nav.querySelector('a[rel="prev"]')?.getAttribute("href")).toBe(
-      "/departements/eure?lettre=M#communes"
+      "/territoires/departements/eure?lettre=M#communes"
     );
     expect(nav.querySelector('a[rel="next"]')).toBeNull();
   });

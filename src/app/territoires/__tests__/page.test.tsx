@@ -124,7 +124,7 @@ describe("page d'entrée Territoires", () => {
     // A COM with a department page links to its communes; Clipperton has none and stays text.
     expect(
       within(section).getByRole("link", { name: /Voir les 48 communes de Polynésie française/ })
-    ).toHaveAttribute("href", "/departements/polynesie-francaise");
+    ).toHaveAttribute("href", "/territoires/departements/polynesie-francaise");
     expect(within(section).getByText("Île de Clipperton")).toBeInTheDocument();
     // The map lives in the banner, not beside the list.
     expect(section.querySelector("svg:not(.lucide)")).toBeNull();

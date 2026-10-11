@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { MapDepartmentData } from "@/app/api/carte/route";
 import { getDepartmentSlug } from "@/config/departments";
+import { territoireDepartementPath } from "@/lib/territoires/paths";
 
 interface MapSidebarProps {
   department: MapDepartmentData;
@@ -75,7 +76,7 @@ export function MapSidebar({ department, onClose }: MapSidebarProps) {
 
         {/* Action button */}
         <Button asChild className="w-full">
-          <Link href={`/departements/${deptSlug}`}>
+          <Link href={territoireDepartementPath(deptSlug)}>
             Voir le département
             <ExternalLink className="ml-2 h-4 w-4" />
           </Link>

@@ -14,7 +14,11 @@ import { getCommuneDossier } from "@/lib/data/territoires";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { communeDescription, communeTitle } from "@/lib/territoires/commune-display";
-import { territoireCommuneDecisionsPath, territoireCommunePath } from "@/lib/territoires/paths";
+import {
+  territoireCommuneDecisionsPath,
+  territoireCommunePath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 
 // ISR: 24 h backstop; freshness comes from the reader's cache tags.
 export const revalidate = 86400;
@@ -82,7 +86,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
             ? {
                 name: departmentName,
                 ...(identity.department.slug && {
-                  url: `${SITE_URL}/departements/${identity.department.slug}`,
+                  url: `${SITE_URL}${territoireDepartementPath(identity.department.slug)}`,
                 }),
               }
             : undefined

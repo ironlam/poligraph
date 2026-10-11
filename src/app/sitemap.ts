@@ -38,6 +38,8 @@ import {
   TERRITOIRES_PATH,
   territoireCommunePath,
   territoireRegionPath,
+  territoireDepartementPath,
+  TERRITOIRES_DEPARTEMENTS_PATH,
 } from "@/lib/territoires/paths";
 
 export async function generateSitemaps() {
@@ -164,7 +166,7 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       priority: 0.8,
     },
     {
-      url: `${SITE_URL}/departements`,
+      url: `${SITE_URL}${TERRITOIRES_DEPARTEMENTS_PATH}`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.8,
@@ -672,7 +674,7 @@ async function buildAffairsPartiesElectionsDepartmentsSitemap(): Promise<Metadat
         }));
 
   const departmentPages: MetadataRoute.Sitemap = Object.values(DEPARTMENTS).map((dept) => ({
-    url: `${SITE_URL}/departements/${getDepartmentSlug(dept.name)}`,
+    url: `${SITE_URL}${territoireDepartementPath(getDepartmentSlug(dept.name))}`,
     lastModified: new Date(),
     changeFrequency: "weekly" as const,
     priority: 0.6,

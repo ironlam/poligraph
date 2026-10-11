@@ -1,5 +1,5 @@
-// Public URLs of the Territoires section (#1052). Departments keep their historical
-// /departements/[slug] route: it is enriched, never duplicated under /territoires.
+// Public URLs of the Territoires section (#1052). Departments moved from /departements to
+// /territoires/departements: next.config.ts redirects the old URLs (308, query string kept).
 
 export const TERRITOIRES_PATH = "/territoires";
 export const TERRITOIRES_REGIONS_ANCHOR = "/territoires#regions";
@@ -8,6 +8,12 @@ export const TERRITOIRES_SEARCH_PATH = "/territoires/recherche";
 
 export function territoireCommunePath(inseeCode: string): string {
   return `/territoires/communes/${encodeURIComponent(inseeCode)}`;
+}
+
+export const TERRITOIRES_DEPARTEMENTS_PATH = "/territoires/departements";
+
+export function territoireDepartementPath(slug: string): string {
+  return `${TERRITOIRES_DEPARTEMENTS_PATH}/${encodeURIComponent(slug)}`;
 }
 
 export function territoireRegionPath(slug: string): string {

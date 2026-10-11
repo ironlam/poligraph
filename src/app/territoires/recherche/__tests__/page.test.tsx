@@ -87,7 +87,7 @@ describe("recherche de territoire", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Résultats pour « loire »");
     expect(screen.getByRole("link", { name: /^Loire · 42/ })).toHaveAttribute(
       "href",
-      "/departements/loire"
+      "/territoires/departements/loire"
     );
     // A territory without a department page is not offered as a link.
     expect(

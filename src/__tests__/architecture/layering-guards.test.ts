@@ -81,7 +81,7 @@ const PAGE_DB_DEBT = new Set([
   "src/app/affaires/condamnations/page.tsx",
   "src/app/affaires/parti/[slug]/page.tsx",
   "src/app/comparer/votes/page.tsx",
-  "src/app/departements/page.tsx",
+  "src/app/territoires/departements/page.tsx",
   "src/app/elections/[slug]/page.tsx",
   "src/app/elections/municipales-2026/communes/[inseeCode]/page.tsx",
   "src/app/elections/municipales-2026/page.tsx",

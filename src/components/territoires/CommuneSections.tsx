@@ -24,7 +24,7 @@ import {
 } from "@/lib/territoires/commune-display";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
-import { TERRITOIRES_DONNEES_PATH } from "@/lib/territoires/paths";
+import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
 import { populationVintageLabel } from "@/lib/territoires/population-label";
 
 /**
@@ -344,7 +344,7 @@ export function ParlementSection({ dossier }: { dossier: CommuneDossier }) {
       {department.slug && department.name && (
         <p className="mt-3 text-sm">
           <Link
-            href={`/departements/${department.slug}`}
+            href={territoireDepartementPath(department.slug)}
             prefetch={false}
             className={`${TAP} ${LINK}`}
           >

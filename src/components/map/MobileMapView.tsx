@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import type { MapDepartmentData } from "@/app/api/carte/route";
 import { getDepartmentSlug } from "@/config/departments";
+import { territoireDepartementPath } from "@/lib/territoires/paths";
 
 interface MobileMapViewProps {
   departments: MapDepartmentData[];
@@ -79,7 +80,7 @@ export function MobileMapView({ departments }: MobileMapViewProps) {
         {filteredAndSorted.map((dept) => (
           <Link
             key={dept.code}
-            href={`/departements/${getDepartmentSlug(dept.name)}`}
+            href={territoireDepartementPath(getDepartmentSlug(dept.name))}
             className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
           >
             <div className="flex-1 min-w-0">

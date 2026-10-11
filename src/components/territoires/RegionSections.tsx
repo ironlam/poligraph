@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import type { CoverageEntry, RegionTerritoire, SourceRef } from "@/lib/data/territoires";
 import { formatDate } from "@/lib/utils";
 import { formatCompte } from "@/lib/territoires/format";
-import { TERRITOIRES_DONNEES_PATH } from "@/lib/territoires/paths";
+import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
 
 const CARD = "rounded-xl border border-border bg-card p-4 sm:p-6";
 
@@ -38,7 +38,7 @@ export function RegionDepartements({ data }: { data: RegionTerritoire }) {
             <li key={d.code}>
               {d.slug ? (
                 <Link
-                  href={`/departements/${d.slug}`}
+                  href={territoireDepartementPath(d.slug)}
                   prefetch={false}
                   className="flex min-h-11 items-center justify-between gap-3 py-3 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
@@ -137,7 +137,7 @@ export function RegionParlement({ data }: { data: RegionTerritoire }) {
       </p>
       <ul className="mt-2 divide-y divide-border">
         {data.departements
-          .filter((d) => d.slug)
+          .filter((d): d is typeof d & { slug: string } => d.slug !== null)
           .map((d) => {
             const parts = [
               d.deputeCount > 0 ? formatCompte(d.deputeCount, "député", "députés") : null,
@@ -146,7 +146,7 @@ export function RegionParlement({ data }: { data: RegionTerritoire }) {
             return (
               <li key={d.code}>
                 <Link
-                  href={`/departements/${d.slug}`}
+                  href={territoireDepartementPath(d.slug)}
                   prefetch={false}
                   className="flex min-h-11 flex-col justify-center py-2 hover:text-primary"
                 >

@@ -37,7 +37,7 @@ describe("navigation : rubrique Territoires", () => {
   it("propose Ma commune, Départements, Régions et Mon député sous Territoires", () => {
     expect(territoires(ALL_FLAGS)?.children?.map((c) => [c.label, c.href])).toEqual([
       ["Ma commune", "/territoires"],
-      ["Départements", "/departements"],
+      ["Départements", "/territoires/departements"],
       ["Régions", "/territoires#regions"],
       ["Mon député", "/mon-depute"],
     ]);
@@ -46,7 +46,7 @@ describe("navigation : rubrique Territoires", () => {
   it("garde Mon député derrière son drapeau", () => {
     const hrefs = territoires(new Set())?.children?.map((c) => c.href) ?? [];
     expect(hrefs).not.toContain("/mon-depute");
-    expect(hrefs).toContain("/departements");
+    expect(hrefs).toContain("/territoires/departements");
   });
 
   it("ne répète en pastille aucune destination du menu principal", () => {

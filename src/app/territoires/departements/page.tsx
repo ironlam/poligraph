@@ -6,6 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import {
+  TERRITOIRES_PATH,
+  territoireDepartementPath,
+  TERRITOIRES_DEPARTEMENTS_PATH,
+} from "@/lib/territoires/paths";
 
 export const revalidate = 3600; // 1 hour — static department listing
 
@@ -13,7 +18,7 @@ export const metadata: Metadata = {
   title: "Départements",
   description:
     "Liste des départements français et leurs représentants politiques - députés et sénateurs par département.",
-  alternates: { canonical: "/departements" },
+  alternates: { canonical: TERRITOIRES_DEPARTEMENTS_PATH },
 };
 
 async function getDepartmentStats() {
@@ -77,7 +82,9 @@ export default async function DepartementsPage() {
   return (
     <>
       <div className="container mx-auto px-4 pt-4 pb-8">
-        <Breadcrumb items={[{ label: "Départements" }]} />
+        <Breadcrumb
+          items={[{ label: "Territoires", href: TERRITOIRES_PATH }, { label: "Départements" }]}
+        />
         <div className="mb-8">
           <h1 className="text-3xl font-display font-extrabold tracking-tight mb-2">Départements</h1>
           <p className="text-muted-foreground">
@@ -101,7 +108,7 @@ export default async function DepartementsPage() {
           {departmentList.map((dept) => (
             <Link
               key={dept.code}
-              href={`/departements/${getDepartmentSlug(dept.name)}`}
+              href={territoireDepartementPath(getDepartmentSlug(dept.name))}
               prefetch={false}
               className="block group"
             >

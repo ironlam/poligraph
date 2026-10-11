@@ -82,7 +82,7 @@ describe("groupe Territoires de la recherche", () => {
       departements: [{ code: "86", name: "Vienne", slug: "vienne" }],
     });
     expect(categories[0]?.results[0]).toMatchObject({
-      href: "/departements/vienne",
+      href: "/territoires/departements/vienne",
       primary: "Vienne",
       secondary: "Département (86)",
     });

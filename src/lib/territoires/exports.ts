@@ -9,7 +9,11 @@ import {
 } from "@/config/regions";
 import { SITE_URL } from "@/config/site";
 import type { DataSource } from "@/generated/prisma";
-import { territoireCommunePath, territoireRegionPath } from "@/lib/territoires/paths";
+import {
+  territoireCommunePath,
+  territoireRegionPath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 
 /**
  * CSV exports of the Territoires section (#1052, lot 3.2). Pure: rows in, rows out. The readers
@@ -224,7 +228,7 @@ export function departementRows(counts: DepartementCounts): DepartementExportRow
       communes_en_base: counts.communes.get(code) ?? 0,
       deputes_en_fonction: counts.deputes.get(code) ?? 0,
       senateurs_en_fonction: counts.senateurs.get(code) ?? 0,
-      url_page: slug ? `${SITE_URL}/departements/${slug}` : "",
+      url_page: slug ? `${SITE_URL}${territoireDepartementPath(slug)}` : "",
       fichier_communes: EXPORT_DEPARTMENT_SET.has(code)
         ? `${SITE_URL}${communesExportPath(code)}`
         : "",

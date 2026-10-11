@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { TerritoireSearchResult } from "@/lib/data/territoires";
-import { territoireCommunePath, territoireRegionPath } from "@/lib/territoires/paths";
+import {
+  territoireCommunePath,
+  territoireRegionPath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 import { formatCompte } from "@/lib/territoires/format";
 
 const POSTAL_CODE = /^\d{5}$/;
@@ -80,7 +84,9 @@ export function TerritoireSearchResults({
   const isPostal = POSTAL_CODE.test(query);
   const byPostal = isPostal ? communes.filter((c) => c.postalCodes.includes(query)) : [];
   const others = isPostal ? communes.filter((c) => !c.postalCodes.includes(query)) : communes;
-  const reachableDepartements = departements.filter((d) => d.slug);
+  const reachableDepartements = departements.filter(
+    (d): d is typeof d & { slug: string } => d.slug !== null
+  );
   const total = communes.length + reachableDepartements.length + regions.length;
 
   if (total === 0) {
@@ -146,7 +152,7 @@ export function TerritoireSearchResults({
           {reachableDepartements.map((d) => (
             <ResultRow
               key={d.code}
-              href={`/departements/${d.slug}`}
+              href={territoireDepartementPath(d.slug)}
               title={d.name ?? d.code}
               detail={d.code}
             />

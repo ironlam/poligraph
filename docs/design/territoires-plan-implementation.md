@@ -8,16 +8,16 @@ maquettes sont fictives.
 
 ## 1. Décisions prises pendant la conception
 
-| N°  | Décision                                                                                                                                                         |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D13 | La rubrique s'appelle **Territoires**, sous-titre « Communes, départements, régions ». Remplace « Communes » (D1 du kit).                                        |
-| D14 | Accroche de l'entrée : « Les élus et les décisions de votre territoire ». Les titres de page restent nominatifs (« Saint-Exemple : maire, élus et décisions »).  |
-| D15 | URL : `/territoires`, `/territoires/regions/[slug]`, `/territoires/communes/[code]`. `/departements/[slug]` est conservé et enrichi, jamais dupliqué.            |
-| D16 | Deux niveaux sur une même page : **socle national** (toutes les communes, sources officielles, sans rédaction) et **dossier curé** (pilote, validation humaine). |
-| D17 | Pas de classement ni de comparaison entre territoires (D5 du kit maintenue).                                                                                     |
-| D18 | Aucune affaire, aucun fact-check, aucun programme n'est rattaché à un territoire par proximité de personne ou de parti.                                          |
-| D19 | Statistiques reste dans le menu principal. Fact-checks et Territoires y entrent. Programmes rejoint l'élection mise en avant.                                    |
-| D20 | La mise en avant d'une élection reste une décision éditoriale : drapeau en base, jamais déclenchée par les seules dates.                                         |
+| N°  | Décision                                                                                                                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D13 | La rubrique s'appelle **Territoires**, sous-titre « Communes, départements, régions ». Remplace « Communes » (D1 du kit).                                                                                                                                                                    |
+| D14 | Accroche de l'entrée : « Les élus et les décisions de votre territoire ». Les titres de page restent nominatifs (« Saint-Exemple : maire, élus et décisions »).                                                                                                                              |
+| D15 | URL : `/territoires`, `/territoires/regions/[slug]`, `/territoires/communes/[code]`, `/territoires/departements/[slug]`. Les départements ont quitté `/departements/[slug]` le 11 octobre 2026 ; l'ancienne adresse redirige en 308 vers la nouvelle, paramètres `lettre` et `page` compris. |
+| D16 | Deux niveaux sur une même page : **socle national** (toutes les communes, sources officielles, sans rédaction) et **dossier curé** (pilote, validation humaine).                                                                                                                             |
+| D17 | Pas de classement ni de comparaison entre territoires (D5 du kit maintenue).                                                                                                                                                                                                                 |
+| D18 | Aucune affaire, aucun fact-check, aucun programme n'est rattaché à un territoire par proximité de personne ou de parti.                                                                                                                                                                      |
+| D19 | Statistiques reste dans le menu principal. Fact-checks et Territoires y entrent. Programmes rejoint l'élection mise en avant.                                                                                                                                                                |
+| D20 | La mise en avant d'une élection reste une décision éditoriale : drapeau en base, jamais déclenchée par les seules dates.                                                                                                                                                                     |
 
 ## 2. Prérequis (avant tout écran)
 
