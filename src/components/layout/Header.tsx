@@ -98,7 +98,7 @@ export async function Header() {
                   className={
                     item.highlight
                       ? "flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-semibold rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
-                      : "flex items-center gap-1 whitespace-nowrap px-1 py-2 text-xs font-semibold min-[1100px]:text-[13px] xl:gap-1.5 xl:px-2.5 xl:text-sm text-foreground/80 hover:text-primary rounded-lg hover:bg-muted/50 transition-colors"
+                      : "flex items-center gap-1 whitespace-nowrap px-1 py-2 text-xs font-semibold min-[1100px]:text-[13px] 2xl:gap-1.5 xl:px-1.5 2xl:px-2.5 xl:text-sm text-foreground/80 hover:text-primary rounded-lg hover:bg-muted/50 transition-colors"
                   }
                 >
                   {Icon && <Icon className="h-3.5 w-3.5 xl:h-4 xl:w-4" aria-hidden="true" />}
