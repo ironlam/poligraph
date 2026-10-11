@@ -160,7 +160,7 @@ describe("/territoires/communes/[code]", () => {
     expect(details?.textContent).toContain("Alex Secteur");
   });
 
-  it("présente les résultats en gris neutre, sans couleur ni étiquette de parti", async () => {
+  it("présente les résultats dans la teinte de marque, sans couleur ni étiquette de parti", async () => {
     const { document, text } = await render(dossier());
 
     expect(text).toContain("Municipales 2026, 1er tour (15 mars 2026)");
@@ -170,7 +170,9 @@ describe("/territoires/communes/[code]", () => {
     const bars = [...document.querySelectorAll("#elections li [style]")];
     expect(bars).toHaveLength(2);
     for (const bar of bars) {
-      expect(bar.className).toContain("bg-muted-foreground");
+      // One brand hue for every list: never a party colour. The elected list is the solid one.
+      expect(bar.className).toMatch(/bg-primary/);
+      expect(bar.className).not.toMatch(/bg-(red|blue|green|orange|yellow|pink|purple)/);
       expect(bar.getAttribute("style")).toMatch(/^width:\s*[\d.]+%;?$/);
     }
     expect(

@@ -21,7 +21,13 @@ const LINK = "underline underline-offset-2 hover:text-primary";
 const TAP = "inline-flex min-h-11 items-center";
 const VISIBLE_CANDIDATES = 5;
 
-function CandidatRow({ candidat }: { candidat: PresidentielleCandidatCommune }) {
+function CandidatRow({
+  candidat,
+  leader = false,
+}: {
+  candidat: PresidentielleCandidatCommune;
+  leader?: boolean;
+}) {
   return (
     <li className="py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
@@ -37,7 +43,7 @@ function CandidatRow({ candidat }: { candidat: PresidentielleCandidatCommune }) 
       {candidat.pct != null && (
         <div className="mt-1.5 h-2 w-full rounded-full bg-muted" aria-hidden="true">
           <div
-            className="h-2 rounded-full bg-muted-foreground/70"
+            className={`h-2 rounded-full ${leader ? "bg-primary" : "bg-primary/45"}`}
             style={{ width: `${Math.min(100, Math.max(0, candidat.pct))}%` }}
           />
         </div>
@@ -72,8 +78,8 @@ function Tour({ tour }: { tour: PresidentielleTourCommune }) {
       {text && <p className="mt-0.5 text-sm text-muted-foreground">{text}</p>}
       {tour.candidats.length > 0 ? (
         <ul className="mt-1">
-          {visible.map((c) => (
-            <CandidatRow key={c.name} candidat={c} />
+          {visible.map((c, i) => (
+            <CandidatRow key={c.name} candidat={c} leader={i === 0} />
           ))}
         </ul>
       ) : (

@@ -393,7 +393,7 @@ function ResultRow({
       </div>
       <div className="mt-1.5 h-2 w-full rounded-full bg-muted" aria-hidden="true">
         <div
-          className="h-2 rounded-full bg-muted-foreground/70"
+          className={`h-2 rounded-full ${status ? "bg-primary" : "bg-primary/45"}`}
           style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
         />
       </div>

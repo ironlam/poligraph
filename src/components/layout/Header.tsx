@@ -101,8 +101,7 @@ export async function Header() {
                       : "flex items-center gap-1.5 whitespace-nowrap px-1 py-2 text-[13px] font-semibold xl:px-2.5 xl:text-sm text-foreground/80 hover:text-primary rounded-lg hover:bg-muted/50 transition-colors"
                   }
                 >
-                  {/* Icons only where six labels, the election pill and the labelled search fit. */}
-                  {Icon && <Icon className="hidden h-4 w-4 2xl:block" aria-hidden="true" />}
+                  {Icon && <Icon className="hidden h-4 w-4 xl:block" aria-hidden="true" />}
                   {item.label}
                 </Link>
               );
