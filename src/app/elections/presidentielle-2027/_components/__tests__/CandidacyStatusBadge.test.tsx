@@ -16,7 +16,9 @@ describe("CandidacyStatusBadge", () => {
   });
 
   it("distingue une défaite à la primaire d'un retrait", () => {
-    expect(candidacyBadgeLabel("RETIRE", "Défaite à la primaire")).toBe("Non retenue à la primaire");
+    expect(candidacyBadgeLabel("RETIRE", "Défaite à la primaire")).toBe(
+      "Non retenue à la primaire"
+    );
     expect(candidacyBadgeLabel("RETIRE", "Retrait personnel")).toBe("Retirée");
     expect(candidacyBadgeLabel("DECLARE", "Défaite à la primaire")).toBe("Annoncée");
     render(<CandidacyStatusBadge status="RETIRE" withdrewReason="Défaite à la primaire" />);
