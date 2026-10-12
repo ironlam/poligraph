@@ -2,6 +2,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CANDIDACY_STATUS_DESCRIPTIONS, CANDIDACY_STATUS_SHORT_LABELS } from "@/config/labels";
 import type { CandidacyStatus } from "@/generated/prisma";
+import { isPrimaryDefeat } from "@/lib/presidentielle/candidacy-outcome";
 
 /**
  * Status and documented programme, merged into the single coloured element of a row.
@@ -48,7 +49,11 @@ function badgeVariant(status: CandidacyStatus | null): BadgeVariant {
  * They are not interchangeable, and the fallback is the one about us: asserting a candidate has
  * published nothing, because our own field is null, would be a false claim about a real person.
  */
-export function candidacyBadgeLabel(status: CandidacyStatus | null): string {
+export function candidacyBadgeLabel(
+  status: CandidacyStatus | null,
+  withdrewReason?: string | null
+): string {
+  if (isPrimaryDefeat(status, withdrewReason)) return "Non retenue à la primaire";
   return status === null ? "Statut non renseigné" : CANDIDACY_STATUS_SHORT_LABELS[status];
 }
 
@@ -62,11 +67,17 @@ export function candidacyBadgeLabel(status: CandidacyStatus | null): string {
 const PILL =
   "inline-flex min-h-[26px] max-w-full items-center gap-1.5 rounded-full border px-2.5 py-[3px] font-display text-xs font-bold leading-[1.35]";
 
-export function CandidacyStatusBadge({ status }: { status: CandidacyStatus | null }) {
+export function CandidacyStatusBadge({
+  status,
+  withdrewReason,
+}: {
+  status: CandidacyStatus | null;
+  withdrewReason?: string | null;
+}) {
   if (status === null) {
     return (
       <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]} self-start`}>
-        {candidacyBadgeLabel(status)}
+        {candidacyBadgeLabel(status, withdrewReason)}
       </span>
     );
   }
@@ -74,11 +85,15 @@ export function CandidacyStatusBadge({ status }: { status: CandidacyStatus | nul
   return (
     <span className="inline-flex items-center gap-0.5 self-start">
       <span className={`${PILL} ${VARIANT_CLASS[badgeVariant(status)]}`}>
-        {candidacyBadgeLabel(status)}
+        {candidacyBadgeLabel(status, withdrewReason)}
       </span>
       <TooltipProvider>
         <InfoTooltip
-          text={CANDIDACY_STATUS_DESCRIPTIONS[status]}
+          text={
+            isPrimaryDefeat(status, withdrewReason)
+              ? "La personne n'a pas été désignée à l'issue de la primaire. Il ne s'agit pas d'un retrait personnel."
+              : CANDIDACY_STATUS_DESCRIPTIONS[status]
+          }
           className="min-h-11 min-w-11"
           side="top"
         />
