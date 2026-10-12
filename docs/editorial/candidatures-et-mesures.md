@@ -65,7 +65,9 @@ Trois situations valent `DECLARE`, parce que la personne s'y engage elle-même :
   un programme devant des électeurs. Ce n'est pas la déclaration conditionnelle du cas limite : l'issue
   de la primaire ne suspend pas l'engagement, elle le tranche. Si la personne perd la primaire ou s'en
   retire, la candidature passe en `RETIRE`, avec `withdrewReason` qui nomme l'issue (« battue à la
-  primaire »). Ses mesures restent, avec leur historique, comme pour tout retrait.
+  primaire »). Pour l'affichage public, saisir de préférence la valeur neutre `Défaite à la primaire`
+  et lier la source du résultat dans `sourceUrl` / `sourceLabel`. `withdrewAt` porte la date du résultat
+  seulement si elle est établie. Ses mesures restent, avec leur historique, comme pour tout retrait.
 - **Une désignation ou une investiture par un parti, un vote d'une instance**, quand la personne était
   candidate à cette désignation ou l'a acceptée publiquement. Ce n'est pas le soutien d'un tiers de la
   liste précédente : là, quelqu'un appelle une personne qui ne s'est pas prononcée ; ici, elle s'est
