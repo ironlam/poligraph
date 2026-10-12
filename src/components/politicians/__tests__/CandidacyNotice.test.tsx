@@ -137,6 +137,32 @@ describe("CandidacyNotice", () => {
     expect(screen.getByText(/18 mesures documentées restent consultables/)).toBeInTheDocument();
   });
 
+  it("dit non retenue à la primaire sans parler de retrait", () => {
+    renderNotice({
+      ...base,
+      status: "RETIRE",
+      withdrewReason: "Défaite à la primaire",
+      withdrewAt: new Date("2026-10-11T00:00:00.000Z"),
+      publishedMeasureCount: 2,
+    });
+    expect(screen.getByText(/Non retenue à la primaire le/)).toBeInTheDocument();
+    expect(screen.queryByText(/Candidature retirée/)).not.toBeInTheDocument();
+    expect(screen.getByText(/2 mesures documentées restent consultables/)).toBeInTheDocument();
+  });
+
+  it("signale l'absence de date du résultat de la primaire", () => {
+    renderNotice({
+      ...base,
+      status: "RETIRE",
+      withdrewReason: "Battu à la primaire",
+      withdrewAt: null,
+      publishedMeasureCount: 2,
+    });
+    expect(screen.getByText("Non retenue à la primaire")).toBeInTheDocument();
+    expect(screen.getByText(/Date du résultat de la primaire non renseignée/)).toBeInTheDocument();
+    expect(screen.queryByText(/Date du retrait/)).not.toBeInTheDocument();
+  });
+
   it("passe au passé après l'élection, avec les scores", () => {
     renderNotice({ ...base, round1Pct: 27.4, round2Pct: 47.2 }, "Mme", AFTER);
     expect(screen.getByText(/27,4 %/)).toBeInTheDocument();
