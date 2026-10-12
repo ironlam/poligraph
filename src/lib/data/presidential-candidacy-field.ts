@@ -24,6 +24,7 @@ export type PublicPresidentialCandidacyFieldEntry = {
   photoUrl: string | null;
   blobPhotoUrl: string | null;
   status: CandidacyStatus;
+  withdrewReason?: string | null;
   sourceUrl: string;
   sourceLabel: string;
   partyLabel: string | null;
@@ -99,7 +100,7 @@ export async function getPublicPresidentialCandidacyField(
         sourceUrl: true,
         sourceLabel: true,
         partyLabel: true,
-        presidentialData: { select: { accentColor: true, publicationStatus: true } },
+        presidentialData: { select: { accentColor: true, publicationStatus: true, withdrewReason: true } },
         politician: {
           select: {
             slug: true,
@@ -149,6 +150,7 @@ export async function getPublicPresidentialCandidacyField(
         photoUrl: candidacy.politician.photoUrl,
         blobPhotoUrl: candidacy.politician.blobPhotoUrl,
         status: candidacy.status,
+        withdrewReason: candidacy.presidentialData?.withdrewReason ?? null,
         sourceUrl: candidacy.sourceUrl,
         sourceLabel: candidacy.sourceLabel,
         partyLabel:
