@@ -132,7 +132,7 @@ describe("annuaire présidentiel", () => {
       })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Candidatures annoncées (1)" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Candidatures retirées (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retirées ou non retenues (1)" })).toBeInTheDocument();
   });
 
   it("présente les statuts en grille sur mobile au lieu de les tronquer horizontalement", () => {
