@@ -213,7 +213,10 @@ export default async function CandidateFichePage({ params }: PageProps) {
               {/* The same badge language as the field, so a reader arriving from the list sees the
                 pastille they clicked, unchanged. Not a link here: the source is a full line just
                 below, and two controls to the same URL name one destination twice. */}
-              <CandidacyStatusBadge status={candidacy.status} withdrewReason={candidacy.withdrewReason} />
+              <CandidacyStatusBadge
+                status={candidacy.status}
+                withdrewReason={candidacy.withdrewReason}
+              />
             </p>
             {candidacy.partyLabel && (
               <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
