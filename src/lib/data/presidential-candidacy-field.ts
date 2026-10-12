@@ -100,7 +100,9 @@ export async function getPublicPresidentialCandidacyField(
         sourceUrl: true,
         sourceLabel: true,
         partyLabel: true,
-        presidentialData: { select: { accentColor: true, publicationStatus: true, withdrewReason: true } },
+        presidentialData: {
+          select: { accentColor: true, publicationStatus: true, withdrewReason: true },
+        },
         politician: {
           select: {
             slug: true,
