@@ -61,7 +61,7 @@ export function CandidacyDirectoryLink({
           </span>
         )}
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <CandidacyStatusBadge status={candidacy.status} />
+          <CandidacyStatusBadge status={candidacy.status} withdrewReason={candidacy.withdrewReason} />
           <span className="text-xs leading-snug text-muted-foreground-strong">
             {publishedContentLabel(candidacy)}
           </span>
