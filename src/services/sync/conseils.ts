@@ -85,6 +85,9 @@ export async function syncConseils(
   }) as Record<string, string>[];
 
   const { rows, skipped, duplicates } = parseConseilRows(niveau, records);
+  const linesRead = records.length;
+  // The municipal file holds 500 000 records: release them before the write phase.
+  records.length = 0;
   const registerDate = registerDateFromUrl(sourceUrl);
 
   const perTerritory: Record<string, number> = {};
@@ -105,7 +108,7 @@ export async function syncConseils(
     tableReady: stored !== null,
     sourceUrl,
     registerDate,
-    linesRead: records.length,
+    linesRead,
     rows: rows.length,
     skipped,
     duplicates,
