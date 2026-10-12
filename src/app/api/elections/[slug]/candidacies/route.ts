@@ -5,6 +5,7 @@ import { buildPaginationMeta, parseStrictPagination } from "@/lib/api/pagination
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { getPublicPresidentialCandidacyField } from "@/lib/data/presidential-candidacy-field";
+import { isPrimaryDefeat } from "@/lib/presidentielle/candidacy-outcome";
 
 const CANDIDACY_STATUSES = ["OFFICIAL", "DECLARE", "PRESSENTI", "ENVISAGE", "RETIRE"] as const;
 
@@ -84,7 +85,9 @@ export const GET = withPublicRoute(async (request, context) => {
       politicianSlug: candidacy.politicianSlug,
       trackingStatus: {
         code: candidacy.status,
-        label: CANDIDACY_STATUS_LABELS[candidacy.status],
+        label: isPrimaryDefeat(candidacy.status, candidacy.withdrewReason)
+          ? "Non retenue à la primaire"
+          : CANDIDACY_STATUS_LABELS[candidacy.status],
         source: {
           label: candidacy.sourceLabel,
           url: candidacy.sourceUrl,
