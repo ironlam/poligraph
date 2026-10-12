@@ -53,6 +53,11 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
   const hubHref = `/elections/${candidacy.electionSlug}`;
   const accented = state.kind === "DECLARED_WITH_MEASURES" || state.kind === "DECLARED_EMPTY";
   const primaryDefeat = isPrimaryDefeat(candidacy.status, candidacy.withdrewReason);
+  const outcomeDate = candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : "";
+  const withdrawnTitle = primaryDefeat ? "Non retenue à la primaire" : "Candidature retirée";
+  const missingOutcomeDate = primaryDefeat
+    ? ". Date du résultat de la primaire non renseignée."
+    : ". Date du retrait non renseignée.";
 
   const Icon = state.kind === "WITHDRAWN" ? CircleX : state.kind === "PAST" ? TrendingUp : Landmark;
 
@@ -60,9 +65,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
     state.kind === "POSSIBLE"
       ? candidacyPossibleLabel(civility)
       : state.kind === "WITHDRAWN"
-        ? `${primaryDefeat ? "Non retenue à la primaire" : "Candidature retirée"}${
-            candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""
-          }`
+        ? `${withdrawnTitle}${outcomeDate}`
         : state.kind === "PAST"
           ? `${candidacyRoleLabel(civility)} en 2027`
           : candidacyRoleLabel(civility);
@@ -73,10 +76,8 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
   // CANDIDACY_STATUS_LABELS.RETIRE, and the page printed the same sentence twice in a row. Guarding
   // on equality rather than on the state kills the whole class, including a future label edit that
   // would make another state collide.
-  const showStatusPill =
-    state.kind !== "PAST" &&
-    !primaryDefeat &&
-    CANDIDACY_STATUS_LABELS[candidacy.status] !== title;
+  const statusPillLabel = primaryDefeat ? title : CANDIDACY_STATUS_LABELS[candidacy.status];
+  const showStatusPill = state.kind !== "PAST" && statusPillLabel !== title;
 
   // Agreement follows the count, not just the noun: "Les 1 mesure documentées" is bad French, and the
   // gate opens at one measure.
@@ -95,11 +96,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
             // Without it, naming the gap beats implying a dating we do not hold.
             candidacy.withdrewAt
             ? measuresPhrase(", datées de la période de campagne.")
-            : measuresPhrase(
-                primaryDefeat
-                  ? ". Date du résultat de la primaire non renseignée."
-                  : ". Date du retrait non renseignée."
-              )
+            : measuresPhrase(missingOutcomeDate)
           : // Deliberately OUTSIDE the results guard. Nesting it there emptied the card between the
             // close of the second round and the import of the results: no pill, no source, no
             // explanation, no counter, on the state that carries the strongest claim.
@@ -177,7 +174,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
           <p className="flex flex-wrap items-center gap-2">
             {showStatusPill && (
               <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-                {CANDIDACY_STATUS_LABELS[candidacy.status]}
+                {statusPillLabel}
               </span>
             )}
             <a
