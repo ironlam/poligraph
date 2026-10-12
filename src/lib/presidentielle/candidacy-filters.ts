@@ -28,7 +28,7 @@ export const CANDIDACY_FILTER_LABELS: Record<CandidacyFilter, string> = {
   officielles: "Candidatures officielles",
   annoncees: "Candidatures annoncées",
   pressenties: "Personnalités pressenties",
-  retirees: "Candidatures retirées",
+  retirees: "Candidatures terminées",
 };
 
 /** The fields a filter reads, so a caller can pass its own row type unchanged. */
@@ -97,7 +97,7 @@ export function countCandidacyField(candidacies: FilterableCandidacy[]): Candida
 
 export function formatCandidacyFieldSummary(candidacies: FilterableCandidacy[]): string {
   const counts = countCandidacyField(candidacies);
-  return `${counts.total} ${counts.total === 1 ? "personne suivie" : "personnes suivies"} pour 2027 : ${counts.official} ${counts.official === 1 ? "candidature officielle" : "candidatures officielles"}, ${counts.announced} ${counts.announced === 1 ? "candidature annoncée" : "candidatures annoncées"}, ${counts.expected} ${counts.expected === 1 ? "personnalité pressentie" : "personnalités pressenties"} et ${counts.withdrawn} ${counts.withdrawn === 1 ? "candidature retirée" : "candidatures retirées"}.`;
+  return `${counts.total} ${counts.total === 1 ? "personne suivie" : "personnes suivies"} pour 2027 : ${counts.official} ${counts.official === 1 ? "candidature officielle" : "candidatures officielles"}, ${counts.announced} ${counts.announced === 1 ? "candidature annoncée" : "candidatures annoncées"}, ${counts.expected} ${counts.expected === 1 ? "personnalité pressentie" : "personnalités pressenties"} et ${counts.withdrawn} ${counts.withdrawn === 1 ? "candidature terminée" : "candidatures terminées"}.`;
 }
 
 /** Accent and case insensitive, so "melenchon" finds "Mélenchon" and "lo" finds "Lutte ouvrière". */
