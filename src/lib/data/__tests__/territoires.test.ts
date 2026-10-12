@@ -137,6 +137,7 @@ const RENNES = {
   constituencyNumber: 1,
   latitude: 48.1159,
   longitude: -1.6884,
+  surfaceHa: 5033.19,
 };
 
 beforeEach(() => {
@@ -381,6 +382,13 @@ describe("getCommuneDossier", () => {
     expect(dossier?.population.importedAt).toBe("2026-08-10T09:00:00.000Z");
     expect(dossier?.maire.state).toBe("ABSENT");
     expect(dossier?.coverage.find((c) => c.bloc === "conseilMunicipal")?.state).toBe("NON_ETABLI");
+  });
+
+  it("restitue la superficie de la commune avec sa source, sans nommer de producteur", async () => {
+    const dossier = await getCommuneDossier("35238");
+    expect(dossier?.surface.hectares).toBe(5033.19);
+    expect(dossier?.surface.source.label).not.toMatch(/IGN/);
+    expect(dossier?.surface.source.url).toContain("geo.api.gouv.fr");
   });
 
   it("lit le conseil municipal du registre, maire puis adjoints par rang, sans lien de fiche", async () => {

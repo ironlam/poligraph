@@ -2795,6 +2795,8 @@ model Commune {
   population         Int?
   latitude           Float?
   longitude          Float?
+  /// Surface in hectares, as served by geo.api.gouv.fr (`surface`). Null until imported.
+  surfaceHa          Float?
   totalSeats         Int? // Conseil municipal seats (computed from population)
   constituencyNumber Int? // Legislative constituency (CIRCO_LEG from INSEE COG)
   website            String?

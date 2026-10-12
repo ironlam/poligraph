@@ -55,6 +55,21 @@ describe("/territoires/communes/[code]", () => {
     ).toBe("Décisions");
   });
 
+  it("affiche la superficie en km² avec sa source, et rien quand elle est inconnue", async () => {
+    const base = dossier();
+    const sans = await render(base);
+    expect(sans.text).not.toContain("Superficie");
+
+    const avec = await render({
+      ...base,
+      surface: { hectares: 5033.19, source: base.surface.source },
+    });
+    expect(avec.text).toContain("Superficie");
+    expect(avec.text).toContain("50,3 km²");
+    expect(avec.text).toContain("geo.api.gouv.fr, surface de la commune");
+    expect(avec.text).not.toContain("IGN");
+  });
+
   it("répond 404 pour un code sans commune", async () => {
     await expect(render(null, "99999")).rejects.toThrow("NEXT_NOT_FOUND");
   });

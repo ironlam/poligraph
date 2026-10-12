@@ -163,6 +163,12 @@ const COG_SOURCE: SourceRef = {
   url: COMMUNE_POPULATION_SOURCE.url,
 };
 
+/** The documentation of the API does not name the producer of `surface`: none is claimed. */
+const SURFACE_SOURCE: SourceRef = {
+  label: "geo.api.gouv.fr, surface de la commune",
+  url: "https://geo.api.gouv.fr/decoupage-administratif/communes",
+};
+
 const POPULATION_SOURCE: SourceRef = {
   label: `${COMMUNE_POPULATION_SOURCE.label}, via ${COMMUNE_POPULATION_SOURCE.via}`,
   url: COMMUNE_POPULATION_SOURCE.url,
@@ -358,6 +364,8 @@ export interface CommuneDossier {
   mairesSecteur: MaireSecteur[];
   /** From the RNE council file; never substituted by ballot results when absent. */
   conseilMunicipal: ConseilBlock;
+  /** Surface in hectares from geo.api.gouv.fr; null until imported or when the source has none. */
+  surface: { hectares: number | null; source: SourceRef };
   population: {
     value: number | null;
     /** Vintage in force (CommunePopulation). Null: geo.api.gouv.fr figure, vintage unknown. */
@@ -622,6 +630,7 @@ async function readCommuneDossier(inseeCode: string): Promise<CommuneDossier | n
       constituencyNumber: true,
       latitude: true,
       longitude: true,
+      surfaceHa: true,
     },
   });
   if (!commune) return null;
@@ -768,6 +777,7 @@ async function readCommuneDossier(inseeCode: string): Promise<CommuneDossier | n
     maire,
     mairesSecteur,
     conseilMunicipal,
+    surface: { hectares: commune.surfaceHa, source: SURFACE_SOURCE },
     population: {
       value: populationEnVigueur?.value ?? commune.population,
       vintage: populationEnVigueur?.vintage ?? null,

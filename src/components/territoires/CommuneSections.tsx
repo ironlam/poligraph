@@ -592,7 +592,7 @@ function ErreurContent() {
 }
 
 export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
-  const { population, identity } = dossier;
+  const { population, identity, surface } = dossier;
   return (
     <aside id="sources" aria-label="Sources et réutilisation" className="scroll-mt-20 space-y-4">
       {/* Population is already the second fact of the banner: on a phone it is not repeated. */}
@@ -618,6 +618,21 @@ export function CommuneSidebar({ dossier }: { dossier: CommuneDossier }) {
               </>
             )}
           </p>
+          {surface.hectares != null && (
+            <>
+              <p className="mt-4 text-sm text-muted-foreground">Superficie</p>
+              <p className="font-display text-xl font-bold">
+                {(surface.hectares / 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} km²
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {surface.source.url ? (
+                  <ExternalLink href={surface.source.url}>{surface.source.label}</ExternalLink>
+                ) : (
+                  surface.source.label
+                )}
+              </p>
+            </>
+          )}
         </SideCard>
       </div>
 

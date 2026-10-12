@@ -44,6 +44,10 @@ export function dossier(overrides: Partial<CommuneDossier> = {}): CommuneDossier
       source: RNE,
     },
     mairesSecteur: [],
+    surface: {
+      hectares: null,
+      source: { label: "geo.api.gouv.fr, surface de la commune", url: null },
+    },
     conseilMunicipal: {
       state: "NON_ETABLI",
       recordedCount: 0,

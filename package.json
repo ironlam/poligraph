@@ -51,6 +51,7 @@
     "sync:gouvernement": "tsx scripts/sync-gouvernement.ts",
     "sync:president": "tsx scripts/sync-president.ts",
     "sync:populations": "tsx scripts/sync-populations.ts",
+    "sync:surfaces": "tsx scripts/sync-surfaces.ts",
     "sync:conseils": "tsx scripts/sync-conseils.ts",
     "sync:hatvp": "tsx scripts/sync-hatvp.ts",
     "sync:photos": "tsx scripts/sync-photos.ts",
