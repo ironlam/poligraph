@@ -7,6 +7,7 @@ import {
 } from "@/config/labels";
 import type { PoliticianCandidacy } from "@/lib/data/politician-candidacy";
 import { deriveCandidacyNoticeState } from "@/lib/politicians/candidacy-notice-state";
+import { isPrimaryDefeat } from "@/lib/presidentielle/candidacy-outcome";
 import { formatDate, formatPct } from "@/lib/utils";
 
 /**
@@ -51,6 +52,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
   const state = deriveCandidacyNoticeState(candidacy, now);
   const hubHref = `/elections/${candidacy.electionSlug}`;
   const accented = state.kind === "DECLARED_WITH_MEASURES" || state.kind === "DECLARED_EMPTY";
+  const primaryDefeat = isPrimaryDefeat(candidacy.status, candidacy.withdrewReason);
 
   const Icon = state.kind === "WITHDRAWN" ? CircleX : state.kind === "PAST" ? TrendingUp : Landmark;
 
@@ -58,7 +60,7 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
     state.kind === "POSSIBLE"
       ? candidacyPossibleLabel(civility)
       : state.kind === "WITHDRAWN"
-        ? `Candidature retirée${candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""}`
+        ? `${primaryDefeat ? "Non retenue à la primaire" : "Candidature retirée"}${candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""}`
         : state.kind === "PAST"
           ? `${candidacyRoleLabel(civility)} en 2027`
           : candidacyRoleLabel(civility);
@@ -70,7 +72,9 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
   // on equality rather than on the state kills the whole class, including a future label edit that
   // would make another state collide.
   const showStatusPill =
-    state.kind !== "PAST" && CANDIDACY_STATUS_LABELS[candidacy.status] !== title;
+    state.kind !== "PAST" &&
+    !primaryDefeat &&
+    CANDIDACY_STATUS_LABELS[candidacy.status] !== title;
 
   // Agreement follows the count, not just the noun: "Les 1 mesure documentées" is bad French, and the
   // gate opens at one measure.
@@ -89,7 +93,11 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
             // Without it, naming the gap beats implying a dating we do not hold.
             candidacy.withdrewAt
             ? measuresPhrase(", datées de la période de campagne.")
-            : measuresPhrase(". Date du retrait non renseignée.")
+            : measuresPhrase(
+                primaryDefeat
+                  ? ". Date du résultat de la primaire non renseignée."
+                  : ". Date du retrait non renseignée."
+              )
           : // Deliberately OUTSIDE the results guard. Nesting it there emptied the card between the
             // close of the second round and the import of the results: no pill, no source, no
             // explanation, no counter, on the state that carries the strongest claim.
