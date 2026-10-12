@@ -5,27 +5,23 @@ import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
 import { ConseilMembres } from "@/components/territoires/ConseilMembres";
-import {
-  PresidentielleAgregatNote,
-  PresidentielleCommuneResults,
-} from "@/components/territoires/CommunePresidentielle";
-import type {
-  CommuneDossier,
-  MunicipalesBlock,
-  MunicipalesListe,
-  ParlementaireRef,
-  SourceRef,
-} from "@/lib/data/territoires";
+import { PresidentielleAgregatNote } from "@/components/territoires/CommunePresidentielle";
+import { ScrutinLine } from "@/components/territoires/CommuneElections";
+import type { CommuneDossier, ParlementaireRef, SourceRef } from "@/lib/data/territoires";
 import {
   deputeNoun,
   formatCirconscription,
-  formatPct,
   formatPopulation,
   maireSince,
 } from "@/lib/territoires/commune-display";
+import { communeScrutins, latestScrutinPerType } from "@/lib/territoires/commune-elections";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
-import { TERRITOIRES_DONNEES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
+import {
+  TERRITOIRES_DONNEES_PATH,
+  territoireCommuneElectionsPath,
+  territoireDepartementPath,
+} from "@/lib/territoires/paths";
 import { populationVintageLabel } from "@/lib/territoires/population-label";
 
 /**
@@ -368,155 +364,59 @@ export function ParlementSection({ dossier }: { dossier: CommuneDossier }) {
 
 // ─── Élections ──────────────────────────────────────────────────
 
-function ResultRow({
-  liste,
-  pct,
-  status,
-}: {
-  liste: MunicipalesListe;
-  pct: number;
-  status: string | null;
-}) {
-  const tete = liste.teteDeListe;
-  return (
-    <li className="py-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm">
-        <p className="min-w-0">
-          <span className="font-semibold">{liste.listName ?? `Liste de ${tete.name}`}</span>
-          {liste.listName && (
-            <span className="text-muted-foreground">
-              {" · tête de liste "}
-              {tete.person ? (
-                <Link href={`/politiques/${tete.person.slug}`} prefetch={false} className={LINK}>
-                  {tete.name}
-                </Link>
-              ) : (
-                tete.name
-              )}
-            </span>
-          )}
-        </p>
-        <p className="shrink-0 tabular-nums">
-          <span className="font-semibold">{formatPct(pct)}</span>
-          {status && <span className="text-muted-foreground"> · {status}</span>}
-        </p>
-      </div>
-      <div className="mt-1.5 h-2 w-full rounded-full bg-muted" aria-hidden="true">
-        <div
-          className={`h-2 rounded-full ${status ? "bg-primary" : "bg-primary/45"}`}
-          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-        />
-      </div>
-    </li>
-  );
-}
-
-/** Lists shown before the rest is folded: the long tail of a big city stays one tap away. */
-const VISIBLE_LISTS = 5;
-
-function participationText(block: MunicipalesBlock, round: number): string | null {
-  const row = block.participation.find((p) => p.round === round);
-  if (row?.participationRate == null) return null;
-  return `Participation : ${formatPct(row.participationRate)}`;
-}
-
-function RoundResults({ block, round }: { block: MunicipalesBlock; round: 1 | 2 }) {
-  const date = round === 1 ? block.round1Date : block.round2Date;
-  const rows = block.listes
-    .map((l) => ({ liste: l, pct: round === 1 ? l.round1Pct : l.round2Pct }))
-    .filter((r): r is { liste: MunicipalesListe; pct: number } => r.pct != null)
-    .sort((a, b) => b.pct - a.pct);
-  if (rows.length === 0) return null;
-  const participation = participationText(block, round);
-  const renderRow = ({ liste, pct }: { liste: MunicipalesListe; pct: number }, i: number) => (
-    <ResultRow
-      key={`${liste.listName ?? liste.teteDeListe.name}-${i}`}
-      liste={liste}
-      pct={pct}
-      status={
-        round === 1 && liste.electionAuPremierTour === "ELUE"
-          ? "élue au 1er tour"
-          : round === 2 && liste.elueAuSecondTour
-            ? "élue au 2d tour"
-            : null
-      }
-    />
-  );
-  return (
-    <div className="mt-2">
-      <h3 className="font-semibold">
-        Municipales 2026, {round === 1 ? "1er tour" : "2d tour"}
-        {date && ` (${formatDate(date)})`}
-      </h3>
-      <ul className="mt-1">{rows.slice(0, VISIBLE_LISTS).map(renderRow)}</ul>
-      {rows.length > VISIBLE_LISTS && (
-        <div className="mt-2">
-          <Collapsible summary={`Autres listes (${rows.length - VISIBLE_LISTS})`}>
-            <ul>{rows.slice(VISIBLE_LISTS).map(renderRow)}</ul>
-          </Collapsible>
-        </div>
-      )}
-      {participation && <p className="mt-1 text-sm text-muted-foreground">{participation}</p>}
-    </div>
-  );
-}
+const ELECTION_MAX_LINES = 4;
 
 export function ElectionsSection({ dossier }: { dossier: CommuneDossier }) {
-  const block = dossier.elections.municipales2026;
+  const { municipales2026: block, presidentielles } = dossier.elections;
+  const { agregatTerritoire } = presidentielles;
   const code = dossier.identity.inseeCode;
-  const detailHref = `/elections/municipales-2026/communes/${code}`;
-  const hasRound2 = block?.listes.some((l) => l.round2Pct != null) ?? false;
-  // Most recent first: a presidential election held after the municipales goes above them.
-  const { blocks: presidentielles, agregatTerritoire } = dossier.elections.presidentielles;
-  const after = (p: { round1Date: string | null }) =>
-    p.round1Date != null && block?.round1Date != null && p.round1Date > block.round1Date;
-  const renderPresidentielle = (p: (typeof presidentielles)[number]) => (
-    <div key={p.electionSlug} className={after(p) ? "mb-4 border-b pb-4" : "mt-4 border-t pt-4"}>
-      <PresidentielleCommuneResults block={p} communeName={dossier.identity.name} />
-    </div>
-  );
+  const all = communeScrutins(dossier.elections, code);
+  // One folded line per type, so the section never grows with the years (kit spec).
+  const lines = latestScrutinPerType(all).slice(0, ELECTION_MAX_LINES);
 
   return (
-    <SectionCard id="elections" title="Élections dans la commune">
-      {presidentielles.filter(after).map(renderPresidentielle)}
-      {!block || block.state === "ABSENT" ? (
-        <p className="text-sm">
+    <SectionCard
+      id="elections"
+      title="Élections"
+      action={
+        all.length > 0 && (
+          <Link
+            href={territoireCommuneElectionsPath(code)}
+            prefetch={false}
+            className={`${TAP} ${LINK} text-sm`}
+          >
+            {`Tous les scrutins (${all.length})`}
+          </Link>
+        )
+      }
+    >
+      {lines.length > 0 && (
+        <ul className="space-y-2">
+          {lines.map((scrutin) => (
+            <li key={scrutin.slug}>
+              <ScrutinLine scrutin={scrutin} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {(!block || block.state === "ABSENT") && (
+        <p className="mt-3 text-sm">
           Aucun résultat des municipales 2026 n{"'"}est enregistré pour cette commune.
         </p>
-      ) : block.state === "NON_ETABLI" ? (
-        <p className="text-sm">
+      )}
+      {block?.state === "NON_ETABLI" && (
+        <p className="mt-3 text-sm">
           Des candidatures aux municipales 2026 sont enregistrées pour cette commune, mais pas les
           résultats par liste.{" "}
-          <Link href={detailHref} prefetch={false} className={LINK}>
+          <Link
+            href={`/elections/municipales-2026/communes/${code}`}
+            prefetch={false}
+            className={LINK}
+          >
             Voir les candidatures
           </Link>
         </p>
-      ) : (
-        <>
-          <RoundResults block={block} round={1} />
-          {hasRound2 && (
-            <div className="mt-4">
-              <RoundResults block={block} round={2} />
-            </div>
-          )}
-          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            Part des suffrages exprimés, têtes de liste uniquement, sans étiquette politique. Source
-            :{" "}
-            {block.source.url ? (
-              <ExternalLink href={block.source.url}>{block.source.label}</ExternalLink>
-            ) : (
-              block.source.label
-            )}
-          </p>
-          <p className="mt-2 text-sm">
-            <Link href={detailHref} prefetch={false} className={`${TAP} ${LINK}`}>
-              Listes complètes et candidats à {dossier.identity.name}
-            </Link>
-          </p>
-        </>
       )}
-
-      {presidentielles.filter((p) => !after(p)).map(renderPresidentielle)}
       {agregatTerritoire && (
         <div className="mt-4">
           <PresidentielleAgregatNote agregat={agregatTerritoire} />
@@ -525,9 +425,9 @@ export function ElectionsSection({ dossier }: { dossier: CommuneDossier }) {
 
       {/* A territory published as one aggregate gets no promise of commune results. */}
       {!agregatTerritoire &&
-        !presidentielles.some((p) => p.electionSlug === PRESIDENTIELLE_2027_SLUG) &&
+        !presidentielles.blocks.some((p) => p.electionSlug === PRESIDENTIELLE_2027_SLUG) &&
         !TERRITOIRES_SANS_COMMUNE.has(dossier.identity.territoireHorsRegion?.code ?? "") && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+          <div className="mt-4 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm">
             <strong>Présidentielle 2027 :</strong> les résultats de la commune apparaîtront ici
             après leur publication officielle.
           </div>

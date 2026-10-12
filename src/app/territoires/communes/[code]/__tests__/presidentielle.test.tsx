@@ -84,28 +84,39 @@ function withPresidentielles(
 }
 
 describe("présidentielle dans la commune", () => {
-  it("montre le 2d tour avant le 1er, voix et parts, source et lien national", () => {
+  it("montre le 2d tour avant le 1er, parts, source et lien national", () => {
     const { document, text } = render(withPresidentielles([block()]));
 
-    expect(text).toContain("Présidentielle 2022 à Rennes");
+    expect(text).toContain("Présidentielle 2022");
     expect(text.indexOf("2d tour (24 avril 2022)")).toBeLessThan(
       text.indexOf("1er tour (10 avril 2022)")
     );
-    expect(text).toContain(
-      "Participation 80,0 %, 800 votants sur 1 000 inscrits, 785 suffrages exprimés."
-    );
+    expect(text).toContain("800 votants sur 1 000 inscrits, 785 suffrages exprimés.");
     expect(text).toContain("38,2 % · 300 voix");
-    expect(text).toContain("publié le 14 avril 2022");
     expect(text).toContain("importé le 12 octobre 2026");
     expect(document.querySelector('a[href="/elections/presidentielle-2022"]')).not.toBeNull();
-    expect(document.querySelector('a[href="https://www.data.gouv.fr/t2"]')).not.toBeNull();
+    expect(document.querySelector('a[href="https://www.data.gouv.fr/t1"]')).not.toBeNull();
   });
 
   it("replie les candidats du 1er tour au-delà de cinq", () => {
     const { document } = render(withPresidentielles([block()]));
-    const folded = document.querySelector("details");
-    expect(folded?.querySelector("summary")?.textContent).toContain("Autres candidats (2)");
+    const folded = [...document.querySelectorAll("details details")].find((d) =>
+      d.querySelector("summary")?.textContent?.includes("Autres candidats (2)")
+    );
     expect(folded?.textContent).toContain("Jean Lassalle");
+  });
+
+  it("garde une seule ligne par type, même avec deux présidentielles", () => {
+    const { document, text } = render(
+      withPresidentielles([block("presidentielle-2027", "Présidentielle 2027"), block()])
+    );
+    // Municipales + the latest presidential: 2022 stays on the dedicated page.
+    expect(document.querySelectorAll("#elections > ul > li")).toHaveLength(2);
+    expect(text).not.toContain("Présidentielle 2022");
+    expect(text).toContain("Tous les scrutins (3)");
+    expect(
+      document.querySelector('a[href="/territoires/communes/35238/elections"]')
+    ).not.toBeNull();
   });
 
   it("n'emploie ni couleur ni étiquette de parti", () => {
@@ -122,12 +133,7 @@ describe("présidentielle dans la commune", () => {
       withPresidentielles([block("presidentielle-2027", "Présidentielle 2027"), block()])
     ).text;
     expect(after).not.toContain("apparaîtront ici");
-    expect(after.indexOf("Présidentielle 2027 à Rennes")).toBeLessThan(
-      after.indexOf("Municipales 2026")
-    );
-    expect(after.indexOf("Municipales 2026")).toBeLessThan(
-      after.indexOf("Présidentielle 2022 à Rennes")
-    );
+    expect(after.indexOf("Présidentielle 2027")).toBeLessThan(after.indexOf("Municipales 2026"));
   });
 
   it("n'affiche aucun bloc sans résultat et une note honnête pour un territoire agrégé", () => {

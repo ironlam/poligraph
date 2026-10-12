@@ -178,10 +178,10 @@ describe("/territoires/communes/[code]", () => {
   it("présente les résultats dans la teinte de marque, sans couleur ni étiquette de parti", async () => {
     const { document, text } = await render(dossier());
 
-    expect(text).toContain("Municipales 2026, 1er tour (15 mars 2026)");
+    expect(text).toContain("Municipales 2026");
+    expect(text).toContain("1er tour (15 mars 2026), participation 63,3 %");
     expect(text).toContain("54,2 %");
     expect(text).toContain("élue au 1er tour");
-    expect(text).toContain("Participation : 63,3 %");
     const bars = [...document.querySelectorAll("#elections li [style]")];
     expect(bars).toHaveLength(2);
     for (const bar of bars) {

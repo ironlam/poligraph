@@ -25,5 +25,10 @@ export function territoireCommuneDecisionsPath(inseeCode: string): string {
   return `${territoireCommunePath(inseeCode)}/decisions`;
 }
 
+/** Dedicated page listing every scrutin the commune has results for (#1052). */
+export function territoireCommuneElectionsPath(inseeCode: string): string {
+  return `${territoireCommunePath(inseeCode)}/elections`;
+}
+
 /** Exports, releases and licences of the section. */
 export const TERRITOIRES_DONNEES_PATH = "/territoires/donnees";
