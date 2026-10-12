@@ -374,8 +374,11 @@ describe("détail d'un gouvernement", () => {
     div.innerHTML = markup;
     const prev = div.querySelector('a[href="/politiques/gouvernements/gouvernement-a"]');
     const next = div.querySelector('a[href="/politiques/gouvernements/gouvernement-c"]');
-    expect(prev?.getAttribute("aria-label")).toBe("Précédent Gouvernement Alpha");
-    expect(next?.getAttribute("aria-label")).toBe("Suivant Gouvernement Charlie");
+    // The accessible name comes from the visible text, so both must read the same.
+    expect(prev?.hasAttribute("aria-label")).toBe(false);
+    expect(next?.hasAttribute("aria-label")).toBe(false);
+    expect(prev?.textContent).toBe("Précédent Gouvernement Alpha");
+    expect(next?.textContent).toBe("Suivant Gouvernement Charlie");
     expect(text(markup)).not.toMatch(/Gouvernement (précédent|suivant) :/);
   });
 
