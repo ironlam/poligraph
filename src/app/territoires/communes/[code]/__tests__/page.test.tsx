@@ -229,6 +229,7 @@ describe("/territoires/communes/[code]", () => {
       "#qui-decide",
       "#elections",
       "#sources",
+      "/territoires/communes/35238/elections",
     ]);
     for (const id of ["qui-decide", "elections", "sources"]) {
       expect(document.getElementById(id), id).not.toBeNull();

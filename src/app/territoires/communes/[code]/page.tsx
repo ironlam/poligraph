@@ -16,6 +16,7 @@ import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
 import { communeDescription, communeTitle } from "@/lib/territoires/commune-display";
 import {
   territoireCommuneDecisionsPath,
+  territoireCommuneElectionsPath,
   territoireCommunePath,
   territoireDepartementPath,
 } from "@/lib/territoires/paths";
@@ -65,14 +66,18 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   if (!dossier) notFound();
 
   const { identity } = dossier;
-  // No link to the decisions while none is published (plan §7).
-  const anchors =
-    dossier.decisionsPubliees > 0
-      ? [
-          ...ANCHORS,
-          { href: territoireCommuneDecisionsPath(identity.inseeCode), label: "Décisions" },
-        ]
-      : ANCHORS;
+  // No link to a sub-page while it has nothing to show (plan §7).
+  const { municipales2026, presidentielles } = dossier.elections;
+  const hasElections = municipales2026?.state === "DISPONIBLE" || presidentielles.blocks.length > 0;
+  const anchors = [
+    ...ANCHORS,
+    ...(hasElections
+      ? [{ href: territoireCommuneElectionsPath(identity.inseeCode), label: "Tous les scrutins" }]
+      : []),
+    ...(dossier.decisionsPubliees > 0
+      ? [{ href: territoireCommuneDecisionsPath(identity.inseeCode), label: "Décisions" }]
+      : []),
+  ];
   const departmentName = identity.department.name ?? identity.territoireHorsRegion?.name ?? null;
 
   return (
