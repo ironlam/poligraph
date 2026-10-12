@@ -60,7 +60,9 @@ export function CandidacyNotice({ candidacy, civility, now, ficheHref }: Candida
     state.kind === "POSSIBLE"
       ? candidacyPossibleLabel(civility)
       : state.kind === "WITHDRAWN"
-        ? `${primaryDefeat ? "Non retenue à la primaire" : "Candidature retirée"}${candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""}`
+        ? `${primaryDefeat ? "Non retenue à la primaire" : "Candidature retirée"}${
+            candidacy.withdrewAt ? ` le ${formatDate(candidacy.withdrewAt)}` : ""
+          }`
         : state.kind === "PAST"
           ? `${candidacyRoleLabel(civility)} en 2027`
           : candidacyRoleLabel(civility);
