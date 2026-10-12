@@ -205,11 +205,15 @@ export default async function CandidateFichePage({ params }: PageProps) {
               {politician.fullName}
             </h1>
             <p className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold">{candidacyRoleLabel(politician.civility)}</span>
+              <span className="font-semibold">
+                {candidacy.status === "RETIRE"
+                  ? "Campagne présidentielle 2027"
+                  : candidacyRoleLabel(politician.civility)}
+              </span>
               {/* The same badge language as the field, so a reader arriving from the list sees the
                 pastille they clicked, unchanged. Not a link here: the source is a full line just
                 below, and two controls to the same URL name one destination twice. */}
-              <CandidacyStatusBadge status={candidacy.status} />
+              <CandidacyStatusBadge status={candidacy.status} withdrewReason={candidacy.withdrewReason} />
             </p>
             {candidacy.partyLabel && (
               <p className="text-base font-semibold text-foreground">{candidacy.partyLabel}</p>
