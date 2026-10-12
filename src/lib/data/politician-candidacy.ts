@@ -57,6 +57,7 @@ export type PoliticianCandidacy = {
   programmeIdentified: boolean;
   declaredAt: Date | null;
   withdrewAt: Date | null;
+  withdrewReason?: string | null;
   /**
    * Generated summary of this candidacy, null until a generation pass has produced one — and null
    * again once the measures published since have contradicted it. See
@@ -130,6 +131,7 @@ export async function loadPoliticianPresidentialCandidacy(
     select: {
       declaredAt: true,
       withdrewAt: true,
+      withdrewReason: true,
       synthesis: true,
       synthesisGeneratedAt: true,
     },
@@ -169,6 +171,7 @@ export async function loadPoliticianPresidentialCandidacy(
     programmeIdentified: programme !== null,
     declaredAt: presidentialData?.declaredAt ?? null,
     withdrewAt: presidentialData?.withdrewAt ?? null,
+    withdrewReason: presidentialData?.withdrewReason ?? null,
     synthesis: synthesisContradicted ? null : (presidentialData?.synthesis ?? null),
     synthesisGeneratedAt: synthesisContradicted
       ? null
