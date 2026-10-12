@@ -176,6 +176,9 @@ const PARTY_SURFACES = [
   // Decisions sub-page: `getCommuneDossier` for the robots verdict only, and the decisions reader,
   // which selects decision, institution, source and mayor name fields. No party data.
   "src/app/territoires/communes/[code]/decisions/page.tsx",
+  // Elections sub-page: `getCommuneDossier` through `getCommuneElections`, which keeps list names,
+  // head-of-list names, candidate names and shares. No party read, no label, no colour.
+  "src/app/territoires/communes/[code]/elections/page.tsx",
   // Territoires entry, search and region pages: flagged through the same territoires readers
   // (and `getElections` on the region page, which selects election rows only). No party data.
   "src/app/territoires/page.tsx",

@@ -37,6 +37,7 @@ import {
   TERRITOIRES_DONNEES_PATH,
   TERRITOIRES_PATH,
   territoireCommunePath,
+  territoireCommuneElectionsPath,
   territoireRegionPath,
   territoireDepartementPath,
   TERRITOIRES_DEPARTEMENTS_PATH,
@@ -807,8 +808,13 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
   cacheTag(...SITEMAP_SHARD_TAGS[5]);
   cacheLife("synced");
 
-  const communes = await db.$queryRaw<Array<{ id: string; lastmod: Date }>>(Prisma.sql`
-    SELECT c."id", maire."lastmod"
+  const communes = await db.$queryRaw<
+    Array<{ id: string; lastmod: Date; hasElections: boolean }>
+  >(Prisma.sql`
+    SELECT c."id", maire."lastmod",
+      EXISTS (
+        SELECT 1 FROM "CommuneElectionRound" r WHERE r."communeId" = c."id"
+      ) AS "hasElections"
     FROM "Commune" c
     JOIN (
       SELECT ml."communeId", MAX(m."updatedAt") AS "lastmod"
@@ -858,5 +864,15 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.5,
     })),
+    // Dedicated elections page: same commune set, and only when results are recorded, so the
+    // sitemap never lists a page that answers 404.
+    ...communes
+      .filter((c) => c.hasElections)
+      .map((c) => ({
+        url: `${SITE_URL}${territoireCommuneElectionsPath(c.id)}`,
+        lastModified: c.lastmod,
+        changeFrequency: "monthly" as const,
+        priority: 0.4,
+      })),
   ];
 }
