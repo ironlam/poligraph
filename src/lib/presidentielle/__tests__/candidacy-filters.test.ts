@@ -91,7 +91,7 @@ describe("compteurs dynamiques", () => {
 
   it("accorde le résumé sans total codé en dur", () => {
     expect(formatCandidacyFieldSummary(rows)).toBe(
-      "6 personnes suivies pour 2027 : 1 candidature officielle, 2 candidatures annoncées, 2 personnalités pressenties et 1 candidature retirée."
+      "6 personnes suivies pour 2027 : 1 candidature officielle, 2 candidatures annoncées, 2 personnalités pressenties et 1 candidature terminée."
     );
   });
 });
