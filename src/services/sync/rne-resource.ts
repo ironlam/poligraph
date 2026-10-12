@@ -60,3 +60,4 @@ export const RNE_MAIRES_FRAGMENTS = ["maire"] as const;
 export const RNE_ARRONDISSEMENTS_FRAGMENTS = ["arrondissement"] as const;
 export const RNE_CONSEILLERS_DEPARTEMENTAUX_FRAGMENTS = ["conseillers", "departementaux"] as const;
 export const RNE_CONSEILLERS_REGIONAUX_FRAGMENTS = ["conseillers", "regionaux"] as const;
+export const RNE_CONSEILLERS_MUNICIPAUX_FRAGMENTS = ["conseillers", "municipaux"] as const;

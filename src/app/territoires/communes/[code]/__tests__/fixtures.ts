@@ -44,7 +44,13 @@ export function dossier(overrides: Partial<CommuneDossier> = {}): CommuneDossier
       source: RNE,
     },
     mairesSecteur: [],
-    conseilMunicipal: { state: "NON_ETABLI" },
+    conseilMunicipal: {
+      state: "NON_ETABLI",
+      recordedCount: 0,
+      membres: [],
+      registerDate: null,
+      source: null,
+    },
     population: {
       value: 230890,
       vintage: null,

@@ -4,6 +4,7 @@ import { DATA_SOURCE_URLS } from "@/config/labels";
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { IntercommunaliteCard } from "@/components/territoires/IntercommunaliteCard";
+import { ConseilMembres } from "@/components/territoires/ConseilMembres";
 import {
   PresidentielleAgregatNote,
   PresidentielleCommuneResults,
@@ -216,11 +217,20 @@ export function QuiDecideSection({ dossier }: { dossier: CommuneDossier }) {
       ) : (
         <div className="mt-4 rounded-xl border p-4">
           <p className="text-sm text-muted-foreground">Conseil municipal</p>
-          <p className="font-semibold">Composition actuelle non établie</p>
-          <p className="mt-1 text-sm">
-            Poligraph ne dispose pas de la liste à jour des conseillers municipaux. Les résultats de
-            mars 2026 ne la remplacent pas : des élus ont pu démissionner ou être remplacés depuis.
-          </p>
+          {dossier.conseilMunicipal.state === "DISPONIBLE" ? (
+            <div className="mt-1">
+              <ConseilMembres conseil={dossier.conseilMunicipal} groupLabel="" />
+            </div>
+          ) : (
+            <>
+              <p className="font-semibold">Composition actuelle non établie</p>
+              <p className="mt-1 text-sm">
+                Poligraph ne dispose pas de la liste à jour des conseillers municipaux. Les
+                résultats de mars 2026 ne la remplacent pas : des élus ont pu démissionner ou être
+                remplacés depuis.
+              </p>
+            </>
+          )}
         </div>
       )}
 

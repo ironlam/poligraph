@@ -370,11 +370,49 @@ describe("getCommuneDossier", () => {
   it("ne remplace jamais le conseil municipal ni le millésime de population", async () => {
     const dossier = await getCommuneDossier("35238");
 
-    expect(dossier?.conseilMunicipal).toEqual({ state: "NON_ETABLI" });
+    expect(dossier?.conseilMunicipal).toEqual({
+      state: "NON_ETABLI",
+      recordedCount: 0,
+      membres: [],
+      registerDate: null,
+      source: null,
+    });
     expect(dossier?.population.vintage).toBeNull();
     expect(dossier?.population.importedAt).toBe("2026-08-10T09:00:00.000Z");
     expect(dossier?.maire.state).toBe("ABSENT");
     expect(dossier?.coverage.find((c) => c.bloc === "conseilMunicipal")?.state).toBe("NON_ETABLI");
+  });
+
+  it("lit le conseil municipal du registre, maire puis adjoints par rang, sans lien de fiche", async () => {
+    const row = (lastName: string, functionLabel: string | null) => ({
+      lastName,
+      firstName: "A",
+      subdivisionLabel: null,
+      functionLabel,
+      registerDate: new Date("2026-08-11T12:00:00Z"),
+    });
+    mocks.conseilFindMany.mockResolvedValue([
+      row("Zed", null),
+      row("Trois", "3ème adjoint au Maire"),
+      row("Maire", "Maire"),
+      row("Un", "1er adjoint au Maire"),
+    ]);
+
+    const dossier = await getCommuneDossier("35238");
+
+    expect(dossier?.conseilMunicipal.state).toBe("DISPONIBLE");
+    expect(dossier?.conseilMunicipal.recordedCount).toBe(4);
+    expect(dossier?.conseilMunicipal.membres.map((m) => m.lastName)).toEqual([
+      "Maire",
+      "Un",
+      "Trois",
+      "Zed",
+    ]);
+    expect(mocks.conseilFindMany.mock.calls[0]?.[0].where).toEqual({
+      niveau: "MUNICIPAL",
+      territoryCode: "35238",
+    });
+    expect(dossier?.coverage.find((c) => c.bloc === "conseilMunicipal")?.state).toBe("DISPONIBLE");
   });
 
   it("date la population par la série en vigueur, avec sa source et sa date de vérification", async () => {

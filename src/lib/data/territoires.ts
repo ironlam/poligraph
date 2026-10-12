@@ -356,10 +356,8 @@ export interface CommuneDossier {
   maire: MaireBlock;
   /** Arrondissement or sector mayors (PLM), public profiles only. Empty elsewhere. */
   mairesSecteur: MaireSecteur[];
-  conseilMunicipal: {
-    /** The current composition is not in the base: never substituted by ballot results. */
-    state: "NON_ETABLI";
-  };
+  /** From the RNE council file; never substituted by ballot results when absent. */
+  conseilMunicipal: ConseilBlock;
   population: {
     value: number | null;
     /** Vintage in force (CommunePopulation). Null: geo.api.gouv.fr figure, vintage unknown. */
@@ -632,6 +630,7 @@ async function readCommuneDossier(inseeCode: string): Promise<CommuneDossier | n
   const importedAt = await getCommunesImportDate();
   const maire = await readMaire(inseeCode);
   const mairesSecteur = await readMairesSecteur(inseeCode);
+  const conseilMunicipal = await readConseil("MUNICIPAL", inseeCode);
   const departmentDeputies = await readParlementaires("DEPUTE", commune.departmentCode);
   const senateurs = await readParlementaires("SENATEUR", commune.departmentCode);
   const municipales2026 = await readMunicipales2026(inseeCode);
@@ -695,7 +694,12 @@ async function readCommuneDossier(inseeCode: string): Promise<CommuneDossier | n
           },
         ]
       : []),
-    { bloc: "conseilMunicipal", state: "NON_ETABLI", source: null, date: null },
+    {
+      bloc: "conseilMunicipal",
+      state: conseilMunicipal.state,
+      source: conseilMunicipal.source,
+      date: conseilMunicipal.registerDate,
+    },
     {
       bloc: "population",
       state: (populationEnVigueur?.value ?? commune.population) != null ? "DISPONIBLE" : "ABSENT",
@@ -763,7 +767,7 @@ async function readCommuneDossier(inseeCode: string): Promise<CommuneDossier | n
     },
     maire,
     mairesSecteur,
-    conseilMunicipal: { state: "NON_ETABLI" },
+    conseilMunicipal,
     population: {
       value: populationEnVigueur?.value ?? commune.population,
       vintage: populationEnVigueur?.vintage ?? null,
@@ -860,14 +864,14 @@ const RNE_CONSEILS_SOURCE: SourceRef = {
 /** "Président" first, then "1er", "2ème"... Vice-présidents, then any other function. */
 export function functionRank(label: string | null): number {
   if (!label) return 1000;
-  if (/^présidente?\b/i.test(label)) return 0;
+  if (/^présidente?\b/i.test(label) || /^maire$/i.test(label)) return 0;
   const m = label.match(/^(\d+)(?:er|ère|ème|e)\b/i);
   if (m) return Number(m[1]);
   return 500;
 }
 
 async function readConseil(
-  niveau: "DEPARTEMENTAL" | "REGIONAL",
+  niveau: "MUNICIPAL" | "DEPARTEMENTAL" | "REGIONAL",
   territoryCode: string
 ): Promise<ConseilBlock> {
   const empty: ConseilBlock = {
@@ -888,7 +892,7 @@ async function readConseil(
         functionLabel: true,
         registerDate: true,
       },
-      // The largest regional council has 209 seats.
+      // The largest councils: 209 seats (Île-de-France region), 163 (Paris).
       take: 300,
     });
   } catch (error) {

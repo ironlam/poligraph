@@ -4,23 +4,30 @@ import { HTTPClient } from "@/lib/api/http-client";
 import { DATA_GOUV_RATE_LIMIT_MS } from "@/config/rate-limits";
 import {
   RNE_CONSEILLERS_DEPARTEMENTAUX_FRAGMENTS,
+  RNE_CONSEILLERS_MUNICIPAUX_FRAGMENTS,
   RNE_CONSEILLERS_REGIONAUX_FRAGMENTS,
   resolveRneResourceUrl,
 } from "./rne-resource";
 import { parseConseilRows, type ConseilMembreRow, type ConseilNiveau } from "./conseils-parse";
 
 /**
- * Import of the RNE departmental and regional council files into `ConseilMembre` (#1052).
- * Each file is a full snapshot: a level is replaced as a whole, in one transaction. The
- * municipal file (500 000+ lines) needs its own batching and is not handled here.
+ * Import of the RNE council files (departmental, regional, municipal) into `ConseilMembre`
+ * (#1052). Each file is a full snapshot of its level. It is written territory by territory, in
+ * batches of `BATCH_TERRITORIES` per short transaction, so the municipal file (500 000+ lines)
+ * never holds a connection for minutes. A territory is replaced as a whole inside its batch.
  */
 
-export type ImportedNiveau = Exclude<ConseilNiveau, "MUNICIPAL">;
+export type ImportedNiveau = ConseilNiveau;
 
 const FRAGMENTS: Record<ImportedNiveau, readonly string[]> = {
   DEPARTEMENTAL: RNE_CONSEILLERS_DEPARTEMENTAUX_FRAGMENTS,
   REGIONAL: RNE_CONSEILLERS_REGIONAUX_FRAGMENTS,
+  MUNICIPAL: RNE_CONSEILLERS_MUNICIPAUX_FRAGMENTS,
 };
+
+/** Territories per transaction: about 2 000 rows for communes, the whole file for the others. */
+const BATCH_TERRITORIES = 150;
+const INSERT_CHUNK = 1000;
 
 /** A new snapshot smaller than this share of the stored one is refused: truncated download. */
 const MIN_SHARE_OF_STORED = 0.5;
@@ -44,6 +51,8 @@ export interface ConseilsReport {
   written: boolean;
   /** Members per territory code, to eyeball against the legal sizes. */
   perTerritory: Record<string, number>;
+  /** The most frequent function labels, to check how the register spells them. */
+  topFunctions: [string, number][];
 }
 
 /** The resource URL carries its publication timestamp: `/20260811-154909/`. */
@@ -81,6 +90,14 @@ export async function syncConseils(
   const perTerritory: Record<string, number> = {};
   for (const r of rows) perTerritory[r.territoryCode] = (perTerritory[r.territoryCode] ?? 0) + 1;
 
+  const functionCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.functionLabel) {
+      functionCounts.set(r.functionLabel, (functionCounts.get(r.functionLabel) ?? 0) + 1);
+    }
+  }
+  const topFunctions = [...functionCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+
   const stored = await storedCount(niveau);
   const report: ConseilsReport = {
     niveau,
@@ -97,6 +114,7 @@ export async function syncConseils(
     stored: stored ?? 0,
     written: false,
     perTerritory,
+    topFunctions,
   };
 
   if (dryRun) return report;
@@ -120,15 +138,38 @@ async function replaceLevel(
   registerDate: string | null
 ): Promise<void> {
   const date = registerDate ? new Date(`${registerDate}T12:00:00Z`) : null;
-  await db.$transaction(
-    async (tx) => {
-      await tx.conseilMembre.deleteMany({ where: { niveau } });
-      for (let i = 0; i < rows.length; i += 1000) {
-        await tx.conseilMembre.createMany({
-          data: rows.slice(i, i + 1000).map((r) => ({ ...r, sourceUrl, registerDate: date })),
-        });
-      }
-    },
-    { timeout: 60_000 }
-  );
+
+  const byTerritory = new Map<string, ConseilMembreRow[]>();
+  for (const r of rows) {
+    const list = byTerritory.get(r.territoryCode);
+    if (list) list.push(r);
+    else byTerritory.set(r.territoryCode, [r]);
+  }
+  const codes = [...byTerritory.keys()];
+
+  for (let i = 0; i < codes.length; i += BATCH_TERRITORIES) {
+    const batch = codes.slice(i, i + BATCH_TERRITORIES);
+    const data = batch.flatMap((code) =>
+      byTerritory.get(code)!.map((r) => ({ ...r, sourceUrl, registerDate: date }))
+    );
+    await db.$transaction(
+      async (tx) => {
+        await tx.conseilMembre.deleteMany({ where: { niveau, territoryCode: { in: batch } } });
+        for (let j = 0; j < data.length; j += INSERT_CHUNK) {
+          await tx.conseilMembre.createMany({ data: data.slice(j, j + INSERT_CHUNK) });
+        }
+      },
+      { timeout: 60_000 }
+    );
+  }
+
+  // Territories the file no longer lists (merged communes): their lines are stale.
+  const inFile = new Set(codes);
+  const stored = await db.conseilMembre.groupBy({ by: ["territoryCode"], where: { niveau } });
+  const stale = stored.map((s) => s.territoryCode).filter((c) => !inFile.has(c));
+  for (let i = 0; i < stale.length; i += 500) {
+    await db.conseilMembre.deleteMany({
+      where: { niveau, territoryCode: { in: stale.slice(i, i + 500) } },
+    });
+  }
 }
