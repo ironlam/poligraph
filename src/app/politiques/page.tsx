@@ -364,6 +364,7 @@ async function getFilterCounts() {
         with_financing: bigint;
         deputes: bigint;
         senateurs: bigint;
+        eurodeputes: bigint;
         gouvernement: bigint;
         dirigeants: bigint;
         maires: bigint;
@@ -402,6 +403,13 @@ async function getFilterCounts() {
           WHERE m."politicianId" = p.id AND m.type = 'SENATEUR' AND m."isCurrent" = true
         )
       ) AS senateurs,
+      -- Eurodéputés
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE EXISTS (
+          SELECT 1 FROM "Mandate" m
+          WHERE m."politicianId" = p.id AND m.type = 'DEPUTE_EUROPEEN' AND m."isCurrent" = true
+        )
+      ) AS eurodeputes,
       -- Gouvernement
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
@@ -439,6 +447,7 @@ async function getFilterCounts() {
     withFinancing: Number(counts.with_financing),
     deputes: Number(counts.deputes),
     senateurs: Number(counts.senateurs),
+    eurodeputes: Number(counts.eurodeputes),
     gouvernement: Number(counts.gouvernement),
     dirigeants: Number(counts.dirigeants),
     maires: Number(counts.maires),
@@ -503,7 +512,7 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
       href: "/politiques?mandate=depute_europeen",
       title: "Eurodéputés",
       icon: Globe,
-      detail: "Parlement européen",
+      detail: `${counts.eurodeputes.toLocaleString("fr-FR")} en exercice`,
     },
     {
       href: "/politiques?mandate=maire",

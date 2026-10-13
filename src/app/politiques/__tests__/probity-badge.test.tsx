@@ -195,6 +195,7 @@ describe("PoliticiansGrid : filtres de condamnation", () => {
             withFinancing: 2,
             deputes: 0,
             senateurs: 0,
+            eurodeputes: 0,
             gouvernement: 0,
             dirigeants: 0,
             maires: 0,
