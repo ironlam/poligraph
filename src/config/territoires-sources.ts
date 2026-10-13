@@ -307,6 +307,33 @@ export const TERRITOIRES_SOURCES: readonly TerritoireSource[] = [
     reuse: "Résultats par candidat et participation, par commune.",
     status: "PREVU",
   },
+  {
+    id: "insee-structure-age",
+    name: "Évolution et structure de la population en 2022 (base communale)",
+    producer: "Insee",
+    url: "https://www.insee.fr/fr/statistiques/8581696",
+    licence: { ...LICENCE_OUVERTE_2, verifiedOn: INSEE_LEGAL_NOTICE, verifiedAt: "2026-10-13" },
+    attribution: INSEE_ATTRIBUTION,
+    reuse: "Effectifs par tranche d'âge de chaque commune, ramenés à six tranches.",
+    status: "PREVU",
+  },
+  {
+    id: "meteofrance-normales",
+    name: "Normales climatiques 1991-2020 des stations de Météo-France",
+    producer: "Météo-France",
+    url: "https://meteo.data.gouv.fr",
+    licence: {
+      name: null,
+      url: null,
+      verifiedOn:
+        "https://data.gouv.fr/en/datasets/fiche-climatologique-des-stations-de-meteo-france",
+      verifiedAt: "2026-10-13",
+      note: "Licence de Météo-France non confirmée : la seule fiche data.gouv.fr trouvée est celle d'une association tierce (Infoclimat), pas celle du producteur. À établir sur le fichier effectivement importé avant toute reprise. Aucun import tant que ce n'est pas fait.",
+    },
+    attribution: null,
+    reuse: "Température moyenne annuelle et précipitations annuelles de la station de référence.",
+    status: "PREVU",
+  },
 ];
 
 /**

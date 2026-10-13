@@ -118,3 +118,36 @@ export async function readDepartementPopulationVintages(
   );
   return rows.map((r) => ({ ...toVintage(r), communes: r.communes }));
 }
+
+export interface PopulationSeriesPoint {
+  millesime: number;
+  value: number;
+  producer: string;
+  effectiveFrom: string;
+}
+
+/**
+ * The two latest vintages in force of a commune, newest first. Feeds the evolution of "Le
+ * territoire en chiffres": the importer drops a commune whose territory changed between two
+ * vintages, so two rows from the national INSEE files are on a constant perimeter.
+ */
+export async function readPopulationSeries(communeId: string): Promise<PopulationSeriesPoint[]> {
+  const rows = await tolerateMissingTable(
+    db.$queryRaw<
+      { millesime: number; populationMunicipale: number; producer: string; effectiveFrom: Date }[]
+    >(Prisma.sql`
+    SELECT p."millesime", p."populationMunicipale", p."producer", p."effectiveFrom"
+    FROM "CommunePopulation" p
+    WHERE p."communeId" = ${communeId} AND p."effectiveFrom" <= CURRENT_DATE
+    ORDER BY p."effectiveFrom" DESC
+    LIMIT 2
+  `),
+    []
+  );
+  return rows.map((r) => ({
+    millesime: r.millesime,
+    value: r.populationMunicipale,
+    producer: r.producer,
+    effectiveFrom: r.effectiveFrom.toISOString().slice(0, 10),
+  }));
+}
