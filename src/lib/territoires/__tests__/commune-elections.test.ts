@@ -265,3 +265,39 @@ describe("historicalMunicipales", () => {
     ]);
   });
 });
+
+describe("municipales 2026", () => {
+  const liste = (name: string, p1: number, p2: number | null) => ({
+    listName: name,
+    teteDeListe: { name: `Tête ${name}`, person: null },
+    round1Votes: 100,
+    round1Pct: p1,
+    round2Votes: null,
+    round2Pct: p2,
+    elueAuPremierTour: false,
+    electionAuPremierTour: "NON_ELUE" as const,
+    elueAuSecondTour: p2 != null && p2 > 50,
+  });
+
+  it("ne relie pas le 2d tour au fichier du 1er tour", () => {
+    const [s] = communeScrutins(
+      {
+        municipales2026: {
+          state: "DISPONIBLE",
+          electionSlug: "municipales-2026",
+          round1Date: "2026-03-15T00:00:00.000Z",
+          round2Date: "2026-03-22T00:00:00.000Z",
+          listes: [liste("A", 40, 55), liste("B", 35, 45)],
+          participation: [],
+          source: { label: "Ministère", url: "https://example.test/premier-tour" },
+        },
+        presidentielles: NO_PRESIDENTIELLE,
+      },
+      "35238"
+    );
+    expect(s?.tours.map((t) => t.source?.url ?? null)).toEqual([
+      "https://example.test/premier-tour",
+      null,
+    ]);
+  });
+});

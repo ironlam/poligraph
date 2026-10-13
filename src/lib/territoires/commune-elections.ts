@@ -97,7 +97,13 @@ function municipales(block: MunicipalesBlock | null, inseeCode: string): Commune
       {
         round,
         date: round === 1 ? block.round1Date : block.round2Date,
-        source: null,
+        // The linked dataset is the first-round file. The second-round file is not referenced
+        // anywhere in the base, so round 2 names the producer without a link rather than a wrong one.
+        source: {
+          label: block.source.label,
+          url: round === 1 ? block.source.url : null,
+          publishedAt: null,
+        },
         participationRate: part?.participationRate ?? null,
         registeredVoters: part?.registeredVoters ?? null,
         actualVoters: part?.actualVoters ?? null,

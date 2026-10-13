@@ -120,7 +120,8 @@ function Sources({ scrutin }: { scrutin: CommuneScrutin }) {
   const perRound = scrutin.tours.filter((t) => t.source !== null);
   return (
     <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-      Suffrages exprimés, sans étiquette ni lecture politique. Source :{" "}
+      Résultats de la commune dans ses limites à la date du scrutin, suffrages exprimés, sans
+      étiquette ni lecture politique. Source :{" "}
       {perRound.length === 0 ? (
         <SourceLink label={scrutin.source.label} url={scrutin.source.url} />
       ) : (
