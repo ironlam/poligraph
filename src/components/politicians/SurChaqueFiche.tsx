@@ -22,7 +22,7 @@ export function SurChaqueFiche() {
       >
         Sur chaque fiche
       </h2>
-      <ul className="mt-5 grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-5 lg:gap-6">
+      <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
         {RUBRIQUES.map(({ icon: Icon, title, detail }) => (
           <li key={title} className="flex flex-col gap-2">
             <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
