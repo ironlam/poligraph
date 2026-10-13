@@ -11,7 +11,8 @@ import type { CommuneChiffres } from "@/lib/data/territoire-chiffres";
 import type { RepereRow, RepereState } from "@/lib/data/territoire-reperes";
 import { formatPct, formatPopulation } from "@/lib/territoires/commune-display";
 import { evolutionSentence, type EvolutionRefusal } from "@/lib/territoires/population-evolution";
-import { formatDate, formatDateFrUTC } from "@/lib/utils";
+import { populationVintageLabel, formatEffectiveDate } from "@/lib/territoires/population-label";
+import { formatDate } from "@/lib/utils";
 
 /**
  * "Le territoire en chiffres" (#1052, kit v3). Server component, no client state.
@@ -75,8 +76,8 @@ function sourceLine(row: RepereRow) {
         {row.source.licenceName}
         <span className="sr-only"> (nouvel onglet)</span>
       </a>
-      . Période du {formatDateFrUTC(row.periodStart)} au {formatDateFrUTC(row.periodEnd)}, importé
-      le {formatDate(row.source.importedAt)}.
+      . Période du {formatEffectiveDate(row.periodStart)} au {formatEffectiveDate(row.periodEnd)},
+      importé le {formatDate(row.source.importedAt)}.
     </p>
   );
 }
@@ -88,10 +89,7 @@ function PopulationCard({ chiffres }: { chiffres: CommuneChiffres }) {
       {population ? (
         <>
           <p className="font-display text-xl font-bold">{formatPopulation(population.value)}</p>
-          <p className="text-xs text-muted-foreground">
-            Population municipale {population.millesime}, en vigueur depuis le{" "}
-            {formatDateFrUTC(population.effectiveFrom)}. Source : {population.producer}.
-          </p>
+          <p className="text-xs text-muted-foreground">{populationVintageLabel(population)}.</p>
           <p className="mt-2 text-sm">
             {evolution.ok
               ? evolutionSentence(evolution)
