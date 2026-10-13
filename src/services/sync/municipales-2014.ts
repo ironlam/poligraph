@@ -10,16 +10,14 @@
  */
 
 import { db } from "@/lib/db";
+import { MUNICIPALES_2014_FILES } from "@/config/municipales-sources";
 import { Prisma } from "@/generated/prisma";
 import { NUANCE_POLITIQUE_MAPPING } from "@/config/labels";
 import { parseWideResultRow2014 } from "./parse-wide-results-2014";
 import { type ListResult, type CommuneResult } from "./parse-wide-results";
 import { decodeAndSplit, downloadBuffer } from "./csv-download";
 
-const URLS = {
-  t1: "https://www.data.gouv.fr/api/1/datasets/r/936f6d38-5969-46e5-8b9d-c7646d6390ec",
-  t2: "https://www.data.gouv.fr/api/1/datasets/r/28ed59fd-d285-42f1-9eb6-d82ff2eaa4b3",
-};
+const URLS = MUNICIPALES_2014_FILES;
 
 const FIXED_COLS_2014 = 17;
 

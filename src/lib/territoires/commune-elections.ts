@@ -185,6 +185,8 @@ export interface HistoricalMunicipales {
   year: number;
   round1Date: string | null;
   round2Date: string | null;
+  /** Result file of each round, null when it cannot be told (unknown commune size). */
+  sources: Record<1 | 2, string | null>;
   entries: HistoricalMunicipalesEntry[];
 }
 
@@ -193,13 +195,12 @@ export interface HistoricalMunicipales {
  * these years, which the page says as "non établi" rather than leaving a gap.
  */
 export function historicalMunicipales(input: HistoricalMunicipales): CommuneScrutin | null {
-  const hasRound2 = input.entries.some((e) => e.round2Pct != null);
-  const decidingRound: 1 | 2 = hasRound2 ? 2 : 1;
-  const source: ScrutinTourSource = {
-    label: `data.gouv.fr, résultats des élections municipales ${input.year}`,
-    url: null,
+  const label = `data.gouv.fr, résultats des élections municipales ${input.year}`;
+  const sourceOf = (round: 1 | 2): ScrutinTourSource => ({
+    label,
+    url: input.sources[round],
     publishedAt: null,
-  };
+  });
   const tours = ([1, 2] as const).flatMap((round): ScrutinTour[] => {
     const rows = input.entries
       .map((e, i) => ({
@@ -208,7 +209,14 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
           key: `${e.label}-${i}`,
           label: e.label,
           detail: e.isNamedList ? `tête de liste ${e.candidateName}` : null,
-          status: round === decidingRound && e.isElected ? (e.isNamedList ? "élue" : "élu") : null,
+          // On the last round the entry appears in: a candidate elected at round 1 of a mixed
+          // ballot has no round-2 share, and must not lose the mention.
+          status:
+            round === (e.round2Pct != null ? 2 : 1) && e.isElected
+              ? e.isNamedList
+                ? "élue"
+                : "élu"
+              : null,
         },
       }))
       .filter((r) => r.pct != null)
@@ -219,7 +227,7 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
       {
         round,
         date: round === 1 ? input.round1Date : input.round2Date,
-        source,
+        source: sourceOf(round),
         participationRate: null,
         registeredVoters: null,
         actualVoters: null,
@@ -236,7 +244,7 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
     date: input.round1Date,
     rowsNoun: input.entries.some((e) => e.isNamedList) ? "listes" : "candidats",
     tours,
-    source,
+    source: sourceOf(1),
     importedAt: null,
     resultsHref: `/elections/${input.slug}/communes/${input.inseeCode}`,
   };

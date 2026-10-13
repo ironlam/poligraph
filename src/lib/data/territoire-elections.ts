@@ -1,5 +1,6 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
+import { MUNICIPALES_2014_FILES, MUNICIPALES_2020_FILES } from "@/config/municipales-sources";
 import { getCommuneResults2014, getCommuneResults2020 } from "@/lib/data/elections";
 import { getCommuneDossier } from "@/lib/data/territoires";
 import {
@@ -57,9 +58,22 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
     isElected: l.isElected,
   }));
 
-  for (const [year, entries] of [
-    [2020, entries2020],
-    [2014, entries2014],
+  // 2020 files are split at 1,000 inhabitants: the size of the commune says which one holds it.
+  const size = r2020?.population ?? r2014?.population ?? null;
+  const files2020: Record<1 | 2, string | null> =
+    size == null
+      ? { 1: null, 2: null }
+      : size >= 1000
+        ? { 1: MUNICIPALES_2020_FILES.t1Large, 2: MUNICIPALES_2020_FILES.t2Large }
+        : { 1: MUNICIPALES_2020_FILES.t1Small, 2: MUNICIPALES_2020_FILES.t2Small };
+  const files2014: Record<1 | 2, string | null> = {
+    1: MUNICIPALES_2014_FILES.t1,
+    2: MUNICIPALES_2014_FILES.t2,
+  };
+
+  for (const [year, entries, sources] of [
+    [2020, entries2020, files2020],
+    [2014, entries2014, files2014],
   ] as const) {
     const slug = HISTORICAL_SLUGS[year];
     const e = dates(slug);
@@ -69,6 +83,7 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
       year,
       round1Date: iso(e?.round1Date),
       round2Date: iso(e?.round2Date),
+      sources,
       entries,
     });
     if (scrutin) out.push(scrutin);

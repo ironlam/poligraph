@@ -86,6 +86,7 @@ describe("historicalMunicipales", () => {
     year: 2020,
     round1Date: "2020-03-15T00:00:00.000Z",
     round2Date: "2020-06-28T00:00:00.000Z",
+    sources: { 1: "https://example.test/t1", 2: "https://example.test/t2" },
   };
 
   it("garde le statut d'élu sur le tour qui décide, et rien sur le premier", () => {
@@ -114,6 +115,55 @@ describe("historicalMunicipales", () => {
     expect(s?.tours[0]?.rows.every((r) => r.status === null)).toBe(true);
     expect(s?.tours[1]?.rows[0]).toMatchObject({ label: "Liste A", status: "élue" });
     expect(s?.resultsHref).toBe("/elections/municipales-2020/communes/35238");
+  });
+
+  it("garde la mention d'élu au 1er tour sur un scrutin mixte", () => {
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "Élu dès le 1er tour",
+          isNamedList: false,
+          candidateName: "A",
+          round1Pct: 62,
+          round2Pct: null,
+          isElected: true,
+        },
+        {
+          label: "Élu au 2d tour",
+          isNamedList: false,
+          candidateName: "B",
+          round1Pct: 30,
+          round2Pct: 51,
+          isElected: true,
+        },
+      ],
+    });
+    const t1 = s?.tours.find((t) => t.round === 1)?.rows ?? [];
+    const t2 = s?.tours.find((t) => t.round === 2)?.rows ?? [];
+    expect(t1.find((r) => r.label === "Élu dès le 1er tour")?.status).toBe("élu");
+    expect(t1.find((r) => r.label === "Élu au 2d tour")?.status).toBeNull();
+    expect(t2[0]).toMatchObject({ label: "Élu au 2d tour", status: "élu" });
+  });
+
+  it("relie chaque tour à son fichier source", () => {
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "X",
+          isNamedList: true,
+          candidateName: "X",
+          round1Pct: 40,
+          round2Pct: 60,
+          isElected: true,
+        },
+      ],
+    });
+    expect(s?.tours.map((t) => t.source?.url)).toEqual([
+      "https://example.test/t1",
+      "https://example.test/t2",
+    ]);
   });
 
   it("présente les candidats d'un scrutin plurinominal sans les appeler listes", () => {
