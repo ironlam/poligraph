@@ -1,9 +1,9 @@
 -- "Le territoire en chiffres" (#1052, kit v3, lot R0) : TerritoireRepere, RepereImport, RepereSource.
 --
 -- Migration additive : trois tables et trois énumérations neuves, aucune colonne existante touchée.
--- NON APPLIQUÉE. .env et .env.prod pointent tous deux en production : relire en entier, puis
+-- NON APPLIQUÉE. À relire en entier avant application, avec une sauvegarde pg_dump :
 --   npx prisma db execute --file prisma/migrations/manual/2026-10-13-territoire-reperes.sql
--- (utilise DIRECT_URL). Sauvegarde pg_dump avant, comme pour tout changement de schéma.
+-- (utilise DIRECT_URL).
 -- Le code tolère l'absence des tables (isMissingTableError) : il peut partir avant ce fichier.
 --
 -- La RLS est posée à la création par l'event trigger enable_rls_on_create ; le ALTER ci-dessous
