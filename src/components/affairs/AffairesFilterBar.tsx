@@ -43,6 +43,8 @@ interface AffairesFilterBarProps {
     count: number;
   }>;
   certaintyCounts: Record<string, number>;
+  /** The landing banner already carries the search field. */
+  hideSearch?: boolean;
   superCounts: Record<string, number>;
 }
 
@@ -91,6 +93,7 @@ export function AffairesFilterBar({
   parties,
   certaintyCounts,
   superCounts,
+  hideSearch = false,
 }: AffairesFilterBarProps) {
   const { isPending, updateParams } = useFilterParams();
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -236,15 +239,17 @@ export function AffairesFilterBar({
             options={partyOptions}
             className="min-w-[200px]"
           />
-          <DebouncedSearchInput
-            id="search-affairs"
-            value={currentFilters.search}
-            onSearch={(v) => set({ search: v })}
-            manual
-            placeholder="Rechercher une affaire..."
-            label="Recherche"
-            className="min-w-[260px] flex-1"
-          />
+          {!hideSearch && (
+            <DebouncedSearchInput
+              id="search-affairs"
+              value={currentFilters.search}
+              onSearch={(v) => set({ search: v })}
+              manual
+              placeholder="Rechercher une affaire..."
+              label="Recherche"
+              className="min-w-[260px] flex-1"
+            />
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -360,14 +365,16 @@ export function AffairesFilterBar({
                   options={sortOptions}
                 />
 
-                <DebouncedSearchInput
-                  id="search-affairs-sheet"
-                  value={currentFilters.search}
-                  onSearch={(v) => set({ search: v })}
-                  manual
-                  placeholder="Rechercher une affaire..."
-                  label="Recherche"
-                />
+                {!hideSearch && (
+                  <DebouncedSearchInput
+                    id="search-affairs-sheet"
+                    value={currentFilters.search}
+                    onSearch={(v) => set({ search: v })}
+                    manual
+                    placeholder="Rechercher une affaire..."
+                    label="Recherche"
+                  />
+                )}
 
                 {activeFilters.length > 0 && (
                   <button

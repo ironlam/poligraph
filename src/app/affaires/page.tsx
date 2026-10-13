@@ -316,6 +316,7 @@ export default async function AffairesPage({ searchParams }: PageProps) {
           }))}
           certaintyCounts={certaintyCounts}
           superCounts={superCounts}
+          hideSearch={isLanding}
         />
 
         {/* Condamnations hub callout when ETABLI certainty is active */}
