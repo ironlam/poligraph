@@ -33,6 +33,7 @@ import {
 import { TERRITOIRE_COMMUNE_MIN_POPULATION } from "@/lib/seo/territoire-robots";
 import { PUBLIC_POLITICIAN_PUBLICATION_STATUS } from "@/lib/api/public-contract";
 import { REGIONS } from "@/config/regions";
+import { REPERE_METHODES, repereMethodePath } from "@/config/territoire-methodes";
 import {
   TERRITOIRES_DONNEES_PATH,
   TERRITOIRES_PATH,
@@ -852,6 +853,13 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.4,
     },
+    // Static method pages of "Le territoire en chiffres".
+    ...REPERE_METHODES.map((m) => ({
+      url: `${SITE_URL}${repereMethodePath(m.slug)}`,
+      lastModified: sectionLastmod ?? new Date(),
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    })),
     ...REGIONS.map((region) => ({
       url: `${SITE_URL}${territoireRegionPath(region.slug)}`,
       lastModified: sectionLastmod ?? new Date(),

@@ -20,6 +20,9 @@ vi.mock("@/lib/data/territoires", () => ({
   getCommuneDossier: (code: string) => mocks.getCommuneDossier(code),
 }));
 // The history reader hits the database: the page then falls back on the dossier's own scrutins.
+vi.mock("@/lib/data/territoire-chiffres", () => ({
+  getCommuneChiffres: () => Promise.resolve(null),
+}));
 vi.mock("@/lib/data/territoire-elections", () => ({
   getCommuneElections: () => Promise.resolve(null),
 }));

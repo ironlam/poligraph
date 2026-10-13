@@ -12,6 +12,8 @@ import {
 } from "@/components/territoires/CommuneSections";
 import { getCommuneDossier } from "@/lib/data/territoires";
 import { getCommuneElections } from "@/lib/data/territoire-elections";
+import { getCommuneChiffres } from "@/lib/data/territoire-chiffres";
+import { hasChiffres, TerritoireChiffres } from "@/components/territoires/TerritoireChiffres";
 import { communeScrutins } from "@/lib/territoires/commune-elections";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { territoireCommuneRobotsMetadata } from "@/lib/seo/territoire-robots";
@@ -56,8 +58,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-const ANCHORS = [
-  { href: "#qui-decide", label: "Élus et institutions" },
+const ANCHOR_ELUS = { href: "#qui-decide", label: "Élus et institutions" };
+const ANCHOR_CHIFFRES = { href: "#chiffres", label: "Le territoire en chiffres" };
+const ANCHORS_AFTER = [
   { href: "#elections", label: "Élections" },
   { href: "#sources", label: "Sources et réutilisation" },
 ];
@@ -70,12 +73,17 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
   const { identity } = dossier;
   // The dossier knows 2026 and the presidential only: the earlier municipales come from the
   // elections reader, so the count and the lines match the dedicated page.
-  const elections = await getCommuneElections(identity.inseeCode);
+  const [elections, chiffres] = await Promise.all([
+    getCommuneElections(identity.inseeCode),
+    getCommuneChiffres(identity.inseeCode),
+  ]);
   const scrutins = elections?.scrutins ?? communeScrutins(dossier.elections, identity.inseeCode);
   // No link to a sub-page while it has nothing to show (plan §7).
   const hasElections = scrutins.length > 0;
   const anchors = [
-    ...ANCHORS,
+    ANCHOR_ELUS,
+    ...(hasChiffres(chiffres) ? [ANCHOR_CHIFFRES] : []),
+    ...ANCHORS_AFTER,
     ...(hasElections
       ? [{ href: territoireCommuneElectionsPath(identity.inseeCode), label: "Tous les scrutins" }]
       : []),
@@ -124,6 +132,7 @@ export default async function TerritoireCommunePage({ params }: PageProps) {
           <div className="min-w-0 space-y-6">
             <QuiDecideSection dossier={dossier} />
             <ParlementSection dossier={dossier} />
+            {hasChiffres(chiffres) && <TerritoireChiffres chiffres={chiffres} />}
             <ElectionsSection dossier={dossier} scrutins={scrutins} />
           </div>
           <CommuneSidebar dossier={dossier} />
