@@ -90,7 +90,7 @@ describe("historicalMunicipales", () => {
     electedUrl: "https://example.test/elus",
   };
 
-  it("garde le statut d'élu sur le tour qui décide, et rien sur le premier", () => {
+  it("ne déclare jamais une liste élue sur la seule foi de sa tête de liste", () => {
     const s = historicalMunicipales({
       ...base,
       entries: [
@@ -114,7 +114,8 @@ describe("historicalMunicipales", () => {
     });
     expect(s?.tours.map((t) => t.round)).toEqual([1, 2]);
     expect(s?.tours[0]?.rows.every((r) => r.status === null)).toBe(true);
-    expect(s?.tours[1]?.rows[0]).toMatchObject({ label: "Liste A", status: "élue" });
+    // A list carries no status: the flag only says its head sits on the council.
+    expect(s?.tours[1]?.rows.every((r) => r.status === null)).toBe(true);
     expect(s?.resultsHref).toBe("/elections/municipales-2020/communes/35238");
   });
 

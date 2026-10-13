@@ -93,7 +93,14 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
 
 export async function getCommuneElections(code: string): Promise<CommuneElections | null> {
   "use cache";
-  cacheTag("territoires", "elections", `territoire:${code}`);
+  // Same tags as the dossier it serializes (maire, 2026 ballot), plus the history readers'.
+  cacheTag(
+    "territoires",
+    "politicians",
+    "elections",
+    "elections-municipales-2026",
+    `territoire:${code}`
+  );
   cacheLife("synced");
 
   const dossier = await getCommuneDossier(code);

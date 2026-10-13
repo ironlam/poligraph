@@ -70,10 +70,13 @@ function votersText(tour: ScrutinTour): string | null {
 function TourResults({
   tour,
   rowsNoun,
+  solidBy,
   showTitle,
 }: {
   tour: ScrutinTour;
   rowsNoun: string;
+  /** Municipal bars are solid for an elected row, presidential ones for the leader. */
+  solidBy: "status" | "leader";
   showTitle: boolean;
 }) {
   const visible = tour.rows.slice(0, VISIBLE_ROWS);
@@ -92,7 +95,11 @@ function TourResults({
       )}
       <ul>
         {visible.map((row, i) => (
-          <ResultRow key={row.key} row={row} leader={i === 0} />
+          <ResultRow
+            key={row.key}
+            row={row}
+            leader={solidBy === "status" ? row.status !== null : i === 0}
+          />
         ))}
       </ul>
       {rest.length > 0 && (
@@ -106,7 +113,11 @@ function TourResults({
           </summary>
           <ul className="border-t px-4 py-1">
             {rest.map((row) => (
-              <ResultRow key={row.key} row={row} leader={false} />
+              <ResultRow
+                key={row.key}
+                row={row}
+                leader={solidBy === "status" && row.status !== null}
+              />
             ))}
           </ul>
         </details>
@@ -165,7 +176,13 @@ function Detail({ scrutin }: { scrutin: CommuneScrutin }) {
   return (
     <div className="border-t px-4 py-3">
       {tours.map((tour) => (
-        <TourResults key={tour.round} tour={tour} rowsNoun={scrutin.rowsNoun} showTitle />
+        <TourResults
+          key={tour.round}
+          tour={tour}
+          rowsNoun={scrutin.rowsNoun}
+          solidBy={scrutin.type === "MUNICIPALES" ? "status" : "leader"}
+          showTitle
+        />
       ))}
       <Sources scrutin={scrutin} />
       <p className="mt-1 flex flex-wrap gap-x-4 text-sm">

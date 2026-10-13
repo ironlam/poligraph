@@ -225,14 +225,12 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
           key: `${e.label}-${i}`,
           label: e.label,
           detail: e.isNamedList ? `tête de liste ${e.candidateName}` : null,
-          // On the last round the entry appears in: a candidate elected at round 1 of a mixed
-          // ballot has no round-2 share, and must not lose the mention.
+          // Only an individual candidate is "élu" on this evidence: for a list, the flag says the
+          // head sits on the council, which losing lists with seats also have. Who won the list
+          // ballot is not established here, so a list carries no status. Read on the last round
+          // the candidate appears in, so a first-round winner of a mixed ballot keeps it.
           status:
-            round === (e.round2Pct != null ? 2 : 1) && e.isElected
-              ? e.isNamedList
-                ? "élue"
-                : "élu"
-              : null,
+            !e.isNamedList && e.isElected && round === (e.round2Pct != null ? 2 : 1) ? "élu" : null,
         },
       }))
       .filter((r) => r.pct != null)
