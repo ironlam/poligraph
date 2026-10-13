@@ -42,7 +42,7 @@ export const REPERE_METHODES: readonly RepereMethode[] = [
     calcul:
       "Poligraph reprend les effectifs par tranche de la base communale de l'INSEE (la tranche des 75 ans et plus est la somme des 75 à 89 ans et des 90 ans et plus) et divise chacun par le total. Un lot dont les six tranches ne totalisent pas 100 %, à 0,1 point près, n'est pas publié.",
     limites:
-      "Les effectifs du recensement sont des estimations. Sur une petite commune, une tranche peut varier d'un millésime à l'autre sans que la population ait vraiment changé.",
+      "Les effectifs du recensement sont des estimations. Sur une petite commune, une tranche peut varier d'un millésime à l'autre sans que la population ait vraiment changé. Le fichier est établi dans les limites communales du 1er janvier 2025 : Poligraph ne repère pas une commune dont le territoire a changé depuis tout en gardant son code.",
     neDitPas:
       "Une tranche d'âge n'est ni un atout ni un handicap, et cette répartition ne dit rien de l'action des élus de la commune.",
     historique: [{ date: "2026-10-13", text: "Première version de la méthode." }],

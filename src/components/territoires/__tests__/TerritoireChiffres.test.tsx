@@ -108,6 +108,15 @@ describe("Le territoire en chiffres", () => {
     expect(cells).not.toContain("0,0 %");
   });
 
+  it("n'affiche que la période la plus récente de chaque indicateur", () => {
+    const recent = row("age_tranche_0_14", 17, { periodEnd: "2022-12-31" });
+    const old = row("age_tranche_0_14", 99, { periodStart: "2016-01-01", periodEnd: "2016-12-31" });
+    const { doc } = render(base({ reperes: [recent, old] }));
+    const cells = [...doc.querySelectorAll("table td")].map((c) => c.textContent);
+    expect(cells[0]?.replace(/\s/g, " ")).toBe("17,0 %");
+    expect(cells.join(" ")).not.toContain("99");
+  });
+
   it("affiche la station et la distance de la valeur climatique", () => {
     const climat = row("climat_temp_moyenne", 11.8, {
       unit: "°C",

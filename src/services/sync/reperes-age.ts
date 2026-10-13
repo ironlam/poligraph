@@ -63,7 +63,8 @@ export async function syncReperesAge(opts: {
     where: {
       indicatorKey: { startsWith: "age_tranche_" },
       periodEnd: new Date(AGE_FILE.periodEnd),
-      import: { status: { not: "DRAFT" } },
+      // A rejected batch settles nothing: a corrected file for the same period may replace it.
+      import: { status: { in: ["IN_REVIEW", "PUBLISHED"] } },
     },
   });
   if (settled > 0) throw new Error("Un lot relu ou publié couvre déjà cette période : arrêt.");

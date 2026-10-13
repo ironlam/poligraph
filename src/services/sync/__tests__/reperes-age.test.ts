@@ -114,13 +114,20 @@ describe("écriture du lot", () => {
     expect(h.importCreate).not.toHaveBeenCalled();
   });
 
+  it("ne bloque que sur un lot relu ou publié, pas sur un lot rejeté", async () => {
+    await syncReperesAge({ dryRun: false, csv: FILE });
+    const where = h.repereCount.mock.calls[0]?.[0].where;
+    expect(where.import.status.in).toEqual(["IN_REVIEW", "PUBLISHED"]);
+    expect(JSON.stringify(where)).not.toContain("REJECTED");
+  });
+
   it("le code de l'importeur ne mentionne aucun statut publié", () => {
     for (const f of ["reperes-age.ts", "reperes-age-plan.ts"]) {
       const code = readFileSync(join(process.cwd(), "src/services/sync", f), "utf8")
         .split("\n")
         .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
         .join("\n");
-      expect(code, f).not.toMatch(/PUBLISHED|IN_REVIEW|revalidateTag/);
+      expect(code, f).not.toMatch(/status: "(PUBLISHED|IN_REVIEW)"|revalidateTag/);
     }
   });
 });

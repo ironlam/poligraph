@@ -161,10 +161,21 @@ function ClimatCard({ rows }: { rows: RepereRow[] }) {
   );
 }
 
+/** Latest period of each indicator. The reader returns every published period, newest first. */
+function latestPerIndicator(rows: RepereRow[]): RepereRow[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (seen.has(r.indicatorKey)) return false;
+    seen.add(r.indicatorKey);
+    return true;
+  });
+}
+
 function rowsOf(chiffres: CommuneChiffres) {
+  const latest = latestPerIndicator(chiffres.reperes);
   return {
-    ageRows: chiffres.reperes.filter((r) => r.indicatorKey.startsWith("age_tranche_")),
-    climatRows: chiffres.reperes.filter((r) => r.indicatorKey.startsWith("climat_")),
+    ageRows: latest.filter((r) => r.indicatorKey.startsWith("age_tranche_")),
+    climatRows: latest.filter((r) => r.indicatorKey.startsWith("climat_")),
   };
 }
 
