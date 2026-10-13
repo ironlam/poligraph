@@ -14,7 +14,11 @@ import {
   formatPopulation,
   maireSince,
 } from "@/lib/territoires/commune-display";
-import { communeScrutins, latestScrutinPerType } from "@/lib/territoires/commune-elections";
+import {
+  communeScrutins,
+  latestScrutinPerType,
+  type CommuneScrutin,
+} from "@/lib/territoires/commune-elections";
 import { PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
 import {
@@ -366,11 +370,18 @@ export function ParlementSection({ dossier }: { dossier: CommuneDossier }) {
 
 const ELECTION_MAX_LINES = 4;
 
-export function ElectionsSection({ dossier }: { dossier: CommuneDossier }) {
+export function ElectionsSection({
+  dossier,
+  scrutins,
+}: {
+  dossier: CommuneDossier;
+  /** Every scrutin of the commune, history included. Falls back on what the dossier carries. */
+  scrutins?: CommuneScrutin[];
+}) {
   const { municipales2026: block, presidentielles } = dossier.elections;
   const { agregatTerritoire } = presidentielles;
   const code = dossier.identity.inseeCode;
-  const all = communeScrutins(dossier.elections, code);
+  const all = scrutins ?? communeScrutins(dossier.elections, code);
   // One folded line per type, so the section never grows with the years (kit spec).
   const lines = latestScrutinPerType(all).slice(0, ELECTION_MAX_LINES);
 

@@ -58,14 +58,13 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
     isElected: l.isElected,
   }));
 
-  // 2020 files are split at 1,000 inhabitants: the size of the commune says which one holds it.
-  const size = r2020?.population ?? r2014?.population ?? null;
+  // 2020 files are split at 1,000 inhabitants, the list-ballot threshold of that election. The
+  // ballot itself says which side the commune was on: named lists mean the large file, individual
+  // candidates the small one. Today's population would misplace a commune that crossed 1,000 since.
   const files2020: Record<1 | 2, string | null> =
-    size == null
-      ? { 1: null, 2: null }
-      : size >= 1000
-        ? { 1: MUNICIPALES_2020_FILES.t1Large, 2: MUNICIPALES_2020_FILES.t2Large }
-        : { 1: MUNICIPALES_2020_FILES.t1Small, 2: MUNICIPALES_2020_FILES.t2Small };
+    (r2020?.namedListCount ?? 0) > 0
+      ? { 1: MUNICIPALES_2020_FILES.t1Large, 2: MUNICIPALES_2020_FILES.t2Large }
+      : { 1: MUNICIPALES_2020_FILES.t1Small, 2: MUNICIPALES_2020_FILES.t2Small };
   const files2014: Record<1 | 2, string | null> = {
     1: MUNICIPALES_2014_FILES.t1,
     2: MUNICIPALES_2014_FILES.t2,
