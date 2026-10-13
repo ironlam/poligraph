@@ -1,7 +1,6 @@
 import { Metadata } from "next";
 import { ParlementHub } from "@/components/parlement";
 import { getHubStats } from "@/lib/data/scrutins";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 
 export const revalidate = 300;
@@ -29,7 +28,6 @@ export default async function ParlementPage() {
         url="https://poligraph.fr/parlement"
         numberOfItems={stats.totalScrutins}
       />
-      <Breadcrumb items={[{ label: "Parlement" }]} />
       <ParlementHub />
     </>
   );
