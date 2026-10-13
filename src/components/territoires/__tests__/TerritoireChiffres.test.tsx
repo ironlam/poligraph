@@ -142,6 +142,7 @@ describe("garde-fous du bloc et de ses pages de méthode", () => {
     "src/config/territoire-reperes.ts",
     "src/config/territoire-methodes.ts",
     "src/lib/territoires/population-evolution.ts",
+    "src/lib/territoires/climat-station.ts",
     "src/lib/data/territoire-chiffres.ts",
     "src/app/territoires/methode/[indicateur]/page.tsx",
   ];
