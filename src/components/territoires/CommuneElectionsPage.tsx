@@ -208,8 +208,9 @@ export function CommuneElectionsSections({
     <>
       <p className="max-w-3xl text-sm leading-relaxed">
         {n === 1 ? "1 scrutin enregistré" : `${n} scrutins enregistrés`}
-        {years(scrutins)} pour cette commune. Les résultats viennent des fichiers officiels du
-        ministère de l{"'"}Intérieur, sans étiquette ni lecture politique.
+        {years(scrutins)} pour cette commune. Les résultats viennent de fichiers publiés sur
+        data.gouv.fr, avec la source de chaque scrutin indiquée dans son détail, sans étiquette ni
+        lecture politique.
       </p>
       <Filters inseeCode={commune.inseeCode} scrutins={scrutins} active={active} />
 

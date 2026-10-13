@@ -3,6 +3,7 @@ import type { CommuneDossier } from "@/lib/data/territoires";
 import {
   communeScrutins,
   decidingTour,
+  historicalMunicipales,
   latestScrutinPerType,
 } from "@/lib/territoires/commune-elections";
 
@@ -75,5 +76,142 @@ describe("communeScrutins", () => {
     expect(scrutins.map((s) => s.slug)).toEqual(["presidentielle-2022", "presidentielle-2017"]);
     expect(latestScrutinPerType(scrutins).map((s) => s.slug)).toEqual(["presidentielle-2022"]);
     expect(decidingTour(scrutins[0] as (typeof scrutins)[number]).rows[0]?.pct).toBe(51.3);
+  });
+});
+
+describe("historicalMunicipales", () => {
+  const base = {
+    inseeCode: "35238",
+    slug: "municipales-2020",
+    year: 2020,
+    round1Date: "2020-03-15T00:00:00.000Z",
+    round2Date: "2020-06-28T00:00:00.000Z",
+  };
+
+  it("garde le statut d'élu sur le tour qui décide, et rien sur le premier", () => {
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "Liste A",
+          isNamedList: true,
+          candidateName: "A",
+          round1Pct: 30,
+          round2Pct: 55,
+          isElected: true,
+        },
+        {
+          label: "Liste B",
+          isNamedList: true,
+          candidateName: "B",
+          round1Pct: 35,
+          round2Pct: 45,
+          isElected: false,
+        },
+      ],
+    });
+    expect(s?.tours.map((t) => t.round)).toEqual([1, 2]);
+    expect(s?.tours[0]?.rows.every((r) => r.status === null)).toBe(true);
+    expect(s?.tours[1]?.rows[0]).toMatchObject({ label: "Liste A", status: "élue" });
+    expect(s?.resultsHref).toBe("/elections/municipales-2020/communes/35238");
+  });
+
+  it("présente les candidats d'un scrutin plurinominal sans les appeler listes", () => {
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "Odile DECELLE",
+          isNamedList: false,
+          candidateName: "Odile DECELLE",
+          round1Pct: 60,
+          round2Pct: null,
+          isElected: true,
+        },
+      ],
+    });
+    expect(s?.rowsNoun).toBe("candidats");
+    expect(s?.tours[0]?.rows[0]).toMatchObject({ detail: null, status: "élu" });
+  });
+
+  it("ne produit rien sans part exprimée, et n'invente aucune participation", () => {
+    expect(
+      historicalMunicipales({
+        ...base,
+        entries: [
+          {
+            label: "X",
+            isNamedList: true,
+            candidateName: "X",
+            round1Pct: null,
+            round2Pct: null,
+            isElected: false,
+          },
+        ],
+      })
+    ).toBeNull();
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "X",
+          isNamedList: true,
+          candidateName: "X",
+          round1Pct: 10,
+          round2Pct: null,
+          isElected: false,
+        },
+      ],
+    });
+    expect(s?.tours[0]?.participationRate).toBeNull();
+  });
+
+  it("classe 2026, 2022, 2020 et 2014 du plus récent au plus ancien", () => {
+    const h14 = historicalMunicipales({
+      ...base,
+      slug: "municipales-2014",
+      year: 2014,
+      round1Date: "2014-03-23T00:00:00.000Z",
+      round2Date: null,
+      entries: [
+        {
+          label: "X",
+          isNamedList: true,
+          candidateName: "X",
+          round1Pct: 10,
+          round2Pct: null,
+          isElected: false,
+        },
+      ],
+    });
+    const h20 = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "X",
+          isNamedList: true,
+          candidateName: "X",
+          round1Pct: 10,
+          round2Pct: null,
+          isElected: false,
+        },
+      ],
+    });
+    const all = communeScrutins(
+      {
+        municipales2026: null,
+        presidentielles: {
+          blocks: [pres("presidentielle-2022", "2022-04-10")],
+          agregatTerritoire: null,
+        },
+      },
+      "35238",
+      [h14, h20].filter((x): x is NonNullable<typeof x> => x !== null)
+    );
+    expect(all.map((s) => s.slug)).toEqual([
+      "presidentielle-2022",
+      "municipales-2020",
+      "municipales-2014",
+    ]);
   });
 });

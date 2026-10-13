@@ -8,7 +8,7 @@ import {
 } from "@/lib/territoires/commune-elections";
 import { formatCount, formatPct } from "@/lib/territoires/commune-display";
 import { TERRITOIRES_DONNEES_PATH } from "@/lib/territoires/paths";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateFrUTC } from "@/lib/utils";
 
 /**
  * Folded election lines of a commune (#1052, kit Commune.html, Mobile.html, ElectionsHistorique.html).
@@ -115,6 +115,43 @@ function TourResults({
   );
 }
 
+/** Each round links to its own dataset when it has one: a figure stays traceable to its file. */
+function Sources({ scrutin }: { scrutin: CommuneScrutin }) {
+  const perRound = scrutin.tours.filter((t) => t.source !== null);
+  return (
+    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+      Suffrages exprimés, sans étiquette ni lecture politique. Source :{" "}
+      {perRound.length === 0 ? (
+        <SourceLink label={scrutin.source.label} url={scrutin.source.url} />
+      ) : (
+        perRound.map((t, i) => {
+          const src = t.source as NonNullable<typeof t.source>;
+          return (
+            <span key={t.round}>
+              {i > 0 && ", "}
+              <SourceLink label={src.label} url={src.url} />
+              {` (${tourLabel(t.round)}`}
+              {src.publishedAt && `, publié le ${formatDateFrUTC(src.publishedAt)}`}
+              {")"}
+            </span>
+          );
+        })
+      )}
+      {scrutin.importedAt && <> · importé le {formatDate(scrutin.importedAt)}</>}
+    </p>
+  );
+}
+
+function SourceLink({ label, url }: { label: string; url: string | null }) {
+  if (!url) return <>{label}</>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className={LINK}>
+      {label}
+      <span className="sr-only"> (nouvel onglet)</span>
+    </a>
+  );
+}
+
 function Detail({ scrutin }: { scrutin: CommuneScrutin }) {
   // Last round first: it decides the ballot and fits in a few lines.
   const tours = [...scrutin.tours].reverse();
@@ -123,18 +160,7 @@ function Detail({ scrutin }: { scrutin: CommuneScrutin }) {
       {tours.map((tour) => (
         <TourResults key={tour.round} tour={tour} rowsNoun={scrutin.rowsNoun} showTitle />
       ))}
-      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-        Suffrages exprimés, sans étiquette ni lecture politique. Source :{" "}
-        {scrutin.source.url ? (
-          <a href={scrutin.source.url} target="_blank" rel="noopener noreferrer" className={LINK}>
-            {scrutin.source.label}
-            <span className="sr-only"> (nouvel onglet)</span>
-          </a>
-        ) : (
-          scrutin.source.label
-        )}
-        {scrutin.importedAt && <> · importé le {formatDate(scrutin.importedAt)}</>}
-      </p>
+      <Sources scrutin={scrutin} />
       <p className="mt-1 flex flex-wrap gap-x-4 text-sm">
         <Link href={scrutin.resultsHref} prefetch={false} className={`${TAP} ${LINK}`}>
           Résultats complets

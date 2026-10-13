@@ -95,7 +95,11 @@ describe("présidentielle dans la commune", () => {
     expect(text).toContain("38,2 % · 300 voix");
     expect(text).toContain("importé le 12 octobre 2026");
     expect(document.querySelector('a[href="/elections/presidentielle-2022"]')).not.toBeNull();
+    // Each round keeps its own dataset: the second-round figures do not cite the first file.
     expect(document.querySelector('a[href="https://www.data.gouv.fr/t1"]')).not.toBeNull();
+    expect(document.querySelector('a[href="https://www.data.gouv.fr/t2"]')).not.toBeNull();
+    expect(text).toContain("2d tour, publié le 28 avril 2022");
+    expect(text).toContain("1er tour, publié le 14 avril 2022");
   });
 
   it("replie les candidats du 1er tour au-delà de cinq", () => {

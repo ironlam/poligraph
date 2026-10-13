@@ -1,9 +1,18 @@
+import { cacheLife, cacheTag } from "next/cache";
+import { db } from "@/lib/db";
+import { getCommuneResults2014, getCommuneResults2020 } from "@/lib/data/elections";
 import { getCommuneDossier } from "@/lib/data/territoires";
-import { communeScrutins, type CommuneScrutin } from "@/lib/territoires/commune-elections";
+import {
+  communeScrutins,
+  historicalMunicipales,
+  type CommuneScrutin,
+  type HistoricalMunicipalesEntry,
+} from "@/lib/territoires/commune-elections";
 
 /**
- * Scrutins of one commune for the dedicated page (#1052). Read from the commune dossier, which
- * is already cached and tagged `territoire:<code>`: no extra query, no tag of its own.
+ * Scrutins of one commune for the dedicated page (#1052). The dossier carries the municipales
+ * 2026 and the presidential results; the earlier municipales come from the readers of their own
+ * pages, which are unbounded by design (one commune, every list). Nothing here reads a party.
  */
 export interface CommuneElections {
   commune: { inseeCode: string; name: string };
@@ -13,10 +22,69 @@ export interface CommuneElections {
   indexSignals: { population: number | null; maireEtabli: boolean };
 }
 
+const HISTORICAL_SLUGS = { 2020: "municipales-2020", 2014: "municipales-2014" } as const;
+
+const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
+
+async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
+  const [elections, r2020, r2014] = await Promise.all([
+    db.election.findMany({
+      where: { slug: { in: Object.values(HISTORICAL_SLUGS) } },
+      select: { slug: true, round1Date: true, round2Date: true },
+    }),
+    getCommuneResults2020(inseeCode),
+    getCommuneResults2014(inseeCode),
+  ]);
+  const dates = (slug: string) => elections.find((e) => e.slug === slug);
+
+  const out: CommuneScrutin[] = [];
+  const entries2020: HistoricalMunicipalesEntry[] = (r2020?.lists ?? []).map((l) => ({
+    label: l.listName,
+    isNamedList: l.isNamedList,
+    candidateName: l.candidateName,
+    round1Pct: l.round1Pct,
+    round2Pct: l.round2Pct,
+    isElected: l.isElected,
+  }));
+  // The 2014 reader substitutes the candidate name for a missing list name: equal strings mean
+  // there was no list.
+  const entries2014: HistoricalMunicipalesEntry[] = (r2014?.lists ?? []).map((l) => ({
+    label: l.listName,
+    isNamedList: l.listName !== l.candidateName,
+    candidateName: l.candidateName,
+    round1Pct: l.round1Pct,
+    round2Pct: l.round2Pct,
+    isElected: l.isElected,
+  }));
+
+  for (const [year, entries] of [
+    [2020, entries2020],
+    [2014, entries2014],
+  ] as const) {
+    const slug = HISTORICAL_SLUGS[year];
+    const e = dates(slug);
+    const scrutin = historicalMunicipales({
+      inseeCode,
+      slug,
+      year,
+      round1Date: iso(e?.round1Date),
+      round2Date: iso(e?.round2Date),
+      entries,
+    });
+    if (scrutin) out.push(scrutin);
+  }
+  return out;
+}
+
 export async function getCommuneElections(code: string): Promise<CommuneElections | null> {
+  "use cache";
+  cacheTag("territoires", "elections", `territoire:${code}`);
+  cacheLife("synced");
+
   const dossier = await getCommuneDossier(code);
   if (!dossier) return null;
-  const scrutins = communeScrutins(dossier.elections, dossier.identity.inseeCode);
+  const historique = await readHistorique(dossier.identity.inseeCode);
+  const scrutins = communeScrutins(dossier.elections, dossier.identity.inseeCode, historique);
   if (scrutins.length === 0) return null;
   return {
     commune: { inseeCode: dossier.identity.inseeCode, name: dossier.identity.name },
