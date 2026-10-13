@@ -84,8 +84,12 @@ export async function syncReperesAge(opts: {
       },
     }));
 
-  // Earlier drafts of this source are replaced: they were never read as final.
-  await db.repereImport.deleteMany({ where: { sourceId: source.id, status: "DRAFT" } });
+  // Earlier drafts and rejected batches of this source are replaced: neither was ever public.
+  // A rejected batch keeps its rows, and the unique key ignores the batch: leaving it would make
+  // the corrected import of the same period fail.
+  await db.repereImport.deleteMany({
+    where: { sourceId: source.id, status: { in: ["DRAFT", "REJECTED"] } },
+  });
   const batch = await db.repereImport.create({
     data: { sourceId: source.id, status: "DRAFT", rowCount: report.rows.length },
   });

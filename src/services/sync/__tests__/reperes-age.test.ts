@@ -105,7 +105,10 @@ describe("écriture du lot", () => {
     const r = await syncReperesAge({ dryRun: false, csv: FILE });
     expect(h.importCreate.mock.calls[0]?.[0].data.status).toBe("DRAFT");
     expect(r.rowsWritten).toBe(6);
-    expect(h.importDeleteMany.mock.calls[0]?.[0].where.status).toBe("DRAFT");
+    // Drafts and rejected batches are replaced, never a batch in review or published.
+    expect(h.importDeleteMany.mock.calls[0]?.[0].where.status).toEqual({
+      in: ["DRAFT", "REJECTED"],
+    });
   });
 
   it("s'arrête si un lot relu ou publié couvre déjà la période", async () => {
