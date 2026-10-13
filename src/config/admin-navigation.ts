@@ -150,6 +150,14 @@ const entries: readonly AdminNavigationEntry[] = [
     icon: Landmark,
   },
   {
+    id: "territory-figures",
+    href: "/admin/territoires/reperes",
+    label: "Le territoire en chiffres",
+    description: "Lots importés : relecture et publication.",
+    group: "content",
+    icon: Landmark,
+  },
+  {
     id: "factchecks",
     href: "/admin/factchecks",
     label: "Fact-checks",
