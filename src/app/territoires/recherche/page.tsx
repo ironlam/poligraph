@@ -6,10 +6,7 @@ import {
   TERRITOIRES_REGIONS_ANCHOR,
   TERRITOIRES_SEARCH_PATH,
 } from "@/lib/territoires/paths";
-import {
-  BandeauFilAriane,
-  EntreeRegionBandeau,
-} from "@/components/territoires/EntreeRegionBandeau";
+import { BandeauFilAriane, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
 import { TerritoireSearch } from "@/components/territoires/TerritoireSearch";
 import { TerritoireSearchResults } from "@/components/territoires/TerritoireSearchResults";
 
@@ -43,7 +40,7 @@ export default async function TerritoiresRecherchePage({
 
   return (
     <>
-      <EntreeRegionBandeau labelledBy="recherche-titre">
+      <RubriqueBandeau labelledBy="recherche-titre">
         <BandeauFilAriane
           items={[{ label: "Territoires", href: TERRITOIRES_PATH }, { label: "Recherche" }]}
         />
@@ -56,7 +53,7 @@ export default async function TerritoiresRecherchePage({
         <div className="mt-5 max-w-xl">
           <TerritoireSearch defaultValue={query} />
         </div>
-      </EntreeRegionBandeau>
+      </RubriqueBandeau>
 
       <div className="container mx-auto max-w-3xl px-4 py-8">
         {isRateLimited ? (

@@ -2,7 +2,11 @@ import Link from "next/link";
 import type { RegionTerritoire } from "@/lib/data/territoires";
 import { TERRITOIRES_PATH, territoireDepartementPath } from "@/lib/territoires/paths";
 import { cn, formatDate } from "@/lib/utils";
-import { BandeauFilAriane, BandeauSurtitre, EntreeRegionBandeau } from "./EntreeRegionBandeau";
+import {
+  BandeauFilAriane,
+  BandeauSurtitre,
+  RubriqueBandeau,
+} from "@/components/ui/RubriqueBandeau";
 import { TerritoryShape } from "./TerritoryShape";
 import { formatCompte, formatNombre } from "@/lib/territoires/format";
 
@@ -33,7 +37,7 @@ export function RegionHero({ data }: { data: RegionTerritoire }) {
   const presidenceDate = presidence.lastConfirmedAt ? formatDate(presidence.lastConfirmedAt) : null;
 
   return (
-    <EntreeRegionBandeau labelledBy="region-titre">
+    <RubriqueBandeau labelledBy="region-titre">
       <BandeauFilAriane
         items={[{ label: "Territoires", href: TERRITOIRES_PATH }, { label: region.name }]}
       />
@@ -102,6 +106,6 @@ export function RegionHero({ data }: { data: RegionTerritoire }) {
           )}
         </Fait>
       </dl>
-    </EntreeRegionBandeau>
+    </RubriqueBandeau>
   );
 }

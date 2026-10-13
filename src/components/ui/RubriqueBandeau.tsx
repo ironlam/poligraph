@@ -5,11 +5,11 @@ import { BRAND_NAVY, BRAND_PAGE, BRAND_RED } from "@/config/brand";
 import { cn } from "@/lib/utils";
 
 /**
- * Navy banner of the Territoires entry and region pages, under a tricolour rule. The colours are
- * brand constants rather than theme tokens: the banner stays navy in dark mode, and the outlines
- * drawn on it (`TerritoryShape` tone "marine") assume that background.
+ * Navy banner of the section landing pages and the Territoires pages, under a tricolour rule. The
+ * colours are brand constants rather than theme tokens: the banner stays navy in dark mode, and
+ * the outlines drawn on it (`TerritoryShape` tone "marine") assume that background.
  */
-export function EntreeRegionBandeau({
+export function RubriqueBandeau({
   children,
   className,
   labelledBy,
