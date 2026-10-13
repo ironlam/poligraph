@@ -2849,6 +2849,99 @@ model CommunePopulation {
   @@index([communeId, effectiveFrom])
 }
 
+/// "Le territoire en chiffres" (#1052): one fact table, one import batch, one source. An indicator
+/// is added as rows, never as a table. Nothing here carries an elected official, a party, a
+/// transaction, a parcel or an address: the block describes the territory, not its representatives.
+enum RepereTerritoryType {
+  COM
+  DEP
+  REG
+}
+
+/// What the figure is measured on, which is not always the commune: a distribution unit for water,
+/// a weather station for climate.
+enum RepereScopeKind {
+  COMMUNE
+  UDI
+  STATION
+  DEPARTEMENT
+}
+
+/// A missing figure is a state, never a zero.
+enum RepereState {
+  ETABLI
+  PARTIEL
+  NON_ETABLI
+  SECRET_STATISTIQUE
+  HORS_COUVERTURE
+}
+
+model RepereSource {
+  id          String   @id @default(cuid())
+  producer    String
+  resourceUrl String
+  licenceName String
+  licenceUrl  String
+  /// Attribution line the licence requires, shown with every figure of this source.
+  attribution String
+  /// Slug of the public method page, /territoires/methode/[methodSlug].
+  methodSlug  String
+  createdAt   DateTime @default(now())
+
+  imports RepereImport[]
+
+  @@index([methodSlug])
+}
+
+/// One batch. Imports write DRAFT; a person reads a sample and the counts, then publishes the whole
+/// batch. Publishing sets no cache tag: pages follow the 24 h `synced` profile.
+model RepereImport {
+  id         String         @id @default(cuid())
+  sourceId   String
+  status     CurationStatus @default(DRAFT)
+  importedAt DateTime       @default(now())
+  reviewedBy String?
+  reviewedAt DateTime?
+  rowCount   Int            @default(0)
+
+  source  RepereSource       @relation(fields: [sourceId], references: [id])
+  reperes TerritoireRepere[]
+
+  @@index([sourceId, status])
+}
+
+model TerritoireRepere {
+  id            String              @id @default(cuid())
+  territoryType RepereTerritoryType
+  /// INSEE code of the commune, department or region.
+  territoryCode String
+  /// COG edition the perimeter refers to (e.g. "2025"), null for a series that has none.
+  cogEdition    String?
+  /// population_municipale, age_tranche_0_14, climat_temp_moyenne...
+  indicatorKey  String
+  /// Observed period, never the import date.
+  periodStart   DateTime            @db.Date
+  periodEnd     DateTime            @db.Date
+  scopeKind     RepereScopeKind
+  /// Identifier of the measured scope (station number...), empty when it is the territory itself.
+  scopeId       String              @default("")
+  scopeLabel    String?
+  /// Null when not established: the state says why.
+  value         Float?
+  unit          String
+  sampleSize    Int?
+  state         RepereState
+  /// SEUIL_ANALYSES, STATION_TROP_ELOIGNEE...
+  reason        String?
+  importId      String
+
+  import RepereImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// Also serves the page read: one territory, every indicator.
+  @@unique([territoryType, territoryCode, indicatorKey, periodEnd, scopeKind, scopeId])
+  @@index([importId])
+}
+
 /// Nature of an intercommunal body, as coded by INSEE and BANATIC. MET69 is the Métropole de
 /// Lyon: a territorial collectivity with special status, listed by the source alongside the EPCI
 /// but not an EPCI itself. EPT: territorial public establishment of the Métropole du Grand Paris,
