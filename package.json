@@ -52,6 +52,7 @@
     "sync:president": "tsx scripts/sync-president.ts",
     "sync:populations": "tsx scripts/sync-populations.ts",
     "sync:reperes-age": "tsx scripts/sync-reperes-age.ts",
+    "sync:reperes-eau": "tsx scripts/sync-reperes-eau.ts",
     "scdl:report": "tsx scripts/scdl-report.ts",
     "sync:surfaces": "tsx scripts/sync-surfaces.ts",
     "sync:conseils": "tsx scripts/sync-conseils.ts",

@@ -1,5 +1,10 @@
 import { TERRITOIRES_SOURCES, type TerritoireSource } from "@/config/territoires-sources";
-import { CLIMAT_STATION_MAX_KM } from "@/config/territoire-reperes";
+import {
+  CLIMAT_STATION_MAX_KM,
+  EAU_LIMIT_SENTENCE,
+  EAU_MIN_ANALYSES,
+  EAU_NITRATES_LIMIT_MG_L,
+} from "@/config/territoire-reperes";
 
 /**
  * Method pages of "Le territoire en chiffres" (#1052): /territoires/methode/[slug]. One per
@@ -46,6 +51,22 @@ export const REPERE_METHODES: readonly RepereMethode[] = [
     neDitPas:
       "Une tranche d'âge n'est ni un atout ni un handicap, et cette répartition ne dit rien de l'action des élus de la commune.",
     historique: [{ date: "2026-10-13", text: "Première version de la méthode." }],
+  },
+  {
+    slug: "eau-du-robinet",
+    title: "Eau du robinet : nitrates",
+    sourceIds: ["sante-eau-distribuee"],
+    montre: `Pour chaque unité de distribution qui dessert la commune, le nombre d'analyses de nitrates réalisées sur douze mois dans le cadre du contrôle sanitaire des agences régionales de santé, et combien d'entre elles dépassent la limite de qualité de ${EAU_NITRATES_LIMIT_MG_L} mg/L.`,
+    calcul: `Poligraph compte les analyses du fichier du ministère, validées par les agences régionales de santé, sur les douze mois qui se terminent à la date du dernier prélèvement du fichier, et non à la date du jour : le fichier est publié avec un décalage d'un à deux mois. Une valeur indiquée « inférieure à » compte comme une analyse sous la limite. Un résultat qui ne peut pas être placé face à la limite n'est pas compté. Sous ${EAU_MIN_ANALYSES} analyses, rien n'est affiché. Chaque unité est présentée séparément : Poligraph ne fait aucune moyenne entre unités.`,
+    limites:
+      "Une unité de distribution peut desservir une partie seulement d'une commune, ou plusieurs communes : le chiffre décrit l'unité, pas toute la commune. Les analyses sont celles du contrôle sanitaire, pas toutes les mesures faites sur le réseau. Le fichier peut être incomplet pour les mois les plus récents, et pour les outre-mer qui y sont ajoutés progressivement. Seuls les nitrates sont repris à ce stade.",
+    neDitPas: `${EAU_LIMIT_SENTENCE} Ce chiffre ne dit rien des autres paramètres de l'eau, ni de l'action des élus de la commune.`,
+    historique: [
+      {
+        date: "2026-10-14",
+        text: "Première version de la méthode, nitrates seuls.",
+      },
+    ],
   },
   {
     slug: "climat",

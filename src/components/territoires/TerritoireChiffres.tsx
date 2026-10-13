@@ -2,6 +2,9 @@ import Link from "next/link";
 import { SectionCard } from "@/components/territoires/CommuneSections";
 import {
   AGE_BANDS,
+  EAU_LIMIT_SENTENCE,
+  EAU_MIN_ANALYSES,
+  EAU_NITRATES_LIMIT_MG_L,
   REPERE_THEME_LABELS,
   repereIndicator,
   type RepereTheme,
@@ -140,6 +143,40 @@ function valueText(row: RepereRow): string {
   return `${n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} ${row.unit}`;
 }
 
+/** One line per distribution unit: each is said on its own, never averaged with another. */
+function EauCard({ rows }: { rows: RepereRow[] }) {
+  const first = rows[0];
+  if (!first) return null;
+  return (
+    <Card title="Eau du robinet, nitrates" methodSlug="eau-du-robinet">
+      <ul className="space-y-3">
+        {rows.map((row) => (
+          <li key={`${row.scopeLabel}-${row.periodEnd}`} className="text-sm">
+            <p className="font-semibold">Unité de distribution : {row.scopeLabel}</p>
+            <p>{eauSentence(row)}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs leading-relaxed">{EAU_LIMIT_SENTENCE}</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        Une unité de distribution peut desservir une partie seulement de la commune, ou plusieurs
+        communes.
+      </p>
+      {sourceLine(first)}
+    </Card>
+  );
+}
+
+function eauSentence(row: RepereRow): string {
+  const n = row.sampleSize ?? 0;
+  const period = `Du ${formatEffectiveDate(row.periodStart)} au ${formatEffectiveDate(row.periodEnd)}`;
+  if (row.state !== "ETABLI" || row.value === null) {
+    return `${period} : non établi, ${n} analyse${n > 1 ? "s" : ""} de nitrates, moins de ${EAU_MIN_ANALYSES} nécessaires.`;
+  }
+  const above = row.value === 0 ? "aucune au-dessus" : `${row.value} au-dessus`;
+  return `${period}, ${n} analyses de nitrates : ${above} de la limite de qualité (${EAU_NITRATES_LIMIT_MG_L} mg/L).`;
+}
+
 function ClimatCard({ rows }: { rows: RepereRow[] }) {
   if (rows.length === 0) return null;
   const station = rows.find((r) => r.scopeLabel)?.scopeLabel ?? null;
@@ -161,12 +198,16 @@ function ClimatCard({ rows }: { rows: RepereRow[] }) {
   );
 }
 
-/** Latest period of each indicator. The reader returns every published period, newest first. */
+/**
+ * Latest period of each indicator on each measured scope. The reader returns every published
+ * period, newest first; a commune served by two water units keeps both, each at its latest period.
+ */
 function latestPerIndicator(rows: RepereRow[]): RepereRow[] {
   const seen = new Set<string>();
   return rows.filter((r) => {
-    if (seen.has(r.indicatorKey)) return false;
-    seen.add(r.indicatorKey);
+    const key = `${r.indicatorKey}|${r.scopeKind}|${r.scopeLabel ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 }
@@ -176,19 +217,25 @@ function rowsOf(chiffres: CommuneChiffres) {
   return {
     ageRows: latest.filter((r) => r.indicatorKey.startsWith("age_tranche_")),
     climatRows: latest.filter((r) => r.indicatorKey.startsWith("climat_")),
+    eauRows: latest.filter((r) => r.indicatorKey === "eau_nitrates"),
   };
 }
 
 /** Whether the block has anything to show: the page links to it only then. */
 export function hasChiffres(chiffres: CommuneChiffres | null): chiffres is CommuneChiffres {
   if (!chiffres) return false;
-  const { ageRows, climatRows } = rowsOf(chiffres);
-  return chiffres.population !== null || ageRows.length > 0 || climatRows.length > 0;
+  const { ageRows, climatRows, eauRows } = rowsOf(chiffres);
+  return (
+    chiffres.population !== null ||
+    ageRows.length > 0 ||
+    climatRows.length > 0 ||
+    eauRows.length > 0
+  );
 }
 
 /** Themes with at least one figure. A theme with nothing to show is not shown at all. */
 export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) {
-  const { ageRows, climatRows } = rowsOf(chiffres);
+  const { ageRows, climatRows, eauRows } = rowsOf(chiffres);
   const themes: { theme: RepereTheme; cards: React.ReactNode }[] = [];
 
   if (chiffres.population || ageRows.length > 0) {
@@ -202,8 +249,16 @@ export function TerritoireChiffres({ chiffres }: { chiffres: CommuneChiffres }) 
       ),
     });
   }
-  if (climatRows.length > 0) {
-    themes.push({ theme: "ENVIRONNEMENT", cards: <ClimatCard rows={climatRows} /> });
+  if (climatRows.length > 0 || eauRows.length > 0) {
+    themes.push({
+      theme: "ENVIRONNEMENT",
+      cards: (
+        <>
+          <EauCard rows={eauRows} />
+          <ClimatCard rows={climatRows} />
+        </>
+      ),
+    });
   }
   if (themes.length === 0) return null;
 

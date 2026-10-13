@@ -131,6 +131,53 @@ describe("Le territoire en chiffres", () => {
     expect(doc.querySelector('a[href="/territoires/methode/climat"]')).not.toBeNull();
   });
 
+  it("présente chaque unité de distribution séparément, avec la phrase fixe sur la limite", () => {
+    const eau = (label: string, value: number | null, n: number) =>
+      row("eau_nitrates", value, {
+        unit: "analyses",
+        scopeKind: "UDI",
+        scopeLabel: label,
+        sampleSize: n,
+        periodStart: "2025-09-01",
+        periodEnd: "2026-08-31",
+        state: value === null ? "NON_ETABLI" : "ETABLI",
+        source: { ...source, methodSlug: "eau-du-robinet" },
+      });
+    const { text, doc } = render(
+      base({
+        reperes: [eau("RESEAU NORD", 0, 12), eau("RESEAU SUD", 2, 6), eau("RESEAU PETIT", null, 3)],
+      })
+    );
+    expect(text).toContain("Unité de distribution : RESEAU NORD");
+    expect(text).toContain(
+      "12 analyses de nitrates : aucune au-dessus de la limite de qualité (50 mg/L)"
+    );
+    expect(text).toContain("6 analyses de nitrates : 2 au-dessus");
+    expect(text).toContain("non établi, 3 analyses de nitrates, moins de 4 nécessaires");
+    expect(text).toContain("ne veut pas dire que l'eau est impropre");
+    expect(text).not.toMatch(/moyenne/);
+    expect(doc.querySelector('a[href="/territoires/methode/eau-du-robinet"]')).not.toBeNull();
+  });
+
+  it("garde chaque unité à sa période la plus récente, sans en perdre une", () => {
+    const mk = (label: string, end: string, value: number) =>
+      row("eau_nitrates", value, {
+        scopeKind: "UDI",
+        scopeLabel: label,
+        sampleSize: 8,
+        periodEnd: end,
+        source: { ...source, methodSlug: "eau-du-robinet" },
+      });
+    const { text } = render(
+      base({
+        reperes: [mk("A", "2026-08-31", 0), mk("B", "2026-08-31", 1), mk("A", "2025-08-31", 5)],
+      })
+    );
+    expect(text).toContain("Unité de distribution : A");
+    expect(text).toContain("Unité de distribution : B");
+    expect(text.match(/Unité de distribution : A/g)).toHaveLength(1);
+  });
+
   it("dit le secret statistique en mots, jamais comme une valeur", () => {
     const climat = row("climat_temp_moyenne", null, { state: "SECRET_STATISTIQUE", unit: "°C" });
     const { text } = render(base({ reperes: [climat] }));

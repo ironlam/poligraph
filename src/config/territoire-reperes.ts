@@ -59,6 +59,14 @@ export const REPERE_INDICATORS: readonly RepereIndicator[] = [
     })
   ),
   {
+    key: "eau_nitrates",
+    theme: "ENVIRONNEMENT",
+    label: "Nitrates dans l'eau du robinet",
+    unit: "analyses",
+    scales: ["COM"],
+    methodSlug: "eau-du-robinet",
+  },
+  {
     key: "climat_temp_moyenne",
     theme: "ENVIRONNEMENT",
     label: "Température moyenne annuelle (normales 1991-2020)",
@@ -82,3 +90,13 @@ export function repereIndicator(key: string): RepereIndicator | undefined {
 
 /** A climate station further than this from the commune is not its reference (to calibrate). */
 export const CLIMAT_STATION_MAX_KM = 30;
+
+/** Water: below this many analyses of a parameter over twelve months, nothing is shown. */
+export const EAU_MIN_ANALYSES = 4;
+/** Months of analyses counted, ending at the most recent sampling date of the source. */
+export const EAU_WINDOW_MONTHS = 12;
+/** Quality limit for nitrates (mg/L), as stated by the source on every result. */
+export const EAU_NITRATES_LIMIT_MG_L = 50;
+/** Said next to every water figure: a limit exceeded is handled by the health authority. */
+export const EAU_LIMIT_SENTENCE =
+  "Être au-dessus d'une limite de qualité ne veut pas dire que l'eau est impropre : un dépassement déclenche une enquête et des mesures de l'agence régionale de santé.";

@@ -318,6 +318,24 @@ export const TERRITOIRES_SOURCES: readonly TerritoireSource[] = [
     status: "PREVU",
   },
   {
+    id: "sante-eau-distribuee",
+    name: "Résultats du contrôle sanitaire de l'eau distribuée commune par commune",
+    producer: "Ministère chargé de la santé",
+    url: "https://www.data.gouv.fr/datasets/resultats-du-controle-sanitaire-de-leau-distribuee-commune-par-commune",
+    licence: {
+      name: "Licence Ouverte / Open Licence version 2.0 (Etalab)",
+      url: "https://www.etalab.gouv.fr/licence-ouverte-open-licence",
+      verifiedOn: "https://www.data.gouv.fr/api/1/datasets/5cf8d9ed8b4c4110294c841d/",
+      verifiedAt: "2026-10-14",
+      note: "Confirmée aussi par la documentation du producteur (version 7, 3 septembre 2021), qui demande de ne pas induire en erreur sur le contenu, la source et la date de mise à jour.",
+    },
+    attribution:
+      "Ministère chargé de la santé, base SISE-Eaux, avec la date de dernière mise à jour des données.",
+    reuse:
+      "Nombre d'analyses de nitrates sur douze mois et nombre de dépassements de la limite de qualité, par unité de distribution.",
+    status: "PREVU",
+  },
+  {
     id: "meteofrance-normales",
     name: "Normales climatiques 1991-2020 des stations de Météo-France",
     producer: "Météo-France",
