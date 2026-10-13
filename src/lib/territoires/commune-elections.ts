@@ -66,6 +66,8 @@ export interface CommuneScrutin {
   source: SourceRef;
   /** Import date when the source records it, null otherwise. */
   importedAt: string | null;
+  /** Separate file the "élu" statuses come from, when they do not come from the result files. */
+  electedSource: { label: string; url: string } | null;
   /** Where the results of this ballot continue on the site. */
   resultsHref: string;
   /** Says what the link leads to: the commune's lists, or the national page of the election. */
@@ -125,6 +127,7 @@ function municipales(block: MunicipalesBlock | null, inseeCode: string): Commune
     source: block.source,
     importedAt: null,
     // Full lists and candidates of this commune, not the national page.
+    electedSource: null,
     resultsHref: `/elections/${block.electionSlug}/communes/${inseeCode}`,
     resultsLabel: "Résultats complets",
   };
@@ -170,6 +173,7 @@ function presidentielle(block: PresidentielleCommuneBlock): CommuneScrutin | nul
       url: block.sources[0]?.url ?? null,
     },
     importedAt: block.importedAt,
+    electedSource: null,
     resultsHref: `/elections/${block.electionSlug}`,
     resultsLabel: "Résultats nationaux de cette élection",
   };
@@ -197,6 +201,8 @@ export interface HistoricalMunicipales {
   round2Date: string | null;
   /** Result file of each round, null when it cannot be told (unknown commune size). */
   sources: Record<1 | 2, string | null>;
+  /** File of the elected officials, when the "élu" status is read from it (2020). */
+  electedUrl: string | null;
   entries: HistoricalMunicipalesEntry[];
 }
 
@@ -256,6 +262,12 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
     tours,
     source: sourceOf(1),
     importedAt: null,
+    electedSource: input.electedUrl
+      ? {
+          label: `data.gouv.fr, élus des élections municipales ${input.year}`,
+          url: input.electedUrl,
+        }
+      : null,
     resultsHref: `/elections/${input.slug}/communes/${input.inseeCode}`,
     resultsLabel: "Résultats complets",
   };

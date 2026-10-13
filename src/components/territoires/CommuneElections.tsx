@@ -138,6 +138,12 @@ function Sources({ scrutin }: { scrutin: CommuneScrutin }) {
           );
         })
       )}
+      {scrutin.electedSource && scrutin.tours.some((t) => t.rows.some((r) => r.status)) && (
+        <>
+          {". Mention d'élu : "}
+          <SourceLink label={scrutin.electedSource.label} url={scrutin.electedSource.url} />
+        </>
+      )}
       {scrutin.importedAt && <> · importé le {formatDate(scrutin.importedAt)}</>}
     </p>
   );

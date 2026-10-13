@@ -70,9 +70,9 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
     2: MUNICIPALES_2014_FILES.t2,
   };
 
-  for (const [year, entries, sources] of [
-    [2020, entries2020, files2020],
-    [2014, entries2014, files2014],
+  for (const [year, entries, sources, electedUrl] of [
+    [2020, entries2020, files2020, MUNICIPALES_2020_FILES.elus],
+    [2014, entries2014, files2014, null],
   ] as const) {
     const slug = HISTORICAL_SLUGS[year];
     const e = dates(slug);
@@ -83,6 +83,7 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
       round1Date: iso(e?.round1Date),
       round2Date: iso(e?.round2Date),
       sources,
+      electedUrl,
       entries,
     });
     if (scrutin) out.push(scrutin);

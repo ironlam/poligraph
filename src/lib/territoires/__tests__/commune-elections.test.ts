@@ -87,6 +87,7 @@ describe("historicalMunicipales", () => {
     round1Date: "2020-03-15T00:00:00.000Z",
     round2Date: "2020-06-28T00:00:00.000Z",
     sources: { 1: "https://example.test/t1", 2: "https://example.test/t2" },
+    electedUrl: "https://example.test/elus",
   };
 
   it("garde le statut d'élu sur le tour qui décide, et rien sur le premier", () => {
@@ -144,6 +145,24 @@ describe("historicalMunicipales", () => {
     expect(t1.find((r) => r.label === "Élu dès le 1er tour")?.status).toBe("élu");
     expect(t1.find((r) => r.label === "Élu au 2d tour")?.status).toBeNull();
     expect(t2[0]).toMatchObject({ label: "Élu au 2d tour", status: "élu" });
+  });
+
+  it("cite le fichier des élus, d'où vient la mention d'élu", () => {
+    const s = historicalMunicipales({
+      ...base,
+      entries: [
+        {
+          label: "X",
+          isNamedList: true,
+          candidateName: "X",
+          round1Pct: 40,
+          round2Pct: null,
+          isElected: true,
+        },
+      ],
+    });
+    expect(s?.electedSource?.url).toBe("https://example.test/elus");
+    expect(historicalMunicipales({ ...base, electedUrl: null, entries: [] })).toBeNull();
   });
 
   it("relie chaque tour à son fichier source", () => {
