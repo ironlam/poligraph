@@ -25,7 +25,8 @@ import {
 import { CERTAINTY_LABELS, type CertaintyLevel } from "@/config/certainty";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
+import { BandeauSearch } from "@/components/ui/BandeauSearch";
 import type { AffairStatus, Involvement } from "@/types";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import { AFFAIRES_DEFAULT_TITLE, AFFAIRES_DEFAULT_DESCRIPTION } from "@/lib/seo/affaires-metadata";
@@ -191,6 +192,26 @@ export default async function AffairesPage({ searchParams }: PageProps) {
     return search ? `/affaires?${search}` : "/affaires";
   }
 
+  // Bare landing: the banner only shows without search, filter, sort, victim mode or page.
+  const isLanding =
+    !searchFilter &&
+    !sortFilter &&
+    !statusFilter &&
+    !superCatFilter &&
+    !categoryFilter &&
+    !certaintyFilter &&
+    !partiFilter &&
+    mode === "mise-en-cause" &&
+    page === 1;
+  const compteur = `${totalAffairs.toLocaleString("fr-FR")} affaire${totalAffairs !== 1 ? "s" : ""} documentée${totalAffairs !== 1 ? "s" : ""} avec sources vérifiables`;
+  const seoIntro = (
+    <div className="sr-only">
+      <SeoIntro
+        text={`${totalAffairs} affaires judiciaires impliquant des responsables politiques, documentées avec sources vérifiables. Mises en examen, procès, condamnations et relaxes.`}
+      />
+    </div>
+  );
+
   return (
     <>
       <CollectionPageJsonLd
@@ -199,24 +220,45 @@ export default async function AffairesPage({ searchParams }: PageProps) {
         url={`${SITE_URL}/affaires`}
         numberOfItems={totalAffairs}
       />
+      {isLanding && (
+        <RubriqueBandeau labelledBy="affaires-titre">
+          <div className="max-w-3xl">
+            <BandeauSurtitre>Affaires</BandeauSurtitre>
+            <h1
+              id="affaires-titre"
+              className="mt-4 font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+            >
+              Affaires judiciaires
+            </h1>
+            <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">
+              Procédures visant des responsables politiques, chacune appuyée sur au moins une source
+              vérifiable. Toute personne mise en cause dans une procédure judiciaire est présumée
+              innocente jusqu{"'"}à ce qu{"'"}elle ait été déclarée coupable par une décision de
+              justice définitive.
+            </p>
+            <div className="mt-6 max-w-xl">
+              <BandeauSearch
+                action="/affaires"
+                id="affaires-q"
+                label="Rechercher une affaire"
+                placeholder="Nom, mot-clé"
+              />
+            </div>
+            <p className="mt-4 text-sm text-white/85">{compteur}</p>
+            {seoIntro}
+          </div>
+        </RubriqueBandeau>
+      )}
       <div className="container mx-auto px-4 pt-4 pb-8">
-        <Breadcrumb items={[{ label: "Affaires" }]} />
-        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
+        {!isLanding && (
+          <div className="mb-6">
             <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
               Affaires judiciaires
             </h1>
-            <p className="text-sm text-muted-foreground">
-              {totalAffairs} affaire{totalAffairs !== 1 ? "s" : ""} documentée
-              {totalAffairs !== 1 ? "s" : ""} avec sources vérifiables
-            </p>
-            <div className="sr-only">
-              <SeoIntro
-                text={`${totalAffairs} affaires judiciaires impliquant des responsables politiques, documentées avec sources vérifiables. Mises en examen, procès, condamnations et relaxes.`}
-              />
-            </div>
+            <p className="text-sm text-muted-foreground">{compteur}</p>
+            {seoIntro}
           </div>
-        </div>
+        )}
 
         {/* Hub tiles: route the strong judicial/statistics/victim intents from the bare listing */}
         <div className="mb-4">
