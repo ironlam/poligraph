@@ -88,6 +88,7 @@ describe("historicalMunicipales", () => {
     round2Date: "2020-06-28T00:00:00.000Z",
     sources: { 1: "https://example.test/t1", 2: "https://example.test/t2" },
     electedUrl: "https://example.test/elus",
+    listWinnerKnown: false,
   };
 
   it("ne déclare jamais une liste élue sur la seule foi de sa tête de liste", () => {
@@ -146,6 +147,36 @@ describe("historicalMunicipales", () => {
     expect(t1.find((r) => r.label === "Élu dès le 1er tour")?.status).toBe("élu");
     expect(t1.find((r) => r.label === "Élu au 2d tour")?.status).toBeNull();
     expect(t2[0]).toMatchObject({ label: "Élu au 2d tour", status: "élu" });
+  });
+
+  it("nomme la liste gagnante quand l'importeur l'établit (2014)", () => {
+    const s = historicalMunicipales({
+      ...base,
+      slug: "municipales-2014",
+      year: 2014,
+      listWinnerKnown: true,
+      entries: [
+        {
+          label: "Gagnante",
+          isNamedList: true,
+          candidateName: "A",
+          round1Pct: 55,
+          round2Pct: null,
+          isElected: true,
+        },
+        {
+          label: "Perdante",
+          isNamedList: true,
+          candidateName: "B",
+          round1Pct: 45,
+          round2Pct: null,
+          isElected: false,
+        },
+      ],
+    });
+    const rows = s?.tours[0]?.rows ?? [];
+    expect(rows.find((r) => r.label === "Gagnante")?.status).toBe("élue");
+    expect(rows.find((r) => r.label === "Perdante")?.status).toBeNull();
   });
 
   it("cite le fichier des élus, d'où vient la mention d'élu", () => {

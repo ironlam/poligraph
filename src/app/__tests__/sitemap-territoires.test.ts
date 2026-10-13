@@ -76,7 +76,7 @@ describe("sitemap : rubrique Territoires", () => {
     h.queryRaw.mockResolvedValueOnce([]);
     await shard5();
     expect(h.cacheTag).toHaveBeenCalledWith(...SITEMAP_SHARD_TAGS[5]);
-    expect(SITEMAP_SHARD_TAGS[5]).toEqual(["politicians", "territoires"]);
+    expect(SITEMAP_SHARD_TAGS[5]).toEqual(["politicians", "territoires", "elections"]);
   });
 });
 

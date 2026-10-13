@@ -2,7 +2,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
 import { MUNICIPALES_2014_FILES, MUNICIPALES_2020_FILES } from "@/config/municipales-sources";
 import { getCommuneResults2014, getCommuneResults2020 } from "@/lib/data/elections";
-import { getCommuneDossier } from "@/lib/data/territoires";
+import { getCommuneDossier, normalizeInseeCode } from "@/lib/data/territoires";
 import {
   communeScrutins,
   historicalMunicipales,
@@ -70,9 +70,9 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
     2: MUNICIPALES_2014_FILES.t2,
   };
 
-  for (const [year, entries, sources, electedUrl] of [
-    [2020, entries2020, files2020, MUNICIPALES_2020_FILES.elus],
-    [2014, entries2014, files2014, null],
+  for (const [year, entries, sources, electedUrl, listWinnerKnown] of [
+    [2020, entries2020, files2020, MUNICIPALES_2020_FILES.elus, false],
+    [2014, entries2014, files2014, null, true],
   ] as const) {
     const slug = HISTORICAL_SLUGS[year];
     const e = dates(slug);
@@ -84,6 +84,7 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
       round2Date: iso(e?.round2Date),
       sources,
       electedUrl,
+      listWinnerKnown,
       entries,
     });
     if (scrutin) out.push(scrutin);
@@ -91,7 +92,14 @@ async function readHistorique(inseeCode: string): Promise<CommuneScrutin[]> {
   return out;
 }
 
+/** The code is normalized before it keys the cache and its tag: `2a004` and `2A004` are one entry. */
 export async function getCommuneElections(code: string): Promise<CommuneElections | null> {
+  const inseeCode = normalizeInseeCode(code);
+  if (!inseeCode) return null;
+  return readCommuneElections(inseeCode);
+}
+
+async function readCommuneElections(code: string): Promise<CommuneElections | null> {
   "use cache";
   // Same tags as the dossier it serializes (maire, 2026 ballot), plus the history readers'.
   cacheTag(

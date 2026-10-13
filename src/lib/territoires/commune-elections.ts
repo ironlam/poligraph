@@ -201,6 +201,11 @@ export interface HistoricalMunicipales {
   round2Date: string | null;
   /** Result file of each round, null when it cannot be told (unknown commune size). */
   sources: Record<1 | 2, string | null>;
+  /**
+   * True when the importer names the winning list itself (2014: the list with the most seats).
+   * False when the flag only says the head is a councillor (2020): a list then has no status.
+   */
+  listWinnerKnown: boolean;
   /** File of the elected officials, when the "élu" status is read from it (2020). */
   electedUrl: string | null;
   entries: HistoricalMunicipalesEntry[];
@@ -225,12 +230,18 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
           key: `${e.label}-${i}`,
           label: e.label,
           detail: e.isNamedList ? `tête de liste ${e.candidateName}` : null,
-          // Only an individual candidate is "élu" on this evidence: for a list, the flag says the
-          // head sits on the council, which losing lists with seats also have. Who won the list
-          // ballot is not established here, so a list carries no status. Read on the last round
-          // the candidate appears in, so a first-round winner of a mixed ballot keeps it.
+          // An individual candidate is "élu" when the flag says so. A list is "élue" only where
+          // the importer names the winning list (2014); in 2020 the flag says the head sits on
+          // the council, which losing lists with seats also have. Read on the last round the
+          // entry appears in, so a first-round winner of a mixed ballot keeps it.
           status:
-            !e.isNamedList && e.isElected && round === (e.round2Pct != null ? 2 : 1) ? "élu" : null,
+            e.isElected && round === (e.round2Pct != null ? 2 : 1)
+              ? e.isNamedList
+                ? input.listWinnerKnown
+                  ? "élue"
+                  : null
+                : "élu"
+              : null,
         },
       }))
       .filter((r) => r.pct != null)
