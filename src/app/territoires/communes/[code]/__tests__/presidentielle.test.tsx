@@ -94,7 +94,9 @@ describe("présidentielle dans la commune", () => {
     expect(text).toContain("800 votants sur 1 000 inscrits, 785 suffrages exprimés.");
     expect(text).toContain("38,2 % · 300 voix");
     expect(text).toContain("importé le 12 octobre 2026");
-    expect(document.querySelector('a[href="/elections/presidentielle-2022"]')).not.toBeNull();
+    expect(document.querySelector('a[href="/elections/presidentielle-2022"]')?.textContent).toBe(
+      "Résultats nationaux de cette élection"
+    );
     // Each round keeps its own dataset: the second-round figures do not cite the first file.
     expect(document.querySelector('a[href="https://www.data.gouv.fr/t1"]')).not.toBeNull();
     expect(document.querySelector('a[href="https://www.data.gouv.fr/t2"]')).not.toBeNull();

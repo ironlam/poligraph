@@ -164,7 +164,7 @@ function Detail({ scrutin }: { scrutin: CommuneScrutin }) {
       <Sources scrutin={scrutin} />
       <p className="mt-1 flex flex-wrap gap-x-4 text-sm">
         <Link href={scrutin.resultsHref} prefetch={false} className={`${TAP} ${LINK}`}>
-          Résultats complets
+          {scrutin.resultsLabel}
         </Link>
         <Link href={TERRITOIRES_DONNEES_PATH} prefetch={false} className={`${TAP} ${LINK}`}>
           Méthode

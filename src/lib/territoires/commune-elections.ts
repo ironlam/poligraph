@@ -66,8 +66,10 @@ export interface CommuneScrutin {
   source: SourceRef;
   /** Import date when the source records it, null otherwise. */
   importedAt: string | null;
-  /** Full results of this ballot elsewhere on the site. */
+  /** Where the results of this ballot continue on the site. */
   resultsHref: string;
+  /** Says what the link leads to: the commune's lists, or the national page of the election. */
+  resultsLabel: string;
 }
 
 function municipales(block: MunicipalesBlock | null, inseeCode: string): CommuneScrutin | null {
@@ -124,6 +126,7 @@ function municipales(block: MunicipalesBlock | null, inseeCode: string): Commune
     importedAt: null,
     // Full lists and candidates of this commune, not the national page.
     resultsHref: `/elections/${block.electionSlug}/communes/${inseeCode}`,
+    resultsLabel: "Résultats complets",
   };
 }
 
@@ -168,6 +171,7 @@ function presidentielle(block: PresidentielleCommuneBlock): CommuneScrutin | nul
     },
     importedAt: block.importedAt,
     resultsHref: `/elections/${block.electionSlug}`,
+    resultsLabel: "Résultats nationaux de cette élection",
   };
 }
 
@@ -253,6 +257,7 @@ export function historicalMunicipales(input: HistoricalMunicipales): CommuneScru
     source: sourceOf(1),
     importedAt: null,
     resultsHref: `/elections/${input.slug}/communes/${input.inseeCode}`,
+    resultsLabel: "Résultats complets",
   };
 }
 
