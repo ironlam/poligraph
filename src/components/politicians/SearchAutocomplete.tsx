@@ -20,6 +20,7 @@ interface SearchAutocompleteProps {
   defaultValue?: string;
   placeholder?: string;
   onSearch?: (query: string) => void;
+  className?: string;
 }
 
 // Avatar component with error handling
@@ -76,6 +77,7 @@ export function SearchAutocomplete({
   defaultValue = "",
   placeholder = "Rechercher un représentant...",
   onSearch,
+  className,
 }: SearchAutocompleteProps) {
   const [query, setQuery] = useState(defaultValue);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -166,7 +168,7 @@ export function SearchAutocomplete({
   };
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-sm">
+    <div ref={containerRef} className={cn("relative w-full max-w-sm", className)}>
       <Input
         ref={inputRef}
         type="search"

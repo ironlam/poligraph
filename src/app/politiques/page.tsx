@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Landmark } from "lucide-react";
+import { Briefcase, Building2, Globe, Landmark, MapPin } from "lucide-react";
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -19,7 +19,10 @@ import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { hasActiveListingFilter, listingRobotsMetadata } from "@/lib/seo/listing-robots";
 import { POLITIQUES_LISTING_FILTER_KEYS } from "@/lib/seo/listing-filters";
 import { SITE_URL } from "@/config/site";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
+import { HemicycleDecor } from "@/components/ui/HemicycleDecor";
+import { RubriqueEntrees, type RubriqueEntree } from "@/components/ui/RubriqueEntrees";
+import { SurChaqueFiche } from "@/components/politicians/SurChaqueFiche";
 import { parsePageParam } from "@/lib/data/query-params";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PolitiquesLocalNav } from "@/components/governments/PolitiquesLocalNav";
@@ -356,6 +359,7 @@ async function getFilterCounts() {
   const [counts] = await db.$queryRaw<
     [
       {
+        total: bigint;
         with_conviction: bigint;
         with_financing: bigint;
         deputes: bigint;
@@ -367,6 +371,7 @@ async function getFilterCounts() {
     ]
   >`
     SELECT
+      COUNT(*) AS total,
       -- Politicians with a definitive probity conviction (same predicate as the badge)
       COUNT(DISTINCT p.id) FILTER (
         WHERE EXISTS (
@@ -429,6 +434,7 @@ async function getFilterCounts() {
   `;
 
   return {
+    total: Number(counts.total),
     withConviction: Number(counts.with_conviction),
     withFinancing: Number(counts.with_financing),
     deputes: Number(counts.deputes),
@@ -477,6 +483,62 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
   const activeFilterCount = [partyFilter, convictionFilter, financingFilter, mandateFilter].filter(
     Boolean
   ).length;
+  // Bare landing: the banner and entry tiles only show without search, filter, sort or page.
+  const isLanding = !search && activeFilterCount === 0 && sortOption === "prominence" && page === 1;
+
+  const entrees: RubriqueEntree[] = [
+    {
+      href: "/politiques?mandate=depute",
+      title: "Députés",
+      icon: Landmark,
+      detail: `${counts.deputes.toLocaleString("fr-FR")} en exercice`,
+    },
+    {
+      href: "/politiques?mandate=senateur",
+      title: "Sénateurs",
+      icon: Building2,
+      detail: `${counts.senateurs.toLocaleString("fr-FR")} en exercice`,
+    },
+    {
+      href: "/politiques?mandate=depute_europeen",
+      title: "Eurodéputés",
+      icon: Globe,
+      detail: "Parlement européen",
+    },
+    {
+      href: "/politiques?mandate=maire",
+      title: "Maires",
+      icon: MapPin,
+      detail: `${counts.maires.toLocaleString("fr-FR")} en exercice`,
+    },
+  ];
+  if (governmentsEnabled) {
+    entrees.push({
+      href: "/politiques/gouvernements",
+      title: "Gouvernement",
+      icon: Briefcase,
+      detail: "Ministres et compositions successives",
+    });
+  }
+
+  const searchForm = (tone: "marine" | "clair") => (
+    <SearchForm
+      defaultSearch={search}
+      partyFilter={partyFilter}
+      convictionFilter={convictionFilter}
+      financingFilter={financingFilter}
+      mandateFilter={mandateFilter}
+      sortOption={sortOption}
+      tone={tone}
+    />
+  );
+  const seoIntro = (
+    <div className="sr-only">
+      <SeoIntro
+        text={`Poligraph référence ${total.toLocaleString("fr-FR")} responsables politiques français : députés, sénateurs, membres du gouvernement et dirigeants de partis. Données issues de sources officielles.`}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -487,53 +549,71 @@ export default async function PolitiquesPage({ searchParams }: PageProps) {
         numberOfItems={total}
       />
       {governmentsEnabled && <PolitiquesLocalNav current="personnes" />}
+      {isLanding && (
+        <RubriqueBandeau labelledBy="politiques-titre">
+          <div className="flex items-center gap-10">
+            <div className="min-w-0 max-w-3xl flex-1">
+              <BandeauSurtitre>Politiques</BandeauSurtitre>
+              <h1
+                id="politiques-titre"
+                className="mt-4 font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+              >
+                Représentants politiques
+              </h1>
+              <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">
+                Mandats, votes, déclarations d{"'"}intérêts et affaires judiciaires. Chaque
+                information renvoie à sa source.
+              </p>
+              <div className="mt-6 max-w-xl">{searchForm("marine")}</div>
+              <p className="mt-4 text-sm text-white/85">
+                <strong className="font-bold text-white">
+                  {counts.total.toLocaleString("fr-FR")}
+                </strong>{" "}
+                représentants référencés
+              </p>
+              {seoIntro}
+            </div>
+            <HemicycleDecor className="hidden w-[420px] shrink-0 lg:block" />
+          </div>
+        </RubriqueBandeau>
+      )}
       <div className="container mx-auto px-4 pt-4 pb-8">
-        <Breadcrumb items={[{ label: "Politiques" }]} />
-        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
-              Représentants politiques
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {total} représentants
-              {search && ` pour "${search}"`}
-              {activeFilterCount > 0 &&
-                ` (${activeFilterCount} filtre${activeFilterCount > 1 ? "s" : ""} actif${activeFilterCount > 1 ? "s" : ""})`}
-            </p>
-            <div className="sr-only">
-              <SeoIntro
-                text={`Poligraph référence ${total.toLocaleString("fr-FR")} responsables politiques français : députés, sénateurs, membres du gouvernement et dirigeants de partis. Données issues de sources officielles.`}
-              />
+        {isLanding ? (
+          <div className="mt-4 mb-8 space-y-8">
+            <RubriqueEntrees
+              titre="Explorer par mandat"
+              titreId="explorer-par-mandat"
+              entrees={entrees}
+            />
+            <SurChaqueFiche />
+            <div>
+              <h2 className="font-display text-2xl font-extrabold text-primary">
+                Tous les représentants
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Toute personne mise en cause dans une procédure judiciaire est présumée innocente
+                jusqu{"'"}à ce qu{"'"}elle ait été déclarée coupable par une décision de justice
+                définitive.
+              </p>
             </div>
           </div>
-          {governmentsEnabled && (
-            <Link
-              href="/politiques/gouvernements"
-              className="flex min-h-11 items-center gap-3 rounded-xl border bg-card px-4 py-2.5 transition-colors hover:border-primary/40 hover:bg-muted/50 md:shrink-0"
-            >
-              <Landmark className="size-5 shrink-0 text-primary" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">Gouvernements</span>
-                <span className="block text-[13px] text-muted-foreground">
-                  Compositions et ministres
-                </span>
-              </span>
-              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </Link>
-          )}
-        </div>
-
-        {/* Search with autocomplete */}
-        <div className="mb-6">
-          <SearchForm
-            defaultSearch={search}
-            partyFilter={partyFilter}
-            convictionFilter={convictionFilter}
-            financingFilter={financingFilter}
-            mandateFilter={mandateFilter}
-            sortOption={sortOption}
-          />
-        </div>
+        ) : (
+          <>
+            <div className="mb-6">
+              <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
+                Représentants politiques
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {total} représentants
+                {search && ` pour "${search}"`}
+                {activeFilterCount > 0 &&
+                  ` (${activeFilterCount} filtre${activeFilterCount > 1 ? "s" : ""} actif${activeFilterCount > 1 ? "s" : ""})`}
+              </p>
+              {seoIntro}
+            </div>
+            <div className="mb-6">{searchForm("clair")}</div>
+          </>
+        )}
 
         {governmentsEnabled && mandateFilter === "gouvernement" && (
           <p className="mb-6 text-sm text-muted-foreground">
