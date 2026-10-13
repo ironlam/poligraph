@@ -25,6 +25,7 @@ const PILOT_COMMUNES: ReadonlyArray<{ name: string; department: string; stratum:
   { name: "Saint-Herblain", department: "44", stratum: "10 000 à 99 999" },
   { name: "Villejuif", department: "94", stratum: "10 000 à 99 999" },
   { name: "Antibes", department: "06", stratum: "10 000 à 99 999" },
+  { name: "Kourou", department: "973", stratum: "10 000 à 99 999" },
   { name: "Brest", department: "29", stratum: "100 000 et plus" },
   { name: "Saint-Étienne", department: "42", stratum: "100 000 et plus" },
 ];
@@ -137,7 +138,7 @@ export default function TerritoireDecisionsMethodologyPage() {
 
         <section aria-labelledby="communes-title">
           <h2 id="communes-title" className="font-display text-2xl font-bold">
-            Les douze communes du pilote
+            Les treize communes du pilote
           </h2>
           <div className="mt-4 space-y-4 leading-relaxed text-muted-foreground">
             <p>
@@ -164,10 +165,10 @@ export default function TerritoireDecisionsMethodologyPage() {
               généralisent donc pas à l&apos;ensemble des communes.
             </p>
             <p>
-              <strong>Une limite connue.</strong> Une seule commune ultramarine figure dans la
-              liste, alors que nous en visons deux, de bassins différents. La seconde reste à
-              trouver. Les collectivités d&apos;outre-mer sans commune (Saint-Barthélemy,
-              Saint-Martin, Wallis-et-Futuna, TAAF) sortent du pilote par construction.
+              <strong>L&apos;outre-mer.</strong> Deux communes, de bassins différents : La
+              Possession et Kourou. Les collectivités d&apos;outre-mer sans commune
+              (Saint-Barthélemy, Saint-Martin, Wallis-et-Futuna, TAAF) sortent du pilote par
+              construction.
             </p>
           </div>
         </section>

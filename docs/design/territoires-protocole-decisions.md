@@ -1,9 +1,8 @@
 # Territoires : protocole de sélection et de saisie des décisions
 
-Date : 13 octobre 2026. Statut : **version 2, arrêtée par la rédaction le 13 octobre 2026**. Publiée
-sur `/methodologie/decisions-territoires`. Les points encore ouverts (seconde commune ultramarine,
-équilibre politique, mapping des sources) sont listés au §8 et bloquent la collecte, pas le
-protocole.
+Date : 14 octobre 2026. Statut : **version 2.1, arrêtée par la rédaction (v2 le 13 octobre 2026, Kourou ajoutée le 14)**. Publiée
+sur `/methodologie/decisions-territoires`. Les points encore ouverts (mapping des sources) sont
+listés au §8 et bloquent la collecte, pas le protocole.
 
 Références : cadrage produit et UX du 8 octobre (§6.1 à §6.4), plan d'implémentation (lot 2).
 
@@ -19,7 +18,7 @@ décisions référencées ne mesure ni l'activité ni la performance d'un consei
 Trois couches se superposent (§3). Seule la première produit des notices rédigées par Poligraph.
 Les deux autres renvoient vers la source officielle ou passent par le même circuit de relecture.
 
-## 2. Choix des douze communes
+## 2. Choix des treize communes
 
 **Liste arrêtée le 13 octobre 2026.** Les critères ci-dessous ont servi à la construire. La liste retenue
 est publiée avec, pour chaque commune, le critère qui l'a fait entrer.
@@ -38,21 +37,24 @@ est publiée avec, pour chaque commune, le critère qui l'a fait entrer.
 | 10  | Antibes            | 06   | 77 637     | 10 000 à 99 999 | 07/2026                       |
 | 11  | Brest              | 29   | 142 346    | 100 000 et plus | jeu SCDL, 10/2026             |
 | 12  | Saint-Étienne      | 42   | 173 136    | 100 000 et plus | 01/2026                       |
+| 13  | Kourou             | 973  | 24 824     | 10 000 à 99 999 | pages de PDF, 06/2026         |
 
 Populations et dates de mise à jour relevées le 12 octobre 2026. Les populations sont à re-vérifier
 sur le millésime légal en vigueur avant publication.
 
 Points non réglés :
 
-- **Une seule commune ultramarine** (La Possession). Le critère 2 en demande deux, de bassins
-  différents. La seconde reste à trouver (Mayotte, Antilles, Guyane ou Pacifique) avec un recueil
-  des actes consultable. Tant qu'elle manque, la page le dit.
+- **Deux communes ultramarines de bassins différents** : La Possession (974, jeu SCDL) et Kourou
+  (973, 122 PDF de délibérations sur le site de la commune, pas de jeu ouvert : saisie depuis les
+  documents). Kourou a été ajoutée le 14 octobre 2026 en treizième commune, sans en retirer une
+  autre. Son maire en base n'a qu'un mandat, depuis le 26 mars 2026 : la profondeur couverte est
+  « depuis mars 2026 ».
 - **Les cas d'épreuve** du critère 5 ne se lisent pas dans les fichiers ouverts. Ils sont constatés
   commune par commune, et la liste peut changer si un cas reste sans exemple.
 - **Équilibre politique** : contrôlé après coup le 13 octobre 2026, jamais utilisé pour choisir
   (critère 6). Nuance de la liste élue en 2026 (ministère de l'Intérieur) : gauche 4 (PS, NFP à
   deux reprises, DVG), centre 2 (DVC à deux reprises), droite 3 (LR, DVD à deux reprises), divers
-  ou sans nuance 3 (DIV à deux reprises, Taugon sans nuance). Aucune concentration. Limite : c'est
+  ou sans nuance 4 (DIV à trois reprises dont Kourou, Taugon sans nuance). Aucune concentration. Limite : c'est
   la nuance de la liste, pas l'appartenance déclarée du maire.
 
 ### Critères
@@ -74,7 +76,7 @@ Points non réglés :
 4. **Période institutionnelle établissable.** Le maire en fonction est établi dans Poligraph, et
    les dates de début et de fin des mandats couverts sont connues au jour près. Sans cela, les
    décisions de la commune s'afficheraient sous « période institutionnelle non établie ».
-5. **Cas d'épreuve couverts** (cadrage §6.4). L'ensemble des douze communes doit contenir au
+5. **Cas d'épreuve couverts** (cadrage §6.4). L'ensemble des treize communes doit contenir au
    moins : un changement de maire sans nouvelle élection générale ; une réélection de la même
    personne ; une décision adoptée sous un maire et publiée sous son successeur ; un acte
    intercommunal concernant la commune ; un résultat collectif sans votes individuels.
@@ -127,7 +129,7 @@ relevés le 12 octobre 2026. Socle arrêté par la rédaction le 13 octobre 2026
 | 9.1      | Autres domaines                                              | Non : catégorie fourre-tout, hétérogène        |
 
 Une notice n'est créée que si la matière figure dans le socle, quelle que soit la commune. Le
-socle est le même pour les douze, publié avec sa date, et ne change pas en cours de collecte.
+socle est le même pour les treize, publié avec sa date, et ne change pas en cours de collecte.
 
 ### Pourquoi pas toutes les délibérations d'un fichier ouvert
 
@@ -210,10 +212,10 @@ dépubliée.
 
 ## 8. Avant la première collecte
 
-- [x] Liste des douze communes arrêtée, avec le critère de chacune (§2).
-- [ ] Seconde commune ultramarine trouvée, ou absence assumée sur la page.
-- [x] Équilibre politique des douze contrôlé et consigné (§2).
+- [x] Liste des treize communes arrêtée, avec le critère de chacune (§2).
+- [x] Seconde commune ultramarine trouvée (Kourou, 14 octobre 2026).
+- [x] Équilibre politique des treize contrôlé et consigné (§2).
 - [x] Liste des matières du socle arrêtée (§3).
 - [x] Fréquence de revérification fixée (§6).
-- [ ] Table de correspondance « jeu ouvert vers institution » complétée pour les douze.
+- [ ] Table de correspondance « jeu ouvert vers institution » complétée pour les treize (Kourou : pas de jeu ouvert, saisie depuis les PDF).
 - [x] Protocole publié sur le site, avec sa date (page `/methodologie/decisions-territoires`).

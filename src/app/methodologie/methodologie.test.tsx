@@ -109,7 +109,7 @@ describe("pages de méthodologie", () => {
     );
     expect(
       within(screen.getByRole("list", { name: "Communes du pilote" })).getAllByRole("listitem")
-    ).toHaveLength(12);
+    ).toHaveLength(13);
     expect(
       within(screen.getByRole("list", { name: "Matières du socle" })).getAllByRole("listitem")
     ).toHaveLength(8);
