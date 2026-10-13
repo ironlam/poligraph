@@ -58,6 +58,24 @@ describe("sitemap : rubrique Territoires", () => {
     expect(lastmod("/territoires")).toEqual(new Date("2026-10-01T00:00:00Z"));
   });
 
+  it("annonce la page des élections seulement pour une commune avec résultats, datée par eux", async () => {
+    h.queryRaw.mockResolvedValueOnce([
+      {
+        id: "35238",
+        lastmod: new Date("2026-10-01T00:00:00Z"),
+        electionsLastmod: new Date("2026-10-12T00:00:00Z"),
+      },
+      { id: "13055", lastmod: new Date("2026-08-01T00:00:00Z"), electionsLastmod: null },
+    ]);
+    const entries = await shard5();
+    const find = (suffix: string) => entries.find((e) => e.url.endsWith(suffix));
+    expect(find("/territoires/communes/35238/elections")?.lastModified).toEqual(
+      new Date("2026-10-12T00:00:00Z")
+    );
+    expect(find("/territoires/communes/13055/elections")).toBeUndefined();
+    expect(find("/territoires/communes/13055")).toBeDefined();
+  });
+
   it("garde l'entrée, la page des données et les régions sans aucune commune indexable", async () => {
     h.queryRaw.mockResolvedValueOnce([]);
     const urls = (await shard5()).map((e) => path(e.url));

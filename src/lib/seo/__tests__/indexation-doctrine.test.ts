@@ -414,8 +414,10 @@ describe("doctrine — the Territoires shard mirrors isIndexableTerritoireCommun
 
   it("lists the dedicated elections page only for the same communes, and only with results", () => {
     expect(territoiresShard).toContain("territoireCommuneElectionsPath(c.id)");
-    expect(territoiresShard).toContain("c.hasElections");
+    expect(territoiresShard).toContain("c.electionsLastmod != null");
     expect(territoiresShard).toContain('"CommuneElectionRound" r WHERE r."communeId" = c."id"');
+    // The lastmod follows the results, not the mayor's mandate.
+    expect(territoiresShard).toContain("lastModified: c.electionsLastmod");
   });
 
   it("gives the dedicated elections page the verdict of its commune page", () => {

@@ -809,12 +809,12 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
   cacheLife("synced");
 
   const communes = await db.$queryRaw<
-    Array<{ id: string; lastmod: Date; hasElections: boolean }>
+    Array<{ id: string; lastmod: Date; electionsLastmod: Date | null }>
   >(Prisma.sql`
     SELECT c."id", maire."lastmod",
-      EXISTS (
-        SELECT 1 FROM "CommuneElectionRound" r WHERE r."communeId" = c."id"
-      ) AS "hasElections"
+      (
+        SELECT MAX(r."updatedAt") FROM "CommuneElectionRound" r WHERE r."communeId" = c."id"
+      ) AS "electionsLastmod"
     FROM "Commune" c
     JOIN (
       SELECT ml."communeId", MAX(m."updatedAt") AS "lastmod"
@@ -865,12 +865,12 @@ async function buildTerritoiresSitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.5,
     })),
     // Dedicated elections page: same commune set, and only when results are recorded, so the
-    // sitemap never lists a page that answers 404.
+    // sitemap never lists a page that answers 404. Its lastmod follows the results, not the mayor.
     ...communes
-      .filter((c) => c.hasElections)
+      .filter((c) => c.electionsLastmod != null)
       .map((c) => ({
         url: `${SITE_URL}${territoireCommuneElectionsPath(c.id)}`,
-        lastModified: c.lastmod,
+        lastModified: c.electionsLastmod as Date,
         changeFrequency: "monthly" as const,
         priority: 0.4,
       })),

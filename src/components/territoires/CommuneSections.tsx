@@ -461,7 +461,10 @@ function SideCard({ title, children }: { title: string; children: React.ReactNod
 function ReutiliserContent({ code }: { code: string }) {
   return (
     <>
-      <p className="text-sm">Les mêmes faits, avec les mêmes réserves, au format JSON.</p>
+      <p className="text-sm">
+        Les faits de cette page au format JSON, avec les mêmes réserves. L{"'"}historique des
+        municipales 2014 et 2020 n{"'"}y figure pas.
+      </p>
       <p className="mt-2 text-sm">
         <a href={`/api/v1/territoires/communes/${code}`} className={`${TAP} ${LINK}`}>
           Données de la commune (API v1, JSON)
