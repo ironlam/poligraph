@@ -28,6 +28,8 @@ interface FactChecksFilterBarProps {
   sources: Array<{ name: string; count: number }>;
   ratingCounts: Record<string, number>;
   politicianContext: PoliticianContext | null;
+  /** The landing banner already carries the search field. */
+  hideSearch?: boolean;
 }
 
 const RATING_OPTIONS: FactCheckRating[] = [
@@ -60,6 +62,7 @@ export function FactChecksFilterBar({
   sources,
   ratingCounts,
   politicianContext,
+  hideSearch = false,
 }: FactChecksFilterBarProps) {
   const { isPending, updateParams } = useFilterParams();
 
@@ -67,13 +70,15 @@ export function FactChecksFilterBar({
     <FilterBarShell isPending={isPending} className="space-y-3">
       {/* Filters row: search + politician + source + verdict */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <DebouncedSearchInput
-          id="search-factchecks"
-          value={currentFilters.search}
-          onSearch={(v) => updateParams({ search: v })}
-          placeholder="Mot-clé..."
-          label="Recherche"
-        />
+        {!hideSearch && (
+          <DebouncedSearchInput
+            id="search-factchecks"
+            value={currentFilters.search}
+            onSearch={(v) => updateParams({ search: v })}
+            placeholder="Mot-clé..."
+            label="Recherche"
+          />
+        )}
 
         <PoliticianFilterAutocomplete onSelect={(slug) => updateParams({ politician: slug })} />
 

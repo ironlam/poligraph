@@ -18,7 +18,8 @@ import {
   getPoliticianNameBySlug,
   getPoliticianFactcheckContext,
 } from "@/lib/data/factchecks";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
+import { BandeauSearch } from "@/components/ui/BandeauSearch";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import type { FactCheckRating } from "@/types";
@@ -128,6 +129,10 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
     return `/factchecks${qs ? `?${qs}` : ""}`;
   };
 
+  // Bare landing: the banner only shows without search, filter or page.
+  const isLanding = !source && !verdict && !politicianSlug && !search && !directOnly && page === 1;
+  const compteur = `${stats.totalFactChecks.toLocaleString("fr-FR")} vérification${stats.totalFactChecks !== 1 ? "s" : ""} issue${stats.totalFactChecks !== 1 ? "s" : ""} de ${sources.length} sources reconnues`;
+
   return (
     <>
       <CollectionPageJsonLd
@@ -136,18 +141,46 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
         url="https://poligraph.fr/factchecks"
         numberOfItems={stats.totalFactChecks}
       />
+      {isLanding && (
+        <RubriqueBandeau labelledBy="factchecks-titre">
+          <div className="max-w-3xl">
+            <BandeauSurtitre>Fact-checks</BandeauSurtitre>
+            <h1
+              id="factchecks-titre"
+              className="mt-4 font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl"
+            >
+              Fact-checks
+            </h1>
+            <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">
+              Vérifications publiées par des médias reconnus, rassemblées via l{"'"}API Google Fact
+              Check Tools. Les verdicts sont ceux des médias, pas ceux de Poligraph.
+            </p>
+            <div className="mt-6 max-w-xl">
+              <BandeauSearch
+                action="/factchecks"
+                id="factchecks-q"
+                label="Rechercher une vérification"
+                placeholder="Sujet, déclaration"
+              />
+            </div>
+            <p className="mt-4 text-sm text-white/85">{compteur}</p>
+          </div>
+        </RubriqueBandeau>
+      )}
       <div className="container mx-auto px-4 pt-4 pb-8">
-        <Breadcrumb items={[{ label: "Fact-checks" }]} />
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">Fact-checks</h1>
-          <p className="text-sm text-muted-foreground">
-            {stats.totalFactChecks} vérification{stats.totalFactChecks !== 1 ? "s" : ""} issue
-            {stats.totalFactChecks !== 1 ? "s" : ""} de {sources.length} sources reconnues
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Les verdicts proviennent des organismes de fact-checking cités, pas de Poligraph.
-          </p>
+          {!isLanding && (
+            <>
+              <h1 className="text-3xl font-display font-extrabold tracking-tight mb-1">
+                Fact-checks
+              </h1>
+              <p className="text-sm text-muted-foreground">{compteur}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Les verdicts proviennent des organismes de fact-checking cités, pas de Poligraph.
+              </p>
+            </>
+          )}
           <div className="sr-only">
             <SeoIntro
               text={`${stats.totalFactChecks.toLocaleString("fr-FR")} vérifications de déclarations politiques, issues de ${sources.length} médias partenaires reconnus.`}
@@ -186,6 +219,7 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
           sources={sources}
           ratingCounts={stats.byRating}
           politicianContext={politicianContext}
+          hideSearch={isLanding}
         />
 
         {/* Active filters */}
