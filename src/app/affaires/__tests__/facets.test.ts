@@ -6,7 +6,7 @@ import {
 } from "@/lib/affairs/public-filters";
 import { AffairesFilterBar } from "@/components/affairs/AffairesFilterBar";
 import { AffairHubTiles } from "@/components/affairs/AffairHubTiles";
-import { AffairesBandeauForm } from "@/components/affairs/AffairesBandeauForm";
+import { BandeauFilterForm } from "@/components/ui/BandeauFilterForm";
 
 const FACETS = { ETABLI: 7, PRONONCE: 3, EN_COURS: 5, CLOS_SANS_CHARGE: 1, CLOS_FAVORABLE: 2 };
 const ADVERSE = { ETABLI: 4, PRONONCE: 2, EN_COURS: 1, CLOS_SANS_CHARGE: 0, CLOS_FAVORABLE: 0 };
@@ -82,7 +82,7 @@ describe("/affaires : facettes documentaires et tuile à charge", () => {
     const tree = await renderTree({});
 
     expect(findElement(tree, AffairesFilterBar)).toBeNull();
-    const form = findElement(tree, AffairesBandeauForm) as ReactElement<{
+    const form = findElement(tree, BandeauFilterForm) as ReactElement<{
       selects: { name: string; options: { value: string; label: string }[] }[];
     }> | null;
     const certainty = form?.props.selects.find((s) => s.name === "certainty");

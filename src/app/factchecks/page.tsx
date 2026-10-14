@@ -19,7 +19,11 @@ import {
   getPoliticianFactcheckContext,
 } from "@/lib/data/factchecks";
 import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
-import { BandeauSearch } from "@/components/ui/BandeauSearch";
+import { BandeauFilterForm } from "@/components/ui/BandeauFilterForm";
+import {
+  sourceFilterOptions,
+  verdictFilterOptions,
+} from "@/components/factchecks/factchecks-filter-options";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import type { FactCheckRating } from "@/types";
@@ -143,7 +147,7 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
       />
       {isLanding && (
         <RubriqueBandeau labelledBy="factchecks-titre">
-          <div className="max-w-3xl">
+          <div className="max-w-4xl">
             <BandeauSurtitre>Fact-checks</BandeauSurtitre>
             <h1
               id="factchecks-titre"
@@ -155,12 +159,30 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
               Vérifications publiées par des médias reconnus, rassemblées via l{"'"}API Google Fact
               Check Tools. Les verdicts sont ceux des médias, pas ceux de Poligraph.
             </p>
-            <div className="mt-6 max-w-xl">
-              <BandeauSearch
+            <div className="mt-6">
+              <BandeauFilterForm
                 action="/factchecks"
-                id="factchecks-q"
-                label="Rechercher une vérification"
-                placeholder="Sujet, déclaration"
+                idPrefix="factchecks"
+                searchPlaceholder="Sujet, déclaration"
+                selects={[
+                  {
+                    name: "politician",
+                    label: "Politicien",
+                    options: [
+                      { value: "", label: "Tous les politiciens" },
+                      ...stats.topPoliticians.map((p) => ({
+                        value: p.slug,
+                        label: `${p.fullName} (${Number(p.count)})`,
+                      })),
+                    ],
+                  },
+                  { name: "source", label: "Source", options: sourceFilterOptions(sources) },
+                  {
+                    name: "verdict",
+                    label: "Verdict",
+                    options: verdictFilterOptions(stats.byRating),
+                  },
+                ]}
               />
             </div>
             <p className="mt-4 text-sm text-white/85">{compteur}</p>
@@ -207,20 +229,21 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
           </div>
         </details>
 
-        {/* Filter bar */}
-        <FactChecksFilterBar
-          currentFilters={{
-            search: search || "",
-            source: source || "",
-            verdict: verdict || "",
-            politician: politicianSlug || "",
-            directOnly,
-          }}
-          sources={sources}
-          ratingCounts={stats.byRating}
-          politicianContext={politicianContext}
-          hideSearch={isLanding}
-        />
+        {/* Filter bar: on the bare landing, the banner form carries the filters */}
+        {!isLanding && (
+          <FactChecksFilterBar
+            currentFilters={{
+              search: search || "",
+              source: source || "",
+              verdict: verdict || "",
+              politician: politicianSlug || "",
+              directOnly,
+            }}
+            sources={sources}
+            ratingCounts={stats.byRating}
+            politicianContext={politicianContext}
+          />
+        )}
 
         {/* Active filters */}
         {(source || verdict || politicianSlug || search || directOnly) && (
@@ -316,10 +339,12 @@ export default async function FactChecksPage({ searchParams }: PageProps) {
           </div>
         )}
 
-        {/* Results count */}
-        <p className="text-sm text-muted-foreground mb-4">
-          {total} fact-check{total > 1 ? "s" : ""} trouvé{total > 1 ? "s" : ""}
-        </p>
+        {/* Results count: the banner already gives the total on the bare landing */}
+        {!isLanding && (
+          <p className="text-sm text-muted-foreground mb-4">
+            {total} fact-check{total > 1 ? "s" : ""} trouvé{total > 1 ? "s" : ""}
+          </p>
+        )}
 
         {/* Grid */}
         {factChecks.length > 0 ? (

@@ -1,3 +1,4 @@
+import type { BandeauFilterOption } from "@/components/ui/BandeauFilterForm";
 import { AFFAIR_SUPER_CATEGORY_LABELS, type AffairSuperCategory } from "@/config/labels";
 import { CERTAINTY_LABELS, CERTAINTY_SORT_ORDER, type CertaintyLevel } from "@/config/certainty";
 
@@ -5,10 +6,7 @@ import { CERTAINTY_LABELS, CERTAINTY_SORT_ORDER, type CertaintyLevel } from "@/c
  * Options of the /affaires filters, shared by the landing banner form and the filter bar so both
  * offer the same values, labels and order.
  */
-export interface AffairesFilterOption {
-  value: string;
-  label: string;
-}
+export type AffairesFilterOption = BandeauFilterOption;
 
 export const AFFAIRES_SORT_OPTIONS: Record<string, string> = {
   "": "Plus récentes",

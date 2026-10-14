@@ -26,7 +26,7 @@ import { CERTAINTY_LABELS, type CertaintyLevel } from "@/config/certainty";
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
 import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
-import { AffairesBandeauForm } from "@/components/affairs/AffairesBandeauForm";
+import { BandeauFilterForm } from "@/components/ui/BandeauFilterForm";
 import {
   certaintyFilterOptions,
   partyFilterOptions,
@@ -258,7 +258,10 @@ export default async function AffairesPage({ searchParams }: PageProps) {
               justice définitive.
             </p>
             <div className="mt-6">
-              <AffairesBandeauForm
+              <BandeauFilterForm
+                action="/affaires"
+                idPrefix="affaires"
+                searchPlaceholder="Nom, mot-clé"
                 selects={[
                   {
                     name: "certainty",

@@ -27,9 +27,4 @@ describe("FactChecksFilterBar", () => {
     render(<FactChecksFilterBar {...baseProps} />);
     expect(screen.getByLabelText("Recherche")).toBeInTheDocument();
   });
-
-  it("retire son champ de recherche quand le bandeau le porte", () => {
-    render(<FactChecksFilterBar {...baseProps} hideSearch />);
-    expect(screen.queryByLabelText("Recherche")).toBeNull();
-  });
 });
