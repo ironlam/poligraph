@@ -1,6 +1,13 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
-import type { Chamber, VotingResult, ThemeCategory, ScrutinType, Prisma } from "@/generated/prisma";
+import {
+  Prisma,
+  type Chamber,
+  type VotingResult,
+  type ThemeCategory,
+  type ScrutinType,
+} from "@/generated/prisma";
+import { accentInsensitivePattern, scrutinSearchTokens } from "@/lib/votes/scrutin-search";
 import {
   Chamber as ChamberEnum,
   VotingResult as VotingResultEnum,
@@ -283,6 +290,38 @@ async function fetchSortedPage(
   return { scrutins, total: filtered.length };
 }
 
+/**
+ * Ids of the scrutins matching every word of a search, accents ignored, in the title, summary,
+ * citizen impact or dossier title. With `explainedOnly`, the approved policy title and subtitle
+ * are searched too.
+ */
+async function findScrutinIdsMatching(search: string, explainedOnly: boolean): Promise<string[]> {
+  const tokens = scrutinSearchTokens(search);
+  if (tokens.length === 0) return [];
+  const conditions = tokens.map((token) => {
+    const pattern = accentInsensitivePattern(token);
+    return Prisma.sql`(
+      s."title" ~* ${pattern}
+      OR s."summary" ~* ${pattern}
+      OR s."citizenImpact" ~* ${pattern}
+      OR d."title" ~* ${pattern}
+      ${
+        explainedOnly
+          ? Prisma.sql`OR pt."policyTitle" ~* ${pattern} OR pt."policySubtitle" ~* ${pattern}`
+          : Prisma.empty
+      }
+    )`;
+  });
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT s."id"
+    FROM "Scrutin" s
+    LEFT JOIN "LegislativeDossier" d ON d."id" = s."dossierLegislatifId"
+    LEFT JOIN "ScrutinPolicyTitle" pt ON pt."scrutinId" = s."id" AND pt."status" = 'APPROVED'
+    WHERE ${Prisma.join(conditions, " AND ")}
+  `;
+  return rows.map((r) => r.id);
+}
+
 /** Core query logic shared by cached and uncached paths. */
 async function queryScrutins(params: {
   page: number;
@@ -314,6 +353,7 @@ async function queryScrutins(params: {
   // caller (idempotent on an already-whitelisted value or `undefined`).
   const sort = normalizeSort(params.sort);
   const skip = (page - 1) * limit;
+  const searchIds = search ? await findScrutinIdsMatching(search, Boolean(explainedOnly)) : null;
 
   const where = {
     ...(result && { result }),
@@ -327,33 +367,7 @@ async function queryScrutins(params: {
     ...(explainedOnly && {
       policyTitle: { is: { status: "APPROVED" as const, policyTitle: { not: null } } },
     }),
-    ...(search && {
-      OR: [
-        { title: { contains: search, mode: "insensitive" as const } },
-        { summary: { contains: search, mode: "insensitive" as const } },
-        { citizenImpact: { contains: search, mode: "insensitive" as const } },
-        {
-          dossierLegislatif: {
-            title: { contains: search, mode: "insensitive" as const },
-          },
-        },
-        ...(explainedOnly
-          ? [
-              {
-                policyTitle: {
-                  is: {
-                    status: "APPROVED" as const,
-                    OR: [
-                      { policyTitle: { contains: search, mode: "insensitive" as const } },
-                      { policySubtitle: { contains: search, mode: "insensitive" as const } },
-                    ],
-                  },
-                },
-              },
-            ]
-          : []),
-      ],
-    }),
+    ...(searchIds && { id: { in: searchIds } }),
   };
 
   const [{ scrutins, total }, stats] = await Promise.all([
