@@ -6,6 +6,7 @@ import {
 } from "@/lib/affairs/public-filters";
 import { AffairesFilterBar } from "@/components/affairs/AffairesFilterBar";
 import { AffairHubTiles } from "@/components/affairs/AffairHubTiles";
+import { AffairesBandeauForm } from "@/components/affairs/AffairesBandeauForm";
 
 const FACETS = { ETABLI: 7, PRONONCE: 3, EN_COURS: 5, CLOS_SANS_CHARGE: 1, CLOS_FAVORABLE: 2 };
 const ADVERSE = { ETABLI: 4, PRONONCE: 2, EN_COURS: 1, CLOS_SANS_CHARGE: 0, CLOS_FAVORABLE: 0 };
@@ -14,12 +15,13 @@ const mocks = vi.hoisted(() => ({
   getAffairs: vi.fn(),
   getCertaintyFacetCounts: vi.fn(),
   getAdverseCertaintyCounts: vi.fn(),
+  getSuperCategoryCounts: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ db: {} }));
 vi.mock("@/lib/data/affairs", () => ({
   getAffairs: mocks.getAffairs,
-  getSuperCategoryCounts: vi.fn().mockResolvedValue({}),
+  getSuperCategoryCounts: mocks.getSuperCategoryCounts,
   getCertaintyFacetCounts: mocks.getCertaintyFacetCounts,
   getAdverseCertaintyCounts: mocks.getAdverseCertaintyCounts,
   getPartiesWithAffairs: vi.fn().mockResolvedValue([]),
@@ -55,10 +57,11 @@ describe("/affaires : facettes documentaires et tuile à charge", () => {
     mocks.getAffairs.mockResolvedValue({ affairs: [], total: 0, totalPages: 0 });
     mocks.getCertaintyFacetCounts.mockResolvedValue(FACETS);
     mocks.getAdverseCertaintyCounts.mockResolvedValue(ADVERSE);
+    mocks.getSuperCategoryCounts.mockResolvedValue({});
   });
 
   it.each([
-    ["mise-en-cause", {}, DEFAULT_LISTING_INVOLVEMENTS],
+    ["mise-en-cause", { search: "x" }, DEFAULT_LISTING_INVOLVEMENTS],
     ["victime", { mode: "victime" }, VICTIM_LISTING_INVOLVEMENTS],
   ] as const)(
     "mode %s : la barre de filtres reçoit les facettes du périmètre listé",
@@ -66,6 +69,7 @@ describe("/affaires : facettes documentaires et tuile à charge", () => {
       const tree = await renderTree(params);
 
       expect(mocks.getCertaintyFacetCounts).toHaveBeenCalledWith([...involvements]);
+      expect(mocks.getSuperCategoryCounts).toHaveBeenCalledWith([...involvements]);
       expect(mocks.getAffairs.mock.calls[0]?.[6]).toEqual([...involvements]);
       const filterBar = findElement(tree, AffairesFilterBar) as ReactElement<{
         certaintyCounts: unknown;
@@ -73,6 +77,17 @@ describe("/affaires : facettes documentaires et tuile à charge", () => {
       expect(filterBar?.props.certaintyCounts).toBe(FACETS);
     }
   );
+
+  it("accueil nu : le formulaire du bandeau reçoit les mêmes facettes, sans barre de filtres", async () => {
+    const tree = await renderTree({});
+
+    expect(findElement(tree, AffairesFilterBar)).toBeNull();
+    const form = findElement(tree, AffairesBandeauForm) as ReactElement<{
+      selects: { name: string; options: { value: string; label: string }[] }[];
+    }> | null;
+    const certainty = form?.props.selects.find((s) => s.name === "certainty");
+    expect(certainty?.options.find((o) => o.value === "ETABLI")?.label).toContain("(7)");
+  });
 
   it("la tuile Condamnations définitives affiche le compte à charge, pas la facette", async () => {
     const tree = await renderTree({});

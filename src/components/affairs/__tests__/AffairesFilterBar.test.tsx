@@ -152,9 +152,4 @@ describe("AffairesFilterBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rechercher" }));
     expect(updateParams).toHaveBeenCalledWith({ search: "dupont" }, { mode: "replace" });
   });
-
-  it("drops its search field when the landing banner carries it", () => {
-    render(<AffairesFilterBar {...baseProps} hideSearch />);
-    expect(screen.queryByRole("searchbox")).toBeNull();
-  });
 });

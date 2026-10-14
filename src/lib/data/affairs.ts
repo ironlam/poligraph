@@ -352,7 +352,11 @@ export async function getAffairNeighborsList(
   return rows.flatMap((r) => (r.slug ? [{ slug: r.slug, title: r.title }] : []));
 }
 
-export async function getSuperCategoryCounts() {
+/**
+ * Family facet counts over the perimeter of the listed cards (same WHERE base as the listing and
+ * getCertaintyFacetCounts), so a family option, the page total and the result count share a unit.
+ */
+export async function getSuperCategoryCounts(involvements: readonly Involvement[]) {
   "use cache";
   cacheTag("affairs");
   cacheLife("synced");
@@ -360,7 +364,8 @@ export async function getSuperCategoryCounts() {
   const categoryCounts = await db.affair.groupBy({
     by: ["category"],
     where: {
-      ...getDocumentaryAffairWhere(ADVERSE_INVOLVEMENTS),
+      ...getDocumentaryAffairWhere(involvements),
+      ...(involvements.includes("VICTIM") && { category: { in: VIOLENCE_CATEGORIES } }),
       politician: PUBLIC_POLITICIAN_WHERE,
     },
     _count: { category: true },

@@ -20,7 +20,13 @@ import {
   getCategoriesForSuper,
   type AffairSuperCategory,
 } from "@/config/labels";
-import { CERTAINTY_LABELS, CERTAINTY_SORT_ORDER, type CertaintyLevel } from "@/config/certainty";
+import { CERTAINTY_LABELS, type CertaintyLevel } from "@/config/certainty";
+import {
+  certaintyFilterOptions,
+  partyFilterOptions,
+  sortFilterOptions,
+  superCategoryFilterOptions,
+} from "@/components/affairs/affaires-filter-options";
 import type { AffairCategory } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -43,30 +49,8 @@ interface AffairesFilterBarProps {
     count: number;
   }>;
   certaintyCounts: Record<string, number>;
-  /** The landing banner already carries the search field. */
-  hideSearch?: boolean;
   superCounts: Record<string, number>;
 }
-
-const SORT_OPTIONS: Record<string, string> = {
-  "": "Plus récentes",
-  certainty: "Par certitude",
-  "date-asc": "Plus anciennes",
-  "name-asc": "Nom A-Z",
-  "name-desc": "Nom Z-A",
-};
-
-const SUPER_CATEGORIES: AffairSuperCategory[] = [
-  "PROBITE",
-  "FINANCES",
-  "PERSONNES",
-  "EXPRESSION",
-  "AUTRE",
-];
-
-const CERTAINTY_LEVELS_ORDERED = (Object.keys(CERTAINTY_LABELS) as CertaintyLevel[]).sort(
-  (a, b) => CERTAINTY_SORT_ORDER[a] - CERTAINTY_SORT_ORDER[b]
-);
 
 // Dot colour family per level, mirroring CERTAINTY_COLORS. Supplementary only:
 // the text label + count remain the primary signal (never colour-alone).
@@ -93,7 +77,6 @@ export function AffairesFilterBar({
   parties,
   certaintyCounts,
   superCounts,
-  hideSearch = false,
 }: AffairesFilterBarProps) {
   const { isPending, updateParams } = useFilterParams();
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -107,24 +90,11 @@ export function AffairesFilterBar({
     ? CATEGORY_TO_SUPER[currentFilters.category as AffairCategory]
     : currentFilters.supercat) || "") as AffairSuperCategory | "";
 
-  const certaintyOptions: ToggleGroupOption[] = [
-    { value: "", label: "Toutes" },
-    ...CERTAINTY_LEVELS_ORDERED.filter((level) => (certaintyCounts[level] ?? 0) > 0).map(
-      (level) => ({
-        value: level,
-        label: `${CERTAINTY_LABELS[level]} (${certaintyCounts[level] ?? 0})`,
-        icon: certaintyDot(level),
-      })
-    ),
-  ];
+  const certaintyOptions: ToggleGroupOption[] = certaintyFilterOptions(certaintyCounts).map(
+    ({ value, label, level }) => ({ value, label, ...(level && { icon: certaintyDot(level) }) })
+  );
 
-  const superCatOptions: ToggleGroupOption[] = [
-    { value: "", label: "Toutes" },
-    ...SUPER_CATEGORIES.map((superCat) => ({
-      value: superCat,
-      label: `${AFFAIR_SUPER_CATEGORY_LABELS[superCat]} (${superCounts[superCat] ?? 0})`,
-    })),
-  ];
+  const superCatOptions: ToggleGroupOption[] = superCategoryFilterOptions(superCounts);
 
   // Infraction options are scoped to the effective family (no separators). The
   // select itself is only rendered once a family is active (see JSX below).
@@ -138,12 +108,9 @@ export function AffairesFilterBar({
       ]
     : [];
 
-  const partyOptions = [
-    { value: "", label: "Tous les partis" },
-    ...parties.map((p) => ({ value: p.slug, label: `${p.shortName} (${p.count})` })),
-  ];
+  const partyOptions = partyFilterOptions(parties);
 
-  const sortOptions = Object.entries(SORT_OPTIONS).map(([value, label]) => ({ value, label }));
+  const sortOptions = sortFilterOptions();
 
   // Active filter chips. `mode` is a perimeter tab (not a chip); `sort` is a
   // display preference, not a filter, so it never becomes a chip (mirrors #484).
@@ -239,17 +206,15 @@ export function AffairesFilterBar({
             options={partyOptions}
             className="min-w-[200px]"
           />
-          {!hideSearch && (
-            <DebouncedSearchInput
-              id="search-affairs"
-              value={currentFilters.search}
-              onSearch={(v) => set({ search: v })}
-              manual
-              placeholder="Rechercher une affaire..."
-              label="Recherche"
-              className="min-w-[260px] flex-1"
-            />
-          )}
+          <DebouncedSearchInput
+            id="search-affairs"
+            value={currentFilters.search}
+            onSearch={(v) => set({ search: v })}
+            manual
+            placeholder="Rechercher une affaire..."
+            label="Recherche"
+            className="min-w-[260px] flex-1"
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -365,16 +330,14 @@ export function AffairesFilterBar({
                   options={sortOptions}
                 />
 
-                {!hideSearch && (
-                  <DebouncedSearchInput
-                    id="search-affairs-sheet"
-                    value={currentFilters.search}
-                    onSearch={(v) => set({ search: v })}
-                    manual
-                    placeholder="Rechercher une affaire..."
-                    label="Recherche"
-                  />
-                )}
+                <DebouncedSearchInput
+                  id="search-affairs-sheet"
+                  value={currentFilters.search}
+                  onSearch={(v) => set({ search: v })}
+                  manual
+                  placeholder="Rechercher une affaire..."
+                  label="Recherche"
+                />
 
                 {activeFilters.length > 0 && (
                   <button
