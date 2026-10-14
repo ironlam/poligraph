@@ -4,7 +4,7 @@ import { KeyVoteCard } from "@/components/votes/KeyVoteCard";
 import { DossierCard } from "@/components/legislation";
 import { CompositionHemicycle } from "./CompositionHemicycle";
 import { BandeauSurtitre, RubriqueBandeau } from "@/components/ui/RubriqueBandeau";
-import { BandeauSearch } from "@/components/ui/BandeauSearch";
+import { ParlementBandeauSearch } from "./ParlementBandeauSearch";
 import { RubriqueEntrees, type RubriqueEntree } from "@/components/ui/RubriqueEntrees";
 // Direct import (not the barrel) to avoid a self-referential cycle: the
 // parlement barrel also re-exports ParlementHub.
@@ -143,12 +143,7 @@ export async function ParlementHub() {
             par vote, à partir des données publiques des deux chambres.
           </p>
           <div className="mt-6 max-w-xl">
-            <BandeauSearch
-              action={ROUTES.votes}
-              id="parlement-q"
-              label="Rechercher un scrutin"
-              placeholder="Scrutin, loi, mot-clé"
-            />
+            <ParlementBandeauSearch />
           </div>
           <p className="mt-4 text-sm text-white/85">
             <strong className="font-bold text-white">
