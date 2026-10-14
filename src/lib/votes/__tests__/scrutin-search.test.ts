@@ -13,6 +13,15 @@ describe("scrutinSearchTokens", () => {
     ]);
   });
 
+  it("écarte les mots vides, qui élargiraient la recherche à presque toute la base", () => {
+    expect(scrutinSearchTokens("Projet de loi de la sécurité")).toEqual([
+      "projet",
+      "loi",
+      "sécurité",
+    ]);
+    expect(scrutinSearchTokens("de la")).toEqual([]);
+  });
+
   it("garde un chiffre seul et plafonne le nombre de mots", () => {
     expect(scrutinSearchTokens("article 4")).toEqual(["article", "4"]);
     expect(scrutinSearchTokens("un deux trois quatre cinq six sept huit neuf dix")).toHaveLength(8);

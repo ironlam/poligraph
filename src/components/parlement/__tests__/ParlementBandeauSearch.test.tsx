@@ -39,6 +39,25 @@ describe("ParlementBandeauSearch", () => {
     expect(push).toHaveBeenCalledWith("/parlement/groupes/udr-17");
   });
 
+  it("présente chaque suggestion comme un vrai lien", async () => {
+    render(<ParlementBandeauSearch />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "ciotti" } });
+    const option = await screen.findByRole("option", { name: /Éric Ciotti/ });
+    expect(option.querySelector("a")).toHaveAttribute("href", "/politiques/eric-ciotti/votes");
+  });
+
+  it("n'ouvre pas une suggestion de la saisie précédente pendant qu'on retape", async () => {
+    render(<ParlementBandeauSearch />);
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "ciotti" } });
+    await waitFor(() => expect(input).toHaveAttribute("aria-expanded", "true"));
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.change(input, { target: { value: "ciotti retraites" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(push).not.toHaveBeenCalled();
+    expect(input).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("reste un formulaire GET vers les scrutins, sans liste ouverte", () => {
     render(<ParlementBandeauSearch />);
     const form = screen.getByRole("search");

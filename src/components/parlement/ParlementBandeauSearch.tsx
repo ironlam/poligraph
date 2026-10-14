@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { ROUTES } from "@/config/routes";
@@ -159,6 +160,10 @@ export function ParlementBandeauSearch() {
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
+              // Suggestions belong to the previous text: Enter must submit what is typed now
+              // until the new ones arrive.
+              setOpen(false);
+              setActive(-1);
               if (e.target.value.trim().length < 2) setGroups([]);
             }}
             onFocus={() => options.length > 0 && setOpen(true)}
@@ -197,16 +202,23 @@ export function ParlementBandeauSearch() {
                       id={`${listId}-${i}`}
                       role="option"
                       aria-selected={i === active}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => go(option.href)}
                       onMouseEnter={() => setActive(i)}
-                      className={cn(
-                        "flex min-h-11 cursor-pointer flex-col justify-center rounded-lg px-3 py-2",
-                        i === active && "bg-muted"
-                      )}
                     >
-                      <span className="line-clamp-2 text-sm font-medium">{option.label}</span>
-                      <span className="text-xs text-muted-foreground">{option.detail}</span>
+                      {/* A real link (AGENTS.md: <a> for navigation): new tab and copy work. */}
+                      <Link
+                        href={option.href}
+                        prefetch={false}
+                        tabIndex={-1}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex min-h-11 flex-col justify-center rounded-lg px-3 py-2",
+                          i === active && "bg-muted"
+                        )}
+                      >
+                        <span className="line-clamp-2 text-sm font-medium">{option.label}</span>
+                        <span className="text-xs text-muted-foreground">{option.detail}</span>
+                      </Link>
                     </li>
                   );
                 })}
