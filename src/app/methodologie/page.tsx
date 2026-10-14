@@ -84,6 +84,15 @@ export default function MethodologiePage() {
 
       <nav aria-label="Méthodes par domaine" className="mb-12 grid gap-3 sm:grid-cols-2">
         <Link
+          href="/methodologie/soutien-projets-gouvernementaux"
+          className="rounded-xl border border-border p-4 hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <span className="block font-bold">Projets gouvernementaux</span>
+          <span className="mt-1 block text-sm text-muted-foreground">
+            Périmètre et calcul des parts de pour, d{"'"}abstention et de contre.
+          </span>
+        </Link>
+        <Link
           href="/methodologie/mesures-presidentielle-2027"
           className="rounded-xl border border-border p-4 hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >

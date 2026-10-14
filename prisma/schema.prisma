@@ -1331,6 +1331,7 @@ model Scrutin {
   votesHash String?
 
   // Official AN voting procedure and independent historical group snapshot (#564).
+  officialDossierRef             String?
   codeTypeVote                  String?
   libelleTypeVote               String?
   officialGroupsHash            String?
@@ -1368,6 +1369,7 @@ model Scrutin {
   @@index([type, votingDate])
   @@index([result, votingDate]) // result filter + default date sort
   @@index([dossierLegislatifId])
+  @@index([officialDossierRef])
 }
 
 /// Official source counts, not reconstructed from current parliamentary mandates.

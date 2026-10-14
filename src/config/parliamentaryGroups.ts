@@ -33,6 +33,63 @@ export interface ParliamentaryGroupConfig {
   partyWikidataId?: string;
 }
 
+export interface AssemblyGroupOrganeRef {
+  organeRef: string;
+  legislature: number;
+  activeFrom: string;
+  activeTo?: string;
+}
+
+/**
+ * Official AN organ identifiers for the 17th legislature.
+ *
+ * Source: Assemblée nationale, archive AMO40 des députés, mandats et organes.
+ * Dates are inclusive. UDR changed its official organ identifier when it became
+ * UDDPLR, while Poligraph keeps one continuous display group.
+ */
+export const ASSEMBLY_GROUP_ORGANE_REFS: Record<string, readonly AssemblyGroupOrganeRef[]> = {
+  RN: [{ organeRef: "PO845401", legislature: 17, activeFrom: "2024-07-18" }],
+  "LFI-NFP": [{ organeRef: "PO845413", legislature: 17, activeFrom: "2024-07-18" }],
+  SOC: [{ organeRef: "PO845419", legislature: 17, activeFrom: "2024-07-18" }],
+  EPR: [{ organeRef: "PO845407", legislature: 17, activeFrom: "2024-07-18" }],
+  DR: [{ organeRef: "PO845425", legislature: 17, activeFrom: "2024-07-18" }],
+  DEM: [{ organeRef: "PO845454", legislature: 17, activeFrom: "2024-07-18" }],
+  HOR: [{ organeRef: "PO845470", legislature: 17, activeFrom: "2024-07-18" }],
+  LIOT: [{ organeRef: "PO845485", legislature: 17, activeFrom: "2024-07-18" }],
+  ECOS: [{ organeRef: "PO845439", legislature: 17, activeFrom: "2024-07-18" }],
+  GDR: [{ organeRef: "PO845514", legislature: 17, activeFrom: "2024-07-18" }],
+  UDR: [
+    {
+      organeRef: "PO847173",
+      legislature: 17,
+      activeFrom: "2024-09-12",
+      activeTo: "2025-09-04",
+    },
+    { organeRef: "PO872880", legislature: 17, activeFrom: "2025-09-05" },
+  ],
+  NI: [{ organeRef: "PO840056", legislature: 17, activeFrom: "2024-07-01" }],
+};
+
+export const ASSEMBLY_ORGANE_REFS_SOURCE_URL =
+  "https://data.assemblee-nationale.fr/acteurs/deputes-en-exercice";
+
+export function getAssemblyGroupOrganeRefs(
+  code: string,
+  legislature: number,
+  votingDate: Date
+): string[] {
+  const canonicalCode = ASSEMBLY_GROUPS[code]?.code ?? code;
+  const day = votingDate.toISOString().slice(0, 10);
+  return (ASSEMBLY_GROUP_ORGANE_REFS[canonicalCode] ?? [])
+    .filter(
+      (entry) =>
+        entry.legislature === legislature &&
+        entry.activeFrom <= day &&
+        (entry.activeTo === undefined || entry.activeTo >= day)
+    )
+    .map((entry) => entry.organeRef);
+}
+
 // ============================================
 // ASSEMBLÉE NATIONALE - 17e législature (2024-2027)
 // ============================================

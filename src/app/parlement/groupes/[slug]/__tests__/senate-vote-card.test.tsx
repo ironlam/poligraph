@@ -11,6 +11,9 @@ vi.mock("@/lib/data/groupes", () => ({
   getGroupeDetail: (slug: string) => mocks.getGroupeDetail(slug),
   getGroupKeyVotes: (groupId: string) => mocks.getGroupKeyVotes(groupId),
 }));
+vi.mock("@/lib/data/government-project-positions", () => ({
+  getGovernmentProjectPositionsForGroup: vi.fn(async () => null),
+}));
 vi.mock("@/components/votes", () => ({
   VoteCard: (props: Record<string, unknown>) => {
     mocks.voteCard(props);

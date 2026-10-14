@@ -15,6 +15,9 @@ import { Users, TrendingUp, Target, Activity, FileCheck2 } from "lucide-react";
 import { ParliamentaryGroupJsonLd } from "@/components/seo/JsonLd";
 import { buildGroupeSeo } from "@/lib/seo/groupe-metadata";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
+import { getGovernmentProjectPositionsForGroup } from "@/lib/data/government-project-positions";
+import { GovernmentProjectPositionBreakdown } from "@/components/groupes/GovernmentProjectPositionBreakdown";
+import { ROUTES } from "@/config/routes";
 
 export const revalidate = 3600;
 
@@ -62,7 +65,10 @@ export default async function GroupeDetailPage({ params }: PageProps) {
 
   if (!group) notFound();
 
-  const groupKeyVotes = await getGroupKeyVotes(group.id);
+  const [groupKeyVotes, governmentProjects] = await Promise.all([
+    getGroupKeyVotes(group.id),
+    group.chamber === "AN" ? getGovernmentProjectPositionsForGroup(group.code) : null,
+  ]);
   const stats = group.stats[0];
 
   const chamberLabel = group.chamber === "AN" ? "Assemblée nationale" : "Sénat";
@@ -167,6 +173,57 @@ export default async function GroupeDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {group.chamber === "AN" && governmentProjects && (
+        <section className="mb-8" aria-labelledby="government-projects-title">
+          <Card>
+            <CardContent className="p-5">
+              <h2 id="government-projects-title" className="text-lg font-semibold">
+                Positions sur les projets gouvernementaux
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Répartition de la position dominante du groupe lors des votes sur l{"'"}ensemble des
+                projets de loi d{"'"}origine gouvernementale. L{"'"}abstention reste distincte et n
+                {"'"}est pas comptée comme un soutien.
+              </p>
+              <div className="mt-5">
+                <GovernmentProjectPositionBreakdown summary={governmentProjects.summary} />
+              </div>
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                {governmentProjects.summary.eligibleScrutinCount} scrutins dans le périmètre, dont{" "}
+                {governmentProjects.summary.groupExcludedCount} sans position retenue pour ce
+                groupe.
+              </p>
+              {governmentProjects.summary.updatedAt && (
+                <p className="mt-1 text-center text-xs text-muted-foreground">
+                  Sources récupérées le{" "}
+                  {governmentProjects.summary.updatedAt.toLocaleDateString("fr-FR", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "Europe/Paris",
+                  })}
+                  .
+                </p>
+              )}
+              <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm">
+                <Link
+                  href={ROUTES.groupeGovernmentProjects(slug)}
+                  className="inline-flex min-h-11 items-center text-primary hover:underline"
+                >
+                  Voir les scrutins et les exclusions
+                </Link>
+                <Link
+                  href={ROUTES.governmentProjectsMethodology}
+                  className="inline-flex min-h-11 items-center text-primary hover:underline"
+                >
+                  Comprendre la méthode
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       {/* Key Votes */}
