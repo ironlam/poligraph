@@ -11,5 +11,9 @@ describe("BandeauSearch", () => {
     expect(form).toHaveAttribute("action", "/affaires");
     expect(form).toHaveAttribute("method", "get");
     expect(screen.getByLabelText("Rechercher une affaire")).toHaveAttribute("name", "search");
+    expect(screen.getByRole("button", { name: "Rechercher" })).toHaveAttribute(
+      "title",
+      "Rechercher"
+    );
   });
 });

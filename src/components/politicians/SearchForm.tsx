@@ -55,6 +55,8 @@ export function SearchForm({
         />
         <button
           type="button"
+          aria-label="Rechercher"
+          title="Rechercher"
           onClick={() => handleSearch(defaultSearch)}
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-primary px-3 font-bold text-primary-foreground hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-5"
         >
