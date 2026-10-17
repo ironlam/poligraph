@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "5A-2.1",
+  "amo30": {
+    "archive": {
+      "sha256": "be3233d5b8a037b396302180601067484588ecf0fcd22eb5d9955cd4c877fa77",
+      "sizeBytes": 13703948,
+      "entryCount": 14053,
+      "entriesByFolder": {
+        "json/acteur": 3175,
+        "json/deport": 59,
+        "json/organe": 10819
+      },
+      "serverLastModified": "2026-10-17 00:34 GMT"
+    },
+    "aggregate": {
+      "organFiles": {
+        "total": 10819,
+        "groupOrgans": 63,
+        "outOfScope": 10756,
+        "rejected": 0,
+        "rejectedByReason": {}
+      },
+      "actorFiles": {
+        "total": 3175,
+        "accepted": 3175,
+        "rejected": 0,
+        "rejectedByReason": {}
+      },
+      "mandates": {
+        "total": 173078,
+        "group": 7772,
+        "seat": 3960,
+        "outOfScope": 161346,
+        "rejected": 0,
+        "rejectedByReason": {}
+      },
+      "organKinds": {
+        "GROUP": 57,
+        "NON_INSCRIT": 6,
+        "unclassified": {}
+      },
+      "groupOrgansByLegislature": {
+        "12": 5,
+        "13": 5,
+        "14": 10,
+        "15": 17,
+        "16": 12,
+        "17": 14
+      },
+      "membershipsByLegislature": {
+        "12": 576,
+        "13": 1347,
+        "14": 1435,
+        "15": 1686,
+        "16": 1305,
+        "17": 1423
+      },
+      "membershipsWithoutEnd": 585,
+      "structure": {
+        "duplicateKeys": {
+          "organs": 0,
+          "memberships": 0,
+          "seats": 0
+        },
+        "membershipsWithAbsentOrgan": 0,
+        "overlapDistinctOrgans": {
+          "13": 35,
+          "14": 86
+        },
+        "overlapAcrossLegislatures": 0,
+        "overlapSameOrgan": {
+          "12": {
+            "identicalDates": 3,
+            "differentDates": 1
+          },
+          "13": {
+            "identicalDates": 1,
+            "differentDates": 14
+          },
+          "14": {
+            "identicalDates": 6,
+            "differentDates": 15
+          },
+          "15": {
+            "identicalDates": 10,
+            "differentDates": 14
+          },
+          "16": {
+            "identicalDates": 9,
+            "differentDates": 4
+          },
+          "17": {
+            "identicalDates": 12,
+            "differentDates": 6
+          }
+        }
+      }
+    }
+  },
+  "scrutins": [
+    {
+      "archive": {
+        "sha256": "ca00f314b6957c9b0f32951a79d393f35a6cfd9f09626a11730984c94985084b",
+        "sizeBytes": 9202661,
+        "entryCount": 4417,
+        "entriesByFolder": {
+          "json": 4417
+        },
+        "serverLastModified": "2022-06-09"
+      },
+      "amo30Sha256": "be3233d5b8a037b396302180601067484588ecf0fcd22eb5d9955cd4c877fa77",
+      "aggregate": {
+        "files": {
+          "total": 4417,
+          "anScrutins": 4417,
+          "congres": 0,
+          "rejected": 0,
+          "rejectedByReason": {}
+        },
+        "byLegislature": {
+          "15": {
+            "anScrutins": 4417,
+            "nominalVotes": 472631,
+            "distinctActors": 651,
+            "coherence": {
+              "COHERENT": 4387,
+              "COUNT_MISMATCH": 30,
+              "UNVERIFIABLE": 0
+            },
+            "countMismatch": {
+              "scrutinsWithGroupMismatch": 17,
+              "groupsMismatched": 17,
+              "scrutinsWithSyntheseMismatch": 30,
+              "scrutinsWithSyntheseMismatchPCA": 30
+            },
+            "votesInPublicationAdmissibleScrutins": 466526,
+            "votesInScrutinsKeptButNotAdmissible": 6105,
+            "miseAuPoint": {
+              "scrutinsPresent": 1231,
+              "scrutinsWithListedVotants": 1226,
+              "listedVotants": 2616,
+              "malformedBlocks": 0
+            },
+            "categories": {
+              "ORGAN_ABSENT": 0,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 465356,
+              "AGREE_SAME_ORGAN_RECORDS": 7198,
+              "SAME_SIGLE_OTHER_REF": 0,
+              "DIFFERENT_GROUP": 77
+            },
+            "organAbsentPlaceholder": 0,
+            "edgeDayVotes": 434,
+            "edgeDayByCategory": {
+              "ORGAN_ABSENT": 0,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 346,
+              "AGREE_SAME_ORGAN_RECORDS": 11,
+              "SAME_SIGLE_OTHER_REF": 0,
+              "DIFFERENT_GROUP": 77
+            },
+            "seat": {
+              "COVERED": 472626,
+              "COVERED_ON_END_DAY_ONLY": 5,
+              "REF_MISSING": 0,
+              "MANDATE_UNKNOWN": 0,
+              "OTHER_ACTOR": 0,
+              "DATE_OUTSIDE": 0
+            }
+          }
+        },
+        "congres": []
+      }
+    },
+    {
+      "archive": {
+        "sha256": "adc5e57d3ad5904fd11e176b531b3d525d4ecfdf78db9587f93a14452601126b",
+        "sizeBytes": 10107912,
+        "entryCount": 4106,
+        "entriesByFolder": {
+          "json": 4106
+        },
+        "serverLastModified": "2024-06-28"
+      },
+      "amo30Sha256": "be3233d5b8a037b396302180601067484588ecf0fcd22eb5d9955cd4c877fa77",
+      "aggregate": {
+        "files": {
+          "total": 4106,
+          "anScrutins": 4105,
+          "congres": 1,
+          "rejected": 0,
+          "rejectedByReason": {}
+        },
+        "byLegislature": {
+          "16": {
+            "anScrutins": 4105,
+            "nominalVotes": 602911,
+            "distinctActors": 617,
+            "coherence": {
+              "COHERENT": 4101,
+              "COUNT_MISMATCH": 4,
+              "UNVERIFIABLE": 0
+            },
+            "countMismatch": {
+              "scrutinsWithGroupMismatch": 4,
+              "groupsMismatched": 4,
+              "scrutinsWithSyntheseMismatch": 4,
+              "scrutinsWithSyntheseMismatchPCA": 4
+            },
+            "votesInPublicationAdmissibleScrutins": 602126,
+            "votesInScrutinsKeptButNotAdmissible": 785,
+            "miseAuPoint": {
+              "scrutinsPresent": 935,
+              "scrutinsWithListedVotants": 929,
+              "listedVotants": 1907,
+              "malformedBlocks": 0
+            },
+            "categories": {
+              "ORGAN_ABSENT": 0,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 590367,
+              "AGREE_SAME_ORGAN_RECORDS": 8164,
+              "SAME_SIGLE_OTHER_REF": 4159,
+              "DIFFERENT_GROUP": 221
+            },
+            "organAbsentPlaceholder": 0,
+            "edgeDayVotes": 398,
+            "edgeDayByCategory": {
+              "ORGAN_ABSENT": 0,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 177,
+              "AGREE_SAME_ORGAN_RECORDS": 0,
+              "SAME_SIGLE_OTHER_REF": 0,
+              "DIFFERENT_GROUP": 221
+            },
+            "seat": {
+              "COVERED": 602911,
+              "COVERED_ON_END_DAY_ONLY": 0,
+              "REF_MISSING": 0,
+              "MANDATE_UNKNOWN": 0,
+              "OTHER_ACTOR": 0,
+              "DATE_OUTSIDE": 0
+            }
+          }
+        },
+        "congres": [
+          {
+            "uid": "VTCGR5L16V1",
+            "date": "2024-03-04",
+            "legislature": 16,
+            "groupCount": 20,
+            "listedVotants": 902
+          }
+        ]
+      }
+    },
+    {
+      "archive": {
+        "sha256": "55af9beb247f6c346cffa4eff1ec29b298cdafb4dae32325f9e4e0cc8a1fafb6",
+        "sizeBytes": 27563304,
+        "entryCount": 8877,
+        "entriesByFolder": {
+          "json": 8877
+        },
+        "serverLastModified": "2026-10-17 10:25 GMT"
+      },
+      "amo30Sha256": "be3233d5b8a037b396302180601067484588ecf0fcd22eb5d9955cd4c877fa77",
+      "aggregate": {
+        "files": {
+          "total": 8877,
+          "anScrutins": 8877,
+          "congres": 0,
+          "rejected": 0,
+          "rejectedByReason": {}
+        },
+        "byLegislature": {
+          "17": {
+            "anScrutins": 8877,
+            "nominalVotes": 1323978,
+            "distinctActors": 652,
+            "coherence": {
+              "COHERENT": 8876,
+              "COUNT_MISMATCH": 1,
+              "UNVERIFIABLE": 0
+            },
+            "countMismatch": {
+              "scrutinsWithGroupMismatch": 0,
+              "groupsMismatched": 0,
+              "scrutinsWithSyntheseMismatch": 1,
+              "scrutinsWithSyntheseMismatchPCA": 0
+            },
+            "votesInPublicationAdmissibleScrutins": 1323760,
+            "votesInScrutinsKeptButNotAdmissible": 218,
+            "miseAuPoint": {
+              "scrutinsPresent": 8877,
+              "scrutinsWithListedVotants": 1534,
+              "listedVotants": 3243,
+              "malformedBlocks": 0
+            },
+            "categories": {
+              "ORGAN_ABSENT": 1916,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 1303437,
+              "AGREE_SAME_ORGAN_RECORDS": 18254,
+              "SAME_SIGLE_OTHER_REF": 0,
+              "DIFFERENT_GROUP": 371
+            },
+            "organAbsentPlaceholder": 1916,
+            "edgeDayVotes": 1432,
+            "edgeDayByCategory": {
+              "ORGAN_ABSENT": 0,
+              "NO_GROUP_RECORD": 0,
+              "MULTIPLE_DISTINCT_ORGANS": 0,
+              "AGREE_SINGLE_RECORD": 1066,
+              "AGREE_SAME_ORGAN_RECORDS": 56,
+              "SAME_SIGLE_OTHER_REF": 0,
+              "DIFFERENT_GROUP": 310
+            },
+            "seat": {
+              "COVERED": 1323465,
+              "COVERED_ON_END_DAY_ONLY": 513,
+              "REF_MISSING": 0,
+              "MANDATE_UNKNOWN": 0,
+              "OTHER_ACTOR": 0,
+              "DATE_OUTSIDE": 0
+            }
+          }
+        },
+        "congres": []
+      }
+    }
+  ]
+}

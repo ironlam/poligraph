@@ -55,6 +55,12 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, readonly string[]> = {
   "publication.ts": ["./types"],
   "exclusion.ts": ["./types"],
   "identity.ts": ["./types"],
+  // The parsers read official files and know nothing of the resolver, the runs or the publication.
+  "source-shape.ts": [],
+  "parse-amo30.ts": ["./civil-date", "./source-shape", "./types"],
+  "parse-scrutin.ts": ["./civil-date", "./source-shape", "./types"],
+  // The validation is an independent measurement: it must never import the resolver it checks.
+  "official-validation.ts": ["./parse-amo30", "./parse-scrutin", "./types"],
 };
 
 function specifiersOf(source: ts.SourceFile): string[] {
@@ -149,10 +155,14 @@ describe("historical groups: the module respects its contract", () => {
       "date-semantics.ts",
       "exclusion.ts",
       "identity.ts",
+      "official-validation.ts",
+      "parse-amo30.ts",
+      "parse-scrutin.ts",
       "publication.ts",
       "resolver.ts",
       "run-contract.ts",
       "run-execution.ts",
+      "source-shape.ts",
       "types.ts",
       "versioning.ts",
     ]) {
@@ -215,6 +225,24 @@ describe("the guard itself can fail", () => {
     );
     expect(scan("publication.ts", 'import { x } from "./resolver";').join("\n")).toContain(
       "may not import ./resolver"
+    );
+  });
+
+  it("refuses a validation that imports the resolver, and a parser that reaches past the files", () => {
+    expect(scan("official-validation.ts", 'import { x } from "./resolver";').join("\n")).toContain(
+      "may not import ./resolver"
+    );
+    expect(
+      scan("official-validation.ts", 'import { x } from "./date-semantics";').join("\n")
+    ).toContain("may not import ./date-semantics");
+    expect(scan("parse-amo30.ts", 'import { x } from "./publication";').join("\n")).toContain(
+      "may not import ./publication"
+    );
+    expect(scan("parse-scrutin.ts", 'import fs from "node:fs";').join("\n")).toContain(
+      "import of node:fs"
+    );
+    expect(scan("source-shape.ts", 'import { x } from "./types";').join("\n")).toContain(
+      "may not import ./types"
     );
   });
 

@@ -30,16 +30,17 @@ attributions sont justes.
 
 ### 0.1 Erreurs de la V2 corrigées dans la V2.1 [V2.1]
 
-| #   | Où (V2)     | Erreur                                                                                                                                                  | Correction                                            |
-| --- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| 1   | 2.3         | Le tableau mélangeait des catégories qui se chevauchent : 116 votes de la 16e comptés comme « plusieurs mandats » relevaient du changement de référence | Catégories exclusives dont la somme égale le total    |
-| 2   | 2.3         | « Même sigle, autre référence » : 4 043 en 16e. « `PO0` » : environ 2 300 votes en 17e                                                                  | 4 159 et 1 916 (recalcul exclusif)                    |
-| 3   | 2.3         | « Plusieurs mandats le même jour » présenté parmi les désaccords                                                                                        | C'est un accord (qualités différentes du même organe) |
-| 4   | 2.2, 3, 5D  | Écart d'une identité entre « votants distincts » et « fiche + sans fiche », et « 611 sur 611 » sans population définie                                  | Populations définies et réconciliées (2.2)            |
-| 5   | 6.3 règle 4 | Le coût de la règle « jour de bascule » comptait des votes qui ont une attestation de scrutin, donc non concernés                                       | Règle « jour de bord », coût recalculé (6.3)          |
-| 6   | 9, 5F       | Renvoi à l'arbitrage A5 pour le masquage des positions, qui est l'arbitrage A4                                                                          | Renvois revus (12)                                    |
-| 7   | 10.2        | « Se rend en quelques secondes » : non vérifié, et faux pour une page ISR                                                                               | Mécanismes réels du cache décrits (10.2)              |
-| 8   | 4           | Le modèle ne gardait qu'une version par enregistrement et le référentiel `AnOrgan` n'est pas versionné                                                  | Modèle versionné (4)                                  |
+| #   | Où (V2)     | Erreur                                                                                                                                                  | Correction                                             |
+| --- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 1   | 2.3         | Le tableau mélangeait des catégories qui se chevauchent : 116 votes de la 16e comptés comme « plusieurs mandats » relevaient du changement de référence | Catégories exclusives dont la somme égale le total     |
+| 2   | 2.3         | « Même sigle, autre référence » : 4 043 en 16e. « `PO0` » : environ 2 300 votes en 17e                                                                  | 4 159 et 1 916 (recalcul exclusif)                     |
+| 3   | 2.3         | « Plusieurs mandats le même jour » présenté parmi les désaccords                                                                                        | C'est un accord (qualités différentes du même organe)  |
+| 4   | 2.2, 3, 5D  | Écart d'une identité entre « votants distincts » et « fiche + sans fiche », et « 611 sur 611 » sans population définie                                  | Populations définies et réconciliées (2.2)             |
+| 5   | 6.3 règle 4 | Le coût de la règle « jour de bascule » comptait des votes qui ont une attestation de scrutin, donc non concernés                                       | Règle « jour de bord », coût recalculé (6.3)           |
+| 6   | 9, 5F       | Renvoi à l'arbitrage A5 pour le masquage des positions, qui est l'arbitrage A4                                                                          | Renvois revus (12)                                     |
+| 7   | 10.2        | « Se rend en quelques secondes » : non vérifié, et faux pour une page ISR                                                                               | Mécanismes réels du cache décrits (10.2)               |
+| 8   | 4           | Le modèle ne gardait qu'une version par enregistrement et le référentiel `AnOrgan` n'est pas versionné                                                  | Modèle versionné (4)                                   |
+| 9   | 2.2         | « Scrutins dans l'archive » : 4 106 en 16e, à côté de 602 911 votes qui ne couvrent que 4 105 scrutins                                                  | Fichiers, scrutins AN et Congrès distingués (2.2, 2.5) |
 
 ## 1. Ce que la documentation officielle établit, et ce qu'elle laisse ouvert
 
@@ -159,8 +160,10 @@ Populations, définies une fois pour toutes :
 
 | Tous chiffres [M]                                        | 15e     | 16e     | 17e       |
 | -------------------------------------------------------- | ------- | ------- | --------- |
-| Scrutins dans l'archive                                  | 4 417   | 4 106   | 8 877     |
-| Votes nominatifs                                         | 472 631 | 602 911 | 1 323 978 |
+| Fichiers de scrutin dans l'archive                       | 4 417   | 4 106   | 8 877     |
+| dont scrutins de l'Assemblée (AN)                        | 4 417   | 4 105   | 8 877     |
+| dont scrutin du Congrès                                  | 0       | 1       | 0         |
+| Votes nominatifs, scrutins AN seuls                      | 472 631 | 602 911 | 1 323 978 |
 | **F**, acteurs distincts                                 | 651     | 617     | 652       |
 | F1, fiche par `officialId`, nom compatible               | 181     | 412     | 612       |
 | F2, fiche par `ExternalId` seul                          | 1       | 1       | 1         |
@@ -171,6 +174,9 @@ Populations, définies une fois pour toutes :
 | dont sans `officialId`                                   | 0       | 9       | 1         |
 | Votes en base de ces fiches sans `officialId`            | 0       | 4 415   | 391       |
 | Fiches de F1 sans aucun vote en base dans la législature | 181     | 7       | 1         |
+
+Le scrutin du Congrès de la 16e (`VTCGR5L16V1`, 2024-03-04) est dans l'archive des scrutins mais
+n'est pas un scrutin de l'Assemblée. Ses 902 votants listés ne sont ajoutés à aucun total : voir 2.5.
 
 Lecture des écarts d'identité :
 
@@ -251,6 +257,115 @@ groupe sans enregistrement précédent.
 [M] Pour les 2 399 520 votes nominatifs des trois législatures, `mandatRef` désigne chaque fois un
 mandat de type `ASSEMBLEE` du même acteur. Les 100 % de ces mandats couvrent la date du scrutin,
 bornes incluses. Aucun vote n'est hors de l'intervalle ainsi lu.
+
+### 2.5 Mesures de la PR 5A-2, parseurs sur les fichiers officiels [M]
+
+Mesures faites par `npm run validate:historical-groups`, qui lit les archives, applique les
+parseurs purs et la classification de `official-validation.ts`, et compare à la baseline commitée
+(`parlement-historique-lot5-baseline-5a2.json`, agrégats seuls). Les archives restent hors du dépôt.
+
+| Archive      | Octets     | SHA-256                                                            | `Last-Modified`      |
+| ------------ | ---------- | ------------------------------------------------------------------ | -------------------- |
+| AMO30        | 13 703 948 | `be3233d5b8a037b396302180601067484588ecf0fcd22eb5d9955cd4c877fa77` | 2026-10-17 00:34 GMT |
+| Scrutins 15e | 9 202 661  | `ca00f314b6957c9b0f32951a79d393f35a6cfd9f09626a11730984c94985084b` | 2022-06-09           |
+| Scrutins 16e | 10 107 912 | `adc5e57d3ad5904fd11e176b531b3d525d4ecfdf78db9587f93a14452601126b` | 2024-06-28           |
+| Scrutins 17e | 27 563 304 | `55af9beb247f6c346cffa4eff1ec29b298cdafb4dae32325f9e4e0cc8a1fafb6` | 2026-10-17 10:25 GMT |
+
+Les archives AMO30 et de la 17e changent chaque jour. Les chiffres qui suivent sont ceux de ces
+octets. Une autre archive donne un rapport de différences, pas un échec (voir « Reproductibilité »).
+
+**Référentiel AMO30.** 14 053 fichiers : 10 819 organes (63 de type `GP`, 10 756 hors périmètre, 0
+rejeté), 3 175 acteurs (0 rejeté), 59 déports (ignorés). 173 078 mandats : 7 772 de groupe, 3 960 de
+siège (`ASSEMBLEE`), 161 346 hors périmètre, 0 rejeté. Somme égale au total. Mandats de groupe par
+législature : 576 (12e), 1 347, 1 435, 1 686 (15e), 1 305 (16e), 1 423 (17e). 585 mandats de groupe
+n'ont pas de date de fin dans le fichier.
+
+**Organes non-inscrits.** Une non-inscription n'est attestée que si deux signaux indépendants
+concordent : le nom de l'organe (sigle `NI` et libellé, qui doivent eux-mêmes s'accorder) et la
+qualité de tous les mandats qu'il contient (« Député non-inscrit »). Résultat : 57 groupes, 6
+organes non-inscrits, 0 organe non classé. En cas de désaccord, l'organe reste sans type, ses valeurs
+sources sont gardées et le diagnostic est `NI_SIGNALS_CONFLICT` (ou `NI_SIGNAL_UNCONFIRMED` si le nom
+dit « non-inscrit » et qu'aucun mandat ne le confirme).
+
+**Scrutins.**
+
+| [M]                                    | 15e     | 16e     | 17e       |
+| -------------------------------------- | ------- | ------- | --------- |
+| Fichiers                               | 4 417   | 4 106   | 8 877     |
+| Scrutins AN, lus                       | 4 417   | 4 105   | 8 877     |
+| Scrutin du Congrès, identifié à part   | 0       | 1       | 0         |
+| Fichiers rejetés                       | 0       | 0       | 0         |
+| Votes nominatifs (scrutins AN)         | 472 631 | 602 911 | 1 323 978 |
+| Acteurs distincts                      | 651     | 617     | 652       |
+| Scrutins dont les décomptes concordent | 4 387   | 4 101   | 8 876     |
+| Scrutins `COUNT_MISMATCH`              | 30      | 4       | 1         |
+| Votes conservés dans ces scrutins      | 6 105   | 785     | 218       |
+
+Le Congrès de la 16e est compté dans les fichiers examinés, jamais dans les scrutins AN. Il utilise
+les clés au singulier (`pour`, `contre`, `abstention`, `nonVotant`), ce que l'ancienne mesure ne
+lisait pas. Ses 902 votants listés sont un comptage brut, non interprété, et ne sont additionnés à
+aucun total de l'Assemblée. Un scrutin AN qui utiliserait ces clés serait rejeté
+(`SINGULAR_KEYS_IN_AN_SCRUTIN`), pas lu à moitié.
+
+**Trois notions séparées.** La conservation brute (toutes les attestations sont gardées, dans les
+scrutins discordants comme ailleurs), la cohérence des décomptes (`COHERENT`, `COUNT_MISMATCH`,
+`UNVERIFIABLE`) et l'admissibilité à la publication (les décomptes concordent). Un scrutin
+`COUNT_MISMATCH` n'alimente aucune position publiable automatiquement. Il reste dans les contrôles
+structurels de conservation, d'unicité et d'absence de perte.
+
+**Écarts des décomptes.** 35 scrutins `COUNT_MISMATCH` : 30 en 15e, 4 en 16e, 1 en 17e. Sur pour,
+contre et abstention seulement, ils sont 34 (30 et 4) ; celui de la 17e (le premier scrutin de la
+législature, une motion de censure) ne diffère que sur les non-votants. Niveau des groupes : 17
+groupes en 15e et 4 en 16e dont la liste nominative diffère du décompte du groupe, 0 en 17e.
+
+**Mises au point (`miseAuPoint`).** Comptées et diagnostiquées, jamais appliquées. Scrutins avec
+des votants listés dans ces blocs : 1 226 (15e), 929 (16e), 1 534 (17e), soit 2 616, 1 907 et 3 243
+votants. Aucun bloc mal formé. Appliquées au calcul, elles n'expliquent aucun des écarts ci-dessus
+(30 sur 30 et 4 sur 4 restent), donc l'incertitude U4 (la ventilation publiée reflète-t-elle les
+corrections ?) n'est pas levée. Les attestations restent celles de la ventilation publiée.
+
+**Formes irrégulières lues explicitement.** `mandats.mandat` objet, liste ou `null` ; `votant` objet
+ou liste ; blocs de position `null`, objet ; blocs de mise au point objet, liste ou liste contenant
+`null` ; décomptes officiels écrits `pour`, `contre` au singulier et `abstentions`, `nonVotants` au
+pluriel ; identifiant d'acteur typé (`#text`) ; `legislature` et nombres en chaînes ; `organeRef`
+d'un mandat parfois en liste (181 mandats hors groupe, jamais pour un groupe : un mandat de groupe
+à plusieurs organes serait rejeté `ORGAN_REF_NOT_SINGLE`, jamais résolu en choisissant un élément).
+Aucun acteur n'est listé deux fois dans un même scrutin.
+
+**Catégories exclusives d'un vote** (2.3, reproduites à l'unité près par une classification qui
+n'importe pas le résolveur) :
+
+| [M]                               | 15e     | 16e     | 17e       |
+| --------------------------------- | ------- | ------- | --------- |
+| `ORGAN_ABSENT` (dont `PO0`)       | 0       | 0       | 1 916     |
+| `NO_GROUP_RECORD`                 | 0       | 0       | 0         |
+| `MULTIPLE_DISTINCT_ORGANS`        | 0       | 0       | 0         |
+| `AGREE_SINGLE_RECORD`             | 465 356 | 590 367 | 1 303 437 |
+| `AGREE_SAME_ORGAN_RECORDS`        | 7 198   | 8 164   | 18 254    |
+| `SAME_SIGLE_OTHER_REF`            | 0       | 4 159   | 0         |
+| `DIFFERENT_GROUP`                 | 77      | 221     | 371       |
+| Somme, égale aux votes nominatifs | 472 631 | 602 911 | 1 323 978 |
+| Votes un jour de bord             | 434     | 398     | 1 432     |
+| dont `DIFFERENT_GROUP`            | 77      | 221     | 310       |
+
+Le contrôle de somme est une invariante vérifiée à chaque exécution : une catégorie perdue fait
+échouer la commande.
+
+**Lien avec le mandat de siège.** Sur 2 399 520 votes, 0 sans référence de mandat, 0 mandat
+inconnu, 0 mandat d'un autre acteur, 0 hors de l'intervalle fermé. 518 votes tombent le jour de la
+`dateFin` du mandat de siège (5 en 15e, 0 en 16e, 513 en 17e) : couverts par la lecture fermée,
+pas par la lecture exclusive.
+
+**Chevauchements.** Deux organes distincts le même jour pour un acteur : 0 en 15e, 16e et 17e. Il y
+en a 121 plus anciens (13e : 35, 14e : 86), dont 120 ne partagent qu'un seul jour (la fin d'un
+organe et le début du suivant, que la lecture fermée transforme en chevauchement) et 1 dure
+plusieurs jours (13e). Ils sont rapportés à part et ne bloquent pas : seules les législatures
+couvertes par les archives de scrutins comptent. Paires d'un même organe : mêmes chiffres que 2.3.
+
+**Limites éditoriales de ces mesures.** Elles décrivent la cohérence des fichiers entre eux, pas
+l'exactitude des attributions. Aucun total ne vaut preuve. Le `Last-Modified` n'est pas lisible
+dans l'archive : il est saisi à la main dans la baseline (la date de modification de 15e et 16e
+n'est connue qu'au jour).
 
 ## 3. Identités officielles et identités PoliGraph
 
@@ -985,7 +1100,7 @@ sont ceux de la section 2.
 
 - Types métier, sérialisation canonique, fonctions de différences et de versions, résolveur pur :
   aucun import de `@/lib/db`, `@/generated/prisma`, `next/*` ni d'`ExternalId`, vérifié par un test.
-- Le parseur pur lit 100 % des mandats `GP` de AMO30 pour les législatures 15 à 17. Pour chaque
+- Le parseur pur lit 100 % des mandats `GP` de AMO30 (12e à 17e, 7 772 mandats, PR 5A-2, mesures en 2.5). Pour chaque
   ligne : acceptée ou rejetée avec une raison. Somme des deux = nombre de lignes du fichier.
 - Les tests reproduisent **à l'unité près** les catégories exclusives de 2.3 (15e, 16e, 17e) sur les
   fichiers réels, hors dépôt. Les fichiers eux-mêmes ne sont jamais commités.
@@ -1370,3 +1485,35 @@ La PR livrée suit 14.1, avec ces différences, toutes demandées par la validat
 | Diagnostic `E2_INDETERMINATE` et `RESOLVER_VERSION` portée à `2`                                   | Revue de la PR : un intervalle indéterminé ne s'efface plus derrière un vote valide (6.3, règle 10). La logique change, donc la version                                                      |
 | `__fixtures__/golden.ts`                                                                           | Empreintes de référence par version du résolveur (T14)                                                                                                                                       |
 | Aucun type ne reprend un nom de table ou de colonne                                                | La représentation SQL reste à décider en 5B. Les intervalles de snapshots sont modélisés comme un concept (`RecordVersion`), pas comme un schéma                                             |
+
+## 15. PR 5A-2 : parseurs et validation sur fichiers officiels
+
+Deuxième moitié de la phase 5A, sans migration ni écriture en production.
+
+| Élément                                          | Rôle                                                                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `source-shape.ts`                                | Lecture des formes XML converties en JSON (objet, liste, `null`, `#text`, nombres en chaînes)         |
+| `parse-amo30.ts`                                 | Organes, mandats de groupe, mandats de siège, classement non-inscrit à deux signaux                   |
+| `parse-scrutin.ts`                               | Attestations, décomptes officiels, Congrès identifié à part, mises au point comptées                  |
+| `official-validation.ts`                         | Catégories exclusives, jours de bord, lien au siège, chevauchements, invariantes, contrôles bloquants |
+| `scripts/validate-historical-groups.ts` et `lib` | Lecture des archives, comparaison à la baseline, rapport JSON                                         |
+| `parlement-historique-lot5-baseline-5a2.json`    | Agrégats, tailles et SHA-256 complets, aucune identité                                                |
+
+**Reproductibilité.** Même SHA-256 et même référentiel que la baseline : comparaison stricte, tout
+écart est un échec (`STRICT_MISMATCH`). Une archive dont les octets diffèrent (ou lue contre un autre
+AMO30) : `CHANGED_INPUT`, liste des chiffres qui changent, jamais un échec. La baseline est un
+instantané de ces quatre fichiers, pas une vérité mouvante : pour la rejouer strictement, il faut
+conserver les octets d'AMO30.
+
+**Ce qui fait échouer la commande.** Archive illisible, tronquée ou corrompue ; nom d'entrée absolu,
+parent (`..`), avec antislash, doublon ou lien symbolique ; dépassement des limites (entrées, taille
+par entrée, taille totale, taux de compression) ; dossier inattendu ; invariante de somme rompue ;
+contrôle bloquant de 8.2 non nul ; différence sur octets identiques.
+
+**Sûreté.** Aucune extraction sur disque : les entrées sont lues en mémoire, une à une, donc il n'y a
+pas de sortie à confiner. Ni réseau, ni base, ni secret, ni option pour en passer un. Les noms des
+acteurs ne sont jamais lus : aucun rapport ne peut en porter.
+
+**Ce que la PR ne contient pas.** Aucune modification de Prisma, de SQL, des synchronisations, de
+calculs persistés ou de statistiques publiées. Aucun import. Le résolveur de la PR 1 n'est pas
+modifié et n'est pas importé par la classification.
