@@ -63,9 +63,13 @@ Limitations constatées chez le fournisseur le 2026-10-18 (relevées par poigné
 en lecture seule, sans connexion des rôles du lot) :
 
 - L'hôte de connexion directe n'a **qu'un enregistrement IPv6** (pas d'IPv4 sans option payante, à
-  confirmer dans le dashboard). Depuis la machine de développement, il est **injoignable** (réseau
-  inaccessible, `errno 101`) bien qu'une route IPv6 par défaut existe. L'import direct exige donc une
-  machine qui joint l'IPv6 du projet, ou l'option IPv4.
+  confirmer dans le dashboard). Il est joignable seulement depuis une machine qui a une connectivité IPv6
+  de bout en bout. Constaté sur le poste de développement : le côté Windows joint l'hôte (TCP établi), mais
+  WSL2 en mode réseau NAT n'a **aucune adresse IPv6 globale ni route par défaut IPv6** (seulement du
+  lien-local) et la connexion échoue (`errno 101`, réseau inaccessible). L'import direct se lance donc
+  depuis une machine qui a de l'IPv6 dans la session qui exécute l'outil : un hôte avec IPv6 natif, WSL en
+  mode réseau « mirrored » (réglage `.wslconfig` suivi d'un redémarrage de WSL, à décider), ou l'option IPv4
+  du projet.
 - L'URL `DIRECT_URL` du projet passe en réalité par le **pooleur en mode session** (certificat
   `*.pooler`, utilisateur de la forme `role.projet`). Ce mode garde la session, mais il ne répond pas à
   « connexion directe ». La garde le refuse (hôte de pooleur, utilisateur à point). L'accepter serait un
@@ -78,8 +82,13 @@ certificate chain`). Avec ce fichier, la chaîne et le nom d'hôte se vérifient
   empreinte SHA-256 à celle présentée par le serveur :
   `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`.
   Ne jamais faire confiance à une autorité simplement parce qu'elle est présentée par le serveur.
-- Le certificat de l'hôte de connexion directe n'a pas pu être inspecté (hôte injoignable) : sa chaîne et
-  son nom sont à vérifier avant l'import, avec le même fichier d'autorité.
+- Le certificat de l'hôte de connexion directe a été contrôlé le 2026-10-18 par un tunnel TCP temporaire
+  (octets non modifiés, TLS de bout en bout) : trois certificats présentés, feuille dont le nom alternatif
+  est exactement l'hôte direct (valide jusqu'en janvier 2031), même autorité racine que celle du pooleur
+  (même empreinte que ci-dessus). Avec ce fichier d'autorité, `verify-full` est accepté en TLS 1.3 ; avec un
+  autre nom d'hôte, il est refusé. Une connexion en lecture seule par cet hôte atteint le même cluster que
+  la connexion actuelle (même identifiant système), sur un primaire, avec `EXECUTE` sur `pg_control_system()`
+  pour les trois rôles. Latence mesurée à travers le tunnel : environ 23 ms.
 
 À contrôler avant l'import :
 
