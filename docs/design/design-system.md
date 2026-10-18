@@ -20,6 +20,8 @@ spécification. Les valeurs de tokens du bundle sont d'ailleurs reprises de
 | Primitives UI                              | `src/components/ui/*`                                         |
 | Specimens de fondations                    | `src/components/foundations/*` (Typography, Colors, Spacing)  |
 | Documentation vivante                      | Storybook (`npm run storybook`)                               |
+| Tokens exportés (machine-readable)         | `docs/design/tokens.generated.json` (`npm run design:tokens`) |
+| Guide de contribution design               | [`CONTRIBUTING-design.md`](./CONTRIBUTING-design.md)          |
 | Patterns et invariants légaux              | `docs/design/patterns/*`, `docs/design/legal-invariants.md`   |
 | Assets de marque                           | `docs/design/*`, `public/*`                                   |
 
