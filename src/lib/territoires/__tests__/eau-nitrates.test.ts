@@ -133,25 +133,28 @@ describe("lignes par unité de distribution", () => {
 });
 
 describe("prélèvements retenus pour une unité", () => {
-  const sur = { cdreseauamont: "", pourcentdebit: "" };
-  const amont = (p: string) => ({ cdreseauamont: "U0", pourcentdebit: p });
+  const sur = { cdreseauamont: "" };
+  const amont = { cdreseauamont: "U0" };
 
-  it("garde par défaut les prélèvements de l'unité et d'une installation qui l'alimente", () => {
-    expect(sampleCounts("SANS_PART_NULLE", sur)).toBe(true);
-    expect(sampleCounts("SANS_PART_NULLE", amont("100 %"))).toBe(true);
-    expect(sampleCounts("SANS_PART_NULLE", amont("30 %"))).toBe(true);
-    expect(sampleCounts("SANS_PART_NULLE", amont(""))).toBe(true);
+  it("garde tout par défaut, comme le producteur l'attribue, même une installation amont", () => {
+    expect(sampleCounts("TOUS", sur)).toBe(true);
+    expect(sampleCounts("TOUS", amont)).toBe(true);
   });
 
-  it("écarte une installation amont qui fournit 0 % de l'unité", () => {
-    expect(sampleCounts("SANS_PART_NULLE", amont("0 %"))).toBe(false);
-    expect(sampleCounts("SANS_PART_NULLE", amont("0"))).toBe(false);
-    expect(sampleCounts("SANS_PART_NULLE", amont("10 %"))).toBe(true);
-  });
-
-  it("propose les deux autres lectures", () => {
-    expect(sampleCounts("TOUS", amont("0 %"))).toBe(true);
-    expect(sampleCounts("SUR_UNITE", amont("100 %"))).toBe(false);
+  it("propose la lecture stricte : seulement les prélèvements faits sur l'unité", () => {
     expect(sampleCounts("SUR_UNITE", sur)).toBe(true);
+    expect(sampleCounts("SUR_UNITE", amont)).toBe(false);
+  });
+});
+
+describe("fenêtre autour du 29 février", () => {
+  it("ne saute pas un jour quand la dernière date est un 29 février", () => {
+    expect(eauWindow("2028-02-29")).toEqual({ start: "2027-03-01", end: "2028-02-29" });
+  });
+
+  it("couvre toujours douze mois pleins", () => {
+    expect(eauWindow("2027-02-28")).toEqual({ start: "2026-03-01", end: "2027-02-28" });
+    expect(eauWindow("2026-03-31")).toEqual({ start: "2025-04-01", end: "2026-03-31" });
+    expect(eauWindow("2026-08-31")).toEqual({ start: "2025-09-01", end: "2026-08-31" });
   });
 });

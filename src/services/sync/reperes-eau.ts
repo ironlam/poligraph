@@ -126,12 +126,7 @@ async function samplesOf(zipPath: string, year: number, policy: SamplePolicy, w?
     const date = r.dateprel ?? "";
     if (date > latest) latest = date;
     if (w && !inWindow(date, w)) continue;
-    if (
-      !sampleCounts(policy, {
-        cdreseauamont: r.cdreseauamont ?? "",
-        pourcentdebit: r.pourcentdebit ?? "",
-      })
-    ) {
+    if (!sampleCounts(policy, { cdreseauamont: r.cdreseauamont ?? "" })) {
       dropped++;
       continue;
     }
@@ -242,7 +237,11 @@ export async function syncReperesEau(opts: {
       },
     }));
 
-  await db.repereImport.deleteMany({ where: { sourceId: source.id, status: "DRAFT" } });
+  // A rejected batch is a failed attempt: its rows would collide with the corrected ones on the
+  // unique key, so it goes with the drafts. A batch in review or published is never touched.
+  await db.repereImport.deleteMany({
+    where: { sourceId: source.id, status: { in: ["DRAFT", "REJECTED"] } },
+  });
   const batch = await db.repereImport.create({
     data: { sourceId: source.id, status: "DRAFT", rowCount: rows.length },
   });

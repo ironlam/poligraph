@@ -9,7 +9,7 @@
  * Usage :
  *   npx tsx --env-file=.env scripts/sync-reperes-eau.ts           (aperçu, aucune écriture)
  *   npx tsx --env-file=.env scripts/sync-reperes-eau.ts --write   (écrit le brouillon)
- *   Option : --prelevements=TOUS | SANS_PART_NULLE (défaut) | SUR_UNITE
+ *   Option : --prelevements=TOUS (défaut) | SUR_UNITE
  */
 import "dotenv/config";
 import { db } from "@/lib/db";
@@ -19,12 +19,12 @@ async function main() {
   const write = process.argv.includes("--write");
   console.log(`Nitrates de l'eau${write ? "" : " [APERÇU, aucune écriture]"}`);
   const arg = process.argv.find((a) => a.startsWith("--prelevements="))?.split("=")[1];
-  if (arg && !["TOUS", "SANS_PART_NULLE", "SUR_UNITE"].includes(arg)) {
-    throw new Error("--prelevements attend TOUS, SANS_PART_NULLE ou SUR_UNITE");
+  if (arg && !["TOUS", "SUR_UNITE"].includes(arg)) {
+    throw new Error("--prelevements attend TOUS ou SUR_UNITE");
   }
   const r = await syncReperesEau({
     dryRun: !write,
-    policy: arg as "TOUS" | "SANS_PART_NULLE" | "SUR_UNITE" | undefined,
+    policy: arg as "TOUS" | "SUR_UNITE" | undefined,
     cacheDir: "scripts/.local/eau-cache",
     onProgress: (m) => console.log(`  ${m}`),
   });

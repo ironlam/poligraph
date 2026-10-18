@@ -151,7 +151,7 @@ function EauCard({ rows }: { rows: RepereRow[] }) {
     <Card title="Eau du robinet, nitrates" methodSlug="eau-du-robinet">
       <ul className="space-y-3">
         {rows.map((row) => (
-          <li key={`${row.scopeLabel}-${row.periodEnd}`} className="text-sm">
+          <li key={`${row.scopeId}-${row.periodEnd}`} className="text-sm">
             <p className="font-semibold">Unité de distribution : {row.scopeLabel}</p>
             <p>{eauSentence(row)}</p>
           </li>
@@ -205,7 +205,7 @@ function ClimatCard({ rows }: { rows: RepereRow[] }) {
 function latestPerIndicator(rows: RepereRow[]): RepereRow[] {
   const seen = new Set<string>();
   return rows.filter((r) => {
-    const key = `${r.indicatorKey}|${r.scopeKind}|${r.scopeLabel ?? ""}`;
+    const key = `${r.indicatorKey}|${r.scopeKind}|${r.scopeId}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -42,26 +42,19 @@ export function classifyAnalysis(rqana: string, limit: number): AnalysisVerdict 
 
 /**
  * Which sampling lines count for a distribution unit. The producer reports every result to the
- * unit concerned, but a sample may have been taken on an installation upstream, which feeds the
- * unit for a stated share of its flow ("pourcentdebit").
+ * unit concerned, and leaves to each regional health agency the decision to extrapolate a sample
+ * taken upstream to the unit: dropping lines on a rule of our own could hide an exceedance.
  *
- * - TOUS: every line, as the producer attributes it.
- * - SANS_PART_NULLE (default): drops the lines whose upstream installation supplies 0 % of the
- *   unit, which describe no water the unit receives.
- * - SUR_UNITE: only samples taken on the unit itself (no upstream installation).
+ * - TOUS (default): every line, as the producer attributes it.
+ * - SUR_UNITE: only samples taken on the unit itself (no upstream installation), a stricter
+ *   reading that leaves many units under the threshold of analyses.
  */
-export type SamplePolicy = "TOUS" | "SANS_PART_NULLE" | "SUR_UNITE";
+export type SamplePolicy = "TOUS" | "SUR_UNITE";
 
-export const DEFAULT_SAMPLE_POLICY: SamplePolicy = "SANS_PART_NULLE";
+export const DEFAULT_SAMPLE_POLICY: SamplePolicy = "TOUS";
 
-export function sampleCounts(
-  policy: SamplePolicy,
-  line: { cdreseauamont: string; pourcentdebit: string }
-): boolean {
-  if (policy === "TOUS") return true;
-  const upstream = line.cdreseauamont.trim() !== "";
-  if (policy === "SUR_UNITE") return !upstream;
-  return !upstream || !/^0(?:[.,]0+)?\s*%?$/.test(line.pourcentdebit.trim());
+export function sampleCounts(policy: SamplePolicy, line: { cdreseauamont: string }): boolean {
+  return policy === "TOUS" || line.cdreseauamont.trim() === "";
 }
 
 export interface EauWindow {
@@ -78,7 +71,10 @@ export interface EauWindow {
  */
 export function eauWindow(latestSamplingDate: string, months = EAU_WINDOW_MONTHS): EauWindow {
   const [y, m, d] = latestSamplingDate.split("-").map(Number) as [number, number, number];
-  const start = new Date(Date.UTC(y, m - 1 - months, d + 1));
+  // The same day `months` earlier, clamped to that month's length (29 February has no twin the
+  // year before), then one day later: the window never skips nor repeats a day.
+  const daysInTarget = new Date(Date.UTC(y, m - months, 0)).getUTCDate();
+  const start = new Date(Date.UTC(y, m - 1 - months, Math.min(d, daysInTarget) + 1));
   return { start: start.toISOString().slice(0, 10), end: latestSamplingDate };
 }
 

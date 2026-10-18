@@ -38,6 +38,8 @@ export interface RepereRow {
   periodStart: string;
   periodEnd: string;
   scopeKind: RepereScopeKind;
+  /** Stable identifier of the measured scope (UDI code, station number), empty for a commune. */
+  scopeId: string;
   scopeLabel: string | null;
   /** Null unless the state is ETABLI or PARTIEL. */
   value: number | null;
@@ -56,6 +58,7 @@ interface RawRow {
   periodStart: Date;
   periodEnd: Date;
   scopeKind: RepereScopeKind;
+  scopeId: string;
   scopeLabel: string | null;
   value: number | null;
   unit: string;
@@ -81,6 +84,7 @@ function toRow(r: RawRow): RepereRow {
     periodStart: day(r.periodStart),
     periodEnd: day(r.periodEnd),
     scopeKind: r.scopeKind,
+    scopeId: r.scopeId,
     scopeLabel: r.scopeLabel,
     value: hasValue ? r.value : null,
     unit: r.unit,
@@ -111,7 +115,7 @@ export async function getTerritoireReperes(
 
   try {
     const rows = await db.$queryRaw<RawRow[]>(Prisma.sql`
-      SELECT r."indicatorKey", r."periodStart", r."periodEnd", r."scopeKind", r."scopeLabel",
+      SELECT r."indicatorKey", r."periodStart", r."periodEnd", r."scopeKind", r."scopeId", r."scopeLabel",
              r."value", r."unit", r."state", r."reason", r."sampleSize",
              s."producer", s."resourceUrl", s."licenceName", s."licenceUrl", s."attribution",
              s."methodSlug", i."importedAt"
@@ -119,7 +123,7 @@ export async function getTerritoireReperes(
       JOIN "RepereImport" i ON i."id" = r."importId" AND i."status" = 'PUBLISHED'
       JOIN "RepereSource" s ON s."id" = i."sourceId"
       WHERE r."territoryType" = ${type}::"RepereTerritoryType" AND r."territoryCode" = ${code}
-      ORDER BY r."indicatorKey", r."periodEnd" DESC, r."scopeLabel"
+      ORDER BY r."indicatorKey", r."periodEnd" DESC, r."scopeLabel", r."scopeId"
       LIMIT ${REPERES_PAGE_LIMIT}
     `);
     return rows.map(toRow);

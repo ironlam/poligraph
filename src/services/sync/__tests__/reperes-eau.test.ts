@@ -139,11 +139,11 @@ describe("import des nitrates", () => {
     ]);
   });
 
-  it("écarte les lignes dont l'installation amont fournit 0 % de l'unité", async () => {
+  it("garde par défaut les prélèvements d'une installation amont, même à 0 %", async () => {
     const dir = mkdtempSync(join(tmpdir(), "eau-"));
-    const rows = ["S1", "S2", "S3", "S4"].flatMap((ref, i) => [
-      plv(ref, "UA", `2026-0${i + 1}-10`, "UX", "0 %"),
-    ]);
+    const rows = ["S1", "S2", "S3", "S4"].map((ref, i) =>
+      plv(ref, "UA", `2026-0${i + 1}-10`, "UX", "0 %")
+    );
     writeFileSync(
       join(dir, "dis-2026.zip"),
       zipOf(
@@ -154,11 +154,19 @@ describe("import des nitrates", () => {
       )
     );
     writeFileSync(join(dir, "dis-2025.zip"), zipOf(2025, [], []));
-    const def = await syncReperesEau({ dryRun: true, cacheDir: dir });
-    expect(def.report.rows[0]).toMatchObject({ sampleSize: 0, state: "NON_ETABLI" });
-    expect(def.report.droppedLines).toBe(4);
-    const all = await syncReperesEau({ dryRun: true, cacheDir: dir, policy: "TOUS" });
+    const all = await syncReperesEau({ dryRun: true, cacheDir: dir });
     expect(all.report.rows[0]).toMatchObject({ sampleSize: 4, state: "ETABLI" });
+    expect(all.report.droppedLines).toBe(0);
+    const strict = await syncReperesEau({ dryRun: true, cacheDir: dir, policy: "SUR_UNITE" });
+    expect(strict.report.rows[0]).toMatchObject({ sampleSize: 0, state: "NON_ETABLI" });
+    expect(strict.report.droppedLines).toBe(4);
+  });
+
+  it("remplace les brouillons et les lots rejetés, jamais un lot en revue ou publié", async () => {
+    await syncReperesEau({ dryRun: false, cacheDir: setup() });
+    const where = h.importDeleteMany.mock.calls[0]?.[0].where;
+    expect(where.status.in).toEqual(["DRAFT", "REJECTED"]);
+    expect(JSON.stringify(where)).not.toMatch(/PUBLISHED|IN_REVIEW/);
   });
 
   it("écarte les autres paramètres et les autres limites, et les déclare", async () => {

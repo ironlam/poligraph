@@ -30,6 +30,7 @@ const row = (
   periodStart: "2022-01-01",
   periodEnd: "2022-12-31",
   scopeKind: "COMMUNE",
+  scopeId: "",
   scopeLabel: null,
   value,
   unit: "%",
@@ -136,6 +137,7 @@ describe("Le territoire en chiffres", () => {
       row("eau_nitrates", value, {
         unit: "analyses",
         scopeKind: "UDI",
+        scopeId: `udi-${label}`,
         scopeLabel: label,
         sampleSize: n,
         periodStart: "2025-09-01",
@@ -163,6 +165,7 @@ describe("Le territoire en chiffres", () => {
     const mk = (label: string, end: string, value: number) =>
       row("eau_nitrates", value, {
         scopeKind: "UDI",
+        scopeId: `udi-${label}`,
         scopeLabel: label,
         sampleSize: 8,
         periodEnd: end,
@@ -176,6 +179,21 @@ describe("Le territoire en chiffres", () => {
     expect(text).toContain("Unité de distribution : A");
     expect(text).toContain("Unité de distribution : B");
     expect(text.match(/Unité de distribution : A/g)).toHaveLength(1);
+  });
+
+  it("ne confond pas deux unités qui portent le même nom ou aucun nom", () => {
+    const mk = (id: string, label: string, value: number) =>
+      row("eau_nitrates", value, {
+        scopeKind: "UDI",
+        scopeId: id,
+        scopeLabel: label,
+        sampleSize: 9,
+        source: { ...source, methodSlug: "eau-du-robinet" },
+      });
+    const { doc } = render(
+      base({ reperes: [mk("U1", "RESEAU", 0), mk("U2", "RESEAU", 3), mk("U3", "", 1)] })
+    );
+    expect(doc.querySelectorAll("#chiffres li")).toHaveLength(3);
   });
 
   it("dit le secret statistique en mots, jamais comme une valeur", () => {

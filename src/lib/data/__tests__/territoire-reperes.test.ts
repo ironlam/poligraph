@@ -18,6 +18,7 @@ const raw = (over: Record<string, unknown> = {}) => ({
   periodStart: new Date("2023-01-01"),
   periodEnd: new Date("2023-12-31"),
   scopeKind: "COMMUNE",
+  scopeId: "",
   scopeLabel: null,
   value: 6412,
   unit: "habitants",
