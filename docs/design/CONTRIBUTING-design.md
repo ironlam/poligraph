@@ -10,7 +10,7 @@ visuel sans connaître toute la base de code.
   panneau d'accessibilité (axe) pour vérifier les contrastes.
 - **En local** : `npm ci && npm run storybook`, puis ouvrir http://localhost:6006.
 - **Tokens lisibles par un outil** : `docs/design/tokens.generated.json` liste toutes les
-  variables de `src/app/globals.css` en clair et en sombre, plus les couleurs d'identité.
+  variables de `src/app/globals.css` en clair et en sombre, les couleurs d'identité, les palettes de données de `src/config/colors.ts` (votes, chambres, statuts d'affaires, catégories, positions, médias) et les couleurs des partis.
   Ce fichier est généré, ne le modifiez pas à la main.
 
 ## Proposer un changement sans écrire de code
