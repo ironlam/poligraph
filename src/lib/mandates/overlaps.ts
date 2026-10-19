@@ -61,7 +61,6 @@ export function findOverlappingParliamentaryMandates<T extends MandateInterval>(
   return overlaps;
 }
 
-
 /**
  * Keep contradictory parliamentary periods out of confirmed public timelines.
  * A current mandate takes precedence over an overlapping ended record; when both
