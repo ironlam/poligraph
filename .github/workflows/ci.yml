@@ -88,9 +88,16 @@ jobs:
         run: npm run format:check
 
   unit-tests:
-    name: Unit Tests
+    # Three parts in parallel: the single job took about 6 minutes and set the length of the whole
+    # run. Vitest splits by test file, so the parts can be uneven; fail-fast stays off to see every
+    # failing part at once. `main` has no required checks, so the part names are free to change.
+    name: Unit Tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout repository
@@ -108,8 +115,8 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Run tests
-        run: npm run test:run
+      - name: Run tests (part ${{ matrix.shard }}/3)
+        run: npm run test:run -- --shard=${{ matrix.shard }}/3
 
   rne-arrondissements-postgres:
     name: RNE arrondissements PostgreSQL integration

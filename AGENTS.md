@@ -438,7 +438,8 @@ Node 22. Prisma generate runs first in every job. Listed by family, because the 
 names move:
 
 - **Static**: ESLint, Prettier, TypeScript.
-- **Unit Tests**: the full Vitest run.
+- **Unit Tests**: the full Vitest run, split by file in three parts that run in parallel
+  (`Unit Tests (1/3)` to `(3/3)`).
 - **Build**: a real `next build`. This is the only job that exercises the production compilation
   path, so a change that typechecks cleanly can still fail here.
 - **Architecture guards**: `Architecture` and `React Patterns` run the suites under
