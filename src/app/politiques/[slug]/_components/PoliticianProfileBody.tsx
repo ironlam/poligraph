@@ -234,7 +234,7 @@ export function PoliticianProfileBody({
                   birthDate={politician.birthDate}
                   deathDate={politician.deathDate}
                 />
-                {politician.mandates.length > 0 && (
+                {displayableMandates.length > 0 && (
                   <Card>
                     <CardHeader>
                       <h2 className="leading-none font-semibold">Mandats</h2>

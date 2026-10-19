@@ -66,7 +66,9 @@ export function findOverlappingParliamentaryMandates<T extends MandateInterval>(
  * A current mandate takes precedence over an overlapping ended record; when both
  * periods have the same status, neither can be selected safely.
  */
-export function partitionMandatesForDisplay<T extends MandateInterval>(mandates: readonly T[]): {
+export function partitionMandatesForDisplay<T extends MandateInterval>(
+  mandates: readonly T[]
+): {
   displayable: T[];
   toVerify: MandateOverlap<T>[];
 } {

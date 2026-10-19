@@ -14,8 +14,9 @@ export function MandateOverlapNotice({ mandates }: { mandates: TimelineMandate[]
     >
       <p className="font-medium">Périodes de mandat à vérifier</p>
       <p className="mt-1">
-        Des périodes de mandat parlementaire se chevauchent. Elles sont indiquées ici et retirées de
-        la chronologie tant que leurs dates ne sont pas vérifiées.
+        Des périodes de mandat parlementaire se chevauchent. Le mandat en cours, s’il y en a un,
+        reste affiché. Les autres périodes concernées sont retirées de la chronologie et de la liste
+        des mandats tant que leurs dates ne sont pas vérifiées.
       </p>
       <ul className="mt-2 list-inside list-disc space-y-1">
         {overlaps.map(({ first, second }) => (

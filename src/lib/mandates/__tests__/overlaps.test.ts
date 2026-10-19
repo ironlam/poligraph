@@ -124,3 +124,36 @@ describe("partitionMandatesForDisplay", () => {
   });
 });
 
+describe("fiche de Yannick Jadot", () => {
+  const european = (id: string, start: string, end: string) =>
+    mandate({
+      id,
+      type: MandateType.DEPUTE_EUROPEEN,
+      startDate: new Date(start),
+      endDate: new Date(end),
+      isCurrent: false,
+    });
+
+  it("affiche quatre mandats : trois européens et le mandat sénatorial en cours", () => {
+    const mandates = [
+      european("ep-2009", "2009-07-14T00:00:00.000Z", "2014-06-30T00:00:00.000Z"),
+      european("ep-2014", "2014-07-01T00:00:00.000Z", "2019-07-01T00:00:00.000Z"),
+      european("ep-2019", "2019-07-02T00:00:00.000Z", "2023-09-23T00:00:00.000Z"),
+      mandate({
+        id: "senat-2020",
+        externalId: "senat-21093M",
+        startDate: new Date("2020-10-01T00:00:00.000Z"),
+        endDate: new Date("2026-02-15T00:00:00.000Z"),
+        isCurrent: false,
+      }),
+      mandate({ id: "senat-2023", externalId: "senat-21093M" }),
+    ];
+
+    const { displayable, toVerify } = partitionMandatesForDisplay(mandates);
+
+    expect(displayable.map((m) => m.id)).toEqual(["ep-2009", "ep-2014", "ep-2019", "senat-2023"]);
+    expect(toVerify.map(({ first, second }) => [first.id, second.id])).toEqual([
+      ["senat-2020", "senat-2023"],
+    ]);
+  });
+});

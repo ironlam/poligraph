@@ -21,7 +21,10 @@ export function CareerTimeline({
   birthDate: _birthDate,
   deathDate,
 }: CareerTimelineProps) {
-  const { displayable: displayableMandates } = partitionMandatesForDisplay(mandates);
+  const displayableMandates = useMemo(
+    () => partitionMandatesForDisplay(mandates).displayable,
+    [mandates]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(900);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -147,7 +150,7 @@ export function CareerTimeline({
       }
     }
     return ordered;
-  }, [mandates]);
+  }, [displayableMandates]);
 
   // ─── Timeline affairs ───────────────────────────────────────────────
   const timelineAffairs = useMemo((): TimelineAffair[] => {

@@ -73,6 +73,32 @@ describe("CareerTimeline (desktop)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("2023");
     expect(screen.getByRole("button", { name: /Sénateur.*2023 - présent/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Sénateur.*2020 - 2026/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mandats (1)" })).toBeInTheDocument();
+  });
+
+  it("ne retient aucune des deux périodes terminées qui se chevauchent", () => {
+    const first = mandate({
+      id: "senate-first",
+      type: "SENATEUR",
+      startDate: new Date("2020-10-01T00:00:00.000Z"),
+      endDate: new Date("2024-10-01T00:00:00.000Z"),
+      isCurrent: false,
+    });
+    const second = mandate({
+      id: "senate-second",
+      type: "SENATEUR",
+      startDate: new Date("2023-10-01T00:00:00.000Z"),
+      endDate: new Date("2025-10-01T00:00:00.000Z"),
+      isCurrent: false,
+    });
+
+    render(
+      <CareerTimeline mandates={[first, second]} partyHistory={[]} affairs={[]} deathDate={null} />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Périodes de mandat à vérifier");
+    expect(screen.queryByRole("button", { name: /Sénateur/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mandats (0)" })).toBeInTheDocument();
   });
 
   it("ne signale pas des mandats successifs qui partagent le même identifiant", () => {
