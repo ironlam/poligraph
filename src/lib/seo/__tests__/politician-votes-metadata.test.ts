@@ -106,3 +106,45 @@ describe("buildPoliticianVotesIntro", () => {
     expect(intro).not.toContain("%");
   });
 });
+
+describe("buildPoliticianVotesIntro limité à une législature", () => {
+  const scopeLabel = "17ᵉ législature (depuis 2024)";
+
+  it("annonce la législature au lieu d'un total de carrière", () => {
+    const intro = buildPoliticianVotesIntro({
+      fullName: "Camille Durand",
+      chamber: "AN",
+      totalVotes: 1200,
+      amendmentVotes: 900,
+      scopeLabel,
+    });
+
+    // toLocaleString("fr-FR") sépare les milliers par une espace insécable fine.
+    expect(intro?.replace(/[\u202f\u00a0]/g, " ")).toBe(
+      "Pour la 17ᵉ législature (depuis 2024), 1 200 votes de Camille Durand sont enregistrés à l'Assemblée nationale. 900 portent sur des amendements."
+    );
+  });
+
+  it("dit qu'aucun vote n'est enregistré pour cette législature, pas pour la carrière", () => {
+    expect(
+      buildPoliticianVotesIntro({
+        fullName: "Camille Durand",
+        chamber: "AN",
+        totalVotes: 0,
+        amendmentVotes: 0,
+        scopeLabel,
+      })
+    ).toBe("Aucun vote de Camille Durand n'est enregistré pour la 17ᵉ législature (depuis 2024).");
+  });
+
+  it("garde la phrase de carrière sans législature", () => {
+    expect(
+      buildPoliticianVotesIntro({
+        fullName: "Camille Durand",
+        chamber: "AN",
+        totalVotes: 4,
+        amendmentVotes: 0,
+      })
+    ).toBe("Au total, 4 votes de Camille Durand sont enregistrés à l'Assemblée nationale.");
+  });
+});

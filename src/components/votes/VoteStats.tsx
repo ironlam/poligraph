@@ -3,6 +3,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VOTE_POSITION_DOT_COLORS } from "@/config/labels";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { formatDate } from "@/lib/utils";
+import type { MandatePeriod, PerimeterIssue } from "@/lib/votes/legislature-perimeter";
+
+/** Why no participation rate is shown for a legislature, in words a citizen can act on. */
+const PERIMETER_ISSUE_COPY: Record<PerimeterIssue, string> = {
+  NO_MANDATE:
+    "Aucun mandat de député couvrant des scrutins de cette législature n\u2019est documenté : le taux de participation n\u2019est pas calculé.",
+  OVERLAPPING_MANDATES:
+    "Des mandats de député se chevauchent pendant cette législature : le taux de participation n\u2019est pas calculé.",
+  VOTES_OUTSIDE_MANDATE:
+    "Des votes sont enregistrés en dehors des dates de mandat connues : le taux de participation n\u2019est pas calculé.",
+};
 
 interface VoteStatsProps {
   stats: {
@@ -17,9 +29,15 @@ interface VoteStatsProps {
     participationStatus: "AVAILABLE" | "SOURCE_INSUFFICIENT" | "COMPUTATION_INCOMPLETE";
   };
   isChamberPresident?: boolean;
+  /** Set when the figures cover one legislature rather than the whole career. */
+  scope?: {
+    label: string;
+    issue: PerimeterIssue | null;
+    periods: MandatePeriod[];
+  };
 }
 
-export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
+export function VoteStats({ stats, isChamberPresident, scope }: VoteStatsProps) {
   const { total, pour, contre, abstention, nonVotant = 0, participationRate } = stats;
   const participationAvailable =
     stats.participationStatus === "AVAILABLE" && participationRate !== null;
@@ -33,6 +51,11 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Statistiques de vote</CardTitle>
+        {scope && (
+          <p className="text-sm text-muted-foreground">
+            {scope.label}, tous types de scrutin confondus
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Participation (hidden for chamber presidents) */}
@@ -58,9 +81,26 @@ export function VoteStats({ stats, isChamberPresident }: VoteStatsProps) {
             individuelle de façon suffisamment fiable.
           </p>
         )}
+        {!isChamberPresident &&
+          scope &&
+          participationAvailable &&
+          stats.eligibleScrutins != null && (
+            <p className="text-sm text-muted-foreground">
+              Position exprimée sur {expressed.toLocaleString("fr-FR")} des{" "}
+              {stats.eligibleScrutins.toLocaleString("fr-FR")} scrutins tenus{" "}
+              {scope.periods
+                .map((p) => `du ${formatDate(p.start)} au ${formatDate(p.end)}`)
+                .join(", puis ")}
+              , pendant le mandat de député. Un scrutin sans position enregistrée n&apos;est pas
+              forcément une absence : la source ne permet pas de le distinguer d&apos;une donnée
+              manquante.
+            </p>
+          )}
         {stats.participationStatus === "COMPUTATION_INCOMPLETE" && (
           <p className="text-sm text-muted-foreground">
-            Le périmètre nécessaire au calcul de la participation n&apos;est pas disponible.
+            {scope?.issue
+              ? PERIMETER_ISSUE_COPY[scope.issue]
+              : "Le périmètre nécessaire au calcul de la participation n\u2019est pas disponible."}
           </p>
         )}
 

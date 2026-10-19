@@ -31,6 +31,12 @@ import {
 import type { ScrutinType } from "@/generated/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { parsePageParam } from "@/lib/data/query-params";
+import { formatLegislature } from "@/lib/votes/legislature";
+import { resolveLegislatureSelection } from "@/lib/votes/legislature-perimeter";
+import {
+  getPoliticianAnLegislatures,
+  getPoliticianLegislatureVotes,
+} from "@/services/politician-legislature-votes";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag (pagination is client-side)
 
@@ -50,7 +56,7 @@ export async function generateStaticParams() {
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ page?: string; type?: string }>;
+  searchParams: Promise<{ page?: string; type?: string; legislature?: string }>;
 }
 
 const getPolitician = cache(async function getPolitician(slug: string) {
@@ -78,7 +84,8 @@ async function getVotes(
   politicianId: string,
   page: number,
   limit: number,
-  typeFilter: { type?: ScrutinType; excludeType?: ScrutinType }
+  typeFilter: { type?: ScrutinType; excludeType?: ScrutinType },
+  legislature: number | null
 ) {
   const skip = (page - 1) * limit;
 
@@ -88,6 +95,8 @@ async function getVotes(
     politicianId,
     ...(typeFilter.type && { scrutinType: typeFilter.type }),
     ...(typeFilter.excludeType && { scrutinType: { not: typeFilter.excludeType } }),
+    // Same perimeter as the counts and statistics read from getPoliticianLegislatureVotes.
+    ...(legislature !== null && { scrutin: { legislature, chamber: "AN" as const } }),
   };
 
   // The per-page list is the only query that varies by page/tab, so it stays live.
@@ -95,32 +104,49 @@ async function getVotes(
   // cached helpers, so navigating pages/tabs no longer re-counts (those counts +
   // the stats groupBy were the dominant DB cost). The active tab's `total` is
   // derived from the cached counts instead of a fresh count query.
-  const [votes, stats, counts] = await Promise.all([
-    db.vote.findMany({
-      where,
-      include: {
-        scrutin: {
-          include: {
-            // Plan 6: public policy title (shown only when APPROVED + valid).
-            policyTitle: {
-              select: {
-                status: true,
-                policyTitle: true,
-                policySubtitle: true,
-                officialSourceUrl: true,
-                proceduralLabel: true,
-              },
+  const listQuery = db.vote.findMany({
+    where,
+    include: {
+      scrutin: {
+        include: {
+          // Plan 6: public policy title (shown only when APPROVED + valid).
+          policyTitle: {
+            select: {
+              status: true,
+              policyTitle: true,
+              policySubtitle: true,
+              officialSourceUrl: true,
+              proceduralLabel: true,
             },
           },
         },
       },
-      orderBy: { votingDate: "desc" },
-      skip,
-      take: limit,
-    }),
-    getPoliticianVotingStats(politicianId),
-    getPoliticianVoteTabCounts(politicianId),
+    },
+    orderBy: { votingDate: "desc" },
+    skip,
+    take: limit,
+  });
+
+  // With a legislature selected, list, tab counts and statistics all come from the same
+  // perimeter. Without one (Sénat, mixed or empty corpus) the career-wide helpers apply.
+  const [votes, scoped] = await Promise.all([
+    listQuery,
+    legislature !== null
+      ? getPoliticianLegislatureVotes(politicianId, legislature).then((view) => ({
+          stats: view.stats,
+          counts: {
+            totalAll: view.counts.total,
+            amendmentCount: view.counts.amendments,
+            nonAmendmentCount: view.counts.nonAmendments,
+          },
+          perimeter: view.perimeter,
+        }))
+      : Promise.all([
+          getPoliticianVotingStats(politicianId),
+          getPoliticianVoteTabCounts(politicianId),
+        ]).then(([stats, counts]) => ({ stats, counts, perimeter: null })),
   ]);
+  const { stats, counts, perimeter } = scoped;
 
   const { totalAll, amendmentCount, nonAmendmentCount } = counts;
   const total =
@@ -135,6 +161,7 @@ async function getVotes(
     total,
     totalPages: Math.ceil(total / limit),
     stats,
+    perimeter,
     totalAll,
     amendmentCount,
     nonAmendmentCount,
@@ -181,15 +208,37 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
   }
 
   const typeFilter = TYPE_TAB_MAP[typeTab] ?? {};
-  const [voteData, voteChambers] = await Promise.all([
-    getVotes(politician.id, page, limit, typeFilter),
-    getPoliticianVoteChamberCoverage(politician.id),
-  ]);
-  const { votes, total, totalPages, stats, totalAll, amendmentCount, nonAmendmentCount } = voteData;
+  const voteChambers = await getPoliticianVoteChamberCoverage(politician.id);
+  const chamber = resolveVoteCorpusChamber(voteChambers);
 
-  const buildUrl = (p: number, tabKey: string) => {
+  // The legislature selector only exists for the Assemblée nationale: Sénat rows number their
+  // sessions by year (#590) and a mixed or empty corpus gets no legislature scoping.
+  const legislatureOptions =
+    chamber === "AN" ? await getPoliticianAnLegislatures(politician.id) : [];
+  const legislature = resolveLegislatureSelection(
+    sp.legislature,
+    legislatureOptions.map((option) => option.legislature)
+  );
+  const defaultLegislature = legislatureOptions[0]?.legislature ?? null;
+
+  const voteData = await getVotes(politician.id, page, limit, typeFilter, legislature);
+  const {
+    votes,
+    total,
+    totalPages,
+    stats,
+    perimeter,
+    totalAll,
+    amendmentCount,
+    nonAmendmentCount,
+  } = voteData;
+
+  const buildUrl = (p: number, tabKey: string, forLegislature: number | null = legislature) => {
     const params = new URLSearchParams();
     if (tabKey && tabKey !== "votes") params.set("type", tabKey);
+    if (forLegislature !== null && forLegislature !== defaultLegislature) {
+      params.set("legislature", String(forLegislature));
+    }
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/politiques/${slug}/votes${qs ? `?${qs}` : ""}`;
@@ -213,8 +262,14 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
 
   const hasMultipleTypes = amendmentCount > 0 && nonAmendmentCount > 0;
 
-  const chamber = resolveVoteCorpusChamber(voteChambers);
   const seo = buildPoliticianVotesSeo(politician.fullName, chamber);
+  const legislatureLabel = legislature !== null ? formatLegislature(legislature) : undefined;
+  const legislatureTabs = legislatureOptions.map((option) => ({
+    key: String(option.legislature),
+    label: formatLegislature(option.legislature),
+    count: option.totalVotes,
+    href: buildUrl(1, typeTab, option.legislature),
+  }));
   // Deterministic, built from the tab counts already loaded above: no extra
   // query, no participation rate, no reading of the voting behaviour.
   const introText = buildPoliticianVotesIntro({
@@ -222,6 +277,7 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
     chamber,
     totalVotes: totalAll,
     amendmentVotes: amendmentCount,
+    scopeLabel: legislatureLabel,
   });
 
   return (
@@ -253,7 +309,9 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
         />
         <div>
           <h1 className="text-2xl font-display font-extrabold tracking-tight">{seo.heading}</h1>
-          <p className="text-muted-foreground">{total} votes enregistrés</p>
+          <p className="text-muted-foreground">
+            {total} votes enregistrés{legislatureLabel ? `, ${legislatureLabel}` : ""}
+          </p>
         </div>
       </div>
 
@@ -280,8 +338,19 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
         return null;
       })()}
 
+      {/* Legislature tabs (Assemblée nationale, several legislatures with recorded votes) */}
+      {legislatureTabs.length > 1 && legislature !== null && (
+        <ScrutinTypeTabs
+          tabs={legislatureTabs}
+          activeKey={String(legislature)}
+          ariaLabel="Choisir une législature"
+        />
+      )}
+
       {/* Type tabs */}
-      {hasMultipleTypes && <ScrutinTypeTabs tabs={tabs} activeKey={typeTab} />}
+      {hasMultipleTypes && (
+        <ScrutinTypeTabs tabs={tabs} activeKey={typeTab} ariaLabel="Type de scrutin" />
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main content */}
@@ -361,6 +430,11 @@ export default async function PoliticianVotesPage({ params, searchParams }: Page
         <div>
           <VoteStats
             stats={stats}
+            scope={
+              legislatureLabel && perimeter
+                ? { label: legislatureLabel, issue: perimeter.issue, periods: perimeter.periods }
+                : undefined
+            }
             isChamberPresident={politician.mandates.some(
               (m) => m.isCurrent && m.role != null && /^Président /.test(m.role)
             )}

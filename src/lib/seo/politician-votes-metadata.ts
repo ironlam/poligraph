@@ -61,6 +61,8 @@ export interface PoliticianVotesIntroInput {
   totalVotes: number;
   /** Subset cast on amendments. */
   amendmentVotes: number;
+  /** Legislature the counts are limited to, e.g. "17ᵉ législature (depuis 2024)". */
+  scopeLabel?: string;
 }
 
 /**
@@ -73,19 +75,23 @@ export function buildPoliticianVotesIntro({
   chamber,
   totalVotes,
   amendmentVotes,
+  scopeLabel,
 }: PoliticianVotesIntroInput): string | null {
   if (totalVotes <= 0) {
-    return `Aucun vote parlementaire n'est enregistré pour ${fullName}.`;
+    return scopeLabel
+      ? `Aucun vote de ${fullName} n'est enregistré pour la ${scopeLabel}.`
+      : `Aucun vote parlementaire n'est enregistré pour ${fullName}.`;
   }
 
   const preposition = chamberPreposition(chamber);
   const where = preposition ? ` ${preposition}` : "";
   const count = totalVotes.toLocaleString("fr-FR");
 
+  const lead = scopeLabel ? `Pour la ${scopeLabel}` : "Au total";
   const sentences: string[] = [
     totalVotes > 1
-      ? `Au total, ${count} votes de ${fullName} sont enregistrés${where}.`
-      : `Au total, ${count} vote de ${fullName} est enregistré${where}.`,
+      ? `${lead}, ${count} votes de ${fullName} sont enregistrés${where}.`
+      : `${lead}, ${count} vote de ${fullName} est enregistré${where}.`,
   ];
 
   if (amendmentVotes > 0) {
