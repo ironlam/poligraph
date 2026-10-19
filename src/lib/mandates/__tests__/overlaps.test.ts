@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { MandateType } from "@/generated/prisma";
-import { findOverlappingParliamentaryMandates, partitionMandatesForDisplay, type MandateInterval } from "../overlaps";
+import {
+  findOverlappingParliamentaryMandates,
+  partitionMandatesForDisplay,
+  type MandateInterval,
+} from "../overlaps";
 
 function mandate(
   overrides: Partial<MandateInterval> & Pick<MandateInterval, "id">
