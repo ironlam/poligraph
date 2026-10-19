@@ -12,6 +12,7 @@ import { computeDuration, computeOverlapOffsets, mandateAffiliation } from "./ut
 import { DesktopTimeline } from "./DesktopTimeline";
 import { MobileTimeline } from "./MobileTimeline";
 import { MandateOverlapNotice } from "./MandateOverlapNotice";
+import { partitionMandatesForDisplay } from "@/lib/mandates/overlaps";
 
 export function CareerTimeline({
   mandates,
@@ -20,6 +21,7 @@ export function CareerTimeline({
   birthDate: _birthDate,
   deathDate,
 }: CareerTimelineProps) {
+  const { displayable: displayableMandates } = partitionMandatesForDisplay(mandates);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(900);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -52,7 +54,7 @@ export function CareerTimeline({
     const now = new Date();
     const careerDates: Date[] = [];
 
-    mandates.forEach((m) => {
+    displayableMandates.forEach((m) => {
       careerDates.push(new Date(m.startDate));
       if (m.endDate) careerDates.push(new Date(m.endDate));
     });
@@ -99,7 +101,7 @@ export function CareerTimeline({
       .range([LEFT_MARGIN, renderWidth - RIGHT_MARGIN]);
 
     return { minDate, maxDate, xScale: scale, renderWidth };
-  }, [mandates, partyHistory, affairs, deathDate, containerWidth]);
+  }, [displayableMandates, partyHistory, affairs, deathDate, containerWidth]);
 
   // ─── Year markers ───────────────────────────────────────────────────
   const yearMarkers = useMemo(() => {
@@ -115,8 +117,8 @@ export function CareerTimeline({
 
   // ─── Mandate rows (grouped by category) ────────────────────────────
   const mandateRows = useMemo(() => {
-    const rowMap = new Map<number, typeof mandates>();
-    mandates.forEach((m) => {
+    const rowMap = new Map<number, typeof displayableMandates>();
+    displayableMandates.forEach((m) => {
       const row = getMandateRow(m.type);
       if (!rowMap.has(row)) rowMap.set(row, []);
       rowMap.get(row)!.push(m);
@@ -125,7 +127,7 @@ export function CareerTimeline({
     const ordered: {
       row: number;
       label: string;
-      mandates: typeof mandates;
+      mandates: typeof displayableMandates;
       overlapOffsets: Map<string, number>;
       maxLanes: number;
     }[] = [];
@@ -242,7 +244,7 @@ export function CareerTimeline({
           tooltip={tooltip}
           xScale={xScale}
           yearMarkers={yearMarkers}
-          mandates={mandates}
+          mandates={displayableMandates}
           mandateRows={mandateRows}
           timelineAffairs={timelineAffairs}
           partyHistory={partyHistory}
@@ -262,7 +264,7 @@ export function CareerTimeline({
     <div className="space-y-4">
       <MandateOverlapNotice mandates={mandates} />
       <MobileTimeline
-        mandates={mandates}
+        mandates={displayableMandates}
         partyHistory={partyHistory}
         timelineAffairs={timelineAffairs}
         deathDate={deathDate}

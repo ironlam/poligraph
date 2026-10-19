@@ -68,9 +68,11 @@ describe("CareerTimeline (desktop)", () => {
       />
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Dates de mandat à vérifier");
+    expect(screen.getByRole("status")).toHaveTextContent("Périodes de mandat à vérifier");
     expect(screen.getByRole("status")).toHaveTextContent("2020");
     expect(screen.getByRole("status")).toHaveTextContent("2023");
+    expect(screen.getByRole("button", { name: /Sénateur.*2023 - présent/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sénateur.*2020 - 2026/ })).not.toBeInTheDocument();
   });
 
   it("ne signale pas des mandats successifs qui partagent le même identifiant", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MandateType } from "@/generated/prisma";
-import { findOverlappingParliamentaryMandates, type MandateInterval } from "../overlaps";
+import { findOverlappingParliamentaryMandates, partitionMandatesForDisplay, type MandateInterval } from "../overlaps";
 
 function mandate(
   overrides: Partial<MandateInterval> & Pick<MandateInterval, "id">
@@ -65,4 +65,57 @@ describe("findOverlappingParliamentaryMandates", () => {
 
     expect(findOverlappingParliamentaryMandates([unknownEnd, current])).toEqual([]);
   });
+
+describe("partitionMandatesForDisplay", () => {
+  it("keeps the current mandate visible and separates the overlapping ended period for review", () => {
+    const former = mandate({
+      id: "senator-2020",
+      startDate: new Date("2020-10-01T00:00:00.000Z"),
+      endDate: new Date("2026-02-15T00:00:00.000Z"),
+      isCurrent: false,
+    });
+    const current = mandate({
+      id: "senator-2023",
+      startDate: new Date("2023-10-01T00:00:00.000Z"),
+      isCurrent: true,
+    });
+
+    expect(partitionMandatesForDisplay([former, current])).toEqual({
+      displayable: [current],
+      toVerify: [{ first: former, second: current }],
+    });
+  });
+
+  it("withholds both overlapping ended periods when neither is current", () => {
+    const first = mandate({
+      id: "senator-first",
+      startDate: new Date("2020-10-01T00:00:00.000Z"),
+      endDate: new Date("2024-10-01T00:00:00.000Z"),
+      isCurrent: false,
+    });
+    const second = mandate({
+      id: "senator-second",
+      startDate: new Date("2023-10-01T00:00:00.000Z"),
+      endDate: new Date("2025-10-01T00:00:00.000Z"),
+      isCurrent: false,
+    });
+
+    expect(partitionMandatesForDisplay([first, second]).displayable).toEqual([]);
+  });
+
+  it("leaves non-overlapping and non-parliamentary mandates visible", () => {
+    const senator = mandate({
+      id: "senator",
+      startDate: new Date("2023-10-01T00:00:00.000Z"),
+      isCurrent: true,
+    });
+    const deputy = mandate({ id: "deputy", type: MandateType.DEPUTE });
+    const otherOffice = mandate({ id: "minister", type: MandateType.MINISTRE });
+
+    expect(partitionMandatesForDisplay([senator, deputy, otherOffice])).toEqual({
+      displayable: [senator, deputy, otherOffice],
+      toVerify: [],
+    });
+  });
 });
+

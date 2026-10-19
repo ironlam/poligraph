@@ -12,10 +12,10 @@ export function MandateOverlapNotice({ mandates }: { mandates: TimelineMandate[]
       role="status"
       className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
     >
-      <p className="font-medium">Dates de mandat à vérifier</p>
+      <p className="font-medium">Périodes de mandat à vérifier</p>
       <p className="mt-1">
-        Des périodes de mandat parlementaire se chevauchent dans les données. Elles sont affichées
-        telles qu’enregistrées, mais peuvent contenir une erreur.
+        Des périodes de mandat parlementaire se chevauchent. Elles sont indiquées ici et retirées
+        de la chronologie tant que leurs dates ne sont pas vérifiées.
       </p>
       <ul className="mt-2 list-inside list-disc space-y-1">
         {overlaps.map(({ first, second }) => (

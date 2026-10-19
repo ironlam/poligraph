@@ -60,3 +60,33 @@ export function findOverlappingParliamentaryMandates<T extends MandateInterval>(
 
   return overlaps;
 }
+
+
+/**
+ * Keep contradictory parliamentary periods out of confirmed public timelines.
+ * A current mandate takes precedence over an overlapping ended record; when both
+ * periods have the same status, neither can be selected safely.
+ */
+export function partitionMandatesForDisplay<T extends MandateInterval>(mandates: readonly T[]): {
+  displayable: T[];
+  toVerify: MandateOverlap<T>[];
+} {
+  const toVerify = findOverlappingParliamentaryMandates(mandates);
+  const excludedIds = new Set<string>();
+
+  for (const { first, second } of toVerify) {
+    if (first.isCurrent && !second.isCurrent) {
+      excludedIds.add(second.id);
+    } else if (second.isCurrent && !first.isCurrent) {
+      excludedIds.add(first.id);
+    } else {
+      excludedIds.add(first.id);
+      excludedIds.add(second.id);
+    }
+  }
+
+  return {
+    displayable: mandates.filter((mandate) => !excludedIds.has(mandate.id)),
+    toVerify,
+  };
+}
