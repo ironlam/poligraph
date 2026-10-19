@@ -65,6 +65,7 @@ describe("findOverlappingParliamentaryMandates", () => {
 
     expect(findOverlappingParliamentaryMandates([unknownEnd, current])).toEqual([]);
   });
+});
 
 describe("partitionMandatesForDisplay", () => {
   it("keeps the current mandate visible and separates the overlapping ended period for review", () => {
