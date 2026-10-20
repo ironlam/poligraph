@@ -26,6 +26,11 @@ vi.mock("@/lib/data/politician-candidacy", () => ({
   loadPoliticianPresidentialCandidacy: vi.fn(),
 }));
 
+// The parliamentary path has its own tests; this file is about a missing or empty dossier.
+vi.mock("@/lib/data/politician-parliamentary-path", () => ({
+  loadParliamentaryPath: vi.fn(async () => []),
+}));
+
 import PoliticianPage from "../page";
 import { PoliticianProfileBody } from "../_components/PoliticianProfileBody";
 

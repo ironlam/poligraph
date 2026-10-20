@@ -148,6 +148,33 @@ describe("ParliamentaryPath", () => {
     expect(within(table).getByText("Mandat non enregistré dans PoliGraph")).toBeVisible();
   });
 
+  it("montre la 16e d'une personne sans mandat de député, avec le lien vers ses votes", () => {
+    const row: ParliamentaryPathRow = {
+      legislature: 16,
+      period: "2022-2024",
+      mandates: [],
+      votes: { total: 1066 },
+      votesImported: true,
+      datesStatus: { kind: "unverified", reason: "NO_MANDATE" },
+    };
+    renderPath([row]);
+
+    const table = screen.getByRole("table");
+    const line = within(table).getAllByRole("row")[1]!;
+    expect(within(line).getByText("Mandat non enregistré dans PoliGraph")).toBeVisible();
+    expect(line.querySelector("[data-status='unverified']")).toHaveTextContent(
+      "Mandat non enregistré"
+    );
+    expect(
+      within(line).getByRole("link", {
+        name: /^Voir les 1\s066 votes de Camille Durand pendant la 16e législature$/,
+      })
+    ).toHaveAttribute("href", "/politiques/camille-durand/votes?legislature=16");
+    // Rien n'est déduit des votes : ni circonscription, ni groupe.
+    expect(within(line).getByText("Non renseignée")).toBeVisible();
+    expect(line).not.toHaveTextContent(/groupe|parti/i);
+  });
+
   it("n'affiche ni groupe ni parti : rien n'est reconstruit depuis l'affiliation actuelle", () => {
     renderPath();
 

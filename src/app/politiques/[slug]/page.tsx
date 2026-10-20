@@ -6,7 +6,7 @@ import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
-import { getPoliticianParliamentaryPath } from "@/lib/data/politician-parliamentary-path";
+import { loadParliamentaryPath } from "@/lib/data/politician-parliamentary-path";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PoliticianHeader } from "./_components/PoliticianHeader";
@@ -69,15 +69,12 @@ export default async function PoliticianPage({ params }: PageProps) {
   const politician = profile.identity;
   const model = derivePoliticianPageModel(politician, profile.dossier, profile.voteStats);
 
-  // Only people with a deputy mandate or recorded votes get a parliamentary path: for the tens of
-  // thousands of other profiles the extra read would be pure cost. Read live, not from the
-  // snapshot: the document and its write points stay as they are.
-  const hasParliamentaryTrace =
-    politician.mandates.some((m) => m.type === "DEPUTE") ||
-    (profile.voteStats?.voteData?.stats.total ?? 0) > 0;
-  const parliamentaryPath = hasParliamentaryTrace
-    ? await getPoliticianParliamentaryPath(politician.id)
-    : [];
+  // Read live, not from the snapshot: the document and its write points stay as they are. People
+  // without any parliamentary trace cost no extra read (see loadParliamentaryPath).
+  const parliamentaryPath = await loadParliamentaryPath({
+    politicianId: politician.id,
+    mandates: politician.mandates,
+  });
 
   const now = new Date();
   // Null only when there is no sourced candidacy, which is the one case the fiche route sends back

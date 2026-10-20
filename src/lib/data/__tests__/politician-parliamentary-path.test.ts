@@ -4,18 +4,26 @@ const mocks = vi.hoisted(() => ({
   findMandates: vi.fn(),
   getOptions: vi.fn(),
   getVotes: vi.fn(),
+  findPoliticians: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }));
 vi.mock("@/lib/db", () => ({
-  db: { mandate: { findMany: (...args: unknown[]) => mocks.findMandates(...args) } },
+  db: {
+    mandate: { findMany: (...args: unknown[]) => mocks.findMandates(...args) },
+    politician: { findMany: (...args: unknown[]) => mocks.findPoliticians(...args) },
+  },
 }));
 vi.mock("@/services/politician-legislature-votes", () => ({
   getPoliticianAnLegislatures: (...args: unknown[]) => mocks.getOptions(...args),
   getPoliticianLegislatureVotes: (...args: unknown[]) => mocks.getVotes(...args),
 }));
 
-import { getPoliticianParliamentaryPath } from "../politician-parliamentary-path";
+import {
+  getPoliticianIdsWithAnVotes,
+  getPoliticianParliamentaryPath,
+  loadParliamentaryPath,
+} from "../politician-parliamentary-path";
 
 const mandate = (id: string, startDate: string, endDate: string | null, isCurrent = false) => ({
   id,
@@ -83,5 +91,91 @@ describe("getPoliticianParliamentaryPath", () => {
 
   it("renvoie un parcours vide pour une personne sans mandat de député ni vote", async () => {
     expect(await getPoliticianParliamentaryPath("maire")).toEqual([]);
+  });
+});
+
+describe("loadParliamentaryPath", () => {
+  const LOCAL_ONLY = [{ type: "MAIRE_ARRONDISSEMENT" }];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findMandates.mockResolvedValue([]);
+    mocks.getOptions.mockResolvedValue([]);
+    mocks.findPoliticians.mockResolvedValue([]);
+  });
+
+  it("affiche la 16e d'une personne sans mandat de député mais avec des votes (cas Rudigoz)", async () => {
+    // Seul mandat en base : maire d'arrondissement. 270 votes sur les textes, 796 sur les
+    // amendements, tous en 16e législature.
+    mocks.findPoliticians.mockResolvedValue([{ id: "rudigoz" }, { id: "autre-depute" }]);
+    mocks.getOptions.mockResolvedValue([{ legislature: 16, totalVotes: 1066 }]);
+    mocks.getVotes.mockResolvedValue({
+      legislature: 16,
+      counts: { total: 1066, amendments: 796, nonAmendments: 270 },
+      perimeter: { issue: "NO_MANDATE", periods: [] },
+    });
+
+    const rows = await loadParliamentaryPath({ politicianId: "rudigoz", mandates: LOCAL_ONLY });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      legislature: 16,
+      mandates: [],
+      votes: { total: 1066 },
+      datesStatus: { kind: "unverified", reason: "NO_MANDATE" },
+    });
+    expect(mocks.getVotes).toHaveBeenCalledWith("rudigoz", 16);
+  });
+
+  it("n'infère aucun mandat à partir des votes", async () => {
+    mocks.findPoliticians.mockResolvedValue([{ id: "rudigoz" }]);
+    mocks.getOptions.mockResolvedValue([{ legislature: 16, totalVotes: 1066 }]);
+    mocks.getVotes.mockResolvedValue({
+      legislature: 16,
+      counts: { total: 1066, amendments: 796, nonAmendments: 270 },
+      perimeter: { issue: "NO_MANDATE", periods: [] },
+    });
+
+    const [row] = await loadParliamentaryPath({ politicianId: "rudigoz", mandates: LOCAL_ONLY });
+
+    expect(row!.mandates).toEqual([]);
+    expect(row!.datesStatus.kind).not.toBe("complete");
+  });
+
+  it("ne lit pas l'ensemble des votants quand un mandat de député est déjà connu", async () => {
+    mocks.findMandates.mockResolvedValue([mandate("m17", "2024-07-01", null, true)]);
+
+    await loadParliamentaryPath({ politicianId: "depute", mandates: [{ type: "DEPUTE" }] });
+
+    expect(mocks.findPoliticians).not.toHaveBeenCalled();
+    expect(mocks.findMandates).toHaveBeenCalled();
+  });
+
+  it("ne coûte aucune lecture par personne à une fiche sans trace parlementaire", async () => {
+    mocks.findPoliticians.mockResolvedValue([{ id: "rudigoz" }]);
+
+    const rows = await loadParliamentaryPath({
+      politicianId: "maire-sans-votes",
+      mandates: LOCAL_ONLY,
+    });
+
+    expect(rows).toEqual([]);
+    expect(mocks.findMandates).not.toHaveBeenCalled();
+    expect(mocks.getOptions).not.toHaveBeenCalled();
+    expect(mocks.getVotes).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPoliticianIdsWithAnVotes", () => {
+  it("ne compte que les votes de l'Assemblée nationale, en une seule requête", async () => {
+    vi.clearAllMocks();
+    mocks.findPoliticians.mockResolvedValue([{ id: "a" }, { id: "b" }]);
+
+    expect(await getPoliticianIdsWithAnVotes()).toEqual(["a", "b"]);
+    expect(mocks.findPoliticians).toHaveBeenCalledTimes(1);
+    expect(mocks.findPoliticians).toHaveBeenCalledWith({
+      where: { votes: { some: { chamber: "AN" } } },
+      select: { id: true },
+    });
   });
 });
