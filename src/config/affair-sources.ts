@@ -8,6 +8,8 @@ const VERIFIED_AFFAIR_PRESS_HOSTS = new Set([
   "franceinfo.fr",
   "reuters.com",
   "apnews.com",
+  "lnc.nc",
+  "outremers360.com",
 ]);
 
 /** Sources journalistiques admises pour ajouter un fait judiciaire à une fiche. */

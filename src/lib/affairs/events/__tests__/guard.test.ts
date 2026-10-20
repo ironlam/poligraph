@@ -322,6 +322,8 @@ describe("checkEventPublishable : listes blanches de sources", () => {
     "https://la1ere.franceinfo.fr/a",
     "https://www.sudouest.fr/a",
     "https://mesinfos.fr/auvergne-rhone-alpes/a",
+    "https://www.lnc.nc/article/a",
+    "https://outremers360.com/bassin-pacifique-appli/a",
   ])("accepte %s comme presse", (sourceUrl) => {
     expect(checkEventPublishable({ ...held, sourceUrl, sourceKind: "PRESS" })).toEqual([]);
   });

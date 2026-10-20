@@ -137,6 +137,8 @@ export const PRESS_SOURCE_HOSTS: readonly string[] = [
   "lequotidien.re",
   "linfo.re",
   "rci.fm",
+  "lnc.nc",
+  "outremers360.com",
   // Presse étrangère de référence
   "lesoir.be",
   "lalibre.be",

@@ -26,6 +26,17 @@ describe("sources de presse des événements d’affaire", () => {
     );
   });
 
+  it("accepte la presse d’outre-mer admise et refuse les domaines qui l’imitent", () => {
+    expect(isVerifiedAffairPressUrl("https://www.lnc.nc/article/affaire-des-collaborateurs")).toBe(
+      true
+    );
+    expect(
+      isVerifiedAffairPressUrl("https://outremers360.com/bassin-pacifique-appli/article")
+    ).toBe(true);
+    expect(isVerifiedAffairPressUrl("https://lnc.nc.example.net/article")).toBe(false);
+    expect(isVerifiedAffairPressUrl("https://notlnc.nc/article")).toBe(false);
+  });
+
   it("exige une date de publication et un extrait explicites", () => {
     expect(findVerifiedAffairPressEventSource([completeSource])).toEqual(completeSource);
     expect(
