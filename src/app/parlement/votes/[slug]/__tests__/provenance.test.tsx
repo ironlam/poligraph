@@ -72,12 +72,13 @@ function scrutin(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function vote(id: string, position: string) {
+function vote(id: string, position: string, publicationStatus = "PUBLISHED") {
   return {
     id,
     position,
     politician: {
       slug: `elu-${id}`,
+      publicationStatus,
       fullName: `Élu ${id}`,
       firstName: "Élu",
       lastName: id,
@@ -182,6 +183,28 @@ describe("page de scrutin : provenance", () => {
       "somme, calculée par PoliGraph, des pour, des contre et des abstentions"
     );
     expect(text(container)).not.toContain("C'est le total que publie");
+  });
+
+  it("ne nomme ni ne lie un votant dont la fiche est en brouillon, mais compte son vote", async () => {
+    mocks.findScrutin.mockResolvedValue(
+      scrutin({
+        votes: [
+          vote("a", "POUR"),
+          vote("b", "POUR"),
+          vote("c", "POUR"),
+          vote("d", "CONTRE"),
+          vote("e", "CONTRE"),
+          vote("f", "ABSTENTION", "DRAFT"),
+        ],
+      })
+    );
+
+    const { container } = await renderPage();
+
+    expect(text(container)).not.toContain("Élu f");
+    expect(container.innerHTML).not.toContain("/politiques/elu-f");
+    expect(text(container)).toContain("Élu a");
+    expect(text(container)).toContain("Compteurs concordants");
   });
 
   it("ne déclare jamais les votes individuels complets, même avec des compteurs égaux", async () => {
