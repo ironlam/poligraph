@@ -105,7 +105,7 @@ export default async function RootLayout({
   const chatEnabled = await isFeatureEnabled("CHATBOT_ENABLED");
 
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="fr" className={`${outfit.variable} ${atkinson.variable}`} suppressHydrationWarning>
       <head>
         {/* Preconnect to analytics origin — saves ~300ms on first request */}
         <link rel="dns-prefetch" href="https://api-gateway.umami.dev" />
@@ -135,9 +135,7 @@ export default async function RootLayout({
         />
         <UmamiAnalytics />
       </head>
-      <body
-        className={`${outfit.variable} ${atkinson.variable} antialiased min-h-screen flex flex-col overflow-x-hidden`}
-      >
+      <body className="antialiased min-h-screen flex flex-col overflow-x-hidden">
         <ServiceWorkerRegistration />
         <ThemeProvider>
           <TooltipProvider>

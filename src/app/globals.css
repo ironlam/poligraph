@@ -174,6 +174,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Outfit pour tous les titres. Une classe utilitaire (font-sans, font-display) l'emporte. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  }
 }
 
 /* Hide scrollbar while preserving scroll behavior */
