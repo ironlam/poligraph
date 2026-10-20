@@ -126,7 +126,7 @@ export default async function PoliticianPage({ params }: PageProps) {
             <Link
               href={model.stats.url}
               aria-label={model.stats.aria}
-              className="text-primary hover:underline"
+              className="text-primary underline underline-offset-2"
               prefetch={false}
             >
               {model.stats.label}

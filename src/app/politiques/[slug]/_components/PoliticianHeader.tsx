@@ -4,7 +4,10 @@ import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { FollowButton } from "@/components/politicians/FollowButton";
 import { CopyableId } from "@/components/politicians/CopyableId";
 import { PARTY_ROLE_LABELS, feminizePartyRole } from "@/config/labels";
-import { ensureContrast } from "@/lib/contrast";
+import { ensureContrast, tintOver } from "@/lib/contrast";
+
+// --background (oklch(0.97 0 0)) : le badge de parti est une teinte posée sur le fond de page.
+const PAGE_BACKGROUND = "#f5f5f5";
 import { formatDate } from "@/lib/utils";
 import type { PartyRole } from "@/generated/prisma";
 import { PoliticianContactLinks } from "./PoliticianContactLinks";
@@ -90,11 +93,14 @@ export function PoliticianHeader({ politician, currentGroup }: PoliticianHeaderP
                 style={{
                   backgroundColor: currentParty.color ? `${currentParty.color}20` : undefined,
                   color: currentParty.color
-                    ? ensureContrast(currentParty.color, "#ffffff")
+                    ? ensureContrast(
+                        currentParty.color,
+                        tintOver(currentParty.color, 0x20 / 255, PAGE_BACKGROUND)
+                      )
                     : undefined,
                 }}
               >
-                <span className="opacity-70 mr-1">Parti :</span>
+                <span className="mr-1">Parti :</span>
                 {currentParty.name}
               </Badge>
             </Link>

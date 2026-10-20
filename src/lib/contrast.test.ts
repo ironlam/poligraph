@@ -5,6 +5,7 @@ import {
   getContrastRatio,
   getAccessibleTextColor,
   ensureContrast,
+  tintOver,
 } from "./contrast";
 
 describe("hexToRgb", () => {
@@ -110,5 +111,23 @@ describe("ensureContrast", () => {
 
   it("falls back to black when target is unreachable", () => {
     expect(ensureContrast("#010101", "#000000", 21)).toBe("#000000");
+  });
+});
+
+describe("tintOver", () => {
+  it("returns the base for a zero alpha and the color for an alpha of 1", () => {
+    expect(tintOver("#FFD600", 0, "#f5f5f5")).toBe("#f5f5f5");
+    expect(tintOver("#FFD600", 1, "#f5f5f5")).toBe("#ffd600");
+  });
+
+  it("matches the surface of a party badge tint on the page background", () => {
+    expect(tintOver("#FFD600", 0x20 / 255, "#f5f5f5")).toBe("#f6f1d6");
+  });
+
+  it("lets ensureContrast reach AA on a tint, where white gave 4.01", () => {
+    const bg = tintOver("#FFD600", 0x20 / 255, "#f5f5f5");
+    const onWhite = ensureContrast("#FFD600", "#ffffff");
+    expect(getContrastRatio(onWhite, bg)).toBeLessThan(4.5);
+    expect(getContrastRatio(ensureContrast("#FFD600", bg), bg)).toBeGreaterThanOrEqual(4.5);
   });
 });

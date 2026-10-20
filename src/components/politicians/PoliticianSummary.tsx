@@ -108,7 +108,7 @@ export function PoliticianSummary({
         )}
         <p className="mt-3 text-xs text-muted-foreground">
           Dernière mise à jour : {lastUpdated} ·{" "}
-          <Link href="/methodologie" className="text-primary hover:underline">
+          <Link href="/methodologie" className="text-primary underline underline-offset-2">
             Méthodologie
           </Link>
         </p>

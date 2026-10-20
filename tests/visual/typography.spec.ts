@@ -4,10 +4,15 @@ import AxeBuilder from "@axe-core/playwright";
 // Outfit pour les titres, Atkinson Hyperlegible pour le texte. Les deux projets Playwright
 // (bureau et Pixel 5) font tourner chaque cas, ce qui couvre les deux viewports.
 const PAGES = [
-  { name: "Territoires", path: "/territoires", axe: true },
-  { name: "Législatures", path: "/parlement/assemblee/legislatures", axe: true },
-  // axe signale déjà un contraste et un lien sans soulignement sur la fiche, sans lien avec les polices.
-  { name: "fiche politique", path: "/politiques/yael-braun-pivet", axe: false },
+  { name: "Territoires", path: "/territoires" },
+  { name: "Législatures", path: "/parlement/assemblee/legislatures" },
+  // Sur la fiche, seules ces deux règles sont suivies ici (#1166). D'autres violations axe
+  // restent à traiter à part, voir #1170.
+  {
+    name: "fiche politique",
+    path: "/politiques/yael-braun-pivet",
+    rules: ["color-contrast", "link-in-text-block"],
+  },
 ];
 
 async function firstFamilies(page: Page, selector: string) {
@@ -18,7 +23,7 @@ async function firstFamilies(page: Page, selector: string) {
   );
 }
 
-for (const { name, path, axe } of PAGES) {
+for (const { name, path, rules } of PAGES) {
   test.describe(`${name}: typographie`, () => {
     test("les titres sont en Outfit", async ({ page }) => {
       await page.goto(path);
@@ -35,11 +40,11 @@ for (const { name, path, axe } of PAGES) {
     });
 
     test("aucune violation WCAG AA (contraste compris)", async ({ page }) => {
-      test.skip(!axe, "violations axe préexistantes, hors périmètre typographie");
       await page.goto(path);
-      const results = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze();
+      const axe = new AxeBuilder({ page });
+      const results = await (
+        rules ? axe.withRules(rules) : axe.withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      ).analyze();
       expect(results.violations).toEqual([]);
     });
   });
