@@ -6,6 +6,7 @@ import { PersonJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { ProfileReturnLink } from "@/components/governments/ProfileReturnLink";
 import { getPoliticianProfile } from "@/lib/data/politician-profile";
+import { getPoliticianParliamentaryPath } from "@/lib/data/politician-parliamentary-path";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { PoliticianHeader } from "./_components/PoliticianHeader";
@@ -68,6 +69,16 @@ export default async function PoliticianPage({ params }: PageProps) {
   const politician = profile.identity;
   const model = derivePoliticianPageModel(politician, profile.dossier, profile.voteStats);
 
+  // Only people with a deputy mandate or recorded votes get a parliamentary path: for the tens of
+  // thousands of other profiles the extra read would be pure cost. Read live, not from the
+  // snapshot: the document and its write points stay as they are.
+  const hasParliamentaryTrace =
+    politician.mandates.some((m) => m.type === "DEPUTE") ||
+    (profile.voteStats?.voteData?.stats.total ?? 0) > 0;
+  const parliamentaryPath = hasParliamentaryTrace
+    ? await getPoliticianParliamentaryPath(politician.id)
+    : [];
+
   const now = new Date();
   // Null only when there is no sourced candidacy, which is the one case the fiche route sends back
   // here. A sourced candidacy without a published programme has a fiche of its own, so the notice
@@ -106,7 +117,11 @@ export default async function PoliticianPage({ params }: PageProps) {
         )}
 
         {/* The tab bodies render from the document already in hand: nothing left to stream. */}
-        <PoliticianProfileBody {...model.body} governmentsEnabled={governmentsEnabled} />
+        <PoliticianProfileBody
+          {...model.body}
+          governmentsEnabled={governmentsEnabled}
+          parliamentaryPath={parliamentaryPath}
+        />
 
         <aside className="mt-12 p-4 rounded-lg border bg-muted/30">
           <p className="text-sm text-muted-foreground">

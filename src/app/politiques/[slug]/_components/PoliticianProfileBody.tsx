@@ -20,6 +20,8 @@ import { isAccusedInvolvement } from "@/config/certainty";
 import { buildPoliticianSignals } from "@/lib/politicians/signals";
 import { buildSourceLinks } from "@/lib/politicians/external-sources";
 import { partitionMandatesForDisplay } from "@/lib/mandates/overlaps";
+import { ParliamentaryPath } from "@/components/politicians/ParliamentaryPath";
+import type { ParliamentaryPathRow } from "@/lib/politicians/parliamentary-path";
 import type {
   PoliticianDossier,
   PoliticianIdentity,
@@ -57,6 +59,8 @@ export interface PoliticianProfileBodyProps {
   isChamberPresident: boolean;
   /** « gouvernements » feature flag: links ministerial mandates to their government page. */
   governmentsEnabled?: boolean;
+  /** Assemblée nationale legislatures of this person, read by the page. Empty or absent: no section. */
+  parliamentaryPath?: ParliamentaryPathRow[];
 }
 
 export function PoliticianProfileBody({
@@ -68,6 +72,7 @@ export function PoliticianProfileBody({
   isActiveParliamentarian,
   isChamberPresident,
   governmentsEnabled = false,
+  parliamentaryPath = [],
 }: PoliticianProfileBodyProps) {
   const { affairs, factCheckMentions, dossierAuthors } = dossier;
   const displayableMandates = partitionMandatesForDisplay(politician.mandates).displayable;
@@ -233,6 +238,11 @@ export function PoliticianProfileBody({
                   affairs={directAffairs}
                   birthDate={politician.birthDate}
                   deathDate={politician.deathDate}
+                />
+                <ParliamentaryPath
+                  rows={parliamentaryPath}
+                  slug={politician.slug}
+                  fullName={politician.fullName}
                 />
                 {displayableMandates.length > 0 && (
                   <Card>

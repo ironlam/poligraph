@@ -140,6 +140,24 @@ export function legislaturePeriod(facts: LegislatureFacts): string {
   return end ? `${year(opening.date)}-${year(end.date)}` : `depuis ${year(opening.date)}`;
 }
 
+/**
+ * Bornes d'une législature, de la première séance à la fin, avec la même priorité de dates que
+ * `legislaturePeriod`. `end` est `null` pour une législature en cours. Sert à rattacher un
+ * mandat documenté à une législature, jamais à en déduire un mandat.
+ */
+export function legislatureSpan(
+  facts: LegislatureFacts
+): { start: string; end: string | null } | null {
+  const opening = facts.dates.find((d) => d.kind === "opening-sitting");
+  if (!opening) return null;
+  if (facts.status === "ongoing") return { start: opening.date, end: null };
+  const end =
+    facts.dates.find((d) => d.kind === "archive-end") ??
+    facts.dates.find((d) => d.kind === "dissolution-decree") ??
+    facts.dates.find((d) => d.kind === "powers-expiry");
+  return { start: opening.date, end: end?.date ?? null };
+}
+
 export function getLegislatureView(n: number): LegislatureView | null {
   const facts = FACTS.get(n);
   const coverage = COVERAGE.get(n);
