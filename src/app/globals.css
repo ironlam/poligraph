@@ -238,6 +238,15 @@
   }
 }
 
+/* Texte du badge de parti : deux variables calculées côté serveur, une par thème. Hors couche
+   pour l'emporter sur la couleur de texte de la variante du Badge. */
+[data-party-badge] {
+  color: var(--party-fg);
+}
+.dark [data-party-badge] {
+  color: var(--party-fg-dark);
+}
+
 /* Global focus-visible styles */
 a:focus-visible,
 button:focus-visible,

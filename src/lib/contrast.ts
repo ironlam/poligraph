@@ -100,3 +100,31 @@ export function ensureContrast(
   // Fallback to black if we can't reach the target
   return "#000000";
 }
+
+/**
+ * Lighten a color until it meets the minimum contrast ratio against a dark background.
+ * Counterpart of `ensureContrast` for the dark theme, where party colors are used as text.
+ */
+export function ensureContrastOnDark(
+  color: string,
+  background: string,
+  minRatio: number = 4.5
+): string {
+  if (getContrastRatio(color, background) >= minRatio) {
+    return color;
+  }
+
+  const { r, g, b } = hexToRgb(color);
+  const lift = (v: number, t: number) =>
+    Math.round(v + (255 - v) * t)
+      .toString(16)
+      .padStart(2, "0");
+  for (let t = 0.05; t <= 1; t += 0.05) {
+    const result = `#${lift(r, t)}${lift(g, t)}${lift(b, t)}`;
+    if (getContrastRatio(result, background) >= minRatio) {
+      return result;
+    }
+  }
+
+  return "#ffffff";
+}

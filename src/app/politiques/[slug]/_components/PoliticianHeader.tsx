@@ -1,13 +1,17 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import { FollowButton } from "@/components/politicians/FollowButton";
 import { CopyableId } from "@/components/politicians/CopyableId";
 import { PARTY_ROLE_LABELS, feminizePartyRole } from "@/config/labels";
-import { ensureContrast, tintOver } from "@/lib/contrast";
+import { ensureContrast, ensureContrastOnDark, tintOver } from "@/lib/contrast";
 
-// --background (oklch(0.97 0 0)) : le badge de parti est une teinte posée sur le fond de page.
+// --background (oklch(0.97 0 0) en clair, oklch(0.16 0 0) en sombre) : le badge de parti est une
+// teinte posée sur le fond de page, le texte se calcule donc contre cette teinte dans chaque thème.
 const PAGE_BACKGROUND = "#f5f5f5";
+const PAGE_BACKGROUND_DARK = "#0d0d0d";
+const PARTY_TINT_ALPHA = 0x20 / 255;
 import { formatDate } from "@/lib/utils";
 import type { PartyRole } from "@/generated/prisma";
 import { PoliticianContactLinks } from "./PoliticianContactLinks";
@@ -89,16 +93,23 @@ export function PoliticianHeader({ politician, currentGroup }: PoliticianHeaderP
               className="min-w-0 max-w-full"
             >
               <Badge
+                data-party-badge
                 className="block max-w-full text-sm hover:opacity-80 transition-opacity cursor-pointer whitespace-normal break-words"
-                style={{
-                  backgroundColor: currentParty.color ? `${currentParty.color}20` : undefined,
-                  color: currentParty.color
-                    ? ensureContrast(
-                        currentParty.color,
-                        tintOver(currentParty.color, 0x20 / 255, PAGE_BACKGROUND)
-                      )
-                    : undefined,
-                }}
+                style={
+                  currentParty.color
+                    ? ({
+                        backgroundColor: `${currentParty.color}20`,
+                        "--party-fg": ensureContrast(
+                          currentParty.color,
+                          tintOver(currentParty.color, PARTY_TINT_ALPHA, PAGE_BACKGROUND)
+                        ),
+                        "--party-fg-dark": ensureContrastOnDark(
+                          currentParty.color,
+                          tintOver(currentParty.color, PARTY_TINT_ALPHA, PAGE_BACKGROUND_DARK)
+                        ),
+                      } as CSSProperties)
+                    : undefined
+                }
               >
                 <span className="mr-1">Parti :</span>
                 {currentParty.name}
@@ -108,14 +119,21 @@ export function PoliticianHeader({ politician, currentGroup }: PoliticianHeaderP
 
           {currentGroup && (
             <Badge
+              data-party-badge
               variant="outline"
               className="block max-w-full text-sm whitespace-normal break-words"
-              style={{
-                borderColor: currentGroup.color || undefined,
-                color: currentGroup.color
-                  ? ensureContrast(currentGroup.color, "#ffffff")
-                  : undefined,
-              }}
+              style={
+                currentGroup.color
+                  ? ({
+                      borderColor: currentGroup.color,
+                      "--party-fg": ensureContrast(currentGroup.color, PAGE_BACKGROUND),
+                      "--party-fg-dark": ensureContrastOnDark(
+                        currentGroup.color,
+                        PAGE_BACKGROUND_DARK
+                      ),
+                    } as CSSProperties)
+                  : undefined
+              }
               title={currentGroup.name}
             >
               Groupe : {currentGroup.name} ({currentGroup.code})

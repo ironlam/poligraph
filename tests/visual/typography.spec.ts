@@ -49,3 +49,20 @@ for (const { name, path, rules } of PAGES) {
     });
   });
 }
+
+// next-themes suit le thème du système (defaultTheme="system") : le badge de parti doit rester
+// lisible une fois la classe .dark posée.
+test.describe("fiche politique: thème sombre", () => {
+  test.use({ colorScheme: "dark" });
+
+  test("contraste du badge de parti et des liens", async ({ page }) => {
+    await page.goto("/politiques/yael-braun-pivet");
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    // Limité aux badges de couleur de l'en-tête : le pied de page a ses propres écarts (#1170).
+    const results = await new AxeBuilder({ page })
+      .include("[data-party-badge]")
+      .withRules(["color-contrast"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
