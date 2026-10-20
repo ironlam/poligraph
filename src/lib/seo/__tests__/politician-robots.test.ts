@@ -29,6 +29,24 @@ describe("isIndexablePolitician", () => {
     }
   );
 
+  it("DEPUTE mandate alone (no biography, no other signal) -> NOT indexable", () => {
+    expect(isIndexablePolitician(signals({ mandates: [{ type: "DEPUTE" }] }))).toBe(false);
+  });
+
+  it("DEPUTE with a biography -> indexable through the biography", () => {
+    expect(
+      isIndexablePolitician(
+        signals({ mandates: [{ type: "DEPUTE" }], biography: "x".repeat(MIN_BIOGRAPHY_LENGTH) })
+      )
+    ).toBe(true);
+  });
+
+  it("DEPUTE with a declaration -> indexable through the declaration", () => {
+    expect(
+      isIndexablePolitician(signals({ mandates: [{ type: "DEPUTE" }], declarationsCount: 1 }))
+    ).toBe(true);
+  });
+
   it("bare RNE-imported maire (small commune, no other signal) -> NOT indexable", () => {
     expect(
       isIndexablePolitician(signals({ mandates: [{ type: "MAIRE", communePopulation: 800 }] }))
@@ -119,7 +137,7 @@ describe("isIndexablePolitician", () => {
 
 describe("politicianRobotsMetadata", () => {
   it("rich profile -> {} (inherits index:true)", () => {
-    expect(politicianRobotsMetadata(signals({ mandates: [{ type: "DEPUTE" }] }))).toEqual({});
+    expect(politicianRobotsMetadata(signals({ mandates: [{ type: "SENATEUR" }] }))).toEqual({});
   });
 
   it("bare profile -> noindex,follow", () => {

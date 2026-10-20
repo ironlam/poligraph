@@ -8,9 +8,13 @@ const NOINDEX_FOLLOW = { index: false, follow: true } as const;
  * (MAIRE, conseillers...) are NOT sufficient by themselves: ~34k RNE-imported
  * mayors have a bare profile (no bio, no affair, no vote) that Google refuses
  * to index ("Explorée, actuellement non indexée", issue #385).
+ *
+ * DEPUTE is deliberately absent. A deputy mandate says nothing about the content of the page:
+ * the fiches of former deputies created from the official archive (#1131) carry a mandate and
+ * votes but no biography, and a fiche without validated biography stays noindex. A deputy with a
+ * biography, a declaration or any other signal below is indexable through that signal.
  */
 export const SIGNIFICANT_MANDATE_TYPES = [
-  "DEPUTE",
   "SENATEUR",
   "DEPUTE_EUROPEEN",
   "PRESIDENT_REPUBLIQUE",

@@ -75,7 +75,14 @@ const NO_OTHER_SIGNAL = {
   biography: null,
 } as const;
 
-const RICH_DEPUTE: PoliticianIndexSignals = { mandates: [{ type: "DEPUTE" }], ...NO_OTHER_SIGNAL };
+const RICH_DEPUTE: PoliticianIndexSignals = {
+  mandates: [{ type: "DEPUTE" }],
+  ...NO_OTHER_SIGNAL,
+  biography: "Biographie validée d'un député, assez longue pour compter comme contenu éditorial.",
+};
+// A deputy mandate alone is not a content signal: fiches of former deputies created from the
+// official archive carry votes but no biography (#1131).
+const BARE_DEPUTE: PoliticianIndexSignals = { mandates: [{ type: "DEPUTE" }], ...NO_OTHER_SIGNAL };
 const BIG_MAYOR: PoliticianIndexSignals = {
   mandates: [{ type: "MAIRE", communePopulation: MAIRE_MIN_COMMUNE_POPULATION }],
   ...NO_OTHER_SIGNAL,
@@ -184,6 +191,9 @@ describe("doctrine — thin/duplicate surfaces stay out of the index", () => {
   });
   it("thin local profile (councillor, no signal)", () => {
     expect(politicianRobotsMetadata(THIN_LOCAL)).toEqual(NOINDEX_FOLLOW);
+  });
+  it("député without biography or any other signal", () => {
+    expect(politicianRobotsMetadata(BARE_DEPUTE)).toEqual(NOINDEX_FOLLOW);
   });
   it("small commune page (< threshold)", () => {
     expect(communeRobotsMetadata(COMMUNE_MIN_POPULATION - 1)).toEqual(NOINDEX_FOLLOW);
