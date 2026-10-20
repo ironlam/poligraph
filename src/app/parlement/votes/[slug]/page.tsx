@@ -23,6 +23,7 @@ import { ArticleJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MissingData } from "@/components/ui/MissingData";
 import { currentAffiliationLabel } from "@/lib/votes/current-affiliation";
+import { publicVotes } from "@/lib/votes/public-voters";
 import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
 import { getScrutinGroupPositions, getScrutinAnalysis } from "@/lib/data/groupes";
 import { getScrutinOfficialGroups } from "@/lib/data/scrutin-official-groups";
@@ -281,8 +282,9 @@ export default async function ScrutinPage({ params }: PageProps) {
 
   const isKeyVote = !!scrutin.importance?.isKeyVote;
 
-  // Group votes by position
-  const votesByPosition = scrutin.votes.reduce(
+  // Names on the page: public politicians only. The coverage below still counts every stored row.
+  const namedVotes = publicVotes(scrutin.votes);
+  const votesByPosition = namedVotes.reduce(
     (acc, vote) => {
       if (!acc[vote.position]) {
         acc[vote.position] = [];
@@ -290,7 +292,7 @@ export default async function ScrutinPage({ params }: PageProps) {
       acc[vote.position].push(vote);
       return acc;
     },
-    {} as Record<VotePosition, typeof scrutin.votes>
+    {} as Record<VotePosition, typeof namedVotes>
   );
 
   const total = scrutin.votesFor + scrutin.votesAgainst + scrutin.votesAbstain;
@@ -492,7 +494,7 @@ export default async function ScrutinPage({ params }: PageProps) {
                 </p>
                 <p className="text-sm text-muted-foreground">{coverage.summary}</p>
               </div>
-              {scrutin.votes.length > 0 ? (
+              {namedVotes.length > 0 ? (
                 <>
                   <p className="mb-4 text-sm text-muted-foreground">
                     Le groupe ou le parti indiqué sous chaque nom est l&apos;affiliation actuelle du
