@@ -185,7 +185,7 @@ export function PoliticianProfileBody({
                 {dossierAuthors.length > 0 && (
                   <Card id="dossiers">
                     <CardHeader>
-                      <h2 className="leading-none font-semibold flex items-center gap-2">
+                      <h2 className="title-card flex items-center gap-2">
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         Propositions de loi ({dossierAuthors.length})
                       </h2>
@@ -247,7 +247,7 @@ export function PoliticianProfileBody({
                 {displayableMandates.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <h2 className="leading-none font-semibold">Mandats</h2>
+                      <h2 className="title-card">Mandats</h2>
                       <p className="text-xs text-muted-foreground mt-1">
                         Liste des mandats nationaux et européens connus. Les mandats locaux (maire,
                         conseiller, etc.) peuvent ne pas être listés.
@@ -293,9 +293,7 @@ export function PoliticianProfileBody({
               ) : isActiveParliamentarian ? (
                 <Card id="declarations">
                   <CardHeader>
-                    <h2 className="text-lg font-semibold">
-                      Déclarations d&apos;intérêts et d&apos;activités
-                    </h2>
+                    <h2 className="title-card">Déclarations d&apos;intérêts et d&apos;activités</h2>
                   </CardHeader>
                   <CardContent>
                     <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">

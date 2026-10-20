@@ -32,6 +32,24 @@ spécification. Les valeurs de tokens du bundle sont d'ailleurs reprises de
 - **Typographie** : **Outfit** en display (`--font-display`, titres/chiffres),
   **Atkinson Hyperlegible** en corps/UI (`--font-body`), chargées via `next/font`.
   Atkinson est choisie pour sa lisibilité maximale (données civiques denses).
+  Les variables sont posées sur `<html>` (et non sur `<body>`) : le preflight Tailwind lit
+  `--font-body` sur `<html>`, sinon le texte retombe sur la police système. `h1` à `h4` sont en
+  Outfit par une règle globale (`globals.css`), une classe utilitaire peut la surcharger.
+- **Graisses** : seules 400 et 700 (Atkinson) et 700 et 800 (Outfit) sont chargées, ce sont les
+  seules des kits graphiques. 500 s'affiche en 400 et 600 en 700.
+- **Échelle des titres** (`globals.css`, en `rem` pour suivre le zoom du texte) :
+
+  | Classe          | Mobile | Dès 640 px | Graisse | Usage                                   |
+  | --------------- | ------ | ---------- | ------- | --------------------------------------- |
+  | `title-page`    | 30 px  | 38 px      | 800     | `h1` des pages Législatures             |
+  | `title-section` | 22 px  | 24 px      | 700     | sections d'une page                     |
+  | `title-card`    | 18 px  | 20 px      | 700     | titre d'une carte (fiche, Législatures) |
+
+  Le niveau visuel est indépendant de la balise. Les titres de blocs latéraux (« En bref »)
+  restent au corps de texte. Les autres pages gardent leurs tailles actuelles tant qu'elles
+  n'ont pas été reprises. Les kits sont une référence visuelle, pas une spécification : leurs
+  niveaux de titres (`h1` d'annotation, `h2` pour le titre de page) ne se copient pas.
+
 - **Ton** : sobre, factuel, neutre. Tout en français, chiffres au format `fr-FR`,
   pas d'emoji. Présomption d'innocence et données sourcées.
 

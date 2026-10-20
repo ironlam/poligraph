@@ -163,7 +163,7 @@ export function ParliamentaryPath({ rows, slug, fullName }: ParliamentaryPathPro
   return (
     <Card>
       <CardHeader>
-        <h2 className="leading-none font-semibold">Parcours parlementaire</h2>
+        <h2 className="title-card">Parcours parlementaire</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Législatures de l&apos;Assemblée nationale où un mandat de député ou des votes sont
           enregistrés. Une législature qui ne figure pas ici n&apos;est pas la preuve d&apos;une

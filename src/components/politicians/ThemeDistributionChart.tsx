@@ -13,7 +13,7 @@ export function ThemeDistributionChart({ themes }: ThemeDistributionChartProps) 
   return (
     <Card>
       <CardHeader>
-        <h2 className="leading-none font-semibold">Votes par thématique</h2>
+        <h2 className="title-card">Votes par thématique</h2>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">

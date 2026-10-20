@@ -73,6 +73,56 @@ export const Echelle: Story = {
   },
 };
 
+// Les classes viennent de globals.css : la story montre ce que l'app rend, pas une copie.
+export const Titres: Story = {
+  render: () => {
+    const levels: [string, string, string, string][] = [
+      [
+        "title-page",
+        "Titre de page (h1)",
+        "30 px, 38 px dès 640 px · Outfit 800",
+        "Les législatures",
+      ],
+      [
+        "title-section",
+        "Titre de section (h2)",
+        "22 px, 24 px dès 640 px · Outfit 700",
+        "De 2017 à aujourd'hui",
+      ],
+      [
+        "title-card",
+        "Titre de carte",
+        "18 px, 20 px dès 640 px · Outfit 700",
+        "Parcours parlementaire",
+      ],
+    ];
+    return (
+      <section>
+        <h2 style={{ fontFamily: "var(--font-display)" }}>Titres</h2>
+        <p style={{ fontSize: 13, color: "var(--muted-foreground)", maxWidth: "60ch" }}>
+          Trois niveaux, en <code>rem</code> pour suivre le zoom du texte. Le niveau visuel est
+          indépendant de la balise : une carte porte un <code>h2</code> dans la hiérarchie du
+          document mais s&apos;affiche en <code>title-card</code>. Les titres de blocs latéraux («
+          En bref ») restent au corps de texte, en 16 px.
+        </p>
+        <dl style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {levels.map(([cls, name, spec, sample]) => (
+            <div key={cls}>
+              <dt className={cls}>{sample}</dt>
+              <dd style={{ margin: "4px 0 0" }}>
+                <code style={{ fontSize: 12, color: "var(--muted-foreground)" }}>.{cls}</code>{" "}
+                <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
+                  {name} · {spec}
+                </span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    );
+  },
+};
+
 export const Nombres: Story = {
   render: () => (
     <section>
@@ -99,18 +149,22 @@ export const PoidsInterlignage: Story = {
   render: () => (
     <section>
       <h2 style={{ fontFamily: "var(--font-display)" }}>Poids & interlignage</h2>
+      <p style={{ fontSize: 13, color: "var(--muted-foreground)", maxWidth: "60ch" }}>
+        Seules quatre graisses sont chargées : Atkinson 400 et 700, Outfit 700 et 800. Le navigateur
+        ramène 500 sur 400 et 600 sur 700, les kits graphiques n&apos;utilisent que ces valeurs.
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
         {(
           [
             ["400", "normal"],
-            ["500", "medium"],
-            ["600", "semibold"],
+            ["500", "medium (rendu en 400)"],
+            ["600", "semibold (rendu en 700)"],
             ["700", "bold"],
-            ["800", "extrabold"],
+            ["800", "extrabold (Outfit seulement)"],
           ] as const
         ).map(([w, name]) => (
           <p key={w} style={{ margin: 0, fontWeight: Number(w) }}>
-            {name} ({w}) — Poligraph, observatoire citoyen
+            {name} ({w}) : Poligraph, observatoire citoyen
           </p>
         ))}
       </div>

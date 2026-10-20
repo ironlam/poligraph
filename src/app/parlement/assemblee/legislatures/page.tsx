@@ -68,9 +68,7 @@ export default function LegislaturesPage() {
       />
 
       <div className="mb-8 max-w-3xl">
-        <h1 className="mb-2 font-display text-3xl font-extrabold tracking-tight">
-          Les législatures de l&apos;Assemblée nationale
-        </h1>
+        <h1 className="mb-2 title-page">Les législatures de l&apos;Assemblée nationale</h1>
         <p className="text-muted-foreground">
           Une législature court de l&apos;élection des députés à la fin de leur mandat, par
           expiration des pouvoirs ou par dissolution. Choisissez-en une pour voir ses dates, ses
@@ -79,7 +77,7 @@ export default function LegislaturesPage() {
       </div>
 
       <section aria-labelledby="frise-titre" className="mb-10">
-        <h2 id="frise-titre" className="mb-3 text-lg font-semibold">
+        <h2 id="frise-titre" className="mb-3 title-section">
           De 2017 à aujourd&apos;hui
         </h2>
         <LegislatureTimeline
@@ -94,13 +92,13 @@ export default function LegislaturesPage() {
       </section>
 
       <section aria-labelledby="cartes-titre" className="mb-10">
-        <h2 id="cartes-titre" className="mb-3 text-lg font-semibold">
+        <h2 id="cartes-titre" className="mb-3 title-section">
           Ce que nous avons pour chaque législature
         </h2>
         <ul className="grid gap-4 md:grid-cols-3">
           {[...views].reverse().map((v) => (
             <li key={v.facts.number} className="rounded-lg border bg-card p-4">
-              <h3 className="font-semibold">
+              <h3 className="title-card">
                 <Link
                   href={ROUTES.legislature(v.facts.number)}
                   className="inline-flex min-h-11 items-center underline hover:text-primary"

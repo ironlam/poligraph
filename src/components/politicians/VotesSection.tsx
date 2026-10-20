@@ -78,7 +78,7 @@ export function VotesSection({
         <Card id="votes">
           <CardHeader>
             <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="leading-none font-semibold">Votes parlementaires</h2>
+              <h2 className="title-card">Votes parlementaires</h2>
               <Link
                 href={`/politiques/${slug}/votes`}
                 prefetch={false}

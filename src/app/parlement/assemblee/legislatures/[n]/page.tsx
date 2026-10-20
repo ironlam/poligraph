@@ -118,9 +118,7 @@ export default async function LegislaturePage({ params }: PageProps) {
       <LegislatureSelector options={selectorOptions} current={facts.number} className="mb-6" />
 
       <header className="mb-8 max-w-3xl">
-        <h1 className="mb-2 font-display text-3xl font-extrabold tracking-tight">
-          {label} de l&apos;Assemblée nationale
-        </h1>
+        <h1 className="mb-2 title-page">{label} de l&apos;Assemblée nationale</h1>
         <p className="text-muted-foreground">
           {summarySentence(
             facts.number,
@@ -143,7 +141,7 @@ export default async function LegislaturePage({ params }: PageProps) {
       </header>
 
       <section aria-labelledby="dates-titre" className="mb-10 max-w-3xl">
-        <h2 id="dates-titre" className="mb-2 text-lg font-semibold">
+        <h2 id="dates-titre" className="mb-2 title-section">
           Dates de référence
         </h2>
         <LegislatureDates dates={view.displayDates} />
@@ -155,7 +153,7 @@ export default async function LegislaturePage({ params }: PageProps) {
       </section>
 
       <section aria-labelledby="sieges-titre" className="mb-10 max-w-3xl">
-        <h2 id="sieges-titre" className="mb-2 text-lg font-semibold">
+        <h2 id="sieges-titre" className="mb-2 title-section">
           Sièges
         </h2>
         <p className="text-sm">
@@ -169,7 +167,7 @@ export default async function LegislaturePage({ params }: PageProps) {
       </section>
 
       <section aria-labelledby="donnees-titre" className="mb-10">
-        <h2 id="donnees-titre" className="mb-2 text-lg font-semibold">
+        <h2 id="donnees-titre" className="mb-2 title-section">
           Données disponibles dans PoliGraph
         </h2>
         {coverage.navigation.absenceNotice && (
@@ -190,7 +188,7 @@ export default async function LegislaturePage({ params }: PageProps) {
       </section>
 
       <section aria-labelledby="aller-titre" className="mb-10 max-w-3xl">
-        <h2 id="aller-titre" className="mb-2 text-lg font-semibold">
+        <h2 id="aller-titre" className="mb-2 title-section">
           Aller plus loin
         </h2>
         {hasVotesData(coverage) ? (

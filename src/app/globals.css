@@ -219,6 +219,36 @@
     font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   }
 
+  /* Échelle des titres (kits graphiques). Tailles en rem pour suivre le zoom du texte, Outfit 700
+     (800 pour le titre de page) : ce sont les deux seules graisses chargées. */
+  .title-page {
+    font-size: 1.875rem;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+  }
+  .title-section {
+    font-size: 1.375rem;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  .title-card {
+    font-size: 1.125rem;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+  @media (min-width: 40rem) {
+    .title-page {
+      font-size: 2.375rem;
+    }
+    .title-section {
+      font-size: 1.5rem;
+    }
+    .title-card {
+      font-size: 1.25rem;
+    }
+  }
+
   /* Animated underline for navigation links */
   .nav-link-underline {
     position: relative;

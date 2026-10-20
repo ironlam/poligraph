@@ -94,7 +94,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
       {/* Affairs -- Accused / Involved */}
       <Card id="affaires" className="scroll-mt-20">
         <CardHeader>
-          <h2 className="leading-none font-semibold">Affaires judiciaires</h2>
+          <h2 className="title-card">Affaires judiciaires</h2>
           <p className="text-xs text-muted-foreground">
             Les procédures closes sans condamnation sont distinguées des condamnations. La
             présomption d&apos;innocence s&apos;applique aux procédures en cours.
@@ -271,7 +271,7 @@ export function AffairsSection({ affairs, civility }: AffairsSectionProps) {
       {victimAffairs.length > 0 && (
         <Card>
           <CardHeader>
-            <h2 className="leading-none font-semibold">Victime d&apos;infractions</h2>
+            <h2 className="title-card">Victime d&apos;infractions</h2>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
