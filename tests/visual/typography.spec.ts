@@ -14,7 +14,7 @@ async function firstFamilies(page: Page, selector: string) {
   return page.$$eval(selector, (els) =>
     els
       .filter((el) => (el.textContent ?? "").trim() !== "")
-      .map((el) => getComputedStyle(el).fontFamily.split(",")[0].replace(/"/g, "").toLowerCase())
+      .map((el) => getComputedStyle(el).fontFamily.split(",")[0]?.replace(/"/g, "").toLowerCase())
   );
 }
 
