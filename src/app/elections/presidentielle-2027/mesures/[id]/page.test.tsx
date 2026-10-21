@@ -59,6 +59,7 @@ const detail = {
       tier: "PRIMARY",
       url: "https://example.org/programme",
       page: "p. 12",
+      startAtSeconds: null,
       publishedAt: new Date("2026-08-10T00:00:00Z"),
     },
   ],
@@ -189,6 +190,57 @@ describe("page publique d'une mesure présidentielle", () => {
     expect(
       screen.getByRole("link", { name: /Consulter la source Zones à faibles émissions/ })
     ).toHaveAttribute("href", "https://www.ecologie.gouv.fr/zfe");
+  });
+
+  it("signale une source vidéo et ouvre YouTube au bon passage", async () => {
+    getDetail.mockResolvedValue({
+      ...detail,
+      sources: [
+        ...detail.sources,
+        {
+          id: "source-2",
+          sourceKind: "DISCOURS_CAMPAGNE",
+          tier: "PRIMARY",
+          url: "https://www.youtube.com/watch?v=-Nb_bTgARWw",
+          page: "22:41",
+          startAtSeconds: 1361,
+          publishedAt: new Date("2026-10-14T00:00:00Z"),
+        },
+        {
+          id: "source-3",
+          sourceKind: "INTERVIEW_PRESSE",
+          tier: "PRIMARY",
+          url: "https://europe.tv5monde.com/fr/guide-tv/l-heure-de-verite/philippe",
+          page: "08:28",
+          startAtSeconds: 508,
+          publishedAt: new Date("2026-10-08T00:00:00Z"),
+        },
+      ],
+    });
+    const { default: Page } = await import("./page");
+    render(
+      <TooltipProvider>
+        {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
+      </TooltipProvider>
+    );
+    const video = screen.getByRole("link", { name: /Voir le passage à 22:41/ });
+    expect(video).toHaveAttribute("href", "https://www.youtube.com/watch?v=-Nb_bTgARWw&t=1361s");
+    expect(video).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getAllByText("Vidéo")).toHaveLength(2);
+    // Hors YouTube, le lien ouvre la page : le libellé ne promet pas de saut.
+    const tv5 = screen.getByRole("link", { name: /Consulter la vidéo \(passage à 08:28\)/ });
+    expect(tv5).toHaveAttribute(
+      "href",
+      "https://europe.tv5monde.com/fr/guide-tv/l-heure-de-verite/philippe"
+    );
+    expect(screen.queryByRole("link", { name: /Voir le passage à 08:28/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Passage à 22:41/)).toBeInTheDocument();
+    // La source document garde son rendu d'origine, sans pastille.
+    expect(screen.getByText(/· p\. 12/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Consulter la source externe/ })).toHaveAttribute(
+      "href",
+      "https://example.org/programme"
+    );
   });
 
   it("n'invente aucun vote quand aucun lien public n'existe", async () => {

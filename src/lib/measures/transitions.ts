@@ -39,6 +39,7 @@ export type MeasureSourceInput = {
   tier: SourceTier;
   url: string;
   page: string | null;
+  startAtSeconds?: number | null;
   publishedAt: Date;
 };
 
@@ -326,6 +327,7 @@ export async function draftMeasureRevision(
               tier: true,
               url: true,
               page: true,
+              startAtSeconds: true,
               publishedAt: true,
             },
           },

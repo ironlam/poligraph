@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { QUALIFICATION_KIND_LABELS } from "@/config/labels";
+import { parseTimecode } from "@/config/video-source";
 import type {
   Chamber,
   MeasureAttribution,
@@ -256,6 +257,8 @@ export type SourceInput = {
   tier: SourceTier;
   url: string;
   page: string | null;
+  /** Timecode typed by the editor ("22:41"), converted to seconds on the way in. */
+  startAt?: string | null;
   publishedAt: string;
 };
 
@@ -279,12 +282,25 @@ function toRevision(input: RevisionInput) {
   };
 }
 
+function parseStartAt(value: string | null | undefined): number | null {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed === "") return null;
+  const seconds = parseTimecode(trimmed);
+  if (seconds === null) {
+    throw new MeasureValidationError(
+      "Le début du passage doit s'écrire minutes:secondes (22:41) ou heures:minutes:secondes (1:05:09)"
+    );
+  }
+  return seconds;
+}
+
 function toSources(inputs: SourceInput[]) {
   return inputs.map((source) => ({
     sourceKind: source.sourceKind,
     tier: source.tier,
     url: source.url.trim(),
     page: source.page?.trim() === "" ? null : (source.page ?? null),
+    startAtSeconds: parseStartAt(source.startAt),
     publishedAt: parseDate(source.publishedAt, "La date de publication de la source"),
   }));
 }

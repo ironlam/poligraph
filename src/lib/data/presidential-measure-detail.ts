@@ -69,6 +69,7 @@ export type PublicPresidentialMeasureDetail = {
     tier: SourceTier;
     url: string;
     page: string | null;
+    startAtSeconds: number | null;
     publishedAt: Date;
   }>;
   votes: Array<{
@@ -133,6 +134,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
               tier: true,
               url: true,
               page: true,
+              startAtSeconds: true,
               publishedAt: true,
             },
           },
