@@ -20,6 +20,7 @@ import { queryMeasureEnrichmentCoverage } from "./_data/enrichment-coverage-quer
 import {
   listMeasureQueueCandidates,
   queryMeasureQueue,
+  QUEUE_SCAN_CAP,
   type EnrichmentState,
 } from "./_data/queue-query";
 
@@ -183,9 +184,9 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
           role="status"
           className="rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40"
         >
-          Les compteurs et les filtres d&apos;étape portent sur les 500 premières mesures de la
-          sélection, pas sur la totalité. Restreindre par thème ou par candidature pour retrouver
-          des chiffres complets.
+          Les compteurs et les filtres d&apos;étape portent sur les{" "}
+          {QUEUE_SCAN_CAP.toLocaleString("fr-FR")} premières mesures de la sélection, pas sur la
+          totalité. Restreindre par thème ou par candidature pour retrouver des chiffres complets.
         </p>
       )}
 
