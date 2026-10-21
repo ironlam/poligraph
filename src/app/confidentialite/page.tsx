@@ -254,6 +254,11 @@ export default function ConfidentialitePage() {
             garanties contractuelles. PoliGraph ne garantit pas une localisation exclusivement
             européenne de tous les traitements.
           </p>
+          <p className="mt-3 text-muted-foreground">
+            Linear, utilisé pour le suivi interne des retours, traite ses données principalement aux
+            États-Unis. Son accord de traitement intègre les clauses contractuelles types de la
+            Commission européenne. Linear ne reçoit que la nature du retour et la page concernée.
+          </p>
         </section>
 
         <section>
