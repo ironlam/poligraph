@@ -9,12 +9,12 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: "Groupes parlementaires",
   description:
-    "Groupes parlementaires de l'Assemblée nationale et du Sénat : composition, cohésion, alignement gouvernemental.",
+    "Groupes parlementaires de l'Assemblée nationale et du Sénat : composition, cohésion et positions de vote.",
   alternates: { canonical: "/parlement/groupes" },
 };
 
 export default async function GroupesPage() {
-  const groups = await getGroupesListing();
+  const groups = await getGroupesListing({ includeGovernmentProjectPositions: true });
 
   const sorted = [...groups]
     .filter((g) => g.seatCount > 0)
@@ -26,7 +26,7 @@ export default async function GroupesPage() {
     <div className="container mx-auto px-4 py-8">
       <CollectionPageJsonLd
         name="Groupes parlementaires"
-        description="Groupes parlementaires de l'Assemblée nationale et du Sénat : composition, cohésion, alignement gouvernemental."
+        description="Groupes parlementaires de l'Assemblée nationale et du Sénat : composition, cohésion et positions de vote."
         url="https://poligraph.fr/parlement/groupes"
         numberOfItems={sorted.length}
       />

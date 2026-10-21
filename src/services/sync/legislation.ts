@@ -16,6 +16,7 @@ import { extractZip } from "@/lib/parsing/unzip";
 import { downloadFileWithRetry } from "@/lib/download-file";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { classifyDossierOrigin } from "@/lib/legislation/origine";
+import { extractDossierVoteRefs } from "@/lib/legislation/timeline-vote-refs";
 
 const DEFAULT_LEGISLATURE = 17;
 // Each run extracts into its own directory: a fixed path let one run delete the
@@ -93,6 +94,7 @@ interface ANActe {
   } | null;
   texteAssocie?: string;
   texteAdopte?: string;
+  voteRefs?: unknown;
 }
 
 function findAllCodes(actes: ANActe | ANActe[] | undefined | null): string[] {
@@ -164,6 +166,8 @@ function buildTimeline(actes: ANActe | ANActe[] | undefined | null): DossierTime
       date: acte.dateActe || null,
       chamber: inferChamber(acte.codeActe),
     };
+    const voteRefs = extractDossierVoteRefs(acte.voteRefs);
+    if (voteRefs.length > 0) entry.voteRefs = voteRefs;
     if (acte.actesLegislatifs?.acteLegislatif) {
       const children = buildTimeline(acte.actesLegislatifs.acteLegislatif);
       if (children.length > 0) {

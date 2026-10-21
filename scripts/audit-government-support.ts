@@ -76,7 +76,7 @@ const markdown = [
   "",
   `Exécuté le ${report.auditedAt}. Législature 17. Aucun accès à la base de données.`,
   "",
-  "Le corpus confirmé exige un vote d'ensemble, une origine gouvernementale établie et une référence voteRef unique. Les rapprochements par séance ou titre restent à vérifier, même si le résolveur existant propose un dossier.",
+  "Le corpus confirmé exige un vote d'ensemble, une origine gouvernementale établie et soit une référence officielle directe vers le dossier, soit une référence voteRef unique. Les rapprochements par séance ou titre restent à vérifier, même si le résolveur existant propose un dossier.",
   "",
   "```json",
   JSON.stringify(report.summary, null, 2),

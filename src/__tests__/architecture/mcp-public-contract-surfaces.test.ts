@@ -142,6 +142,9 @@ const PARTY_SURFACES = [
   "src/app/parlement/dossiers/[slug]/page.tsx",
   "src/app/parlement/dossiers/page.tsx",
   "src/app/parlement/groupes/[slug]/page.tsx",
+  // The evidence page reads the group's name, code and chamber through the shared group reader.
+  // That reader also selects currentParty for published members; this page renders none of it.
+  "src/app/parlement/groupes/[slug]/projets-gouvernementaux/page.tsx",
   "src/app/parlement/groupes/page.tsx",
   "src/app/parlement/page.tsx",
   "src/app/parlement/votes/[slug]/page.tsx",

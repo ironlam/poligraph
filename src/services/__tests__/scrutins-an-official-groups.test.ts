@@ -48,6 +48,7 @@ const rawScrutin = {
     legislature: "17",
     dateScrutin: "2025-01-01",
     titre: "sur un projet de loi",
+    objet: { dossierLegislatif: { dossierRef: "DLR5L17N9000" } },
     typeVote: {
       codeTypeVote: "SPS",
       libelleTypeVote: "scrutin public solennel",
@@ -239,6 +240,7 @@ describe("syncScrutinsAN official group metadata", () => {
         officialGroupsSourceHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         officialGroupsSourceUrl:
           "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+        officialDossierRef: "DLR5L17N9000",
         codeTypeVote: "SPS",
         libelleTypeVote: "scrutin public solennel",
         officialGroupsIssues: [],
@@ -295,6 +297,7 @@ describe("syncScrutinsAN official group metadata", () => {
       officialGroupsSourceHash: sourceHash,
       officialGroupsSourceUrl:
         "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      officialDossierRef: "DLR5L17N9000",
       codeTypeVote: "SPS",
       libelleTypeVote: "scrutin public solennel",
     });
@@ -315,6 +318,7 @@ describe("syncScrutinsAN official group metadata", () => {
       officialGroupsSourceHash: sourceHash,
       officialGroupsSourceUrl:
         "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      officialDossierRef: "DLR5L17N9000",
       codeTypeVote: "SPS",
       libelleTypeVote: "scrutin public solennel",
     });
@@ -324,6 +328,58 @@ describe("syncScrutinsAN official group metadata", () => {
     expect(result.errors).toEqual([]);
     expect(result.scrutinsSkipped).toBe(1);
     expect(dbMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("preserves an existing official dossier ref when the source field is absent", async () => {
+    const withoutDossierRef = structuredClone(rawScrutin);
+    Reflect.deleteProperty(withoutDossierRef.scrutin, "objet");
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(withoutDossierRef));
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialDossierRef: "DLR5L17N9000",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: "SPS",
+      libelleTypeVote: "scrutin public solennel",
+    });
+
+    const result = await syncScrutinsAN(17, false, false, true, true);
+
+    expect(result.errors).toEqual([]);
+    const updateData = transactionMock.scrutin.update.mock.calls[0]![0].data;
+    expect(updateData).not.toHaveProperty("officialDossierRef");
+  });
+
+  it("clears an existing official dossier ref when the source explicitly publishes null", async () => {
+    const explicitNull = structuredClone(rawScrutin);
+    Reflect.set(explicitNull.scrutin.objet, "dossierLegislatif", null);
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(explicitNull));
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({
+      id: "scrutin-1",
+      officialDossierRef: "DLR5L17N9000",
+      officialGroupsHash: null,
+      officialGroupsSourceHash: null,
+      officialGroupsSourceUrl: null,
+      codeTypeVote: "SPS",
+      libelleTypeVote: "scrutin public solennel",
+    });
+
+    const result = await syncScrutinsAN(17, false, false, true, true);
+
+    expect(result.errors).toEqual([]);
+    expect(transactionMock.scrutin.update).toHaveBeenCalledWith({
+      where: { id: "scrutin-1" },
+      data: expect.objectContaining({ officialDossierRef: null }),
+    });
   });
 
   it("updates source provenance without rebuilding unchanged rows", async () => {
@@ -336,6 +392,7 @@ describe("syncScrutinsAN official group metadata", () => {
       officialGroupsSourceHash: "older-source-hash",
       officialGroupsSourceUrl:
         "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      officialDossierRef: "DLR5L17N9000",
       codeTypeVote: "SPS",
       libelleTypeVote: "scrutin public solennel",
     });
@@ -480,6 +537,7 @@ describe("syncScrutinsAN official group metadata", () => {
       officialGroupsSourceHash: sourceHash,
       officialGroupsSourceUrl:
         "https://data.assemblee-nationale.fr/static/openData/repository/17/loi/scrutins/Scrutins.json.zip",
+      officialDossierRef: "DLR5L17N9000",
       codeTypeVote: "SPS",
       libelleTypeVote: "scrutin public solennel",
     });

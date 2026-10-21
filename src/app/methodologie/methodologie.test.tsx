@@ -13,6 +13,9 @@ import TerritoireDecisionsMethodologyPage, {
 import MediaSourcesMethodologyPage, {
   metadata as mediaSourcesMetadata,
 } from "./sources-medias/page";
+import GovernmentProjectsMethodologyPage, {
+  metadata as governmentProjectsMetadata,
+} from "./soutien-projets-gouvernementaux/page";
 
 describe("pages de méthodologie", () => {
   it("présente la méthodologie générale comme une entrée par domaine", () => {
@@ -23,6 +26,10 @@ describe("pages de méthodologie", () => {
       "href",
       "/methodologie/mesures-presidentielle-2027"
     );
+    expect(screen.getByRole("link", { name: /Projets gouvernementaux/ })).toHaveAttribute(
+      "href",
+      "/methodologie/soutien-projets-gouvernementaux"
+    );
     expect(
       screen.getByRole("heading", { name: "Candidatures à la présidentielle 2027" })
     ).toBeInTheDocument();
@@ -32,6 +39,41 @@ describe("pages de méthodologie", () => {
       "_blank"
     );
     expect(container.querySelector("#comment-nous-comptons")).toBeInTheDocument();
+  });
+
+  it("documente les trois positions sans les fusionner en un score", () => {
+    render(<GovernmentProjectsMethodologyPage />);
+
+    expect(governmentProjectsMetadata.alternates?.canonical).toBe(
+      "/methodologie/soutien-projets-gouvernementaux"
+    );
+    expect(screen.getByText(/ne sont pas fusionnées en un score/)).toBeInTheDocument();
+    expect(screen.getByText(/SPS décrit une procédure/)).toBeInTheDocument();
+    expect(screen.getByText(/L'abstention reste visible/)).toBeInTheDocument();
+    expect(screen.getByText(/quelques dizaines de scrutins candidats/)).toBeInTheDocument();
+    expect(screen.getByText(/varie selon les références disponibles/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Chaque lecture d'un même projet compte comme un scrutin distinct/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Les non-inscrits sont exclus/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/ne constitue pas une position ou une consigne officielle du groupe/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Les périodes de validité des organes viennent de l'archive historique officielle/
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: /Archive historique officielle des acteurs, mandats et organes/,
+      })
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("AMO30_tous_acteurs_tous_mandats_tous_organes_historique.json.zip")
+    );
+    expect(screen.getByRole("heading", { name: /49.3, motions de censure/ })).toBeInTheDocument();
+    expect(screen.getByText(/ne calcule pas de soutien indirect décisif/)).toBeInTheDocument();
   });
 
   it("explique la chaîne éditoriale des mesures sur une URL canonique dédiée", () => {

@@ -9,6 +9,9 @@ vi.mock("@/lib/data/groupes", () => ({
   getScrutinGroupPositions: vi.fn(async () => []),
   getScrutinAnalysis: vi.fn(async () => null),
 }));
+vi.mock("@/lib/data/government-project-positions", () => ({
+  getGovernmentProjectPositionsForGroup: vi.fn(async () => null),
+}));
 vi.mock("@/lib/db", () => ({ db: {} }));
 
 import { generateMetadata } from "@/app/parlement/groupes/[slug]/page";

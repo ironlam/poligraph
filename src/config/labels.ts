@@ -57,6 +57,28 @@ import type { MeasureBadgeTier } from "@/components/measures/MeasureBadge";
 // Nombre de sièges à l'Assemblée nationale (XVIIe législature)
 export const AN_SEAT_COUNT = 577;
 
+export const GOVERNMENT_PROJECT_EXCLUSION_LABELS = {
+  NOT_WHOLE_BILL: "Le vote ne porte pas sur l’ensemble du projet",
+  PARLIAMENTARY_BILL: "Le texte est d’origine parlementaire",
+  DOSSIER_UNRESOLVED: "Le dossier officiel n’a pas été retrouvé",
+  DOSSIER_LINK_REQUIRES_REVIEW: "Le rattachement au dossier n’est pas confirmé",
+  ORIGIN_UNDETERMINED: "L’origine du dossier reste indéterminée",
+  ORIGIN_CONFLICT: "Les sources contredisent l’origine gouvernementale",
+  OFFICIAL_SNAPSHOT_DIAGNOSTIC: "Le décompte importé contient un diagnostic",
+  OFFICIAL_GROUP_COUNTS_WITHHELD:
+    "Les décomptes importés ne peuvent pas être validés avec le référentiel officiel",
+  OFFICIAL_GROUPS_MISSING: "Les décomptes officiels des groupes sont absents",
+  OFFICIAL_GROUP_TOTALS_INCOMPLETE: "Les décomptes officiels sont incomplets",
+  OFFICIAL_GROUP_TOTALS_MISMATCH: "Les décomptes des groupes ne correspondent pas au total",
+  GROUP_REFERENCE_MISSING: "La référence officielle du groupe est absente",
+  GROUP_SNAPSHOT_MISSING: "Le groupe est absent de la ventilation officielle",
+  GROUP_SNAPSHOT_AMBIGUOUS: "Plusieurs blocs officiels correspondent au groupe",
+  SOURCE_DIAGNOSTIC: "Le bloc officiel du groupe contient un diagnostic",
+  COUNTS_INCOMPLETE: "Les voix du groupe sont incomplètes",
+  POSITION_TIE: "Plusieurs positions arrivent à égalité",
+  MAJORITY_MISMATCH: "La position calculée contredit le libellé officiel",
+} as const;
+
 /**
  * Ordre de juridiction, libellé pour la modération.
  *

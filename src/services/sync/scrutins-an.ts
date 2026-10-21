@@ -54,6 +54,11 @@ interface ANScrutin {
     legislature: string;
     dateScrutin: string;
     titre: string;
+    objet?: {
+      dossierLegislatif?: {
+        dossierRef?: string | null;
+      } | null;
+    } | null;
     typeVote?: {
       codeTypeVote?: string;
       libelleTypeVote?: string;
@@ -142,6 +147,7 @@ export interface OfficialGroupSnapshot {
 }
 
 interface OfficialVoteMetadata {
+  officialDossierRef?: string | null;
   codeTypeVote: string | null;
   libelleTypeVote: string | null;
 }
@@ -151,6 +157,7 @@ interface ExistingOfficialGroupSnapshot {
   officialGroupsHash: string | null;
   officialGroupsSourceHash: string | null;
   officialGroupsSourceUrl: string | null;
+  officialDossierRef: string | null;
   codeTypeVote: string | null;
   libelleTypeVote: string | null;
 }
@@ -159,6 +166,16 @@ interface OfficialGroupSnapshotChanges {
   countsChanged: boolean;
   sourceChanged: boolean;
   metadataChanged: boolean;
+}
+
+function readOfficialDossierRef(scrutin: ANScrutin["scrutin"]): string | null | undefined {
+  if (!scrutin.objet || !Object.prototype.hasOwnProperty.call(scrutin.objet, "dossierLegislatif")) {
+    return undefined;
+  }
+  const dossier = scrutin.objet.dossierLegislatif;
+  if (dossier === null) return null;
+  if (!dossier || !Object.prototype.hasOwnProperty.call(dossier, "dossierRef")) return undefined;
+  return dossier.dossierRef?.trim() || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +361,8 @@ function getOfficialGroupSnapshotChanges(
       existing.officialGroupsSourceHash !== snapshot.sourceHash ||
       existing.officialGroupsSourceUrl !== snapshot.sourceUrl,
     metadataChanged:
+      (metadata.officialDossierRef !== undefined &&
+        existing.officialDossierRef !== metadata.officialDossierRef) ||
       existing.codeTypeVote !== metadata.codeTypeVote ||
       existing.libelleTypeVote !== metadata.libelleTypeVote,
   };
@@ -380,7 +399,11 @@ async function persistOfficialGroupSnapshot(
     await tx.scrutin.update({
       where: { id: existing.id },
       data: {
-        ...metadata,
+        ...(metadata.officialDossierRef !== undefined
+          ? { officialDossierRef: metadata.officialDossierRef }
+          : {}),
+        codeTypeVote: metadata.codeTypeVote,
+        libelleTypeVote: metadata.libelleTypeVote,
         ...(countsChanged || sourceChanged
           ? {
               officialGroupsHash: snapshot.hash,
@@ -546,7 +569,9 @@ export async function syncScrutinsAN(
         // parsing that section entirely in this mode to make that contract
         // explicit and keep the backfill cheap.
         const individualVotes = officialGroupsOnly ? [] : extractVotes(data);
+        const officialDossierRef = readOfficialDossierRef(s);
         const officialMetadata: OfficialVoteMetadata = {
+          ...(officialDossierRef !== undefined ? { officialDossierRef } : {}),
           codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
           libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
         };
@@ -595,6 +620,9 @@ export async function syncScrutinsAN(
               result: parseVotingResult(s.sort?.code || "rejeté"),
               sourceUrl,
               type: classifyScrutinTitle(s.titre),
+              ...(officialMetadata.officialDossierRef !== undefined
+                ? { officialDossierRef: officialMetadata.officialDossierRef }
+                : {}),
               codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
               libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
             };

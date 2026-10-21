@@ -8,6 +8,12 @@ import {
 } from "@/lib/votes/group-attribution";
 import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
 import type { GroupPosition, Chamber } from "@/generated/prisma";
+import { getParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
+import {
+  getGovernmentProjectPositionDataset,
+  type GovernmentProjectGroupSummary,
+  type GovernmentProjectPositionDataset,
+} from "@/lib/data/government-project-positions";
 
 export interface ScrutinGroupPositionData {
   id: string;
@@ -163,43 +169,52 @@ export interface GroupListingItem {
     finalVoteAlignmentPct: number;
     averageParticipationPct: number | null;
   } | null;
+  governmentProjectPositions: GovernmentProjectGroupSummary | null;
 }
 
 export async function getGroupesListing(
   options: {
     chamber?: Chamber;
     legislature?: number;
+    includeGovernmentProjectPositions?: boolean;
   } = {}
 ): Promise<GroupListingItem[]> {
   "use cache";
   cacheTag("votes", "groupes");
   cacheLife("synced");
 
-  const { chamber, legislature = 17 } = options;
+  const { chamber, legislature = 17, includeGovernmentProjectPositions = false } = options;
 
-  const groups = await db.parliamentaryGroup.findMany({
-    where: {
-      ...(chamber && { chamber }),
-      // AN groups have legislature set; Senate groups don't (staggered renewals)
-      OR: [{ legislature }, { legislature: null }],
-    },
-    include: {
-      stats: {
-        take: 1,
-        orderBy: { computedAt: "desc" },
+  const governmentProjectsPromise: Promise<GovernmentProjectPositionDataset> =
+    !includeGovernmentProjectPositions || chamber === "SENAT"
+      ? Promise.resolve({ legislature, groups: {} })
+      : getGovernmentProjectPositionDataset(legislature);
+  const [groups, governmentProjects] = await Promise.all([
+    db.parliamentaryGroup.findMany({
+      where: {
+        ...(chamber && { chamber }),
+        // AN groups have legislature set; Senate groups don't (staggered renewals)
+        OR: [{ legislature }, { legislature: null }],
       },
-      _count: {
-        select: {
-          mandates: {
-            where: {
-              mandate: { isCurrent: true },
+      include: {
+        stats: {
+          take: 1,
+          orderBy: { computedAt: "desc" },
+        },
+        _count: {
+          select: {
+            mandates: {
+              where: {
+                mandate: { isCurrent: true },
+              },
             },
           },
         },
       },
-    },
-    orderBy: { code: "asc" },
-  });
+      orderBy: { code: "asc" },
+    }),
+    governmentProjectsPromise,
+  ]);
 
   return groups.map((g) => ({
     id: g.id,
@@ -219,6 +234,11 @@ export async function getGroupesListing(
             finalVoteAlignmentPct: g.stats[0].finalVoteAlignmentPct,
             averageParticipationPct: null,
           }
+        : null,
+    governmentProjectPositions:
+      g.chamber === "AN"
+        ? (governmentProjects.groups[getParliamentaryGroupConfig(g.code, "AN")?.code ?? g.code]
+            ?.summary ?? null)
         : null,
   }));
 }
