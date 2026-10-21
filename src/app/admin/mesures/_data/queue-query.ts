@@ -17,19 +17,24 @@ import {
  * writing the derivation a second time in another language, and the two would drift.
  *
  * So: the SQL-expressible filters bound the scan, the derivation runs over the scanned rows,
- * and the derived filters apply after it. The scan is capped, and `scanCapped` says so rather
- * than letting the counters look exhaustive when they are not.
+ * and the derived filters apply after it. The scan reads a LIGHT selection (only what the
+ * derivation needs), so it can cover the whole filtered set; the heavy rows (text, politician,
+ * election) are loaded afterwards for the page being shown and nothing else. The scan is still
+ * capped, and `scanCapped` says so rather than letting the counters look exhaustive when they
+ * are not.
  */
 
 const DEFAULT_TAKE = 25;
 const MAX_TAKE = 100;
 
 /**
- * The ceiling on rows fed to the derivation in one call. At a few hundred measures it never
- * bites; when it does, the caller is told instead of being handed truncated counters that
- * read like totals.
+ * The ceiling on rows fed to the derivation in one call. The scan is light (about 70 µs a row,
+ * measured on production: 4 342 measures in ~300 ms), so the cap sits well above the corpus.
+ * When it does bite, the caller is told instead of being handed truncated counters that read
+ * like totals. It used to be 500 over HEAVY rows, which is below the size of the table: the
+ * state filters and the stage counters then silently ignored every recent measure.
  */
-export const QUEUE_SCAN_CAP = 500;
+export const QUEUE_SCAN_CAP = 10_000;
 
 export type EnrichmentState = "SUBTOPICS_PENDING" | "SUBTOPICS_APPROVED" | "DETAILS_MISSING";
 
@@ -47,6 +52,31 @@ export type MeasureQueueFilters = {
   take?: number;
   skip?: number;
 };
+
+/**
+ * What the scan reads: the derivation's own selection plus the two things the enrichment
+ * filters look at. No text, no politician, no election.
+ */
+const SCAN_SELECT = {
+  ...MODERATION_MEASURE_SELECT,
+  createdAt: true,
+  revisions: {
+    select: {
+      ...MODERATION_MEASURE_SELECT.revisions.select,
+      details: true,
+      subtopics: { select: { status: true } },
+    },
+    orderBy: MODERATION_MEASURE_SELECT.revisions.orderBy,
+  },
+} satisfies Prisma.MeasureSelect;
+
+type ScanDbRow = Prisma.MeasureGetPayload<{ select: typeof SCAN_SELECT }>;
+
+/** The part of a queue row the derived filters and the counters read. */
+type ScannedMeasure = Pick<
+  MeasureQueueRow,
+  "id" | "state" | "hasDetails" | "suggestedSubtopicCount" | "approvedSubtopicCount"
+>;
 
 const QUEUE_SELECT = {
   ...MODERATION_MEASURE_SELECT,
@@ -211,7 +241,22 @@ function toQueueRow(row: QueueDbRow): MeasureQueueRow {
   };
 }
 
-function matchesDerivedFilters(row: MeasureQueueRow, filters: MeasureQueueFilters): boolean {
+function toScanned(row: ScanDbRow): ScannedMeasure {
+  const referenceId = row.publishedRevisionId ?? row.latestRevisionId;
+  const referenceRevision = row.revisions.find((revision) => revision.id === referenceId);
+
+  return {
+    id: row.id,
+    hasDetails: Boolean(referenceRevision?.details?.trim()),
+    suggestedSubtopicCount:
+      referenceRevision?.subtopics.filter((item) => item.status === "SUGGESTED").length ?? 0,
+    approvedSubtopicCount:
+      referenceRevision?.subtopics.filter((item) => item.status === "APPROVED").length ?? 0,
+    state: deriveModerationState(toModerationMeasureRow(row)),
+  };
+}
+
+function matchesDerivedFilters(row: ScannedMeasure, filters: MeasureQueueFilters): boolean {
   if (filters.publication && filters.publication.length > 0) {
     if (!filters.publication.includes(row.state.publication)) return false;
   }
@@ -227,26 +272,29 @@ function emptyCounts(): Record<PublicationState, number> {
 }
 
 export async function queryMeasureQueue(
-  filters: MeasureQueueFilters = {}
+  filters: MeasureQueueFilters = {},
+  options: { scanCap?: number } = {}
 ): Promise<MeasureQueueResult> {
   const take = clampTake(filters.take);
   const skip = clampSkip(filters.skip);
+  const scanCap = options.scanCap ?? QUEUE_SCAN_CAP;
 
   const where = buildWhere(filters);
-  const scanQuery = {
-    where,
-    select: QUEUE_SELECT,
-    orderBy: { createdAt: "asc" } as const,
-    take: QUEUE_SCAN_CAP + 1,
-  };
   const detailsMissingIsDatabaseFiltered = filters.enrichment === "DETAILS_MISSING";
-  const [scanned, exactPage, exactTotal] = await Promise.all([
-    db.measure.findMany(scanQuery),
+  const [scannedDb, exactPage, exactTotal] = await Promise.all([
+    db.measure.findMany({
+      where,
+      select: SCAN_SELECT,
+      // `id` breaks ties: bulk imports share one createdAt, and without a total order two
+      // successive calls (page 1, then page 2) can order the equal rows differently.
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: scanCap + 1,
+    }),
     detailsMissingIsDatabaseFiltered
       ? db.measure.findMany({
           where,
           select: QUEUE_SELECT,
-          orderBy: { createdAt: "asc" },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           skip,
           take,
         })
@@ -254,8 +302,8 @@ export async function queryMeasureQueue(
     detailsMissingIsDatabaseFiltered ? db.measure.count({ where }) : Promise.resolve(null),
   ]);
 
-  const scanCapped = scanned.length > QUEUE_SCAN_CAP;
-  const rows = scanned.slice(0, QUEUE_SCAN_CAP).map(toQueueRow);
+  const scanCapped = scannedDb.length > scanCap;
+  const scanned = scannedDb.slice(0, scanCap).map(toScanned);
 
   // Counters are computed BEFORE the derived filters, so the filter chips show the whole
   // distribution of the SQL-filtered set instead of only the state already selected.
@@ -267,7 +315,7 @@ export async function queryMeasureQueue(
     SUBTOPICS_APPROVED: 0,
     DETAILS_MISSING: 0,
   };
-  for (const row of rows) {
+  for (const row of scanned) {
     counts[row.state.publication] += 1;
     if (row.state.anomalies.length > 0) anomalyCount += 1;
     if (row.state.withdrawal !== null) withdrawnCount += 1;
@@ -290,10 +338,23 @@ export async function queryMeasureQueue(
     };
   }
 
-  const matching = rows.filter((row) => matchesDerivedFilters(row, filters));
+  const matching = scanned.filter((row) => matchesDerivedFilters(row, filters));
+
+  // The heavy rows are loaded for the page only, then put back in scan order: `id IN (...)`
+  // promises no order.
+  const pageIds = matching.slice(skip, skip + take).map((row) => row.id);
+  const heavy =
+    pageIds.length === 0
+      ? []
+      : await db.measure.findMany({ where: { id: { in: pageIds } }, select: QUEUE_SELECT });
+  const heavyById = new Map(heavy.map((row) => [row.id, row]));
+  const rows = pageIds.flatMap((id) => {
+    const row = heavyById.get(id);
+    return row ? [toQueueRow(row)] : [];
+  });
 
   return {
-    rows: matching.slice(skip, skip + take),
+    rows,
     total: matching.length,
     counts,
     anomalyCount,
