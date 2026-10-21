@@ -9,6 +9,7 @@ import {
   FileCheck2,
   FileText,
   HeartPulse,
+  Inbox,
   Landmark,
   History,
   LayoutDashboard,
@@ -180,6 +181,14 @@ const entries: readonly AdminNavigationEntry[] = [
     description: "Promesses de campagne à vérifier.",
     group: "content",
     icon: FileCheck2,
+  },
+  {
+    id: "retours",
+    href: "/admin/retours",
+    label: "Retours visiteurs",
+    description: "Signalements et avis reçus par le formulaire.",
+    group: "content",
+    icon: Inbox,
   },
   {
     id: "newsletter",

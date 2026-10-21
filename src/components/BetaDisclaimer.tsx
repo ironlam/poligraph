@@ -1,3 +1,5 @@
+import { ReportLink } from "@/components/feedback/ReportLink";
+
 type Variant = "stats" | "profile" | "compare";
 
 const MESSAGES: Record<Variant, { note: string; detail: string }> = {
@@ -33,14 +35,9 @@ export function BetaDisclaimer({ variant }: BetaDisclaimerProps) {
       <p className="font-medium text-foreground/80 mb-0.5">{note}</p>
       <p className="leading-relaxed">
         {detail}{" "}
-        <a
-          href="https://github.com/ironlam/poligraph/issues"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary/80 hover:text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary/60 transition-colors"
-        >
-          Signaler une erreur ou contribuer
-        </a>
+        <ReportLink className="text-primary/80 hover:text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary/60 transition-colors">
+          Signaler une erreur ou donner un avis
+        </ReportLink>
       </p>
     </aside>
   );

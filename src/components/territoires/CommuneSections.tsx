@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReportLink } from "@/components/feedback/ReportLink";
 import { ChevronDown } from "lucide-react";
 import { DATA_SOURCE_URLS } from "@/config/labels";
 import { TERRITOIRES_SANS_COMMUNE } from "@/config/regions";
@@ -489,13 +490,7 @@ function ErreurContent() {
   return (
     <>
       <p className="text-sm">Toute personne citée peut demander une correction.</p>
-      <Link
-        href="/support"
-        prefetch={false}
-        className="mt-3 flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold hover:bg-muted"
-      >
-        Signaler une erreur
-      </Link>
+      <ReportLink className="mt-3 flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold hover:bg-muted" />
       <p className="mt-1 text-sm">
         <Link href="/methodologie" prefetch={false} className={`${TAP} ${LINK}`}>
           Sources et méthode

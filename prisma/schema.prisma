@@ -4566,3 +4566,34 @@ model ScrutinOrganPosition {
   @@index([runId, publishable], map: "ScrutinOrganPosition_runId_publishable_idx")
   @@index([scrutinExternalId], map: "ScrutinOrganPosition_scrutinExternalId_idx")
 }
+
+/// Retour d'un visiteur via /signaler. Table privée : jamais exposée par une page ou une API
+/// publique. `contactEmail` est effacé quand le retour est clos.
+model VisitorFeedback {
+  id             String           @id @default(cuid())
+  category       FeedbackCategory
+  message        String
+  /// Chemin relatif de la page d'origine, sans paramètres de requête.
+  pagePath       String?
+  contactEmail   String?
+  status         FeedbackStatus   @default(NEW)
+  linearIssueId  String?
+  linearIssueUrl String?
+  createdAt      DateTime         @default(now())
+  resolvedAt     DateTime?
+
+  @@index([status, createdAt])
+}
+
+enum FeedbackCategory {
+  FACTUAL_ERROR
+  BUG
+  IDEA
+  OTHER
+}
+
+enum FeedbackStatus {
+  NEW
+  DONE
+  REJECTED
+}

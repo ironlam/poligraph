@@ -50,6 +50,11 @@ describe("degradedActionForTier", () => {
     expect(degradedActionForTier("degraded-prod", "export")).toBe("block");
   });
 
+  it("fails the anonymous feedback form closed in production (public write endpoint)", () => {
+    expect(degradedActionForTier("degraded-prod", "feedback")).toBe("block");
+    expect(degradedActionForTier("degraded-dev", "feedback")).toBe("allow");
+  });
+
   it("never locks operators out of admin, nor breaks public search", () => {
     expect(degradedActionForTier("degraded-prod", "admin")).toBe("allow");
     expect(degradedActionForTier("degraded-prod", "search")).toBe("allow");

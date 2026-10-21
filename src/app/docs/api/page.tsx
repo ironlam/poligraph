@@ -283,7 +283,7 @@ join = affaires.merge(
           <p className="text-sm text-muted-foreground mt-4">
             Pour signaler une erreur ou demander l{"'"}exercice d{"'"}un droit (correction,
             opposition) :{" "}
-            <Link href="/contact" className="text-primary hover:underline">
+            <Link href="/support" className="text-primary hover:underline">
               nous contacter
             </Link>
             .

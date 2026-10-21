@@ -6,6 +6,7 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NOT_FOUND");
   },
+  usePathname: () => "/parlement/assemblee/legislatures",
 }));
 vi.mock("@/components/seo/JsonLd", () => ({
   BreadcrumbJsonLd: () => null,

@@ -19,7 +19,14 @@ import { TERRITOIRES_SEARCH_PATH } from "@/lib/territoires/paths";
 
 // ─── Rate limit tiers ────────────────────────────────────────────
 
-type RateLimitTier = "general" | "search" | "autocomplete" | "export" | "admin" | "subscribe";
+type RateLimitTier =
+  | "general"
+  | "search"
+  | "autocomplete"
+  | "export"
+  | "admin"
+  | "subscribe"
+  | "feedback";
 
 const PRESIDENTIAL_SEARCH_PAGE_PATH = "/elections/presidentielle-2027/recherche";
 /** HTML search pages: rate-limited like the search API, answered with an HTML state when limited. */
@@ -32,6 +39,8 @@ const TIER_CONFIG: Record<RateLimitTier, { tokens: number; window: string }> = {
   export: { tokens: 5, window: "1m" },
   admin: { tokens: 30, window: "1m" },
   subscribe: { tokens: 8, window: "1m" },
+  // Un retour par visiteur suffit : six par heure absorbent un foyer ou un réseau partagé.
+  feedback: { tokens: 6, window: "1h" },
 };
 
 // ─── Lazy-init rate limiters ─────────────────────────────────────
@@ -169,6 +178,7 @@ export function getRateLimitTier(pathname: string): RateLimitTier | null {
   ) {
     return "subscribe";
   }
+  if (pathname.startsWith("/api/feedback")) return "feedback";
   if (pathname.startsWith("/api/export")) return "export";
   if (SEARCH_PAGE_PATHS.has(pathname)) return "search";
   if (pathname.startsWith("/api/elections/presidentielle-2027/recherche")) {

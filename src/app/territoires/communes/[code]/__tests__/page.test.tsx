@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
+vi.mock("next/navigation", () => ({
+  notFound: mocks.notFound,
+  usePathname: () => "/territoires/communes/75056",
+}));
 vi.mock("@/lib/data/territoires", () => ({
   getCommuneDossier: (code: string) => mocks.getCommuneDossier(code),
 }));
@@ -256,7 +259,9 @@ describe("/territoires/communes/[code]", () => {
     expect(document.querySelectorAll('a[href="/api/v1/territoires/communes/35238"]').length).toBe(
       2
     );
-    expect(document.querySelector('a[href="/support"]')?.textContent).toBe("Signaler une erreur");
+    const report = document.querySelector('a[href^="/signaler"]');
+    expect(report?.textContent).toBe("Signaler une erreur");
+    expect(report?.getAttribute("href")).toBe("/signaler?from=%2Fterritoires%2Fcommunes%2F75056");
     expect(document.querySelector('a[href="/methodologie"]')).not.toBeNull();
     expect(document.querySelector('a[href*="csv"]')).toBeNull();
   });

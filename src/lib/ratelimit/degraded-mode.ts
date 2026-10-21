@@ -17,11 +17,13 @@ export type DegradedAction = "allow" | "block";
 
 /**
  * Tiers that fail closed (HTTP 503) when rate limiting is degraded in
- * production. Deliberately limited to `export`: blocking admin would lock
- * operators out during an outage, and blocking search/general would break the
- * public site.
+ * production. Deliberately limited to `export` and `feedback`: blocking admin
+ * would lock operators out during an outage, and blocking search/general would
+ * break the public site. `feedback` is an anonymous write endpoint: a form that
+ * is unavailable for a few minutes costs less than an unthrottled flood of
+ * rows.
  */
-const FAIL_CLOSED_TIERS: ReadonlySet<string> = new Set(["export"]);
+const FAIL_CLOSED_TIERS: ReadonlySet<string> = new Set(["export", "feedback"]);
 
 /**
  * Vercel marks preview builds with `NODE_ENV=production`, so `VERCEL_ENV` is the

@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { formatDate } from "@/lib/utils";
+import { ReportLink } from "@/components/feedback/ReportLink";
+
+const REPORT_FORM_HREF = "/signaler";
 
 /**
  * SourceLine: attribution de source, sous le bloc qu'elle justifie.
@@ -62,7 +65,7 @@ export function SourceLine({
   sources,
   consultedAt,
   note,
-  reportHref = "/contact",
+  reportHref = REPORT_FORM_HREF,
   className,
 }: SourceLineProps) {
   const named = sources.filter((s) => s.label.trim().length > 0);
@@ -97,9 +100,13 @@ export function SourceLine({
       {reportHref && (
         <>
           <span aria-hidden="true"> · </span>
-          <a href={reportHref} className="underline hover:text-primary">
-            Signaler une erreur
-          </a>
+          {reportHref === REPORT_FORM_HREF ? (
+            <ReportLink className="underline hover:text-primary" />
+          ) : (
+            <a href={reportHref} className="underline hover:text-primary">
+              Signaler une erreur
+            </a>
+          )}
         </>
       )}
     </p>

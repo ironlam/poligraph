@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ReportLink } from "@/components/feedback/ReportLink";
 import { notFound } from "next/navigation";
 import {
   methodeSources,
@@ -120,13 +121,7 @@ export default async function MethodePage({ params }: PageProps) {
       </Rubrique>
 
       <p className="mt-8 text-sm">
-        <Link
-          href="/support"
-          prefetch={false}
-          className="inline-flex min-h-11 items-center underline underline-offset-2"
-        >
-          Signaler une erreur
-        </Link>
+        <ReportLink className="inline-flex min-h-11 items-center underline underline-offset-2" />
       </p>
     </div>
   );

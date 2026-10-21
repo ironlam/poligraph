@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReportLink } from "@/components/feedback/ReportLink";
 import { FOOTER_SECTIONS, DATA_SOURCES, RSS_FEEDS, SOCIAL_LINKS } from "@/config/navigation";
 import { ExternalLink, Instagram, Github, Rss } from "lucide-react";
 import { HexPattern } from "@/components/ui/HexPattern";
@@ -162,15 +163,7 @@ export async function Footer() {
               </a>
             ))}
           </div>
-          <a
-            href="https://github.com/ironlam/poligraph/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Signaler une erreur
-            <span className="sr-only">(ouvre un nouvel onglet)</span>
-          </a>
+          <ReportLink className="text-xs text-muted-foreground hover:text-foreground transition-colors" />
         </div>
       </div>
     </footer>
