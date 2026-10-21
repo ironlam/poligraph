@@ -132,8 +132,7 @@ export default function ConfidentialitePage() {
             </p>
             <p>
               Le message est lu par l&apos;équipe. L&apos;adresse email est effacée dès que le
-              retour est traité. Un outil de suivi (Linear) reçoit uniquement la nature du retour et
-              la page concernée, jamais le message ni l&apos;adresse email.
+              retour est traité. Le message n&apos;est transmis à aucun service tiers.
             </p>
           </div>
         </section>
@@ -198,10 +197,6 @@ export default function ConfidentialitePage() {
               <strong>Mailjet :</strong> inscription et envoi de la newsletter.
             </li>
             <li>
-              <strong>Linear :</strong> suivi interne des retours des visiteurs, limité à la nature
-              du retour et à la page concernée.
-            </li>
-            <li>
               <strong>HelloAsso :</strong> traitement du don lorsqu&apos;un utilisateur choisit
               d&apos;ouvrir le formulaire correspondant.
             </li>
@@ -253,11 +248,6 @@ export default function ConfidentialitePage() {
             traitements hors de l&apos;Union européenne selon leur configuration et leurs propres
             garanties contractuelles. PoliGraph ne garantit pas une localisation exclusivement
             européenne de tous les traitements.
-          </p>
-          <p className="mt-3 text-muted-foreground">
-            Linear, utilisé pour le suivi interne des retours, traite ses données principalement aux
-            États-Unis. Son accord de traitement intègre les clauses contractuelles types de la
-            Commission européenne. Linear ne reçoit que la nature du retour et la page concernée.
           </p>
         </section>
 

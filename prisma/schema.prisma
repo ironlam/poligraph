@@ -4577,8 +4577,6 @@ model VisitorFeedback {
   pagePath       String?
   contactEmail   String?
   status         FeedbackStatus   @default(NEW)
-  linearIssueId  String?
-  linearIssueUrl String?
   createdAt      DateTime         @default(now())
   resolvedAt     DateTime?
 

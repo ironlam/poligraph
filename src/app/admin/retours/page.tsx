@@ -87,16 +87,6 @@ export default async function AdminRetoursPage({
               </p>
             )}
             <div className="flex flex-wrap items-center gap-4">
-              {f.linearIssueUrl && (
-                <a
-                  className="text-sm underline"
-                  href={f.linearIssueUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Issue Linear<span className="sr-only"> (ouvre un nouvel onglet)</span>
-                </a>
-              )}
               {f.status === "NEW" && <CloseFeedbackButtons id={f.id} />}
             </div>
           </CardContent>

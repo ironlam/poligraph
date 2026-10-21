@@ -33,9 +33,9 @@ describe("feedbackSchema", () => {
     );
   });
 
-  it("ne laisse pas passer un champ inconnu (statut, identifiant Linear)", () => {
-    const parsed = feedbackSchema.parse({ ...valid, status: "DONE", linearIssueId: "x" });
+  it("ne laisse pas passer un champ inconnu (statut, identifiant)", () => {
+    const parsed = feedbackSchema.parse({ ...valid, status: "DONE", id: "x" });
     expect(parsed).not.toHaveProperty("status");
-    expect(parsed).not.toHaveProperty("linearIssueId");
+    expect(parsed).not.toHaveProperty("id");
   });
 });
