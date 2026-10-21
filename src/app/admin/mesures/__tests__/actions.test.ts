@@ -634,6 +634,63 @@ describe("relecture par lot", () => {
   });
 });
 
+describe("sources vidéo : le début du passage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+    eligibilityMock.assertHubMeasureCandidacy.mockResolvedValue({
+      electionId: "e-1",
+      politicianId: "p-1",
+    });
+  });
+
+  const create = async (startAt: string | null | undefined) => {
+    const { createMeasureAction } = await actions();
+    return createMeasureAction({
+      candidacyId: "c-1",
+      politicianId: "p-1",
+      electionId: "e-1",
+      theme: "LOGEMENT_URBANISME",
+      attribution: "PERSONAL",
+      revision: REVISION,
+      sources: [{ ...SOURCES[0]!, page: null, startAt }],
+    });
+  };
+
+  it("convertit 22:41 en secondes avant l'écriture", async () => {
+    const result = await create("22:41");
+
+    expect(result.ok).toBe(true);
+    expect(transitionsMock.createMeasure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: [expect.objectContaining({ startAtSeconds: 1361 })],
+      })
+    );
+  });
+
+  it("enregistre null quand le champ est vide ou absent", async () => {
+    await create("  ");
+    await create(undefined);
+
+    expect(transitionsMock.createMeasure).toHaveBeenCalledTimes(2);
+    expect(transitionsMock.createMeasure).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sources: [expect.objectContaining({ startAtSeconds: null })] })
+    );
+    expect(transitionsMock.createMeasure).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sources: [expect.objectContaining({ startAtSeconds: null })] })
+    );
+  });
+
+  it("refuse un horodatage invalide sans rien écrire", async () => {
+    const result = await create("22h41");
+
+    expect(result.ok).toBe(false);
+    expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
+  });
+});
+
 describe("actions éditoriales : ce qu'elles transmettent", () => {
   beforeEach(() => {
     vi.clearAllMocks();

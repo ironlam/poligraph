@@ -3956,6 +3956,9 @@ model MeasureSource {
   tier        SourceTier
   url         String
   page        String?
+  // Where the passage starts in an audio-visual source, in seconds. `page` stays free text for
+  // documents; a video source carries this instead so the public link can jump to the passage.
+  startAtSeconds Int?
   publishedAt DateTime
 
   createdAt DateTime @default(now())
