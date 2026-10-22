@@ -178,6 +178,28 @@ Le texte enregistré doit être **attribuable et sans ambiguïté sur son objet*
 pas dire à quoi elle s'applique n'est pas encore une mesure ; elle attend une formulation plus nette, pas
 une interprétation de notre part.
 
+### Clarté : une mesure se lit seule
+
+Une mesure s'affiche dans une liste, sur une page de thème, parfois sous un autre titre : son texte
+doit se comprendre sans la source ni la fiche. Avant d'enregistrer ou de relire une mesure, cinq
+questions :
+
+1. **Qui est visé ?** Une population nommée (« les jeunes en formation »), jamais « les personnes
+   concernées ».
+2. **Quoi ?** Un verbe d'action précis : instaurer, supprimer, porter à.
+3. **Combien ?** Un chiffre avec son unité et sa période, et ce que ce chiffre mesure.
+4. **Quand ?** Une échéance, si la source en donne une.
+5. **Quel antécédent ?** Aucun pronom (« ces derniers », « ceux-ci ») dont le référent peut être pris
+   pour un autre, aucun sigle sans développement ni repère.
+
+Ce que la source ne dit pas ne se complète pas : le texte reste dans les mots du candidat, et la
+limite va dans le contexte (« l'indice de référence n'est pas précisé »).
+
+`npm run measures:audit-clarity` (lecture seule) liste les mesures dont le texte déclenche une règle :
+renvoi vague, pronom ambigu, texte trop court, quantité floue, sigle non défini. Chaque ligne est une
+question à poser, pas un verdict. `--drafts` inclut les brouillons, `--strict` sort en erreur s'il
+reste une mesure à relire.
+
 ### Rattachement
 
 Une mesure se rattache à une candidature, et, quand elle existe, à une édition de programme. **Règle
