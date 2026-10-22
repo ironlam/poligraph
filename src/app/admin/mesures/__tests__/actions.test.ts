@@ -64,6 +64,7 @@ const subtopicsMock = {
     skipped: false,
   })),
   reviewMeasureRevisionSubtopic: vi.fn(async () => undefined),
+  addMeasureRevisionSubtopic: vi.fn(async () => undefined),
 };
 vi.mock("@/lib/measures/subtopics", () => subtopicsMock);
 
@@ -152,6 +153,11 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
           subtopicId: "subtopic-1",
           status: "APPROVED",
         }),
+    },
+    {
+      name: "addSubtopicAction",
+      call: () =>
+        a.addSubtopicAction({ measureId: "m-1", revisionId: "rev-1", subtopicId: "subtopic-1" }),
     },
     {
       name: "proposeReaderGuidesAction",
@@ -261,6 +267,7 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).not.toHaveBeenCalled();
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).not.toHaveBeenCalled();
+    expect(subtopicsMock.addMeasureRevisionSubtopic).not.toHaveBeenCalled();
     expect(readerGuidesMock.proposeReaderGuidesForRevision).not.toHaveBeenCalled();
     expect(readerGuidesMock.reviewReaderGuideMention).not.toHaveBeenCalled();
     expect(readerGuidesMock.saveReaderGuideDraft).not.toHaveBeenCalled();
@@ -284,6 +291,7 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledTimes(1);
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
+    expect(subtopicsMock.addMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
@@ -688,6 +696,74 @@ describe("sources vidéo : le début du passage", () => {
 
     expect(result.ok).toBe(false);
     expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
+  });
+});
+
+describe("sous-thèmes : proposition continue et ajout manuel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  it("laisse l'admin relancer la proposition après une validation", async () => {
+    const { proposeSubtopicsAction } = await actions();
+
+    await proposeSubtopicsAction({ measureId: "m-1", revisionId: "rev-1" });
+
+    expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledWith("rev-1", {
+      proposedBy: "admin",
+      allowWhenApproved: true,
+    });
+  });
+
+  it("transmet l'ajout manuel à l'acteur admin, jamais à un nom saisi", async () => {
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(subtopicsMock.addMeasureRevisionSubtopic).toHaveBeenCalledWith({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+      addedBy: "admin",
+    });
+    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/mesures/m-1");
+  });
+
+  it("refuse une entrée incomplète sans écrire", async () => {
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(subtopicsMock.addMeasureRevisionSubtopic).not.toHaveBeenCalled();
+  });
+
+  it("remonte le refus de la règle des trois sous-thèmes comme un message", async () => {
+    subtopicsMock.addMeasureRevisionSubtopic.mockRejectedValueOnce(
+      new MeasureValidationError("Cette révision possède déjà trois sous-thèmes approuvés")
+    );
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Cette révision possède déjà trois sous-thèmes approuvés",
+    });
   });
 });
 

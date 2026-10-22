@@ -37,6 +37,7 @@ import {
 } from "@/lib/measures/context-generation";
 import { createMeasureVoteLink } from "@/lib/measures/vote-links";
 import {
+  addMeasureRevisionSubtopic,
   proposeMeasureRevisionSubtopics,
   reviewMeasureRevisionSubtopic,
 } from "@/lib/measures/subtopics";
@@ -144,6 +145,10 @@ const subtopicReviewInputSchema = subtopicProposalInputSchema
     subtopicId: z.string().min(1),
     status: z.enum(["APPROVED", "REJECTED"]),
   })
+  .strict();
+
+const subtopicAddInputSchema = subtopicProposalInputSchema
+  .extend({ subtopicId: z.string().min(1) })
   .strict();
 
 const contextGenerationInputSchema = z
@@ -413,7 +418,10 @@ export async function proposeSubtopicsAction(input: {
   try {
     const parsed = subtopicProposalInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Révision à classer invalide");
-    await proposeMeasureRevisionSubtopics(parsed.data.revisionId, { proposedBy: ACTOR });
+    await proposeMeasureRevisionSubtopics(parsed.data.revisionId, {
+      proposedBy: ACTOR,
+      allowWhenApproved: true,
+    });
     revalidate(parsed.data.measureId);
     return { ok: true };
   } catch (error) {
@@ -438,6 +446,29 @@ export async function reviewSubtopicAction(input: {
       subtopicId: parsed.data.subtopicId,
       status: parsed.data.status,
       reviewedBy: ACTOR,
+    });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function addSubtopicAction(input: {
+  measureId: string;
+  revisionId: string;
+  subtopicId: string;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const parsed = subtopicAddInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Sous-thème à ajouter invalide");
+    await addMeasureRevisionSubtopic({
+      measureId: parsed.data.measureId,
+      revisionId: parsed.data.revisionId,
+      subtopicId: parsed.data.subtopicId,
+      addedBy: ACTOR,
     });
     revalidate(parsed.data.measureId);
     return { ok: true };
