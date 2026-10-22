@@ -284,6 +284,20 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
     sourcePublisher: "Ministère de l’Europe et des Affaires étrangères",
   },
   {
+    slug: "majorite-trois-cinquiemes",
+    label: "Majorité des trois cinquièmes",
+    definition:
+      "La majorité des trois cinquièmes est un seuil de vote plus élevé que la majorité simple. " +
+      "La Constitution l’exige notamment pour qu’un projet de révision soit approuvé par le " +
+      "Parlement réuni en Congrès : il doit réunir les trois cinquièmes des suffrages exprimés, " +
+      "après avoir été voté en termes identiques par l’Assemblée nationale et le Sénat.",
+    aliases: ["majorité qualifiée des trois cinquièmes", "trois cinquièmes des suffrages exprimés"],
+    sourceUrl:
+      "https://www.conseil-constitutionnel.fr/la-constitution/peut-on-modifier-la-constitution",
+    sourceLabel: "Peut-on modifier la Constitution ?",
+    sourcePublisher: "Conseil constitutionnel",
+  },
+  {
     slug: "marches-publics",
     label: "Marché public",
     definition:
@@ -425,6 +439,20 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "https://www.vie-publique.fr/fiches/23948-quels-sont-les-differents-modes-de-scrutin",
     sourceLabel: "Quels sont les différents modes de scrutin ?",
     sourcePublisher: "Vie publique",
+  },
+  {
+    slug: "solde-stabilisant-dette",
+    label: "Solde stabilisant la dette",
+    definition:
+      "Le solde stabilisant la dette est le solde public pour lequel la dette et le PIB " +
+      "progressent au même rythme, ce qui maintient constant le ratio d’endettement public. Il " +
+      "correspond approximativement à l’opposé du produit de la croissance nominale du PIB par " +
+      "le ratio d’endettement de l’année précédente.",
+    aliases: ["seuil stabilisant de la dette", "solde stabilisant"],
+    sourceUrl: "https://www.senat.fr/rap/r16-566/r16-5669.html",
+    sourceLabel:
+      "La dette publique de la France : un poids du passé, un défi pour l’avenir (rapport d’information n° 566, 2016-2017)",
+    sourcePublisher: "Sénat",
   },
   {
     slug: "sous-traitance",
