@@ -14,6 +14,18 @@ export type MeasureReaderGuideDefinition = {
  */
 export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
   {
+    slug: "aide-personnalisee-logement",
+    label: "Aide personnalisée au logement (APL)",
+    definition:
+      "L’aide personnalisée au logement (APL) permet de réduire le montant du loyer ou de la " +
+      "redevance. Elle est versée par la caisse d’allocations familiales (Caf) ou la mutualité " +
+      "sociale agricole (MSA), sous conditions.",
+    aliases: ["APL", "aide personnalisée au logement"],
+    sourceUrl: "https://www.service-public.gouv.fr/particuliers/vosdroits/F12006",
+    sourceLabel: "Aide personnalisée au logement (APL)",
+    sourcePublisher: "Service Public",
+  },
+  {
     slug: "allocation-solidarite-specifique",
     label: "Allocation de solidarité spécifique (ASS)",
     definition:
@@ -298,6 +310,19 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
     sourcePublisher: "Conseil constitutionnel",
   },
   {
+    slug: "marche-europeen-electricite",
+    label: "Marché européen de l’électricité",
+    definition:
+      "Le marché de l’électricité s’est libéralisé progressivement avec le renforcement du " +
+      "marché intérieur européen. Sur les marchés de gros, le prix de l’électricité est " +
+      "déterminé par le coût variable de la dernière centrale de production appelée.",
+    aliases: [],
+    sourceUrl: "https://www.assemblee-nationale.fr/dyn/opendata/RINFANR5L17B1902.html",
+    sourceLabel:
+      "Rapport d’information n° 1902 sur le prix de l’électricité, la compétitivité des entreprises et l’action de l’État",
+    sourcePublisher: "Assemblée nationale",
+  },
+  {
     slug: "marches-publics",
     label: "Marché public",
     definition:
@@ -350,6 +375,19 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "https://www.vie-publique.fr/questions-reponses/296120-les-peines-en-droit-penal-le-point-en-cinq-questions",
     sourceLabel: "Les peines en droit pénal. Le point en cinq questions",
     sourcePublisher: "Vie publique",
+  },
+  {
+    slug: "point-indice",
+    label: "Point d’indice",
+    definition:
+      "Le point d’indice sert à calculer le traitement brut des fonctionnaires, magistrats, " +
+      "militaires et de certains agents contractuels. Le traitement brut mensuel s’obtient en " +
+      "multipliant la valeur du point d’indice par l’indice majoré propre à chaque agent public.",
+    aliases: ["point d'indice", "valeur du point d'indice"],
+    sourceUrl:
+      "https://www.fonction-publique.gouv.fr/etre-agent-public/ma-remuneration/connaitre-le-point-dindice",
+    sourceLabel: "Connaître le point d’indice",
+    sourcePublisher: "Portail de la fonction publique",
   },
   {
     slug: "politique-agricole-commune",
@@ -478,6 +516,18 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "https://www.vie-publique.fr/fiches/37927-financement-des-soins-lhopital-la-tarification-lactivite-t2a",
     sourceLabel: "Financement des soins à l’hôpital : la tarification à l’activité (T2A)",
     sourcePublisher: "Vie publique",
+  },
+  {
+    slug: "tva",
+    label: "TVA",
+    definition:
+      "La taxe sur la valeur ajoutée (TVA) est facturée aux clients sur les biens qu’ils " +
+      "consomment ou les services qu’ils utilisent. Les professionnels la collectent sur ces " +
+      "opérations imposables et la déclarent.",
+    aliases: ["taxe sur la valeur ajoutée"],
+    sourceUrl: "https://entreprendre.service-public.gouv.fr/vosdroits/N13445",
+    sourceLabel: "Taxe sur la valeur ajoutée (TVA)",
+    sourcePublisher: "Service Public Entreprendre",
   },
   {
     slug: "zero-artificialisation-nette",
