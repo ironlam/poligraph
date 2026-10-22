@@ -354,7 +354,7 @@ export async function proposeMeasureRevisionSubtopics(
     select: {
       id: true,
       text: true,
-      measure: { select: { theme: true } },
+      measure: { select: { id: true, theme: true } },
       subtopics: { select: { subtopic: { select: { slug: true } }, status: true } },
     },
   });
@@ -388,13 +388,25 @@ export async function proposeMeasureRevisionSubtopics(
   });
   const ids = new Map(rows.map((row) => [row.slug, row.id]));
 
-  await db.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
+    // Same lock as a validation and a manual add: without it a proposal can land after a third
+    // subtopic was approved and leave a suggestion nobody can validate.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id
+      FROM "Measure"
+      WHERE id = ${revision.measure.id}
+      FOR UPDATE
+    `);
+    const approvedNow = await tx.measureRevisionSubtopic.count({
+      where: { revisionId, status: "APPROVED" },
+    });
+    const toCreate = suggestions.slice(0, Math.max(0, MAX_SUBTOPICS_PER_REVISION - approvedNow));
     await tx.measureRevisionSubtopic.deleteMany({
       where: { revisionId, status: "SUGGESTED" },
     });
-    if (suggestions.length > 0) {
+    if (toCreate.length > 0) {
       await tx.measureRevisionSubtopic.createMany({
-        data: suggestions.flatMap((suggestion) => {
+        data: toCreate.flatMap((suggestion) => {
           const subtopicId = ids.get(suggestion.slug);
           return subtopicId
             ? [
@@ -419,16 +431,17 @@ export async function proposeMeasureRevisionSubtopics(
         entityType: "MeasureRevision",
         entityId: revisionId,
         changes: {
-          slugs: suggestions.map((suggestion) => suggestion.slug),
+          slugs: toCreate.map((suggestion) => suggestion.slug),
           classifierVersion: classification.classifierVersion,
           taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
         },
         userId: options.proposedBy ?? "system",
       },
     });
+    return toCreate;
   });
 
-  return { revisionId, suggestions, skipped: false };
+  return { revisionId, suggestions: created, skipped: false };
 }
 
 export async function reviewMeasureRevisionSubtopic(input: {
@@ -510,6 +523,7 @@ export async function reviewMeasureRevisionSubtopic(input: {
  * is resynchronised. A refused or pending row for that subtopic is replaced by the decision.
  */
 export async function addMeasureRevisionSubtopic(input: {
+  measureId: string;
   revisionId: string;
   subtopicId: string;
   addedBy: string;
@@ -517,9 +531,21 @@ export async function addMeasureRevisionSubtopic(input: {
   const measure = await db.$transaction(async (tx) => {
     const revision = await tx.measureRevision.findUnique({
       where: { id: input.revisionId },
-      select: { id: true, measure: { select: { id: true, electionId: true, theme: true } } },
+      select: {
+        id: true,
+        discardedAt: true,
+        supersededAt: true,
+        rejectedAt: true,
+        measure: { select: { id: true, electionId: true, theme: true } },
+      },
     });
     if (!revision) throw new MeasureValidationError("Révision introuvable");
+    if (revision.measure.id !== input.measureId) {
+      throw new MeasureValidationError("Cette révision n’appartient pas à cette mesure");
+    }
+    if (revision.discardedAt || revision.supersededAt || revision.rejectedAt) {
+      throw new MeasureValidationError("Cette révision n’est plus active");
+    }
 
     const subtopic = await tx.measureSubtopic.findUnique({
       where: { id: input.subtopicId },

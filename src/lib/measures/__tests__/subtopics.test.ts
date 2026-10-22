@@ -108,6 +108,9 @@ describe("classification des sous-sujets de mesure", () => {
     mocks.createAudit.mockResolvedValue({ id: "audit-1" });
     mocks.findRevisionInTransaction.mockResolvedValue({
       id: "revision-1",
+      discardedAt: null,
+      supersededAt: null,
+      rejectedAt: null,
       measure: { id: "measure-1", electionId: "election-1", theme: "LOGEMENT_URBANISME" },
     });
     mocks.createAssignment.mockResolvedValue({});
@@ -552,6 +555,7 @@ describe("classification des sous-sujets de mesure", () => {
       const { addMeasureRevisionSubtopic } = await import("../subtopics");
 
       await addMeasureRevisionSubtopic({
+        measureId: "measure-1",
         revisionId: "revision-1",
         subtopicId: "subtopic-9",
         addedBy: "admin",
@@ -585,6 +589,7 @@ describe("classification des sous-sujets de mesure", () => {
 
       await expect(
         addMeasureRevisionSubtopic({
+          measureId: "measure-1",
           revisionId: "revision-1",
           subtopicId: "subtopic-9",
           addedBy: "admin",
@@ -600,6 +605,7 @@ describe("classification des sous-sujets de mesure", () => {
 
       await expect(
         addMeasureRevisionSubtopic({
+          measureId: "measure-1",
           revisionId: "revision-1",
           subtopicId: "subtopic-9",
           addedBy: "admin",
@@ -614,6 +620,7 @@ describe("classification des sous-sujets de mesure", () => {
 
       await expect(
         addMeasureRevisionSubtopic({
+          measureId: "measure-1",
           revisionId: "revision-1",
           subtopicId: "subtopic-9",
           addedBy: "admin",
@@ -631,6 +638,7 @@ describe("classification des sous-sujets de mesure", () => {
 
       await expect(
         addMeasureRevisionSubtopic({
+          measureId: "measure-1",
           revisionId: "revision-1",
           subtopicId: "subtopic-9",
           addedBy: "admin",
@@ -646,22 +654,103 @@ describe("classification des sous-sujets de mesure", () => {
       const { addMeasureRevisionSubtopic } = await import("../subtopics");
 
       await addMeasureRevisionSubtopic({
+        measureId: "measure-1",
         revisionId: "revision-1",
         subtopicId: "subtopic-9",
         addedBy: "admin",
       });
 
-      expect(mocks.updateAssignment).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: "APPROVED", reviewedBy: "admin" }),
-        })
-      );
+      expect(mocks.updateAssignment).toHaveBeenCalledWith({
+        where: { revisionId_subtopicId: { revisionId: "revision-1", subtopicId: "subtopic-9" } },
+        data: expect.objectContaining({ status: "APPROVED", reviewedBy: "admin" }),
+      });
       expect(mocks.createAssignment).not.toHaveBeenCalled();
       expect(mocks.createAudit).toHaveBeenCalledWith({
         data: expect.objectContaining({
           changes: expect.objectContaining({ replacedStatus: "REJECTED" }),
         }),
       });
+    });
+  });
+
+  describe("garde-fous issus de la revue", () => {
+    const loyers = { id: "subtopic-9", slug: "loyers", theme: "LOGEMENT_URBANISME", active: true };
+    const add = async (measureId = "measure-1") => {
+      const { addMeasureRevisionSubtopic } = await import("../subtopics");
+      return addMeasureRevisionSubtopic({
+        measureId,
+        revisionId: "revision-1",
+        subtopicId: "subtopic-9",
+        addedBy: "admin",
+      });
+    };
+
+    it("refuse une révision qui appartient à une autre mesure", async () => {
+      mocks.findSubtopicInTransaction.mockResolvedValue(loyers);
+
+      await expect(add("autre-mesure")).rejects.toThrow("pas à cette mesure");
+      expect(mocks.createAssignment).not.toHaveBeenCalled();
+      expect(mocks.invalidateMeasureTags).not.toHaveBeenCalled();
+    });
+
+    it.each(["discardedAt", "supersededAt", "rejectedAt"])(
+      "refuse une révision dont %s est renseignée",
+      async (field) => {
+        mocks.findSubtopicInTransaction.mockResolvedValue(loyers);
+        mocks.findRevisionInTransaction.mockResolvedValue({
+          id: "revision-1",
+          discardedAt: null,
+          supersededAt: null,
+          rejectedAt: null,
+          [field]: new Date("2026-10-01T00:00:00Z"),
+          measure: { id: "measure-1", electionId: "election-1", theme: "LOGEMENT_URBANISME" },
+        });
+
+        await expect(add()).rejects.toThrow("n’est plus active");
+        expect(mocks.createAssignment).not.toHaveBeenCalled();
+      }
+    );
+
+    it("prend le verrou de la mesure avant de compter les sous-thèmes validés", async () => {
+      mocks.findSubtopicInTransaction.mockResolvedValue(loyers);
+      mocks.countAssignments.mockResolvedValue(0);
+      mocks.findAssignment.mockResolvedValue(null);
+
+      await add();
+
+      const lock = mocks.queryRaw.mock.invocationCallOrder[0] ?? Infinity;
+      const count = mocks.countAssignments.mock.invocationCallOrder[0] ?? 0;
+      expect(lock).toBeLessThan(count);
+    });
+
+    it("recompte sous verrou : aucune suggestion si un troisième est validé entre-temps", async () => {
+      mocks.findRevision.mockResolvedValue({
+        id: "revision-1",
+        text: "Encadrer les loyers.",
+        measure: { id: "measure-1", theme: "LOGEMENT_URBANISME" },
+        subtopics: [
+          { subtopic: { slug: "loyers" }, status: "APPROVED" },
+          { subtopic: { slug: "acces-au-logement" }, status: "APPROVED" },
+        ],
+      });
+      mocks.parseMistralJSON.mockReturnValue({
+        subtopics: [{ slug: "logement-social", confidence: 0.8 }],
+      });
+      mocks.findSubtopics.mockResolvedValue([{ id: "subtopic-5", slug: "logement-social" }]);
+      // The read above saw two approved; under the lock a third has landed.
+      mocks.countAssignments.mockResolvedValue(3);
+      const { proposeMeasureRevisionSubtopics } = await import("../subtopics");
+
+      const result = await proposeMeasureRevisionSubtopics("revision-1", {
+        allowWhenApproved: true,
+        skipTaxonomySync: true,
+      });
+
+      expect(result.suggestions).toEqual([]);
+      expect(mocks.createAssignments).not.toHaveBeenCalled();
+      expect(mocks.queryRaw.mock.invocationCallOrder[0] ?? Infinity).toBeLessThan(
+        mocks.countAssignments.mock.invocationCallOrder[0] ?? 0
+      );
     });
   });
 });

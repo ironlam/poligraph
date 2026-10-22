@@ -36,7 +36,7 @@ export function MeasureSubtopicsPanel({
   const [failure, setFailure] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("");
 
-  function run(action: () => Promise<ActionResult>): void {
+  function run(action: () => Promise<ActionResult>, onSuccess?: () => void): void {
     setFailure(null);
     startTransition(async () => {
       const result = await action();
@@ -44,6 +44,7 @@ export function MeasureSubtopicsPanel({
         setFailure(result.message);
         return;
       }
+      onSuccess?.();
       router.refresh();
     });
   }
@@ -183,9 +184,10 @@ export function MeasureSubtopicsPanel({
             className="min-h-11"
             disabled={pending || selectedId === ""}
             onClick={() => {
-              const subtopicId = selectedId;
-              setSelectedId("");
-              run(() => addSubtopicAction({ measureId, revisionId, subtopicId }));
+              run(
+                () => addSubtopicAction({ measureId, revisionId, subtopicId: selectedId }),
+                () => setSelectedId("")
+              );
             }}
           >
             Ajouter

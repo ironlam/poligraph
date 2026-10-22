@@ -727,6 +727,7 @@ describe("sous-thèmes : proposition continue et ajout manuel", () => {
 
     expect(result).toEqual({ ok: true });
     expect(subtopicsMock.addMeasureRevisionSubtopic).toHaveBeenCalledWith({
+      measureId: "m-1",
       revisionId: "rev-1",
       subtopicId: "subtopic-1",
       addedBy: "admin",

@@ -465,6 +465,7 @@ export async function addSubtopicAction(input: {
     const parsed = subtopicAddInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Sous-thème à ajouter invalide");
     await addMeasureRevisionSubtopic({
+      measureId: parsed.data.measureId,
       revisionId: parsed.data.revisionId,
       subtopicId: parsed.data.subtopicId,
       addedBy: ACTOR,

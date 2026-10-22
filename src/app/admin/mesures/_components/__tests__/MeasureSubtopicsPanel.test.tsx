@@ -138,4 +138,23 @@ describe("MeasureSubtopicsPanel", () => {
       });
     });
   });
+
+  it("garde le sous-thème choisi quand l'ajout est refusé", async () => {
+    mocks.add.mockResolvedValue({ ok: false, message: "Ce sous-thème est déjà validé" });
+    render(
+      <MeasureSubtopicsPanel
+        measureId="measure-1"
+        revisionId="revision-1"
+        assignments={[]}
+        addableSubtopics={[{ id: "topic-2", label: "Logement social" }]}
+      />
+    );
+
+    const select = screen.getByLabelText("Ajouter un sous-thème") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "topic-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    expect(await screen.findByText("Ce sous-thème est déjà validé")).toBeInTheDocument();
+    expect(select.value).toBe("topic-2");
+  });
 });
