@@ -3,8 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { MAX_SUBTOPICS_PER_REVISION } from "@/config/measure-subtopics";
 import type { MeasureSubtopicAssignmentStatus } from "@/generated/prisma";
-import { proposeSubtopicsAction, reviewSubtopicAction, type ActionResult } from "../actions";
+import {
+  addSubtopicAction,
+  proposeSubtopicsAction,
+  reviewSubtopicAction,
+  type ActionResult,
+} from "../actions";
 
 export type MeasureSubtopicAssignment = {
   subtopicId: string;
@@ -17,14 +23,18 @@ export function MeasureSubtopicsPanel({
   measureId,
   revisionId,
   assignments,
+  addableSubtopics = [],
 }: {
   measureId: string;
   revisionId: string | null;
   assignments: MeasureSubtopicAssignment[];
+  /** Subtopics of the measure's theme a human can still add; empty hides the picker. */
+  addableSubtopics?: Array<{ id: string; label: string }>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [failure, setFailure] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState("");
 
   function run(action: () => Promise<ActionResult>): void {
     setFailure(null);
@@ -146,19 +156,63 @@ export function MeasureSubtopicsPanel({
         </p>
       )}
 
+      {approved.length < MAX_SUBTOPICS_PER_REVISION && addableSubtopics.length > 0 && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`add-subtopic-${revisionId}`} className="text-sm font-bold">
+              Ajouter un sous-thème
+            </label>
+            <select
+              id={`add-subtopic-${revisionId}`}
+              value={selectedId}
+              disabled={pending}
+              onChange={(event) => setSelectedId(event.target.value)}
+              className="min-h-11 rounded border border-border bg-background px-3 text-sm"
+            >
+              <option value="">Choisir un sous-thème</option>
+              {addableSubtopics.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            type="button"
+            variant="default"
+            className="min-h-11"
+            disabled={pending || selectedId === ""}
+            onClick={() => {
+              const subtopicId = selectedId;
+              setSelectedId("");
+              run(() => addSubtopicAction({ measureId, revisionId, subtopicId }));
+            }}
+          >
+            Ajouter
+          </Button>
+        </div>
+      )}
+
       <Button
         type="button"
         variant="outline"
         className="min-h-11"
-        disabled={pending || approved.length > 0}
+        disabled={pending || approved.length >= MAX_SUBTOPICS_PER_REVISION}
         onClick={() => run(() => proposeSubtopicsAction({ measureId, revisionId }))}
       >
         {pending ? "Traitement en cours…" : "Proposer des sous-thèmes"}
       </Button>
-      {approved.length > 0 && (
+      {approved.length >= MAX_SUBTOPICS_PER_REVISION ? (
         <p className="text-xs text-muted-foreground">
-          Une validation humaine existe. Le traitement automatique ne la remplace pas.
+          Trois sous-thèmes sont validés : le maximum est atteint.
         </p>
+      ) : (
+        approved.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Les sous-thèmes validés sont conservés. La proposition automatique complète seulement
+            les places libres (trois au maximum).
+          </p>
+        )
       )}
     </div>
   );

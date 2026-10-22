@@ -341,7 +341,13 @@ export async function proposeMeasureRevisionSubtopicDelta(
 
 export async function proposeMeasureRevisionSubtopics(
   revisionId: string,
-  options: { dryRun?: boolean; proposedBy?: string; skipTaxonomySync?: boolean } = {}
+  options: {
+    dryRun?: boolean;
+    proposedBy?: string;
+    skipTaxonomySync?: boolean;
+    /** The admin keeps proposing after a validation; the CLI keeps the old freeze. */
+    allowWhenApproved?: boolean;
+  } = {}
 ): Promise<ProposeSubtopicsResult> {
   const revision = await db.measureRevision.findUnique({
     where: { id: revisionId },
@@ -359,11 +365,20 @@ export async function proposeMeasureRevisionSubtopics(
       .filter((item) => item.status !== "SUGGESTED")
       .map((item) => item.subtopic.slug)
   );
-  const hasApproved = revision.subtopics.some((item) => item.status === "APPROVED");
-  if (hasApproved) return { revisionId, suggestions: [], skipped: true };
+  const approvedCount = revision.subtopics.filter((item) => item.status === "APPROVED").length;
+  // By default one approved subtopic freezes the automatic pass. The admin opts out: approved
+  // ones stay untouched and the suggestions only fill the places left under the maximum.
+  if (approvedCount > 0 && !options.allowWhenApproved) {
+    return { revisionId, suggestions: [], skipped: true };
+  }
+  if (approvedCount >= MAX_SUBTOPICS_PER_REVISION) {
+    return { revisionId, suggestions: [], skipped: true };
+  }
 
   const classification = await classifySubtopics(revision.text, revision.measure.theme);
-  const suggestions = classification.suggestions.filter((item) => !fixedSlugs.has(item.slug));
+  const suggestions = classification.suggestions
+    .filter((item) => !fixedSlugs.has(item.slug))
+    .slice(0, MAX_SUBTOPICS_PER_REVISION - approvedCount);
   if (options.dryRun) return { revisionId, suggestions, skipped: false };
 
   if (!options.skipTaxonomySync) await syncMeasureSubtopicTaxonomy();
@@ -483,6 +498,101 @@ export async function reviewMeasureRevisionSubtopic(input: {
     }
 
     return assignment.revision.measure;
+  });
+
+  invalidateMeasureTags(measure.id, measure.electionId);
+}
+
+/**
+ * A human adds a subtopic of the measure's own theme straight to APPROVED, for the cases where
+ * the automatic pass proposes nothing or only one. The same rules as a validation apply: at most
+ * MAX_SUBTOPICS_PER_REVISION approved, one row per (revision, subtopic), and the search document
+ * is resynchronised. A refused or pending row for that subtopic is replaced by the decision.
+ */
+export async function addMeasureRevisionSubtopic(input: {
+  revisionId: string;
+  subtopicId: string;
+  addedBy: string;
+}): Promise<void> {
+  const measure = await db.$transaction(async (tx) => {
+    const revision = await tx.measureRevision.findUnique({
+      where: { id: input.revisionId },
+      select: { id: true, measure: { select: { id: true, electionId: true, theme: true } } },
+    });
+    if (!revision) throw new MeasureValidationError("Révision introuvable");
+
+    const subtopic = await tx.measureSubtopic.findUnique({
+      where: { id: input.subtopicId },
+      select: { id: true, slug: true, theme: true, active: true },
+    });
+    if (!subtopic || !subtopic.active) {
+      throw new MeasureValidationError("Sous-thème introuvable ou inactif");
+    }
+    if (subtopic.theme !== revision.measure.theme) {
+      throw new MeasureValidationError("Ce sous-thème n’appartient pas au thème de la mesure");
+    }
+
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id
+      FROM "Measure"
+      WHERE id = ${revision.measure.id}
+      FOR UPDATE
+    `);
+    const approvedCount = await tx.measureRevisionSubtopic.count({
+      where: { revisionId: input.revisionId, status: "APPROVED" },
+    });
+    if (approvedCount >= MAX_SUBTOPICS_PER_REVISION) {
+      throw new MeasureValidationError("Cette révision possède déjà trois sous-thèmes approuvés");
+    }
+
+    const key = {
+      revisionId_subtopicId: { revisionId: input.revisionId, subtopicId: subtopic.id },
+    };
+    const existing = await tx.measureRevisionSubtopic.findUnique({
+      where: key,
+      select: { status: true },
+    });
+    if (existing?.status === "APPROVED") {
+      throw new MeasureValidationError("Ce sous-thème est déjà validé");
+    }
+
+    const now = new Date();
+    if (existing) {
+      await tx.measureRevisionSubtopic.update({
+        where: key,
+        data: { status: "APPROVED", reviewedAt: now, reviewedBy: input.addedBy },
+      });
+    } else {
+      await tx.measureRevisionSubtopic.create({
+        data: {
+          revisionId: input.revisionId,
+          subtopicId: subtopic.id,
+          status: "APPROVED",
+          confidence: null,
+          method: "MANUAL",
+          classifierVersion: "manual",
+          taxonomyVersion: MEASURE_SUBTOPIC_TAXONOMY_VERSION,
+          reviewedAt: now,
+          reviewedBy: input.addedBy,
+        },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        action: "ADD_SUBTOPIC",
+        entityType: "MeasureRevision",
+        entityId: input.revisionId,
+        changes: {
+          subtopicId: subtopic.id,
+          slug: subtopic.slug,
+          replacedStatus: existing?.status ?? null,
+        },
+        userId: input.addedBy,
+      },
+    });
+    await syncSearchDocument(tx, revision.measure.id);
+
+    return revision.measure;
   });
 
   invalidateMeasureTags(measure.id, measure.electionId);
