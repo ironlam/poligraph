@@ -316,7 +316,7 @@ export const MEASURE_READER_GUIDES: readonly MeasureReaderGuideDefinition[] = [
       "Le marché de l’électricité s’est libéralisé progressivement avec le renforcement du " +
       "marché intérieur européen. Sur les marchés de gros, le prix de l’électricité est " +
       "déterminé par le coût variable de la dernière centrale de production appelée.",
-    aliases: ["marché européen"],
+    aliases: [],
     sourceUrl: "https://www.assemblee-nationale.fr/dyn/opendata/RINFANR5L17B1902.html",
     sourceLabel:
       "Rapport d’information n° 1902 sur le prix de l’électricité, la compétitivité des entreprises et l’action de l’État",
