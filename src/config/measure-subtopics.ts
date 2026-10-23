@@ -259,6 +259,14 @@ export const MEASURE_SUBTOPICS: readonly MeasureSubtopicDefinition[] = [
     "Jeunesse et sport",
     "Jeunesse, vie associative et pratiques sportives."
   ),
+  topic(
+    "EDUCATION_CULTURE",
+    50,
+    "jeu-video",
+    "Jeu vidéo",
+    "Création, formation, travail et pratique du jeu vidéo et de l’e-sport.",
+    ["jeux vidéo", "e-sport", "esport", "studios de jeu"]
+  ),
 
   topic(
     "INSTITUTIONS",
