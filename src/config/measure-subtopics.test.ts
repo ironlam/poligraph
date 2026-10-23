@@ -14,6 +14,13 @@ describe("taxonomie des sous-thèmes de mesure", () => {
     }
   });
 
+  it("range Jeu vidéo dans Éducation et culture", () => {
+    expect(MEASURE_SUBTOPICS.find((candidate) => candidate.slug === "jeu-video")).toMatchObject({
+      label: "Jeu vidéo",
+      theme: "EDUCATION_CULTURE",
+    });
+  });
+
   it("définit le périmètre de Racisme et antisémitisme", () => {
     const subtopic = MEASURE_SUBTOPICS.find(
       (candidate) => candidate.slug === "racisme-antisemitisme"
