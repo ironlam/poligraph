@@ -12,6 +12,9 @@ export const ROUTES = {
   dossierDetail: (slug: string) => `/parlement/dossiers/${slug}`,
   groupes: "/parlement/groupes",
   groupeDetail: (slug: string) => `/parlement/groupes/${slug}`,
+  assembleeNationale: "/parlement/assemblee-nationale",
+  senat: "/parlement/senat",
+  parcoursLegislatif: "/parlement/parcours-legislatif",
   legislatures: "/parlement/assemblee/legislatures",
   legislature: (n: number) => `/parlement/assemblee/legislatures/${n}`,
 } as const;

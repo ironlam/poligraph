@@ -20,6 +20,7 @@ import {
 import { getLatestDossiers } from "@/lib/data/legislation";
 import { getGroupesListing } from "@/lib/data/groupes";
 import { LEGISLATIVE_JOURNEY_STEPS } from "@/config/legislative-journey";
+import { CHAMBER_PROFILES, chamberPath } from "@/config/chambres";
 import { ROUTES } from "@/config/routes";
 import {
   Info,
@@ -94,6 +95,12 @@ const ENTREES: RubriqueEntree[] = [
     title: "Groupes parlementaires",
     detail: "Composition des chambres et équilibres politiques",
     icon: Users,
+  },
+  {
+    href: ROUTES.parcoursLegislatif,
+    title: "Parcours d'une loi",
+    detail: "Du dépôt à la promulgation, étape par étape",
+    icon: Info,
   },
   {
     href: ROUTES.legislatures,
@@ -180,6 +187,65 @@ export async function ParlementHub() {
               </div>
             );
           })()}
+
+        {/* Les deux chambres: first choice for a citizen who does not know the institutions */}
+        <section aria-labelledby="deux-chambres" className="mb-8">
+          <h2 id="deux-chambres" className="font-display text-2xl font-extrabold text-primary">
+            Deux chambres, un même texte
+          </h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {(["AN", "SENAT"] as const).map((chamber) => {
+              const profile = CHAMBER_PROFILES[chamber];
+              return (
+                <article
+                  key={chamber}
+                  className="overflow-hidden rounded-2xl border border-border bg-card"
+                >
+                  <h3
+                    className="px-5 py-4 font-display text-xl font-extrabold text-white"
+                    style={{ backgroundColor: profile.accent }}
+                  >
+                    {profile.name}
+                  </h3>
+                  <div className="p-5">
+                    <p className="text-sm text-muted-foreground">{profile.intro}</p>
+                    <dl className="mt-4 grid grid-cols-3 gap-3">
+                      {profile.facts.map((fact) => (
+                        <div key={fact.label}>
+                          <dt className="sr-only">{fact.label}</dt>
+                          <dd
+                            className="font-display text-2xl font-extrabold"
+                            style={{ color: profile.accent }}
+                          >
+                            {fact.value}
+                          </dd>
+                          <p className="text-xs text-muted-foreground">{fact.label}</p>
+                        </div>
+                      ))}
+                    </dl>
+                    <Link
+                      href={chamberPath(chamber)}
+                      className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-5 text-sm font-bold text-white hover:opacity-90"
+                      style={{ backgroundColor: profile.accent }}
+                    >
+                      Découvrir {chamber === "AN" ? "l'Assemblée" : "le Sénat"}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Un texte fait la navette entre les deux chambres jusqu{"'"}à une version commune.{" "}
+            <Link
+              href={ROUTES.parcoursLegislatif}
+              className="font-bold text-primary hover:underline"
+            >
+              Voir le parcours d{"'"}une loi
+            </Link>
+          </p>
+        </section>
 
         {/* Orientation: entry tiles to the three pillars */}
         <div className="mb-8">
