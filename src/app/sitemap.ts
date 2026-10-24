@@ -11,7 +11,7 @@ import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
-import { STATS_SECTIONS, STATS_TABS } from "@/config/routes";
+import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -155,6 +155,30 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.assembleeNationale}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.senat}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.glossaire}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.parcoursLegislatif}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
     },
     {
       url: `${SITE_URL}/parlement/dossiers`,
