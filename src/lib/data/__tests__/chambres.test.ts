@@ -41,7 +41,7 @@ describe("getChamberOverview", () => {
     await getChamberOverview("AN");
 
     expect(dbMock.scrutin.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { votingDate: "desc" }, take: 5 })
+      expect.objectContaining({ orderBy: [{ votingDate: "desc" }, { sequence: "desc" }], take: 5 })
     );
   });
 

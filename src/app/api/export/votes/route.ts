@@ -9,6 +9,7 @@ import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { withCache } from "@/lib/cache";
 import { EXPORT_CACHE_TAGS, EXPORT_ROLLUP_TAG } from "@/lib/api/export-cache-tags";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,7 @@ export const GET = withPublicRoute(async (request) => {
   // Fetch scrutins
   const scrutins = await db.scrutin.findMany({
     where,
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     take: limit,
   });
 

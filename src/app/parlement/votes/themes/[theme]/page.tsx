@@ -23,6 +23,7 @@ import type { Prisma } from "@/generated/prisma";
 import { listingRobotsMetadata, hasActiveListingFilter } from "@/lib/seo/listing-robots";
 import { missingEntityMetadata } from "@/lib/seo/not-found-metadata";
 import { parsePageParam } from "@/lib/data/query-params";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export const revalidate = 3600;
 
@@ -116,7 +117,7 @@ export default async function ThemePage({
   const [scrutins, total, resultStats, lastScrutin, typeCounts] = await Promise.all([
     db.scrutin.findMany({
       where,
-      orderBy: { votingDate: "desc" },
+      orderBy: SCRUTIN_RECENT_FIRST,
       skip,
       take: PAGE_SIZE,
       include: {

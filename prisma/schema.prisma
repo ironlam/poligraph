@@ -1302,6 +1302,7 @@ model Scrutin {
   title       String   @db.Text
   description String?  @db.Text
   votingDate  DateTime
+  sequence    Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
   legislature Int
   chamber     Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
 
@@ -1361,6 +1362,7 @@ model Scrutin {
   updatedAt DateTime @updatedAt
 
   @@index([votingDate])
+  @@index([votingDate(sort: Desc), sequence(sort: Desc)], map: "Scrutin_votingDate_sequence_idx")
   @@index([legislature])
   @@index([chamber])
   @@index([chamber, votingDate]) // participation stats: mandate date range queries

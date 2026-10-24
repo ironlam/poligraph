@@ -27,6 +27,7 @@ import { getPreferredDossierAlias, getDossierAliasSources } from "@/lib/legislat
 import { getDossierAliasMatches } from "@/lib/data/dossier-aliases";
 import Link from "next/link";
 import { DossierAliasChoices } from "@/components/legislation/DossierAliasChoices";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export const revalidate = 86400; // ISR: 24h backstop; real changes propagate on-demand via revalidateTag
 
@@ -89,7 +90,7 @@ const includeOptions = {
       votesAbstain: true,
       type: true,
     },
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
   },
   aliases: {
     where: { status: "PUBLISHED" },

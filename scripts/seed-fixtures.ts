@@ -13,6 +13,7 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { scrutinSequence } from "@/lib/votes/scrutin-order";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -576,6 +577,7 @@ async function seed() {
         title: s.title,
         description: s.description,
         votingDate: s.votingDate,
+        sequence: scrutinSequence(s.externalId),
         legislature: s.legislature,
         chamber: s.chamber,
         votesFor: s.votesFor,

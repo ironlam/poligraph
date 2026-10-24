@@ -1,6 +1,7 @@
 import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import type { Chamber, VotingResult } from "@/generated/prisma";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export interface ChamberScrutin {
   id: string;
@@ -28,7 +29,7 @@ export async function getChamberOverview(chamber: Chamber): Promise<ChamberOverv
     db.scrutin.count({ where: { chamber } }),
     db.scrutin.findMany({
       where: { chamber },
-      orderBy: { votingDate: "desc" },
+      orderBy: SCRUTIN_RECENT_FIRST,
       take: LATEST_COUNT,
       select: { id: true, slug: true, title: true, votingDate: true, result: true },
     }),
