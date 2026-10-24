@@ -297,38 +297,6 @@ export async function ParlementHub() {
           ]}
         />
 
-        {/* Pedagogy */}
-        <details className="mb-8 bg-muted/50 rounded-lg border">
-          <summary className="px-4 py-3 cursor-pointer text-sm font-medium hover:bg-muted/80 rounded-lg transition-colors">
-            Comment fonctionne le Parlement ?
-          </summary>
-          <div className="px-4 pb-4 pt-2 text-sm text-muted-foreground space-y-2">
-            <p>
-              Le Parlement français est composé de deux chambres : l{"'"}Assemblée nationale (577
-              députés) et le Sénat (348 sénateurs). Ensemble, ils votent les lois et contrôlent l
-              {"'"}
-              action du gouvernement.
-            </p>
-            <p className="font-medium">Parcours d{"'"}un texte de loi :</p>
-            <ol className="list-decimal list-inside space-y-1 ml-2">
-              {LEGISLATIVE_JOURNEY_STEPS.map((step) => (
-                <li key={step.label}>
-                  <strong>{step.label}</strong> : {step.description}
-                </li>
-              ))}
-            </ol>
-            <p>
-              Tous les textes ne franchissent pas toutes ces étapes : ils peuvent être rejetés,
-              retirés ou rester sans suite.
-            </p>
-            <p>
-              <Link href={ROUTES.glossaire} className="font-medium text-primary hover:underline">
-                Tous les mots du Parlement
-              </Link>
-            </p>
-          </div>
-        </details>
-
         {/* Hero Spotlight */}
         {keyVotes.hero && (
           <section className="mb-8" aria-label="Vote clé mis en avant">
@@ -490,6 +458,38 @@ export async function ParlementHub() {
             </div>
           </section>
         )}
+
+        {/* Pedagogy */}
+        <details className="mb-8 mt-8 bg-muted/50 rounded-lg border">
+          <summary className="px-4 py-3 cursor-pointer text-sm font-medium hover:bg-muted/80 rounded-lg transition-colors">
+            Comment fonctionne le Parlement ?
+          </summary>
+          <div className="px-4 pb-4 pt-2 text-sm text-muted-foreground space-y-2">
+            <p>
+              Le Parlement français est composé de deux chambres : l{"'"}Assemblée nationale (577
+              députés) et le Sénat (348 sénateurs). Ensemble, ils votent les lois et contrôlent l
+              {"'"}
+              action du gouvernement.
+            </p>
+            <p className="font-medium">Parcours d{"'"}un texte de loi :</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              {LEGISLATIVE_JOURNEY_STEPS.map((step) => (
+                <li key={step.label}>
+                  <strong>{step.label}</strong> : {step.description}
+                </li>
+              ))}
+            </ol>
+            <p>
+              Tous les textes ne franchissent pas toutes ces étapes : ils peuvent être rejetés,
+              retirés ou rester sans suite.
+            </p>
+            <p>
+              <Link href={ROUTES.glossaire} className="font-medium text-primary hover:underline">
+                Tous les mots du Parlement
+              </Link>
+            </p>
+          </div>
+        </details>
       </div>
     </>
   );
