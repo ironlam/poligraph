@@ -2,6 +2,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { db } from "@/lib/db";
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export async function getPoliticianForComparison(slug: string) {
   "use cache";
@@ -29,7 +30,7 @@ export async function getPoliticianForComparison(slug: string) {
         include: {
           scrutin: true,
         },
-        orderBy: { votingDate: "desc" },
+        orderBy: VOTE_RECENT_FIRST,
         take: 500,
       },
       factCheckMentions: {

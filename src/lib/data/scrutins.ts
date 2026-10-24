@@ -8,6 +8,7 @@ import {
   type ScrutinType,
 } from "@/generated/prisma";
 import { accentInsensitivePattern, scrutinSearchTokens } from "@/lib/votes/scrutin-search";
+import { SCRUTIN_RECENT_FIRST, compareScrutinsRecentFirst } from "@/lib/votes/scrutin-order";
 import {
   Chamber as ChamberEnum,
   VotingResult as VotingResultEnum,
@@ -35,6 +36,7 @@ export interface DailyScrutin {
   slug: string | null;
   title: string;
   votingDate: Date;
+  sequence: number;
   legislature: number;
   chamber: Chamber;
   votesFor: number;
@@ -80,6 +82,7 @@ const DAILY_SELECT = {
   slug: true,
   title: true,
   votingDate: true,
+  sequence: true,
   legislature: true,
   chamber: true,
   votesFor: true,
@@ -120,7 +123,7 @@ export async function getScrutinsByDate(dateStr: string): Promise<DailyVotesData
 
   const scrutins = await db.scrutin.findMany({
     where: { votingDate: { gte: start, lt: end } },
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     select: DAILY_SELECT,
   });
 
@@ -215,13 +218,15 @@ type SortableRow = {
   votesAgainst: number;
   votesAbstain: number;
   votingDate: Date | null;
+  sequence?: number;
 };
 
 // Pure in-memory sort for computed orders. No raw SQL: the filtered id set is
 // fetched via a parameterized Prisma findMany, then ordered here.
 export function sortScrutinsInMemory<T extends SortableRow>(rows: T[], sort: ScrutinSort): T[] {
   const byDateDesc = (a: T, b: T) =>
-    (b.votingDate?.getTime() ?? 0) - (a.votingDate?.getTime() ?? 0);
+    (b.votingDate?.getTime() ?? 0) - (a.votingDate?.getTime() ?? 0) ||
+    (b.sequence ?? 0) - (a.sequence ?? 0);
   if (sort === "close") {
     return [...rows].sort(
       (a, b) =>
@@ -265,7 +270,7 @@ async function fetchSortedPage(
     const [scrutins, total] = await Promise.all([
       db.scrutin.findMany({
         where,
-        orderBy: { votingDate: "desc" },
+        orderBy: SCRUTIN_RECENT_FIRST,
         skip,
         take: limit,
         select: LISTING_SELECT,
@@ -277,7 +282,14 @@ async function fetchSortedPage(
 
   const filtered = await db.scrutin.findMany({
     where,
-    select: { id: true, votesFor: true, votesAgainst: true, votesAbstain: true, votingDate: true },
+    select: {
+      id: true,
+      votesFor: true,
+      votesAgainst: true,
+      votesAbstain: true,
+      votingDate: true,
+      sequence: true,
+    },
   });
   const ordered = sortScrutinsInMemory(filtered, sort);
   const pageIds = ordered.slice(skip, skip + limit).map((r) => r.id);
@@ -546,7 +558,7 @@ export async function getLastScrutinDate(): Promise<Date | null> {
   cacheLife("synced");
 
   const last = await db.scrutin.findFirst({
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     select: { votingDate: true },
   });
   return last?.votingDate ?? null;
@@ -559,7 +571,7 @@ export async function getLatestScrutins() {
   cacheLife("synced");
 
   return db.scrutin.findMany({
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     take: 8,
     select: DAILY_SELECT,
   });
@@ -695,7 +707,9 @@ export async function getKeyVotes(): Promise<{
   };
   const toResult = (picked: { hero: KeyVoteRow | null; grid: KeyVoteRow[] }) => ({
     hero: picked.hero ? { ...picked.hero, score: picked.hero.importance?.score ?? 0 } : null,
-    grid: picked.grid.map((s) => ({ ...s, score: s.importance?.score ?? 0 })),
+    grid: picked.grid
+      .map((s) => ({ ...s, score: s.importance?.score ?? 0 }))
+      .sort(compareScrutinsRecentFirst),
   });
   const pick = (pool: KeyVoteRow[]) => {
     const { hero, grid } = selectKeyVotes(pool.map(toKeyVoteCandidate), selectOpts);
@@ -704,7 +718,7 @@ export async function getKeyVotes(): Promise<{
 
   const rows = await db.scrutin.findMany({
     where: { importance: { isKeyVote: true }, votingDate: { gte: windowStart } },
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     take: KEY_VOTES_QUERY_LIMIT,
     select: KEY_VOTE_SELECT,
   });
@@ -800,7 +814,7 @@ export async function getExplainedShowcase(opts: {
   windowStart.setDate(windowStart.getDate() - 365);
   let rows = await db.scrutin.findMany({
     where: { ...EXPLAINED_BASE_WHERE, votingDate: { gte: windowStart } },
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     select: EXPLAINED_SELECT,
     take: 400,
   });
@@ -820,7 +834,9 @@ export async function getExplainedShowcase(opts: {
     cutoff.setDate(cutoff.getDate() - days);
     const sub = rows.filter((r) => r.votingDate >= cutoff);
     diversified = pick(sub);
-    if (diversified.length >= opts.count) return diversified.slice(0, opts.count);
+    if (diversified.length >= opts.count) {
+      return diversified.slice(0, opts.count).sort(compareScrutinsRecentFirst);
+    }
   }
 
   // 3. bounded all-time fallback — gate on the last window's diversified
@@ -829,10 +845,10 @@ export async function getExplainedShowcase(opts: {
   if (diversified.length < opts.count) {
     rows = await db.scrutin.findMany({
       where: EXPLAINED_BASE_WHERE,
-      orderBy: { votingDate: "desc" },
+      orderBy: SCRUTIN_RECENT_FIRST,
       select: EXPLAINED_SELECT,
       take: ALL_TIME_FALLBACK_POOL_SIZE,
     });
   }
-  return pick(rows).slice(0, opts.count);
+  return pick(rows).slice(0, opts.count).sort(compareScrutinsRecentFirst);
 }

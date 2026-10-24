@@ -12,6 +12,7 @@ import { COMPARE_CATEGORIES, COMPARE_CATEGORY_LABELS, type CompareCategory } fro
 import { buildComparerVotesCanonical } from "@/lib/seo/comparer-votes-metadata";
 import type { VotePosition } from "@/types";
 import { parsePageParam } from "@/lib/data/query-params";
+import { compareScrutinsRecentFirst } from "@/lib/votes/scrutin-order";
 
 interface PageProps {
   searchParams: Promise<{
@@ -55,6 +56,7 @@ interface ComparedVote {
   title: string;
   slug: string | null;
   votingDate: Date;
+  sequence: number;
   leftPosition: VotePosition;
   rightPosition: VotePosition;
   agreement: AgreementType;
@@ -115,6 +117,7 @@ async function getPoliticianVoteComparison(leftSlug: string, rightSlug: string) 
       title: leftVote.scrutin.title,
       slug: leftVote.scrutin.slug,
       votingDate: leftVote.scrutin.votingDate,
+      sequence: leftVote.scrutin.sequence,
       leftPosition: leftVote.position as VotePosition,
       rightPosition: rightVote.position as VotePosition,
       agreement: getAgreement(
@@ -124,7 +127,7 @@ async function getPoliticianVoteComparison(leftSlug: string, rightSlug: string) 
     };
   });
 
-  comparedVotes.sort((a, b) => new Date(b.votingDate).getTime() - new Date(a.votingDate).getTime());
+  comparedVotes.sort(compareScrutinsRecentFirst);
 
   return {
     leftName: leftPol.fullName,

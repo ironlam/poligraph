@@ -3,6 +3,7 @@ import type { DateEvidence, GovernmentFunctionEnd, PublicationStatus } from "@/g
 import { getPublicFactCheckWhere, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { PUBLIC_EVENT_WHERE } from "@/lib/affairs/events/public";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import {
   computePoliticianVotingStats,
   buildPoliticianParliamentaryCard,
@@ -347,7 +348,7 @@ export async function readProfileVoteStats(
           },
         },
       },
-      orderBy: { votingDate: "desc" },
+      orderBy: VOTE_RECENT_FIRST,
       take: 5,
     }),
     voteStatsService.getPoliticianThemeDistribution(politicianId),

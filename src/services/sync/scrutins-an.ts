@@ -21,6 +21,7 @@ import { tmpdir } from "os";
 import { extractZip } from "@/lib/parsing/unzip";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { createHash } from "crypto";
+import { scrutinSequence } from "@/lib/votes/scrutin-order";
 import {
   hashOfficialGroupSnapshot,
   parseOfficialGroupCountsDetailed,
@@ -588,6 +589,7 @@ export async function syncScrutinsAN(
               title: s.titre,
               description: null,
               votingDate,
+              sequence: scrutinSequence(externalId),
               legislature: parseInt(s.legislature, 10),
               votesFor,
               votesAgainst,

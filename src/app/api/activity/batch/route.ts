@@ -4,6 +4,7 @@ import { withCache } from "@/lib/cache";
 import { withPublicRoute } from "@/lib/api/with-public-route";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import type {
   WatchlistPolitician,
   WatchlistParty,
@@ -87,7 +88,7 @@ export const POST = withPublicRoute(async (request: NextRequest) => {
                 select: { slug: true, title: true, votingDate: true, result: true },
               },
             },
-            orderBy: { votingDate: "desc" },
+            orderBy: VOTE_RECENT_FIRST,
             take: MAX_ITEMS_PER_TYPE,
           }),
           db.affair.findMany({

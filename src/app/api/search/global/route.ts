@@ -177,7 +177,7 @@ export const GET = withPublicRoute(async (request) => {
         SELECT s."id", s."slug", s."title", s."votingDate", s."chamber"
         FROM "Scrutin" s
         WHERE unaccent(s."title") ILIKE unaccent(${pattern})
-        ORDER BY s."votingDate" DESC
+        ORDER BY s."votingDate" DESC, s."sequence" DESC
         LIMIT ${limit}
       `,
 

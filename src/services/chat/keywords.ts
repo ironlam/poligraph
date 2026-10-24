@@ -4,6 +4,7 @@ import { DEPARTMENTS } from "@/config/departments";
 import { PUBLIC_PARTY_WHERE, PUBLIC_POLITICIAN_WHERE } from "@/lib/api/public-contract";
 import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { extractTemporalModifiers, DOSSIER_STATUS_LABELS, formatCurrency } from "./helpers";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 /**
  * Thematic keyword groups for expanding search terms.
@@ -259,7 +260,7 @@ export async function searchDatabaseByKeywords(query: string): Promise<string | 
 
       const scrutins = await db.scrutin.findMany({
         where: scrutinWhere,
-        orderBy: { votingDate: "desc" },
+        orderBy: SCRUTIN_RECENT_FIRST,
         take: 3,
       });
 
