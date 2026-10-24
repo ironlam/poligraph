@@ -169,6 +169,12 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       priority: 0.8,
     },
     {
+      url: `${SITE_URL}${ROUTES.glossaire}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
       url: `${SITE_URL}${ROUTES.parcoursLegislatif}`,
       lastModified: new Date(),
       changeFrequency: "monthly",

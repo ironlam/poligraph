@@ -10,7 +10,7 @@ import { RubriqueEntrees, type RubriqueEntree } from "@/components/ui/RubriqueEn
 // parlement barrel also re-exports ParlementHub.
 import { ExplainedVotesTeaser } from "./ExplainedVotesTeaser";
 import { FAQJsonLd } from "@/components/seo/JsonLd";
-import { getFeatureValue } from "@/lib/feature-flags";
+import { getFeatureValue, isFeatureEnabled } from "@/lib/feature-flags";
 import {
   getHubStats,
   getLastScrutinDate,
@@ -130,7 +130,18 @@ export async function ParlementHub() {
     getGroupesListing(),
   ]);
 
-  const periodOverride = await getFeatureValue<PeriodOverride>(PARLIAMENTARY_PERIOD_FLAG);
+  const [periodOverride, monDeputeEnabled] = await Promise.all([
+    getFeatureValue<PeriodOverride>(PARLIAMENTARY_PERIOD_FLAG),
+    isFeatureEnabled("MON_DEPUTE_SECTION"),
+  ]);
+  const accesRapide = [
+    { href: ROUTES.votes, label: "Scrutins" },
+    { href: ROUTES.dossiers, label: "Lois en construction" },
+    ...(monDeputeEnabled ? [{ href: "/mon-depute", label: "Mes élus" }] : []),
+    { href: ROUTES.groupes, label: "Groupes" },
+    { href: ROUTES.parcoursLegislatif, label: "Parcours d'une loi" },
+    { href: ROUTES.glossaire, label: "Glossaire" },
+  ];
   const period = resolveParliamentaryPeriod(lastDate, periodOverride);
 
   const anGroups = allGroups.filter((g) => g.chamber === "AN" && g.seatCount > 0);
@@ -172,6 +183,22 @@ export async function ParlementHub() {
           </p>
         </div>
       </RubriqueBandeau>
+      {/* Mobile: the main destinations one swipe away, without scrolling the whole page */}
+      <nav aria-label="Accès rapide" className="border-b border-border bg-card sm:hidden">
+        <ul className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none]">
+          {accesRapide.map(({ href, label }) => (
+            <li key={href} className="shrink-0">
+              <Link
+                href={href}
+                prefetch={false}
+                className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-medium hover:bg-muted"
+              >
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <div className="container mx-auto px-4 pt-8">
         {/* Parliamentary period banner */}
         {period &&
@@ -293,6 +320,11 @@ export async function ParlementHub() {
             <p>
               Tous les textes ne franchissent pas toutes ces étapes : ils peuvent être rejetés,
               retirés ou rester sans suite.
+            </p>
+            <p>
+              <Link href={ROUTES.glossaire} className="font-medium text-primary hover:underline">
+                Tous les mots du Parlement
+              </Link>
             </p>
           </div>
         </details>

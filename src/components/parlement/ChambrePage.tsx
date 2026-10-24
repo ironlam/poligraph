@@ -90,6 +90,26 @@ export function ChambrePage({
               {profile.name}
             </h1>
             <p className="mt-4 max-w-2xl text-base text-white/85 sm:text-lg">{profile.intro}</p>
+            <div
+              role="group"
+              aria-label="Changer de chambre"
+              className="mt-5 grid max-w-sm grid-cols-2 rounded-xl bg-white/12 p-1 md:hidden"
+            >
+              {(["AN", "SENAT"] as const).map((c) => (
+                <Link
+                  key={c}
+                  href={chamberPath(c)}
+                  aria-current={c === chamber ? "page" : undefined}
+                  className={
+                    c === chamber
+                      ? "inline-flex min-h-11 items-center justify-center rounded-lg bg-white text-sm font-bold text-primary"
+                      : "inline-flex min-h-11 items-center justify-center rounded-lg text-sm font-medium text-white"
+                  }
+                >
+                  {c === "AN" ? "Assemblée" : "Sénat"}
+                </Link>
+              ))}
+            </div>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href={`${ROUTES.votes}?chamber=${chamber}`}
@@ -108,7 +128,7 @@ export function ChambrePage({
         </div>
       </RubriqueBandeau>
 
-      <div className="container mx-auto space-y-12 px-4 py-10">
+      <div className="container mx-auto flex flex-col gap-12 px-4 py-10">
         <section aria-labelledby="role">
           <h2 id="role" className="font-display text-2xl font-extrabold text-primary">
             À quoi sert {chamber === "AN" ? "l'Assemblée nationale" : "le Sénat"} ?
@@ -171,7 +191,7 @@ export function ChambrePage({
           </ul>
         </section>
 
-        <section aria-labelledby="derniers">
+        <section aria-labelledby="derniers" className="order-first md:order-none">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="derniers" className="font-display text-2xl font-extrabold text-primary">
               Derniers scrutins {chamber === "AN" ? "à l'Assemblée" : "au Sénat"}

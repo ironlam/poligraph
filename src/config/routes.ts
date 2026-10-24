@@ -15,6 +15,7 @@ export const ROUTES = {
   assembleeNationale: "/parlement/assemblee-nationale",
   senat: "/parlement/senat",
   parcoursLegislatif: "/parlement/parcours-legislatif",
+  glossaire: "/parlement/glossaire",
   legislatures: "/parlement/assemblee/legislatures",
   legislature: (n: number) => `/parlement/assemblee/legislatures/${n}`,
 } as const;
