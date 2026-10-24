@@ -8,7 +8,7 @@ import {
 import { CollectionPageJsonLd } from "@/components/seo/JsonLd";
 import { BRAND_NAVY } from "@/config/brand";
 import { SENAT_ACCENT, chamberPath } from "@/config/chambres";
-import { DOSSIER_STATUS_LABELS } from "@/config/labels";
+import { DOSSIER_STATUS_SITUATIONS } from "@/config/labels";
 import { LEGISLATIVE_JOURNEY_STEPS } from "@/config/legislative-journey";
 import { ROUTES } from "@/config/routes";
 import { SITE_URL } from "@/config/site";
@@ -42,17 +42,6 @@ const ETAPES_PAR_CHAMBRE = [
     senat: "Même débat au Sénat, souvent avec un texte modifié.",
   },
 ] as const;
-
-const STATUT_SENS: Record<DossierStatus, string> = {
-  DEPOSE: "Enregistré, pas encore examiné.",
-  EN_COMMISSION: "Étudié, pas encore débattu en séance.",
-  EN_COURS: "En discussion : séance, navette ou CMP.",
-  CONSEIL_CONSTITUTIONNEL: "Saisi pour vérifier sa conformité à la Constitution.",
-  ADOPTE: "Promulgué : la loi est publiée et s'applique.",
-  REJETE: "Le texte s'arrête sans devenir loi.",
-  RETIRE: "Retiré par son auteur, sans devenir loi.",
-  CADUQUE: "Fin de législature sans adoption.",
-};
 
 function Pastille({ n, fond = BRAND_NAVY }: { n: number; fond?: string }) {
   return (
@@ -180,12 +169,12 @@ export default function ParcoursLegislatifPage() {
             Chaque dossier législatif affiche un statut. Voici ce que chacun veut dire.
           </p>
           <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(Object.keys(STATUT_SENS) as DossierStatus[]).map((statut) => (
-              <li key={statut} className="rounded-xl border border-border p-3">
-                <span className="inline-block rounded-full border border-border px-3 py-0.5 text-xs font-bold">
-                  {DOSSIER_STATUS_LABELS[statut]}
-                </span>
-                <p className="mt-2 text-sm text-muted-foreground">{STATUT_SENS[statut]}</p>
+            {(Object.keys(DOSSIER_STATUS_SITUATIONS) as DossierStatus[]).map((statut) => (
+              <li
+                key={statut}
+                className="rounded-xl border border-border p-3 text-sm text-muted-foreground"
+              >
+                {DOSSIER_STATUS_SITUATIONS[statut]}
               </li>
             ))}
           </ul>
