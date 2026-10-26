@@ -150,6 +150,7 @@ describe("public page performance contracts", () => {
         ["electionId", "electionSlug"],
       ],
       ["hub", "getHubLatestMeasuresCached", "loadHubLatestMeasures", ["electionId"]],
+      ["hub-press", "getHubPressCached", "loadHubPress", ["electionId"]],
       ["themes-index", "getThemesIndexCached", "loadThemesIndex", ["electionId", "electionSlug"]],
       ["priorites", "getPrioritesDataCached", "loadPrioritesData", ["electionId", "electionSlug"]],
       [

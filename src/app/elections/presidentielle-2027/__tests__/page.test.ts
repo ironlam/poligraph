@@ -8,6 +8,7 @@ vi.mock("@/lib/data/hub", () => ({
   getHubMeasureContext: vi.fn(),
   getHubLatestMeasures: vi.fn(),
 }));
+vi.mock("@/lib/data/hub-press", () => ({ getHubPress: vi.fn() }));
 vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: vi.fn() }));
 
 import { getHubMeasureContext } from "@/lib/data/hub";
