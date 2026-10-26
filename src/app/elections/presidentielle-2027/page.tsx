@@ -2,15 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Mail } from "lucide-react";
-import { Breadcrumb } from "@/components/ui/Breadcrumb";
+import { HexPattern } from "@/components/ui/HexPattern";
+import {
+  BandeauFilAriane,
+  BandeauSurtitre,
+  RubriqueBandeau,
+} from "@/components/ui/RubriqueBandeau";
 import { AddToCalendar } from "@/components/elections/AddToCalendar";
 import { CollectionPageJsonLd, EventJsonLd } from "@/components/seo/JsonLd";
 import { getHubCandidacyField, getHubLatestMeasures, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
+import { daysUntil } from "@/lib/elections/countdown";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { HubPrimaryPaths } from "./_components/HubPrimaryPaths";
+import { DaysUntilBadge } from "./_components/DaysUntilBadge";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
 import { HubLatestMeasures } from "./_components/HubLatestMeasures";
@@ -48,10 +55,6 @@ export default async function PresidentialHubPage() {
   ]);
   if (context === null) notFound();
 
-  const now = new Date();
-  const daysUntil = context.round1Date
-    ? Math.ceil((context.round1Date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
   const themeCount = THEMES_IN_ORDER.length;
 
   const calendarLink = context.round1Date && (
@@ -81,40 +84,44 @@ export default async function PresidentialHubPage() {
         url={`${SITE_URL}/elections/${PRESIDENTIELLE_2027_SLUG}`}
         numberOfItems={context.verifiedMeasureCount}
       />
-      <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
-        <Breadcrumb
-          items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
-        />
-
-        <PresidentialHubNav active="overview" />
-
-        <header className="max-w-3xl space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-brand-on-surface">
-            Présidentielle 2027
-          </p>
-          <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl">
-            Présidentielle 2027 : programmes et mesures
-          </h1>
-          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-lg">
-            Explorez les mesures publiées par candidat et par thème, avec leurs sources et les votes
-            parlementaires disponibles.
-          </p>
-          {context.round1Date && (
-            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground-strong">
-              {daysUntil !== null && daysUntil > 0 && (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 font-bold text-primary">
-                  J-{daysUntil}
-                </span>
-              )}
-              <span>
-                1er tour le {formatDate(context.round1Date)}
-                {!context.dateConfirmed && ", date non confirmée"}
-              </span>
+      <RubriqueBandeau labelledBy="hub-title" className="relative">
+        <HexPattern className="pointer-events-none absolute inset-0 text-white opacity-[0.06]" />
+        <div className="relative space-y-6">
+          <BandeauFilAriane
+            items={[{ label: "Élections", href: "/elections" }, { label: "Présidentielle 2027" }]}
+          />
+          <header className="max-w-3xl space-y-3">
+            <BandeauSurtitre>Présidentielle 2027</BandeauSurtitre>
+            <h1
+              id="hub-title"
+              className="font-display text-3xl font-extrabold leading-tight tracking-tight md:text-5xl"
+            >
+              Présidentielle 2027 : programmes et mesures
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-white/85 md:text-lg">
+              Explorez les mesures publiées par candidat et par thème, avec leurs sources et les
+              votes parlementaires disponibles.
             </p>
-          )}
-        </header>
+            {context.round1Date && (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-white/85">
+                <DaysUntilBadge
+                  targetDate={context.round1Date.toISOString()}
+                  serverDays={daysUntil(context.round1Date, new Date())}
+                  className="rounded-full border border-white/40 bg-white/10 px-2.5 py-0.5 font-display font-bold text-white"
+                />
+                <span>
+                  1er tour le {formatDate(context.round1Date)}
+                  {!context.dateConfirmed && ", date non confirmée"}
+                </span>
+              </p>
+            )}
+          </header>
+          <PresidentialCorpusSearch />
+        </div>
+      </RubriqueBandeau>
 
-        <PresidentialCorpusSearch />
+      <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
+        <PresidentialHubNav active="overview" />
 
         <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />
 

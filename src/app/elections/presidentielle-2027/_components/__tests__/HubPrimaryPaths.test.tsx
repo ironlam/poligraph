@@ -54,4 +54,23 @@ describe("HubPrimaryPaths", () => {
 
     expect(screen.getByText(/0 ont déjà des propositions publiées, sur 0/)).toBeInTheDocument();
   });
+
+  it("montre toutes les candidatures en cours dans l'ordre reçu, sans les retirées", () => {
+    render(
+      <HubPrimaryPaths
+        candidacies={[
+          candidacy({ id: "a", candidateName: "Alix Dupont" }),
+          candidacy({ id: "b", candidateName: "Bao Martin", status: "RETIRE" }),
+          candidacy({ id: "c", candidateName: "Chloé Petit", status: "PRESSENTI" }),
+        ]}
+        themeCount={16}
+      />
+    );
+
+    const faces = screen
+      .getAllByRole("img", { hidden: true })
+      .map((face) => face.getAttribute("aria-label"));
+    expect(faces).toEqual(["Avatar de Alix Dupont", "Avatar de Chloé Petit"]);
+    expect(screen.getByText("Candidatures en cours, par ordre alphabétique")).toBeInTheDocument();
+  });
 });
