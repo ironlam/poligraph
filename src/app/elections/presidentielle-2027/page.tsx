@@ -5,7 +5,7 @@ import { Mail } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { AddToCalendar } from "@/components/elections/AddToCalendar";
 import { CollectionPageJsonLd, EventJsonLd } from "@/components/seo/JsonLd";
-import { getHubCandidacyField, getHubMeasureContext } from "@/lib/data/hub";
+import { getHubCandidacyField, getHubLatestMeasures, getHubMeasureContext } from "@/lib/data/hub";
 import { PRESIDENTIELLE_2027_SLUG, THEMES_IN_ORDER } from "@/lib/presidentielle/themes";
 import { formatDate } from "@/lib/utils";
 import { SITE_URL } from "@/config/site";
@@ -13,6 +13,7 @@ import { isFeatureEnabled } from "@/lib/feature-flags";
 import { HubPrimaryPaths } from "./_components/HubPrimaryPaths";
 import { HubClosedState } from "./_components/HubClosedState";
 import { HubCorpusState } from "./_components/HubCorpusState";
+import { HubLatestMeasures } from "./_components/HubLatestMeasures";
 import { HubComparisonLauncher } from "./_components/HubComparisonLauncher";
 import { HubSubjects } from "./_components/HubSubjects";
 import { HubTopics } from "./_components/HubTopics";
@@ -39,9 +40,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PresidentialHubPage() {
-  const [field, context, programmesEnabled] = await Promise.all([
+  const [field, context, latestMeasures, programmesEnabled] = await Promise.all([
     getHubCandidacyField(PRESIDENTIELLE_2027_SLUG),
     getHubMeasureContext(PRESIDENTIELLE_2027_SLUG),
+    getHubLatestMeasures(PRESIDENTIELLE_2027_SLUG),
     isFeatureEnabled("PROGRAMMES_ENABLED"),
   ]);
   if (context === null) notFound();
@@ -113,6 +115,8 @@ export default async function PresidentialHubPage() {
         </header>
 
         <PresidentialCorpusSearch />
+
+        <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />
 
         <HubPrimaryPaths candidacies={field} themeCount={themeCount} />
 

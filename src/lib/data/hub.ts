@@ -1,7 +1,11 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { ThemeCategory } from "@/generated/prisma";
+import type { MeasureSourceKind, ThemeCategory } from "@/generated/prisma";
+import { MEASURE_SOURCE_KIND_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
 import { db } from "@/lib/db";
+import { keepOnePerCandidacy } from "@/lib/presidentielle/latest-measures";
+import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
+import { themeToSlug } from "@/lib/theme-utils";
 import { observeRead } from "@/lib/telemetry/read-operations";
 import { isHubPublishable } from "@/config/publication-gates";
 import {
@@ -186,4 +190,127 @@ async function getHubMeasureContextCached(
   cacheTag(`election-candidacies:${electionId}`);
   cacheLife("synced");
   return loadHubMeasureContext(electionId, electionSlug);
+}
+
+/** How many recent measures the hub shows. */
+export const HUB_LATEST_MEASURES_LIMIT = 4;
+
+/** Rows read before `keepOnePerCandidacy`. Bounded so the read stays one indexed `take`. */
+const HUB_LATEST_MEASURES_SCAN = 24;
+
+/**
+ * One recently published measure, as the hub's "En ce moment" block names it.
+ *
+ * Same population as the measure detail page (`PUBLIC_PRESIDENTIAL_MEASURE_WHERE`), so every
+ * row links to a page that exists. The source is reduced to its kind and host: the detail page
+ * carries the full citation.
+ */
+export type HubLatestMeasure = {
+  slug: string;
+  text: string;
+  publishedAt: Date;
+  theme: ThemeCategory;
+  themeLabel: string;
+  themeSlug: string;
+  candidateName: string;
+  politicianSlug: string | null;
+  photoUrl: string | null;
+  blobPhotoUrl: string | null;
+  source: { kindLabel: string; host: string | null } | null;
+};
+
+function sourceHost(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function toSource(source: { sourceKind: MeasureSourceKind; url: string } | undefined) {
+  if (source === undefined) return null;
+  return { kindLabel: MEASURE_SOURCE_KIND_LABELS[source.sourceKind], host: sourceHost(source.url) };
+}
+
+async function queryHubLatestMeasures(electionId: string): Promise<HubLatestMeasure[]> {
+  const rows = await db.measure.findMany({
+    where: { electionId, ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE },
+    // Publication order of the revision the public sees, not the measure's creation: a measure
+    // created months ago and published today is news today.
+    orderBy: [{ publishedRevision: { publishedAt: "desc" } }, { id: "asc" }],
+    take: HUB_LATEST_MEASURES_SCAN,
+    select: {
+      slug: true,
+      candidacyId: true,
+      theme: true,
+      publishedRevision: {
+        select: {
+          text: true,
+          publishedAt: true,
+          sources: {
+            select: { sourceKind: true, url: true },
+            // Enum declaration order: PRIMARY sorts before SECONDARY.
+            orderBy: [{ tier: "asc" }, { publishedAt: "asc" }],
+            take: 1,
+          },
+        },
+      },
+      candidacy: {
+        select: {
+          candidateName: true,
+          politician: { select: { slug: true, photoUrl: true, blobPhotoUrl: true } },
+        },
+      },
+    },
+  });
+
+  const candidates: Array<{ candidacyId: string | null; measure: HubLatestMeasure }> = [];
+  for (const row of rows) {
+    const revision = row.publishedRevision;
+    if (revision === null || revision.publishedAt === null || row.candidacy === null) continue;
+    const politician = row.candidacy.politician;
+    candidates.push({
+      candidacyId: row.candidacyId,
+      measure: {
+        slug: row.slug,
+        text: revision.text,
+        publishedAt: revision.publishedAt,
+        theme: row.theme,
+        themeLabel: THEME_CATEGORY_LABELS[row.theme],
+        themeSlug: themeToSlug(row.theme),
+        candidateName: row.candidacy.candidateName,
+        politicianSlug: politician?.slug ?? null,
+        photoUrl: politician?.photoUrl ?? null,
+        blobPhotoUrl: politician?.blobPhotoUrl ?? null,
+        source: toSource(revision.sources[0]),
+      },
+    });
+  }
+  return keepOnePerCandidacy(candidates, HUB_LATEST_MEASURES_LIMIT).map(({ measure }) => measure);
+}
+
+/** Plain async, integration-testable. Pages call `getHubLatestMeasures`, which caches this. */
+export async function loadHubLatestMeasures(electionId: string) {
+  return observeRead("presidential.hub.latest", () => queryHubLatestMeasures(electionId));
+}
+
+export async function getHubLatestMeasures(electionSlug: string): Promise<HubLatestMeasure[]> {
+  const election = await db.election.findUnique({
+    where: { slug: electionSlug },
+    select: { id: true },
+  });
+  if (election === null) return [];
+  return getHubLatestMeasuresCached(election.id);
+}
+
+/**
+ * Same tags as the measure context: publishing a measure or a candidacy extension refreshes the
+ * block on demand. No short profile, which would re-block the hub's 24 h ISR (AGENTS.md §5).
+ */
+async function getHubLatestMeasuresCached(electionId: string): Promise<HubLatestMeasure[]> {
+  "use cache";
+  cacheTag(`election-measures:${electionId}`);
+  cacheTag(`election-candidacies:${electionId}`);
+  cacheLife("synced");
+  return loadHubLatestMeasures(electionId);
 }

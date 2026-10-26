@@ -6,6 +6,8 @@ let db: typeof import("@/lib/db").db;
 let getHubCandidacyField: typeof import("../hub").getHubCandidacyField;
 let getHubMeasureContext: typeof import("../hub").getHubMeasureContext;
 let loadHubMeasureContext: typeof import("../hub").loadHubMeasureContext;
+let loadHubLatestMeasures: typeof import("../hub").loadHubLatestMeasures;
+let getHubLatestMeasures: typeof import("../hub").getHubLatestMeasures;
 
 const SLUG = "hub-test";
 
@@ -24,8 +26,13 @@ describeIfDisposableDb("hub", () => {
   beforeAll(async () => {
     assertDisposableTestDb();
     ({ db } = await import("@/lib/db"));
-    ({ getHubCandidacyField, getHubMeasureContext, loadHubMeasureContext } =
-      await import("../hub"));
+    ({
+      getHubCandidacyField,
+      getHubMeasureContext,
+      loadHubMeasureContext,
+      loadHubLatestMeasures,
+      getHubLatestMeasures,
+    } = await import("../hub"));
     const { seedHubFixture } = await import("./hub-fixture");
     electionId = await seedHubFixture(db, { electionSlug: SLUG });
   });
@@ -214,6 +221,28 @@ describeIfDisposableDb("hub", () => {
       expect(context.round2Date).toEqual(round2Date);
       expect(context.dateConfirmed).toBe(true);
       expect(context.electionDescription).toBe("Élection de test (hub) pour le second tour.");
+    });
+  });
+  describe("loadHubLatestMeasures", () => {
+    it("ne remonte que les mesures atteignables, jamais celle d'une extension en brouillon", async () => {
+      const latest = await loadHubLatestMeasures(electionId);
+
+      expect(latest.map((m) => m.candidateName).sort()).toEqual(["Alpha Fixture", "Bravo Fixture"]);
+      expect(latest.some((m) => m.candidateName === "Charlie Fixture")).toBe(false);
+      for (const m of latest) {
+        expect(m.themeLabel).toBe("Logement et urbanisme");
+        expect(m.source).toEqual({ kindLabel: "Discours de campagne", host: "example.org" });
+      }
+    });
+
+    it("trie par date de publication de la révision, la plus récente d'abord", async () => {
+      const latest = await loadHubLatestMeasures(electionId);
+      const dates = latest.map((m) => m.publishedAt.getTime());
+      expect(dates).toEqual([...dates].sort((a, b) => b - a));
+    });
+
+    it("rend une liste vide pour une élection inconnue (avant la frontière cache)", async () => {
+      expect(await getHubLatestMeasures("inconnue")).toEqual([]);
     });
   });
 });
