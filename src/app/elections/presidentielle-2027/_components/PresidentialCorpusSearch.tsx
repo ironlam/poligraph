@@ -36,6 +36,7 @@ type Option =
   | { kind: "candidacy"; value: PresidentialCandidacySearchResult }
   | { kind: "measure"; value: PresidentialMeasureSearchResult };
 
+/** Styled for the hub's navy banner (`RubriqueBandeau`), its only host. */
 export function PresidentialCorpusSearch() {
   const router = useRouter();
   const listboxId = useId();
@@ -170,7 +171,7 @@ export function PresidentialCorpusSearch() {
   return (
     <section
       aria-label="Recherche dans les programmes de la présidentielle 2027"
-      className="mx-auto w-full max-w-3xl"
+      className="w-full max-w-3xl"
     >
       <div ref={rootRef} className="relative">
         <form
@@ -180,10 +181,10 @@ export function PresidentialCorpusSearch() {
             submitFullResults();
           }}
         >
-          <label htmlFor="presidential-corpus-query" className="mb-2 block font-bold">
+          <label htmlFor="presidential-corpus-query" className="mb-2 block font-bold text-white">
             Rechercher une mesure, un thème ou un candidat
           </label>
-          <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2">
+          <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card text-foreground shadow-sm focus-within:ring-2 focus-within:ring-white focus-within:ring-offset-2 focus-within:ring-offset-transparent">
             <Search aria-hidden="true" className="ml-4 h-5 w-5 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
@@ -246,7 +247,7 @@ export function PresidentialCorpusSearch() {
             id={listboxId}
             role="listbox"
             aria-label="Résultats de la recherche présidentielle"
-            className="absolute inset-x-0 top-full z-30 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto rounded-2xl border border-border bg-popover shadow-xl"
+            className="absolute inset-x-0 top-full z-30 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl"
           >
             {status === "loading" && (
               <p className="px-5 py-8 text-center text-sm text-muted-foreground">
@@ -409,10 +410,10 @@ export function PresidentialCorpusSearch() {
           </div>
         )}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 text-xs text-white/85">
         <span>Recherche dans les contenus publiés par Poligraph.</span>
         <details>
-          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center font-medium text-white underline underline-offset-4 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden">
             Comment fonctionne la recherche ?
           </summary>
           <p className="max-w-2xl pb-2 leading-relaxed">
