@@ -4,6 +4,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export const READ_OPERATIONS = [
   "measures.election.full",
   "presidential.hub.load",
+  "presidential.hub.latest",
   "presidential.field.load",
   "presidential.themes.load",
   "presidential.subject.load",

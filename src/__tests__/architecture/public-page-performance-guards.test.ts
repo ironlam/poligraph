@@ -142,21 +142,28 @@ describe("public page performance contracts", () => {
   });
 
   it("keeps telemetry outside cache signatures and inside executed loaders", () => {
-    for (const [file, cached, loader] of [
-      ["hub", "getHubMeasureContextCached", "loadHubMeasureContext"],
-      ["themes-index", "getThemesIndexCached", "loadThemesIndex"],
-      ["priorites", "getPrioritesDataCached", "loadPrioritesData"],
-      ["subject-page", "getSubjectPageDataCached", "loadSubjectPageData"],
-    ]) {
+    for (const [file, cached, loader, params] of [
+      [
+        "hub",
+        "getHubMeasureContextCached",
+        "loadHubMeasureContext",
+        ["electionId", "electionSlug"],
+      ],
+      ["hub", "getHubLatestMeasuresCached", "loadHubLatestMeasures", ["electionId"]],
+      ["themes-index", "getThemesIndexCached", "loadThemesIndex", ["electionId", "electionSlug"]],
+      ["priorites", "getPrioritesDataCached", "loadPrioritesData", ["electionId", "electionSlug"]],
+      [
+        "subject-page",
+        "getSubjectPageDataCached",
+        "loadSubjectPageData",
+        ["electionId", "electionSlug", "theme"],
+      ],
+    ] as const) {
       const ast = sourceFile(`src/lib/data/${file}.ts`);
       const functions = ast.statements.filter(ts.isFunctionDeclaration);
       const boundary = functions.find((fn) => fn.name?.text === cached);
       expect(boundary, cached).toBeDefined();
-      expect(boundary?.parameters.map((param) => param.name.getText(ast))).toEqual(
-        file === "subject-page"
-          ? ["electionId", "electionSlug", "theme"]
-          : ["electionId", "electionSlug"]
-      );
+      expect(boundary?.parameters.map((param) => param.name.getText(ast))).toEqual(params);
       const calls: string[] = [];
       function visit(node: ts.Node) {
         if (ts.isCallExpression(node)) calls.push(node.expression.getText(ast));
