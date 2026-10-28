@@ -28,6 +28,13 @@ describe("formatChangelogDay", () => {
 describe("buildChangelogRss", () => {
   const xml = buildChangelogRss([entry], LABELS, "https://poligraph.fr");
 
+  it("points the self link at the feed, not at the HTML page", () => {
+    expect(xml).toContain(
+      '<atom:link href="https://poligraph.fr/changelog/rss.xml" rel="self" type="application/rss+xml"/>'
+    );
+    expect(xml).toContain("<link>https://poligraph.fr/changelog</link>");
+  });
+
   it("escapes XML special characters in titles", () => {
     expect(xml).toContain("<title>Scrutins &amp; votes &lt;ordre&gt;</title>");
   });

@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/config/site";
+import { buildRss, type RssItem } from "@/lib/rss";
 
 export type PublicChangelogEntry = {
   id: string;
@@ -22,50 +23,30 @@ export function formatChangelogDay(isoDay: string): string {
   return DAY_FORMAT.format(new Date(`${isoDay}T00:00:00Z`));
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 export function buildChangelogRss(
   entries: readonly PublicChangelogEntry[],
   typeLabels: Record<PublicChangelogEntry["type"], string>,
   siteUrl: string = SITE_URL
 ): string {
-  const items = entries
-    .map((entry) => {
-      const link = `${siteUrl}/changelog#${entry.id}`;
-      const description = entry.sourceUrl
-        ? `${entry.body} Source : ${entry.sourceUrl}`
-        : entry.body;
-      return [
-        "    <item>",
-        `      <title>${escapeXml(entry.title)}</title>`,
-        `      <link>${escapeXml(link)}</link>`,
-        `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
-        `      <pubDate>${new Date(`${entry.date}T00:00:00Z`).toUTCString()}</pubDate>`,
-        `      <category>${escapeXml(typeLabels[entry.type])}</category>`,
-        `      <description>${escapeXml(description)}</description>`,
-        "    </item>",
-      ].join("\n");
-    })
-    .join("\n");
+  const items: RssItem[] = entries.map((entry) => {
+    const link = `${siteUrl}/changelog#${entry.id}`;
+    return {
+      title: entry.title,
+      link,
+      guid: link,
+      description: entry.sourceUrl ? `${entry.body} Source : ${entry.sourceUrl}` : entry.body,
+      pubDate: new Date(`${entry.date}T00:00:00Z`),
+      category: typeLabels[entry.type],
+    };
+  });
 
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<rss version="2.0">',
-    "  <channel>",
-    "    <title>Journal des évolutions de Poligraph</title>",
-    `    <link>${escapeXml(`${siteUrl}/changelog`)}</link>`,
-    "    <description>Les changements apportés à Poligraph, avec leur source.</description>",
-    "    <language>fr</language>",
-    items,
-    "  </channel>",
-    "</rss>",
-    "",
-  ].join("\n");
+  return buildRss(
+    {
+      title: "Journal des évolutions de Poligraph",
+      link: `${siteUrl}/changelog`,
+      feedUrl: `${siteUrl}/changelog/rss.xml`,
+      description: "Les changements apportés à Poligraph, avec leur source.",
+    },
+    items
+  );
 }
