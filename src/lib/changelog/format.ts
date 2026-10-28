@@ -44,6 +44,7 @@ export function buildChangelogRss(
     {
       title: "Journal des évolutions de Poligraph",
       link: `${siteUrl}/changelog`,
+      feedUrl: `${siteUrl}/changelog/rss.xml`,
       description: "Les changements apportés à Poligraph, avec leur source.",
     },
     items
