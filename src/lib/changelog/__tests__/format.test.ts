@@ -33,7 +33,7 @@ describe("buildChangelogRss", () => {
   });
 
   it("links each item to its anchor on the public page and carries its source", () => {
-    expect(xml).toContain("<guid isPermaLink=\"true\">https://poligraph.fr/changelog#abc</guid>");
+    expect(xml).toContain('<guid isPermaLink="true">https://poligraph.fr/changelog#abc</guid>');
     expect(xml).toContain("Source : https://github.com/ironlam/poligraph/pull/1190");
   });
 
