@@ -16,6 +16,31 @@ const SENTRY_ENABLED = Boolean(SENTRY_DSN) && process.env.NEXT_PUBLIC_SENTRY_ENA
 const IS_ADMIN_ROUTE =
   typeof window !== "undefined" && /^\/admin(\/|$)/.test(window.location.pathname);
 
+// Replay takes a full DOM snapshot and starts observing mutations as soon as it is added. Done at
+// boot, that is a single ~1 s long task on a mid-range phone, more CPU than React hydration, paid by
+// every visitor for a recording that only ships when an error occurs. Starting it on the first
+// interaction keeps it out of the load path; an error raised before any interaction is still
+// reported, only without a recording of a page nobody had touched yet.
+const REPLAY_START_EVENTS = ["pointerdown", "keydown", "touchstart", "scroll"] as const;
+
+function startReplayOnFirstInteraction(): void {
+  const start = () => {
+    for (const type of REPLAY_START_EVENTS) window.removeEventListener(type, start, true);
+    Sentry.addIntegration(
+      Sentry.replayIntegration({
+        maskAllText: false,
+        blockAllMedia: true,
+        // The production CSP intentionally forbids blob workers. Replay falls back to its
+        // in-thread buffer, avoiding a blocked worker and keeping the security boundary intact.
+        useCompression: false,
+      })
+    );
+  };
+  for (const type of REPLAY_START_EVENTS) {
+    window.addEventListener(type, start, { capture: true, passive: true });
+  }
+}
+
 // React's streaming renderer injects these inline scripts into the HTML document
 // to reveal a Suspense boundary ($RS), complete one ($RC) or reveal viewport
 // content ($RV). They dereference `document.getElementById(...)` with no null
@@ -75,17 +100,6 @@ if (SENTRY_ENABLED) {
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
     sendDefaultPii: false,
-    integrations: IS_ADMIN_ROUTE
-      ? []
-      : [
-          Sentry.replayIntegration({
-            maskAllText: false,
-            blockAllMedia: true,
-            // The production CSP intentionally forbids blob workers. Replay falls back to its
-            // in-thread buffer, avoiding a blocked worker and keeping the security boundary intact.
-            useCompression: false,
-          }),
-        ],
     beforeSend(event) {
       if (isReactStreamingScriptError(event)) {
         if (reactStreamingReported) return null;
@@ -107,6 +121,8 @@ if (SENTRY_ENABLED) {
       "AbortError",
     ],
   });
+
+  if (!IS_ADMIN_ROUTE) startReplayOnFirstInteraction();
 }
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

@@ -27,12 +27,14 @@ function reactStreamingEvent(fn: string, value: string): SentryEvent {
 
 const mocks = vi.hoisted(() => ({
   init: vi.fn(),
+  addIntegration: vi.fn(),
   replayIntegration: vi.fn(() => ({ name: "Replay" })),
   captureRouterTransitionStart: vi.fn(),
 }));
 
 vi.mock("@sentry/nextjs", () => ({
   init: mocks.init,
+  addIntegration: mocks.addIntegration,
   replayIntegration: mocks.replayIntegration,
   captureRouterTransitionStart: mocks.captureRouterTransitionStart,
 }));
@@ -40,7 +42,10 @@ vi.mock("@sentry/nextjs", () => ({
 /** Boots the client instrumentation as if the document had loaded at `pathname`. */
 async function bootAt(pathname: string) {
   vi.resetModules();
+  // Flushes the first-interaction listener a previous boot may have left on the shared window.
+  window.dispatchEvent(new Event("pointerdown"));
   mocks.init.mockClear();
+  mocks.addIntegration.mockClear();
   mocks.replayIntegration.mockClear();
   window.history.replaceState(null, "", pathname);
   await import("./instrumentation-client");
@@ -50,8 +55,16 @@ async function bootAt(pathname: string) {
   };
 }
 
-const hasReplay = (opts: { integrations?: unknown[] }) =>
-  (opts.integrations ?? []).some((i) => (i as { name?: string })?.name === "Replay");
+const isReplay = (i: unknown) => (i as { name?: string })?.name === "Replay";
+
+/** Whether replay ends up recording once the visitor interacts with the page. */
+function hasReplay(opts: { integrations?: unknown[] }): boolean {
+  window.dispatchEvent(new Event("pointerdown"));
+  return (
+    (opts.integrations ?? []).some(isReplay) ||
+    mocks.addIntegration.mock.calls.some(([i]) => isReplay(i))
+  );
+}
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@o1.ingest.de.sentry.io/1");
@@ -81,6 +94,19 @@ describe("Session replay : périmètre d'enregistrement", () => {
     const opts = await bootAt("/admin/affaires");
     expect(mocks.init).toHaveBeenCalledTimes(1);
     expect(hasReplay(opts)).toBe(false);
+  });
+
+  // Le snapshot DOM initial du replay est une tâche longue d'environ 1 s sur mobile milieu de
+  // gamme : il ne doit pas peser sur le chargement (TBT, INP).
+  it("ne démarre le replay qu'à la première interaction", async () => {
+    const opts = await bootAt("/");
+    expect((opts.integrations ?? []).some(isReplay)).toBe(false);
+    expect(mocks.addIntegration).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new Event("scroll"));
+    window.dispatchEvent(new Event("keydown"));
+    expect(mocks.addIntegration).toHaveBeenCalledTimes(1);
+    expect(isReplay(mocks.addIntegration.mock.calls[0]![0])).toBe(true);
   });
 
   it("ne coupe pas une route publique dont le nom commence par admin", async () => {

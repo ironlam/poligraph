@@ -243,7 +243,16 @@ export default sentryEnabled
       widenClientFileUpload: true,
       // Route Sentry events through our domain to bypass ad blockers
       tunnelRoute: "/monitoring",
-      disableLogger: true,
+      webpack: {
+        // Replay never records the HelloAsso iframe (cross-origin) nor any shadow DOM, and runs
+        // with `useCompression: false` because the CSP forbids blob workers, so this code is dead.
+        treeshake: {
+          removeDebugLogging: true,
+          excludeReplayIframe: true,
+          excludeReplayShadowDOM: true,
+          excludeReplayCompressionWorker: true,
+        },
+      },
       // Instruments Vercel Cron jobs defined in vercel.json automatically
       automaticVercelMonitors: true,
       // A bad/partial upload config must not break or spam the build log
