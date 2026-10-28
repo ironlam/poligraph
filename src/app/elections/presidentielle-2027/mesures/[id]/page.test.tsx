@@ -9,6 +9,9 @@ const notFound = vi.fn(() => {
 vi.mock("@/lib/data/presidential-measure-detail", () => ({
   getPublicPresidentialMeasureDetail: (...args: unknown[]) => getDetail(...args),
 }));
+vi.mock("@/components/elections/ParliamentThemeBridgeLoader", () => ({
+  ParliamentThemeBridgeLoader: () => null,
+}));
 vi.mock("next/navigation", () => ({ notFound: () => notFound() }));
 
 const detail = {
