@@ -17,6 +17,7 @@ import {
   Newspaper,
   RefreshCw,
   Scale,
+  ScrollText,
   Settings,
   ShieldCheck,
   ShieldX,
@@ -181,6 +182,14 @@ const entries: readonly AdminNavigationEntry[] = [
     description: "Promesses de campagne à vérifier.",
     group: "content",
     icon: FileCheck2,
+  },
+  {
+    id: "changelog",
+    href: "/admin/changelog",
+    label: "Journal des évolutions",
+    description: "Entrées du changelog public, en brouillon jusqu'à leur publication.",
+    group: "content",
+    icon: ScrollText,
   },
   {
     id: "retours",
