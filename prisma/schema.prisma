@@ -1290,6 +1290,31 @@ model FeatureFlag {
   updatedBy   String?
 }
 
+enum ChangelogType {
+  NOUVEAUTE
+  AMELIORATION
+  CORRECTION
+  DONNEES
+}
+
+/// Entrée du journal des évolutions (/changelog et flux RSS).
+/// PublicationStatus.PUBLISHED est la seule valeur exposée par les pages publiques.
+model ChangelogEntry {
+  id        String            @id @default(cuid())
+  type      ChangelogType
+  /// Date du changement, affichée telle quelle (jour calendaire, pas un instant).
+  date      DateTime          @db.Date
+  title     String
+  body      String
+  /// PR, commit ou source officielle. Obligatoire pour publier.
+  sourceUrl String?
+  status    PublicationStatus @default(DRAFT)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([status, date(sort: Desc)])
+}
+
 // ============================================
 // PARLIAMENTARY VOTES
 // ============================================

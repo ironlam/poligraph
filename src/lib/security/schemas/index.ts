@@ -15,6 +15,7 @@ export {
 } from "./party";
 export { updateDossierSchema } from "./dossier";
 export { createFeatureFlagSchema, updateFeatureFlagSchema } from "./feature-flag";
+export { createChangelogSchema, updateChangelogSchema } from "./changelog";
 export {
   revalidateCacheSchema,
   revalidateVotesSchema,
