@@ -12,6 +12,7 @@ import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
 import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
+import { getPublishedChangelog } from "@/lib/data/changelog";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -88,6 +89,11 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
   "use cache";
   cacheTag(...SITEMAP_SHARD_TAGS[0]);
   cacheLife("synced");
+
+  const latestChangelogDay = (await getPublishedChangelog())[0]?.date;
+  const changelogLastmod = latestChangelogDay
+    ? new Date(`${latestChangelogDay}T00:00:00Z`)
+    : undefined;
 
   const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     SELECT p."slug", p."updatedAt"
@@ -284,7 +290,7 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
     },
     {
       url: `${SITE_URL}/changelog`,
-      lastModified: new Date(),
+      lastModified: changelogLastmod,
       changeFrequency: "weekly",
       priority: 0.4,
     },

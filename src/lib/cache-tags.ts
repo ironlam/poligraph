@@ -49,6 +49,7 @@ export const NARROW_TAGS = [
   "gouvernements",
   "territoires",
   "historical-group-positions",
+  "changelog",
 ] as const;
 
 /** Every tag an operator may name explicitly (admin endpoint, cron endpoint). */

@@ -37,7 +37,7 @@ const TYPES = Object.keys(CHANGELOG_TYPE_LABELS) as EntryType[];
 function emptyForm(): Form {
   return {
     type: "AMELIORATION",
-    date: new Date().toISOString().slice(0, 10),
+    date: new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }),
     title: "",
     body: "",
     sourceUrl: "",
