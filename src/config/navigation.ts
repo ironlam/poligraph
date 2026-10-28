@@ -302,6 +302,7 @@ export const FOOTER_SECTIONS: FooterSection[] = [
       { href: "/chat", label: "Assistant IA" },
       { href: "/sources", label: "Sources et principes" },
       { href: "/methodologie", label: "Méthodologie" },
+      { href: "/changelog", label: "Journal des évolutions" },
       { href: "/docs/api", label: "API" },
       { href: "/espace-presse", label: "Presse et partenaires" },
       {

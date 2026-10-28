@@ -282,6 +282,12 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       changeFrequency: "monthly",
       priority: 0.8,
     },
+    {
+      url: `${SITE_URL}/changelog`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.4,
+    },
     // Rich, self-canonical methodology supporting every presidential measure page. It is stable
     // public content, not a utility view, so it belongs in the index and in the sitemap together.
     {
