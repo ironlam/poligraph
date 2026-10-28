@@ -13,30 +13,40 @@ export const PUT = withAdminAuth(
   withValidation(updateChangelogSchema, async (request, context, body: UpdateChangelogBody) => {
     const { id } = await context.params;
 
-    const existing = await db.changelogEntry.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: "Entrée introuvable" }, { status: 404 });
-    }
+    // Le verrou de ligne sérialise les PUT concurrents : le garde de publication lit l'état
+    // que l'update va réellement modifier.
+    const result = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "ChangelogEntry" WHERE id = ${id} FOR UPDATE`;
+      const existing = await tx.changelogEntry.findUnique({ where: { id } });
+      if (!existing) return { error: "Entrée introuvable", status: 404 } as const;
 
-    const sourceUrl = body.sourceUrl !== undefined ? body.sourceUrl : existing.sourceUrl;
-    if (body.status === "PUBLISHED" && !isChangelogPublishable({ sourceUrl })) {
-      return NextResponse.json(
-        { error: "Une entrée ne peut être publiée qu'avec un lien vers sa source" },
-        { status: 422 }
-      );
-    }
+      const sourceUrl = body.sourceUrl !== undefined ? body.sourceUrl : existing.sourceUrl;
+      const nextStatus = body.status ?? existing.status;
+      if (nextStatus === "PUBLISHED" && !isChangelogPublishable({ sourceUrl })) {
+        return {
+          error: "Une entrée publiée doit garder un lien vers sa source",
+          status: 422,
+        } as const;
+      }
 
-    const entry = await db.changelogEntry.update({
-      where: { id },
-      data: {
-        ...(body.type !== undefined && { type: body.type }),
-        ...(body.date !== undefined && { date: new Date(`${body.date}T00:00:00Z`) }),
-        ...(body.title !== undefined && { title: body.title }),
-        ...(body.body !== undefined && { body: body.body }),
-        ...(body.sourceUrl !== undefined && { sourceUrl: body.sourceUrl }),
-        ...(body.status !== undefined && { status: body.status }),
-      },
+      const entry = await tx.changelogEntry.update({
+        where: { id },
+        data: {
+          ...(body.type !== undefined && { type: body.type }),
+          ...(body.date !== undefined && { date: new Date(`${body.date}T00:00:00Z`) }),
+          ...(body.title !== undefined && { title: body.title }),
+          ...(body.body !== undefined && { body: body.body }),
+          ...(body.sourceUrl !== undefined && { sourceUrl: body.sourceUrl }),
+          ...(body.status !== undefined && { status: body.status }),
+        },
+      });
+      return { entry } as const;
     });
+
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    const { entry } = result;
 
     const meta = getRequestMeta(request);
     await db.auditLog.create({

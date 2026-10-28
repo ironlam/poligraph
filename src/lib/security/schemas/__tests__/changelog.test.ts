@@ -14,6 +14,11 @@ describe("createChangelogSchema", () => {
     expect(createChangelogSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("refuses a day that does not exist", () => {
+    expect(createChangelogSchema.safeParse({ ...valid, date: "2026-13-45" }).success).toBe(false);
+    expect(createChangelogSchema.safeParse({ ...valid, date: "2026-02-30" }).success).toBe(false);
+  });
+
   it("accepts a draft without source", () => {
     expect(createChangelogSchema.safeParse({ ...valid, sourceUrl: null }).success).toBe(true);
   });

@@ -2,7 +2,13 @@ import { z } from "zod/v4";
 
 const CHANGELOG_TYPES = ["NOUVEAUTE", "AMELIORATION", "CORRECTION", "DONNEES"] as const;
 
-const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ");
+const isoDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ")
+  .refine((value) => {
+    const day = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === value;
+  }, "Ce jour n'existe pas");
 
 const httpsUrl = z
   .string()

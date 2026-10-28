@@ -7,7 +7,7 @@ export async function GET() {
   return new Response(buildChangelogRss(entries, CHANGELOG_TYPE_LABELS), {
     headers: {
       "Content-Type": "application/rss+xml; charset=utf-8",
-      "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
     },
   });
 }
