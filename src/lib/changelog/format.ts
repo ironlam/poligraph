@@ -39,7 +39,9 @@ export function buildChangelogRss(
   const items = entries
     .map((entry) => {
       const link = `${siteUrl}/changelog#${entry.id}`;
-      const description = entry.sourceUrl ? `${entry.body} Source : ${entry.sourceUrl}` : entry.body;
+      const description = entry.sourceUrl
+        ? `${entry.body} Source : ${entry.sourceUrl}`
+        : entry.body;
       return [
         "    <item>",
         `      <title>${escapeXml(entry.title)}</title>`,

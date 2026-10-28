@@ -22,9 +22,9 @@ describe("createChangelogSchema", () => {
     expect(createChangelogSchema.safeParse({ ...valid, sourceUrl: "http://x.org" }).success).toBe(
       false
     );
-    expect(createChangelogSchema.safeParse({ ...valid, sourceUrl: "javascript:alert(1)" }).success).toBe(
-      false
-    );
+    expect(
+      createChangelogSchema.safeParse({ ...valid, sourceUrl: "javascript:alert(1)" }).success
+    ).toBe(false);
     expect(createChangelogSchema.safeParse({ ...valid, sourceUrl: "pas un lien" }).success).toBe(
       false
     );
