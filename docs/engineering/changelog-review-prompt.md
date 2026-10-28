@@ -15,14 +15,14 @@ Revoir, sans réécrire, l'ajout d'un journal des évolutions éditable depuis l
 
 ## Périmètre
 
-| Couche | Fichiers |
-| --- | --- |
-| Schéma | `prisma/schema.prisma` (`ChangelogEntry`, `ChangelogType`), `prisma/migrations/20261028180000_add_changelog_entries/migration.sql` |
-| Domaine | `src/lib/changelog/format.ts` (date, flux RSS), `src/lib/changelog/publish-guard.ts` |
-| Validation | `src/lib/security/schemas/changelog.ts` |
-| Lecture publique | `src/lib/data/changelog.ts`, `src/app/changelog/page.tsx`, `src/app/changelog/_components/ChangelogList.tsx`, `src/app/changelog/rss.xml/route.ts` |
-| Admin | `src/app/api/admin/changelog/route.ts`, `src/app/api/admin/changelog/[id]/route.ts`, `src/app/admin/changelog/page.tsx`, `src/config/admin-navigation.ts` |
-| Divers | `src/config/labels.ts`, `src/config/navigation.ts` (pied de page), `src/app/sitemap.ts` |
+| Couche           | Fichiers                                                                                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schéma           | `prisma/schema.prisma` (`ChangelogEntry`, `ChangelogType`), `prisma/migrations/20261028180000_add_changelog_entries/migration.sql`                        |
+| Domaine          | `src/lib/changelog/format.ts` (date, flux RSS), `src/lib/changelog/publish-guard.ts`                                                                      |
+| Validation       | `src/lib/security/schemas/changelog.ts`                                                                                                                   |
+| Lecture publique | `src/lib/data/changelog.ts`, `src/app/changelog/page.tsx`, `src/app/changelog/_components/ChangelogList.tsx`, `src/app/changelog/rss.xml/route.ts`        |
+| Admin            | `src/app/api/admin/changelog/route.ts`, `src/app/api/admin/changelog/[id]/route.ts`, `src/app/admin/changelog/page.tsx`, `src/config/admin-navigation.ts` |
+| Divers           | `src/config/labels.ts`, `src/config/navigation.ts` (pied de page), `src/app/sitemap.ts`                                                                   |
 
 ## Points à vérifier en priorité
 
