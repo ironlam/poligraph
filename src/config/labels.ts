@@ -45,6 +45,7 @@ import type {
   QualificationKind,
   SimilarityConclusion,
   SourceTier,
+  ChangelogType,
 } from "@/generated/prisma";
 import type {
   ModerationAnomalyCode,
@@ -1855,4 +1856,11 @@ export const SIMILARITY_CONCLUSION_LABELS: Record<SimilarityConclusion, string> 
   NO_EQUIVALENT_FOUND: "Aucun équivalent trouvé",
   EQUIVALENT_FOUND: "Équivalent trouvé",
   INCONCLUSIVE: "Non concluant",
+};
+
+export const CHANGELOG_TYPE_LABELS: Record<ChangelogType, string> = {
+  NOUVEAUTE: "Nouveauté",
+  AMELIORATION: "Amélioration",
+  CORRECTION: "Correction",
+  DONNEES: "Données",
 };
