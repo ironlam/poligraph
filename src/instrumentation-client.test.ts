@@ -44,6 +44,7 @@ async function bootAt(pathname: string) {
   vi.resetModules();
   // Flushes the first-interaction listener a previous boot may have left on the shared window.
   window.dispatchEvent(new Event("pointerdown"));
+  vi.runAllTimers();
   mocks.init.mockClear();
   mocks.addIntegration.mockClear();
   mocks.replayIntegration.mockClear();
@@ -60,6 +61,7 @@ const isReplay = (i: unknown) => (i as { name?: string })?.name === "Replay";
 /** Whether replay ends up recording once the visitor interacts with the page. */
 function hasReplay(opts: { integrations?: unknown[] }): boolean {
   window.dispatchEvent(new Event("pointerdown"));
+  vi.runAllTimers();
   return (
     (opts.integrations ?? []).some(isReplay) ||
     mocks.addIntegration.mock.calls.some(([i]) => isReplay(i))
@@ -67,6 +69,7 @@ function hasReplay(opts: { integrations?: unknown[] }): boolean {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "https://public@o1.ingest.de.sentry.io/1");
   vi.stubEnv("NEXT_PUBLIC_SENTRY_ENABLED", "true");
 });
@@ -105,6 +108,9 @@ describe("Session replay : périmètre d'enregistrement", () => {
 
     window.dispatchEvent(new Event("scroll"));
     window.dispatchEvent(new Event("keydown"));
+    // Hors du gestionnaire d'événement : le premier geste est affiché avant le snapshot.
+    expect(mocks.addIntegration).not.toHaveBeenCalled();
+    vi.runAllTimers();
     expect(mocks.addIntegration).toHaveBeenCalledTimes(1);
     expect(isReplay(mocks.addIntegration.mock.calls[0]![0])).toBe(true);
   });

@@ -21,11 +21,22 @@ const IS_ADMIN_ROUTE =
 // every visitor for a recording that only ships when an error occurs. Starting it on the first
 // interaction keeps it out of the load path; an error raised before any interaction is still
 // reported, only without a recording of a page nobody had touched yet.
+//
+// The snapshot itself still runs outside the input handler, once the main thread is idle: run inside
+// it, it would delay the paint answering that first tap by the same second (INP).
 const REPLAY_START_EVENTS = ["pointerdown", "keydown", "touchstart", "scroll"] as const;
+const REPLAY_IDLE_TIMEOUT_MS = 2000;
+
+function whenIdle(task: () => void): void {
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(task, { timeout: REPLAY_IDLE_TIMEOUT_MS });
+    return;
+  }
+  setTimeout(task, 0);
+}
 
 function startReplayOnFirstInteraction(): void {
-  const start = () => {
-    for (const type of REPLAY_START_EVENTS) window.removeEventListener(type, start, true);
+  const addReplay = () => {
     Sentry.addIntegration(
       Sentry.replayIntegration({
         maskAllText: false,
@@ -35,6 +46,10 @@ function startReplayOnFirstInteraction(): void {
         useCompression: false,
       })
     );
+  };
+  const start = () => {
+    for (const type of REPLAY_START_EVENTS) window.removeEventListener(type, start, true);
+    whenIdle(addReplay);
   };
   for (const type of REPLAY_START_EVENTS) {
     window.addEventListener(type, start, { capture: true, passive: true });
