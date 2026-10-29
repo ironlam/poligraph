@@ -25,6 +25,9 @@ import {
   buildQualificationPrompt,
   cosine,
   evaluate,
+  isGenericEvidence,
+  MIN_SHARED_TERMS,
+  sharedDistinctiveTerms,
   fuseRankings,
   groupForBatchReview,
   isQuoteVerified,
@@ -37,7 +40,11 @@ import {
 
 const EMBED_MODEL = "mistral-embed";
 const CHAT_MODEL = "mistral-large-latest";
-const TOP_K = 10;
+const RETRIEVE_K = 10;
+// Only the best candidates are qualified: 91 % of the pairs of the first run were rejected.
+const QUALIFY_K = 5;
+// Floor on the measure/dossier cosine, to be calibrated on the reference set (--min-cosine).
+const DEFAULT_MIN_COSINE = 0.65;
 const DOC_CHARS = 1200;
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -145,6 +152,7 @@ async function main(): Promise<void> {
   mkdirSync(out, { recursive: true });
   const n = Number(arg("measures", "50"));
   const dryRun = flag("dry-run");
+  const minCosine = Number(arg("min-cosine", String(DEFAULT_MIN_COSINE)));
   if (!dryRun && !process.env.MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY doit être définie");
 
   const rows = await db.measure.findMany({
@@ -184,7 +192,7 @@ async function main(): Promise<void> {
 
   const usable = sample.filter((m) => getParliamentThemeTarget(m.theme) !== null);
   const estTokens = Math.round(
-    (docs.length * DOC_CHARS + usable.length * 300) / 3.5 + usable.length * TOP_K * 900
+    (docs.length * DOC_CHARS + usable.length * 300) / 3.5 + usable.length * QUALIFY_K * 900
   );
   console.log(
     `[poc] mesures=${usable.length}/${sample.length} dossiers=${docs.length} jetons estimés≈${estTokens}`
@@ -217,11 +225,12 @@ async function main(): Promise<void> {
       .map((d) => [d.id, lexicalOverlap(m.text, d.body)] as const)
       .toSorted((l, r) => r[1] - l[1])
       .map(([id]) => id);
-    const top = fuseRankings(sem.slice(0, 50), lex.slice(0, 50)).slice(0, TOP_K);
+    const top = fuseRankings(sem.slice(0, 50), lex.slice(0, 50)).slice(0, RETRIEVE_K);
     retrieved.set(m.id, top);
 
-    for (const [rank, id] of top.entries()) {
+    for (const [rank, id] of top.slice(0, QUALIFY_K).entries()) {
       const d = pool.find((x) => x.id === id)!;
+      if (cosine(mv, cache[`d:${d.id}`]!) < minCosine) continue;
       const res = await callMistral(
         [{ role: "user", content: buildQualificationPrompt(m.text, d.title, d.body) }],
         {
@@ -239,6 +248,8 @@ async function main(): Promise<void> {
       const tier = assignReviewTier(q, {
         measure: isQuoteVerified(q.measureQuote, m.text),
         text: isQuoteVerified(q.textQuote, d.body),
+        specific: !isGenericEvidence(q, m.text, d.title),
+        vocabulary: sharedDistinctiveTerms(m.text, d.body) >= MIN_SHARED_TERMS,
       });
       proposals.push({
         measureId: m.id,

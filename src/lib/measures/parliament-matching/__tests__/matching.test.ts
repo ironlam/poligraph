@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   assignReviewTier,
   buildQualificationPrompt,
+  buildReferenceSheet,
+  isGenericEvidence,
+  sharedDistinctiveTerms,
   evaluate,
   fuseRankings,
   groupForBatchReview,
@@ -26,6 +29,22 @@ describe("isQuoteVerified", () => {
       isQuoteVerified("Allocation à 300 EUROS", "Il faut porter l'allocation à 300 euros.")
     ).toBe(true);
   });
+  it("vérifie chaque fragment d'une citation reliée par une ellipse", () => {
+    const source =
+      "Il faut porter l'allocation à 300 euros. Elle sera versée chaque mois aux étudiants.";
+    expect(
+      isQuoteVerified(
+        "porter l'allocation à 300 euros [...] versée chaque mois aux étudiants",
+        source
+      )
+    ).toBe(true);
+    expect(
+      isQuoteVerified(
+        "porter l'allocation à 300 euros ... supprimée pour tous les étudiants",
+        source
+      )
+    ).toBe(false);
+  });
   it("refuse un extrait inventé ou trop court", () => {
     expect(isQuoteVerified("supprimer toute allocation", "porter l'allocation à 300 euros")).toBe(
       false
@@ -34,16 +53,52 @@ describe("isQuoteVerified", () => {
   });
 });
 
+describe("isGenericEvidence", () => {
+  const measure =
+    "Relever l'allocation logement des étudiants à 300 euros par mois sous conditions de ressources";
+  it("repère le titre du dossier recopié", () => {
+    expect(
+      isGenericEvidence(
+        q({ textQuote: "Projet de loi logement" }),
+        measure,
+        "Projet de loi logement étudiant"
+      )
+    ).toBe(true);
+  });
+  it("repère la mesure recopiée en entier", () => {
+    expect(isGenericEvidence(q({ measureQuote: measure }), measure, "Autre titre")).toBe(true);
+  });
+  it("laisse passer des extraits précis", () => {
+    expect(isGenericEvidence(q(), measure, "Projet de loi logement étudiant")).toBe(false);
+  });
+});
+
+describe("sharedDistinctiveTerms", () => {
+  it("compte les mots distinctifs communs", () => {
+    expect(
+      sharedDistinctiveTerms("élevage d'animaux intensif", "protection des animaux d'élevage")
+    ).toBe(2);
+    expect(sharedDistinctiveTerms("élevage d'animaux intensif", "pêche des poulpes")).toBe(0);
+  });
+});
+
 describe("assignReviewTier", () => {
-  const ok = { measure: true, text: true };
+  const ok = { measure: true, text: true, specific: true, vocabulary: true };
   it("met en lot prêt une proposition solide aux citations vérifiées", () => {
     expect(assignReviewTier(q(), ok)).toBe("LOT_PRET");
+  });
+  it("ne coche jamais d'office un BROADER_TEXT", () => {
+    expect(assignReviewTier(q({ kind: "BROADER_TEXT" }), ok)).toBe("A_EXAMINER");
+  });
+  it("rejette des preuves génériques ou sans vocabulaire commun", () => {
+    expect(assignReviewTier(q(), { ...ok, specific: false })).toBe("REJETE");
+    expect(assignReviewTier(q(), { ...ok, vocabulary: false })).toBe("REJETE");
   });
   it("renvoie à l'examen une confiance moyenne", () => {
     expect(assignReviewTier(q({ confidence: "medium" }), ok)).toBe("A_EXAMINER");
   });
   it("rejette sans relecture une citation non retrouvée", () => {
-    expect(assignReviewTier(q(), { measure: true, text: false })).toBe("REJETE");
+    expect(assignReviewTier(q(), { ...ok, text: false })).toBe("REJETE");
   });
   it("rejette NO_VOTE_IDENTIFIED même avec confiance haute", () => {
     expect(assignReviewTier(q({ kind: "NO_VOTE_IDENTIFIED" }), ok)).toBe("REJETE");
@@ -107,5 +162,36 @@ describe("evaluate", () => {
     ]);
     expect(res.recallAtK).toBe(0.5);
     expect(res.precision).toBe(0.5);
+  });
+});
+
+describe("buildReferenceSheet", () => {
+  const rec = (
+    id: string,
+    kind: Qualification["kind"],
+    tier: "LOT_PRET" | "A_EXAMINER" | "REJETE",
+    rank = 0
+  ) => ({
+    measureId: id,
+    textId: `t-${id}`,
+    measureText: "m",
+    textTitle: "t",
+    tier,
+    rank,
+    q: q({ kind }),
+  });
+  it("garde tous les SAME_OBJECT, les BROADER proposés et les négatifs bien classés", () => {
+    const sheet = buildReferenceSheet(
+      [
+        rec("a", "SAME_OBJECT", "REJETE"),
+        rec("b", "BROADER_TEXT", "A_EXAMINER"),
+        rec("c", "BROADER_TEXT", "REJETE"),
+        rec("d", "NO_VOTE_IDENTIFIED", "REJETE", 0),
+        rec("e", "NO_VOTE_IDENTIFIED", "REJETE", 4),
+      ],
+      { same: 9, broader: 10, negatives: 11 }
+    );
+    expect(sheet.map((s) => s.measureId)).toEqual(["a", "b", "d"]);
+    expect(sheet.every((s) => s.expected === "")).toBe(true);
   });
 });
