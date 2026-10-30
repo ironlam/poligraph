@@ -13,6 +13,7 @@
     "search:audit": "tsx scripts/search-audit.ts",
     "search:evaluate": "tsx --env-file=.env scripts/evaluate-presidential-search.ts",
     "search:reindex": "tsx --env-file=.env scripts/search-reindex.ts",
+    "poc:measure-matching": "tsx --env-file=.env scripts/poc-measure-parliament-matching.ts",
     "search:embed": "tsx --env-file=.env scripts/search-embed.ts",
     "measures:migrate-promises": "tsx scripts/migrate-promises-to-measures.ts",
     "measures:extract-press": "tsx scripts/measures-extract-from-press.ts",
