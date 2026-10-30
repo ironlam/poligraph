@@ -122,20 +122,63 @@ export function parseQualification(raw: unknown): Qualification | null {
   return r as unknown as Qualification;
 }
 
-/** A quote counts only if it is long enough to mean something and sits verbatim in the source. */
+const ELLIPSIS = /\[\s*(?:\.{3}|…)\s*\]|\.{3}|…/;
+
+/**
+ * A quote counts only if each fragment is long enough to mean something and sits verbatim in the
+ * source. An ellipsis joins fragments that need not be contiguous in the source, so each is checked
+ * on its own; fragments shorter than `minWords` are ignored, and at least one must remain.
+ */
 export function isQuoteVerified(quote: string, source: string, minWords = 4): boolean {
-  const q = normalizeForMatch(quote);
-  if (q.split(" ").filter(Boolean).length < minWords) return false;
-  return normalizeForMatch(source).includes(q);
+  const haystack = normalizeForMatch(source);
+  const fragments = quote
+    .split(ELLIPSIS)
+    .map(normalizeForMatch)
+    .filter((f) => f.split(" ").filter(Boolean).length >= minWords);
+  return fragments.length > 0 && fragments.every((f) => haystack.includes(f));
 }
 
-export function assignReviewTier(
-  q: Qualification,
-  verified: { measure: boolean; text: boolean }
-): ReviewTier {
+/**
+ * A verified quote can still prove little: the dossier's own title. For a short bill the title is
+ * the object, so this is not grounds for rejection, only for a human to read it. The measure
+ * quote is not checked: a short measure is naturally quoted whole.
+ */
+export function isGenericEvidence(q: Pick<Qualification, "textQuote">, textTitle: string): boolean {
+  const tq = normalizeForMatch(q.textQuote);
+  return tq.length > 0 && normalizeForMatch(textTitle).includes(tq);
+}
+
+/** Distinct significant words (5+ letters) of the measure that the document also contains. */
+export function sharedDistinctiveTerms(measure: string, document: string): number {
+  const haystack = new Set(significantTokens(document));
+  const wanted = new Set(significantTokens(measure).filter((t) => t.length >= 5));
+  let hits = 0;
+  for (const token of wanted) if (haystack.has(token)) hits++;
+  return hits;
+}
+
+export const MIN_SHARED_TERMS = 2;
+
+export interface EvidenceChecks {
+  measure: boolean;
+  text: boolean;
+  /** False when the text quote is only the dossier title. */
+  specific: boolean;
+  /** True when the measure and the text share enough distinctive words. */
+  vocabulary: boolean;
+}
+
+/**
+ * Only SAME_OBJECT with high confidence, every check passed and a quote beyond the dossier title is
+ * pre-ticked. BROADER_TEXT is a thematic proximity until a human says otherwise, so it always waits
+ * for an explicit decision. A title-only quote waits too, without being rejected.
+ */
+export function assignReviewTier(q: Qualification, checks: EvidenceChecks): ReviewTier {
   if (q.kind === "NO_VOTE_IDENTIFIED") return "REJETE";
-  if (!verified.measure || !verified.text) return "REJETE";
-  return q.confidence === "high" ? "LOT_PRET" : "A_EXAMINER";
+  if (!checks.measure || !checks.text || !checks.vocabulary) return "REJETE";
+  return q.kind === "SAME_OBJECT" && q.confidence === "high" && checks.specific
+    ? "LOT_PRET"
+    : "A_EXAMINER";
 }
 
 export interface ReviewRow {
@@ -182,4 +225,59 @@ export function evaluate(
     positives: positives.length,
     proposed: proposed.length,
   };
+}
+
+export interface ProposalRecord {
+  measureId: string;
+  textId: string;
+  measureText: string;
+  textTitle: string;
+  tier: ReviewTier;
+  rank: number;
+  q: Qualification;
+}
+
+export interface ReferenceCandidate {
+  measureId: string;
+  textId: string;
+  measureText: string;
+  textTitle: string;
+  /** What the tool said, shown to the judge only as a hint. */
+  proposedKind: ProposedLinkKind;
+  /** To fill in by hand: SAME_OBJECT, BROADER_TEXT or NONE. */
+  expected: "";
+}
+
+const byStableId = (l: ProposalRecord, r: ProposalRecord) =>
+  `${l.measureId}|${l.textId}`.localeCompare(`${r.measureId}|${r.textId}`);
+
+/**
+ * Builds the sheet a human judges: every SAME_OBJECT (rejected ones included, they measure the
+ * false rejects), a slice of BROADER_TEXT, and well-ranked pairs the model refused (the negatives).
+ */
+export function buildReferenceSheet(
+  records: readonly ProposalRecord[],
+  quota = { same: 9, broader: 10, negatives: 11 }
+): ReferenceCandidate[] {
+  const pick = (list: ProposalRecord[], n: number) => list.toSorted(byStableId).slice(0, n);
+  const same = pick(
+    records.filter((r) => r.q.kind === "SAME_OBJECT"),
+    quota.same
+  );
+  const broader = pick(
+    records.filter((r) => r.q.kind === "BROADER_TEXT" && r.tier !== "REJETE"),
+    quota.broader
+  );
+  const negatives = pick(
+    records.filter((r) => r.q.kind === "NO_VOTE_IDENTIFIED" && r.rank < 2),
+    quota.negatives
+  );
+  return [...same, ...broader, ...negatives].map((r) => ({
+    measureId: r.measureId,
+    textId: r.textId,
+    measureText: r.measureText,
+    textTitle: r.textTitle,
+    proposedKind: r.q.kind,
+    expected: "",
+  }));
 }
