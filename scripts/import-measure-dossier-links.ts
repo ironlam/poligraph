@@ -14,6 +14,7 @@ import { createMeasureDossierLink } from "@/lib/measures/dossier-links";
 import { MeasureValidationError } from "@/lib/measures/errors";
 import {
   planDossierLinkImport,
+  reviewedTextStillCurrent,
   type ImportDecision,
   type ImportProposal,
 } from "@/lib/measures/dossier-link-import";
@@ -37,12 +38,33 @@ async function main(): Promise<void> {
     .map((l) => JSON.parse(l) as ImportProposal);
   const plan = planDossierLinkImport(decisions, proposals);
 
+  const measures = await db.measure.findMany({
+    where: { id: { in: plan.toWrite.map((l) => l.measureId) } },
+    select: { id: true, publishedRevisionId: true, publishedRevision: { select: { text: true } } },
+  });
+  const current = new Map(measures.map((m) => [m.id, m]));
+  const stale = plan.toWrite.filter(
+    (l) =>
+      !current.get(l.measureId)?.publishedRevisionId ||
+      !reviewedTextStillCurrent(
+        l.measureText,
+        current.get(l.measureId)?.publishedRevision?.text ?? null
+      )
+  );
+  const staleKeys = new Set(stale.map((l) => `${l.measureId}|${l.dossierId}`));
+  const toWrite = plan.toWrite.filter((l) => !staleKeys.has(`${l.measureId}|${l.dossierId}`));
+
   console.log(
-    `[import] ${decisions.length} décisions : ${plan.toWrite.length} à écrire, ${plan.rejected} rejetées, ${plan.problems.length} problème(s)`
+    `[import] ${decisions.length} décisions : ${toWrite.length} à écrire, ${plan.rejected} rejetées, ${stale.length} périmée(s), ${plan.problems.length} problème(s)`
   );
   for (const p of plan.problems) console.log(`  problème : ${p}`);
+  for (const l of stale) {
+    console.log(
+      `  périmée (le texte de la mesure a changé depuis la relecture) : ${l.measureText.slice(0, 60)}`
+    );
+  }
   console.table(
-    plan.toWrite.map((l) => ({
+    toWrite.map((l) => ({
       mesure: l.measureText.slice(0, 50),
       dossier: l.textTitle.slice(0, 50),
       niveau: l.linkKind,
@@ -56,19 +78,12 @@ async function main(): Promise<void> {
   const before = await db.measureDossierLink.count();
   const checkedAt = new Date();
   let written = 0;
-  for (const l of plan.toWrite) {
-    const measure = await db.measure.findUnique({
-      where: { id: l.measureId },
-      select: { publishedRevisionId: true },
-    });
-    if (!measure?.publishedRevisionId) {
-      console.log(`  ignoré (mesure sans révision publiée) : ${l.measureText.slice(0, 50)}`);
-      continue;
-    }
+  for (const l of toWrite) {
+    const publishedRevisionId = current.get(l.measureId)!.publishedRevisionId!;
     try {
       await createMeasureDossierLink({
         measureId: l.measureId,
-        applicableRevisionId: measure.publishedRevisionId,
+        applicableRevisionId: publishedRevisionId,
         dossierId: l.dossierId,
         linkKind: l.linkKind,
         measureQuote: l.measureQuote,

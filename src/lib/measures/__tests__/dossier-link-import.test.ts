@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { planDossierLinkImport, type ImportProposal } from "../dossier-link-import";
+import {
+  planDossierLinkImport,
+  reviewedTextStillCurrent,
+  type ImportProposal,
+} from "../dossier-link-import";
 
 const proposal = (over: Partial<ImportProposal> = {}): ImportProposal => ({
   measureId: "m1",
@@ -56,5 +60,22 @@ describe("planDossierLinkImport", () => {
     expect(plan.problems.join("\n")).toMatch(/double/);
     expect(plan.problems.join("\n")).toMatch(/inconnue/);
     expect(plan.problems.join("\n")).toMatch(/citations absentes/);
+  });
+});
+
+describe("reviewedTextStillCurrent", () => {
+  it("accepte un texte inchangé depuis la relecture", () => {
+    expect(reviewedTextStillCurrent("Plafonner les frais", "Plafonner les frais")).toBe(true);
+  });
+  it("refuse une mesure reformulée, même si une citation y survit", () => {
+    expect(
+      reviewedTextStillCurrent(
+        "Plafonner les frais bancaires",
+        "Plafonner les frais bancaires pour les seuls particuliers"
+      )
+    ).toBe(false);
+  });
+  it("refuse une mesure sans révision publiée", () => {
+    expect(reviewedTextStillCurrent("Plafonner les frais", null)).toBe(false);
   });
 });
