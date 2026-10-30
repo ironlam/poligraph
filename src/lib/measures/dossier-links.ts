@@ -114,3 +114,18 @@ export async function createMeasureDossierLink(
   invalidateMeasureTags(input.measureId, electionId);
   return link;
 }
+
+/** Removes a link. Takes the measure lock like the creation, so it cannot interleave with a publication. */
+export async function deleteMeasureDossierLink(linkId: string): Promise<void> {
+  const electionId = await db.$transaction(async (tx: DbTransactionClient) => {
+    const link = await tx.measureDossierLink.findUnique({
+      where: { id: linkId },
+      select: { measureId: true, measure: { select: { electionId: true } } },
+    });
+    if (!link) throw new MeasureValidationError("Ce rapprochement n'existe plus");
+    await lockMeasure(tx, link.measureId);
+    await tx.measureDossierLink.delete({ where: { id: linkId } });
+    return { measureId: link.measureId, electionId: link.measure.electionId };
+  });
+  invalidateMeasureTags(electionId.measureId, electionId.electionId);
+}

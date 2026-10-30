@@ -170,6 +170,13 @@ export default async function AdminMeasuresPage({ searchParams }: PageProps) {
             Repères pour comprendre
           </Link>
           <Link
+            href="/admin/mesures/rapprochements"
+            prefetch={false}
+            className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Rapprochements avec le Parlement
+          </Link>
+          <Link
             href="/admin/mesures/nouvelle"
             prefetch={false}
             className="inline-flex min-h-11 items-center rounded border border-border px-3 py-2 text-sm font-medium hover:bg-muted"

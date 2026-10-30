@@ -36,6 +36,7 @@ import {
   type ContextGenerationSkipReason,
 } from "@/lib/measures/context-generation";
 import { createMeasureVoteLink } from "@/lib/measures/vote-links";
+import { deleteMeasureDossierLink } from "@/lib/measures/dossier-links";
 import {
   addMeasureRevisionSubtopic,
   proposeMeasureRevisionSubtopics,
@@ -940,6 +941,22 @@ export async function attachVoteLinkAction(input: {
 
     revalidate(input.measureId);
     return { ok: true, measureId: input.measureId };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function deleteDossierLinkAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ linkId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Rapprochement invalide");
+    await deleteMeasureDossierLink(parsed.data.linkId);
+    revalidatePath("/admin/mesures/rapprochements");
+    return { ok: true };
   } catch (error) {
     return toFailure(error);
   }

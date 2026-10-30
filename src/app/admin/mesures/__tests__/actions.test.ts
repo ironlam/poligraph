@@ -57,6 +57,12 @@ const voteLinksMock = {
 };
 vi.mock("@/lib/measures/vote-links", () => voteLinksMock);
 
+// The measure-dossier link remover. Mocked so importing actions does not pull the real @/lib/db.
+const dossierLinksMock = {
+  deleteMeasureDossierLink: vi.fn(async () => undefined),
+};
+vi.mock("@/lib/measures/dossier-links", () => dossierLinksMock);
+
 const subtopicsMock = {
   proposeMeasureRevisionSubtopics: vi.fn(async () => ({
     revisionId: "rev-1",
@@ -1048,5 +1054,37 @@ describe("attachVoteLinkAction : rattachement manuel à un scrutin (#662)", () =
       message: "La date de vérification n'est pas une date valide",
     });
     expect(voteLinksMock.createMeasureVoteLink).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteDossierLinkAction : retrait d'un rapprochement avec un dossier", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("refuse sans session et ne retire rien", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { deleteDossierLinkAction } = await actions();
+
+    await expect(deleteDossierLinkAction({ linkId: "l-1" })).rejects.toThrow("Non autorisé");
+    expect(dossierLinksMock.deleteMeasureDossierLink).not.toHaveBeenCalled();
+  });
+
+  it("retire le lien avec une session valide", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { deleteDossierLinkAction } = await actions();
+
+    await expect(deleteDossierLinkAction({ linkId: "l-1" })).resolves.toEqual({ ok: true });
+    expect(dossierLinksMock.deleteMeasureDossierLink).toHaveBeenCalledWith("l-1");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/mesures/rapprochements");
+  });
+
+  it("refuse une entrée invalide sans rien retirer", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { deleteDossierLinkAction } = await actions();
+
+    const result = await deleteDossierLinkAction({ linkId: "" });
+    expect(result).toMatchObject({ ok: false });
+    expect(dossierLinksMock.deleteMeasureDossierLink).not.toHaveBeenCalled();
   });
 });
