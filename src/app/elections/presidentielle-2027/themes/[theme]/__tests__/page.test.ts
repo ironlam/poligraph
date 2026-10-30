@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mocked so importing the page pulls no @/lib/db: the data authority is exercised in its own
 // integration test. Here we only check the metadata mapping and the theme-param parsing.
+vi.mock("@/components/elections/ParliamentThemeBridgeLoader", () => ({
+  ParliamentThemeBridgeLoader: () => null,
+}));
 vi.mock("@/lib/data/subject-page", () => ({ getSubjectPageData: vi.fn() }));
 
 import { getSubjectPageData } from "@/lib/data/subject-page";
