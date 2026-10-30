@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ExternalLink, PlayCircle } from "lucide-react";
+import { ParliamentThemeBridgeLoader } from "@/components/elections/ParliamentThemeBridgeLoader";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MarkdownText } from "@/components/ui/markdown";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
@@ -475,6 +476,10 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             </ul>
           </section>
         )}
+
+        <div className="border-t border-border py-8 empty:hidden">
+          <ParliamentThemeBridgeLoader theme={measure.theme} source="mesure" />
+        </div>
 
         <footer className="border-t border-border py-8 text-sm text-muted-foreground">
           <p>
