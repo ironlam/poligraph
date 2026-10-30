@@ -24,6 +24,7 @@ import {
   assignReviewTier,
   buildQualificationPrompt,
   cosine,
+  embeddingCacheKey,
   evaluate,
   isGenericEvidence,
   MIN_SHARED_TERMS,
@@ -169,8 +170,8 @@ async function main(): Promise<void> {
     ? JSON.parse(readFileSync(cachePath, "utf8"))
     : {};
   const need = [
-    ...docs.map((d) => [`d:${d.id}`, d.body] as const),
-    ...usable.map((m) => [`m:${m.id}`, m.text] as const),
+    ...docs.map((d) => [embeddingCacheKey("d", d.id, d.body), d.body] as const),
+    ...usable.map((m) => [embeddingCacheKey("m", m.id, m.text), m.text] as const),
   ].filter(([k]) => !cache[k]);
   const vectors = await embedAll(need.map(([, t]) => t));
   need.forEach(([k], i) => (cache[k] = vectors[i]!));
@@ -181,9 +182,9 @@ async function main(): Promise<void> {
   for (const m of usable) {
     const target = getParliamentThemeTarget(m.theme)!;
     const pool = docs.filter((d) => d.theme === target.theme);
-    const mv = cache[`m:${m.id}`]!;
+    const mv = cache[embeddingCacheKey("m", m.id, m.text)]!;
     const sem = pool
-      .map((d) => [d.id, cosine(mv, cache[`d:${d.id}`]!)] as const)
+      .map((d) => [d.id, cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!)] as const)
       .toSorted((l, r) => r[1] - l[1])
       .map(([id]) => id);
     const lex = pool
@@ -195,7 +196,7 @@ async function main(): Promise<void> {
 
     for (const [rank, id] of top.slice(0, QUALIFY_K).entries()) {
       const d = pool.find((x) => x.id === id)!;
-      if (cosine(mv, cache[`d:${d.id}`]!) < minCosine) continue;
+      if (cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!) < minCosine) continue;
       const res = await callMistral(
         [{ role: "user", content: buildQualificationPrompt(m.text, d.title, d.body) }],
         {

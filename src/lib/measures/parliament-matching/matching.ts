@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /**
  * Pure building blocks of the measure to parliamentary text matching proof of concept.
  *
@@ -280,4 +281,13 @@ export function buildReferenceSheet(
     proposedKind: r.q.kind,
     expected: "",
   }));
+}
+
+/**
+ * Embedding cache key: the id alone is not enough, a measure reworded after the cache was written
+ * would keep its old vector and be matched on its old meaning. The text hash makes a changed text a
+ * cache miss.
+ */
+export function embeddingCacheKey(kind: "m" | "d", id: string, text: string): string {
+  return `${kind}:${id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`;
 }
