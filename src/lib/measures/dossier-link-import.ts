@@ -84,3 +84,15 @@ export function planDossierLinkImport(
   }
   return plan;
 }
+
+/**
+ * A decision was taken on the text the reviewer saw. If the measure was republished since, the
+ * quotes may still occur in the new wording while its scope has changed, so the link would carry a
+ * human approval that never covered that wording. Strict equality: no normalisation.
+ */
+export function reviewedTextStillCurrent(
+  reviewedText: string,
+  currentText: string | null
+): boolean {
+  return currentText !== null && currentText === reviewedText;
+}
