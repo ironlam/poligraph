@@ -99,6 +99,12 @@ describe("renderReviewPage", () => {
     expect(html).toContain("&#60;img");
   });
 
+  it("pointe le dossier vers le site, pas vers une racine locale", () => {
+    const html = renderReviewPage([proposal()], stats);
+    expect(html).toMatch(/href="https?:\/\/[^"]+\/parlement\/dossiers\/dossier-un"/);
+    expect(html).not.toContain('href="/parlement');
+  });
+
   it("n'écrit aucun sens de vote", () => {
     const html = renderReviewPage([proposal()], stats).toLowerCase();
     expect(html).not.toMatch(/\b(pour|contre|abstention)\b[^<]{0,20}vote/);
