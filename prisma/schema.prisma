@@ -1706,6 +1706,7 @@ model LegislativeDossier {
   scrutins   Scrutin[]
   authors    DossierAuthor[]
   aliases    LegislativeDossierAlias[]
+  measureLinks MeasureDossierLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3759,6 +3760,7 @@ model Measure {
 
   revisions MeasureRevision[] @relation("MeasureRevisions")
   voteLinks MeasureVoteLink[] @relation("MeasureVoteLinks")
+  dossierLinks MeasureDossierLink[] @relation("MeasureDossierLinks")
 
   latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
   latestRevisionId    String?          @unique
@@ -3830,6 +3832,7 @@ model MeasureRevision {
   assessments              MeasureSimilarityAssessment[]
   equivalentOf             MeasureSimilarityMatch[]         @relation("EquivalentRevision")
   applicableVoteLinks      MeasureVoteLink[]                @relation("ApplicableRevisionVoteLinks")
+  applicableDossierLinks   MeasureDossierLink[]             @relation("ApplicableRevisionDossierLinks")
   subtopics                MeasureRevisionSubtopic[]
   readerGuideMentions      MeasureRevisionReaderGuide[]     @relation("MeasureRevisionReaderGuides")
   readerGuideDetectionRuns MeasureReaderGuideDetectionRun[]
@@ -3968,6 +3971,42 @@ model MeasureVoteLink {
   @@index([measureId])
   @@index([applicableRevisionId])
   @@index([scrutinId])
+}
+
+enum MeasureDossierLinkKind {
+  SAME_OBJECT
+  BROADER_TEXT
+}
+
+// A human-reviewed link between a published measure and a legislative dossier. Carries no vote
+// relation and no polarity: it only says that the dossier deals with the same object (or contains
+// a wider text), proved by one quote on each side. Never derived from a model score alone.
+model MeasureDossierLink {
+  id String @id @default(cuid())
+
+  measure   Measure @relation("MeasureDossierLinks", fields: [measureId], references: [id], onDelete: Cascade)
+  measureId String
+
+  applicableRevision   MeasureRevision @relation("ApplicableRevisionDossierLinks", fields: [applicableRevisionId], references: [id], onDelete: Cascade)
+  applicableRevisionId String
+
+  dossier   LegislativeDossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  dossierId String
+
+  linkKind     MeasureDossierLinkKind
+  measureQuote String                 @db.Text
+  textQuote    String                 @db.Text
+  rationale    String                 @db.Text
+  searchMethod String
+  reviewedBy   String
+  checkedAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicableRevisionId, dossierId])
+  @@index([measureId])
+  @@index([dossierId])
 }
 
 // Attached to the revision and not to the measure: this is what represents the ordinary
