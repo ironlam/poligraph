@@ -48,3 +48,13 @@ Règle commune : un lien thématique est présenté comme tel. Seul un `MeasureV
 
 - Lot 2 : parcours 2 et 5 sur la fiche candidat, avec mandats nationaux et locaux et accès aux votes de la personne.
 - Lot 3 : premiers `MeasureVoteLink` relus (parcours 4), en commençant par les mesures qui reprennent une proposition de loi déposée.
+
+## POC de rapprochement mesures et dossiers (lot 3, essai hors ligne)
+
+Un script en lecture seule (`npm run poc:measure-matching`) propose des rapprochements entre mesures publiées et dossiers législatifs. Le modèle propose, un humain tranche, aucun sens de vote n'est produit.
+
+- Niveaux proposés : « Même objet » ou « Texte plus large ». Un lien thématique n'est jamais présenté comme un rapprochement relu.
+- Contrôles automatiques : les citations doivent exister dans les sources (fragments séparés par « [...] » acceptés) et la mesure et le dossier doivent partager au moins deux mots distinctifs. Une citation qui n'est que le titre du dossier passe en « à examiner », jamais en « prêt ».
+- Page de revue générée (`review.html`) : trois onglets (prêts, à examiner, rejetés), lots par dossier, rien de coché ni de décidé d'avance, décision par ligne ou par lot avec confirmation, export d'un fichier `decisions.json`. Aucune écriture en base.
+- Feuille de référence (`npm run poc:measure-matching:reference`) : 30 paires à juger à la main pour mesurer rappel@10 et précision (`--reference`).
+- Prochaine étape : stocker les liens mesure-dossier relus et brancher cette file dans l'administration. Cela demande un choix de modèle de données, `MeasureVoteLink` ne relie aujourd'hui qu'à un scrutin.

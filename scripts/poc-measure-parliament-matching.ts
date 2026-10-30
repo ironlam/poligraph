@@ -29,7 +29,6 @@ import {
   MIN_SHARED_TERMS,
   sharedDistinctiveTerms,
   fuseRankings,
-  groupForBatchReview,
   isQuoteVerified,
   lexicalOverlap,
   parseQualification,
@@ -37,6 +36,7 @@ import {
   type Qualification,
   type ReviewRow,
 } from "@/lib/measures/parliament-matching/matching";
+import { renderReviewPage } from "@/lib/measures/parliament-matching/review-page";
 
 const EMBED_MODEL = "mistral-embed";
 const CHAT_MODEL = "mistral-large-latest";
@@ -103,47 +103,12 @@ async function embedAll(texts: string[]): Promise<number[][]> {
   return vectors;
 }
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
 interface Proposal extends ReviewRow {
   measureText: string;
   measureSlug: string;
   textSlug: string;
   q: Qualification;
   rank: number;
-}
-
-function renderReview(proposals: Proposal[]): string {
-  const groups = groupForBatchReview(proposals);
-  const body = groups
-    .map((g) => {
-      const rows = g.rows
-        .map(
-          (r) => `<li data-tier="${r.tier}"><label>
-<input type="checkbox" class="row" data-m="${esc(r.measureId)}" data-t="${esc(r.textId)}" data-kind="${esc(r.q.kind)}" ${r.tier === "LOT_PRET" ? "checked" : ""}>
-<b>${esc(r.q.kind)}</b> <span class="tier">${r.tier === "LOT_PRET" ? "Lot prêt" : "À examiner"}, confiance ${esc(r.q.confidence)}</span></label>
-<p>Mesure : ${esc(r.measureText)}</p>
-<blockquote>Extrait mesure : « ${esc(r.q.measureQuote)} »</blockquote>
-<blockquote>Extrait texte : « ${esc(r.q.textQuote)} »</blockquote>
-<p class="why">${esc(r.q.rationale)}</p></li>`
-        )
-        .join("");
-      return `<section><h2><label><input type="checkbox" class="all"> ${esc(g.textTitle)}</label>
-<small>${g.rows.length} mesure(s), <a href="/parlement/dossiers/${esc(g.rows[0]!.textSlug)}">dossier</a></small></h2><ul>${rows}</ul></section>`;
-    })
-    .join("");
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Revue par lots</title>
-<style>body{font:16px system-ui;max-width:60rem;margin:1rem auto;padding:0 1rem}section{border:1px solid #ccc;border-radius:12px;padding:12px;margin:12px 0}li{list-style:none;border-top:1px solid #eee;padding:8px 0}blockquote{margin:4px 0 4px 12px;color:#333}.why,.tier,small{color:#555}button{min-height:44px;padding:0 16px}</style></head><body>
-<h1>Revue par lots</h1><p>Un lot = un dossier. Cocher le titre applique le choix à tous ses rapprochements. Les lignes « lot prêt » sont cochées d'office, décochez les exceptions. Aucun lien n'est écrit ici : l'export est un fichier de décisions.</p>
-<p><button id="export">Exporter les décisions (JSON)</button> <span id="count"></span></p>${body}
-<script>
-const rows=[...document.querySelectorAll('.row')];const out=document.getElementById('count');
-const upd=()=>out.textContent=rows.filter(r=>r.checked).length+' / '+rows.length+' retenus';
-document.querySelectorAll('.all').forEach(a=>a.addEventListener('change',()=>{a.closest('section').querySelectorAll('.row').forEach(r=>r.checked=a.checked);upd()}));
-rows.forEach(r=>r.addEventListener('change',upd));upd();
-document.getElementById('export').addEventListener('click',()=>{const d=rows.map(r=>({measureId:r.dataset.m,textId:r.dataset.t,kind:r.dataset.kind,accepted:r.checked}));
-const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.download='decisions.json';a.click()});
-</script></body></html>`;
 }
 
 async function main(): Promise<void> {
@@ -266,7 +231,10 @@ async function main(): Promise<void> {
   }
 
   writeFileSync(join(out, "proposals.jsonl"), proposals.map((p) => JSON.stringify(p)).join("\n"));
-  writeFileSync(join(out, "review.html"), renderReview(proposals));
+  writeFileSync(
+    join(out, "review.html"),
+    renderReviewPage(proposals, { measures: usable.length, pairs: proposals.length })
+  );
 
   const refPath = arg("reference");
   const kept = proposals.filter((p) => p.tier !== "REJETE");
