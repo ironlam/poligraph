@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assignReviewTier,
+  embeddingCacheKey,
   buildQualificationPrompt,
   buildReferenceSheet,
   isGenericEvidence,
@@ -194,5 +195,21 @@ describe("buildReferenceSheet", () => {
     );
     expect(sheet.map((s) => s.measureId)).toEqual(["a", "b", "d"]);
     expect(sheet.every((s) => s.expected === "")).toBe(true);
+  });
+});
+
+describe("embeddingCacheKey", () => {
+  it("reste stable pour un même texte", () => {
+    expect(embeddingCacheKey("m", "id1", "Plafonner les frais")).toBe(
+      embeddingCacheKey("m", "id1", "Plafonner les frais")
+    );
+  });
+  it("change quand le texte de la mesure est réécrit", () => {
+    expect(embeddingCacheKey("m", "id1", "Plafonner les frais")).not.toBe(
+      embeddingCacheKey("m", "id1", "Encadrer les frais")
+    );
+  });
+  it("distingue une mesure d'un dossier de même identifiant", () => {
+    expect(embeddingCacheKey("m", "id1", "texte")).not.toBe(embeddingCacheKey("d", "id1", "texte"));
   });
 });
