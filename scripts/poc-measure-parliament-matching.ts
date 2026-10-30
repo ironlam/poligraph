@@ -142,7 +142,6 @@ async function main(): Promise<void> {
       id: true,
       slug: true,
       title: true,
-      shortTitle: true,
       theme: true,
       exposeDesMotifs: true,
     },
@@ -151,7 +150,7 @@ async function main(): Promise<void> {
     id: d.id,
     slug: d.slug!,
     theme: d.theme!,
-    title: d.shortTitle ?? d.title,
+    title: d.title,
     // Official statement of reasons only: the AI summary must never be the evidence.
     body: `${d.title}\n${d.exposeDesMotifs ?? ""}`.slice(0, DOC_CHARS),
   }));

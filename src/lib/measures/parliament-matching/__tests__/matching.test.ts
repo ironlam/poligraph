@@ -165,6 +165,26 @@ describe("evaluate", () => {
     expect(res.recallAtK).toBe(0.5);
     expect(res.precision).toBe(0.5);
   });
+  it("ne compte pas une proposition non jugée comme un faux positif", () => {
+    const res = evaluate(
+      [{ measureId: "m1", textId: "t1", expected: "SAME_OBJECT" as const }],
+      new Map([["m1", ["t1"]]]),
+      [
+        { measureId: "m1", textId: "t1" },
+        { measureId: "m7", textId: "t7" },
+      ]
+    );
+    expect(res.precision).toBe(1);
+    expect(res.judgedProposed).toBe(1);
+    expect(res.proposed).toBe(2);
+  });
+  it("refuse une feuille dont un verdict est vide", () => {
+    expect(() =>
+      evaluate([{ measureId: "m1", textId: "t1", expected: "" as never }], new Map(), [
+        { measureId: "m1", textId: "t1" },
+      ])
+    ).toThrow(/sans verdict/);
+  });
 });
 
 describe("buildReferenceSheet", () => {

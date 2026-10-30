@@ -210,21 +210,37 @@ export interface Judgement {
   expected: "SAME_OBJECT" | "BROADER_TEXT" | "NONE";
 }
 
-/** recall@k over measures that have a positive reference, precision over what the tool proposed. */
+const REFERENCE_LABELS = new Set(["SAME_OBJECT", "BROADER_TEXT", "NONE"]);
+
+/**
+ * recall@k over the positives of the reference, precision over the proposals the reference covers.
+ * A proposal the reference does not judge is unknown, not wrong: counting it as a false positive
+ * would make the precision depend on how many pairs were not labelled. A sheet with a missing label
+ * is refused, since an empty verdict would otherwise count as a positive.
+ */
 export function evaluate(
   reference: readonly Judgement[],
   retrieved: ReadonlyMap<string, readonly string[]>,
   proposed: readonly { measureId: string; textId: string }[]
 ) {
+  const unlabeled = reference.filter((j) => !REFERENCE_LABELS.has(j.expected));
+  if (unlabeled.length > 0) {
+    throw new Error(
+      `${unlabeled.length} paire(s) de la feuille de référence sans verdict (SAME_OBJECT, BROADER_TEXT ou NONE)`
+    );
+  }
+  const key = (j: { measureId: string; textId: string }) => `${j.measureId}|${j.textId}`;
+  const judged = new Map(reference.map((j) => [key(j), j.expected] as const));
   const positives = reference.filter((j) => j.expected !== "NONE");
   const found = positives.filter((j) => retrieved.get(j.measureId)?.includes(j.textId)).length;
-  const goodKey = new Set(positives.map((j) => `${j.measureId}|${j.textId}`));
-  const truePositives = proposed.filter((p) => goodKey.has(`${p.measureId}|${p.textId}`)).length;
+  const judgedProposals = proposed.filter((p) => judged.has(key(p)));
+  const truePositives = judgedProposals.filter((p) => judged.get(key(p)) !== "NONE").length;
   return {
     recallAtK: positives.length === 0 ? null : found / positives.length,
-    precision: proposed.length === 0 ? null : truePositives / proposed.length,
+    precision: judgedProposals.length === 0 ? null : truePositives / judgedProposals.length,
     positives: positives.length,
     proposed: proposed.length,
+    judgedProposed: judgedProposals.length,
   };
 }
 

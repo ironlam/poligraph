@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/config/site";
 import {
   groupForBatchReview,
   isGenericEvidence,
@@ -82,7 +83,7 @@ function renderPanel(
           (g, i) => `<section class="card group" aria-labelledby="g-${tier}-${i}">
 <div class="group-head"><label class="chkbox"><input type="checkbox" class="chk all" aria-label="Cocher les ${g.rows.length} ligne(s) du dossier"></label>
 <div class="grow"><h2 id="g-${tier}-${i}">${esc(g.textTitle)}</h2><p class="muted">${g.rows.length} mesure(s) proposée(s)</p></div>
-<a class="link" href="/parlement/dossiers/${esc(g.rows[0]!.textSlug)}">Voir le dossier</a></div>
+<a class="link" href="${esc(SITE_URL)}/parlement/dossiers/${esc(g.rows[0]!.textSlug)}">Voir le dossier</a></div>
 <ul>${g.rows.map(renderRow).join("")}</ul></section>`
         )
         .join("")
