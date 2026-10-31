@@ -22,33 +22,44 @@ export async function setSourceExcerpt(input: {
   const clean = input.excerpt === null ? null : validateExcerpt(input.excerpt);
   if (clean && clean.errors.length > 0) throw new MeasureValidationError(clean.errors.join(" ; "));
 
-  const source = await db.measureSource.findUniqueOrThrow({
+  const located = await db.measureSource.findUniqueOrThrow({
     where: { id: input.sourceId },
-    select: {
-      id: true,
-      sourceKind: true,
-      excerpt: true,
-      measureRevision: {
-        select: {
-          measureId: true,
-          id: true,
-          measure: { select: { electionId: true, publishedRevisionId: true } },
+    select: { measureRevision: { select: { measureId: true } } },
+  });
+  const measureId = located.measureRevision.measureId;
+
+  const electionId = await db.$transaction(async (tx) => {
+    await lockMeasure(tx, measureId);
+    // Read again under the lock: a publication that committed between the lookup above and the
+    // lock would otherwise leave this write on a superseded revision, reported as a success, and
+    // the audit log would record a stale previous value.
+    const source = await tx.measureSource.findUniqueOrThrow({
+      where: { id: input.sourceId },
+      select: {
+        id: true,
+        sourceKind: true,
+        excerpt: true,
+        measureRevision: {
+          select: {
+            id: true,
+            measureId: true,
+            measure: { select: { electionId: true, publishedRevisionId: true } },
+          },
         },
       },
-    },
-  });
-  const { measureId, measure } = source.measureRevision;
-  if (measure.publishedRevisionId !== source.measureRevision.id) {
-    throw new MeasureValidationError("L'extrait ne s'écrit que sur la révision publiée");
-  }
-  if (clean && !(EXCERPT_SOURCE_KINDS as readonly string[]).includes(source.sourceKind)) {
-    throw new MeasureValidationError(
-      "Un extrait ne s'écrit que sur un document écrit, pas sur un discours, la presse ou une vidéo"
-    );
-  }
-
-  await db.$transaction(async (tx) => {
-    await lockMeasure(tx, measureId);
+    });
+    const { measure } = source.measureRevision;
+    if (source.measureRevision.measureId !== measureId) {
+      throw new MeasureValidationError("La source n'appartient plus à cette mesure");
+    }
+    if (measure.publishedRevisionId !== source.measureRevision.id) {
+      throw new MeasureValidationError("L'extrait ne s'écrit que sur la révision publiée");
+    }
+    if (clean && !(EXCERPT_SOURCE_KINDS as readonly string[]).includes(source.sourceKind)) {
+      throw new MeasureValidationError(
+        "Un extrait ne s'écrit que sur un document écrit, pas sur un discours, la presse ou une vidéo"
+      );
+    }
     await tx.measureSource.update({
       where: { id: source.id },
       data: { excerpt: clean?.excerpt ?? null },
@@ -62,6 +73,7 @@ export async function setSourceExcerpt(input: {
         userId: input.setBy,
       },
     });
+    return measure.electionId;
   });
-  invalidateMeasureTags(measureId, measure.electionId);
+  invalidateMeasureTags(measureId, electionId);
 }
