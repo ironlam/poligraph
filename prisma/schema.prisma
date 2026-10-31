@@ -1461,7 +1461,11 @@ model Vote {
   // CONCURRENTLY. Superset of the former [politicianId, position] index (dropped).
   @@index([politicianId, position, votingDate, scrutinId])
   @@index([politicianId, votingDate(sort: Desc)], map: "Vote_politicianId_votingDate_idx")
-  @@index([politicianId, chamber, votingDate(sort: Desc)], map: "Vote_politicianId_chamber_votingDate_idx")
+  // Trailing position covers the per-chamber position breakdown (voteStats groupBy):
+  // index-only scan, no heap fetch. A politician's votes sit about one per heap page,
+  // so fetching position from the heap cost 1.4 s cold. Created in prod via CREATE
+  // INDEX CONCURRENTLY.
+  @@index([politicianId, chamber, votingDate(sort: Desc), position], map: "Vote_politicianId_chamber_votingDate_idx")
   // Covering index for the per-politician votes list/counts filtered by tab
   // (Issue #377): index-only scan, drops the JOIN on Scrutin. Created in prod via
   // CREATE INDEX CONCURRENTLY.
