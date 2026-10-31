@@ -46,6 +46,30 @@ describe("buildSummaryPrompt", () => {
     expect(prompt.match(/<\/texte-amendement>/g)).toHaveLength(1);
   });
 
+  it("marks the parent of a sous-amendement as context, distinct from the voted text", () => {
+    const prompt = buildSummaryPrompt({
+      ...BASE,
+      amendmentBlocks: [
+        {
+          sourceType: "subAmendment",
+          sourceId: "sub_1",
+          field: "Amendment.content",
+          text: "Remplacer le taux de 5 % par 3 %.",
+          trust: "official",
+        },
+        {
+          sourceType: "parentAmendment",
+          sourceId: "amd_1",
+          field: "Amendment.content",
+          text: "Instaurer une taxe de 5 %.",
+          trust: "official",
+        },
+      ],
+    });
+    expect(prompt).toContain('role="vote" champ="dispositif">Remplacer le taux');
+    expect(prompt).toContain('role="contexte" champ="dispositif">Instaurer une taxe');
+  });
+
   it("has no amendment block for a non-amendment vote", () => {
     expect(buildSummaryPrompt({ ...BASE, amendmentBlocks: [] })).not.toContain(
       "<texte-amendement>"
@@ -56,5 +80,9 @@ describe("buildSummaryPrompt", () => {
 describe("SYSTEM_PROMPT", () => {
   it("forbids inventing an amendment's content", () => {
     expect(SYSTEM_PROMPT).toMatch(/N'invente jamais le contenu d'un amendement/);
+  });
+
+  it("forbids crediting a sous-amendement vote to its parent", () => {
+    expect(SYSTEM_PROMPT).toMatch(/role="contexte"/);
   });
 });

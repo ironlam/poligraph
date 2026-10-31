@@ -337,9 +337,14 @@ const PFX3 = "TEST_CIU_";
 describeIfDb("generateScrutinCitizenImpacts — unlinked amendment vote", () => {
   let typedId: string;
   let untypedId: string;
+  let groundedId: string;
 
   async function cleanup() {
+    await db.scrutinAmendment.deleteMany({
+      where: { scrutin: { externalId: { startsWith: PFX3 } } },
+    });
     await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX3 } } });
+    await db.amendment.deleteMany({ where: { externalId: { startsWith: PFX3 } } });
     await db.legislativeDossier.deleteMany({ where: { externalId: `${PFX3}DLR` } });
   }
 
@@ -383,6 +388,34 @@ describeIfDb("generateScrutinCitizenImpacts — unlinked amendment vote", () => 
         data: { ...base, externalId: `${PFX3}S2`, slug: `${PFX3}s2`, title, type: null },
       })
     ).id;
+
+    // Older than the refused one, and grounded on its own amendment text.
+    const amendment = await db.amendment.create({
+      data: {
+        externalId: `${PFX3}A2084`,
+        number: "2084",
+        dossierId: dossier.id,
+        status: "DEPOSE",
+        legislature: 17,
+        chamber: "AN",
+        content: COOP_CONTENT,
+      },
+    });
+    groundedId = (
+      await db.scrutin.create({
+        data: {
+          ...base,
+          externalId: `${PFX3}S3`,
+          slug: `${PFX3}s3`,
+          title: "l'amendement n° 2084 de Mme Lechon après l'article 22",
+          type: "AMENDEMENT",
+          votingDate: new Date("2026-10-01"),
+          amendmentLinks: {
+            create: [{ amendmentId: amendment.id, role: "PRINCIPAL", source: "TITLE_REGEX" }],
+          },
+        },
+      })
+    ).id;
   });
 
   afterAll(cleanup);
@@ -405,5 +438,20 @@ describeIfDb("generateScrutinCitizenImpacts — unlinked amendment vote", () => 
     expect(mockCall).not.toHaveBeenCalled();
     const row = await db.scrutin.findUnique({ where: { id: untypedId } });
     expect(row?.citizenImpact).toBeNull();
+  });
+
+  it("spends the limit on model calls, so a refused candidate cannot starve older ones", async () => {
+    mockCall.mockResolvedValue(mistralImpact(COHERENT_IMPACT));
+    const stats = await generateScrutinCitizenImpacts({
+      scrutinIds: [untypedId, groundedId],
+      force: true,
+      limit: 1,
+    });
+
+    expect(stats.skippedNoSubstance).toBe(1);
+    expect(mockCall).toHaveBeenCalledTimes(1);
+    expect(stats.generated).toBe(1);
+    const row = await db.scrutin.findUnique({ where: { id: groundedId } });
+    expect(row?.citizenImpact).toContain("coopératives agricoles");
   });
 });

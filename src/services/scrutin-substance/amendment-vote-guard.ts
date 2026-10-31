@@ -10,7 +10,10 @@
  * that gap either: it describes the whole bill, not this amendment.
  *
  * So an amendment vote is described only from amendment-level substance, or
- * not at all. Better an empty block than a confident wrong one.
+ * not at all. Better an empty block than a confident wrong one. A vote on a
+ * sous-amendement decides only its modification: the parent's text alone would
+ * credit the vote with adopting or rejecting the parent, so it needs the
+ * sous-amendement's own text.
  */
 import type { Prisma, ScrutinType } from "@/generated/prisma";
 import { parseScrutinTitle } from "@/services/sync/link-scrutins-to-amendments/parse-title";
@@ -37,6 +40,11 @@ export function isAmendmentLevelSubstance(depth: SubstanceDepth | null): boolean
   return depth === "amendment" || depth === "subAmendment";
 }
 
+/** True when the title puts a sous-amendement to the vote. */
+export function isSubAmendmentVote(title: string): boolean {
+  return parseScrutinTitle(title).subAmendmentNumber !== null;
+}
+
 /**
  * Whether an AI pipeline may describe the measure voted in this scrutin.
  * Non-amendment votes (whole text, article, motion) are not concerned.
@@ -47,6 +55,7 @@ export function canDescribeVotedMeasure(input: {
   substanceDepth: SubstanceDepth | null;
 }): boolean {
   if (!isAmendmentVote(input)) return true;
+  if (isSubAmendmentVote(input.title)) return input.substanceDepth === "subAmendment";
   return isAmendmentLevelSubstance(input.substanceDepth);
 }
 

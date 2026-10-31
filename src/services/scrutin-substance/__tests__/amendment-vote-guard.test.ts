@@ -11,6 +11,9 @@ import {
 const V9336_TITLE =
   "l'amendement n° 1358 de M. Lhardit après l'article 15 (examen prioritaire) du projet de loi de finances pour 2027 (première lecture).";
 
+const SUB_TITLE =
+  "le sous-amendement n° 2368 de M. Potier à l'amendement n° 2058 du Gouvernement après l'article 3";
+
 describe("isAmendmentVote", () => {
   it("is true for the AMENDEMENT type", () => {
     expect(isAmendmentVote({ type: "AMENDEMENT", title: "titre sans numéro" })).toBe(true);
@@ -71,6 +74,26 @@ describe("canDescribeVotedMeasure", () => {
         type: "AMENDEMENT",
         title: V9336_TITLE,
         substanceDepth: "amendment",
+      })
+    ).toBe(true);
+  });
+
+  it("refuses a sous-amendement vote grounded only on its parent's text", () => {
+    expect(
+      canDescribeVotedMeasure({
+        type: "AMENDEMENT",
+        title: SUB_TITLE,
+        substanceDepth: "amendment",
+      })
+    ).toBe(false);
+  });
+
+  it("allows a sous-amendement vote grounded on its own text", () => {
+    expect(
+      canDescribeVotedMeasure({
+        type: "AMENDEMENT",
+        title: SUB_TITLE,
+        substanceDepth: "subAmendment",
       })
     ).toBe(true);
   });

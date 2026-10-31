@@ -224,15 +224,11 @@ export async function generateScrutinCitizenImpacts(options?: {
   whereClause.summary = { not: null };
   whereClause.AND = [AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE];
 
-  let scrutins = await db.scrutin.findMany({
+  const scrutins = await db.scrutin.findMany({
     where: whereClause,
     orderBy: { votingDate: "desc" },
     select: { id: true },
   });
-
-  if (limit) {
-    scrutins = scrutins.slice(0, limit);
-  }
 
   console.log(
     `[citizen-impacts] Found ${scrutins.length} scrutins to process${dryRun ? " (dry-run)" : ""}`
@@ -242,7 +238,12 @@ export async function generateScrutinCitizenImpacts(options?: {
     return stats;
   }
 
+  // `limit` budgets model calls, not candidates: a refused candidate stays
+  // eligible, so a candidate budget would re-select it on every run and starve
+  // older scrutins that can be generated.
+  let modelCalls = 0;
   for (let i = 0; i < scrutins.length; i++) {
+    if (limit && modelCalls >= limit) break;
     const id = scrutins[i]!.id;
 
     try {
@@ -260,6 +261,7 @@ export async function generateScrutinCitizenImpacts(options?: {
         continue;
       }
 
+      modelCalls++;
       const result = await generateCitizenImpact(prepared.input);
       stats.processed++;
 
