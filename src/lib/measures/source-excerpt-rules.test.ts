@@ -24,9 +24,17 @@ describe("validateExcerpt", () => {
     expect(good.length).toBeGreaterThan(EXCERPT_MIN_LENGTH);
   });
 
-  it("refuse une note d'agent, un lien ou un texte coupé en cours de phrase", () => {
+  it("accepte la fin d'un élément de liste sans point, que seul l'appelant sait situer dans le document", () => {
+    expect(validateExcerpt(good.slice(0, -1)).errors).toEqual([]);
+  });
+
+  it("refuse une note d'agent, un lien ou un texte qui commence au milieu d'une phrase", () => {
     expect(validateExcerpt(good + " (À vérifier avec la page 12.)").errors.join()).toMatch(/note/);
     expect(validateExcerpt(good + " https://exemple.fr.").errors.join()).toMatch(/lien/);
-    expect(validateExcerpt(good.slice(0, -1) + ", et").errors.join()).toMatch(/fin d'une phrase/);
+    expect(
+      validateExcerpt(
+        "pour que les épargnants aient davantage recours au livret A. " + good
+      ).errors.join()
+    ).toMatch(/milieu d'une phrase/);
   });
 });

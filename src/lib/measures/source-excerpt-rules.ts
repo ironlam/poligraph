@@ -8,7 +8,7 @@ export const EXCERPT_SOURCE_KINDS = [
   "PROPOSITIONS_CANDIDAT",
 ] as const;
 
-/** Pure checks on the text itself. That it appears word for word in the document is checked by the caller, which holds the document. */
+/** Pure checks on the text itself. That it appears word for word in the document, and that it ends where a sentence or a list item ends, is checked by the caller, which holds the document. */
 export function validateExcerpt(raw: string): { excerpt: string; errors: string[] } {
   const excerpt = raw.replace(/\s+/g, " ").trim();
   const errors: string[] = [];
@@ -26,8 +26,8 @@ export function validateExcerpt(raw: string): { excerpt: string; errors: string[
   if (/(note de l'éditeur|\bnb\s*:|\bndlr\b|à vérifier|\btodo\b)/i.test(excerpt)) {
     errors.push("Extrait contenant une note qui n'est pas du document");
   }
-  if (!/[.!?»”)…]$/.test(excerpt)) {
-    errors.push("Extrait qui ne se termine pas à la fin d'une phrase");
+  if (/^[a-zàâéèêîôûç]/.test(excerpt)) {
+    errors.push("Extrait qui commence au milieu d'une phrase");
   }
   return { excerpt, errors };
 }
