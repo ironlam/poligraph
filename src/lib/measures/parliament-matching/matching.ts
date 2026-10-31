@@ -304,6 +304,6 @@ export function buildReferenceSheet(
  * would keep its old vector and be matched on its old meaning. The text hash makes a changed text a
  * cache miss.
  */
-export function embeddingCacheKey(kind: "m" | "d", id: string, text: string): string {
+export function embeddingCacheKey(kind: "m" | "d" | "q", id: string, text: string): string {
   return `${kind}:${id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`;
 }
