@@ -95,6 +95,18 @@ function sampleMeasures(all: Meas[], n: number): Meas[] {
   return out;
 }
 
+async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (error) {
+      const limited = error instanceof Error && /Mistral API error 429/.test(error.message);
+      if (!limited || attempt >= 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 5000 * 2 ** attempt));
+    }
+  }
+}
+
 async function embedAll(texts: string[]): Promise<number[][]> {
   const vectors: number[][] = [];
   for (let i = 0; i < texts.length; i += 16) {
@@ -196,17 +208,19 @@ async function main(): Promise<void> {
     for (const [rank, id] of top.slice(0, QUALIFY_K).entries()) {
       const d = pool.find((x) => x.id === id)!;
       if (cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!) < minCosine) continue;
-      const res = await callMistral(
-        [{ role: "user", content: buildQualificationPrompt(m.text, d.title, d.body) }],
-        {
-          model: CHAT_MODEL,
-          temperature: 0,
-          maxTokens: 500,
-          responseFormat: {
-            type: "json_schema",
-            json_schema: { name: "qualification", schema: QUALIFICATION_SCHEMA, strict: true },
-          },
-        }
+      const res = await withRateLimitRetry(() =>
+        callMistral(
+          [{ role: "user", content: buildQualificationPrompt(m.text, d.title, d.body) }],
+          {
+            model: CHAT_MODEL,
+            temperature: 0,
+            maxTokens: 500,
+            responseFormat: {
+              type: "json_schema",
+              json_schema: { name: "qualification", schema: QUALIFICATION_SCHEMA, strict: true },
+            },
+          }
+        )
       );
       const q = parseQualification(parseMistralJSON(extractMistralText(res)));
       if (!q) continue;
