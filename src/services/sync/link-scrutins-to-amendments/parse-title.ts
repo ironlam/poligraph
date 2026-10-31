@@ -125,19 +125,30 @@ export interface ArticleTarget {
   article: string;
 }
 
-const ARTICLE_TARGET_RE =
-  /(?:(avant|apres)\s+)?(?:l['’]\s*)?article\s+(\d+(?:\s+(?:bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies))?)/i;
+const ARTICLE_SUFFIXES =
+  "bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies|undecies|duodecies|terdecies|quaterdecies|quindecies|sexdecies|septdecies|octodecies|novodecies|vicies";
+const ARTICLE_TARGET_RE = new RegExp(
+  String.raw`(?:(avant|apres)\s+)?(?:l['’]\s*)?article\s+(\d+(?:\s+(?:${ARTICLE_SUFFIXES}))?)`,
+  "i"
+);
+// What may follow an identifier we cannot read to the end: a lone letter
+// ("10 bis A", "10 A") or a Latin multiplier outside the list ("10 trevicies").
+const INCOMPLETE_ARTICLE_RE = /^\s+(?:[a-z]\b|[a-z]*(?:ies|ter|bis)\b)/i;
 
 /**
  * Reads the first article a title or an amendment's `article` field points at:
  * "après l'article 15 (examen prioritaire)" and "APRÈS L'ARTICLE 15, insérer
  * l'article suivant:" both give { after, 15 }; "à l'article 34" and "ARTICLE 34"
- * both give { at, 34 }. Null when no numbered article is found.
+ * both give { at, 34 }. Null when no numbered article is found, and also when the
+ * identifier looks longer than what was read ("ARTICLE 10 BIS A"): two different
+ * articles must never compare equal.
  */
 export function parseArticleTarget(text: string | null | undefined): ArticleTarget | null {
   if (!text) return null;
-  const m = ARTICLE_TARGET_RE.exec(text.normalize("NFD").replace(DIACRITICS_RE, ""));
+  const norm = text.normalize("NFD").replace(DIACRITICS_RE, "");
+  const m = ARTICLE_TARGET_RE.exec(norm);
   if (!m?.[2]) return null;
+  if (INCOMPLETE_ARTICLE_RE.test(norm.slice(m.index + m[0].length))) return null;
   const position = m[1] ? (m[1].toLowerCase() === "avant" ? "before" : "after") : "at";
   return { position, article: m[2].toLowerCase().replace(/\s+/g, " ") };
 }

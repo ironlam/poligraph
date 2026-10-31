@@ -47,6 +47,21 @@ describe("parseArticleTarget", () => {
     expect(parseArticleTarget("ARTICLE 15")).not.toEqual(parseArticleTarget("APRÈS L'ARTICLE 15"));
   });
 
+  it("reads the long Latin suffixes in full", () => {
+    expect(parseArticleTarget("ARTICLE 10 UNDECIES")).toEqual({
+      position: "at",
+      article: "10 undecies",
+    });
+    expect(parseArticleTarget("ARTICLE 10 UNDECIES")).not.toEqual(parseArticleTarget("ARTICLE 10"));
+  });
+
+  it("refuses an identifier it cannot read to the end", () => {
+    expect(parseArticleTarget("ARTICLE 10 BIS A")).toBeNull();
+    expect(parseArticleTarget("ARTICLE 10 BIS B")).toBeNull();
+    expect(parseArticleTarget("ARTICLE 10 A")).toBeNull();
+    expect(parseArticleTarget("ARTICLE 10 TREVICIES")).toBeNull();
+  });
+
   it("returns null without a numbered article", () => {
     expect(parseArticleTarget(null)).toBeNull();
     expect(parseArticleTarget("l'amendement n° 12 de M. Dupont")).toBeNull();
