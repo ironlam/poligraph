@@ -3,7 +3,6 @@ import { cacheLife, cacheTag } from "next/cache";
 import type { MeasureSourceKind, ThemeCategory } from "@/generated/prisma";
 import { MEASURE_SOURCE_KIND_LABELS, THEME_CATEGORY_LABELS } from "@/config/labels";
 import { db } from "@/lib/db";
-import { keepOnePerCandidacy } from "@/lib/presidentielle/latest-measures";
 import { PUBLIC_PRESIDENTIAL_MEASURE_WHERE } from "@/lib/presidentielle/publication";
 import { themeToSlug } from "@/lib/theme-utils";
 import { observeRead } from "@/lib/telemetry/read-operations";
@@ -195,9 +194,6 @@ async function getHubMeasureContextCached(
 /** How many recent measures the hub shows. */
 export const HUB_LATEST_MEASURES_LIMIT = 4;
 
-/** Rows read before `keepOnePerCandidacy`. Bounded so the read stays one indexed `take`. */
-const HUB_LATEST_MEASURES_SCAN = 24;
-
 /**
  * One recently published measure, as the hub's "En ce moment" block names it.
  *
@@ -233,60 +229,66 @@ function toSource(source: { sourceKind: MeasureSourceKind; url: string } | undef
 }
 
 async function queryHubLatestMeasures(electionId: string): Promise<HubLatestMeasure[]> {
-  const rows = await db.measure.findMany({
-    where: { electionId, ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE },
-    // Publication order of the revision the public sees, not the measure's creation: a measure
-    // created months ago and published today is news today.
-    orderBy: [{ publishedRevision: { publishedAt: "desc" } }, { id: "asc" }],
-    take: HUB_LATEST_MEASURES_SCAN,
-    select: {
-      slug: true,
-      candidacyId: true,
-      theme: true,
-      publishedRevision: {
-        select: {
-          text: true,
-          publishedAt: true,
-          sources: {
-            select: { sourceKind: true, url: true },
-            // Enum declaration order: PRIMARY sorts before SECONDARY.
-            orderBy: [{ tier: "asc" }, { publishedAt: "asc" }],
-            take: 1,
+  // One query per candidacy shown, each excluding the candidacies already taken. A fixed scan
+  // of the newest rows fails the day a batch is published for one candidate: they would all be
+  // his, and the block would collapse to a single card.
+  const latest: HubLatestMeasure[] = [];
+  const taken: string[] = [];
+  while (latest.length < HUB_LATEST_MEASURES_LIMIT) {
+    const row = await db.measure.findFirst({
+      where: {
+        electionId,
+        ...PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
+        candidacyId: { not: null, notIn: taken },
+      },
+      // Publication order of the revision the public sees, not the measure's creation: a
+      // measure created months ago and published today is news today.
+      orderBy: [{ publishedRevision: { publishedAt: "desc" } }, { id: "asc" }],
+      select: {
+        slug: true,
+        candidacyId: true,
+        theme: true,
+        publishedRevision: {
+          select: {
+            text: true,
+            publishedAt: true,
+            sources: {
+              select: { sourceKind: true, url: true },
+              // Enum declaration order: PRIMARY sorts before SECONDARY.
+              orderBy: [{ tier: "asc" }, { publishedAt: "asc" }],
+              take: 1,
+            },
+          },
+        },
+        candidacy: {
+          select: {
+            candidateName: true,
+            politician: { select: { slug: true, photoUrl: true, blobPhotoUrl: true } },
           },
         },
       },
-      candidacy: {
-        select: {
-          candidateName: true,
-          politician: { select: { slug: true, photoUrl: true, blobPhotoUrl: true } },
-        },
-      },
-    },
-  });
-
-  const candidates: Array<{ candidacyId: string | null; measure: HubLatestMeasure }> = [];
-  for (const row of rows) {
+    });
+    if (row === null) break;
+    // Taken before the checks below: a row we cannot show must not be read again.
+    if (row.candidacyId !== null) taken.push(row.candidacyId);
     const revision = row.publishedRevision;
     if (revision === null || revision.publishedAt === null || row.candidacy === null) continue;
     const politician = row.candidacy.politician;
-    candidates.push({
-      candidacyId: row.candidacyId,
-      measure: {
-        slug: row.slug,
-        text: revision.text,
-        publishedAt: revision.publishedAt,
-        theme: row.theme,
-        themeLabel: THEME_CATEGORY_LABELS[row.theme],
-        themeSlug: themeToSlug(row.theme),
-        candidateName: row.candidacy.candidateName,
-        politicianSlug: politician?.slug ?? null,
-        photoUrl: politician?.photoUrl ?? null,
-        blobPhotoUrl: politician?.blobPhotoUrl ?? null,
-        source: toSource(revision.sources[0]),
-      },
+    latest.push({
+      slug: row.slug,
+      text: revision.text,
+      publishedAt: revision.publishedAt,
+      theme: row.theme,
+      themeLabel: THEME_CATEGORY_LABELS[row.theme],
+      themeSlug: themeToSlug(row.theme),
+      candidateName: row.candidacy.candidateName,
+      politicianSlug: politician?.slug ?? null,
+      photoUrl: politician?.photoUrl ?? null,
+      blobPhotoUrl: politician?.blobPhotoUrl ?? null,
+      source: toSource(revision.sources[0]),
     });
   }
-  return keepOnePerCandidacy(candidates, HUB_LATEST_MEASURES_LIMIT).map(({ measure }) => measure);
+  return latest;
 }
 
 /** Plain async, integration-testable. Pages call `getHubLatestMeasures`, which caches this. */
