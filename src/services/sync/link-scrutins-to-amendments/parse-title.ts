@@ -119,3 +119,25 @@ export function parseScrutinTitle(title: string): ParsedTitle {
 export function budgetPartNumbers(number: string): string[] {
   return /^[0-9]+$/.test(number) ? [`I-${number}`, `II-${number}`] : [];
 }
+
+export interface ArticleTarget {
+  position: "before" | "at" | "after";
+  article: string;
+}
+
+const ARTICLE_TARGET_RE =
+  /(?:(avant|apres)\s+)?(?:l['’]\s*)?article\s+(\d+(?:\s+(?:bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies))?)/i;
+
+/**
+ * Reads the first article a title or an amendment's `article` field points at:
+ * "après l'article 15 (examen prioritaire)" and "APRÈS L'ARTICLE 15, insérer
+ * l'article suivant:" both give { after, 15 }; "à l'article 34" and "ARTICLE 34"
+ * both give { at, 34 }. Null when no numbered article is found.
+ */
+export function parseArticleTarget(text: string | null | undefined): ArticleTarget | null {
+  if (!text) return null;
+  const m = ARTICLE_TARGET_RE.exec(text.normalize("NFD").replace(DIACRITICS_RE, ""));
+  if (!m?.[2]) return null;
+  const position = m[1] ? (m[1].toLowerCase() === "avant" ? "before" : "after") : "at";
+  return { position, article: m[2].toLowerCase().replace(/\s+/g, " ") };
+}
