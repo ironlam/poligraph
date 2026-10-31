@@ -137,14 +137,15 @@ describeIfDisposableDb("extrait de source", () => {
 
     it("refuse une source qui n'est pas un document écrit", async () => {
       const { revisionId } = await publishSeededMeasure();
-      const press = await db.measureSource.findFirstOrThrow({
-        where: { measureRevisionId: revisionId, sourceKind: "ARTICLE_PRESSE" },
+      // La source du jeu de données de base est un discours de campagne : pas un document écrit.
+      const speech = await db.measureSource.findFirstOrThrow({
+        where: { measureRevisionId: revisionId, sourceKind: "DISCOURS_CAMPAGNE" },
       });
 
       await expect(
-        setSourceExcerpt({ sourceId: press.id, excerpt: EXCERPT, setBy: "relecteur" })
+        setSourceExcerpt({ sourceId: speech.id, excerpt: EXCERPT, setBy: "relecteur" })
       ).rejects.toThrow(/document écrit/);
-      const after = await db.measureSource.findUniqueOrThrow({ where: { id: press.id } });
+      const after = await db.measureSource.findUniqueOrThrow({ where: { id: speech.id } });
       expect(after.excerpt).toBeNull();
     });
 
