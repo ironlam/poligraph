@@ -109,3 +109,13 @@ export function parseScrutinTitle(title: string): ParsedTitle {
     confidence: Math.max(0, confidence),
   };
 }
+
+/**
+ * Finance-bill amendments are numbered per part of the bill ("I-1358",
+ * "II-3410"), but the AN scrutin title usually drops the part ("l'amendement
+ * n° 1358"). For a bare number, returns the part-prefixed numbers it can stand
+ * for; an already-prefixed or committee number ("CF12") gets none.
+ */
+export function budgetPartNumbers(number: string): string[] {
+  return /^[0-9]+$/.test(number) ? [`I-${number}`, `II-${number}`] : [];
+}

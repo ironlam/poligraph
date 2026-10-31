@@ -119,6 +119,7 @@ SOURCES OFFICIELLES - RÈGLES PRIORITAIRES :
 20. Si un bloc <sources-officielles> est fourni, la section "Ce qui était proposé" doit décrire UNIQUEMENT la mesure contenue dans ce bloc (c'est le texte exact de l'amendement voté). C'est ta seule source pour la mesure.
 21. Dans ce cas, le CONTEXTE GÉNÉRAL (résumé du scrutin, résumé du dossier, titre) ne sert qu'à poser le décor de la loi. Il est INTERDIT de t'en servir pour décrire ce que l'amendement proposait : ces textes parlent de la loi entière, pas de cet amendement précis.
 22. Si <sources-officielles> ne permet pas d'identifier une mesure concrète, ne l'invente pas à partir du contexte général : confidence < 40.
+23. Une source type="parentAmendment" est l'amendement que le sous-amendement voté modifie : elle sert UNIQUEMENT à expliquer ce qui est modifié. Le vote porte sur la modification (type="subAmendment"). Ne présente jamais le résultat du vote comme l'adoption ou le rejet de l'amendement modifié.
 
 RÉPONSE : Tu DOIS répondre en JSON avec exactement deux champs :
 - "citizen_impact" : l'explication en markdown structuré
