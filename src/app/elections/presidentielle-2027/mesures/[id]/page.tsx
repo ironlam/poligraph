@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ExternalLink, PlayCircle } from "lucide-react";
+import { ArrowRight, ExternalLink, PlayCircle, Quote } from "lucide-react";
 import { ParliamentThemeBridgeLoader } from "@/components/elections/ParliamentThemeBridgeLoader";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MarkdownText } from "@/components/ui/markdown";
@@ -420,6 +420,23 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
                     Publiée le {formatDate(source.publishedAt)}
                     {timecode ? " · Passage à " + timecode : source.page ? " · " + source.page : ""}
                   </p>
+                  {source.excerpt ? (
+                    <figure className="mt-4 rounded-xl border border-border bg-muted/60 p-4">
+                      <figcaption className="text-muted-foreground-strong flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                        <Quote aria-hidden="true" className="text-brand-on-surface h-4 w-4" />
+                        Dans le document source
+                        {source.page
+                          ? ", " + (/^\d/.test(source.page) ? "page " : "") + source.page
+                          : ""}
+                      </figcaption>
+                      <blockquote
+                        cite={source.url}
+                        className="mt-3 max-w-[80ch] border-l-4 border-brand pl-4 text-[1.0625rem] leading-relaxed text-foreground"
+                      >
+                        <p>« {source.excerpt} »</p>
+                      </blockquote>
+                    </figure>
+                  ) : null}
                   <a
                     href={videoSourceHref(source.url, source.startAtSeconds)}
                     target="_blank"

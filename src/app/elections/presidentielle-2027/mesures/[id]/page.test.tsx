@@ -63,6 +63,7 @@ const detail = {
       url: "https://example.org/programme",
       page: "p. 12",
       startAtSeconds: null,
+      excerpt: null,
       publishedAt: new Date("2026-08-10T00:00:00Z"),
     },
   ],
@@ -207,6 +208,7 @@ describe("page publique d'une mesure présidentielle", () => {
           url: "https://www.youtube.com/watch?v=-Nb_bTgARWw",
           page: "22:41",
           startAtSeconds: 1361,
+          excerpt: null,
           publishedAt: new Date("2026-10-14T00:00:00Z"),
         },
         {
@@ -216,6 +218,7 @@ describe("page publique d'une mesure présidentielle", () => {
           url: "https://europe.tv5monde.com/fr/guide-tv/l-heure-de-verite/philippe",
           page: "08:28",
           startAtSeconds: 508,
+          excerpt: null,
           publishedAt: new Date("2026-10-08T00:00:00Z"),
         },
       ],
@@ -244,6 +247,40 @@ describe("page publique d'une mesure présidentielle", () => {
       "href",
       "https://example.org/programme"
     );
+  });
+
+  it("affiche l'extrait du document sous sa source, sans rien ajouter quand il manque", async () => {
+    getDetail.mockResolvedValue({
+      ...detail,
+      sources: [
+        {
+          ...detail.sources[0],
+          excerpt:
+            "Nous rendrons obligatoire une empreinte de décision sur chaque texte important.",
+        },
+      ],
+    });
+    const { default: Page } = await import("./page");
+    const { unmount } = render(
+      <TooltipProvider>
+        {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
+      </TooltipProvider>
+    );
+    expect(screen.getByText(/Dans le document source/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Nous rendrons obligatoire une empreinte de décision sur chaque texte important/
+      )
+    ).toBeInTheDocument();
+    unmount();
+
+    getDetail.mockResolvedValue(detail);
+    render(
+      <TooltipProvider>
+        {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
+      </TooltipProvider>
+    );
+    expect(screen.queryByText(/Dans le document source/)).not.toBeInTheDocument();
   });
 
   it("n'invente aucun vote quand aucun lien public n'existe", async () => {

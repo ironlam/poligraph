@@ -4025,6 +4025,9 @@ model MeasureSource {
   // Where the passage starts in an audio-visual source, in seconds. `page` stays free text for
   // documents; a video source carries this instead so the public link can jump to the passage.
   startAtSeconds Int?
+  // Short verbatim passage of a written source (programme, proposals), 100 to 520 characters, set by
+  // setSourceExcerpt() after a mechanical check against the document. Null for speeches, press and video.
+  excerpt String? @db.Text
   publishedAt DateTime
 
   createdAt DateTime @default(now())
