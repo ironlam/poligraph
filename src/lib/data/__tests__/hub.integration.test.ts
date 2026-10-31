@@ -241,6 +241,59 @@ describeIfDisposableDb("hub", () => {
       expect(dates).toEqual([...dates].sort((a, b) => b - a));
     });
 
+    it("montre encore les autres candidatures quand une seule vient de publier un grand lot", async () => {
+      const { createMeasure, reviewMeasureRevision, publishMeasureRevision } =
+        await import("@/lib/measures/transitions");
+      const alpha = await db.candidacy.findFirstOrThrow({
+        where: { electionId, candidateName: "Alpha Fixture" },
+        select: { id: true, politicianId: true },
+      });
+      if (alpha.politicianId === null) throw new Error("fixture: Alpha sans politicien");
+      const created: string[] = [];
+      try {
+        // Plus que les lignes lues par la requête : Alpha occupe seul les plus récentes.
+        for (let i = 0; i < 30; i++) {
+          const seeded = await createMeasure({
+            politicianId: alpha.politicianId,
+            electionId,
+            candidacyId: alpha.id,
+            programEditionId: null,
+            attribution: "PERSONAL",
+            theme: "LOGEMENT_URBANISME",
+            precedingMeasureId: null,
+            revision: {
+              text: `Mesure de lot numéro ${i} pour Alpha.`,
+              precision: "OBJECTIF_SANS_CHIFFRE",
+              validFrom: new Date("2027-01-01T00:00:00Z"),
+              extractionMethod: "MANUAL",
+              extractionConfidence: null,
+              extractorVersion: null,
+            },
+            sources: [
+              {
+                sourceKind: "DISCOURS_CAMPAGNE",
+                tier: "PRIMARY",
+                url: "https://example.org/meeting",
+                page: null,
+                publishedAt: new Date("2027-01-01T00:00:00Z"),
+              },
+            ],
+          });
+          created.push(seeded.measureId);
+          await reviewMeasureRevision({ ...seeded, reviewedBy: "fixture" });
+          await publishMeasureRevision(seeded);
+        }
+
+        const latest = await loadHubLatestMeasures(electionId);
+
+        expect(latest.map((m) => m.candidateName).sort()).toEqual([
+          "Alpha Fixture",
+          "Bravo Fixture",
+        ]);
+      } finally {
+        await db.measure.deleteMany({ where: { id: { in: created } } });
+      }
+    });
     it("rend une liste vide pour une élection inconnue (avant la frontière cache)", async () => {
       expect(await getHubLatestMeasures("inconnue")).toEqual([]);
     });
