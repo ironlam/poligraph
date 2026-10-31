@@ -40,6 +40,7 @@ function source(
     url: "https://example.org/programme.pdf",
     page: null,
     startAtSeconds: null,
+    excerpt: null,
     publishedAt: new Date("2027-01-15T00:00:00Z"),
     createdAt: new Date("2027-01-16T00:00:00Z"),
     ...over,

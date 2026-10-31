@@ -70,6 +70,7 @@ export type PublicPresidentialMeasureDetail = {
     url: string;
     page: string | null;
     startAtSeconds: number | null;
+    excerpt: string | null;
     publishedAt: Date;
   }>;
   votes: Array<{
@@ -135,6 +136,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
               url: true,
               page: true,
               startAtSeconds: true,
+              excerpt: true,
               publishedAt: true,
             },
           },
