@@ -6,6 +6,8 @@
  * resolver the policy-title pipeline uses), NOT from the broad dossier summary.
  * A coherence guard rejects any generated impact whose vocabulary does not
  * overlap the official reference (the scrutin-2084 import-ban failure mode).
+ * An amendment vote without amendment-level substance is not generated at all
+ * (amendment-vote-guard.ts): the model would otherwise describe the whole bill.
  */
 
 import { db } from "@/lib/db";
@@ -14,6 +16,11 @@ import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-subst
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import type { SubstanceDepth } from "@/services/scrutin-policy-title/types";
 import { fetchScrutinContext } from "@/services/scrutin-context-fetcher";
+import {
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
+  canDescribeVotedMeasure,
+  isAmendmentVote,
+} from "@/services/scrutin-substance/amendment-vote-guard";
 import { AI_RATE_LIMIT_MS, AI_429_BACKOFF_MS } from "@/config/rate-limits";
 
 export interface ScrutinCitizenImpactsResult {
@@ -21,6 +28,8 @@ export interface ScrutinCitizenImpactsResult {
   generated: number;
   skipped: number;
   skippedIncoherent: number;
+  /** Amendment votes not generated: no amendment-level official text. */
+  skippedNoSubstance: number;
   contextHits: number;
   errors: string[];
 }
@@ -30,6 +39,9 @@ export interface PreparedCitizenImpact {
   slug: string | null;
   title: string;
   hasLinkedAmendment: boolean;
+  isAmendmentVote: boolean;
+  /** False for an amendment vote whose own text is not resolved: do not generate. */
+  canDescribeMeasure: boolean;
   substanceDepth: SubstanceDepth | null;
   policyTitle: { policyTitle: string | null; policySubtitle: string | null } | null;
   contextHit: boolean;
@@ -64,6 +76,7 @@ export async function prepareCitizenImpactInput(
       votingDate: true,
       sourceUrl: true,
       dossierLegislatifId: true,
+      type: true,
       policyTitle: { select: { policyTitle: true, policySubtitle: true } },
       amendmentLinks: { select: { amendmentId: true } },
     },
@@ -165,6 +178,12 @@ export async function prepareCitizenImpactInput(
     slug: scrutin.slug,
     title: scrutin.title,
     hasLinkedAmendment: input.hasLinkedAmendment,
+    isAmendmentVote: isAmendmentVote(scrutin),
+    canDescribeMeasure: canDescribeVotedMeasure({
+      type: scrutin.type,
+      title: scrutin.title,
+      substanceDepth: resolved.substanceDepth,
+    }),
     substanceDepth: resolved.substanceDepth,
     policyTitle: scrutin.policyTitle,
     contextHit,
@@ -189,6 +208,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     generated: 0,
     skipped: 0,
     skippedIncoherent: 0,
+    skippedNoSubstance: 0,
     contextHits: 0,
     errors: [],
   };
@@ -202,6 +222,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     whereClause.citizenImpact = null;
   }
   whereClause.summary = { not: null };
+  whereClause.AND = [AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE];
 
   let scrutins = await db.scrutin.findMany({
     where: whereClause,
@@ -233,6 +254,12 @@ export async function generateScrutinCitizenImpacts(options?: {
       }
       if (prepared.contextHit) stats.contextHits++;
 
+      if (!prepared.canDescribeMeasure) {
+        stats.skippedNoSubstance++;
+        stats.processed++;
+        continue;
+      }
+
       const result = await generateCitizenImpact(prepared.input);
       stats.processed++;
 
@@ -250,7 +277,7 @@ export async function generateScrutinCitizenImpacts(options?: {
       // THIS amendment or drifted onto the broad dossier — so we refuse to persist.
       // Better an empty "en bref" than a confident wrong one; a later run
       // regenerates once a reference exists, since the row stays null.
-      if (prepared.hasLinkedAmendment) {
+      if (prepared.hasLinkedAmendment || prepared.isAmendmentVote) {
         const verdict = assessCoherence({
           text: result.citizenImpact,
           policyTitle: prepared.policyTitle?.policyTitle ?? null,

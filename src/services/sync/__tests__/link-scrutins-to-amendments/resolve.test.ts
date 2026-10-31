@@ -272,6 +272,101 @@ describeIfDb("resolveLinks", () => {
     expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
   });
 
+  it("matches a finance-bill part prefix (title '1358' → candidate 'I-1358') when unique (V9336)", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    await db.amendment.create({
+      data: {
+        externalId: `${AMEND_PFX}plf_I_1358`,
+        number: "I-1358",
+        texteRef: "TEST_PRJLANR_PLF",
+        dossierId,
+        status: "ADOPTE",
+        legislature: 17,
+        chamber: "AN",
+      },
+    });
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["1358"],
+      hasIdentique: false,
+    });
+    const link = res.links.find((l) => l.role === "PRINCIPAL");
+    const a = await db.amendment.findUnique({ where: { externalId: `${AMEND_PFX}plf_I_1358` } });
+    expect(link?.amendmentId).toBe(a?.id);
+    expect(link?.parserWarnings.map((w) => w.code)).toEqual(["BUDGET_PART_PREFIX"]);
+  });
+
+  it("does NOT match when both I- and II- parts carry the cited number (ambiguous)", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    for (const number of ["I-4242", "II-4242"]) {
+      await db.amendment.create({
+        data: {
+          externalId: `${AMEND_PFX}plf_${number}`,
+          number,
+          texteRef: "TEST_PRJLANR_PLF",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+        },
+      });
+    }
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["4242"],
+      hasIdentique: false,
+    });
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+  });
+
+  it("prefers the bare number over a finance-bill part candidate", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    for (const number of ["5151", "I-5151"]) {
+      await db.amendment.create({
+        data: {
+          externalId: `${AMEND_PFX}plf_bare_${number}`,
+          number,
+          texteRef: "TEST_PRJLANR_PLF",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+        },
+      });
+    }
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["5151"],
+      hasIdentique: false,
+    });
+    const bare = await db.amendment.findUnique({
+      where: { externalId: `${AMEND_PFX}plf_bare_5151` },
+    });
+    expect(res.links.find((l) => l.role === "PRINCIPAL")?.amendmentId).toBe(bare?.id);
+  });
+
   it("warns CANDIDATE_NOT_FOUND when a cited number resolves to nothing in scope", async () => {
     const scrutin = await db.scrutin.findUniqueOrThrow({
       where: { externalId: `${SCRUTIN_PFX}1` },

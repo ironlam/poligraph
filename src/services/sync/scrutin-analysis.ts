@@ -4,6 +4,10 @@ import { escapeXmlText } from "@/lib/text/escape-xml";
 import { isGroupAttributionReliable } from "@/lib/votes/group-attribution";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
+import {
+  canDescribeVotedMeasure,
+  isAmendmentVote,
+} from "@/services/scrutin-substance/amendment-vote-guard";
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 import type { AnalysisSourceType } from "@/generated/prisma";
 
@@ -202,6 +206,7 @@ export async function generateScrutinAnalysis(
       votesAbstain: true,
       chamber: true,
       legislature: true,
+      type: true,
       groupPositions: {
         include: {
           group: { select: { name: true, code: true, chamber: true, legislature: true } },
@@ -236,6 +241,10 @@ export async function generateScrutinAnalysis(
 
       // Anchor the topic on the official amendment substance (what is voted).
       const resolved = await resolveSubstanceSources(s.id);
+      if (!canDescribeVotedMeasure({ ...s, substanceDepth: resolved.substanceDepth })) {
+        skipped++;
+        continue;
+      }
 
       const prompt = buildAnalysisPrompt({
         title: s.title,
@@ -282,7 +291,7 @@ export async function generateScrutinAnalysis(
 
       // Guard 2: arguments must echo the official measure (amendment), not drift
       // onto a different measure from the broad séance debate.
-      if (s.amendmentLinks.length > 0 && resolved.blocks.length > 0) {
+      if ((s.amendmentLinks.length > 0 || isAmendmentVote(s)) && resolved.blocks.length > 0) {
         const verdict = assessCoherence({
           text: `${parsed.argumentsFor} ${parsed.argumentsAgainst}`,
           policyTitle: s.policyTitle?.policyTitle ?? null,

@@ -327,3 +327,83 @@ describeIfDb("generateScrutinCitizenImpacts — guard without resolved substance
     expect(row?.citizenImpact).toContain("néonicotinoïdes");
   });
 });
+
+// Regression V9336: an amendment vote whose amendment is not linked. The only
+// "official" substance left is the bill's exposé des motifs, which describes the
+// whole finance bill; the model then invented an energy-renovation aid for a
+// digital-data tax amendment. Such a vote must never reach the model.
+const PFX3 = "TEST_CIU_";
+
+describeIfDb("generateScrutinCitizenImpacts — unlinked amendment vote", () => {
+  let typedId: string;
+  let untypedId: string;
+
+  async function cleanup() {
+    await db.scrutin.deleteMany({ where: { externalId: { startsWith: PFX3 } } });
+    await db.legislativeDossier.deleteMany({ where: { externalId: `${PFX3}DLR` } });
+  }
+
+  beforeAll(async () => {
+    ({ db } = await import("@/lib/db"));
+    ({ generateScrutinCitizenImpacts } =
+      await import("@/services/sync/generate-scrutin-citizen-impacts"));
+    await cleanup();
+
+    const dossier = await db.legislativeDossier.create({
+      data: {
+        externalId: `${PFX3}DLR`,
+        slug: `${PFX3}dossier`,
+        title: "Projet de loi de finances pour 2027",
+        exposeDesMotifs: "Le présent projet de loi fixe les ressources et les charges de l'État.",
+        status: "EN_COURS",
+      },
+    });
+
+    const base = {
+      votingDate: new Date("2026-10-30"),
+      legislature: 17,
+      chamber: "AN" as const,
+      votesFor: 11,
+      votesAgainst: 10,
+      votesAbstain: 14,
+      result: "ADOPTED" as const,
+      summary: "Les députés ont adopté un amendement sur les aides aux ménages modestes.",
+      dossierLegislatifId: dossier.id,
+    };
+    const title =
+      "l'amendement n° 1358 de M. Lhardit après l'article 15 (examen prioritaire) du projet de loi de finances pour 2027 (première lecture).";
+
+    typedId = (
+      await db.scrutin.create({
+        data: { ...base, externalId: `${PFX3}S1`, slug: `${PFX3}s1`, title, type: "AMENDEMENT" },
+      })
+    ).id;
+    untypedId = (
+      await db.scrutin.create({
+        data: { ...base, externalId: `${PFX3}S2`, slug: `${PFX3}s2`, title, type: null },
+      })
+    ).id;
+  });
+
+  afterAll(cleanup);
+
+  beforeEach(() => {
+    mockCall.mockReset();
+  });
+
+  it("does not select an AMENDEMENT vote with no linked amendment", async () => {
+    const stats = await generateScrutinCitizenImpacts({ scrutinIds: [typedId], force: true });
+
+    expect(stats.processed).toBe(0);
+    expect(mockCall).not.toHaveBeenCalled();
+  });
+
+  it("refuses an untyped amendment vote grounded only on the exposé des motifs", async () => {
+    const stats = await generateScrutinCitizenImpacts({ scrutinIds: [untypedId], force: true });
+
+    expect(stats.skippedNoSubstance).toBe(1);
+    expect(mockCall).not.toHaveBeenCalled();
+    const row = await db.scrutin.findUnique({ where: { id: untypedId } });
+    expect(row?.citizenImpact).toBeNull();
+  });
+});

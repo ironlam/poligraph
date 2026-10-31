@@ -1,21 +1,36 @@
 /**
  * Orchestration service for generating AI summaries for scrutins.
  * Uses Mistral Small for cost-efficient generation.
+ *
+ * An amendment vote is summarised from the amendment's official text only
+ * (see amendment-vote-guard.ts). Its title alone names a number, not a measure.
  */
 
 import { db } from "@/lib/db";
+import type { ScrutinType } from "@/generated/prisma";
 import { callMistral, extractMistralText } from "@/lib/api/mistral";
 import { AI_RATE_LIMIT_MS, AI_429_BACKOFF_MS } from "@/config/rate-limits";
-
-const SYSTEM_PROMPT = `Tu es un assistant parlementaire expert. Résume ce scrutin en 2-3 phrases concises pour un citoyen français.
-Inclus: le sujet du vote, le résultat (adopté/rejeté), et les principaux enjeux.
-Écris en français courant, sans jargon technique. Ne mentionne pas les numéros d'articles.`;
+import { buildSummaryPrompt, SYSTEM_PROMPT } from "@/services/scrutin-summary";
+import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
+import {
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
+  canDescribeVotedMeasure,
+  isAmendmentVote,
+} from "@/services/scrutin-substance/amendment-vote-guard";
 
 export interface ScrutinSummariesResult {
   processed: number;
   generated: number;
   skipped: number;
+  /** Amendment votes left without summary: no amendment-level official text. */
+  skippedNoSubstance: number;
   errors: string[];
+}
+
+/** Blocks read from the voted amendment(s), never from the whole bill. */
+function amendmentLevelBlocks(blocks: SubstanceTextBlock[]): SubstanceTextBlock[] {
+  return blocks.filter((b) => b.sourceType !== "dossier");
 }
 
 export async function generateScrutinSummaries(options?: {
@@ -28,6 +43,7 @@ export async function generateScrutinSummaries(options?: {
     processed: 0,
     generated: 0,
     skipped: 0,
+    skippedNoSubstance: 0,
     errors: [],
   };
 
@@ -35,6 +51,7 @@ export async function generateScrutinSummaries(options?: {
     where: {
       ...(force ? {} : { summary: null }),
       votes: { some: {} },
+      ...AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
     },
     orderBy: { votingDate: "desc" },
     take: limit,
@@ -46,6 +63,7 @@ export async function generateScrutinSummaries(options?: {
       votesAgainst: true,
       votesAbstain: true,
       chamber: true,
+      type: true,
     },
   });
 
@@ -53,14 +71,24 @@ export async function generateScrutinSummaries(options?: {
 
   for (const s of scrutins) {
     stats.processed++;
-    const resultLabel = s.result === "ADOPTED" ? "Adopté" : "Rejeté";
-    const chamberLabel = s.chamber === "AN" ? "Assemblée nationale" : "Sénat";
-
-    const prompt = `Scrutin: ${s.title}
-Chambre: ${chamberLabel}
-Résultat: ${resultLabel} (Pour: ${s.votesFor}, Contre: ${s.votesAgainst}, Abstention: ${s.votesAbstain})`;
 
     try {
+      const amendmentBlocks = await loadAmendmentBlocks(s);
+      if (amendmentBlocks === null) {
+        stats.skippedNoSubstance++;
+        continue;
+      }
+
+      const prompt = buildSummaryPrompt({
+        title: s.title,
+        result: s.result,
+        votesFor: s.votesFor,
+        votesAgainst: s.votesAgainst,
+        votesAbstain: s.votesAbstain,
+        chamber: s.chamber,
+        amendmentBlocks,
+      });
+
       const response = await callMistral([{ role: "user", content: prompt }], {
         model: "mistral-small-latest",
         system: SYSTEM_PROMPT,
@@ -95,4 +123,20 @@ Résultat: ${resultLabel} (Pour: ${s.votesFor}, Contre: ${s.votesAgainst}, Abste
   }
 
   return stats;
+}
+
+/**
+ * Amendment-level official text for an amendment vote, an empty list for any
+ * other vote, or null when the vote is an amendment whose text is not linked:
+ * that vote must not be summarised.
+ */
+async function loadAmendmentBlocks(s: {
+  id: string;
+  title: string;
+  type: ScrutinType | null;
+}): Promise<SubstanceTextBlock[] | null> {
+  if (!isAmendmentVote(s)) return [];
+  const resolved = await resolveSubstanceSources(s.id);
+  if (!canDescribeVotedMeasure({ ...s, substanceDepth: resolved.substanceDepth })) return null;
+  return amendmentLevelBlocks(resolved.blocks);
 }
