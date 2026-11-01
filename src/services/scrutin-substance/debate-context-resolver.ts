@@ -80,6 +80,7 @@ export async function resolveDebateContextForScrutin(
     confidence: "NONE",
     reason: "Aucune mention claire de l'amendement dans le débat.",
     excerpt: null,
+    context: null,
     matchedAmendmentNumber: null,
     usableForGeneration: false,
     reinforced: false,

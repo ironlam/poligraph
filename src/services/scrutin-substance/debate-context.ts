@@ -22,6 +22,9 @@ export interface AmendmentMention {
   reason: string;
   /** Bounded window around the match, never the whole transcript. */
   excerpt: string | null;
+  /** Longer passage that follows a HIGH match (the speeches on that amendment),
+   *  the only text allowed to ground for/against arguments. Null otherwise. */
+  context: string | null;
   matchedAmendmentNumber: string | null;
   /** Only HIGH is trustworthy enough to feed a future generation. */
   usableForGeneration: boolean;
@@ -34,6 +37,7 @@ const NONE: AmendmentMention = {
   confidence: "NONE",
   reason: "Aucune mention claire de l'amendement dans le débat.",
   excerpt: null,
+  context: null,
   matchedAmendmentNumber: null,
   usableForGeneration: false,
   reinforced: false,
@@ -67,6 +71,9 @@ function normalizeSpaces(s: string): string {
 function coreNumber(n: string): string {
   return n.replace(/\s*\(.*?\)\s*$/, "").trim();
 }
+
+/** Characters of debate kept after a HIGH match for the model to read. */
+const DEBATE_CONTEXT_CHARS = 3500;
 
 function windowAround(text: string, idx: number, before = 120, after = 220): string {
   const start = Math.max(0, idx - before);
@@ -158,6 +165,7 @@ export function findAmendmentMention(
         confidence: "HIGH",
         reason: `Numéro d'amendement « ${amd.number} » cité explicitement dans le débat.`,
         excerpt: windowAround(spaced, idx),
+        context: windowAround(spaced, idx, 200, DEBATE_CONTEXT_CHARS),
         matchedAmendmentNumber: amd.number,
         usableForGeneration: true,
         reinforced: reinforcedNear(folded, idx, amd),
@@ -181,6 +189,7 @@ export function findAmendmentMention(
         confidence: "MEDIUM",
         reason: "Auteur et article cités à proximité, sans le numéro d'amendement.",
         excerpt: windowAround(spaced, Math.min(surnameIdx, articleIdx)),
+        context: null,
         matchedAmendmentNumber: amd.number,
         usableForGeneration: false,
         reinforced: false,
@@ -191,6 +200,7 @@ export function findAmendmentMention(
         confidence: "LOW",
         reason: "Signal faible (auteur ou article seul), non exploitable pour la génération.",
         excerpt: windowAround(spaced, surnameIdx >= 0 ? surnameIdx : articleIdx),
+        context: null,
         matchedAmendmentNumber: amd.number,
         usableForGeneration: false,
         reinforced: false,

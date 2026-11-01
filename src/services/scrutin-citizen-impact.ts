@@ -31,6 +31,11 @@ export interface CitizenImpactInput {
   dossierSummary: string | null;
   sourcePageText: string | null;
   /**
+   * Passage of the official séance transcript on THIS amendment (HIGH match only).
+   * The ONLY source of for/against arguments; null means no argument may be written.
+   */
+  debateExcerpt: string | null;
+  /**
    * OFFICIAL substance blocks from `resolveSubstanceSources` (amendment-first).
    * When non-empty, they are the SOLE basis for describing the voted measure;
    * `summary` / `dossierSummary` become background context only. Empty for
@@ -85,9 +90,10 @@ STRUCTURE A SUIVRE :
 **Le résultat du vote**
 1 phrase sur le résultat et ce que cela implique.
 
-**Le débat**
-- **Pour :** 1-2 phrases sur les arguments des partisans
-- **Contre :** 1-2 phrases sur les arguments des opposants (même poids que les arguments pour)
+**Le débat** (UNIQUEMENT si un bloc <debat> est fourni, sinon OMETTRE toute cette section)
+- **Pour :** 1-2 phrases sur les arguments des partisans, tirés du bloc <debat>
+- **Contre :** 1-2 phrases sur les arguments des opposants, tirés du bloc <debat> (même poids que les arguments pour)
+Si le bloc <debat> ne contient qu'un côté, ne présenter que ce côté et ne rien inventer pour l'autre.
 
 **Qui est concerné ?**
 1 phrase sur qui est directement impacté par cette décision.
@@ -98,10 +104,10 @@ NEUTRALITÉ - RÈGLES ABSOLUES :
 3. Présenter les arguments POUR et CONTRE avec le même poids et la même longueur
 4. Ne PAS rassurer le lecteur - c'est du parti-pris
 5. Ne PAS utiliser de formulations qui prennent parti : "renforcer la lutte contre" (= c'est bien). Préférer : "augmenter les contrôles sur..."
-6. Vote ADOPTÉ : "cette mesure entre en vigueur" / "cela signifie que..."
+6. Vote ADOPTÉ : décrire ce que l'assemblée a adopté. NE JAMAIS écrire que la mesure "entre en vigueur" ni donner une date d'application : un amendement ou un vote en première lecture ne l'applique pas, le texte doit encore poursuivre son parcours.
 7. Vote REJETÉ : "cette mesure n'a pas été retenue" / "le texte initial est maintenu"
 8. Traduire TOUT le jargon parlementaire en français courant
-9. JAMAIS inventer de mesures concrètes absentes des données fournies
+9. JAMAIS inventer de mesures concrètes absentes des données fournies, ni d'exemples (noms d'entreprises, de produits, de personnes), de chiffres, de dates ou d'arguments absents de <sources-officielles> et <debat>
 10. Si les données sont trop minces pour identifier un impact citoyen : confidence < 40
 11. Votes purement procéduraux : confidence < 40
 12. Ne PAS commencer par "Ce vote..." - varier les accroches, mais le sujet de l'accroche reste le texte, la loi ou les parlementaires, jamais le lecteur
@@ -322,6 +328,19 @@ export function buildUserMessage(input: CitizenImpactInput): string {
   sections.push(`Chambre : ${input.chamber === "AN" ? "Assemblée nationale" : "Sénat"}`);
   sections.push(`Date : ${input.votingDate}`);
   if (input.theme) sections.push(`Thème : ${input.theme}`);
+
+  if (input.debateExcerpt) {
+    sections.push("");
+    sections.push(
+      'EXTRAIT DU DÉBAT (compte rendu officiel de la séance, SEULE base pour la section "Le débat") :'
+    );
+    sections.push("<debat>");
+    sections.push(escapeXmlText(input.debateExcerpt));
+    sections.push("</debat>");
+  } else {
+    sections.push("");
+    sections.push('AUCUN EXTRAIT DE DÉBAT FOURNI : ne pas écrire de section "Le débat".');
+  }
 
   if (hasOfficial) {
     // OFFICIAL amendment text — the only basis for "Ce qui était proposé".

@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { generateCitizenImpact, type CitizenImpactInput } from "@/services/scrutin-citizen-impact";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import type { SubstanceDepth } from "@/services/scrutin-policy-title/types";
 import { fetchScrutinContext } from "@/services/scrutin-context-fetcher";
 import {
@@ -93,6 +94,10 @@ export async function prepareCitizenImpactInput(
   });
   const contextHit = Boolean(context.dossierTitle || context.sourcePageText);
 
+  // Debate passage on this very amendment, only when the match is explicit.
+  const debate = await resolveDebateContextForScrutin(scrutinId);
+  const debateExcerpt = debate.usableForGeneration ? debate.context : null;
+
   const links: CitizenImpactInput["links"] = {
     dossierUrl: null,
     dossierLabel: null,
@@ -167,6 +172,7 @@ export async function prepareCitizenImpactInput(
     dossierTitle: context.dossierTitle,
     dossierSummary: context.dossierSummary,
     sourcePageText: context.sourcePageText,
+    debateExcerpt,
     substanceBlocks: resolved.blocks,
     substanceDepth: resolved.substanceDepth,
     hasLinkedAmendment: scrutin.amendmentLinks.length > 0,

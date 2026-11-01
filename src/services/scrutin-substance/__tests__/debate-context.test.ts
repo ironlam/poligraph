@@ -219,4 +219,20 @@ describe("findAmendmentMention — finance-bill parts (séance text drops the I-
     ]);
     expect(r.confidence).toBe("HIGH");
   });
+
+  it("hands over the passage that follows a HIGH match, and nothing for a weaker one", () => {
+    const speech = "M. Lhardit : cette taxe répond à une inégalité entre acteurs.";
+    const high = findAmendmentMention(
+      `Nous en venons à l'amendement no 1358 après l'article 15. ${speech}`,
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(high.context).toContain("répond à une inégalité");
+
+    const medium = findAmendmentMention(
+      "M. Lhardit présente un texte après l'article 15, sans numéro.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(medium.confidence).toBe("MEDIUM");
+    expect(medium.context).toBeNull();
+  });
 });
