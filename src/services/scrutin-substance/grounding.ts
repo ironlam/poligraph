@@ -136,23 +136,25 @@ const EXPANSION_STOPWORDS = new Set([
 ]);
 
 /**
- * True when the initials of the last words of `phrase` appear, in order, in `abbr`, the
- * first one opening it. An abbreviation may carry letters no word of the phrase gives
+ * The last words of `phrase` whose initials appear, in order, in `abbr`, the first one
+ * opening it, or null. Only that window is the expansion: an unrelated name earlier in the
+ * same sentence is not part of the definition. An abbreviation may carry letters no word of the phrase gives
  * (Ehpad: "établissements pour personnes âgées dépendantes", the h is missing).
  */
-function expandsTo(abbr: string, phrase: string[]): boolean {
+function expandsTo(abbr: string, phrase: string[]): string[] | null {
   const letters = fold(abbr).replace(/[^a-z]/g, "");
-  if (letters.length < 3) return false;
+  if (letters.length < 3) return null;
   const words = phrase.map(fold).filter((w) => !EXPANSION_STOPWORDS.has(w));
   for (let n = Math.max(2, letters.length - 2); n <= letters.length; n++) {
     if (words.length < n) break;
-    const initials = words.slice(-n).map((w) => w[0]!);
+    const window = words.slice(-n);
+    const initials = window.map((w) => w[0]!);
     if (initials[0] !== letters[0]) continue;
     let at = 0;
     for (const ch of letters) if (ch === initials[at]) at++;
-    if (at === initials.length) return true;
+    if (at === initials.length) return window;
   }
-  return false;
+  return null;
 }
 
 /** At least 60% of the expansion's words (4 letters or more) are known to the sources. */
@@ -171,10 +173,11 @@ function expansionIsSupported(phrase: string[], words: Set<string>): boolean {
 function definedInText(plain: string, words: Set<string>): Set<string> {
   const exempt = new Set<string>();
   const accept = (abbr: string, phrase: string[]) => {
-    if (!expandsTo(abbr, phrase)) return;
-    if (!isInSources(fold(abbr), words) && !expansionIsSupported(phrase, words)) return;
+    const expansion = expandsTo(abbr, phrase);
+    if (!expansion) return;
+    if (!isInSources(fold(abbr), words) && !expansionIsSupported(expansion, words)) return;
     exempt.add(fold(abbr));
-    for (const w of phrase) exempt.add(fold(w));
+    for (const w of expansion) exempt.add(w);
   };
   // "expansion (ABBR)"
   for (const m of plain.matchAll(/([^()\n.]{3,160})\(([\p{L}][\p{L}-]{1,11})\)/gu)) {
@@ -212,7 +215,7 @@ export function findUngroundedNames(text: string, sources: string[]): string[] {
       // or a mark that ends a sentence/label. Spaces and opening marks are skipped, but
       // not newlines: they are what tells a paragraph opener from a mid-sentence word.
       const before = plain.slice(0, m.index).replace(/[ \t(«"]+$/u, "");
-      if (before === "" || /[.!?:;\n»]$/.test(before)) continue;
+      if (before === "" || /[.!?:;\n]$/.test(before) || /[.!?]\s*»$/.test(before)) continue;
     }
 
     const key = fold(word);

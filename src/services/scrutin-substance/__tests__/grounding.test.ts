@@ -103,6 +103,19 @@ describe("findUngroundedNames", () => {
     });
   });
 
+  it("does not exempt an unrelated name that precedes a valid definition", () => {
+    const text =
+      "Selon Orange, le produit intérieur brut (PIB) augmente avec le produit intérieur brut.";
+    expect(
+      findUngroundedNames(text, ["Un texte sur le produit intérieur brut et la dépense."])
+    ).toEqual(["Orange"]);
+  });
+
+  it("does not open a sentence after a quote that ends mid-sentence", () => {
+    const text = "La taxe concerne le fournisseur « historique » Orange.";
+    expect(findUngroundedNames(text, ["La taxe concerne le fournisseur."])).toEqual(["Orange"]);
+  });
+
   it("does not take the first word after a closing quotation mark for a name", () => {
     const text =
       "Le texte prévoyait : « une séance ne peut être imposée. » Cela visait la victime.";
