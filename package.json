@@ -96,6 +96,7 @@
     "sync:importance-scores": "tsx -e \"import {computeImportanceScores} from './src/services/sync/scrutin-importance'; computeImportanceScores().then(console.log)\"",
     "sync:group-positions": "tsx -e \"import {computeGroupPositions} from './src/services/sync/compute-group-positions'; computeGroupPositions().then(console.log)\"",
     "sync:debate-transcripts": "tsx -e \"import {syncDebateTranscripts} from './src/services/sync/debate-transcripts'; syncDebateTranscripts().then(console.log)\"",
+    "sync:debate-transcripts:refresh": "tsx -e \"import {syncDebateTranscripts} from './src/services/sync/debate-transcripts'; syncDebateTranscripts({refresh:true}).then(console.log)\"",
     "sync:group-stats": "tsx -e \"import {computeGroupStats} from './src/services/sync/compute-group-stats'; computeGroupStats().then(console.log)\"",
     "sync:scrutin-analysis": "tsx -e \"import {generateScrutinAnalysis} from './src/services/sync/scrutin-analysis'; generateScrutinAnalysis({limit:10}).then(console.log)\"",
     "sync:citizen-impacts": "tsx -e \"import {generateScrutinCitizenImpacts} from './src/services/sync/generate-scrutin-citizen-impacts'; generateScrutinCitizenImpacts({limit:10}).then(console.log)\"",
