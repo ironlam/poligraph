@@ -17,6 +17,7 @@ import {
   AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
   canDescribeVotedMeasure,
   isAmendmentVote,
+  isArticleVote,
 } from "@/services/scrutin-substance/amendment-vote-guard";
 
 export interface ScrutinSummariesResult {
@@ -164,6 +165,8 @@ async function loadAmendmentBlocks(s: {
   title: string;
   type: ScrutinType | null;
 }): Promise<SubstanceTextBlock[] | null> {
+  // An article vote has no text to ground on: it must not be summarised.
+  if (isArticleVote(s)) return null;
   if (!isAmendmentVote(s)) return [];
   const resolved = await resolveSubstanceSources(s.id);
   if (!canDescribeVotedMeasure({ ...s, substanceDepth: resolved.substanceDepth })) return null;
