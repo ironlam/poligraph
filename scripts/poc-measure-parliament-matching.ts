@@ -98,10 +98,15 @@ function sampleMeasures(all: Meas[], n: number): Meas[] {
 const CALL_TIMEOUT_MS = 90_000;
 const CONCURRENCY = 4;
 
-function withTimeout<T>(call: () => Promise<T>): Promise<T> {
+function withTimeout<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Mistral call timeout")), CALL_TIMEOUT_MS);
-    call().then(
+    const timer = setTimeout(() => {
+      reject(new Error("Mistral call timeout"));
+      // Cancel the request itself: a retry must not leave the stalled one running and billing.
+      controller.abort();
+    }, CALL_TIMEOUT_MS);
+    call(controller.signal).then(
       (value) => {
         clearTimeout(timer);
         resolve(value);
@@ -115,7 +120,7 @@ function withTimeout<T>(call: () => Promise<T>): Promise<T> {
 }
 
 /** Retries a call on a 429 or a timeout (a stalled socket after a sleep never fails by itself). */
-async function withRetry<T>(call: () => Promise<T>): Promise<T> {
+async function withRetry<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await withTimeout(call);
@@ -151,7 +156,7 @@ async function qualifyAll(
   const worker = async () => {
     while (next < todo.length) {
       const task = todo[next++]!;
-      const res = await withRetry(() =>
+      const res = await withRetry((signal) =>
         callMistral(
           [
             {
@@ -163,6 +168,7 @@ async function qualifyAll(
             model: CHAT_MODEL,
             temperature: 0,
             maxTokens: 500,
+            signal,
             responseFormat: {
               type: "json_schema",
               json_schema: { name: "qualification", schema: QUALIFICATION_SCHEMA, strict: true },

@@ -11,6 +11,8 @@ function getApiKey(): string {
 
 export interface MistralOptions {
   model?: string;
+  /** Cancels the underlying request (a caller-side timeout must not leave it running). */
+  signal?: AbortSignal;
   maxTokens?: number;
   system?: string;
   temperature?: number;
@@ -83,6 +85,7 @@ export async function callMistral(
     system,
     temperature,
     responseFormat,
+    signal,
   } = options;
 
   const allMessages: MistralMessage[] = system
@@ -103,6 +106,7 @@ export async function callMistral(
       "Content-Type": "application/json",
       Authorization: `Bearer ${getApiKey()}`,
     },
+    signal,
     body: JSON.stringify(body),
   });
 
