@@ -29,6 +29,10 @@ describe("findUngroundedNames", () => {
     expect(findUngroundedNames(text, sources)).toEqual([]);
   });
 
+  it("does not require a well known acronym such as the PIB to appear in the sources", () => {
+    expect(findUngroundedNames("Le PIB augmente.", ["Un texte sans rapport."])).toEqual([]);
+  });
+
   it("does not require generic institutions to appear in the sources", () => {
     const text = "L'Assemblée nationale a adopté le texte, qui doit passer par le Sénat.";
     expect(findUngroundedNames(text, sources)).toEqual([]);
@@ -63,5 +67,45 @@ describe("findUngroundedNames", () => {
     const text =
       "Le débat :\n- Pour : un argument.\n- Contre : un autre argument.\nSelon eux, non.";
     expect(findUngroundedNames(text, ["un argument"])).toEqual([]);
+  });
+
+  describe("abbreviations the text defines itself", () => {
+    const src = [
+      "La taxe spéciale sur les conventions d'assurance est reversée à la branche famille. Le produit intérieur brut et la contribution sociale généralisée sont cités. L'allocation de solidarité aux personnes âgées.",
+    ];
+
+    it("accepts 'expansion (ABBR)' when the expansion rests on the sources", () => {
+      const text =
+        "La part de la taxe spéciale sur les conventions d'assurance (TSCA) augmente. Le produit intérieur brut (PIB) aussi.";
+      expect(findUngroundedNames(text, src)).toEqual([]);
+    });
+
+    it("accepts 'ABBR (Expansion)' and the capitalised words of the expansion", () => {
+      const text = "Elle porte sur la CSG (Contribution sociale généralisée) des apprentis.";
+      expect(findUngroundedNames(text, src)).toEqual([]);
+    });
+
+    it("accepts an abbreviation that only keeps part of the initials (Ehpad)", () => {
+      const text = "Les établissements pour personnes âgées dépendantes (Ehpad) sont visés.";
+      expect(
+        findUngroundedNames(text, ["Les établissements pour personnes âgées dépendantes."])
+      ).toEqual([]);
+    });
+
+    it("still refuses an invented abbreviation whose expansion is not in the sources", () => {
+      const text = "La taxe fictive sur les yachts de luxe (TFY) serait créée.";
+      expect(findUngroundedNames(text, src)).toEqual(["TFY"]);
+    });
+
+    it("still refuses a name whose initials do not match the parenthesis", () => {
+      const text = "Les fournisseurs d'accès à internet (Orange) mesureraient.";
+      expect(findUngroundedNames(text, src)).toEqual(["Orange"]);
+    });
+  });
+
+  it("does not take the first word after a closing quotation mark for a name", () => {
+    const text =
+      "Le texte prévoyait : « une séance ne peut être imposée. » Cela visait la victime.";
+    expect(findUngroundedNames(text, ["une séance ne peut être imposée"])).toEqual([]);
   });
 });
