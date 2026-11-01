@@ -25,6 +25,27 @@ import {
 } from "@/services/scrutin-substance/amendment-vote-guard";
 import { AI_RATE_LIMIT_MS, AI_429_BACKOFF_MS } from "@/config/rate-limits";
 
+export type CitizenImpactOutcome =
+  | "generated"
+  | "low_confidence"
+  | "incoherent"
+  | "ungrounded"
+  | "no_substance"
+  | "missing"
+  | "error";
+
+/** What happened to one scrutin, for the review of a run. */
+export interface CitizenImpactOutcomeRow {
+  id: string;
+  slug: string | null;
+  title: string | null;
+  outcome: CitizenImpactOutcome;
+  /** Why it was refused (coverage, unknown names, error message). */
+  detail?: string;
+  /** The text the model produced, kept for a generated or a refused one. */
+  text?: string;
+}
+
 export interface ScrutinCitizenImpactsResult {
   processed: number;
   generated: number;
@@ -36,6 +57,8 @@ export interface ScrutinCitizenImpactsResult {
   skippedNoSubstance: number;
   contextHits: number;
   errors: string[];
+  /** One row per scrutin handled, in processing order. */
+  outcomes: CitizenImpactOutcomeRow[];
 }
 
 export interface PreparedCitizenImpact {
@@ -239,6 +262,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     skippedNoSubstance: 0,
     contextHits: 0,
     errors: [],
+    outcomes: [],
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -279,13 +303,16 @@ export async function generateScrutinCitizenImpacts(options?: {
       if (!prepared) {
         stats.skipped++;
         stats.processed++;
+        stats.outcomes.push({ id, slug: null, title: null, outcome: "missing" });
         continue;
       }
+      const row = { id, slug: prepared.slug, title: prepared.title };
       if (prepared.contextHit) stats.contextHits++;
 
       if (!prepared.canDescribeMeasure) {
         stats.skippedNoSubstance++;
         stats.processed++;
+        stats.outcomes.push({ ...row, outcome: "no_substance" });
         continue;
       }
 
@@ -295,6 +322,12 @@ export async function generateScrutinCitizenImpacts(options?: {
 
       if (result.confidence < 40) {
         stats.skipped++;
+        stats.outcomes.push({
+          ...row,
+          outcome: "low_confidence",
+          detail: `confiance ${result.confidence}`,
+          text: result.citizenImpact,
+        });
         continue;
       }
 
@@ -316,6 +349,12 @@ export async function generateScrutinCitizenImpacts(options?: {
         });
         if (verdict.referenceUsed === "none" || !verdict.coherent) {
           stats.skippedIncoherent++;
+          stats.outcomes.push({
+            ...row,
+            outcome: "incoherent",
+            detail: `couverture ${verdict.coverage.toFixed(2)}, référence ${verdict.referenceUsed}`,
+            text: result.citizenImpact,
+          });
           console.warn(
             `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} ` +
               `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed})`
@@ -328,6 +367,12 @@ export async function generateScrutinCitizenImpacts(options?: {
       const ungrounded = findUngroundedNames(result.citizenImpact, citizenImpactSources(prepared));
       if (ungrounded.length > 0) {
         stats.skippedUngrounded++;
+        stats.outcomes.push({
+          ...row,
+          outcome: "ungrounded",
+          detail: `noms absents des sources : ${ungrounded.join(", ")}`,
+          text: result.citizenImpact,
+        });
         console.warn(
           `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} (noms absents des sources: ${ungrounded.join(", ")})`
         );
@@ -342,6 +387,7 @@ export async function generateScrutinCitizenImpacts(options?: {
       }
 
       stats.generated++;
+      stats.outcomes.push({ ...row, outcome: "generated", text: result.citizenImpact });
 
       if (i < scrutins.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, AI_RATE_LIMIT_MS));
@@ -350,6 +396,13 @@ export async function generateScrutinCitizenImpacts(options?: {
       const errorMsg = err instanceof Error ? err.message : String(err);
       stats.errors.push(`${id}: ${errorMsg}`);
       stats.processed++;
+      stats.outcomes.push({
+        id,
+        slug: null,
+        title: null,
+        outcome: "error",
+        detail: errorMsg.slice(0, 160),
+      });
 
       if (errorMsg.includes("429") || errorMsg.includes("rate")) {
         console.log("[citizen-impacts] Rate limited, waiting 30s...");
