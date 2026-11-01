@@ -80,9 +80,19 @@ function windowAround(text: string, idx: number, before = 120, after = 220): str
  * a standalone token within a short window after it (covers "no 2084", "n° 2084",
  * "numéro 2084", "nos 27, 16 et 2084").
  */
-function highMatchIndex(folded: string, core: string): number {
+function highMatchIndex(
+  folded: string,
+  core: string,
+  /** Accepts a match written without the finance-bill part ("no 1358" for "I-1358"). */
+  corroborate?: (idx: number) => boolean
+): number {
   const token = foldLower(core);
   const numRe = new RegExp(`(?<![\\w-])${escapeRegExp(token)}(?![\\w-])`);
+  // Finance-bill amendments are numbered per part ("I-1358") but the séance text
+  // says "l'amendement no 1358". The bare number also names the other part, so it
+  // only counts when the caller can corroborate it.
+  const bare = /^ii?-(\d+)$/.exec(token)?.[1];
+  const bareRe = bare ? new RegExp(`(?<![\\w-])${bare}(?![\\w-])`) : null;
   // Allow a comma between "amendements" and the "n" prefix: real séance text
   // says "amendements, nos 1403, 1984 et 1977".
   const anchorRe = /\bamendements?[\s,]+n/g;
@@ -92,6 +102,10 @@ function highMatchIndex(folded: string, core: string): number {
     const win = folded.slice(winStart, winStart + 45);
     const nm = numRe.exec(win);
     if (nm) return winStart + nm.index;
+    if (bareRe && corroborate) {
+      const bm = bareRe.exec(win);
+      if (bm && corroborate(winStart + bm.index)) return winStart + bm.index;
+    }
   }
   return -1;
 }
@@ -136,7 +150,9 @@ export function findAmendmentMention(
 
   // HIGH: explicit amendment number. Strongest, the only "usable" signal.
   for (const amd of amendments) {
-    const idx = highMatchIndex(folded, coreNumber(amd.number));
+    const idx = highMatchIndex(folded, coreNumber(amd.number), (i) =>
+      reinforcedNear(folded, i, amd)
+    );
     if (idx >= 0) {
       return {
         confidence: "HIGH",

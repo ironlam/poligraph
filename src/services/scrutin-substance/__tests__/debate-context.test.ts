@@ -172,3 +172,51 @@ describe("findAmendmentMention — MEDIUM (author + article, no number)", () => 
     expect(r.usableForGeneration).toBe(false);
   });
 });
+
+describe("findAmendmentMention — finance-bill parts (séance text drops the I-/II- prefix)", () => {
+  const transcript =
+    "Nous en venons à l'amendement no 1358 portant article additionnel après l'article 15, examiné par priorité. La parole est à M. Laurent Lhardit, pour soutenir l'amendement.";
+
+  it("matches 'no 1358' to I-1358 when its article and author are cited nearby", () => {
+    const r = findAmendmentMention(transcript, [
+      {
+        number: "I-1358",
+        authorSurname: "Lhardit",
+        article: "APRÈS L'ARTICLE 15, insérer l'article suivant:",
+      },
+    ]);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.usableForGeneration).toBe(true);
+    expect(r.matchedAmendmentNumber).toBe("I-1358");
+  });
+
+  it("does not credit the other part, whose article and author are absent", () => {
+    const r = findAmendmentMention(transcript, [
+      { number: "II-1358", authorSurname: "Dupont", article: "ARTICLE 58" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("does not accept a bare number nothing corroborates", () => {
+    const r = findAmendmentMention("Je mets aux voix l'amendement no 1358.", [
+      { number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+  });
+
+  it("does not match a longer number (1358 is not 13580)", () => {
+    const r = findAmendmentMention(
+      "L'amendement no 13580 après l'article 15, présenté par M. Lhardit.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).not.toBe("HIGH");
+  });
+
+  it("still prefers an explicit prefixed mention", () => {
+    const r = findAmendmentMention("Sur l'amendement no I-1358, avis défavorable.", [
+      { number: "I-1358" },
+    ]);
+    expect(r.confidence).toBe("HIGH");
+  });
+});
