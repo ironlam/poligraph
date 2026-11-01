@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { groupAtDate, type MandateWindow } from "../group-at-date";
 
-const group = (id: string) => ({ id, code: id.toUpperCase(), name: `Groupe ${id}` });
+const group = (id: string) => ({
+  id,
+  code: id.toUpperCase(),
+  name: `Groupe ${id}`,
+  chamber: "AN" as const,
+  legislature: 17,
+});
 const mandates: MandateWindow[] = [
   {
     type: "DEPUTE",
