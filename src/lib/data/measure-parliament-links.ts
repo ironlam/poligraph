@@ -9,7 +9,14 @@ import type {
   VotingResult,
 } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import {
+  chartGroups,
+  isCandidateGroupAttested,
+  isWholeTextVote,
+} from "@/lib/measures/final-vote-groups";
 import { groupAtDate, type MandateWindow } from "@/lib/measures/group-at-date";
+import { getScrutinOfficialGroups } from "@/lib/data/scrutin-official-groups";
+import { officialGroupCountsView } from "@/lib/votes/scrutin-provenance";
 
 export type MeasureParliamentFinalVote = {
   slug: string;
@@ -76,6 +83,7 @@ export async function getMeasureParliamentLinks(
               title: true,
               votingDate: true,
               chamber: true,
+              legislature: true,
               result: true,
               votesFor: true,
               votesAgainst: true,
@@ -88,7 +96,15 @@ export async function getMeasureParliamentLinks(
                   againstCount: true,
                   abstainCount: true,
                   group: {
-                    select: { id: true, code: true, name: true, shortName: true, color: true },
+                    select: {
+                      id: true,
+                      code: true,
+                      name: true,
+                      shortName: true,
+                      color: true,
+                      chamber: true,
+                      legislature: true,
+                    },
                   },
                 },
               },
@@ -100,7 +116,25 @@ export async function getMeasureParliamentLinks(
   });
   if (links.length === 0) return [];
 
-  const scrutinIds = links.flatMap((l) => l.dossier.scrutins.map((s) => s.id));
+  // A FINAL scrutin may be a budget-section vote: keep the whole-text votes only.
+  const wholeTextVotes = links.map((l) =>
+    l.dossier.scrutins.filter((s) => isWholeTextVote(s.title))
+  );
+  const scrutinIds = wholeTextVotes.flatMap((list) => list.map((s) => s.id));
+
+  // Official count by group first (AN), read once per scrutin.
+  const officialByScrutin = new Map<string, Awaited<ReturnType<typeof getScrutinOfficialGroups>>>();
+  await Promise.all(
+    wholeTextVotes.flat().flatMap((s) =>
+      s.chamber === "AN"
+        ? [
+            getScrutinOfficialGroups(s.id, s.legislature).then((o) => {
+              officialByScrutin.set(s.id, o);
+            }),
+          ]
+        : []
+    )
+  );
   const [votes, mandates] =
     scrutinIds.length === 0
       ? [[], []]
@@ -121,7 +155,9 @@ export async function getMeasureParliamentLinks(
               endDate: true,
               parliamentaryData: {
                 select: {
-                  parliamentaryGroup: { select: { id: true, code: true, name: true } },
+                  parliamentaryGroup: {
+                    select: { id: true, code: true, name: true, chamber: true, legislature: true },
+                  },
                 },
               },
             },
@@ -141,7 +177,7 @@ export async function getMeasureParliamentLinks(
       : []
   );
 
-  return links.flatMap((link) => {
+  return links.flatMap((link, index) => {
     const { dossier } = link;
     if (!dossier.slug) return [];
     return [
@@ -150,12 +186,27 @@ export async function getMeasureParliamentLinks(
         title: dossier.shortTitle ?? dossier.title,
         status: dossier.status,
         linkKind: link.linkKind,
-        finalVotes: dossier.scrutins.flatMap((s) => {
+        finalVotes: (wholeTextVotes[index] ?? []).flatMap((s) => {
           if (!s.slug) return [];
-          const group = groupAtDate(windows, s.chamber, s.votingDate);
-          const groupPosition = group
-            ? (s.groupPositions.find((p) => p.groupId === group.id)?.position ?? null)
-            : null;
+          const mandateGroup = groupAtDate(windows, s.chamber, s.votingDate);
+          const group =
+            mandateGroup && isCandidateGroupAttested(s, mandateGroup) ? mandateGroup : null;
+          const official = officialByScrutin.get(s.id);
+          const groups = chartGroups({
+            scrutin: s,
+            computed: s.groupPositions,
+            official: official
+              ? officialGroupCountsView({
+                  snapshot: official.snapshot,
+                  organes: official.organes,
+                  scrutin: s,
+                })
+              : null,
+          });
+          const mine = group
+            ? groups.find((g) => g.code === group.code || g.shortName === group.code)
+            : undefined;
+          const groupPosition = mine?.position ?? null;
           return [
             {
               slug: s.slug,
@@ -164,16 +215,10 @@ export async function getMeasureParliamentLinks(
               chamber: s.chamber,
               result: s.result,
               counts: { for: s.votesFor, against: s.votesAgainst, abstain: s.votesAbstain },
-              groups: s.groupPositions
-                .map((p) => ({
-                  ...p.group,
-                  position: p.position,
-                  size: p.forCount + p.againstCount + p.abstainCount,
-                }))
-                .toSorted((l, r) => r.size - l.size),
+              groups,
               candidateVote: voteByScrutin.get(s.id) ?? null,
               candidateGroup: group
-                ? { code: group.code, name: group.name, position: groupPosition }
+                ? { code: mine?.code ?? group.code, name: group.name, position: groupPosition }
                 : null,
             },
           ];

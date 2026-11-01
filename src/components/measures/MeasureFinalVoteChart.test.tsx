@@ -44,7 +44,9 @@ describe("MeasureFinalVoteChart", () => {
     expect(within(pour).getByText("(groupe de A B)", { exact: false })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Groupes : contre" })).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Groupes : abstention" })).not.toBeInTheDocument();
-    expect(screen.getByText("Le groupe de A B est entouré.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Le groupe de A B est entouré (appartenance au groupe non datée).")
+    ).toBeInTheDocument();
   });
 
   it("n'annonce aucun groupe entouré quand celui du candidat est inconnu", () => {

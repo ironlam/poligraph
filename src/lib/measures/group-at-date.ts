@@ -4,7 +4,7 @@ export interface MandateWindow {
   type: MandateType;
   startDate: Date;
   endDate: Date | null;
-  group: { id: string; code: string; name: string };
+  group: { id: string; code: string; name: string; chamber: Chamber; legislature: number | null };
 }
 
 const MANDATE_TYPE_BY_CHAMBER: Record<Chamber, MandateType> = {

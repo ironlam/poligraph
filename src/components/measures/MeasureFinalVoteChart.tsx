@@ -86,7 +86,7 @@ export function MeasureFinalVoteChart({
           })}
           {candidateGroup && groups.some((g) => g.code === candidateGroup.code) && (
             <p className="text-xs text-muted-foreground">
-              Le groupe de {candidateName} est entouré.
+              Le groupe de {candidateName} est entouré (appartenance au groupe non datée).
             </p>
           )}
         </div>
