@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { themeToSlug } from "@/lib/theme-utils";
 import { themeSeoPhrase } from "@/lib/seo/theme-metadata";
 import type { ThemeCategory } from "@/generated/prisma";
@@ -16,12 +17,16 @@ interface ThemeVotesLinkProps {
  */
 export function ThemeVotesLink({ theme, className }: ThemeVotesLinkProps) {
   return (
-    <Link
-      href={`/parlement/votes/themes/${themeToSlug(theme)}`}
-      className={`inline-flex min-h-11 items-center gap-1.5 text-primary hover:underline ${className ?? ""}`}
+    <Button
+      asChild
+      variant="outline"
+      size="lg"
+      className={`h-auto min-h-11 max-w-full shrink whitespace-normal py-2 text-center ${className ?? ""}`}
     >
-      Voir tous les votes sur {themeSeoPhrase(theme)}
-      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-    </Link>
+      <Link href={`/parlement/votes/themes/${themeToSlug(theme)}`}>
+        Voir tous les votes sur {themeSeoPhrase(theme)}
+        <ArrowRight aria-hidden="true" />
+      </Link>
+    </Button>
   );
 }
