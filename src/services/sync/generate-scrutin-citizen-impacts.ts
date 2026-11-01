@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { generateCitizenImpact, type CitizenImpactInput } from "@/services/scrutin-citizen-impact";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import { findUngroundedNames } from "@/services/scrutin-substance/grounding";
 import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import type { SubstanceDepth } from "@/services/scrutin-policy-title/types";
 import { fetchScrutinContext } from "@/services/scrutin-context-fetcher";
@@ -29,6 +30,8 @@ export interface ScrutinCitizenImpactsResult {
   generated: number;
   skipped: number;
   skippedIncoherent: number;
+  /** Texts citing a proper name found in none of the sources given to the model. */
+  skippedUngrounded: number;
   /** Amendment votes not generated: no amendment-level official text. */
   skippedNoSubstance: number;
   contextHits: number;
@@ -198,6 +201,23 @@ export async function prepareCitizenImpactInput(
   };
 }
 
+/** Everything the model was given, as plain text, for the grounding check. */
+export function citizenImpactSources(prepared: PreparedCitizenImpact): string[] {
+  const i = prepared.input;
+  return [
+    i.title,
+    i.summary,
+    i.dossierTitle,
+    i.dossierSummary,
+    i.sourcePageText,
+    i.debateExcerpt,
+    ...i.substanceBlocks.map((b) => b.text),
+    i.links.dossierLabel,
+    ...i.links.relatedVotes.map((v) => v.label),
+    ...i.links.politicians.map((p) => p.label),
+  ].filter((x): x is string => Boolean(x));
+}
+
 export async function generateScrutinCitizenImpacts(options?: {
   limit?: number;
   force?: boolean;
@@ -215,6 +235,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     generated: 0,
     skipped: 0,
     skippedIncoherent: 0,
+    skippedUngrounded: 0,
     skippedNoSubstance: 0,
     contextHits: 0,
     errors: [],
@@ -301,6 +322,16 @@ export async function generateScrutinCitizenImpacts(options?: {
           );
           continue;
         }
+      }
+
+      // Names the text cites must exist in what the model was given.
+      const ungrounded = findUngroundedNames(result.citizenImpact, citizenImpactSources(prepared));
+      if (ungrounded.length > 0) {
+        stats.skippedUngrounded++;
+        console.warn(
+          `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} (noms absents des sources: ${ungrounded.join(", ")})`
+        );
+        continue;
       }
 
       if (!dryRun) {
