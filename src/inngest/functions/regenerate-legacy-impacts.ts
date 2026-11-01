@@ -2,11 +2,15 @@ import { inngest } from "../client";
 
 /** Impacts regenerated per run when the environment does not say otherwise. */
 const DEFAULT_PER_RUN = 50;
-/**
- * Impacts per step: one Mistral call takes about ten seconds and a step must stay well
- * under the 270 s the function can run, even with a rate-limit wait.
- */
+/** Impacts per step. */
 const CHUNK = 10;
+/**
+ * No new vote is started after this long in a step. One call takes about ten seconds and a
+ * rate-limit response adds a 30 s wait: with this budget a step ends well under the 270 s the
+ * function can run, even when Mistral keeps answering 429. Votes not reached are left for the
+ * next run.
+ */
+const STEP_TIME_BUDGET_MS = 150_000;
 
 /** `IMPACT_REGEN_PER_RUN`: unset gives the default, 0 switches the job off. */
 export function readPerRun(raw: string | undefined = process.env.IMPACT_REGEN_PER_RUN): number {
@@ -37,7 +41,7 @@ export const regenerateLegacyImpactsFn = inngest.createFunction(
         try {
           const { regenerateLegacyImpacts } =
             await import("@/services/sync/regenerate-legacy-impacts");
-          return await regenerateLegacyImpacts({ limit });
+          return await regenerateLegacyImpacts({ limit, timeBudgetMs: STEP_TIME_BUDGET_MS });
         } catch (err) {
           return { error: err instanceof Error ? err.message : String(err) };
         }

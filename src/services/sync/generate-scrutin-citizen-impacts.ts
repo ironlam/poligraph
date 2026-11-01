@@ -59,6 +59,8 @@ export interface ScrutinCitizenImpactsResult {
   errors: string[];
   /** One row per scrutin handled, in processing order. */
   outcomes: CitizenImpactOutcomeRow[];
+  /** True when `timeBudgetMs` ran out before every scrutin was handled. */
+  stoppedEarly: boolean;
 }
 
 export interface PreparedCitizenImpact {
@@ -250,8 +252,20 @@ export async function generateScrutinCitizenImpacts(options?: {
   /** Restrict processing to these scrutin ids. ALWAYS scoped first in the
    *  WHERE, so a targeted run can never touch the rest of the table. */
   scrutinIds?: string[];
+  /** No new scrutin is started once this much time has passed, so that a caller with a
+   *  hard time limit (a serverless step) is never cut in the middle of a write. The wait
+   *  after a rate-limit response comes on top: leave room for one call and one wait. */
+  timeBudgetMs?: number;
 }): Promise<ScrutinCitizenImpactsResult> {
-  const { limit, force = false, skipScrape = true, dryRun = false, scrutinIds } = options ?? {};
+  const {
+    limit,
+    force = false,
+    skipScrape = true,
+    dryRun = false,
+    scrutinIds,
+    timeBudgetMs,
+  } = options ?? {};
+  const startedAt = Date.now();
 
   const stats: ScrutinCitizenImpactsResult = {
     processed: 0,
@@ -263,6 +277,7 @@ export async function generateScrutinCitizenImpacts(options?: {
     contextHits: 0,
     errors: [],
     outcomes: [],
+    stoppedEarly: false,
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -296,6 +311,10 @@ export async function generateScrutinCitizenImpacts(options?: {
   let modelCalls = 0;
   for (let i = 0; i < scrutins.length; i++) {
     if (limit && modelCalls >= limit) break;
+    if (timeBudgetMs !== undefined && Date.now() - startedAt > timeBudgetMs) {
+      stats.stoppedEarly = true;
+      break;
+    }
     const id = scrutins[i]!.id;
 
     try {

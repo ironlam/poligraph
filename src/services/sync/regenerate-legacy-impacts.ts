@@ -25,6 +25,8 @@ export interface LegacyImpactRunResult {
  */
 export async function regenerateLegacyImpacts(opts: {
   limit: number;
+  /** Stop starting votes after this long (see generateScrutinCitizenImpacts). */
+  timeBudgetMs?: number;
 }): Promise<LegacyImpactRunResult> {
   const result: LegacyImpactRunResult = {
     selected: 0,
@@ -51,6 +53,7 @@ export async function regenerateLegacyImpacts(opts: {
   const generation = await generateScrutinCitizenImpacts({
     scrutinIds: candidates.map((c) => c.id),
     force: true,
+    timeBudgetMs: opts.timeBudgetMs,
   });
 
   const handled = new Map<string, { outcome: string; detail: string | null }>();
@@ -65,11 +68,15 @@ export async function regenerateLegacyImpacts(opts: {
     handled.set(o.id, { outcome: o.outcome, detail: o.detail ?? null });
   }
   // The generator skips votes it cannot take at all; they must not come back every run.
-  const seen = new Set(generation.outcomes.map((o) => o.id));
-  for (const c of candidates) {
-    if (seen.has(c.id)) continue;
-    result.notEligible++;
-    handled.set(c.id, { outcome: "not_eligible", detail: null });
+  // When it stopped on its time budget, the votes it did not reach are simply left for
+  // the next run: they are not "not eligible".
+  if (!generation.stoppedEarly) {
+    const seen = new Set(generation.outcomes.map((o) => o.id));
+    for (const c of candidates) {
+      if (seen.has(c.id)) continue;
+      result.notEligible++;
+      handled.set(c.id, { outcome: "not_eligible", detail: null });
+    }
   }
 
   if (handled.size > 0) {

@@ -60,7 +60,11 @@ describe("regenerateLegacyImpacts", () => {
     generate.mockResolvedValue({ outcomes: [row("a", "generated"), row("b", "generated")] });
     await regenerateLegacyImpacts({ limit: 2 });
 
-    expect(generate).toHaveBeenCalledWith({ scrutinIds: ["a", "b"], force: true });
+    expect(generate).toHaveBeenCalledWith({
+      scrutinIds: ["a", "b"],
+      force: true,
+      timeBudgetMs: undefined,
+    });
   });
 
   it("logs written and refused votes, so they leave the queue", async () => {
@@ -107,5 +111,22 @@ describe("regenerateLegacyImpacts", () => {
     generate.mockResolvedValue({ outcomes: [row("a", "error", "boom")] });
     await regenerateLegacyImpacts({ limit: 1 });
     expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it("passes the time budget on to the generator", async () => {
+    findMany.mockResolvedValue([{ id: "a" }]);
+    generate.mockResolvedValue({ outcomes: [row("a", "generated")] });
+    await regenerateLegacyImpacts({ limit: 1, timeBudgetMs: 150_000 });
+    expect(generate.mock.calls[0]![0].timeBudgetMs).toBe(150_000);
+  });
+
+  it("leaves the votes a time-limited run did not reach for the next run", async () => {
+    findMany.mockResolvedValue([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    generate.mockResolvedValue({ outcomes: [row("a", "generated")], stoppedEarly: true });
+    const res = await regenerateLegacyImpacts({ limit: 3, timeBudgetMs: 1 });
+
+    expect(res.notEligible).toBe(0);
+    const data = createMany.mock.calls[0]![0].data as { scrutinId: string }[];
+    expect(data.map((d) => d.scrutinId)).toEqual(["a"]);
   });
 });
