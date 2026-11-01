@@ -17,7 +17,12 @@ interface ThemeVotesLinkProps {
  */
 export function ThemeVotesLink({ theme, className }: ThemeVotesLinkProps) {
   return (
-    <Button asChild variant="outline" size="lg" className={`min-h-11 ${className ?? ""}`}>
+    <Button
+      asChild
+      variant="outline"
+      size="lg"
+      className={`h-auto min-h-11 max-w-full shrink whitespace-normal py-2 text-center ${className ?? ""}`}
+    >
       <Link href={`/parlement/votes/themes/${themeToSlug(theme)}`}>
         Voir tous les votes sur {themeSeoPhrase(theme)}
         <ArrowRight aria-hidden="true" />
