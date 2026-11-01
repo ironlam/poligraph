@@ -80,6 +80,22 @@ function windowAround(text: string, idx: number, before = 120, after = 220): str
  * a standalone token within a short window after it (covers "no 2084", "n° 2084",
  * "numéro 2084", "nos 27, 16 et 2084").
  */
+/**
+ * Index of `bare` inside the amendment-number list that opens `win` ("o 1358",
+ * "os 2080 et 2084", "° 3915"), or -1. Only a number syntactically part of that list
+ * counts: "no 42 à l'article 15" does not cite amendment 15.
+ */
+const NUMBER_LIST_RE = /^(?:os?|°|umeros?)?\s*((?:\d+(?:\s*\([^)]*\))?(?:\s*(?:,|et)\s*)?)+)/;
+function bareNumberIndexInList(win: string, bare: string): number {
+  const m = NUMBER_LIST_RE.exec(win);
+  if (!m?.[1]) return -1;
+  const listStart = m[0].length - m[1].length;
+  for (const n of m[1].matchAll(/\d+/g)) {
+    if (n[0] === bare) return listStart + n.index;
+  }
+  return -1;
+}
+
 function highMatchIndex(
   folded: string,
   core: string,
@@ -92,7 +108,6 @@ function highMatchIndex(
   // says "l'amendement no 1358". The bare number also names the other part, so it
   // only counts when the caller can corroborate it.
   const bare = /^ii?-(\d+)$/.exec(token)?.[1];
-  const bareRe = bare ? new RegExp(`(?<![\\w-])${bare}(?![\\w-])`) : null;
   // Allow a comma between "amendements" and the "n" prefix: real séance text
   // says "amendements, nos 1403, 1984 et 1977".
   const anchorRe = /\bamendements?[\s,]+n/g;
@@ -102,9 +117,9 @@ function highMatchIndex(
     const win = folded.slice(winStart, winStart + 45);
     const nm = numRe.exec(win);
     if (nm) return winStart + nm.index;
-    if (bareRe && corroborate) {
-      const bm = bareRe.exec(win);
-      if (bm && corroborate(winStart + bm.index)) return winStart + bm.index;
+    if (bare && corroborate) {
+      const at = bareNumberIndexInList(win, bare);
+      if (at >= 0 && corroborate(winStart + at)) return winStart + at;
     }
   }
   return -1;
