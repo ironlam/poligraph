@@ -14,6 +14,7 @@
  */
 import { db } from "@/lib/db";
 import {
+  applyAmbiguity,
   findAmendmentMention,
   type AmendmentRef,
   type AmendmentMention,
@@ -80,6 +81,7 @@ export async function resolveDebateContextForScrutin(
     confidence: "NONE",
     reason: "Aucune mention claire de l'amendement dans le débat.",
     excerpt: null,
+    context: null,
     matchedAmendmentNumber: null,
     usableForGeneration: false,
     reinforced: false,
@@ -118,7 +120,7 @@ export async function resolveDebateContextForScrutin(
     }
   }
   best.transcriptsMentioningAmendment = mentioning;
-  return best;
+  return applyAmbiguity(best, mentioning);
 }
 
 export interface DebateContextAuditRow {
