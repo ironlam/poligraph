@@ -19,8 +19,12 @@ const SECTION_STYLES: Record<GroupPosition, { heading: string; dot: string }> = 
   ABSTENTION: { heading: "text-yellow-700 dark:text-yellow-400", dot: "bg-yellow-500" },
 };
 
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n > 1 ? many : one}`;
+}
+
 function GroupPill({ gp }: { gp: ScrutinGroupPositionData }) {
-  const total = gp.forCount + gp.againstCount + gp.abstainCount;
+  const detail = `${gp.forCount} pour, ${gp.againstCount} contre, ${plural(gp.abstainCount, "abstention", "abstentions")}`;
   const href = gp.group.slug ? ROUTES.groupeDetail(gp.group.slug) : null;
   const content = (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border bg-card text-sm hover:bg-muted transition-colors">
@@ -33,22 +37,17 @@ function GroupPill({ gp }: { gp: ScrutinGroupPositionData }) {
       )}
       <span className="font-medium">{gp.group.shortName || gp.group.code}</span>
       <span className="text-xs text-muted-foreground">{Math.round(gp.cohesionPct)}%</span>
-      <span className="text-xs text-muted-foreground">({total})</span>
     </span>
   );
 
   if (href) {
     return (
-      <Link
-        href={href}
-        prefetch={false}
-        title={`${gp.group.name} - Cohésion : ${Math.round(gp.cohesionPct)}%`}
-      >
+      <Link href={href} prefetch={false} title={`${gp.group.name} : ${detail}`}>
         {content}
       </Link>
     );
   }
-  return content;
+  return <span title={`${gp.group.name} : ${detail}`}>{content}</span>;
 }
 
 export function GroupPositions({ positions, chamber }: GroupPositionsProps) {
@@ -67,6 +66,10 @@ export function GroupPositions({ positions, chamber }: GroupPositionsProps) {
       <div>
         <h3 className="text-base font-semibold">{COMPUTED_POSITIONS_TITLE}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{computedPositionsNote(chamber)}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Chaque groupe figure sous sa position dominante. Le pourcentage indique la part du groupe
+          qui a voté ainsi ; le détail des voix s&apos;affiche au survol.
+        </p>
       </div>
 
       {/* Desktop: 3 columns */}
