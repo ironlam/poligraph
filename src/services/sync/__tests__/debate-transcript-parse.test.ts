@@ -115,3 +115,39 @@ describe("comparaisons dans le contenu extrait", () => {
     expect(r!.content).not.toContain("italique");
   });
 });
+
+/**
+ * Structure des vrais fichiers syseron : seule la présidente porte roledebat="president",
+ * les autres orateurs n'ont pas l'attribut, et les lignes de table des matières portent
+ * sommaire="1". Un parseur filtré sur roledebat ne gardait que les propos de la présidente.
+ */
+describe("extractSeanceFromXml, structure réelle des fichiers", () => {
+  const xml = `<?xml version='1.0' encoding='UTF-8'?>
+<compteRendu>
+  <uid>CRSANR5L17S2027O1N047</uid>
+  <seanceRef>RUANR5L17S2027IDS31006</seanceRef>
+  <metadonnees><dateSeance>20261030090000000</dateSeance><numSeanceJour>1</numSeanceJour></metadonnees>
+  <contenu>
+    <paragraphe sommaire="1" valeur=""><orateurs><orateur><nom>M. Table</nom></orateur></orateurs><texte>Amendement no 1358 entree de la table des matieres.</texte></paragraphe>
+    <paragraphe roledebat="president" sommaire="0" valeur="">
+      <orateurs><orateur><nom>Mme la présidente</nom></orateur></orateurs>
+      <texte>La parole est à M. Laurent Lhardit, pour soutenir l'amendement no 1358.</texte>
+    </paragraphe>
+    <paragraphe sommaire="0" valeur="">
+      <orateurs><orateur><nom>M. Laurent Lhardit</nom></orateur></orateurs>
+      <texte>Cet amendement instaure une taxe sur les flux de données numériques émis par les fournisseurs de contenu.</texte>
+    </paragraphe>
+  </contenu>
+</compteRendu>`;
+
+  it("garde les propos des orateurs sans attribut roledebat", () => {
+    const r = extractSeanceFromXml(xml);
+    expect(r!.content).toContain("M. Laurent Lhardit : Cet amendement instaure une taxe");
+    expect(r!.content).toContain("La parole est à M. Laurent Lhardit");
+  });
+
+  it("écarte les entrées de table des matières (sommaire=1)", () => {
+    const r = extractSeanceFromXml(xml);
+    expect(r!.content).not.toContain("table des matieres");
+  });
+});
