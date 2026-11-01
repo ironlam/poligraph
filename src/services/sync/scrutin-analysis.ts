@@ -6,6 +6,7 @@ import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/deb
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import {
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
   canDescribeVotedMeasure,
   isAmendmentVote,
 } from "@/services/scrutin-substance/amendment-vote-guard";
@@ -193,6 +194,8 @@ export async function generateScrutinAnalysis(
   const where: any = { importance: { isKeyVote: true } };
   if (scrutinIds && scrutinIds.length > 0) where.id = { in: scrutinIds };
   if (!force) where.analysis = null;
+  // Refused votes keep `analysis: null`: left in the query they would fill every batch.
+  where.AND = [AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE];
 
   const scrutins = await db.scrutin.findMany({
     where,

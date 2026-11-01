@@ -35,6 +35,7 @@ vi.mock("@/services/scrutin-substance/debate-context-resolver", () => ({
 }));
 
 import { generateScrutinAnalysis, auditScrutinAnalysisCoherence } from "../scrutin-analysis";
+import { AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE } from "@/services/scrutin-substance/amendment-vote-guard";
 
 const COOP_BLOCKS: SubstanceTextBlock[] = [
   {
@@ -290,5 +291,14 @@ describe("auditScrutinAnalysisCoherence — read-only report", () => {
     expect(report.atRisk[0]!.sourceType).toBe("STRUCTURED_DATA");
     expect(report.atRisk[0]!.hasDebate).toBe(false);
     expect(report.atRisk[0]!.coverage).toBeLessThan(0.3);
+  });
+
+  it("keeps refused article votes out of the candidate query, so they cannot fill every batch", async () => {
+    scrutinFindMany.mockResolvedValue([]);
+
+    await generateScrutinAnalysis({ limit: 5 });
+
+    const where = scrutinFindMany.mock.calls[0]![0].where;
+    expect(where.AND).toContainEqual(AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE);
   });
 });
