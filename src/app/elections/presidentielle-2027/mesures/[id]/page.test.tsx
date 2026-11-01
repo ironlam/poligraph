@@ -68,6 +68,7 @@ const detail = {
     },
   ],
   votes: [],
+  parliamentLinks: [],
   relatedMeasures: [],
 };
 
@@ -290,6 +291,32 @@ describe("page publique d'une mesure présidentielle", () => {
         {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
       </TooltipProvider>
     );
+    expect(
+      screen.queryByRole("heading", { name: "Votes parlementaires liés" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("affiche le texte parlementaire relié sans présenter de vote sur la mesure", async () => {
+    getDetail.mockResolvedValue({
+      ...detail,
+      parliamentLinks: [
+        {
+          dossierSlug: "dossier-1",
+          title: "Dossier relié",
+          status: "ADOPTE",
+          linkKind: "BROADER_TEXT",
+          finalVotes: [],
+        },
+      ],
+    });
+    const { default: Page } = await import("./page");
+    render(
+      <TooltipProvider>
+        {await Page({ params: Promise.resolve({ id: "measure-1" }) })}
+      </TooltipProvider>
+    );
+    expect(screen.getByRole("heading", { name: "Cette mesure au Parlement" })).toBeInTheDocument();
+    expect(screen.getByText("Un texte plus large traite de ce sujet.")).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Votes parlementaires liés" })
     ).not.toBeInTheDocument();
