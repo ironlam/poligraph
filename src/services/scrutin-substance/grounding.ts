@@ -131,8 +131,10 @@ export function findUngroundedNames(text: string, sources: string[]): string[] {
     if (!isAcronym && !isCapitalised) continue;
 
     if (!isAcronym) {
-      // Sentence start: nothing before it, or the previous mark ends a sentence/label.
-      const before = plain.slice(0, m.index).replace(/[\s(«"]+$/u, "");
+      // Sentence start: nothing before it, a line break (paragraph, heading, list item),
+      // or a mark that ends a sentence/label. Spaces and opening marks are skipped, but
+      // not newlines: they are what tells a paragraph opener from a mid-sentence word.
+      const before = plain.slice(0, m.index).replace(/[ \t(«"]+$/u, "");
       if (before === "" || /[.!?:;\n]$/.test(before)) continue;
     }
 

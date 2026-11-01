@@ -53,4 +53,15 @@ describe("findUngroundedNames", () => {
       "Les députés ont examiné un texte. Selon eux, l'amendement et L'Assemblée comptent.";
     expect(findUngroundedNames(text, sources)).toEqual([]);
   });
+
+  it("does not take the first word of a paragraph after a heading for a name", () => {
+    const text = "**Ce qui était proposé**\n\nCette mesure prévoit la suppression de la taxe.";
+    expect(findUngroundedNames(text, ["Suppression de la taxe."])).toEqual([]);
+  });
+
+  it("does not take the first word of a bullet for a name", () => {
+    const text =
+      "Le débat :\n- Pour : un argument.\n- Contre : un autre argument.\nSelon eux, non.";
+    expect(findUngroundedNames(text, ["un argument"])).toEqual([]);
+  });
 });
