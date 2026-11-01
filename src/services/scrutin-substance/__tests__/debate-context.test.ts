@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAmendmentMention } from "@/services/scrutin-substance/debate-context";
+import { applyAmbiguity, findAmendmentMention } from "@/services/scrutin-substance/debate-context";
 
 // Realistic AN séance snippet style: "l'amendement no <n>" (letter o, typographic ').
 const filler = (label: string) => ` ${label} `.repeat(40);
@@ -221,7 +221,10 @@ describe("findAmendmentMention — finance-bill parts (séance text drops the I-
   });
 
   it("hands over the passage that follows a HIGH match, and nothing for a weaker one", () => {
-    const speech = "M. Lhardit : cette taxe répond à une inégalité entre acteurs.";
+    const speech =
+      "M. Lhardit : cette taxe répond à une inégalité entre acteurs. " +
+      "Elle repose sur un volume mesuré en France, que personne ne peut contester, et elle serait payée surtout par les grandes plateformes étrangères. " +
+      "Son rendement serait important et elle rétablirait une équité entre les commerces et les plateformes. (L'amendement no 1358 est adopté.)";
     const high = findAmendmentMention(
       `Nous en venons à l'amendement no 1358 après l'article 15. ${speech}`,
       [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
@@ -244,11 +247,89 @@ describe("findAmendmentMention — finance-bill parts (séance text drops the I-
     expect(r.usableForGeneration).toBe(false);
   });
 
+  it("reads the real séance spelling 'n o 1358' (exposant split by a space)", () => {
+    const r = findAmendmentMention(
+      "Nous en venons à l'amendement n o 1358 portant article additionnel après l'article 15.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).toBe("HIGH");
+  });
+
   it("finds the bare number anywhere in a list of amendment numbers", () => {
     const r = findAmendmentMention(
       "Sur les amendements nos 2080, 1358 et 2090, avis défavorable, après l'article 15.",
       [{ number: "I-1358", article: "APRÈS L'ARTICLE 15" }]
     );
     expect(r.confidence).toBe("HIGH");
+  });
+});
+
+describe("findAmendmentMention, bounded discussion", () => {
+  const ref = [{ number: "2084", authorSurname: "Lechon", article: "22" }];
+  const speech2084 =
+    "Mme Léchon : Cet amendement impose la transparence de la répartition de la valeur dans les coopératives agricoles. " +
+    "Il garantit que les producteurs connaissent la part qui leur revient sur chaque vente, et il permet un contrôle annuel. " +
+    "Les coopératives devraient publier chaque année la ventilation de la valeur entre l'amont et l'aval, afin que les agriculteurs puissent juger du partage. " +
+    "C'est une mesure de transparence, simple à mettre en oeuvre et sans coût pour les finances publiques. ";
+
+  it("cuts at the closing vote and leaves out the next amendment's speeches", () => {
+    const text =
+      "Mme la présidente : La parole est à Mme Léchon, pour soutenir l'amendement no 2084 à l'article 22. " +
+      speech2084 +
+      "(L'amendement no 2084 est adopté.) Mme la présidente : Nous en venons à l'amendement no 2085. M. Durand : ARGUMENT_AUTRE_AMENDEMENT sur les importations.";
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toContain("coopératives agricoles");
+    expect(r.context).not.toContain("ARGUMENT_AUTRE_AMENDEMENT");
+  });
+
+  it("cuts at the next different amendment when no closing is stated", () => {
+    const text =
+      "La parole est à Mme Léchon pour l'amendement no 2084 à l'article 22. " +
+      speech2084 +
+      "Mme la présidente : L'amendement no 2090 de M. Durand est défendu. ARGUMENT_AUTRE_AMENDEMENT.";
+    const r = findAmendmentMention(text, ref);
+    expect(r.context).toContain("contrôle annuel");
+    expect(r.context).not.toContain("ARGUMENT_AUTRE_AMENDEMENT");
+  });
+
+  it("gives no context when the match is only the closing announcement", () => {
+    const text =
+      "(L'amendement no 2084 est adopté.) Nous en venons à l'amendement no 2085. M. Durand : " +
+      "ARGUMENT_AUTRE_AMENDEMENT ".repeat(30);
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toBeNull();
+  });
+
+  it("gives no context when the end of the discussion cannot be found", () => {
+    const text =
+      "Sur l'amendement no 2084 à l'article 22, Mme Léchon : " + "Un propos sans fin. ".repeat(600);
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toBeNull();
+  });
+});
+
+describe("applyAmbiguity", () => {
+  const high = {
+    confidence: "HIGH" as const,
+    reason: "Numéro cité.",
+    excerpt: "x",
+    context: "passage",
+    matchedAmendmentNumber: "2084",
+    usableForGeneration: true,
+    reinforced: true,
+  };
+
+  it("withdraws a match cited in several séances", () => {
+    const r = applyAmbiguity(high, 2);
+    expect(r.usableForGeneration).toBe(false);
+    expect(r.context).toBeNull();
+    expect(r.confidence).toBe("HIGH");
+  });
+
+  it("keeps a match cited in a single séance", () => {
+    expect(applyAmbiguity(high, 1)).toEqual(high);
   });
 });

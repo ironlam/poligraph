@@ -96,7 +96,8 @@ export async function prepareCitizenImpactInput(
 
   // Debate passage on this very amendment, only when the match is explicit.
   const debate = await resolveDebateContextForScrutin(scrutinId);
-  const debateExcerpt = debate.usableForGeneration ? debate.context : null;
+  // Only an unambiguous, corroborated match: the lexical guard cannot check provenance.
+  const debateExcerpt = debate.usableForGeneration && debate.reinforced ? debate.context : null;
 
   const links: CitizenImpactInput["links"] = {
     dossierUrl: null,

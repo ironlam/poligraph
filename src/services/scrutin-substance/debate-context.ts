@@ -74,6 +74,10 @@ function coreNumber(n: string): string {
 
 /** Characters of debate kept after a HIGH match for the model to read. */
 const DEBATE_CONTEXT_CHARS = 3500;
+/** How far past a mention to look for the end of that amendment's discussion. */
+const DISCUSSION_SEARCH_CHARS = 8000;
+/** Below this, the passage is a bare vote announcement, not a discussion. */
+const DISCUSSION_MIN_CHARS = 300;
 
 function windowAround(text: string, idx: number, before = 120, after = 220): string {
   const start = Math.max(0, idx - before);
@@ -92,7 +96,7 @@ function windowAround(text: string, idx: number, before = 120, after = 220): str
  * "os 2080 et 2084", "° 3915"), or -1. Only a number syntactically part of that list
  * counts: "no 42 à l'article 15" does not cite amendment 15.
  */
-const NUMBER_LIST_RE = /^(?:os?|°|umeros?)?\s*((?:\d+(?:\s*\([^)]*\))?(?:\s*(?:,|et)\s*)?)+)/;
+const NUMBER_LIST_RE = /^\s*(?:os?|°|umeros?)?\s*((?:\d+(?:\s*\([^)]*\))?(?:\s*(?:,|et)\s*)?)+)/;
 function bareNumberIndexInList(win: string, bare: string): number {
   const m = NUMBER_LIST_RE.exec(win);
   if (!m?.[1]) return -1;
@@ -130,6 +134,53 @@ function highMatchIndex(
     }
   }
   return -1;
+}
+
+/** Stage direction that closes an amendment: "(L'amendement no 1358 est adopté.)". */
+const CLOSING_RE = /\(l.amendement[^)]{0,100}?(?:adopte|rejete|repousse|retire|tombe)[^)]*\)/;
+
+/**
+ * Where the discussion of the amendment that starts at `idx` ends, in folded
+ * coordinates: the closing stage direction, or the next mention of a different
+ * amendment, whichever comes first. -1 when neither is found within reach, so the
+ * caller omits the passage rather than pass on speeches about other amendments.
+ */
+function discussionEnd(folded: string, idx: number, core: string): number {
+  const token = foldLower(core);
+  const numRe = new RegExp(`(?<![\\w-])${escapeRegExp(token)}(?![\\w-])`);
+  const bare = /^ii?-(\d+)$/.exec(token)?.[1];
+  const limit = Math.min(folded.length, idx + DISCUSSION_SEARCH_CHARS);
+  const zone = folded.slice(idx, limit);
+
+  let end = -1;
+  const closing = CLOSING_RE.exec(zone);
+  if (closing) end = idx + closing.index + closing[0].length;
+
+  const anchorRe = /\bamendements?[\s,]+n/g;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(zone)) !== null) {
+    const winStart = m.index + m[0].length;
+    const win = zone.slice(winStart, winStart + 45);
+    const ours = numRe.test(win) || (bare !== undefined && bareNumberIndexInList(win, bare) >= 0);
+    if (!ours) {
+      const at = idx + m.index;
+      if (at > idx && (end < 0 || at < end)) end = at;
+      break;
+    }
+  }
+  return end;
+}
+
+/** The passage that follows a HIGH match, cut at the end of that amendment's discussion. */
+function discussionContext(
+  spaced: string,
+  folded: string,
+  idx: number,
+  core: string
+): string | null {
+  const end = discussionEnd(folded, idx, core);
+  if (end < 0 || end - idx < DISCUSSION_MIN_CHARS) return null;
+  return windowAround(spaced, idx, 200, Math.min(end - idx, DEBATE_CONTEXT_CHARS));
 }
 
 function extractArticleNumber(article: string): string | null {
@@ -180,7 +231,7 @@ export function findAmendmentMention(
         confidence: "HIGH",
         reason: `Numéro d'amendement « ${amd.number} » cité explicitement dans le débat.`,
         excerpt: windowAround(spaced, idx),
-        context: windowAround(spaced, idx, 200, DEBATE_CONTEXT_CHARS),
+        context: discussionContext(spaced, folded, idx, coreNumber(amd.number)),
         matchedAmendmentNumber: amd.number,
         usableForGeneration: true,
         reinforced: reinforcedNear(folded, idx, amd),
@@ -224,4 +275,18 @@ export function findAmendmentMention(
   }
 
   return low ?? NONE;
+}
+
+/**
+ * A number cited in several same-day séances cannot be tied to one debate: such a
+ * match stays a diagnostic, never feeds a generation.
+ */
+export function applyAmbiguity<T extends AmendmentMention>(m: T, citingSeances: number): T {
+  if (citingSeances <= 1 || !m.usableForGeneration) return m;
+  return {
+    ...m,
+    usableForGeneration: false,
+    context: null,
+    reason: `Plusieurs séances du jour citent l'amendement (${citingSeances}): correspondance ambiguë.`,
+  };
 }

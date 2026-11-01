@@ -14,6 +14,7 @@
  */
 import { db } from "@/lib/db";
 import {
+  applyAmbiguity,
   findAmendmentMention,
   type AmendmentRef,
   type AmendmentMention,
@@ -119,7 +120,7 @@ export async function resolveDebateContextForScrutin(
     }
   }
   best.transcriptsMentioningAmendment = mentioning;
-  return best;
+  return applyAmbiguity(best, mentioning);
 }
 
 export interface DebateContextAuditRow {
