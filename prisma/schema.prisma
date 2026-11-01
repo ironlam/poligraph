@@ -1376,6 +1376,7 @@ model Scrutin {
   importance        ScrutinImportance?
   groupPositions    ScrutinGroupPosition[]
   analysis          ScrutinAnalysis?
+  impactRegeneration ImpactRegenerationLog?
   measureVoteLinks  MeasureVoteLink[]
   debateTranscripts DebateTranscript[]
 
@@ -4670,4 +4671,17 @@ enum FeedbackStatus {
   NEW
   DONE
   REJECTED
+}
+
+/// Journal de la régénération des anciens impacts citoyens : un vote y entre une fois traité
+/// (texte réécrit ou refusé par un contrôle), pour que les passages suivants avancent.
+/// Créée par prisma/migrations/manual/add_impact_regeneration_log.sql, jamais par db:push.
+model ImpactRegenerationLog {
+  scrutinId String   @id
+  scrutin   Scrutin  @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
+  outcome   String
+  detail    String?  @db.Text
+  handledAt DateTime @default(now())
+
+  @@index([handledAt])
 }
