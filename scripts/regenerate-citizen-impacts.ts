@@ -168,31 +168,47 @@ async function apply(path: string): Promise<void> {
   const rejected = new Set((arg("reject") ?? "").split(",").filter(Boolean));
   const ledger = readLedger();
   let written = 0;
+  let alreadyApplied = 0;
   let changedSince = 0;
 
-  for (const r of file.rows) {
-    let outcome: string = r.outcome;
-    if (r.outcome === "generated" && r.text && !rejected.has(r.id)) {
-      // Only if the text is still the one the review was made against.
-      const res = await db.scrutin.updateMany({
-        where: { id: r.id, citizenImpact: r.previousText },
-        data: { citizenImpact: r.text, citizenImpactDate: new Date() },
-      });
-      if (res.count === 1) written++;
-      else {
-        changedSince++;
-        outcome = "changed_since_review";
+  try {
+    for (const r of file.rows) {
+      let outcome: string = r.outcome;
+      if (r.outcome === "generated" && r.text && !rejected.has(r.id)) {
+        const current = await db.scrutin.findUnique({
+          where: { id: r.id },
+          select: { citizenImpact: true },
+        });
+        if (current?.citizenImpact === r.text) {
+          // Replay of a run that stopped half way: this row is already written.
+          alreadyApplied++;
+        } else {
+          // Only if the text is still the one the review was made against.
+          const res = await db.scrutin.updateMany({
+            where: { id: r.id, citizenImpact: r.previousText },
+            data: { citizenImpact: r.text, citizenImpactDate: new Date() },
+          });
+          if (res.count === 1) written++;
+          else {
+            changedSince++;
+            outcome = "changed_since_review";
+          }
+        }
+      } else if (r.outcome === "generated") {
+        outcome = "rejected_by_reviewer";
       }
-    } else if (r.outcome === "generated") {
-      outcome = "rejected_by_reviewer";
+      if (outcome === "error" || outcome === "missing" || outcome === "changed_since_review") {
+        continue;
+      }
+      ledger.handled[r.id] = { outcome, at: new Date().toISOString() };
+      // Saved row by row: a failure later in the batch must not lose what is done.
+      writeLedger(ledger);
     }
-    if (outcome === "error" || outcome === "missing" || outcome === "changed_since_review")
-      continue;
-    ledger.handled[r.id] = { outcome, at: new Date().toISOString() };
+  } finally {
+    writeLedger(ledger);
   }
-  writeLedger(ledger);
   console.log(
-    `${written} impacts écrits, ${rejected.size} écartés par la revue, ${changedSince} modifiés depuis la revue (non écrits, à refaire).`
+    `${written} impacts écrits, ${alreadyApplied} déjà en place, ${rejected.size} écartés par la revue, ${changedSince} modifiés depuis la revue (non écrits, à refaire).`
   );
   console.log(`Ledger : ${Object.keys(ledger.handled).length} votes traités.`);
 }
