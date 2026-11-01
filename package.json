@@ -99,6 +99,7 @@
     "sync:debate-transcripts:refresh": "tsx -e \"import {syncDebateTranscripts} from './src/services/sync/debate-transcripts'; syncDebateTranscripts({refresh:true}).then(console.log)\"",
     "sync:group-stats": "tsx -e \"import {computeGroupStats} from './src/services/sync/compute-group-stats'; computeGroupStats().then(console.log)\"",
     "sync:scrutin-analysis": "tsx -e \"import {generateScrutinAnalysis} from './src/services/sync/scrutin-analysis'; generateScrutinAnalysis({limit:10}).then(console.log)\"",
+    "impacts:regenerate": "tsx scripts/regenerate-citizen-impacts.ts",
     "sync:citizen-impacts": "tsx -e \"import {generateScrutinCitizenImpacts} from './src/services/sync/generate-scrutin-citizen-impacts'; generateScrutinCitizenImpacts({limit:10}).then(console.log)\"",
     "sync:citizen-impacts:force": "tsx -e \"import {generateScrutinCitizenImpacts} from './src/services/sync/generate-scrutin-citizen-impacts'; generateScrutinCitizenImpacts({limit:10,force:true}).then(console.log)\"",
     "sync:dossier-summaries": "tsx -e \"import {generateDossierSummaries} from './src/services/sync/generate-dossier-summaries'; generateDossierSummaries({limit:20}).then(console.log)\"",
