@@ -9,6 +9,12 @@
  * renovation aid for households). The dossier's exposé des motifs does not fill
  * that gap either: it describes the whole bill, not this amendment.
  *
+ * The same holds for a vote on an article. Its title names the bill and the
+ * article number, not what the article does, and "(examen prioritaire)" is a
+ * procedure note, not the measure (the article 40 of the 2027 finance bill was
+ * described as "a measure to speed up the examination of the budget"). The text
+ * of the articles is not ingested, so an article vote is not described at all.
+ *
  * So an amendment vote is described only from amendment-level substance, or
  * not at all. Better an empty block than a confident wrong one. A vote on a
  * sous-amendement decides only its modification: the parent's text alone would
@@ -35,6 +41,15 @@ export function isAmendmentVote(scrutin: { type: ScrutinType | null; title: stri
   );
 }
 
+/**
+ * True when the vote targets one article of a bill. The type comes from
+ * `classifyScrutinTitle`, which tests amendments first: "l'amendement à l'article
+ * X" is never an article vote.
+ */
+export function isArticleVote(scrutin: { type: ScrutinType | null; title: string }): boolean {
+  return scrutin.type === "ARTICLE" && !isAmendmentVote(scrutin);
+}
+
 /** Substance read from the voted amendment itself, not from the whole bill. */
 export function isAmendmentLevelSubstance(depth: SubstanceDepth | null): boolean {
   return depth === "amendment" || depth === "subAmendment";
@@ -47,24 +62,31 @@ export function isSubAmendmentVote(title: string): boolean {
 
 /**
  * Whether an AI pipeline may describe the measure voted in this scrutin.
- * Non-amendment votes (whole text, article, motion) are not concerned.
+ * Whole-text and motion votes are not concerned. An article vote is refused: the
+ * text of the articles is not ingested, so nothing grounds a description.
  */
 export function canDescribeVotedMeasure(input: {
   type: ScrutinType | null;
   title: string;
   substanceDepth: SubstanceDepth | null;
 }): boolean {
+  if (isArticleVote(input)) return false;
   if (!isAmendmentVote(input)) return true;
   if (isSubAmendmentVote(input.title)) return input.substanceDepth === "subAmendment";
   return isAmendmentLevelSubstance(input.substanceDepth);
 }
 
 /**
- * Prisma fragment excluding AMENDEMENT votes that no amendment is linked to
- * yet. Applied in the generators' candidate query so these rows are not
- * selected, retried and billed every day while the linker has not resolved
- * them; they become candidates the run after their link is written.
+ * Prisma fragment excluding the votes no pipeline may describe: ARTICLE votes
+ * (no article text) and AMENDEMENT votes that no amendment is linked to yet.
+ * Applied in the generators' candidate query so these rows are not selected,
+ * retried and billed every day; an amendment vote becomes a candidate the run
+ * after its link is written.
  */
 export const AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE: Prisma.ScrutinWhereInput = {
-  OR: [{ type: null }, { type: { not: "AMENDEMENT" } }, { amendmentLinks: { some: {} } }],
+  OR: [
+    { type: null },
+    { type: { notIn: ["AMENDEMENT", "ARTICLE"] } },
+    { amendmentLinks: { some: {} } },
+  ],
 };

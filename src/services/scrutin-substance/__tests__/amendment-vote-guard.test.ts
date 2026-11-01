@@ -3,6 +3,8 @@ import {
   canDescribeVotedMeasure,
   isAmendmentLevelSubstance,
   isAmendmentVote,
+  isArticleVote,
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
 } from "@/services/scrutin-substance/amendment-vote-guard";
 
 // Scrutin VTANR5L17V9336: the title names amendment I-1358 (a digital-data tax)
@@ -106,5 +108,52 @@ describe("canDescribeVotedMeasure", () => {
         substanceDepth: null,
       })
     ).toBe(true);
+  });
+
+  it("does not gate a motion vote", () => {
+    expect(
+      canDescribeVotedMeasure({
+        type: "MOTION",
+        title: "la motion de rejet préalable, déposée par M. X, du projet de loi de finances",
+        substanceDepth: null,
+      })
+    ).toBe(true);
+  });
+});
+
+// Scrutin VTANR5L17V8892: "l'article 40 (examen prioritaire)" was described as "a measure to
+// speed up the examination of the budget, criticised for its lack of transparency". The title
+// names the article, not what it does, and "(examen prioritaire)" is a procedure note.
+const ARTICLE_40_TITLE =
+  "l'article 40 (examen prioritaire) du projet de loi de finances pour 2027 (première lecture).";
+
+describe("article votes", () => {
+  it("recognises an article vote by its type, never an amendment on an article", () => {
+    expect(isArticleVote({ type: "ARTICLE", title: ARTICLE_40_TITLE })).toBe(true);
+    expect(isArticleVote({ type: "AMENDEMENT", title: V9336_TITLE })).toBe(false);
+    expect(isArticleVote({ type: "FINAL", title: "l'ensemble du projet de loi" })).toBe(false);
+  });
+
+  it("refuses to describe an article vote, whatever the substance on hand", () => {
+    expect(
+      canDescribeVotedMeasure({ type: "ARTICLE", title: ARTICLE_40_TITLE, substanceDepth: null })
+    ).toBe(false);
+    expect(
+      canDescribeVotedMeasure({
+        type: "ARTICLE",
+        title: ARTICLE_40_TITLE,
+        substanceDepth: "exposeDesMotifs",
+      })
+    ).toBe(false);
+  });
+
+  it("keeps article votes out of the generators' candidates, with unlinked amendments", () => {
+    expect(AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE).toEqual({
+      OR: [
+        { type: null },
+        { type: { notIn: ["AMENDEMENT", "ARTICLE"] } },
+        { amendmentLinks: { some: {} } },
+      ],
+    });
   });
 });
