@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import type { ParsedTitle, LinkResolution, ResolvedLink, ParserWarning } from "./types";
-import { budgetPartNumbers } from "./parse-title";
+import { budgetPartNumbers, parseArticleTarget } from "./parse-title";
 
 const PARSER_FLOOR = 0.2;
 
@@ -111,6 +111,7 @@ export async function resolveLinks(
     ? await db.amendment.findMany({
         where: { dossierId: scrutin.dossierLegislatifId, number: { in: allNumbers } },
         select: {
+          article: true,
           id: true,
           number: true,
           identicalGroupKey: true,
@@ -135,6 +136,7 @@ export async function resolveLinks(
     const variants = await db.amendment.findMany({
       where: { dossierId: scrutin.dossierLegislatifId, number: { startsWith: `${n} (` } },
       select: {
+        article: true,
         id: true,
         number: true,
         identicalGroupKey: true,
@@ -153,6 +155,7 @@ export async function resolveLinks(
     const prefixed = await db.amendment.findMany({
       where: { dossierId: scrutin.dossierLegislatifId, ...budgetPartNumberFilter(n) },
       select: {
+        article: true,
         id: true,
         number: true,
         identicalGroupKey: true,
@@ -236,8 +239,24 @@ export async function resolveLinks(
       continue;
     }
     const partCandidates = budgetPartByNumber.get(number) ?? [];
-    if (partCandidates.length === 1) {
-      const picked = partCandidates[0]!;
+    // Both parts of a finance bill can carry the number: the article the title
+    // points at ("après l'article 15") then names the part, when exactly one
+    // candidate targets it.
+    const titleTarget = partCandidates.length > 1 ? parseArticleTarget(scrutin.title) : null;
+    const sameArticle = titleTarget
+      ? partCandidates.filter((c) => {
+          const t = parseArticleTarget(c.article);
+          return t?.position === titleTarget.position && t.article === titleTarget.article;
+        })
+      : [];
+    const partPick =
+      partCandidates.length === 1
+        ? { picked: partCandidates[0]!, code: "BUDGET_PART_PREFIX" }
+        : sameArticle.length === 1
+          ? { picked: sameArticle[0]!, code: "BUDGET_PART_ARTICLE" }
+          : null;
+    if (partPick) {
+      const { picked, code } = partPick;
       candidates.push(picked);
       links.push({
         scrutinId: scrutin.id,
@@ -246,8 +265,8 @@ export async function resolveLinks(
         parserConfidence: Math.max(PARSER_FLOOR, confidence - 0.1),
         parserWarnings: [
           {
-            code: "BUDGET_PART_PREFIX",
-            message: `matched title "${number}" to finance-bill candidate "${picked.number}"`,
+            code,
+            message: `matched title "${number}" to finance-bill candidate "${picked.number}"${code === "BUDGET_PART_ARTICLE" ? ` (article "${picked.article}")` : ""}`,
           },
         ],
       });

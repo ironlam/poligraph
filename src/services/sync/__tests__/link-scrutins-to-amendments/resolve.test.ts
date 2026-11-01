@@ -334,6 +334,93 @@ describeIfDb("resolveLinks", () => {
     expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
   });
 
+  describe("finance-bill parts told apart by the article the title cites", () => {
+    const seedParts = async (number: string, articleI: string, articleII: string) => {
+      const dossierId = (
+        await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+      ).id;
+      for (const [part, article] of [
+        ["I", articleI],
+        ["II", articleII],
+      ] as const) {
+        await db.amendment.create({
+          data: {
+            externalId: `${AMEND_PFX}plfart_${part}-${number}`,
+            number: `${part}-${number}`,
+            article,
+            texteRef: "TEST_PRJLANR_PLF",
+            dossierId,
+            status: "DEPOSE",
+            legislature: 17,
+            chamber: "AN",
+          },
+        });
+      }
+    };
+    const resolve = async (number: string, title: string) => {
+      const scrutin = await db.scrutin.findUniqueOrThrow({
+        where: { externalId: `${SCRUTIN_PFX}1` },
+      });
+      return resolveLinks(
+        { ...scrutin, title },
+        {
+          ...parsedPotier,
+          subAmendmentNumber: null,
+          parentAmendmentNumber: null,
+          principalNumbers: [number],
+          hasIdentique: false,
+        }
+      );
+    };
+
+    it("picks the part whose amendment targets the cited article (V9338 shape)", async () => {
+      await seedParts(
+        "7001",
+        "APRÈS L'ARTICLE 15, insérer l'article suivant:",
+        "APRÈS L'ARTICLE 77"
+      );
+      const res = await resolve("7001", "l'amendement n° 7001 de M. Pilato après l'article 15");
+      const a = await db.amendment.findUnique({
+        where: { externalId: `${AMEND_PFX}plfart_I-7001` },
+      });
+      const links = res.links.filter((l) => l.role === "PRINCIPAL");
+      expect(links.map((l) => l.amendmentId)).toEqual([a?.id]);
+      expect(links[0]?.parserWarnings.map((w) => w.code)).toEqual(["BUDGET_PART_ARTICLE"]);
+    });
+
+    it("picks the second part when the title cites its article", async () => {
+      await seedParts("7002", "ARTICLE 10", "AVANT L'ARTICLE 58");
+      const res = await resolve("7002", "l'amendement n° 7002 de Mme X avant l'article 58");
+      const a = await db.amendment.findUnique({
+        where: { externalId: `${AMEND_PFX}plfart_II-7002` },
+      });
+      expect(res.links.filter((l) => l.role === "PRINCIPAL").map((l) => l.amendmentId)).toEqual([
+        a?.id,
+      ]);
+    });
+
+    it("refuses when the position differs (à l'article 15 vs après l'article 15)", async () => {
+      await seedParts("7003", "APRÈS L'ARTICLE 15", "AVANT L'ARTICLE 15");
+      const res = await resolve("7003", "l'amendement n° 7003 de M. X à l'article 15");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+
+    it("refuses when both parts target the same article", async () => {
+      await seedParts("7004", "ARTICLE 34", "ARTICLE 34");
+      const res = await resolve("7004", "l'amendement n° 7004 de M. X à l'article 34");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+
+    it("refuses when the title cites no article", async () => {
+      await seedParts("7005", "ARTICLE 10", "ARTICLE 58");
+      const res = await resolve("7005", "l'amendement n° 7005 de M. X");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+  });
+
   it("prefers the bare number over a finance-bill part candidate", async () => {
     const dossierId = (
       await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
