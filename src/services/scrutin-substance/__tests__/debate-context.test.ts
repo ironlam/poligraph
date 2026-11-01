@@ -235,4 +235,20 @@ describe("findAmendmentMention — finance-bill parts (séance text drops the I-
     expect(medium.confidence).toBe("MEDIUM");
     expect(medium.context).toBeNull();
   });
+
+  it("does not take the article number for the amendment number", () => {
+    const r = findAmendmentMention("L'amendement no 42 à l'article 15 est rejeté.", [
+      { number: "I-15", article: "ARTICLE 15" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("finds the bare number anywhere in a list of amendment numbers", () => {
+    const r = findAmendmentMention(
+      "Sur les amendements nos 2080, 1358 et 2090, avis défavorable, après l'article 15.",
+      [{ number: "I-1358", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).toBe("HIGH");
+  });
 });
