@@ -332,4 +332,30 @@ describe("applyAmbiguity", () => {
   it("keeps a match cited in a single séance", () => {
     expect(applyAmbiguity(high, 1)).toEqual(high);
   });
+
+  it("does not take an article number for a plain amendment number", () => {
+    const r = findAmendmentMention(
+      "Mme la présidente : sur l'amendement no 42 à l'article 15, M. Durand défend un autre sujet.",
+      [{ number: "15", article: "ARTICLE 15" }]
+    );
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("still finds a plain number, a prefixed one and a rectified one in a list", () => {
+    expect(
+      findAmendmentMention("Sur les amendements nos 12, 2084 et 2090.", [{ number: "2084" }])
+        .confidence
+    ).toBe("HIGH");
+    expect(
+      findAmendmentMention("Sur l'amendement no II-CF711, avis favorable.", [
+        { number: "II-CF711" },
+      ]).confidence
+    ).toBe("HIGH");
+    expect(
+      findAmendmentMention("Sur l'amendement no 600 (rect.), avis favorable.", [
+        { number: "600 (Rect)" },
+      ]).confidence
+    ).toBe("HIGH");
+  });
 });

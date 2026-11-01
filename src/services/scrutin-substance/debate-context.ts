@@ -92,17 +92,25 @@ function windowAround(text: string, idx: number, before = 120, after = 220): str
  * "numéro 2084", "nos 27, 16 et 2084").
  */
 /**
- * Index of `bare` inside the amendment-number list that opens `win` ("o 1358",
- * "os 2080 et 2084", "° 3915"), or -1. Only a number syntactically part of that list
- * counts: "no 42 à l'article 15" does not cite amendment 15.
+ * One amendment number as the séance spells it: "1358", "I-1358", "CL8", "II-CF711".
+ * Matched on accent-folded, lowercased text.
  */
-const NUMBER_LIST_RE = /^\s*(?:os?|°|umeros?)?\s*((?:\d+(?:\s*\([^)]*\))?(?:\s*(?:,|et)\s*)?)+)/;
-function bareNumberIndexInList(win: string, bare: string): number {
+const NUM = String.raw`(?:[a-z]{1,2}-)?[a-z]{0,3}\d+`;
+const NUMBER_LIST_RE = new RegExp(
+  String.raw`^\s*(?:os?|°|umeros?)?\s*(${NUM}(?:\s*\([^)]*\))?(?:\s*(?:,|et)\s*${NUM}(?:\s*\([^)]*\))?)*)`
+);
+
+/**
+ * Index of `token` inside the amendment-number list that opens `win` ("o 1358",
+ * "os 2080 et 2084", "° 3915", "o I-390"), or -1. Only a number that is part of
+ * that list counts: "no 42 à l'article 15" does not cite amendment 15.
+ */
+function numberIndexInList(win: string, token: string): number {
   const m = NUMBER_LIST_RE.exec(win);
   if (!m?.[1]) return -1;
   const listStart = m[0].length - m[1].length;
-  for (const n of m[1].matchAll(/\d+/g)) {
-    if (n[0] === bare) return listStart + n.index;
+  for (const n of m[1].matchAll(new RegExp(NUM, "g"))) {
+    if (n[0] === token) return listStart + n.index;
   }
   return -1;
 }
@@ -114,7 +122,6 @@ function highMatchIndex(
   corroborate?: (idx: number) => boolean
 ): number {
   const token = foldLower(core);
-  const numRe = new RegExp(`(?<![\\w-])${escapeRegExp(token)}(?![\\w-])`);
   // Finance-bill amendments are numbered per part ("I-1358") but the séance text
   // says "l'amendement no 1358". The bare number also names the other part, so it
   // only counts when the caller can corroborate it.
@@ -126,10 +133,10 @@ function highMatchIndex(
   while ((m = anchorRe.exec(folded)) !== null) {
     const winStart = m.index + m[0].length;
     const win = folded.slice(winStart, winStart + 45);
-    const nm = numRe.exec(win);
-    if (nm) return winStart + nm.index;
+    const exact = numberIndexInList(win, token);
+    if (exact >= 0) return winStart + exact;
     if (bare && corroborate) {
-      const at = bareNumberIndexInList(win, bare);
+      const at = numberIndexInList(win, bare);
       if (at >= 0 && corroborate(winStart + at)) return winStart + at;
     }
   }
@@ -147,7 +154,6 @@ const CLOSING_RE = /\(l.amendement[^)]{0,100}?(?:adopte|rejete|repousse|retire|t
  */
 function discussionEnd(folded: string, idx: number, core: string): number {
   const token = foldLower(core);
-  const numRe = new RegExp(`(?<![\\w-])${escapeRegExp(token)}(?![\\w-])`);
   const bare = /^ii?-(\d+)$/.exec(token)?.[1];
   const limit = Math.min(folded.length, idx + DISCUSSION_SEARCH_CHARS);
   const zone = folded.slice(idx, limit);
@@ -161,7 +167,9 @@ function discussionEnd(folded: string, idx: number, core: string): number {
   while ((m = anchorRe.exec(zone)) !== null) {
     const winStart = m.index + m[0].length;
     const win = zone.slice(winStart, winStart + 45);
-    const ours = numRe.test(win) || (bare !== undefined && bareNumberIndexInList(win, bare) >= 0);
+    const ours =
+      numberIndexInList(win, token) >= 0 ||
+      (bare !== undefined && numberIndexInList(win, bare) >= 0);
     if (!ours) {
       const at = idx + m.index;
       if (at > idx && (end < 0 || at < end)) end = at;
