@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { escapeXmlText } from "@/lib/text/escape-xml";
 import { isGroupAttributionReliable } from "@/lib/votes/group-attribution";
+import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import {
@@ -233,7 +234,20 @@ export async function generateScrutinAnalysis(
     try {
       // Guard 1: arguments need a real debate. No usable transcript → never
       // invent (no resolver, no model call, no write). See scrutin 2084.
-      const debateExcerpt = s.debateTranscripts[0]?.content?.trim();
+      //
+      // An amendment vote takes the passage on THAT amendment, never the start of a
+      // whole séance: only an explicit, corroborated, unambiguous match qualifies.
+      // Other votes keep the transcript linked to the scrutin.
+      let debateExcerpt: string | undefined;
+      if (s.amendmentLinks.length > 0 || isAmendmentVote(s)) {
+        const debate = await resolveDebateContextForScrutin(s.id);
+        debateExcerpt =
+          debate.usableForGeneration && debate.reinforced
+            ? (debate.context?.trim() ?? undefined)
+            : undefined;
+      } else {
+        debateExcerpt = s.debateTranscripts[0]?.content?.trim();
+      }
       if (!debateExcerpt) {
         skipped++;
         continue;

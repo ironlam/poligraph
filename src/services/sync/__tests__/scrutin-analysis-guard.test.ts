@@ -29,6 +29,11 @@ vi.mock("@/services/scrutin-policy-title/substance-resolver", () => ({
   resolveSubstanceSources: (...a: unknown[]) => resolveSubstanceSources(...a),
 }));
 
+const resolveDebate = vi.fn();
+vi.mock("@/services/scrutin-substance/debate-context-resolver", () => ({
+  resolveDebateContextForScrutin: (...a: unknown[]) => resolveDebate(...a),
+}));
+
 import { generateScrutinAnalysis, auditScrutinAnalysisCoherence } from "../scrutin-analysis";
 
 const COOP_BLOCKS: SubstanceTextBlock[] = [
@@ -109,6 +114,13 @@ beforeEach(() => {
   extractMistralText.mockReset();
   parseMistralJSON.mockReset();
   resolveSubstanceSources.mockReset();
+  resolveDebate.mockReset();
+  // Default: the resolver finds an explicit, corroborated passage on the amendment.
+  resolveDebate.mockResolvedValue({
+    usableForGeneration: true,
+    reinforced: true,
+    context: "Passage de débat sur l'amendement : M. X défend, Mme Y s'oppose.",
+  });
   resolveSubstanceSources.mockResolvedValue({
     blocks: COOP_BLOCKS,
     substanceDepth: "amendment",
@@ -117,8 +129,48 @@ beforeEach(() => {
 });
 
 describe("generateScrutinAnalysis — no-debate guard", () => {
+  it("skips an amendment vote the resolver cannot tie to a debate: no model, no write", async () => {
+    resolveDebate.mockResolvedValue({
+      usableForGeneration: false,
+      reinforced: false,
+      context: null,
+    });
+    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+
+    const res = await generateScrutinAnalysis({ limit: 10 });
+
+    expect(callMistral).not.toHaveBeenCalled();
+    expect(analysisUpsert).not.toHaveBeenCalled();
+    expect(res.skipped).toBeGreaterThanOrEqual(1);
+  });
+
+  it("skips an uncorroborated match even when the resolver calls it usable", async () => {
+    resolveDebate.mockResolvedValue({ usableForGeneration: true, reinforced: false, context: "x" });
+    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+
+    await generateScrutinAnalysis({ limit: 10 });
+
+    expect(callMistral).not.toHaveBeenCalled();
+  });
+
+  it("feeds an amendment vote the passage on that amendment, not the start of the séance", async () => {
+    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+    setMistral(COHERENT_ARGS);
+
+    await generateScrutinAnalysis({ limit: 10 });
+
+    const prompt = (callMistral.mock.calls[0]![0] as { content: string }[])[0]!.content;
+    expect(prompt).toContain("M. X défend");
+    expect(prompt).not.toContain("DEBUT_DE_SEANCE");
+  });
+
   it("skips a scrutin with no usable debate transcript: no resolver, no model, no write", async () => {
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin(null)]);
+    scrutinFindMany.mockResolvedValue([
+      keyVoteScrutin(null, {
+        amendmentLinked: false,
+        title: "l'ensemble du projet de loi (première lecture).",
+      }),
+    ]);
 
     const res = await generateScrutinAnalysis({ limit: 10 });
 
