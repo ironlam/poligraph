@@ -5,6 +5,7 @@ import { ArrowRight, ExternalLink, PlayCircle, Quote } from "lucide-react";
 import { ParliamentThemeBridgeLoader } from "@/components/elections/ParliamentThemeBridgeLoader";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MarkdownText } from "@/components/ui/markdown";
+import { MeasureParliamentLinks } from "@/components/measures/MeasureParliamentLinks";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import {
@@ -493,6 +494,11 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             </ul>
           </section>
         )}
+
+        <MeasureParliamentLinks
+          links={measure.parliamentLinks}
+          candidateName={measure.candidate.name}
+        />
 
         <div className="border-t border-border py-8 empty:hidden">
           <ParliamentThemeBridgeLoader theme={measure.theme} source="mesure" />

@@ -15,6 +15,10 @@ import {
   PUBLIC_PRESIDENTIAL_MEASURE_WHERE,
 } from "@/lib/presidentielle/publication";
 import { deriveVoteRelation, type VoteRelation } from "@/lib/measures/vote-relation";
+import {
+  getMeasureParliamentLinks,
+  type MeasureParliamentLink,
+} from "@/lib/data/measure-parliament-links";
 import { readEvidenceSnapshot } from "@/lib/measures/evidence-snapshot";
 import {
   GENERATED_CONTEXT_DRAFT_ACTION,
@@ -87,6 +91,7 @@ export type PublicPresidentialMeasureDetail = {
       sourceUrl: string | null;
     } | null;
   }>;
+  parliamentLinks: MeasureParliamentLink[];
   relatedMeasures: Array<{
     slug: string;
     text: string;
@@ -182,6 +187,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
           party: { select: { name: true, shortName: true } },
           politician: {
             select: {
+              id: true,
               slug: true,
               photoUrl: true,
               blobPhotoUrl: true,
@@ -228,7 +234,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
   const currentSubtopics = revision.subtopics.map(({ subtopic }) => subtopic);
   const currentSubtopicSlugs = new Set(currentSubtopics.map((subtopic) => subtopic.slug));
 
-  const [contextAudit, relatedRows] = await Promise.all([
+  const [contextAudit, relatedRows, parliamentLinks] = await Promise.all([
     revision.details === null
       ? Promise.resolve(null)
       : db.auditLog.findFirst({
@@ -287,6 +293,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: 100,
     }),
+    getMeasureParliamentLinks(row.id, publishedRevisionId, candidate.politician.id),
   ]);
 
   const evidence = readEvidenceSnapshot(revision.evidenceSnapshot);
@@ -370,6 +377,7 @@ async function loadPublicPresidentialMeasureDetail(electionSlug: string, measure
       guide?.reviewedAt ? [{ ...guide, reviewedAt: guide.reviewedAt }] : []
     ),
     sources: revision.sources,
+    parliamentLinks,
     votes: row.voteLinks.map((link) => ({
       id: link.id,
       relation: deriveVoteRelation(
