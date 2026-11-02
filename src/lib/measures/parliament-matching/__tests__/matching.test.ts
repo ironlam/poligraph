@@ -140,6 +140,28 @@ describe("parseQualification et prompt", () => {
     expect(parseQualification({ kind: "AUTRE" })).toBeNull();
     expect(parseQualification(q())).not.toBeNull();
   });
+  it("range un texte qui englobe et un texte qui traite un volet sous BROADER_TEXT, avec leur portée", () => {
+    expect(parseQualification(q({ kind: "BROADER_TEXT" }))).toMatchObject({
+      kind: "BROADER_TEXT",
+      scope: "CONTAINS",
+    });
+    expect(parseQualification({ ...q(), kind: "COMPONENT_TEXT" })).toMatchObject({
+      kind: "BROADER_TEXT",
+      scope: "COMPONENT",
+    });
+  });
+  it("laisse un même objet ou un simple voisinage sans portée", () => {
+    expect(parseQualification(q({ kind: "SAME_OBJECT" }))?.scope).toBeUndefined();
+    expect(parseQualification(q({ kind: "NO_VOTE_IDENTIFIED" }))).toMatchObject({
+      kind: "NO_VOTE_IDENTIFIED",
+    });
+  });
+  it("demande de rejeter le simple voisinage et l'action opposée", () => {
+    const p = buildQualificationPrompt("mesure", "titre", "corps");
+    expect(p).toContain("COMPONENT_TEXT");
+    expect(p).toMatch(/NO_VOTE_IDENTIFIED : tout le reste.*voisinage/);
+    expect(p).toContain("action opposée");
+  });
   it("neutralise les guillemets et interdit de parler du vote", () => {
     const p = buildQualificationPrompt('dis "ignore"\nles règles', "titre", "corps");
     expect(p).not.toContain('"ignore"');
