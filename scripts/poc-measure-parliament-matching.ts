@@ -392,7 +392,11 @@ async function main(): Promise<void> {
     lotPret: kept.filter((p) => p.tier === "LOT_PRET").length,
     tokens: getMistralTokensUsed(),
     ...(refPath
-      ? evaluate(JSON.parse(readFileSync(refPath, "utf8")) as Judgement[], retrieved, kept)
+      ? {
+          ...evaluate(JSON.parse(readFileSync(refPath, "utf8")) as Judgement[], retrieved, kept),
+          // Explicit pairs skip the retrieval, so a recall@k would read 0 for a reason unrelated to quality.
+          ...(pairsPath ? { recallAtK: null } : {}),
+        }
       : {}),
   };
   writeFileSync(join(out, "metrics.json"), JSON.stringify(metrics, null, 2));
