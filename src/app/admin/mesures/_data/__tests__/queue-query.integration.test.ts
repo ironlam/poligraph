@@ -176,4 +176,114 @@ describeIfDisposableDb("queryMeasureQueue", () => {
     // toBeNull() and not toBeUndefined(): the row is there, its reference text is not.
     expect(result.rows[0]?.referenceText).toBeNull();
   });
+
+  it("signale un plafond de balayage atteint au lieu de présenter des compteurs partiels", async () => {
+    const result = await queryMeasureQueue({ electionId: corpus.electionId }, { scanCap: 4 });
+
+    expect(result.scanCapped).toBe(true);
+    const counted = Object.values(result.counts).reduce((sum, n) => sum + n, 0);
+    expect(counted).toBe(4);
+
+    // Exactly as many measures as the cap is NOT a truncation: the limit case must not cry wolf.
+    const exact = await queryMeasureQueue({ electionId: corpus.electionId }, { scanCap: 10 });
+    expect(exact.scanCapped).toBe(false);
+    expect(Object.values(exact.counts).reduce((sum, n) => sum + n, 0)).toBe(10);
+  });
+
+  it(
+    "retrouve un brouillon récent noyé sous plus de 500 mesures plus anciennes",
+    async () => {
+      // The regression: the queue used to read the 500 OLDEST measures and only then apply the
+      // state filter, so a recent draft was invisible to `publication: ["DRAFT"]` and to every
+      // stage counter. Its own election keeps the counters of the other tests exact.
+      const unique = `${process.pid}-${Date.now().toString(36)}`;
+      const election = await db.election.create({
+        data: {
+          slug: `demo-file-attente-${unique}`,
+          type: "PRESIDENTIELLE",
+          scope: "NATIONAL",
+          title: "Élection de démonstration : file d'attente",
+          round1Date: new Date("2032-04-11T00:00:00Z"),
+        },
+      });
+      const politician = await db.politician.create({
+        data: {
+          slug: `demo-file-attente-${unique}`,
+          firstName: "Dominique",
+          lastName: "Fictif",
+          fullName: "Dominique Fictif",
+        },
+      });
+      const longAgo = new Date("2020-01-01T00:00:00Z");
+      await db.measure.createMany({
+        data: Array.from({ length: 520 }, (_, index) => ({
+          slug: `demo-file-attente-${unique}-${index}`,
+          politicianId: politician.id,
+          electionId: election.id,
+          attribution: "PERSONAL" as const,
+          theme: "TRANSPORTS" as const,
+          // One shared timestamp, like a bulk import: the order must not depend on it.
+          createdAt: longAgo,
+        })),
+      });
+      const { createMeasure } = await import("@/lib/measures/transitions");
+      const { measureId } = await createMeasure({
+        politicianId: politician.id,
+        electionId: election.id,
+        candidacyId: null,
+        programEditionId: null,
+        attribution: "PERSONAL",
+        theme: "TRANSPORTS",
+        precedingMeasureId: null,
+        revision: {
+          text: "Mesure fictive récente, la plus jeune de la file.",
+          precision: null,
+          validFrom: new Date("2027-01-15T00:00:00Z"),
+          extractionMethod: "MANUAL",
+          extractionConfidence: null,
+          extractorVersion: null,
+        },
+        sources: [
+          {
+            sourceKind: "PROGRAMME_CANDIDAT",
+            tier: "PRIMARY",
+            url: "https://example.org/programme-demonstration",
+            page: null,
+            publishedAt: new Date("2027-01-10T00:00:00Z"),
+          },
+        ],
+      });
+
+      const result = await queryMeasureQueue({
+        electionId: election.id,
+        publication: ["DRAFT"],
+      });
+
+      expect(result.rows.map((row) => row.id)).toEqual([measureId]);
+      expect(result.total).toBe(1);
+      expect(result.counts.DRAFT).toBe(1);
+      expect(result.counts.EMPTY).toBe(520);
+      expect(result.scanCapped).toBe(false);
+
+      // Equal createdAt on every empty measure: two pages must still partition them.
+      const first = await queryMeasureQueue({
+        electionId: election.id,
+        publication: ["EMPTY"],
+        take: 100,
+        skip: 0,
+      });
+      const second = await queryMeasureQueue({
+        electionId: election.id,
+        publication: ["EMPTY"],
+        take: 100,
+        skip: 100,
+      });
+      expect(first.total).toBe(520);
+      expect(first.rows).toHaveLength(100);
+      expect(second.rows).toHaveLength(100);
+      const firstIds = new Set(first.rows.map((row) => row.id));
+      expect(second.rows.filter((row) => firstIds.has(row.id))).toEqual([]);
+    },
+    SEED_TIMEOUT_MS
+  );
 });

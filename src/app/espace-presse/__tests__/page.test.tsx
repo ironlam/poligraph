@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
 vi.mock("next/server", () => ({ connection: vi.fn(async () => {}) }));
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: h.db }));
+vi.mock("@/lib/data/changelog", () => ({ getPublishedChangelog: async () => [] }));
 vi.mock("@/lib/feature-flags", () => ({ isFeatureEnabled: async () => false }));
 
 import EspacePressePage, { metadata } from "@/app/espace-presse/page";

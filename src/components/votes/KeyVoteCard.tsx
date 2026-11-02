@@ -55,6 +55,10 @@ export function KeyVoteCard({
   });
   const heading = displayTitleOf(view);
   const isPolicy = view.mode === "policy";
+  // Aperçu en texte brut : sans l'intitulé « De quoi s'agit-il ? » ni les marqueurs markdown.
+  const teaser = (citizenImpact || summary)
+    ?.replace(/^\s*\*\*De quoi s['’]agit-il ?\?\*\*\s*/i, "")
+    .replace(/\*\*/g, "");
   const total = votesFor + votesAgainst + votesAbstain;
   const forPct = total > 0 ? (votesFor / total) * 100 : 0;
   const againstPct = total > 0 ? (votesAgainst / total) * 100 : 0;
@@ -82,11 +86,7 @@ export function KeyVoteCard({
           </p>
         </Link>
 
-        {(citizenImpact || summary) && (
-          <p className="text-xs text-muted-foreground line-clamp-3 mb-3">
-            {citizenImpact || summary}
-          </p>
-        )}
+        {teaser && <p className="text-xs text-muted-foreground line-clamp-3 mb-3">{teaser}</p>}
 
         <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
           <VotingResultBadge result={result} />

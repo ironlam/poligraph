@@ -57,6 +57,12 @@ const voteLinksMock = {
 };
 vi.mock("@/lib/measures/vote-links", () => voteLinksMock);
 
+// The measure-dossier link remover. Mocked so importing actions does not pull the real @/lib/db.
+const dossierLinksMock = {
+  deleteMeasureDossierLink: vi.fn(async () => undefined),
+};
+vi.mock("@/lib/measures/dossier-links", () => dossierLinksMock);
+
 const subtopicsMock = {
   proposeMeasureRevisionSubtopics: vi.fn(async () => ({
     revisionId: "rev-1",
@@ -64,6 +70,7 @@ const subtopicsMock = {
     skipped: false,
   })),
   reviewMeasureRevisionSubtopic: vi.fn(async () => undefined),
+  addMeasureRevisionSubtopic: vi.fn(async () => undefined),
 };
 vi.mock("@/lib/measures/subtopics", () => subtopicsMock);
 
@@ -152,6 +159,11 @@ async function everyAction(): Promise<{ name: string; call: () => Promise<unknow
           subtopicId: "subtopic-1",
           status: "APPROVED",
         }),
+    },
+    {
+      name: "addSubtopicAction",
+      call: () =>
+        a.addSubtopicAction({ measureId: "m-1", revisionId: "rev-1", subtopicId: "subtopic-1" }),
     },
     {
       name: "proposeReaderGuidesAction",
@@ -261,6 +273,7 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).not.toHaveBeenCalled();
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).not.toHaveBeenCalled();
+    expect(subtopicsMock.addMeasureRevisionSubtopic).not.toHaveBeenCalled();
     expect(readerGuidesMock.proposeReaderGuidesForRevision).not.toHaveBeenCalled();
     expect(readerGuidesMock.reviewReaderGuideMention).not.toHaveBeenCalled();
     expect(readerGuidesMock.saveReaderGuideDraft).not.toHaveBeenCalled();
@@ -284,6 +297,7 @@ describe("actions éditoriales : la session", () => {
     }
     expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledTimes(1);
     expect(subtopicsMock.reviewMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
+    expect(subtopicsMock.addMeasureRevisionSubtopic).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.proposeReaderGuidesForRevision).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.reviewReaderGuideMention).toHaveBeenCalledTimes(1);
     expect(readerGuidesMock.saveReaderGuideDraft).toHaveBeenCalledTimes(1);
@@ -634,6 +648,131 @@ describe("relecture par lot", () => {
   });
 });
 
+describe("sources vidéo : le début du passage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+    eligibilityMock.assertHubMeasureCandidacy.mockResolvedValue({
+      electionId: "e-1",
+      politicianId: "p-1",
+    });
+  });
+
+  const create = async (startAt: string | null | undefined) => {
+    const { createMeasureAction } = await actions();
+    return createMeasureAction({
+      candidacyId: "c-1",
+      politicianId: "p-1",
+      electionId: "e-1",
+      theme: "LOGEMENT_URBANISME",
+      attribution: "PERSONAL",
+      revision: REVISION,
+      sources: [{ ...SOURCES[0]!, page: null, startAt }],
+    });
+  };
+
+  it("convertit 22:41 en secondes avant l'écriture", async () => {
+    const result = await create("22:41");
+
+    expect(result.ok).toBe(true);
+    expect(transitionsMock.createMeasure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: [expect.objectContaining({ startAtSeconds: 1361 })],
+      })
+    );
+  });
+
+  it("enregistre null quand le champ est vide ou absent", async () => {
+    await create("  ");
+    await create(undefined);
+
+    expect(transitionsMock.createMeasure).toHaveBeenCalledTimes(2);
+    expect(transitionsMock.createMeasure).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sources: [expect.objectContaining({ startAtSeconds: null })] })
+    );
+    expect(transitionsMock.createMeasure).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sources: [expect.objectContaining({ startAtSeconds: null })] })
+    );
+  });
+
+  it("refuse un horodatage invalide sans rien écrire", async () => {
+    const result = await create("22h41");
+
+    expect(result.ok).toBe(false);
+    expect(transitionsMock.createMeasure).not.toHaveBeenCalled();
+  });
+});
+
+describe("sous-thèmes : proposition continue et ajout manuel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isAuthenticatedMock.mockResolvedValue(true);
+  });
+
+  it("laisse l'admin relancer la proposition après une validation", async () => {
+    const { proposeSubtopicsAction } = await actions();
+
+    await proposeSubtopicsAction({ measureId: "m-1", revisionId: "rev-1" });
+
+    expect(subtopicsMock.proposeMeasureRevisionSubtopics).toHaveBeenCalledWith("rev-1", {
+      proposedBy: "admin",
+      allowWhenApproved: true,
+    });
+  });
+
+  it("transmet l'ajout manuel à l'acteur admin, jamais à un nom saisi", async () => {
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(subtopicsMock.addMeasureRevisionSubtopic).toHaveBeenCalledWith({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+      addedBy: "admin",
+    });
+    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/mesures/m-1");
+  });
+
+  it("refuse une entrée incomplète sans écrire", async () => {
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(subtopicsMock.addMeasureRevisionSubtopic).not.toHaveBeenCalled();
+  });
+
+  it("remonte le refus de la règle des trois sous-thèmes comme un message", async () => {
+    subtopicsMock.addMeasureRevisionSubtopic.mockRejectedValueOnce(
+      new MeasureValidationError("Cette révision possède déjà trois sous-thèmes approuvés")
+    );
+    const { addSubtopicAction } = await actions();
+
+    const result = await addSubtopicAction({
+      measureId: "m-1",
+      revisionId: "rev-1",
+      subtopicId: "subtopic-1",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Cette révision possède déjà trois sous-thèmes approuvés",
+    });
+  });
+});
+
 describe("actions éditoriales : ce qu'elles transmettent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -915,5 +1054,37 @@ describe("attachVoteLinkAction : rattachement manuel à un scrutin (#662)", () =
       message: "La date de vérification n'est pas une date valide",
     });
     expect(voteLinksMock.createMeasureVoteLink).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteDossierLinkAction : retrait d'un rapprochement avec un dossier", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("refuse sans session et ne retire rien", async () => {
+    isAuthenticatedMock.mockResolvedValue(false);
+    const { deleteDossierLinkAction } = await actions();
+
+    await expect(deleteDossierLinkAction({ linkId: "l-1" })).rejects.toThrow("Non autorisé");
+    expect(dossierLinksMock.deleteMeasureDossierLink).not.toHaveBeenCalled();
+  });
+
+  it("retire le lien avec une session valide", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { deleteDossierLinkAction } = await actions();
+
+    await expect(deleteDossierLinkAction({ linkId: "l-1" })).resolves.toEqual({ ok: true });
+    expect(dossierLinksMock.deleteMeasureDossierLink).toHaveBeenCalledWith("l-1");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/admin/mesures/rapprochements");
+  });
+
+  it("refuse une entrée invalide sans rien retirer", async () => {
+    isAuthenticatedMock.mockResolvedValue(true);
+    const { deleteDossierLinkAction } = await actions();
+
+    const result = await deleteDossierLinkAction({ linkId: "" });
+    expect(result).toMatchObject({ ok: false });
+    expect(dossierLinksMock.deleteMeasureDossierLink).not.toHaveBeenCalled();
   });
 });

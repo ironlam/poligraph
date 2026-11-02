@@ -4,12 +4,13 @@ import { VOTING_RESULT_LABELS, CHAMBER_LABELS } from "@/config/labels";
 import type { VotingResult, Chamber } from "@/types";
 import { SITE_URL } from "@/config/site";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 export const revalidate = 300;
 
 export const GET = withPublicRoute(async () => {
   const scrutins = await db.scrutin.findMany({
-    orderBy: { votingDate: "desc" },
+    orderBy: SCRUTIN_RECENT_FIRST,
     take: 50,
     select: {
       slug: true,

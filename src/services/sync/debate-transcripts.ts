@@ -14,6 +14,8 @@ const SYSERON_ZIP_URL = `https://data.assemblee-nationale.fr/static/openData/rep
 
 interface SyncResult {
   downloaded: number;
+  /** Existing séances whose text was rewritten (refresh mode). */
+  refreshed: number;
   errors: string[];
 }
 
@@ -39,29 +41,33 @@ function downloadFile(url: string, dest: string): Promise<void> {
   });
 }
 
-export async function syncDebateTranscripts(): Promise<SyncResult> {
+/**
+ * `refresh` rewrites the text of séances already stored. The import skips them
+ * otherwise, so a séance parsed with an older, lossier parser keeps its truncated text.
+ */
+export async function syncDebateTranscripts(opts?: { refresh?: boolean }): Promise<SyncResult> {
   const tempDir = mkdtempSync(join(tmpdir(), TEMP_DIR_PREFIX));
   try {
-    return await syncFromArchive(tempDir);
+    return await syncFromArchive(tempDir, opts?.refresh ?? false);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
-async function syncFromArchive(tempDir: string): Promise<SyncResult> {
+async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncResult> {
   const errors: string[] = [];
   const zipPath = `${tempDir}/cr.zip`;
 
   try {
     await downloadFile(SYSERON_ZIP_URL, zipPath);
   } catch (e) {
-    return { downloaded: 0, errors: [`Download failed: ${e}`] };
+    return { downloaded: 0, refreshed: 0, errors: [`Download failed: ${e}`] };
   }
 
   try {
     extractZip(zipPath, `${tempDir}/extracted`);
   } catch (e) {
-    return { downloaded: 0, errors: [`Unzip failed: ${e}`] };
+    return { downloaded: 0, refreshed: 0, errors: [`Unzip failed: ${e}`] };
   }
 
   const extractDir = `${tempDir}/extracted`;
@@ -83,6 +89,7 @@ async function syncFromArchive(tempDir: string): Promise<SyncResult> {
   }
 
   let downloaded = 0;
+  let refreshed = 0;
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 90);
@@ -102,8 +109,22 @@ async function syncFromArchive(tempDir: string): Promise<SyncResult> {
       const extracted = extractSeanceFromXml(raw);
       if (!extracted) continue;
 
+      const exists = existingRefs.has(extracted.seanceRef);
+      if (exists) {
+        if (!refresh) continue;
+        const r = await db.debateTranscript.updateMany({
+          where: { seanceRef: extracted.seanceRef },
+          data: {
+            content: extracted.content,
+            startTime: extracted.startTime,
+            seanceOrder: extracted.seanceOrder,
+            sourceUrl: extracted.sourceUrl,
+          },
+        });
+        refreshed += r.count;
+        continue;
+      }
       if (extracted.date < cutoff) continue;
-      if (existingRefs.has(extracted.seanceRef)) continue;
 
       // Store the FULL séance text (no truncation) plus the metadata needed for
       // séance-scoped matching: start time and sitting order in the day.
@@ -130,5 +151,5 @@ async function syncFromArchive(tempDir: string): Promise<SyncResult> {
     }
   }
 
-  return { downloaded, errors: errors.slice(0, 10) };
+  return { downloaded, refreshed, errors: errors.slice(0, 10) };
 }

@@ -651,7 +651,7 @@ jobs:
 
   header-responsive:
     name: Header responsive
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     # The header is global, and #688 showed a 100px overflow at exactly 1024px surviving a

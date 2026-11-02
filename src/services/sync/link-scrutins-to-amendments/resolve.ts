@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { ParsedTitle, LinkResolution, ResolvedLink, ParserWarning } from "./types";
+import { budgetPartNumbers, parseArticleTarget } from "./parse-title";
 
 const PARSER_FLOOR = 0.2;
 
@@ -61,6 +62,17 @@ function disambiguateByDeliberation<
   return kept.length === 1 ? kept[0]! : null;
 }
 
+/** Prisma filter for the part-prefixed numbers of `number`, rectified variants included. */
+function budgetPartNumberFilter(number: string) {
+  const prefixed = budgetPartNumbers(number);
+  return {
+    OR: [
+      { number: { in: prefixed } },
+      ...prefixed.map((p) => ({ number: { startsWith: `${p} (` } })),
+    ],
+  };
+}
+
 export async function resolveLinks(
   scrutin: ScrutinForLink,
   parsed: ParsedTitle
@@ -99,6 +111,7 @@ export async function resolveLinks(
     ? await db.amendment.findMany({
         where: { dossierId: scrutin.dossierLegislatifId, number: { in: allNumbers } },
         select: {
+          article: true,
           id: true,
           number: true,
           identicalGroupKey: true,
@@ -123,6 +136,7 @@ export async function resolveLinks(
     const variants = await db.amendment.findMany({
       where: { dossierId: scrutin.dossierLegislatifId, number: { startsWith: `${n} (` } },
       select: {
+        article: true,
         id: true,
         number: true,
         identicalGroupKey: true,
@@ -133,6 +147,25 @@ export async function resolveLinks(
       },
     });
     if (variants.length > 0) variantsByNumber.set(n, variants);
+  }
+
+  const budgetPartByNumber = new Map<string, Candidate[]>();
+  for (const n of unmatched) {
+    if (variantsByNumber.has(n) || budgetPartNumbers(n).length === 0) continue;
+    const prefixed = await db.amendment.findMany({
+      where: { dossierId: scrutin.dossierLegislatifId, ...budgetPartNumberFilter(n) },
+      select: {
+        article: true,
+        id: true,
+        number: true,
+        identicalGroupKey: true,
+        texteRef: true,
+        externalId: true,
+        authorType: true,
+        authorName: true,
+      },
+    });
+    if (prefixed.length > 0) budgetPartByNumber.set(n, prefixed);
   }
 
   for (const { role, number } of cited) {
@@ -201,6 +234,48 @@ export async function resolveLinks(
       warnings.push({
         code: "AMBIGUOUS_CANDIDATES",
         message: `Amendment n° ${number} (${role}) has ${variants.length} rectified-variant candidates in dossier scope: ${variants.map((c) => `${c.number}=${c.id}`).join(", ")}.`,
+      });
+      confidence -= 0.2;
+      continue;
+    }
+    const partCandidates = budgetPartByNumber.get(number) ?? [];
+    // Both parts of a finance bill can carry the number: the article the title
+    // points at ("après l'article 15") then names the part, when exactly one
+    // candidate targets it.
+    const titleTarget = partCandidates.length > 1 ? parseArticleTarget(scrutin.title) : null;
+    const sameArticle = titleTarget
+      ? partCandidates.filter((c) => {
+          const t = parseArticleTarget(c.article);
+          return t?.position === titleTarget.position && t.article === titleTarget.article;
+        })
+      : [];
+    const partPick =
+      partCandidates.length === 1
+        ? { picked: partCandidates[0]!, code: "BUDGET_PART_PREFIX" }
+        : sameArticle.length === 1
+          ? { picked: sameArticle[0]!, code: "BUDGET_PART_ARTICLE" }
+          : null;
+    if (partPick) {
+      const { picked, code } = partPick;
+      candidates.push(picked);
+      links.push({
+        scrutinId: scrutin.id,
+        amendmentId: picked.id,
+        role,
+        parserConfidence: Math.max(PARSER_FLOOR, confidence - 0.1),
+        parserWarnings: [
+          {
+            code,
+            message: `matched title "${number}" to finance-bill candidate "${picked.number}"${code === "BUDGET_PART_ARTICLE" ? ` (article "${picked.article}")` : ""}`,
+          },
+        ],
+      });
+      continue;
+    }
+    if (partCandidates.length > 1) {
+      warnings.push({
+        code: "AMBIGUOUS_CANDIDATES",
+        message: `Amendment n° ${number} (${role}) has ${partCandidates.length} finance-bill part candidates in dossier scope: ${partCandidates.map((c) => `${c.number}=${c.id}`).join(", ")}.`,
       });
       confidence -= 0.2;
       continue;

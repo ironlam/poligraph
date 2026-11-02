@@ -9,6 +9,7 @@ import { syncFactchecksGrouped } from "./functions/sync-factchecks";
 import { syncLegislation } from "./functions/sync-legislation";
 import { syncPoliticians } from "./functions/sync-politicians";
 import { syncDaily } from "./functions/sync-daily";
+import { regenerateLegacyImpactsFn } from "./functions/regenerate-legacy-impacts";
 import { generateSocialDrafts, publishApprovedPost } from "./functions/post-social";
 import { sendNewsletter } from "./functions/send-newsletter";
 import { onboardingSend } from "./functions/onboarding-send";
@@ -38,6 +39,7 @@ const groupedFunctions = [
   moderationPreflight,
   discoverAffairsWebWave,
   syncDaily,
+  regenerateLegacyImpactsFn,
   generateSocialDrafts,
   publishApprovedPost,
   sendNewsletter,

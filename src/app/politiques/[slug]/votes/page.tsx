@@ -33,6 +33,7 @@ import type { Prisma } from "@/generated/prisma";
 import { parsePageParam } from "@/lib/data/query-params";
 import { formatLegislature } from "@/lib/votes/legislature";
 import { resolveLegislatureSelection } from "@/lib/votes/legislature-perimeter";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import {
   getPoliticianAnLegislatures,
   getPoliticianLegislatureVotes,
@@ -122,7 +123,7 @@ async function getVotes(
         },
       },
     },
-    orderBy: { votingDate: "desc" },
+    orderBy: VOTE_RECENT_FIRST,
     skip,
     take: limit,
   });

@@ -46,6 +46,7 @@ function baseInput(overrides: Partial<CitizenImpactInput> = {}): CitizenImpactIn
     dossierTitle: "Projet de loi d'urgence pour la protection et la souveraineté agricoles",
     dossierSummary: DOSSIER_SUMMARY_BROAD,
     sourcePageText: null,
+    debateExcerpt: null,
     substanceBlocks: [],
     substanceDepth: null,
     hasLinkedAmendment: false,
@@ -106,6 +107,39 @@ describe("buildUserMessage — official substance blocks", () => {
 // by parliamentarians. The prompt used to say only "vouvoyer le lecteur", which
 // the model read as "put the reader in the hemicycle" — shipping openers like
 // "Vous votez sur une loi d'urgence..." and "Vous assistez à un vote sur...".
+describe("buildUserMessage — debate passage", () => {
+  it("carries the séance passage in a <debat> block, escaped, as the source of the arguments", () => {
+    const msg = buildUserMessage(
+      baseInput({ debateExcerpt: "M. Lhardit : cette taxe vise <les géants> du numérique." })
+    );
+    expect(msg).toContain("<debat>");
+    expect(msg).toContain("cette taxe vise");
+    expect(msg).not.toContain("<les géants>");
+    expect(msg).not.toContain("AUCUN EXTRAIT DE DÉBAT");
+  });
+
+  it("tells the model to write no debate section when no passage is available", () => {
+    const msg = buildUserMessage(baseInput({ debateExcerpt: null }));
+    expect(msg).not.toContain("<debat>");
+    expect(msg).toContain("AUCUN EXTRAIT DE DÉBAT FOURNI");
+  });
+});
+
+describe("SYSTEM_PROMPT — claims the sources cannot back", () => {
+  it("makes the debate section conditional on a <debat> block", () => {
+    expect(SYSTEM_PROMPT).toContain("UNIQUEMENT si un bloc <debat> est fourni");
+  });
+
+  it("no longer tells the model an adopted measure enters into force", () => {
+    expect(SYSTEM_PROMPT).not.toContain('"cette mesure entre en vigueur" /');
+    expect(SYSTEM_PROMPT).toContain('NE JAMAIS écrire que la mesure "entre en vigueur"');
+  });
+
+  it("forbids examples and figures absent from the sources", () => {
+    expect(SYSTEM_PROMPT).toContain("noms d'entreprises");
+  });
+});
+
 describe("SYSTEM_PROMPT — the reader never votes", () => {
   it("states that the vote already happened and that the reader took no part in it", () => {
     expect(SYSTEM_PROMPT).toContain("QUI EST LE LECTEUR");

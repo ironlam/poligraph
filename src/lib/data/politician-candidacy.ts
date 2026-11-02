@@ -4,6 +4,7 @@ import type { CandidacyStatus, ThemeCategory, VotePosition } from "@/generated/p
 import { getCategoriesForSuper } from "@/config/labels";
 import { db } from "@/lib/db";
 import { getConvictionOnlyWhere } from "@/lib/affairs/public-filters";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import { isSynthesisContradictedByMeasures } from "@/lib/presidentielle/candidate-synthesis";
 import { pickMeasureSourceUrl } from "@/lib/presidentielle/measure-source";
 import {
@@ -296,7 +297,7 @@ export async function loadCandidateFicheDetail(
   const votes = hasDeputyMandate
     ? await db.vote.findMany({
         where: { politicianId, scrutin: { chamber: "AN" } },
-        orderBy: { votingDate: "desc" },
+        orderBy: VOTE_RECENT_FIRST,
         take: 5,
         select: {
           id: true,

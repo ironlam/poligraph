@@ -79,7 +79,7 @@ export const GET = withPublicRoute(async (request) => {
         SELECT s."id", s."slug", s."title", s."votingDate"
         FROM "Scrutin" s
         WHERE ${Prisma.join(scrutinConditions, " AND ")}
-        ORDER BY s."votingDate" DESC
+        ORDER BY s."votingDate" DESC, s."sequence" DESC
         LIMIT ${PER_FAMILY}
       `
     ),

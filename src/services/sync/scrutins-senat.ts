@@ -16,6 +16,7 @@ import { removeTags } from "@/lib/parsing/html-utils";
 import { generateDateSlug, generateUniqueSlug } from "@/lib/utils";
 import { VotePosition, VotingResult, DataSource, Chamber } from "@/generated/prisma";
 import { classifyScrutinTitle } from "@/lib/scrutin-type";
+import { scrutinSequence } from "@/lib/votes/scrutin-order";
 import { SENAT_RATE_LIMIT_MS } from "@/config/rate-limits";
 import {
   assessSenateVoteSource,
@@ -441,6 +442,7 @@ export async function syncScrutinsSenat(
               title: metadata.title,
               description: null,
               votingDate: metadata.date,
+              sequence: scrutinSequence(externalId),
               legislature: sessionToLegislature(currentSession),
               chamber: Chamber.SENAT,
               votesFor: metadata.votesFor,

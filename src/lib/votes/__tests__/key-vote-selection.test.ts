@@ -140,24 +140,68 @@ describe("selectKeyVotes", () => {
     expect(grid.map((c) => c.id)).not.toContain(hero!.id);
   });
 
-  it("changes the selection from one day to the next", () => {
+  it("keeps the hero while no newer vote exists, and rotates the grid from one day to the next", () => {
     const today = selectKeyVotes(corpus(), opts);
     const tomorrow = selectKeyVotes(corpus(), { ...opts, now: new Date(NOW.getTime() + DAY) });
-    expect(tomorrow.hero!.id).not.toBe(today.hero!.id);
+    expect(tomorrow.hero!.id).toBe(today.hero!.id);
     expect(tomorrow.grid.map((c) => c.id)).not.toEqual(today.grid.map((c) => c.id));
   });
 
-  it("keeps rotating when no new vote has been recorded for weeks", () => {
-    // Frozen corpus, as during a recess: the surface must still move.
+  it("headlines the most recent decisive vote, not the best scored one", () => {
+    const candidates = [
+      base({
+        id: "old",
+        type: "MOTION",
+        importanceScore: 90,
+        votingDate: daysAgo(19),
+        dossierLegislatifId: "d1",
+      }),
+      base({
+        id: "recent",
+        type: "FINAL",
+        importanceScore: 72,
+        votingDate: daysAgo(3),
+        dossierLegislatifId: "d2",
+      }),
+      base({
+        id: "amend",
+        type: "AMENDEMENT",
+        importanceScore: 99,
+        votingDate: daysAgo(0),
+        dossierLegislatifId: "d3",
+      }),
+    ];
+    expect(selectKeyVotes(candidates, opts).hero!.id).toBe("recent");
+  });
+
+  it("breaks a same-day tie on the importance score", () => {
+    const candidates = [
+      base({
+        id: "low",
+        type: "FINAL",
+        importanceScore: 71,
+        votingDate: daysAgo(2),
+        dossierLegislatifId: "d1",
+      }),
+      base({
+        id: "high",
+        type: "MOTION",
+        importanceScore: 85,
+        votingDate: daysAgo(2),
+        dossierLegislatifId: "d2",
+      }),
+    ];
+    expect(selectKeyVotes(candidates, opts).hero!.id).toBe("high");
+  });
+
+  it("keeps rotating the grid when no new vote has been recorded for weeks", () => {
+    // Frozen corpus, as during a recess: the grid must still move, the hero stays put.
     const frozen = corpus().map((c) => ({ ...c, votingDate: daysAgo(30 + Number(c.id.slice(1))) }));
-    const heroes = new Set(
-      Array.from(
-        { length: 6 },
-        (_, d) =>
-          selectKeyVotes(frozen, { ...opts, now: new Date(NOW.getTime() + d * DAY) }).hero!.id
-      )
+    const picks = Array.from({ length: 6 }, (_, d) =>
+      selectKeyVotes(frozen, { ...opts, now: new Date(NOW.getTime() + d * DAY) })
     );
-    expect(heroes.size).toBeGreaterThan(1);
+    expect(new Set(picks.map((p) => p.hero!.id)).size).toBe(1);
+    expect(new Set(picks.map((p) => p.grid.map((c) => c.id).join(","))).size).toBeGreaterThan(1);
   });
 
   it("headlines a decisive vote even when amendements score higher", () => {

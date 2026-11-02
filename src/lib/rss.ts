@@ -14,6 +14,8 @@ export interface RssChannel {
   link: string;
   description: string;
   language?: string;
+  /** URL of the feed itself (atom:link rel="self"). Defaults to `link`. */
+  feedUrl?: string;
 }
 
 export interface RssItem {
@@ -64,7 +66,7 @@ export function buildRss(channel: RssChannel, items: RssItem[]): string {
     <link>${escapeXml(channel.link)}</link>
     <description>${escapeXml(channel.description)}</description>
     <language>${channel.language ?? "fr"}</language>
-    <atom:link href="${escapeXml(channel.link)}" rel="self" type="application/rss+xml"/>
+    <atom:link href="${escapeXml(channel.feedUrl ?? channel.link)}" rel="self" type="application/rss+xml"/>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
 ${itemsXml}
   </channel>

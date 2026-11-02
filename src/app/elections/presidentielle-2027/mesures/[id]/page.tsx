@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink, PlayCircle, Quote } from "lucide-react";
+import { ParliamentThemeBridgeLoader } from "@/components/elections/ParliamentThemeBridgeLoader";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { MarkdownText } from "@/components/ui/markdown";
+import { MeasureParliamentLinks } from "@/components/measures/MeasureParliamentLinks";
 import { VoteRelationBadge } from "@/components/measures/VoteRelationBadge";
 import { PoliticianAvatar } from "@/components/politicians/PoliticianAvatar";
 import {
@@ -16,6 +18,12 @@ import {
 import { getPublicPresidentialMeasureDetail } from "@/lib/data/presidential-measure-detail";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL } from "@/config/site";
+import {
+  formatTimecode,
+  isVideoSource,
+  isYouTubeUrl,
+  videoSourceHref,
+} from "@/config/video-source";
 import { buildMeasureSeoDescription, truncateAtWord } from "@/lib/presidentielle/measure-seo";
 import { themeToSlug } from "@/lib/presidentielle/themes";
 import {
@@ -383,31 +391,70 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             Sources
           </h2>
           <ul className="mt-4 space-y-3">
-            {measure.sources.map((source) => (
-              <li key={source.id} className="rounded-2xl border border-border bg-card p-5">
-                <div className="flex flex-wrap gap-2 text-sm font-bold">
-                  <span>{SOURCE_TIER_LABELS[source.tier]}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{MEASURE_SOURCE_KIND_LABELS[source.sourceKind]}</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Publiée le {formatDate(source.publishedAt)}
-                  {source.page ? " · " + source.page : ""}
-                </p>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={
-                    "Consulter la source externe : " + MEASURE_SOURCE_KIND_LABELS[source.sourceKind]
-                  }
-                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                >
-                  Consulter la source
-                  <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                </a>
-              </li>
-            ))}
+            {measure.sources.map((source) => {
+              const isVideo = isVideoSource(source.url, source.startAtSeconds);
+              const timecode =
+                source.startAtSeconds == null ? null : formatTimecode(source.startAtSeconds);
+              const kindLabel = MEASURE_SOURCE_KIND_LABELS[source.sourceKind];
+              // Only YouTube opens at the passage. Elsewhere the link opens the page, so the label
+              // must not promise a jump the player will not make.
+              const jumpsToPassage = timecode !== null && isYouTubeUrl(source.url);
+              const linkLabel = jumpsToPassage
+                ? "Voir le passage à " + timecode
+                : timecode
+                  ? "Consulter la vidéo (passage à " + timecode + ")"
+                  : "Consulter la source";
+              return (
+                <li key={source.id} className="rounded-2xl border border-border bg-card p-5">
+                  <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                    <span>{SOURCE_TIER_LABELS[source.tier]}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{kindLabel}</span>
+                    {isVideo && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-bold">
+                        <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />
+                        Vidéo
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Publiée le {formatDate(source.publishedAt)}
+                    {timecode ? " · Passage à " + timecode : source.page ? " · " + source.page : ""}
+                  </p>
+                  {source.excerpt ? (
+                    <figure className="mt-4 rounded-xl border border-border bg-muted/60 p-4">
+                      <figcaption className="text-muted-foreground-strong flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                        <Quote aria-hidden="true" className="text-brand-on-surface h-4 w-4" />
+                        Dans le document source
+                        {source.page
+                          ? ", " + (/^\d/.test(source.page) ? "page " : "") + source.page
+                          : ""}
+                      </figcaption>
+                      <blockquote
+                        cite={source.url}
+                        className="mt-3 max-w-[80ch] border-l-4 border-brand pl-4 text-[1.0625rem] leading-relaxed text-foreground"
+                      >
+                        <p>« {source.excerpt} »</p>
+                      </blockquote>
+                    </figure>
+                  ) : null}
+                  <a
+                    href={videoSourceHref(source.url, source.startAtSeconds)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={
+                      timecode
+                        ? linkLabel + " : source externe, " + kindLabel
+                        : "Consulter la source externe : " + kindLabel
+                    }
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    {linkLabel}
+                    <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </section>
 
@@ -447,6 +494,15 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             </ul>
           </section>
         )}
+
+        <MeasureParliamentLinks
+          links={measure.parliamentLinks}
+          candidateName={measure.candidate.name}
+        />
+
+        <div className="border-t border-border py-8 empty:hidden">
+          <ParliamentThemeBridgeLoader theme={measure.theme} source="mesure" />
+        </div>
 
         <footer className="border-t border-border py-8 text-sm text-muted-foreground">
           <p>

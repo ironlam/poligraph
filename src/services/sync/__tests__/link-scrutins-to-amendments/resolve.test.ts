@@ -272,6 +272,188 @@ describeIfDb("resolveLinks", () => {
     expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
   });
 
+  it("matches a finance-bill part prefix (title '1358' → candidate 'I-1358') when unique (V9336)", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    await db.amendment.create({
+      data: {
+        externalId: `${AMEND_PFX}plf_I_1358`,
+        number: "I-1358",
+        texteRef: "TEST_PRJLANR_PLF",
+        dossierId,
+        status: "ADOPTE",
+        legislature: 17,
+        chamber: "AN",
+      },
+    });
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["1358"],
+      hasIdentique: false,
+    });
+    const link = res.links.find((l) => l.role === "PRINCIPAL");
+    const a = await db.amendment.findUnique({ where: { externalId: `${AMEND_PFX}plf_I_1358` } });
+    expect(link?.amendmentId).toBe(a?.id);
+    expect(link?.parserWarnings.map((w) => w.code)).toEqual(["BUDGET_PART_PREFIX"]);
+  });
+
+  it("does NOT match when both I- and II- parts carry the cited number (ambiguous)", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    for (const number of ["I-4242", "II-4242"]) {
+      await db.amendment.create({
+        data: {
+          externalId: `${AMEND_PFX}plf_${number}`,
+          number,
+          texteRef: "TEST_PRJLANR_PLF",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+        },
+      });
+    }
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["4242"],
+      hasIdentique: false,
+    });
+    expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+    expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+  });
+
+  describe("finance-bill parts told apart by the article the title cites", () => {
+    const seedParts = async (number: string, articleI: string, articleII: string) => {
+      const dossierId = (
+        await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+      ).id;
+      for (const [part, article] of [
+        ["I", articleI],
+        ["II", articleII],
+      ] as const) {
+        await db.amendment.create({
+          data: {
+            externalId: `${AMEND_PFX}plfart_${part}-${number}`,
+            number: `${part}-${number}`,
+            article,
+            texteRef: "TEST_PRJLANR_PLF",
+            dossierId,
+            status: "DEPOSE",
+            legislature: 17,
+            chamber: "AN",
+          },
+        });
+      }
+    };
+    const resolve = async (number: string, title: string) => {
+      const scrutin = await db.scrutin.findUniqueOrThrow({
+        where: { externalId: `${SCRUTIN_PFX}1` },
+      });
+      return resolveLinks(
+        { ...scrutin, title },
+        {
+          ...parsedPotier,
+          subAmendmentNumber: null,
+          parentAmendmentNumber: null,
+          principalNumbers: [number],
+          hasIdentique: false,
+        }
+      );
+    };
+
+    it("picks the part whose amendment targets the cited article (V9338 shape)", async () => {
+      await seedParts(
+        "7001",
+        "APRÈS L'ARTICLE 15, insérer l'article suivant:",
+        "APRÈS L'ARTICLE 77"
+      );
+      const res = await resolve("7001", "l'amendement n° 7001 de M. Pilato après l'article 15");
+      const a = await db.amendment.findUnique({
+        where: { externalId: `${AMEND_PFX}plfart_I-7001` },
+      });
+      const links = res.links.filter((l) => l.role === "PRINCIPAL");
+      expect(links.map((l) => l.amendmentId)).toEqual([a?.id]);
+      expect(links[0]?.parserWarnings.map((w) => w.code)).toEqual(["BUDGET_PART_ARTICLE"]);
+    });
+
+    it("picks the second part when the title cites its article", async () => {
+      await seedParts("7002", "ARTICLE 10", "AVANT L'ARTICLE 58");
+      const res = await resolve("7002", "l'amendement n° 7002 de Mme X avant l'article 58");
+      const a = await db.amendment.findUnique({
+        where: { externalId: `${AMEND_PFX}plfart_II-7002` },
+      });
+      expect(res.links.filter((l) => l.role === "PRINCIPAL").map((l) => l.amendmentId)).toEqual([
+        a?.id,
+      ]);
+    });
+
+    it("refuses when the position differs (à l'article 15 vs après l'article 15)", async () => {
+      await seedParts("7003", "APRÈS L'ARTICLE 15", "AVANT L'ARTICLE 15");
+      const res = await resolve("7003", "l'amendement n° 7003 de M. X à l'article 15");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+
+    it("refuses when both parts target the same article", async () => {
+      await seedParts("7004", "ARTICLE 34", "ARTICLE 34");
+      const res = await resolve("7004", "l'amendement n° 7004 de M. X à l'article 34");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+
+    it("refuses when the title cites no article", async () => {
+      await seedParts("7005", "ARTICLE 10", "ARTICLE 58");
+      const res = await resolve("7005", "l'amendement n° 7005 de M. X");
+      expect(res.warnings.some((w) => w.code === "AMBIGUOUS_CANDIDATES")).toBe(true);
+      expect(res.links.filter((l) => l.role === "PRINCIPAL")).toHaveLength(0);
+    });
+  });
+
+  it("prefers the bare number over a finance-bill part candidate", async () => {
+    const dossierId = (
+      await db.legislativeDossier.findUniqueOrThrow({ where: { externalId: "TEST_LINK_DLR_1" } })
+    ).id;
+    for (const number of ["5151", "I-5151"]) {
+      await db.amendment.create({
+        data: {
+          externalId: `${AMEND_PFX}plf_bare_${number}`,
+          number,
+          texteRef: "TEST_PRJLANR_PLF",
+          dossierId,
+          status: "DEPOSE",
+          legislature: 17,
+          chamber: "AN",
+        },
+      });
+    }
+    const scrutin = await db.scrutin.findUniqueOrThrow({
+      where: { externalId: `${SCRUTIN_PFX}1` },
+    });
+    const res = await resolveLinks(scrutin, {
+      ...parsedPotier,
+      subAmendmentNumber: null,
+      parentAmendmentNumber: null,
+      principalNumbers: ["5151"],
+      hasIdentique: false,
+    });
+    const bare = await db.amendment.findUnique({
+      where: { externalId: `${AMEND_PFX}plf_bare_5151` },
+    });
+    expect(res.links.find((l) => l.role === "PRINCIPAL")?.amendmentId).toBe(bare?.id);
+  });
+
   it("warns CANDIDATE_NOT_FOUND when a cited number resolves to nothing in scope", async () => {
     const scrutin = await db.scrutin.findUniqueOrThrow({
       where: { externalId: `${SCRUTIN_PFX}1` },

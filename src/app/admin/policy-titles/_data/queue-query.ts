@@ -165,12 +165,12 @@ function orderClause(filters: QueueFilters): Prisma.Sql {
   switch (filters.sort) {
     case "confidence":
       // HIGH first, then MEDIUM, then LOW.
-      return Prisma.sql`ORDER BY array_position(ARRAY['HIGH','MEDIUM','LOW'], pt."confidence"::text), s."votingDate" DESC`;
+      return Prisma.sql`ORDER BY array_position(ARRAY['HIGH','MEDIUM','LOW'], pt."confidence"::text), s."votingDate" DESC, s."sequence" DESC`;
     case "generatedAt":
       return Prisma.sql`ORDER BY pt."generatedAt" DESC`;
     case "votingDate":
     default:
-      return Prisma.sql`ORDER BY s."votingDate" DESC`;
+      return Prisma.sql`ORDER BY s."votingDate" DESC, s."sequence" DESC`;
   }
 }
 

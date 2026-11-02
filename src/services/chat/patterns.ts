@@ -6,6 +6,7 @@ import { getPublishedAffairWhere } from "@/lib/affairs/public-filters";
 import { isAccusedInvolvement } from "@/config/certainty";
 import { INVOLVEMENT_LABELS } from "@/config/labels";
 import { extractPersonName, AFFAIR_STATUS_LABELS, formatCurrency } from "./helpers";
+import { SCRUTIN_RECENT_FIRST, VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 /**
  * A pattern that matches a citizen query and returns direct context.
@@ -377,7 +378,7 @@ const PATTERNS: QueryPattern[] = [
       ),
     handler: async () => {
       const scrutins = await db.scrutin.findMany({
-        orderBy: { votingDate: "desc" },
+        orderBy: SCRUTIN_RECENT_FIRST,
         take: 5,
       });
 
@@ -732,7 +733,7 @@ async function fetchPoliticianVotes(
         select: { title: true, votingDate: true, slug: true, id: true },
       },
     },
-    orderBy: { votingDate: "desc" },
+    orderBy: VOTE_RECENT_FIRST,
     take: 10,
   });
 

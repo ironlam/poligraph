@@ -10,7 +10,7 @@ import { RubriqueEntrees, type RubriqueEntree } from "@/components/ui/RubriqueEn
 // parlement barrel also re-exports ParlementHub.
 import { ExplainedVotesTeaser } from "./ExplainedVotesTeaser";
 import { FAQJsonLd } from "@/components/seo/JsonLd";
-import { getFeatureValue } from "@/lib/feature-flags";
+import { getFeatureValue, isFeatureEnabled } from "@/lib/feature-flags";
 import {
   getHubStats,
   getLastScrutinDate,
@@ -20,6 +20,7 @@ import {
 import { getLatestDossiers } from "@/lib/data/legislation";
 import { getGroupesListing } from "@/lib/data/groupes";
 import { LEGISLATIVE_JOURNEY_STEPS } from "@/config/legislative-journey";
+import { CHAMBER_PROFILES, chamberPath } from "@/config/chambres";
 import { ROUTES } from "@/config/routes";
 import {
   Info,
@@ -96,6 +97,12 @@ const ENTREES: RubriqueEntree[] = [
     icon: Users,
   },
   {
+    href: ROUTES.parcoursLegislatif,
+    title: "Parcours d'une loi",
+    detail: "Du dépôt à la promulgation, étape par étape",
+    icon: Info,
+  },
+  {
     href: ROUTES.legislatures,
     title: "Législatures",
     detail: "L'Assemblée nationale depuis 2017, dates et données disponibles",
@@ -123,7 +130,18 @@ export async function ParlementHub() {
     getGroupesListing(),
   ]);
 
-  const periodOverride = await getFeatureValue<PeriodOverride>(PARLIAMENTARY_PERIOD_FLAG);
+  const [periodOverride, monDeputeEnabled] = await Promise.all([
+    getFeatureValue<PeriodOverride>(PARLIAMENTARY_PERIOD_FLAG),
+    isFeatureEnabled("MON_DEPUTE_SECTION"),
+  ]);
+  const accesRapide = [
+    { href: ROUTES.votes, label: "Scrutins" },
+    { href: ROUTES.dossiers, label: "Lois en construction" },
+    ...(monDeputeEnabled ? [{ href: "/mon-depute", label: "Mes élus" }] : []),
+    { href: ROUTES.groupes, label: "Groupes" },
+    { href: ROUTES.parcoursLegislatif, label: "Parcours d'une loi" },
+    { href: ROUTES.glossaire, label: "Glossaire" },
+  ];
   const period = resolveParliamentaryPeriod(lastDate, periodOverride);
 
   const anGroups = allGroups.filter((g) => g.chamber === "AN" && g.seatCount > 0);
@@ -165,6 +183,22 @@ export async function ParlementHub() {
           </p>
         </div>
       </RubriqueBandeau>
+      {/* Mobile: the main destinations one swipe away, without scrolling the whole page */}
+      <nav aria-label="Accès rapide" className="border-b border-border bg-card sm:hidden">
+        <ul className="flex gap-2 overflow-x-auto px-4 py-3 [scrollbar-width:none]">
+          {accesRapide.map(({ href, label }) => (
+            <li key={href} className="shrink-0">
+              <Link
+                href={href}
+                prefetch={false}
+                className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-medium hover:bg-muted"
+              >
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <div className="container mx-auto px-4 pt-8">
         {/* Parliamentary period banner */}
         {period &&
@@ -180,6 +214,65 @@ export async function ParlementHub() {
               </div>
             );
           })()}
+
+        {/* Les deux chambres: first choice for a citizen who does not know the institutions */}
+        <section aria-labelledby="deux-chambres" className="mb-8">
+          <h2 id="deux-chambres" className="font-display text-2xl font-extrabold text-primary">
+            Deux chambres, un même texte
+          </h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {(["AN", "SENAT"] as const).map((chamber) => {
+              const profile = CHAMBER_PROFILES[chamber];
+              return (
+                <article
+                  key={chamber}
+                  className="overflow-hidden rounded-2xl border border-border bg-card"
+                >
+                  <h3
+                    className="px-5 py-4 font-display text-xl font-extrabold text-white"
+                    style={{ backgroundColor: profile.accent }}
+                  >
+                    {profile.name}
+                  </h3>
+                  <div className="p-5">
+                    <p className="text-sm text-muted-foreground">{profile.intro}</p>
+                    <dl className="mt-4 grid grid-cols-3 gap-3">
+                      {profile.facts.map((fact) => (
+                        <div key={fact.label}>
+                          <dt className="sr-only">{fact.label}</dt>
+                          <dd
+                            className="font-display text-2xl font-extrabold"
+                            style={{ color: profile.accent }}
+                          >
+                            {fact.value}
+                          </dd>
+                          <p className="text-xs text-muted-foreground">{fact.label}</p>
+                        </div>
+                      ))}
+                    </dl>
+                    <Link
+                      href={chamberPath(chamber)}
+                      className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg px-5 text-sm font-bold text-white hover:opacity-90"
+                      style={{ backgroundColor: profile.accent }}
+                    >
+                      Découvrir {chamber === "AN" ? "l'Assemblée" : "le Sénat"}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Un texte fait la navette entre les deux chambres jusqu{"'"}à une version commune.{" "}
+            <Link
+              href={ROUTES.parcoursLegislatif}
+              className="font-bold text-primary hover:underline"
+            >
+              Voir le parcours d{"'"}une loi
+            </Link>
+          </p>
+        </section>
 
         {/* Orientation: entry tiles to the three pillars */}
         <div className="mb-8">
@@ -203,33 +296,6 @@ export async function ParlementHub() {
             },
           ]}
         />
-
-        {/* Pedagogy */}
-        <details className="mb-8 bg-muted/50 rounded-lg border">
-          <summary className="px-4 py-3 cursor-pointer text-sm font-medium hover:bg-muted/80 rounded-lg transition-colors">
-            Comment fonctionne le Parlement ?
-          </summary>
-          <div className="px-4 pb-4 pt-2 text-sm text-muted-foreground space-y-2">
-            <p>
-              Le Parlement français est composé de deux chambres : l{"'"}Assemblée nationale (577
-              députés) et le Sénat (348 sénateurs). Ensemble, ils votent les lois et contrôlent l
-              {"'"}
-              action du gouvernement.
-            </p>
-            <p className="font-medium">Parcours d{"'"}un texte de loi :</p>
-            <ol className="list-decimal list-inside space-y-1 ml-2">
-              {LEGISLATIVE_JOURNEY_STEPS.map((step) => (
-                <li key={step.label}>
-                  <strong>{step.label}</strong> : {step.description}
-                </li>
-              ))}
-            </ol>
-            <p>
-              Tous les textes ne franchissent pas toutes ces étapes : ils peuvent être rejetés,
-              retirés ou rester sans suite.
-            </p>
-          </div>
-        </details>
 
         {/* Hero Spotlight */}
         {keyVotes.hero && (
@@ -392,6 +458,38 @@ export async function ParlementHub() {
             </div>
           </section>
         )}
+
+        {/* Pedagogy */}
+        <details className="mb-8 mt-8 bg-muted/50 rounded-lg border">
+          <summary className="px-4 py-3 cursor-pointer text-sm font-medium hover:bg-muted/80 rounded-lg transition-colors">
+            Comment fonctionne le Parlement ?
+          </summary>
+          <div className="px-4 pb-4 pt-2 text-sm text-muted-foreground space-y-2">
+            <p>
+              Le Parlement français est composé de deux chambres : l{"'"}Assemblée nationale (577
+              députés) et le Sénat (348 sénateurs). Ensemble, ils votent les lois et contrôlent l
+              {"'"}
+              action du gouvernement.
+            </p>
+            <p className="font-medium">Parcours d{"'"}un texte de loi :</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              {LEGISLATIVE_JOURNEY_STEPS.map((step) => (
+                <li key={step.label}>
+                  <strong>{step.label}</strong> : {step.description}
+                </li>
+              ))}
+            </ol>
+            <p>
+              Tous les textes ne franchissent pas toutes ces étapes : ils peuvent être rejetés,
+              retirés ou rester sans suite.
+            </p>
+            <p>
+              <Link href={ROUTES.glossaire} className="font-medium text-primary hover:underline">
+                Tous les mots du Parlement
+              </Link>
+            </p>
+          </div>
+        </details>
       </div>
     </>
   );

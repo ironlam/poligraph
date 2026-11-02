@@ -3,6 +3,7 @@ import { inngest } from "../client";
 import { computeWeeklyConcordance } from "@/lib/newsletter/concordance";
 import type { PersonalDeputyContext } from "@/lib/email/render-recap";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 import type { WeeklyRecapData } from "@/lib/data/recap";
 
 const BATCH_SIZE = 50;
@@ -226,7 +227,7 @@ export const sendNewsletter = inngest.createFunction(
             select: { id: true, slug: true, title: true, votingDate: true },
           },
         },
-        orderBy: { votingDate: "desc" },
+        orderBy: VOTE_RECENT_FIRST,
       });
 
       return { deputies, votes };

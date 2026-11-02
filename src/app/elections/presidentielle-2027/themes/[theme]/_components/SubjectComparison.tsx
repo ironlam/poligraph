@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import {
@@ -308,7 +309,14 @@ const COLUMNS = [
   },
 ];
 
-export function SubjectComparison({ data }: { data: SubjectPageData }) {
+export function SubjectComparison({
+  data,
+  parliamentBridge = null,
+}: {
+  data: SubjectPageData;
+  /** Thematic door to the parliamentary sections, built by the page (it reads the database). */
+  parliamentBridge?: ReactNode;
+}) {
   const themeLabel = THEME_CATEGORY_LABELS[data.theme];
   // From the authority, not recomputed here. `entry.measures` carries withdrawn measures on purpose
   // (`includeWithdrawn: true`), so counting rows with `measures.length > 0` would say a candidacy
@@ -359,6 +367,7 @@ export function SubjectComparison({ data }: { data: SubjectPageData }) {
           <>
             <ComparisonTable data={data} />
             <ReaderGuideLinks guides={data.readerGuides} />
+            {parliamentBridge}
             <MeasureMentionsGuide />
             <FooterCard
               documented={documented}
@@ -414,8 +423,8 @@ function PlannedSections() {
       body: "Ce qu'un président décide réellement ici, et ce qui relève du Parlement, des collectivités ou de l'Union européenne. À écrire thème par thème.",
     },
     {
-      title: "Les votes au Parlement sur ce thème",
-      body: "Les scrutins de l'Assemblée nationale et du Sénat portant sur ce thème, avec leur issue et leur date. Le rattachement des scrutins aux thématiques reste à construire.",
+      title: "Les votes sur le même objet qu'une mesure",
+      body: "Les scrutins qui portent sur le même objet qu'une proposition, avec leur issue et leur date. Le bloc « Au Parlement » ci-dessus classe par thème seulement, le rapprochement mesure par mesure reste à construire.",
     },
     {
       title: "Les fonctions exercées sur ce thème",

@@ -15,7 +15,8 @@ export const SITEMAP_SHARD_TAGS = {
   // because it carries a published affair or a fact-check, so those tags
   // belong here as much as "politicians" does.
   // "gouvernements": the published governments listed at the end of the shard.
-  0: ["politicians", "affairs", "factchecks", "gouvernements"],
+  // "changelog": the lastmod of /changelog is the date of its latest published entry.
+  0: ["politicians", "affairs", "factchecks", "gouvernements", "changelog"],
   // Affair pages, party pages, elections, departments.
   1: ["affairs", "parties", "elections"],
   2: ["dossiers"],

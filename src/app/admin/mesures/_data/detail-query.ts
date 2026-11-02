@@ -26,6 +26,25 @@ export async function getMeasureContext(measureId: string) {
 
 export type MeasureContext = NonNullable<Awaited<ReturnType<typeof getMeasureContext>>>;
 
+/**
+ * The active subtopics of the measure's theme that a human can still add to a revision: the ones
+ * already approved or waiting for a decision are left out, a refused one can be added back.
+ */
+export async function listAddableSubtopics(
+  theme: MeasureContext["theme"],
+  takenSubtopicIds: string[]
+): Promise<Array<{ id: string; label: string }>> {
+  return db.measureSubtopic.findMany({
+    where: {
+      theme,
+      active: true,
+      ...(takenSubtopicIds.length > 0 ? { id: { notIn: takenSubtopicIds } } : {}),
+    },
+    select: { id: true, label: true },
+    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+  });
+}
+
 export async function listReaderGuidesForModeration() {
   return db.measureReaderGuide.findMany({
     where: { active: true },

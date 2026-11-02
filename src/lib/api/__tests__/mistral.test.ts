@@ -45,6 +45,19 @@ describe("callMistral", () => {
     expect(body.max_tokens).toBe(500);
   });
 
+  it("passes the abort signal to fetch so a caller timeout cancels the request", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ choices: [{ message: { content: "response" } }] }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    const controller = new AbortController();
+
+    await callMistral([{ role: "user", content: "hello" }], { signal: controller.signal });
+
+    expect(mockFetch.mock.calls[0]![1].signal).toBe(controller.signal);
+  });
+
   it("throws on API error", async () => {
     vi.stubGlobal(
       "fetch",

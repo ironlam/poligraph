@@ -36,6 +36,17 @@ const DAILY_STEPS: DailyStep[] = [
     },
   },
   {
+    // The official group count of a scrutin is written by this mode only, never by the
+    // run above: without it, every vote since the last manual backfill shows no count.
+    name: "scrutins-an-official-groups",
+    run: async () => {
+      const { syncScrutinsAN } = await import("@/services/sync/scrutins-an");
+      return runVoteSyncWithCacheInvalidation(() =>
+        syncScrutinsAN(undefined, false, false, false, true, 7)
+      );
+    },
+  },
+  {
     name: "scrutins-senat",
     run: async () => {
       const { syncScrutinsSenat } = await import("@/services/sync/scrutins-senat");

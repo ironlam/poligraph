@@ -10,6 +10,9 @@ vi.mock("@/lib/db", () => ({
 import { db } from "@/lib/db";
 import { normalizeSort, sortScrutinsInMemory, getScrutins } from "@/lib/data/scrutins";
 
+// Le jour seul ne suffit pas : les scrutins d'une même séance se départagent par numéro.
+const RECENT_ORDER = [{ votingDate: "desc" }, { sequence: "desc" }];
+
 describe("normalizeSort", () => {
   it("accepte la whitelist", () => {
     expect(normalizeSort("recent")).toBe("recent");
@@ -56,6 +59,17 @@ describe("sortScrutinsInMemory", () => {
   });
   it("recent = date décroissante", () => {
     expect(sortScrutinsInMemory(rows, "recent").map((r) => r.id)).toEqual(["c", "b", "a"]);
+  });
+
+  it("à égalité de jour, le numéro de scrutin le plus élevé passe devant", () => {
+    const day = new Date("2026-10-23");
+    const sameDay = [
+      { id: "x", votesFor: 1, votesAgainst: 1, votesAbstain: 0, votingDate: day, sequence: 9086 },
+      { id: "y", votesFor: 1, votesAgainst: 1, votesAbstain: 0, votingDate: day, sequence: 9097 },
+      { id: "z", votesFor: 1, votesAgainst: 1, votesAbstain: 0, votingDate: day, sequence: 9089 },
+    ];
+    expect(sortScrutinsInMemory(sameDay, "recent").map((r) => r.id)).toEqual(["y", "z", "x"]);
+    expect(sortScrutinsInMemory(sameDay, "close").map((r) => r.id)).toEqual(["y", "z", "x"]);
   });
 
   it("tableau vide ne plante pas, pour les 3 sorts", () => {
@@ -132,7 +146,7 @@ describe("getScrutins router — sort normalisé avant la frontière de cache", 
     await getScrutins({ page: 1, limit: 20, sort: "garbage" as never });
 
     expect(db.scrutin.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { votingDate: "desc" }, skip: 0, take: 20 })
+      expect.objectContaining({ orderBy: RECENT_ORDER, skip: 0, take: 20 })
     );
   });
 
@@ -140,7 +154,7 @@ describe("getScrutins router — sort normalisé avant la frontière de cache", 
     await getScrutins({ page: 1, limit: 20, sort: "turnout" });
 
     for (const call of (db.scrutin.findMany as ReturnType<typeof vi.fn>).mock.calls) {
-      expect(call[0]).not.toEqual(expect.objectContaining({ orderBy: { votingDate: "desc" } }));
+      expect(call[0]).not.toEqual(expect.objectContaining({ orderBy: RECENT_ORDER }));
     }
   });
 
@@ -148,7 +162,7 @@ describe("getScrutins router — sort normalisé avant la frontière de cache", 
     await getScrutins({ page: 1, limit: 20 });
 
     expect(db.scrutin.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { votingDate: "desc" }, skip: 0, take: 20 })
+      expect.objectContaining({ orderBy: RECENT_ORDER, skip: 0, take: 20 })
     );
   });
 });

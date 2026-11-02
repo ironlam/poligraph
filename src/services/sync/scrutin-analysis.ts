@@ -2,8 +2,14 @@ import { db } from "@/lib/db";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { escapeXmlText } from "@/lib/text/escape-xml";
 import { isGroupAttributionReliable } from "@/lib/votes/group-attribution";
+import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
+import {
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
+  canDescribeVotedMeasure,
+  isAmendmentVote,
+} from "@/services/scrutin-substance/amendment-vote-guard";
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 import type { AnalysisSourceType } from "@/generated/prisma";
 
@@ -188,6 +194,8 @@ export async function generateScrutinAnalysis(
   const where: any = { importance: { isKeyVote: true } };
   if (scrutinIds && scrutinIds.length > 0) where.id = { in: scrutinIds };
   if (!force) where.analysis = null;
+  // Refused votes keep `analysis: null`: left in the query they would fill every batch.
+  where.AND = [AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE];
 
   const scrutins = await db.scrutin.findMany({
     where,
@@ -202,6 +210,7 @@ export async function generateScrutinAnalysis(
       votesAbstain: true,
       chamber: true,
       legislature: true,
+      type: true,
       groupPositions: {
         include: {
           group: { select: { name: true, code: true, chamber: true, legislature: true } },
@@ -228,7 +237,20 @@ export async function generateScrutinAnalysis(
     try {
       // Guard 1: arguments need a real debate. No usable transcript → never
       // invent (no resolver, no model call, no write). See scrutin 2084.
-      const debateExcerpt = s.debateTranscripts[0]?.content?.trim();
+      //
+      // An amendment vote takes the passage on THAT amendment, never the start of a
+      // whole séance: only an explicit, corroborated, unambiguous match qualifies.
+      // Other votes keep the transcript linked to the scrutin.
+      let debateExcerpt: string | undefined;
+      if (s.amendmentLinks.length > 0 || isAmendmentVote(s)) {
+        const debate = await resolveDebateContextForScrutin(s.id);
+        debateExcerpt =
+          debate.usableForGeneration && debate.reinforced
+            ? (debate.context?.trim() ?? undefined)
+            : undefined;
+      } else {
+        debateExcerpt = s.debateTranscripts[0]?.content?.trim();
+      }
       if (!debateExcerpt) {
         skipped++;
         continue;
@@ -236,6 +258,10 @@ export async function generateScrutinAnalysis(
 
       // Anchor the topic on the official amendment substance (what is voted).
       const resolved = await resolveSubstanceSources(s.id);
+      if (!canDescribeVotedMeasure({ ...s, substanceDepth: resolved.substanceDepth })) {
+        skipped++;
+        continue;
+      }
 
       const prompt = buildAnalysisPrompt({
         title: s.title,
@@ -282,7 +308,7 @@ export async function generateScrutinAnalysis(
 
       // Guard 2: arguments must echo the official measure (amendment), not drift
       // onto a different measure from the broad séance debate.
-      if (s.amendmentLinks.length > 0 && resolved.blocks.length > 0) {
+      if ((s.amendmentLinks.length > 0 || isAmendmentVote(s)) && resolved.blocks.length > 0) {
         const verdict = assessCoherence({
           text: `${parsed.argumentsFor} ${parsed.argumentsAgainst}`,
           policyTitle: s.policyTitle?.policyTitle ?? null,

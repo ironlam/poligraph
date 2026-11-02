@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { QUALIFICATION_KIND_LABELS } from "@/config/labels";
+import { parseTimecode } from "@/config/video-source";
 import type {
   Chamber,
   MeasureAttribution,
@@ -35,7 +36,9 @@ import {
   type ContextGenerationSkipReason,
 } from "@/lib/measures/context-generation";
 import { createMeasureVoteLink } from "@/lib/measures/vote-links";
+import { deleteMeasureDossierLink } from "@/lib/measures/dossier-links";
 import {
+  addMeasureRevisionSubtopic,
   proposeMeasureRevisionSubtopics,
   reviewMeasureRevisionSubtopic,
 } from "@/lib/measures/subtopics";
@@ -143,6 +146,10 @@ const subtopicReviewInputSchema = subtopicProposalInputSchema
     subtopicId: z.string().min(1),
     status: z.enum(["APPROVED", "REJECTED"]),
   })
+  .strict();
+
+const subtopicAddInputSchema = subtopicProposalInputSchema
+  .extend({ subtopicId: z.string().min(1) })
   .strict();
 
 const contextGenerationInputSchema = z
@@ -256,6 +263,8 @@ export type SourceInput = {
   tier: SourceTier;
   url: string;
   page: string | null;
+  /** Timecode typed by the editor ("22:41"), converted to seconds on the way in. */
+  startAt?: string | null;
   publishedAt: string;
 };
 
@@ -279,12 +288,25 @@ function toRevision(input: RevisionInput) {
   };
 }
 
+function parseStartAt(value: string | null | undefined): number | null {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed === "") return null;
+  const seconds = parseTimecode(trimmed);
+  if (seconds === null) {
+    throw new MeasureValidationError(
+      "Le début du passage doit s'écrire minutes:secondes (22:41) ou heures:minutes:secondes (1:05:09)"
+    );
+  }
+  return seconds;
+}
+
 function toSources(inputs: SourceInput[]) {
   return inputs.map((source) => ({
     sourceKind: source.sourceKind,
     tier: source.tier,
     url: source.url.trim(),
     page: source.page?.trim() === "" ? null : (source.page ?? null),
+    startAtSeconds: parseStartAt(source.startAt),
     publishedAt: parseDate(source.publishedAt, "La date de publication de la source"),
   }));
 }
@@ -397,7 +419,10 @@ export async function proposeSubtopicsAction(input: {
   try {
     const parsed = subtopicProposalInputSchema.safeParse(input);
     if (!parsed.success) throw new MeasureValidationError("Révision à classer invalide");
-    await proposeMeasureRevisionSubtopics(parsed.data.revisionId, { proposedBy: ACTOR });
+    await proposeMeasureRevisionSubtopics(parsed.data.revisionId, {
+      proposedBy: ACTOR,
+      allowWhenApproved: true,
+    });
     revalidate(parsed.data.measureId);
     return { ok: true };
   } catch (error) {
@@ -422,6 +447,29 @@ export async function reviewSubtopicAction(input: {
       subtopicId: parsed.data.subtopicId,
       status: parsed.data.status,
       reviewedBy: ACTOR,
+    });
+    revalidate(parsed.data.measureId);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function addSubtopicAction(input: {
+  measureId: string;
+  revisionId: string;
+  subtopicId: string;
+}): Promise<ActionResult> {
+  await assertAuthenticated();
+
+  try {
+    const parsed = subtopicAddInputSchema.safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Sous-thème à ajouter invalide");
+    await addMeasureRevisionSubtopic({
+      measureId: parsed.data.measureId,
+      revisionId: parsed.data.revisionId,
+      subtopicId: parsed.data.subtopicId,
+      addedBy: ACTOR,
     });
     revalidate(parsed.data.measureId);
     return { ok: true };
@@ -893,6 +941,22 @@ export async function attachVoteLinkAction(input: {
 
     revalidate(input.measureId);
     return { ok: true, measureId: input.measureId };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+export async function deleteDossierLinkAction(input: unknown): Promise<ActionResult> {
+  await assertAuthenticated();
+  try {
+    const parsed = z
+      .object({ linkId: z.string().min(1) })
+      .strict()
+      .safeParse(input);
+    if (!parsed.success) throw new MeasureValidationError("Rapprochement invalide");
+    await deleteMeasureDossierLink(parsed.data.linkId);
+    revalidatePath("/admin/mesures/rapprochements");
+    return { ok: true };
   } catch (error) {
     return toFailure(error);
   }

@@ -64,6 +64,7 @@ vi.mock("@/lib/measures/context-generation", () => ({
 vi.mock("../_data/queue-query", () => ({
   queryMeasureQueue: (filters: unknown) => queryMeasureQueueMock(filters),
   listMeasureQueueCandidates: () => listMeasureQueueCandidatesMock(),
+  QUEUE_SCAN_CAP: 10_000,
 }));
 
 vi.mock("../_data/batch-publish-query", () => ({

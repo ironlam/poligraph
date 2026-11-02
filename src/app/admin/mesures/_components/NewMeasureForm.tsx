@@ -94,6 +94,7 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
                 tier: String(data.get("tier")) as SourceTier,
                 url: String(data.get("sourceUrl") ?? ""),
                 page: String(data.get("page") ?? "") || null,
+                startAt: String(data.get("startAt") ?? "") || null,
                 publishedAt: String(data.get("sourcePublishedAt") ?? ""),
               },
             ],
@@ -253,6 +254,24 @@ export function NewMeasureForm({ candidacies }: { candidacies: CandidacyOption[]
               Page (facultatif)
             </label>
             <input id="new-page" name="page" type="text" className={FIELD} />
+          </div>
+          <div>
+            <label htmlFor="new-start" className={LABEL}>
+              Début du passage, si vidéo (facultatif)
+            </label>
+            <input
+              id="new-start"
+              name="startAt"
+              type="text"
+              inputMode="numeric"
+              placeholder="22:41"
+              aria-describedby="new-start-hint"
+              className={FIELD}
+            />
+            <p id="new-start-hint" className="mt-1 text-xs text-muted-foreground">
+              minutes:secondes, ou heures:minutes:secondes. Le lien public ouvre la vidéo à ce
+              moment.
+            </p>
           </div>
         </div>
       </fieldset>

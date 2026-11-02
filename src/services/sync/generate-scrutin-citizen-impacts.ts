@@ -6,23 +6,61 @@
  * resolver the policy-title pipeline uses), NOT from the broad dossier summary.
  * A coherence guard rejects any generated impact whose vocabulary does not
  * overlap the official reference (the scrutin-2084 import-ban failure mode).
+ * An amendment vote without amendment-level substance is not generated at all
+ * (amendment-vote-guard.ts): the model would otherwise describe the whole bill.
  */
 
 import { db } from "@/lib/db";
 import { generateCitizenImpact, type CitizenImpactInput } from "@/services/scrutin-citizen-impact";
 import { assessCoherence, type CoherenceVerdict } from "@/services/scrutin-substance/coherence";
 import { resolveSubstanceSources } from "@/services/scrutin-policy-title/substance-resolver";
+import { findUngroundedNames } from "@/services/scrutin-substance/grounding";
+import { resolveDebateContextForScrutin } from "@/services/scrutin-substance/debate-context-resolver";
 import type { SubstanceDepth } from "@/services/scrutin-policy-title/types";
 import { fetchScrutinContext } from "@/services/scrutin-context-fetcher";
+import {
+  AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE,
+  canDescribeVotedMeasure,
+  isAmendmentVote,
+} from "@/services/scrutin-substance/amendment-vote-guard";
 import { AI_RATE_LIMIT_MS, AI_429_BACKOFF_MS } from "@/config/rate-limits";
+
+export type CitizenImpactOutcome =
+  | "generated"
+  | "low_confidence"
+  | "incoherent"
+  | "ungrounded"
+  | "no_substance"
+  | "missing"
+  | "error";
+
+/** What happened to one scrutin, for the review of a run. */
+export interface CitizenImpactOutcomeRow {
+  id: string;
+  slug: string | null;
+  title: string | null;
+  outcome: CitizenImpactOutcome;
+  /** Why it was refused (coverage, unknown names, error message). */
+  detail?: string;
+  /** The text the model produced, kept for a generated or a refused one. */
+  text?: string;
+}
 
 export interface ScrutinCitizenImpactsResult {
   processed: number;
   generated: number;
   skipped: number;
   skippedIncoherent: number;
+  /** Texts citing a proper name found in none of the sources given to the model. */
+  skippedUngrounded: number;
+  /** Amendment votes not generated: no amendment-level official text. */
+  skippedNoSubstance: number;
   contextHits: number;
   errors: string[];
+  /** One row per scrutin handled, in processing order. */
+  outcomes: CitizenImpactOutcomeRow[];
+  /** True when `timeBudgetMs` ran out before every scrutin was handled. */
+  stoppedEarly: boolean;
 }
 
 export interface PreparedCitizenImpact {
@@ -30,6 +68,9 @@ export interface PreparedCitizenImpact {
   slug: string | null;
   title: string;
   hasLinkedAmendment: boolean;
+  isAmendmentVote: boolean;
+  /** False for an amendment vote whose own text is not resolved: do not generate. */
+  canDescribeMeasure: boolean;
   substanceDepth: SubstanceDepth | null;
   policyTitle: { policyTitle: string | null; policySubtitle: string | null } | null;
   contextHit: boolean;
@@ -64,6 +105,7 @@ export async function prepareCitizenImpactInput(
       votingDate: true,
       sourceUrl: true,
       dossierLegislatifId: true,
+      type: true,
       policyTitle: { select: { policyTitle: true, policySubtitle: true } },
       amendmentLinks: { select: { amendmentId: true } },
     },
@@ -79,6 +121,11 @@ export async function prepareCitizenImpactInput(
     dossierLegislatifId: scrutin.dossierLegislatifId,
   });
   const contextHit = Boolean(context.dossierTitle || context.sourcePageText);
+
+  // Debate passage on this very amendment, only when the match is explicit.
+  const debate = await resolveDebateContextForScrutin(scrutinId);
+  // Only an unambiguous, corroborated match: the lexical guard cannot check provenance.
+  const debateExcerpt = debate.usableForGeneration && debate.reinforced ? debate.context : null;
 
   const links: CitizenImpactInput["links"] = {
     dossierUrl: null,
@@ -154,6 +201,7 @@ export async function prepareCitizenImpactInput(
     dossierTitle: context.dossierTitle,
     dossierSummary: context.dossierSummary,
     sourcePageText: context.sourcePageText,
+    debateExcerpt,
     substanceBlocks: resolved.blocks,
     substanceDepth: resolved.substanceDepth,
     hasLinkedAmendment: scrutin.amendmentLinks.length > 0,
@@ -165,11 +213,34 @@ export async function prepareCitizenImpactInput(
     slug: scrutin.slug,
     title: scrutin.title,
     hasLinkedAmendment: input.hasLinkedAmendment,
+    isAmendmentVote: isAmendmentVote(scrutin),
+    canDescribeMeasure: canDescribeVotedMeasure({
+      type: scrutin.type,
+      title: scrutin.title,
+      substanceDepth: resolved.substanceDepth,
+    }),
     substanceDepth: resolved.substanceDepth,
     policyTitle: scrutin.policyTitle,
     contextHit,
     input,
   };
+}
+
+/** Everything the model was given, as plain text, for the grounding check. */
+export function citizenImpactSources(prepared: PreparedCitizenImpact): string[] {
+  const i = prepared.input;
+  return [
+    i.title,
+    i.summary,
+    i.dossierTitle,
+    i.dossierSummary,
+    i.sourcePageText,
+    i.debateExcerpt,
+    ...i.substanceBlocks.map((b) => b.text),
+    i.links.dossierLabel,
+    ...i.links.relatedVotes.map((v) => v.label),
+    ...i.links.politicians.map((p) => p.label),
+  ].filter((x): x is string => Boolean(x));
 }
 
 export async function generateScrutinCitizenImpacts(options?: {
@@ -181,16 +252,32 @@ export async function generateScrutinCitizenImpacts(options?: {
   /** Restrict processing to these scrutin ids. ALWAYS scoped first in the
    *  WHERE, so a targeted run can never touch the rest of the table. */
   scrutinIds?: string[];
+  /** No new scrutin is started once this much time has passed, so that a caller with a
+   *  hard time limit (a serverless step) is never cut in the middle of a write. The wait
+   *  after a rate-limit response comes on top: leave room for one call and one wait. */
+  timeBudgetMs?: number;
 }): Promise<ScrutinCitizenImpactsResult> {
-  const { limit, force = false, skipScrape = true, dryRun = false, scrutinIds } = options ?? {};
+  const {
+    limit,
+    force = false,
+    skipScrape = true,
+    dryRun = false,
+    scrutinIds,
+    timeBudgetMs,
+  } = options ?? {};
+  const startedAt = Date.now();
 
   const stats: ScrutinCitizenImpactsResult = {
     processed: 0,
     generated: 0,
     skipped: 0,
     skippedIncoherent: 0,
+    skippedUngrounded: 0,
+    skippedNoSubstance: 0,
     contextHits: 0,
     errors: [],
+    outcomes: [],
+    stoppedEarly: false,
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,16 +289,13 @@ export async function generateScrutinCitizenImpacts(options?: {
     whereClause.citizenImpact = null;
   }
   whereClause.summary = { not: null };
+  whereClause.AND = [AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE];
 
-  let scrutins = await db.scrutin.findMany({
+  const scrutins = await db.scrutin.findMany({
     where: whereClause,
     orderBy: { votingDate: "desc" },
     select: { id: true },
   });
-
-  if (limit) {
-    scrutins = scrutins.slice(0, limit);
-  }
 
   console.log(
     `[citizen-impacts] Found ${scrutins.length} scrutins to process${dryRun ? " (dry-run)" : ""}`
@@ -221,7 +305,16 @@ export async function generateScrutinCitizenImpacts(options?: {
     return stats;
   }
 
+  // `limit` budgets model calls, not candidates: a refused candidate stays
+  // eligible, so a candidate budget would re-select it on every run and starve
+  // older scrutins that can be generated.
+  let modelCalls = 0;
   for (let i = 0; i < scrutins.length; i++) {
+    if (limit && modelCalls >= limit) break;
+    if (timeBudgetMs !== undefined && Date.now() - startedAt > timeBudgetMs) {
+      stats.stoppedEarly = true;
+      break;
+    }
     const id = scrutins[i]!.id;
 
     try {
@@ -229,15 +322,31 @@ export async function generateScrutinCitizenImpacts(options?: {
       if (!prepared) {
         stats.skipped++;
         stats.processed++;
+        stats.outcomes.push({ id, slug: null, title: null, outcome: "missing" });
         continue;
       }
+      const row = { id, slug: prepared.slug, title: prepared.title };
       if (prepared.contextHit) stats.contextHits++;
 
+      if (!prepared.canDescribeMeasure) {
+        stats.skippedNoSubstance++;
+        stats.processed++;
+        stats.outcomes.push({ ...row, outcome: "no_substance" });
+        continue;
+      }
+
+      modelCalls++;
       const result = await generateCitizenImpact(prepared.input);
       stats.processed++;
 
       if (result.confidence < 40) {
         stats.skipped++;
+        stats.outcomes.push({
+          ...row,
+          outcome: "low_confidence",
+          detail: `confiance ${result.confidence}`,
+          text: result.citizenImpact,
+        });
         continue;
       }
 
@@ -250,7 +359,7 @@ export async function generateScrutinCitizenImpacts(options?: {
       // THIS amendment or drifted onto the broad dossier — so we refuse to persist.
       // Better an empty "en bref" than a confident wrong one; a later run
       // regenerates once a reference exists, since the row stays null.
-      if (prepared.hasLinkedAmendment) {
+      if (prepared.hasLinkedAmendment || prepared.isAmendmentVote) {
         const verdict = assessCoherence({
           text: result.citizenImpact,
           policyTitle: prepared.policyTitle?.policyTitle ?? null,
@@ -259,12 +368,34 @@ export async function generateScrutinCitizenImpacts(options?: {
         });
         if (verdict.referenceUsed === "none" || !verdict.coherent) {
           stats.skippedIncoherent++;
+          stats.outcomes.push({
+            ...row,
+            outcome: "incoherent",
+            detail: `couverture ${verdict.coverage.toFixed(2)}, référence ${verdict.referenceUsed}`,
+            text: result.citizenImpact,
+          });
           console.warn(
             `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} ` +
               `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed})`
           );
           continue;
         }
+      }
+
+      // Names the text cites must exist in what the model was given.
+      const ungrounded = findUngroundedNames(result.citizenImpact, citizenImpactSources(prepared));
+      if (ungrounded.length > 0) {
+        stats.skippedUngrounded++;
+        stats.outcomes.push({
+          ...row,
+          outcome: "ungrounded",
+          detail: `noms absents des sources : ${ungrounded.join(", ")}`,
+          text: result.citizenImpact,
+        });
+        console.warn(
+          `[citizen-impacts] NOT PERSISTED for ${prepared.slug ?? id} (noms absents des sources: ${ungrounded.join(", ")})`
+        );
+        continue;
       }
 
       if (!dryRun) {
@@ -275,6 +406,7 @@ export async function generateScrutinCitizenImpacts(options?: {
       }
 
       stats.generated++;
+      stats.outcomes.push({ ...row, outcome: "generated", text: result.citizenImpact });
 
       if (i < scrutins.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, AI_RATE_LIMIT_MS));
@@ -283,6 +415,13 @@ export async function generateScrutinCitizenImpacts(options?: {
       const errorMsg = err instanceof Error ? err.message : String(err);
       stats.errors.push(`${id}: ${errorMsg}`);
       stats.processed++;
+      stats.outcomes.push({
+        id,
+        slug: null,
+        title: null,
+        outcome: "error",
+        detail: errorMsg.slice(0, 160),
+      });
 
       if (errorMsg.includes("429") || errorMsg.includes("rate")) {
         console.log("[citizen-impacts] Rate limited, waiting 30s...");

@@ -17,7 +17,8 @@ import {
   SCRUTIN_TYPE_LABELS,
   SCRUTIN_TYPE_COLORS,
 } from "@/config/labels";
-import { ExternalLink, Calendar, Users, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink, Calendar, Users, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/legislation";
 import { ArticleJsonLd } from "@/components/seo/JsonLd";
 import { Breadcrumb } from "@/components/ui/Breadcrumb";
@@ -614,20 +615,20 @@ export default async function ScrutinPage({ params }: PageProps) {
           </section>
         )}
 
-        {/* Contextual link to the thematic landing (descriptive anchor: the
-            theme badge above only carries the bare label). */}
-        {scrutin.theme && (
-          <div className="mt-8 text-center">
-            <ThemeVotesLink theme={scrutin.theme} />
-          </div>
-        )}
-
-        {/* Back link */}
-        <div className="mt-8 text-center">
-          <Link href="/parlement/votes" className="text-primary hover:underline">
-            ← Retour aux scrutins
-          </Link>
-        </div>
+        {/* Where to go next: the thematic landing (descriptive anchor, the theme badge
+            above only carries the bare label) and the way back to the list. */}
+        <nav
+          aria-label="Aller plus loin"
+          className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
+        >
+          {scrutin.theme && <ThemeVotesLink theme={scrutin.theme} />}
+          <Button asChild variant="outline" size="lg" className="min-h-11">
+            <Link href="/parlement/votes">
+              <ArrowLeft aria-hidden="true" />
+              Retour aux scrutins
+            </Link>
+          </Button>
+        </nav>
       </div>
     </>
   );

@@ -23,6 +23,7 @@ import {
   getPublishedAffairSqlWhere,
   getPublishedAffairWhere,
 } from "@/lib/affairs/public-filters";
+import { SCRUTIN_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,7 +389,7 @@ async function queryWeeklyRecap(weekStart: Date, weekEnd: Date): Promise<WeeklyR
           votesAbstain: true,
           votingDate: true,
         },
-        orderBy: { votingDate: "desc" },
+        orderBy: SCRUTIN_RECENT_FIRST,
       }),
 
       // 2. Most active voters this week

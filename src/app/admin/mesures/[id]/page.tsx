@@ -23,7 +23,11 @@ import { PublicVisibilityCard } from "../_components/PublicVisibilityCard";
 import { RevisionTimeline } from "../_components/RevisionTimeline";
 import { VoteLinkForm } from "../_components/VoteLinkForm";
 import { availableActions, hasAmbiguousPointers } from "../_data/available-actions";
-import { getMeasureContext, listReaderGuidesForModeration } from "../_data/detail-query";
+import {
+  getMeasureContext,
+  listAddableSubtopics,
+  listReaderGuidesForModeration,
+} from "../_data/detail-query";
 import { getMeasureVoteLinksForModeration } from "../_data/vote-links-query";
 
 export const metadata = {
@@ -93,6 +97,13 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
   const referenceRevisionId = measure.publishedRevisionId ?? measure.latestRevisionId;
   const referenceText =
     measure.revisions.find((revision) => revision.id === referenceRevisionId)?.text ?? null;
+
+  const referenceSubtopics =
+    measure.revisions.find((revision) => revision.id === referenceRevisionId)?.subtopics ?? [];
+  const addableSubtopics = await listAddableSubtopics(
+    context.theme,
+    referenceSubtopics.filter((item) => item.status !== "REJECTED").map((item) => item.subtopicId)
+  );
 
   const actions = availableActions({
     state,
@@ -214,10 +225,8 @@ export default async function AdminMeasureDetailPage({ params }: PageProps) {
           <MeasureSubtopicsPanel
             measureId={id}
             revisionId={referenceRevisionId}
-            assignments={(
-              measure.revisions.find((revision) => revision.id === referenceRevisionId)
-                ?.subtopics ?? []
-            ).map((assignment) => ({
+            addableSubtopics={addableSubtopics}
+            assignments={referenceSubtopics.map((assignment) => ({
               subtopicId: assignment.subtopicId,
               label: assignment.subtopic.label,
               status: assignment.status,

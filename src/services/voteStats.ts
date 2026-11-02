@@ -271,7 +271,7 @@ async function getDivisiveScrutins(
         AND s.chamber = ${chamber}::"Chamber"
       ORDER BY
         ABS(s."votesFor" - s."votesAgainst")::float / NULLIF(s."votesFor" + s."votesAgainst", 0) ASC,
-        s."votingDate" DESC
+        s."votingDate" DESC, s."sequence" DESC
       LIMIT ${limit}
     `;
   } else {
@@ -289,7 +289,7 @@ async function getDivisiveScrutins(
       WHERE s."votesFor" > 10 AND s."votesAgainst" > 10
       ORDER BY
         ABS(s."votesFor" - s."votesAgainst")::float / NULLIF(s."votesFor" + s."votesAgainst", 0) ASC,
-        s."votingDate" DESC
+        s."votingDate" DESC, s."sequence" DESC
       LIMIT ${limit}
     `;
   }

@@ -21,6 +21,7 @@ import { tmpdir } from "os";
 import { extractZip } from "@/lib/parsing/unzip";
 import { safeJsonParseOrThrow } from "@/lib/api/safe-json";
 import { createHash } from "crypto";
+import { scrutinSequence } from "@/lib/votes/scrutin-order";
 import {
   hashOfficialGroupSnapshot,
   parseOfficialGroupCountsDetailed,
@@ -427,12 +428,29 @@ async function persistOfficialGroupSnapshot(
 /**
  * Sync votes from Assemblée nationale
  */
+/** True when `dateScrutin` (YYYY-MM-DD) falls within the last `days` days, today included. */
+export function isWithinLastDays(
+  dateScrutin: string,
+  days: number,
+  now: Date = new Date()
+): boolean {
+  const voted = Date.parse(`${dateScrutin}T00:00:00Z`);
+  if (Number.isNaN(voted)) return false;
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return voted >= todayStart - days * 86_400_000;
+}
+
+/**
+ * `sinceDays` keeps only the scrutins of the last N days: the daily run refreshes the
+ * official group counts of recent votes without reading the whole archive again.
+ */
 export async function syncScrutinsAN(
   legislature: number = LEGISLATURE,
   dryRun: boolean = false,
   todayOnly: boolean = false,
   force: boolean = false,
-  officialGroupsOnly: boolean = false
+  officialGroupsOnly: boolean = false,
+  sinceDays?: number
 ): Promise<ScrutinsANSyncStats> {
   const stats: ScrutinsANSyncStats = {
     scrutinsProcessed: 0,
@@ -556,6 +574,12 @@ export async function syncScrutinsAN(
           }
         }
 
+        if (sinceDays !== undefined && !isWithinLastDays(s.dateScrutin, sinceDays)) {
+          stats.scrutinsSkipped++;
+          progress.tick();
+          continue;
+        }
+
         const externalId = s.uid;
         const votingDate = new Date(s.dateScrutin);
         const votesFor = parseInt(s.syntheseVote?.decompte?.pour || "0", 10);
@@ -613,6 +637,7 @@ export async function syncScrutinsAN(
               title: s.titre,
               description: null,
               votingDate,
+              sequence: scrutinSequence(externalId),
               legislature: parseInt(s.legislature, 10),
               votesFor,
               votesAgainst,

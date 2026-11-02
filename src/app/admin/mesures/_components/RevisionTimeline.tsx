@@ -1,3 +1,4 @@
+import { formatTimecode, videoSourceHref } from "@/config/video-source";
 import {
   MEASURE_EXTRACTION_METHOD_LABELS,
   MEASURE_PRECISION_LABELS,
@@ -165,7 +166,7 @@ function RevisionCard({
             {revision.sources.map((source) => (
               <li key={source.id}>
                 <a
-                  href={source.url}
+                  href={videoSourceHref(source.url, source.startAtSeconds)}
                   className="text-primary underline break-all"
                   rel="noreferrer"
                   target="_blank"
@@ -175,6 +176,8 @@ function RevisionCard({
                 <span className="text-muted-foreground">
                   {" "}
                   · {SOURCE_TIER_LABELS[source.tier]} · {formatter.format(source.publishedAt)}
+                  {source.startAtSeconds != null &&
+                    ` · passage à ${formatTimecode(source.startAtSeconds)}`}
                 </span>
               </li>
             ))}

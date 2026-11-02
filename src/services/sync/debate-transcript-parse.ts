@@ -82,12 +82,16 @@ export function extractSeanceFromXml(xml: string): ParsedSeance | null {
   const seanceRef = seanceRefMatch?.[1] ?? uid;
   const seanceOrder = parseSeanceOrder(numSeanceJourMatch?.[1] ?? null);
 
-  // Concatenate every spoken paragraphe. No truncation.
+  // Concatenate every spoken paragraphe. No truncation. In the real files only the
+  // president's paragraphes carry roledebat="president"; every other speaker has no
+  // such attribute, so filtering on it kept about a tenth of the debate. Table of
+  // contents entries are flagged sommaire="1" and are not speech.
   const texts: string[] = [];
-  const paragrapheRegex = /<paragraphe[^>]*roledebat="[^"]*"[^>]*>[\s\S]*?<\/paragraphe>/g;
+  const paragrapheRegex = /<paragraphe\b[^>]*>[\s\S]*?<\/paragraphe>/g;
   let match: RegExpExecArray | null;
   while ((match = paragrapheRegex.exec(xml)) !== null) {
     const block = match[0];
+    if (/^<paragraphe\b[^>]*\bsommaire="1"/.test(block)) continue;
     const nameMatch = block.match(/<nom>([^<]+)<\/nom>/);
     const texteMatch = block.match(/<texte[^>]*>([\s\S]*?)<\/texte>/);
     if (texteMatch) {

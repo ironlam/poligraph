@@ -11,7 +11,8 @@ import { DEPARTMENTS, getDepartmentSlug } from "@/config/departments";
 import { getAllLegacyThemeSlugs } from "@/lib/theme-utils";
 import { SITE_URL } from "@/config/site";
 import { PRESS_SPACE_UPDATED_AT } from "@/config/press-space";
-import { STATS_SECTIONS, STATS_TABS } from "@/config/routes";
+import { ROUTES, STATS_SECTIONS, STATS_TABS } from "@/config/routes";
+import { getPublishedChangelog } from "@/lib/data/changelog";
 import { getWeekStart, getISOWeekString } from "@/lib/data/recap";
 import { loadThemesIndex } from "@/lib/data/themes-index";
 import { isFicheCandidatPublishable, isHubPublishable } from "@/config/publication-gates";
@@ -89,6 +90,11 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
   cacheTag(...SITEMAP_SHARD_TAGS[0]);
   cacheLife("synced");
 
+  const latestChangelogDay = (await getPublishedChangelog())[0]?.date;
+  const changelogLastmod = latestChangelogDay
+    ? new Date(`${latestChangelogDay}T00:00:00Z`)
+    : undefined;
+
   const politicians = await db.$queryRaw<Array<{ slug: string; updatedAt: Date }>>(Prisma.sql`
     SELECT p."slug", p."updatedAt"
     FROM "Politician" p
@@ -155,6 +161,30 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.assembleeNationale}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.senat}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.glossaire}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: `${SITE_URL}${ROUTES.parcoursLegislatif}`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.7,
     },
     {
       url: `${SITE_URL}/parlement/dossiers`,
@@ -257,6 +287,12 @@ async function buildStaticAndPoliticiansSitemap(): Promise<MetadataRoute.Sitemap
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/changelog`,
+      lastModified: changelogLastmod,
+      changeFrequency: "weekly",
+      priority: 0.4,
     },
     // Rich, self-canonical methodology supporting every presidential measure page. It is stable
     // public content, not a utility view, so it belongs in the index and in the sitemap together.

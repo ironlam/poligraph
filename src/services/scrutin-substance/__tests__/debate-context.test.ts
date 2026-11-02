@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAmendmentMention } from "@/services/scrutin-substance/debate-context";
+import { applyAmbiguity, findAmendmentMention } from "@/services/scrutin-substance/debate-context";
 
 // Realistic AN séance snippet style: "l'amendement no <n>" (letter o, typographic ').
 const filler = (label: string) => ` ${label} `.repeat(40);
@@ -170,5 +170,192 @@ describe("findAmendmentMention — MEDIUM (author + article, no number)", () => 
     ]);
     expect(r.confidence).toBe("MEDIUM");
     expect(r.usableForGeneration).toBe(false);
+  });
+});
+
+describe("findAmendmentMention — finance-bill parts (séance text drops the I-/II- prefix)", () => {
+  const transcript =
+    "Nous en venons à l'amendement no 1358 portant article additionnel après l'article 15, examiné par priorité. La parole est à M. Laurent Lhardit, pour soutenir l'amendement.";
+
+  it("matches 'no 1358' to I-1358 when its article and author are cited nearby", () => {
+    const r = findAmendmentMention(transcript, [
+      {
+        number: "I-1358",
+        authorSurname: "Lhardit",
+        article: "APRÈS L'ARTICLE 15, insérer l'article suivant:",
+      },
+    ]);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.usableForGeneration).toBe(true);
+    expect(r.matchedAmendmentNumber).toBe("I-1358");
+  });
+
+  it("does not credit the other part, whose article and author are absent", () => {
+    const r = findAmendmentMention(transcript, [
+      { number: "II-1358", authorSurname: "Dupont", article: "ARTICLE 58" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("does not accept a bare number nothing corroborates", () => {
+    const r = findAmendmentMention("Je mets aux voix l'amendement no 1358.", [
+      { number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+  });
+
+  it("does not match a longer number (1358 is not 13580)", () => {
+    const r = findAmendmentMention(
+      "L'amendement no 13580 après l'article 15, présenté par M. Lhardit.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).not.toBe("HIGH");
+  });
+
+  it("still prefers an explicit prefixed mention", () => {
+    const r = findAmendmentMention("Sur l'amendement no I-1358, avis défavorable.", [
+      { number: "I-1358" },
+    ]);
+    expect(r.confidence).toBe("HIGH");
+  });
+
+  it("hands over the passage that follows a HIGH match, and nothing for a weaker one", () => {
+    const speech =
+      "M. Lhardit : cette taxe répond à une inégalité entre acteurs. " +
+      "Elle repose sur un volume mesuré en France, que personne ne peut contester, et elle serait payée surtout par les grandes plateformes étrangères. " +
+      "Son rendement serait important et elle rétablirait une équité entre les commerces et les plateformes. (L'amendement no 1358 est adopté.)";
+    const high = findAmendmentMention(
+      `Nous en venons à l'amendement no 1358 après l'article 15. ${speech}`,
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(high.context).toContain("répond à une inégalité");
+
+    const medium = findAmendmentMention(
+      "M. Lhardit présente un texte après l'article 15, sans numéro.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(medium.confidence).toBe("MEDIUM");
+    expect(medium.context).toBeNull();
+  });
+
+  it("does not take the article number for the amendment number", () => {
+    const r = findAmendmentMention("L'amendement no 42 à l'article 15 est rejeté.", [
+      { number: "I-15", article: "ARTICLE 15" },
+    ]);
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("reads the real séance spelling 'n o 1358' (exposant split by a space)", () => {
+    const r = findAmendmentMention(
+      "Nous en venons à l'amendement n o 1358 portant article additionnel après l'article 15.",
+      [{ number: "I-1358", authorSurname: "Lhardit", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).toBe("HIGH");
+  });
+
+  it("finds the bare number anywhere in a list of amendment numbers", () => {
+    const r = findAmendmentMention(
+      "Sur les amendements nos 2080, 1358 et 2090, avis défavorable, après l'article 15.",
+      [{ number: "I-1358", article: "APRÈS L'ARTICLE 15" }]
+    );
+    expect(r.confidence).toBe("HIGH");
+  });
+});
+
+describe("findAmendmentMention, bounded discussion", () => {
+  const ref = [{ number: "2084", authorSurname: "Lechon", article: "22" }];
+  const speech2084 =
+    "Mme Léchon : Cet amendement impose la transparence de la répartition de la valeur dans les coopératives agricoles. " +
+    "Il garantit que les producteurs connaissent la part qui leur revient sur chaque vente, et il permet un contrôle annuel. " +
+    "Les coopératives devraient publier chaque année la ventilation de la valeur entre l'amont et l'aval, afin que les agriculteurs puissent juger du partage. " +
+    "C'est une mesure de transparence, simple à mettre en oeuvre et sans coût pour les finances publiques. ";
+
+  it("cuts at the closing vote and leaves out the next amendment's speeches", () => {
+    const text =
+      "Mme la présidente : La parole est à Mme Léchon, pour soutenir l'amendement no 2084 à l'article 22. " +
+      speech2084 +
+      "(L'amendement no 2084 est adopté.) Mme la présidente : Nous en venons à l'amendement no 2085. M. Durand : ARGUMENT_AUTRE_AMENDEMENT sur les importations.";
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toContain("coopératives agricoles");
+    expect(r.context).not.toContain("ARGUMENT_AUTRE_AMENDEMENT");
+  });
+
+  it("cuts at the next different amendment when no closing is stated", () => {
+    const text =
+      "La parole est à Mme Léchon pour l'amendement no 2084 à l'article 22. " +
+      speech2084 +
+      "Mme la présidente : L'amendement no 2090 de M. Durand est défendu. ARGUMENT_AUTRE_AMENDEMENT.";
+    const r = findAmendmentMention(text, ref);
+    expect(r.context).toContain("contrôle annuel");
+    expect(r.context).not.toContain("ARGUMENT_AUTRE_AMENDEMENT");
+  });
+
+  it("gives no context when the match is only the closing announcement", () => {
+    const text =
+      "(L'amendement no 2084 est adopté.) Nous en venons à l'amendement no 2085. M. Durand : " +
+      "ARGUMENT_AUTRE_AMENDEMENT ".repeat(30);
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toBeNull();
+  });
+
+  it("gives no context when the end of the discussion cannot be found", () => {
+    const text =
+      "Sur l'amendement no 2084 à l'article 22, Mme Léchon : " + "Un propos sans fin. ".repeat(600);
+    const r = findAmendmentMention(text, ref);
+    expect(r.confidence).toBe("HIGH");
+    expect(r.context).toBeNull();
+  });
+});
+
+describe("applyAmbiguity", () => {
+  const high = {
+    confidence: "HIGH" as const,
+    reason: "Numéro cité.",
+    excerpt: "x",
+    context: "passage",
+    matchedAmendmentNumber: "2084",
+    usableForGeneration: true,
+    reinforced: true,
+  };
+
+  it("withdraws a match cited in several séances", () => {
+    const r = applyAmbiguity(high, 2);
+    expect(r.usableForGeneration).toBe(false);
+    expect(r.context).toBeNull();
+    expect(r.confidence).toBe("HIGH");
+  });
+
+  it("keeps a match cited in a single séance", () => {
+    expect(applyAmbiguity(high, 1)).toEqual(high);
+  });
+
+  it("does not take an article number for a plain amendment number", () => {
+    const r = findAmendmentMention(
+      "Mme la présidente : sur l'amendement no 42 à l'article 15, M. Durand défend un autre sujet.",
+      [{ number: "15", article: "ARTICLE 15" }]
+    );
+    expect(r.confidence).not.toBe("HIGH");
+    expect(r.usableForGeneration).toBe(false);
+  });
+
+  it("still finds a plain number, a prefixed one and a rectified one in a list", () => {
+    expect(
+      findAmendmentMention("Sur les amendements nos 12, 2084 et 2090.", [{ number: "2084" }])
+        .confidence
+    ).toBe("HIGH");
+    expect(
+      findAmendmentMention("Sur l'amendement no II-CF711, avis favorable.", [
+        { number: "II-CF711" },
+      ]).confidence
+    ).toBe("HIGH");
+    expect(
+      findAmendmentMention("Sur l'amendement no 600 (rect.), avis favorable.", [
+        { number: "600 (Rect)" },
+      ]).confidence
+    ).toBe("HIGH");
   });
 });

@@ -39,6 +39,9 @@ export type MeasureSourceInput = {
   tier: SourceTier;
   url: string;
   page: string | null;
+  startAtSeconds?: number | null;
+  /** Left undefined, it is carried over from the published revision when url and page are unchanged. */
+  excerpt?: string | null;
   publishedAt: Date;
 };
 
@@ -244,6 +247,30 @@ export async function createMeasure(
   });
 }
 
+/**
+ * A correction re-submits the sources of a measure, usually without the excerpt a source already
+ * carries. Without this, every text correction would wipe the excerpts of the published revision.
+ * The excerpt belongs to the passage of the document, so it follows only an unchanged url and page.
+ */
+async function carryOverExcerpts(
+  tx: DbTransactionClient,
+  publishedRevisionId: string | null,
+  sources: MeasureSourceInput[]
+): Promise<MeasureSourceInput[]> {
+  if (!publishedRevisionId || sources.every((source) => source.excerpt !== undefined))
+    return sources;
+  const published = await tx.measureSource.findMany({
+    where: { measureRevisionId: publishedRevisionId, excerpt: { not: null } },
+    select: { url: true, page: true, excerpt: true },
+  });
+  if (published.length === 0) return sources;
+  return sources.map((source) => {
+    if (source.excerpt !== undefined) return source;
+    const match = published.find((p) => p.url === source.url && p.page === source.page);
+    return match ? { ...source, excerpt: match.excerpt } : source;
+  });
+}
+
 export type DraftMeasureRevisionInput = {
   measureId: string;
   revision: MeasureRevisionInput;
@@ -326,6 +353,7 @@ export async function draftMeasureRevision(
               tier: true,
               url: true,
               page: true,
+              startAtSeconds: true,
               publishedAt: true,
             },
           },
@@ -363,6 +391,7 @@ export async function draftMeasureRevision(
       };
       revisionSources = previous.sources;
     }
+    revisionSources = await carryOverExcerpts(tx, measure.publishedRevisionId, revisionSources);
     const evidence = assertRevisionIsUsable(revisionInput, revisionSources);
 
     // The previous latest revision is an active draft only if it is not the published

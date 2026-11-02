@@ -4,6 +4,7 @@ import { withCache } from "@/lib/cache";
 import { getPoliticianVotingStats } from "@/services/voteStats";
 import { parsePagination, buildPaginationMeta } from "@/lib/api/pagination";
 import { withPublicRoute } from "@/lib/api/with-public-route";
+import { VOTE_RECENT_FIRST } from "@/lib/votes/scrutin-order";
 
 /**
  * @openapi
@@ -102,7 +103,7 @@ export const GET = withPublicRoute(async (request, context) => {
           },
         },
       },
-      orderBy: { votingDate: "desc" },
+      orderBy: VOTE_RECENT_FIRST,
       skip,
       take: limit,
     }),

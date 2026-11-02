@@ -179,3 +179,10 @@ describe("sitemap shards take part in tag invalidation", () => {
     }
   });
 });
+
+describe("changelog tag", () => {
+  it("is selectable by an operator and reaches the sitemap shard that lists /changelog", () => {
+    expect(SELECTABLE_TAGS).toContain("changelog");
+    expect(SITEMAP_SHARD_TAGS[0]).toContain("changelog");
+  });
+});

@@ -4,6 +4,7 @@ import { Breadcrumb } from "@/components/ui/Breadcrumb";
 import { THEME_CATEGORY_LABELS } from "@/config/labels";
 import { getSubjectPageData } from "@/lib/data/subject-page";
 import { parseThemeSlug, PRESIDENTIELLE_2027_SLUG } from "@/lib/presidentielle/themes";
+import { ParliamentThemeBridgeLoader } from "@/components/elections/ParliamentThemeBridgeLoader";
 import { SubjectComparison } from "./_components/SubjectComparison";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
@@ -68,7 +69,10 @@ export default async function SubjectPage({ params }: PageProps) {
           { label: THEME_CATEGORY_LABELS[theme] },
         ]}
       />
-      <SubjectComparison data={data} />
+      <SubjectComparison
+        data={data}
+        parliamentBridge={<ParliamentThemeBridgeLoader theme={theme} source="theme" />}
+      />
     </div>
   );
 }

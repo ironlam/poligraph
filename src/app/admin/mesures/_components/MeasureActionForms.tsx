@@ -230,6 +230,7 @@ function DraftForm({
                     tier: String(data.get("tier")) as SourceTier,
                     url: String(data.get("sourceUrl") ?? ""),
                     page: String(data.get("page") ?? "") || null,
+                    startAt: String(data.get("startAt") ?? "") || null,
                     publishedAt: String(data.get("sourcePublishedAt") ?? ""),
                   },
                 ],
@@ -348,6 +349,24 @@ function DraftForm({
                 Page (facultatif)
               </label>
               <input id="draft-page" name="page" type="text" className={FIELD} />
+            </div>
+            <div>
+              <label htmlFor="draft-start" className={LABEL}>
+                Début du passage, si vidéo (facultatif)
+              </label>
+              <input
+                id="draft-start"
+                name="startAt"
+                type="text"
+                inputMode="numeric"
+                placeholder="22:41"
+                aria-describedby="draft-start-hint"
+                className={FIELD}
+              />
+              <p id="draft-start-hint" className="mt-1 text-xs text-muted-foreground">
+                minutes:secondes, ou heures:minutes:secondes. Le lien public ouvre la vidéo à ce
+                moment.
+              </p>
             </div>
           </div>
         </fieldset>

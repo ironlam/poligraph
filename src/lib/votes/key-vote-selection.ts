@@ -135,7 +135,12 @@ export function selectKeyVotes<T extends KeyVoteCandidate>(
 
   const heroPool = pool.filter((c) => c.type && HERO_TYPES.includes(c.type));
   const effectiveHeroPool = heroPool.length > 0 ? heroPool : pool;
-  const hero = effectiveHeroPool[rotationOffset(opts.now, effectiveHeroPool.length)]!;
+  // The hero is the most recent decisive vote of the pool, not a daily rotation: a
+  // visitor expects the headline to be the latest thing the Parliament decided.
+  const hero = [...effectiveHeroPool].sort(
+    (a, b) =>
+      b.votingDate.getTime() - a.votingDate.getTime() || b.importanceScore - a.importanceScore
+  )[0]!;
 
   const rest = pool.filter((c) => c.id !== hero.id);
   const grid = rotate(rest, rotationOffset(opts.now, rest.length)).slice(0, opts.gridCount);

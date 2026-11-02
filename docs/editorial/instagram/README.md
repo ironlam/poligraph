@@ -52,8 +52,24 @@ Un export réussi ne dit rien de la mise en page : regarder chaque PNG avant de 
 - Titres en Outfit, corps en Atkinson Hyperlegible.
 - Bleu nuit pour la couverture et la clôture, papier clair pour les écrans de contenu, filet
   rouge et bleu en haut de chaque écran.
-- Aucune photographie de personne.
+- Portraits seulement en bichromie, depuis un fichier Wikimedia Commons à licence libre, avec le crédit dans
+  le pied de l'écran (voir `illustrations/`). Jamais sur un sujet judiciaire.
 - Une ligne de source dans le pied de chaque écran qui porte des données.
 - Pas d'indice de défilement : Instagram affiche déjà sa pagination.
 - Graphiques : une seule série se dessine d'une seule teinte, la valeur est écrite à côté de la
   barre.
+
+## Illustrations
+
+`illustrations/` contient des illustrations vectorielles au style de la charte (hémicycle, urne, Journal
+officiel, façade d'institution) et `portrait.mjs`, qui produit un portrait en bichromie.
+
+- Les SVG se posent avec `<img src="public/illustrations/<nom>.svg" alt="" />` : copier le dossier dans
+  `public/` du kit. Palette : bleu nuit, bleu clair, rouge, crème. Sur fond bleu nuit, les poser sur un
+  fond clair.
+- `node illustrations/portrait.mjs "<Titre du fichier Commons>" <sortie.png> [x,y,l,h]` télécharge la photo,
+  refuse toute licence non libre, recadre, applique la bichromie et écrit le crédit à côté. Une photo de
+  la base n'a pas de licence enregistrée : ne pas l'utiliser.
+- Le crédit (auteur, licence, Wikimedia Commons) figure dans le pied ou la ligne de source de l'écran.
+- Aucun portrait ni illustration sur un sujet judiciaire. Les portraits ne se génèrent ni ne se retouchent
+  par IA : une image de situation fabriquée avec un vrai élu se repartage hors contexte et ne se corrige pas.

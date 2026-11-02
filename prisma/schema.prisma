@@ -1290,6 +1290,31 @@ model FeatureFlag {
   updatedBy   String?
 }
 
+enum ChangelogType {
+  NOUVEAUTE
+  AMELIORATION
+  CORRECTION
+  DONNEES
+}
+
+/// Entrée du journal des évolutions (/changelog et flux RSS).
+/// PublicationStatus.PUBLISHED est la seule valeur exposée par les pages publiques.
+model ChangelogEntry {
+  id        String            @id @default(cuid())
+  type      ChangelogType
+  /// Date du changement, affichée telle quelle (jour calendaire, pas un instant).
+  date      DateTime          @db.Date
+  title     String
+  body      String
+  /// PR, commit ou source officielle. Obligatoire pour publier.
+  sourceUrl String?
+  status    PublicationStatus @default(DRAFT)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([status, date(sort: Desc)])
+}
+
 // ============================================
 // PARLIAMENTARY VOTES
 // ============================================
@@ -1302,6 +1327,7 @@ model Scrutin {
   title       String   @db.Text
   description String?  @db.Text
   votingDate  DateTime
+  sequence    Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
   legislature Int
   chamber     Chamber  @default(AN) // AN = Assemblée Nationale, SENAT = Sénat
 
@@ -1351,6 +1377,7 @@ model Scrutin {
   importance        ScrutinImportance?
   groupPositions    ScrutinGroupPosition[]
   analysis          ScrutinAnalysis?
+  impactRegeneration ImpactRegenerationLog?
   measureVoteLinks  MeasureVoteLink[]
   debateTranscripts DebateTranscript[]
 
@@ -1362,6 +1389,7 @@ model Scrutin {
   updatedAt DateTime @updatedAt
 
   @@index([votingDate])
+  @@index([votingDate(sort: Desc), sequence(sort: Desc)], map: "Scrutin_votingDate_sequence_idx")
   @@index([legislature])
   @@index([chamber])
   @@index([chamber, votingDate]) // participation stats: mandate date range queries
@@ -1436,7 +1464,11 @@ model Vote {
   // CONCURRENTLY. Superset of the former [politicianId, position] index (dropped).
   @@index([politicianId, position, votingDate, scrutinId])
   @@index([politicianId, votingDate(sort: Desc)], map: "Vote_politicianId_votingDate_idx")
-  @@index([politicianId, chamber, votingDate(sort: Desc)], map: "Vote_politicianId_chamber_votingDate_idx")
+  // Trailing position covers the per-chamber position breakdown (voteStats groupBy):
+  // index-only scan, no heap fetch. A politician's votes sit about one per heap page,
+  // so fetching position from the heap cost 1.4 s cold. Created in prod via CREATE
+  // INDEX CONCURRENTLY.
+  @@index([politicianId, chamber, votingDate(sort: Desc), position], map: "Vote_politicianId_chamber_votingDate_idx")
   // Covering index for the per-politician votes list/counts filtered by tab
   // (Issue #377): index-only scan, drops the JOIN on Scrutin. Created in prod via
   // CREATE INDEX CONCURRENTLY.
@@ -1681,6 +1713,7 @@ model LegislativeDossier {
   scrutins   Scrutin[]
   authors    DossierAuthor[]
   aliases    LegislativeDossierAlias[]
+  measureLinks MeasureDossierLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3734,6 +3767,7 @@ model Measure {
 
   revisions MeasureRevision[] @relation("MeasureRevisions")
   voteLinks MeasureVoteLink[] @relation("MeasureVoteLinks")
+  dossierLinks MeasureDossierLink[] @relation("MeasureDossierLinks")
 
   latestRevision      MeasureRevision? @relation("MeasureLatest", fields: [latestRevisionId], references: [id], onDelete: SetNull)
   latestRevisionId    String?          @unique
@@ -3805,6 +3839,7 @@ model MeasureRevision {
   assessments              MeasureSimilarityAssessment[]
   equivalentOf             MeasureSimilarityMatch[]         @relation("EquivalentRevision")
   applicableVoteLinks      MeasureVoteLink[]                @relation("ApplicableRevisionVoteLinks")
+  applicableDossierLinks   MeasureDossierLink[]             @relation("ApplicableRevisionDossierLinks")
   subtopics                MeasureRevisionSubtopic[]
   readerGuideMentions      MeasureRevisionReaderGuide[]     @relation("MeasureRevisionReaderGuides")
   readerGuideDetectionRuns MeasureReaderGuideDetectionRun[]
@@ -3945,6 +3980,42 @@ model MeasureVoteLink {
   @@index([scrutinId])
 }
 
+enum MeasureDossierLinkKind {
+  SAME_OBJECT
+  BROADER_TEXT
+}
+
+// A human-reviewed link between a published measure and a legislative dossier. Carries no vote
+// relation and no polarity: it only says that the dossier deals with the same object (or contains
+// a wider text), proved by one quote on each side. Never derived from a model score alone.
+model MeasureDossierLink {
+  id String @id @default(cuid())
+
+  measure   Measure @relation("MeasureDossierLinks", fields: [measureId], references: [id], onDelete: Cascade)
+  measureId String
+
+  applicableRevision   MeasureRevision @relation("ApplicableRevisionDossierLinks", fields: [applicableRevisionId], references: [id], onDelete: Cascade)
+  applicableRevisionId String
+
+  dossier   LegislativeDossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  dossierId String
+
+  linkKind     MeasureDossierLinkKind
+  measureQuote String                 @db.Text
+  textQuote    String                 @db.Text
+  rationale    String                 @db.Text
+  searchMethod String
+  reviewedBy   String
+  checkedAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([applicableRevisionId, dossierId])
+  @@index([measureId])
+  @@index([dossierId])
+}
+
 // Attached to the revision and not to the measure: this is what represents the ordinary
 // case of a measure announced in an interview, reformulated in the programme, then cited
 // by three newspapers.
@@ -3958,6 +4029,12 @@ model MeasureSource {
   tier        SourceTier
   url         String
   page        String?
+  // Where the passage starts in an audio-visual source, in seconds. `page` stays free text for
+  // documents; a video source carries this instead so the public link can jump to the passage.
+  startAtSeconds Int?
+  // Short verbatim passage of a written source (programme, proposals), 100 to 520 characters, set by
+  // setSourceExcerpt() after a mechanical check against the document. Null for speeches, press and video.
+  excerpt String? @db.Text
   publishedAt DateTime
 
   createdAt DateTime @default(now())
@@ -4596,4 +4673,17 @@ enum FeedbackStatus {
   NEW
   DONE
   REJECTED
+}
+
+/// Journal de la régénération des anciens impacts citoyens : un vote y entre une fois traité
+/// (texte réécrit ou refusé par un contrôle), pour que les passages suivants avancent.
+/// Créée par prisma/migrations/manual/add_impact_regeneration_log.sql, jamais par db:push.
+model ImpactRegenerationLog {
+  scrutinId String   @id
+  scrutin   Scrutin  @relation(fields: [scrutinId], references: [id], onDelete: Cascade)
+  outcome   String
+  detail    String?  @db.Text
+  handledAt DateTime @default(now())
+
+  @@index([handledAt])
 }
