@@ -44,6 +44,8 @@ const CHAT_MODEL = "mistral-large-latest";
 const RETRIEVE_K = 10;
 // Only the best candidates are qualified: 91 % of the pairs of the first run were rejected.
 const DEFAULT_QUALIFY_K = 5;
+// Part of the qualification checkpoint key: a changed prompt must never reuse an older answer.
+const PROMPT_VERSION = "scope-v2";
 // Floor on the measure/dossier cosine, to be calibrated on the reference set (--min-cosine).
 const DEFAULT_MIN_COSINE = 0.65;
 const DOC_CHARS = 1200;
@@ -119,18 +121,27 @@ function withTimeout<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   });
 }
 
-/** Retries a call on a 429 or a timeout (a stalled socket after a sleep never fails by itself). */
+/** Retries a call on a 429, a transient 5xx or a timeout (a stalled socket after a sleep never fails by itself). */
 async function withRetry<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await withTimeout(call);
     } catch (error) {
       const retryable =
-        error instanceof Error && /Mistral API error 429|Mistral call timeout/.test(error.message);
+        error instanceof Error &&
+        /Mistral API error (?:429|50[234])|Mistral call timeout/.test(error.message);
       if (!retryable || attempt >= 5) throw error;
       await new Promise((resolve) => setTimeout(resolve, 5000 * 2 ** attempt));
     }
   }
+}
+
+function qualificationKey(m: Meas, d: Doc): string {
+  return embeddingCacheKey(
+    "q",
+    `${m.id}:${d.id}`,
+    `${PROMPT_VERSION}\u0000${m.text}\u0000${d.body}`
+  );
 }
 
 interface QualifyTask {
@@ -215,6 +226,8 @@ async function main(): Promise<void> {
   mkdirSync(out, { recursive: true });
   const n = Number(arg("measures", "50"));
   const dryRun = flag("dry-run");
+  // Requalify a given list of pairs (JSON [{measureId, textId}]) instead of retrieving candidates.
+  const pairsPath = arg("pairs");
   const qualifyK = Number(arg("qualify-k", String(DEFAULT_QUALIFY_K)));
   const minCosine = Number(arg("min-cosine", String(DEFAULT_MIN_COSINE)));
   if (!dryRun && !process.env.MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY doit être définie");
@@ -232,7 +245,7 @@ async function main(): Promise<void> {
       ? [{ id: r.id, slug: r.slug, theme: r.theme, text: r.publishedRevision.text }]
       : []
   );
-  const sample = sampleMeasures(all, n);
+  const sample = pairsPath ? all : sampleMeasures(all, n);
 
   const dossiers = await db.legislativeDossier.findMany({
     where: { theme: { not: null }, slug: { not: null } },
@@ -260,46 +273,70 @@ async function main(): Promise<void> {
   console.log(
     `[poc] mesures=${usable.length}/${sample.length} dossiers=${docs.length} jetons estimés≈${estTokens}`
   );
+  if (pairsPath) {
+    const count = (JSON.parse(readFileSync(pairsPath, "utf8")) as unknown[]).length;
+    console.log(`[poc] mode paires : ${count} paires, jetons estimés≈${count * 900}`);
+  }
   if (dryRun) return;
-
-  const cachePath = join(out, "embeddings.json");
-  const cache: Record<string, number[]> = existsSync(cachePath)
-    ? JSON.parse(readFileSync(cachePath, "utf8"))
-    : {};
-  const need = [
-    ...docs.map((d) => [embeddingCacheKey("d", d.id, d.body), d.body] as const),
-    ...usable.map((m) => [embeddingCacheKey("m", m.id, m.text), m.text] as const),
-  ].filter(([k]) => !cache[k]);
-  const vectors = await embedAll(need.map(([, t]) => t));
-  need.forEach(([k], i) => (cache[k] = vectors[i]!));
-  writeFileSync(cachePath, JSON.stringify(cache));
 
   const retrieved = new Map<string, string[]>();
   const tasks: QualifyTask[] = [];
-  for (const m of usable) {
-    const target = getParliamentThemeTarget(m.theme)!;
-    const pool = docs.filter((d) => d.theme === target.theme);
-    const mv = cache[embeddingCacheKey("m", m.id, m.text)]!;
-    const sem = pool
-      .map((d) => [d.id, cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!)] as const)
-      .toSorted((l, r) => r[1] - l[1])
-      .map(([id]) => id);
-    const lex = pool
-      .map((d) => [d.id, lexicalOverlap(m.text, d.body)] as const)
-      .toSorted((l, r) => r[1] - l[1])
-      .map(([id]) => id);
-    const top = fuseRankings(sem.slice(0, 50), lex.slice(0, 50)).slice(0, RETRIEVE_K);
-    retrieved.set(m.id, top);
+  if (pairsPath) {
+    const wanted = JSON.parse(readFileSync(pairsPath, "utf8")) as {
+      measureId: string;
+      textId: string;
+    }[];
+    const measureById = new Map(all.map((m) => [m.id, m]));
+    const docById = new Map(docs.map((d) => [d.id, d]));
+    for (const w of wanted) {
+      const m = measureById.get(w.measureId);
+      const d = docById.get(w.textId);
+      if (!m || !d) {
+        console.log(
+          `[poc] paire ignorée (mesure ou dossier introuvable) ${w.measureId}|${w.textId}`
+        );
+        continue;
+      }
+      tasks.push({ key: qualificationKey(m, d), measure: m, doc: d, rank: 0 });
+    }
+  } else {
+    const cachePath = join(out, "embeddings.json");
+    const cache: Record<string, number[]> = existsSync(cachePath)
+      ? JSON.parse(readFileSync(cachePath, "utf8"))
+      : {};
+    const need = [
+      ...docs.map((d) => [embeddingCacheKey("d", d.id, d.body), d.body] as const),
+      ...usable.map((m) => [embeddingCacheKey("m", m.id, m.text), m.text] as const),
+    ].filter(([k]) => !cache[k]);
+    const vectors = await embedAll(need.map(([, t]) => t));
+    need.forEach(([k], i) => (cache[k] = vectors[i]!));
+    writeFileSync(cachePath, JSON.stringify(cache));
 
-    for (const [rank, id] of top.slice(0, qualifyK).entries()) {
-      const d = pool.find((x) => x.id === id)!;
-      if (cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!) < minCosine) continue;
-      tasks.push({
-        key: embeddingCacheKey("q", `${m.id}:${d.id}`, `${m.text}\u0000${d.body}`),
-        measure: m,
-        doc: d,
-        rank,
-      });
+    for (const m of usable) {
+      const target = getParliamentThemeTarget(m.theme)!;
+      const pool = docs.filter((d) => d.theme === target.theme);
+      const mv = cache[embeddingCacheKey("m", m.id, m.text)]!;
+      const sem = pool
+        .map((d) => [d.id, cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!)] as const)
+        .toSorted((l, r) => r[1] - l[1])
+        .map(([id]) => id);
+      const lex = pool
+        .map((d) => [d.id, lexicalOverlap(m.text, d.body)] as const)
+        .toSorted((l, r) => r[1] - l[1])
+        .map(([id]) => id);
+      const top = fuseRankings(sem.slice(0, 50), lex.slice(0, 50)).slice(0, RETRIEVE_K);
+      retrieved.set(m.id, top);
+
+      for (const [rank, id] of top.slice(0, qualifyK).entries()) {
+        const d = pool.find((x) => x.id === id)!;
+        if (cosine(mv, cache[embeddingCacheKey("d", d.id, d.body)]!) < minCosine) continue;
+        tasks.push({
+          key: qualificationKey(m, d),
+          measure: m,
+          doc: d,
+          rank,
+        });
+      }
     }
   }
 
@@ -315,6 +352,7 @@ async function main(): Promise<void> {
   }
   await qualifyAll(tasks, done, checkpointPath);
 
+  const measuresUsed = new Set(tasks.map((t) => t.measure.id)).size;
   const proposals: Proposal[] = [];
   for (const t of tasks) {
     const q = done.get(t.key);
@@ -342,13 +380,13 @@ async function main(): Promise<void> {
   writeFileSync(join(out, "proposals.jsonl"), proposals.map((p) => JSON.stringify(p)).join("\n"));
   writeFileSync(
     join(out, "review.html"),
-    renderReviewPage(proposals, { measures: usable.length, pairs: proposals.length })
+    renderReviewPage(proposals, { measures: measuresUsed, pairs: proposals.length })
   );
 
   const refPath = arg("reference");
   const kept = proposals.filter((p) => p.tier !== "REJETE");
   const metrics = {
-    measures: usable.length,
+    measures: measuresUsed,
     pairsQualified: proposals.length,
     proposed: kept.length,
     lotPret: kept.filter((p) => p.tier === "LOT_PRET").length,

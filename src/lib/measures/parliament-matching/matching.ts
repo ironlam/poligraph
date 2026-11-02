@@ -8,6 +8,11 @@ import { createHash } from "node:crypto";
  */
 
 export type ProposedLinkKind = "SAME_OBJECT" | "BROADER_TEXT" | "NO_VOTE_IDENTIFIED";
+/**
+ * Why a BROADER_TEXT is related: the text contains the measure, or covers one of its several parts.
+ * Both are stored as BROADER_TEXT; a text that only shares the domain is NO_VOTE_IDENTIFIED.
+ */
+export type BroaderScope = "CONTAINS" | "COMPONENT";
 export type Confidence = "high" | "medium" | "low";
 
 export interface Qualification {
@@ -18,6 +23,8 @@ export interface Qualification {
   /** Passage copied from the parliamentary text, verbatim. */
   textQuote: string;
   rationale: string;
+  /** Only set on a BROADER_TEXT qualified with the scope-aware prompt. */
+  scope?: BroaderScope;
 }
 
 export type ReviewTier = "LOT_PRET" | "A_EXAMINER" | "REJETE";
@@ -85,7 +92,10 @@ export const QUALIFICATION_SCHEMA = {
   additionalProperties: false,
   required: ["kind", "confidence", "measureQuote", "textQuote", "rationale"],
   properties: {
-    kind: { type: "string", enum: ["SAME_OBJECT", "BROADER_TEXT", "NO_VOTE_IDENTIFIED"] },
+    kind: {
+      type: "string",
+      enum: ["SAME_OBJECT", "BROADER_TEXT", "COMPONENT_TEXT", "NO_VOTE_IDENTIFIED"],
+    },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     measureQuote: { type: "string" },
     textQuote: { type: "string" },
@@ -101,8 +111,9 @@ export function buildQualificationPrompt(measureText: string, textTitle: string,
     "Réponds uniquement par un objet JSON conforme au schéma.",
     "Règles :",
     "- SAME_OBJECT : le texte traite du même dispositif, avec la même action et le même public. Une proximité de thème ne suffit pas.",
-    "- BROADER_TEXT : le texte contient ou encadre le dispositif de la mesure sans lui être identique.",
-    "- NO_VOTE_IDENTIFIED : tout le reste, y compris dans le doute.",
+    "- BROADER_TEXT : le texte englobe le dispositif de la mesure, qui en est un cas ou un élément.",
+    "- COMPONENT_TEXT : la mesure compte plusieurs volets et le texte traite l'un d'eux, avec la même action et le même public.",
+    "- NO_VOTE_IDENTIFIED : tout le reste, y compris dans le doute : même domaine sans qu'aucun volet de la mesure soit traité, action opposée, simple voisinage.",
     "- measureQuote et textQuote sont des extraits copiés mot pour mot. Si tu ne peux pas citer, réponds NO_VOTE_IDENTIFIED avec des citations vides.",
     "- Ne dis rien du sens d'un vote, ni de la position d'une personne.",
     `<mesure>${sanitize(measureText, 600)}</mesure>`,
@@ -114,13 +125,22 @@ export function buildQualificationPrompt(measureText: string, textTitle: string,
 export function parseQualification(raw: unknown): Qualification | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
-  const kinds = ["SAME_OBJECT", "BROADER_TEXT", "NO_VOTE_IDENTIFIED"];
+  const kinds = ["SAME_OBJECT", "BROADER_TEXT", "COMPONENT_TEXT", "NO_VOTE_IDENTIFIED"];
   const confidences = ["high", "medium", "low"];
   if (typeof r.kind !== "string" || !kinds.includes(r.kind)) return null;
   if (typeof r.confidence !== "string" || !confidences.includes(r.confidence)) return null;
   if (typeof r.measureQuote !== "string" || typeof r.textQuote !== "string") return null;
   if (typeof r.rationale !== "string") return null;
-  return r as unknown as Qualification;
+  const base = {
+    confidence: r.confidence as Confidence,
+    measureQuote: r.measureQuote,
+    textQuote: r.textQuote,
+    rationale: r.rationale,
+  };
+  // COMPONENT_TEXT is a kind of BROADER_TEXT downstream: same stored value, with its scope kept.
+  if (r.kind === "COMPONENT_TEXT") return { ...base, kind: "BROADER_TEXT", scope: "COMPONENT" };
+  if (r.kind === "BROADER_TEXT") return { ...base, kind: "BROADER_TEXT", scope: "CONTAINS" };
+  return { ...base, kind: r.kind as ProposedLinkKind };
 }
 
 const ELLIPSIS = /\[\s*(?:\.{3}|…)\s*\]|\.{3}|…/;
