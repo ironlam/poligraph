@@ -1,0 +1,137 @@
+{
+  "sourceUrl": "https://data.assemblee-nationale.fr/static/openData/repository/17/amo/tous_acteurs_mandats_organes_xi_legislature/AMO30_tous_acteurs_tous_mandats_tous_organes_historique.json.zip",
+  "retrievedAt": "2026-10-21T14:33:05Z",
+  "archiveSha256": "331addb75d7212aef6aec13de84fcf6c5506a90ddac648b26916f192a1f10539",
+  "organes": [
+    {
+      "organe": {
+        "uid": "PO845401",
+        "codeType": "GP",
+        "libelle": "Rassemblement National",
+        "libelleAbrege": "RN",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845413",
+        "codeType": "GP",
+        "libelle": "La France insoumise - Nouveau Front Populaire",
+        "libelleAbrege": "LFI-NFP",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845419",
+        "codeType": "GP",
+        "libelle": "Socialistes et apparentés",
+        "libelleAbrege": "SOC",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845407",
+        "codeType": "GP",
+        "libelle": "Ensemble pour la République",
+        "libelleAbrege": "EPR",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845425",
+        "codeType": "GP",
+        "libelle": "Droite Républicaine",
+        "libelleAbrege": "DR",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845454",
+        "codeType": "GP",
+        "libelle": "Les Démocrates",
+        "libelleAbrege": "Dem",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845470",
+        "codeType": "GP",
+        "libelle": "Horizons & Indépendants",
+        "libelleAbrege": "HOR",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845485",
+        "codeType": "GP",
+        "libelle": "Libertés, Indépendants, Outre-mer et Territoires",
+        "libelleAbrege": "LIOT",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845439",
+        "codeType": "GP",
+        "libelle": "Écologiste et Social",
+        "libelleAbrege": "EcoS",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO845514",
+        "codeType": "GP",
+        "libelle": "Gauche Démocrate et Républicaine",
+        "libelleAbrege": "GDR",
+        "viMoDe": { "dateDebut": "2024-07-18", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO847173",
+        "codeType": "GP",
+        "libelle": "UDR",
+        "libelleAbrege": "UDR",
+        "viMoDe": { "dateDebut": "2024-09-12", "dateFin": "2025-09-04" },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO872880",
+        "codeType": "GP",
+        "libelle": "Union des droites pour la République",
+        "libelleAbrege": "UDR",
+        "viMoDe": { "dateDebut": "2025-09-05", "dateFin": null },
+        "legislature": "17"
+      }
+    },
+    {
+      "organe": {
+        "uid": "PO840056",
+        "codeType": "GP",
+        "libelle": "Non inscrit",
+        "libelleAbrege": "NI",
+        "viMoDe": { "dateDebut": "2024-07-01", "dateFin": null },
+        "legislature": "17"
+      }
+    }
+  ]
+}

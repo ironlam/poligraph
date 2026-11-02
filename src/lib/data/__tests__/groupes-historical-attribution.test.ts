@@ -4,10 +4,14 @@ const dbMock = vi.hoisted(() => ({
   parliamentaryGroup: { findUnique: vi.fn(), findMany: vi.fn() },
   scrutinGroupPosition: { findMany: vi.fn() },
   scrutinAnalysis: { findUnique: vi.fn() },
+  governmentProjects: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: dbMock }));
+vi.mock("@/lib/data/government-project-positions", () => ({
+  getGovernmentProjectPositionDataset: dbMock.governmentProjects,
+}));
 
 import {
   getGroupeDetail,
@@ -165,6 +169,35 @@ describe("statistiques de groupe AN persistées", () => {
 
     expect(group?.stats).toBeNull();
     expect(group?.seatCount).toBe(70);
+  });
+
+  it("garde les statistiques AN masquées lorsque le nouvel indicateur est chargé", async () => {
+    const summary = {
+      candidateCount: 2,
+      eligibleScrutinCount: 2,
+      consideredCount: 2,
+      excludedCount: 0,
+      groupExcludedCount: 0,
+      scopeExcludedCount: 0,
+      updatedAt: null,
+      counts: { POUR: 1, ABSTENTION: 0, CONTRE: 1 },
+      percentages: { POUR: 50, ABSTENTION: 0, CONTRE: 50 },
+    };
+    dbMock.governmentProjects.mockResolvedValue({
+      legislature: 17,
+      groups: { SOC: { summary, rows: [] } },
+    });
+    dbMock.parliamentaryGroup.findMany.mockResolvedValue([
+      { id: "g", code: "SOC", chamber: "AN", stats, _count: { mandates: 70 } },
+    ]);
+
+    const [group] = await getGroupesListing({
+      chamber: "AN",
+      includeGovernmentProjectPositions: true,
+    });
+
+    expect(group?.stats).toBeNull();
+    expect(group?.governmentProjectPositions).toEqual(summary);
   });
 
   it("n'expose pas les valeurs persistées dans le détail", async () => {

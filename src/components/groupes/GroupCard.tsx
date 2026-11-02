@@ -5,6 +5,7 @@ import { CHAMBER_SHORT_LABELS } from "@/config/labels";
 import { ROUTES } from "@/config/routes";
 import { Users } from "lucide-react";
 import type { GroupListingItem } from "@/lib/data/groupes";
+import { GovernmentProjectPositionBreakdown } from "./GovernmentProjectPositionBreakdown";
 
 interface GroupCardProps {
   group: GroupListingItem;
@@ -46,7 +47,7 @@ export function GroupCard({ group }: GroupCardProps) {
             </span>
           </div>
 
-          {group.stats && (
+          {group.stats && group.chamber === "SENAT" && (
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-lg font-bold">{Math.round(group.stats.cohesionPct)}%</p>
@@ -62,6 +63,26 @@ export function GroupCard({ group }: GroupCardProps) {
                 <p className="text-sm font-semibold text-muted-foreground">Indisponible</p>
                 <p className="text-xs text-muted-foreground">Participation</p>
               </div>
+            </div>
+          )}
+
+          {group.chamber === "AN" && (
+            <div className="border-t pt-3">
+              <p className="mb-2 text-center text-xs font-medium">
+                Positions sur les projets gouvernementaux
+              </p>
+              {group.code === "NI" ? (
+                <p className="text-center text-sm text-muted-foreground">
+                  Non calculé pour les non-inscrits
+                </p>
+              ) : group.governmentProjectPositions ? (
+                <GovernmentProjectPositionBreakdown
+                  summary={group.governmentProjectPositions}
+                  compact
+                />
+              ) : (
+                <p className="text-center text-sm text-muted-foreground">Données indisponibles</p>
+              )}
             </div>
           )}
         </Link>

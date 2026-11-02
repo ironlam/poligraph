@@ -33,6 +33,48 @@ export interface ParliamentaryGroupConfig {
   partyWikidataId?: string;
 }
 
+export interface AssemblyGroupOrganeRef {
+  organeRef: string;
+  legislature: number;
+}
+
+/**
+ * Official AN organ identifiers for the 17th legislature.
+ *
+ * Crosswalk only: labels and validity periods come from AnOrgan (AMO30).
+ * UDR has two successive official identities under one internal display code.
+ */
+export const ASSEMBLY_GROUP_ORGANE_REFS: Record<string, readonly AssemblyGroupOrganeRef[]> = {
+  RN: [{ organeRef: "PO845401", legislature: 17 }],
+  "LFI-NFP": [{ organeRef: "PO845413", legislature: 17 }],
+  SOC: [{ organeRef: "PO845419", legislature: 17 }],
+  EPR: [{ organeRef: "PO845407", legislature: 17 }],
+  DR: [{ organeRef: "PO845425", legislature: 17 }],
+  DEM: [{ organeRef: "PO845454", legislature: 17 }],
+  HOR: [{ organeRef: "PO845470", legislature: 17 }],
+  LIOT: [{ organeRef: "PO845485", legislature: 17 }],
+  ECOS: [{ organeRef: "PO845439", legislature: 17 }],
+  GDR: [{ organeRef: "PO845514", legislature: 17 }],
+  UDR: [
+    {
+      organeRef: "PO847173",
+      legislature: 17,
+    },
+    { organeRef: "PO872880", legislature: 17 },
+  ],
+  NI: [{ organeRef: "PO840056", legislature: 17 }],
+};
+
+export const ASSEMBLY_ORGANE_REFS_SOURCE_URL =
+  "https://data.assemblee-nationale.fr/static/openData/repository/17/amo/tous_acteurs_mandats_organes_xi_legislature/AMO30_tous_acteurs_tous_mandats_tous_organes_historique.json.zip";
+
+export function getAssemblyGroupOrganeRefs(code: string, legislature: number): string[] {
+  const canonicalCode = ASSEMBLY_GROUPS[code]?.code ?? code;
+  return (ASSEMBLY_GROUP_ORGANE_REFS[canonicalCode] ?? [])
+    .filter((entry) => entry.legislature === legislature)
+    .map((entry) => entry.organeRef);
+}
+
 // ============================================
 // ASSEMBLÉE NATIONALE - 17e législature (2024-2027)
 // ============================================
