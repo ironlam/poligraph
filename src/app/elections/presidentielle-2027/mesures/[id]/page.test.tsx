@@ -316,7 +316,9 @@ describe("page publique d'une mesure présidentielle", () => {
       </TooltipProvider>
     );
     expect(screen.getByRole("heading", { name: "Cette mesure au Parlement" })).toBeInTheDocument();
-    expect(screen.getByText("Un texte plus large traite de ce sujet.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Un texte connexe aborde ce sujet, plus largement ou plus partiellement.")
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Votes parlementaires liés" })
     ).not.toBeInTheDocument();

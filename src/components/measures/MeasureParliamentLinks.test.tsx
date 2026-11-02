@@ -46,7 +46,9 @@ describe("MeasureParliamentLinks", () => {
       />
     );
     expect(screen.getByText("Un texte porte précisément sur cette mesure.")).toBeInTheDocument();
-    expect(screen.getByText("Un texte plus large traite de ce sujet.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Un texte connexe aborde ce sujet, plus largement ou plus partiellement.")
+    ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/même objet/i);
     expect(screen.getAllByRole("link", { name: "Lire le texte" })[0]).toHaveAttribute(
       "href",

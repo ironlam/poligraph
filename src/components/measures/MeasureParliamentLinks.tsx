@@ -10,7 +10,7 @@ import { MeasureFinalVoteChart } from "./MeasureFinalVoteChart";
 
 const KIND_SENTENCE = {
   SAME_OBJECT: "Un texte porte précisément sur cette mesure.",
-  BROADER_TEXT: "Un texte plus large traite de ce sujet.",
+  BROADER_TEXT: "Un texte connexe aborde ce sujet, plus largement ou plus partiellement.",
 } as const;
 
 const BY_CHAMBER: Record<Chamber, string> = {
