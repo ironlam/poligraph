@@ -2,7 +2,7 @@
 // Every entry was read at its source on the date given in consultedAt. Adding a mention or a
 // contributor is a one-line change here; bump PRESS_SPACE_UPDATED_AT with it (sitemap lastmod).
 
-export const PRESS_SPACE_UPDATED_AT = "2026-10-10";
+export const PRESS_SPACE_UPDATED_AT = "2026-11-02";
 
 export type PressMentionKind = "article" | "site";
 
@@ -145,7 +145,7 @@ export const CONTRIBUTORS: Contributor[] = [
   {
     handle: "bazmap",
     firstContributionAt: "2026-07-21",
-    consentedAt: null,
+    consentedAt: "2026-10-10",
     contributions: [
       {
         verb: "a proposé",
@@ -158,7 +158,7 @@ export const CONTRIBUTORS: Contributor[] = [
   {
     handle: "intelarti11",
     firstContributionAt: "2026-07-20",
-    consentedAt: null,
+    consentedAt: "2026-10-14",
     contributions: [
       {
         verb: "a contribué",
