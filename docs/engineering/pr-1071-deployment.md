@@ -55,6 +55,18 @@ schéma est appliqué avec le SQL manuel ci-dessous, pas avec `prisma migrate`.
    que les champs d'origine et laisse la chronologie inchangée. La synchronisation peut être
    relancée; elle télécharge et traite l'archive de la législature pour mettre à jour les dossiers.
 
+   La synchronisation complète ne réécrit pas l'origine des dossiers déjà en base. Si l'origine n'a
+   jamais été remplie pour la 17e législature, lancer aussi le remplissage, sans quoi les dossiers
+   restent `INDETERMINEE` et le corpus sort vide ou partiel :
+
+   ```sh
+   npm run sync:legislation -- --leg=17 --origin-only --dry-run
+   npm run sync:legislation -- --leg=17 --origin-only
+   ```
+
+   Contrôle : le nombre de dossiers `INDETERMINEE` de la 17e législature doit être nul, ou
+   expliqué, avant de passer à la suite.
+
 6. Vérifier qu'il existe des scrutins de la 17e législature avec une référence officielle, que les
    erreurs des deux synchronisations sont nulles, et que les liens avec les dossiers reposent sur
    `officialDossierRef` ou un `voteRef` exact. Les rapprochements par titre restent exclus de cet
