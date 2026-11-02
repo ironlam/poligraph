@@ -121,4 +121,37 @@ describe("findUngroundedNames", () => {
       "Le texte prévoyait : « une séance ne peut être imposée. » Cela visait la victime.";
     expect(findUngroundedNames(text, ["une séance ne peut être imposée"])).toEqual([]);
   });
+
+  describe("overseas territories", () => {
+    const text =
+      "Cela concerne les employeurs des territoires ultramarins (Guadeloupe, Martinique, La Réunion et Mayotte).";
+
+    it("accepts the territories when the sources speak of the overseas collectivities", () => {
+      const src = [
+        "Les collectivités régies par l'article 73 de la Constitution bénéficient d'exonérations.",
+      ];
+      expect(findUngroundedNames(text, src)).toEqual([]);
+    });
+
+    it("accepts them when the sources say outre-mer", () => {
+      expect(
+        findUngroundedNames(text, ["Les entreprises d'outre-mer rencontrent des difficultés."])
+      ).toEqual([]);
+    });
+
+    it("still flags them when the sources never speak of the overseas", () => {
+      const found = findUngroundedNames(text, [
+        "Les droits de succession sur les patrimoines financiers.",
+      ]);
+      expect(found).toContain("Guadeloupe");
+      expect(found).toContain("Mayotte");
+    });
+
+    it("does not exempt another name from the same text", () => {
+      const found = findUngroundedNames("Les employeurs ultramarins (Guadeloupe) et Edenred.", [
+        "Les collectivités d'outre-mer.",
+      ]);
+      expect(found).toEqual(["Edenred"]);
+    });
+  });
 });

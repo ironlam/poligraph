@@ -85,6 +85,33 @@ const GENERIC_CAPITALISED = new Set(
   ].map(fold)
 );
 
+/**
+ * Overseas territories. A text may list them when the sources speak of "l'article 73",
+ * "ultramarins" or "outre-mer" without naming each one: the list is a gloss of what the
+ * sources say, not an addition. Without such a mention in the sources they stay names to ground.
+ */
+const OVERSEAS_TERRITORIES = new Set(
+  [
+    "guadeloupe",
+    "martinique",
+    "guyane",
+    "reunion",
+    "mayotte",
+    "polynesie",
+    "caledonie",
+    "nouvelle-caledonie",
+    "saint-martin",
+    "saint-barthelemy",
+    "saint-pierre-et-miquelon",
+    "wallis",
+    "futuna",
+    "wallis-et-futuna",
+  ].map(fold)
+);
+
+const OVERSEAS_CONTEXT_RE =
+  /outre-mer|outremer|ultramarin|\bdrom\b|\bdrom-com\b|\blodeom\b|articles?\s+7[34]\b/;
+
 // Apostrophes split words: "L'Assemblée" is the word "Assemblée" after an elision.
 const WORD_RE = /[\p{L}][\p{L}-]*/gu;
 
@@ -199,6 +226,7 @@ export function findUngroundedNames(text: string, sources: string[]): string[] {
   const words = sourceWords(sources);
   const plain = stripMarkdown(text);
   const defined = definedInText(plain, words);
+  const overseasInSources = sources.some((src) => OVERSEAS_CONTEXT_RE.test(fold(src)));
   const found = new Set<string>();
   const out: string[] = [];
 
@@ -220,6 +248,7 @@ export function findUngroundedNames(text: string, sources: string[]): string[] {
 
     const key = fold(word);
     if (GENERIC_CAPITALISED.has(key) || defined.has(key) || found.has(key)) continue;
+    if (overseasInSources && OVERSEAS_TERRITORIES.has(key)) continue;
     found.add(key);
     if (!isInSources(key, words)) out.push(word);
   }
