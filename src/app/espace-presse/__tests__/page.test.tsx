@@ -74,10 +74,12 @@ describe("/espace-presse", () => {
     }
   });
 
-  it("names no contributor who has not agreed", () => {
+  it("names only the contributors who agreed", () => {
     const { text } = render();
-    // No entry carries consentedAt yet: the section must stay anonymous.
-    for (const handle of ["DidiLJ", "LaBinocle21", "bazmap", "intelarti11", "virginielenk-spec"]) {
+    for (const handle of ["bazmap", "intelarti11"]) {
+      expect(text).toContain(handle);
+    }
+    for (const handle of ["DidiLJ", "LaBinocle21", "virginielenk-spec"]) {
       expect(text).not.toContain(handle);
     }
   });
