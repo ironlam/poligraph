@@ -4,9 +4,12 @@ const dbMock = vi.hoisted(() => ({
   scrutin: { findMany: vi.fn() },
   legislativeDossier: { findMany: vi.fn() },
   anOrgan: { findMany: vi.fn() },
+  $queryRaw: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }));
+const cacheMock = vi.hoisted(() => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }));
+
+vi.mock("next/cache", () => cacheMock);
 vi.mock("@/lib/db", () => ({ db: dbMock }));
 
 import { getGovernmentProjectPositionDataset } from "../government-project-positions";
@@ -58,6 +61,7 @@ const dossier = {
 describe("lecture des positions sur les projets gouvernementaux", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dbMock.$queryRaw.mockResolvedValue([]);
     dbMock.legislativeDossier.findMany.mockResolvedValue([dossier]);
     dbMock.anOrgan.findMany.mockResolvedValue([
       {
@@ -86,6 +90,7 @@ describe("lecture des positions sur les projets gouvernementaux", () => {
 
   it("refuse un rattachement heuristique mais accepte un voteRef exact", async () => {
     dbMock.legislativeDossier.findMany.mockResolvedValue([]);
+    dbMock.$queryRaw.mockResolvedValue([{ externalId: "DLR5L17N1", ref: "VTANR5L17V3055" }]);
     dbMock.scrutin.findMany.mockResolvedValue([
       scrutin({
         officialDossierRef: null,
@@ -116,6 +121,50 @@ describe("lecture des positions sur les projets gouvernementaux", () => {
       groupExcludedCount: 0,
       scopeExcludedCount: 1,
     });
+  });
+
+  it("refuse un voteRef porté par deux dossiers", async () => {
+    dbMock.legislativeDossier.findMany.mockResolvedValue([]);
+    dbMock.$queryRaw.mockResolvedValue([
+      { externalId: "DLR5L17N1", ref: "VTANR5L17V518" },
+      { externalId: "DLR5L17N2", ref: "VTANR5L17V518" },
+    ]);
+    dbMock.scrutin.findMany.mockResolvedValue([
+      scrutin({
+        officialDossierRef: null,
+        dossierLegislatif: { ...dossier, timeline: [{ voteRefs: ["VTANR5L17V518"] }] },
+      }),
+    ]);
+
+    const dataset = await getGovernmentProjectPositionDataset(17);
+
+    expect(dataset.groups.RN?.rows[0]).toMatchObject({
+      position: null,
+      exclusion: "DOSSIER_LINK_REQUIRES_REVIEW",
+    });
+  });
+
+  it("refuse un voteRef que seul un autre dossier porte", async () => {
+    dbMock.legislativeDossier.findMany.mockResolvedValue([]);
+    dbMock.$queryRaw.mockResolvedValue([{ externalId: "DLR5L17N2", ref: "VTANR5L17V518" }]);
+    dbMock.scrutin.findMany.mockResolvedValue([
+      scrutin({
+        officialDossierRef: null,
+        dossierLegislatif: { ...dossier, timeline: [{ voteRefs: ["VTANR5L17V518"] }] },
+      }),
+    ]);
+
+    const dataset = await getGovernmentProjectPositionDataset(17);
+
+    expect(dataset.groups.RN?.rows[0]).toMatchObject({ position: null });
+  });
+
+  it("s'invalide avec les dossiers", async () => {
+    dbMock.scrutin.findMany.mockResolvedValue([scrutin()]);
+
+    await getGovernmentProjectPositionDataset(17);
+
+    expect(cacheMock.cacheTag).toHaveBeenCalledWith("votes", "groupes", "dossiers");
   });
 
   it("compte séparément une exclusion de données dans le périmètre", async () => {

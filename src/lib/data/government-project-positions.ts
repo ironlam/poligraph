@@ -5,7 +5,6 @@ import {
   getParliamentaryGroupConfig,
 } from "@/config/parliamentaryGroups";
 import { db } from "@/lib/db";
-import { timelineContainsVoteRef } from "@/lib/legislation/timeline-vote-refs";
 import {
   evaluateOfficialGroupPosition,
   summarizeGovernmentProjectPositions,
@@ -76,7 +75,7 @@ export async function getGovernmentProjectPositionDataset(
   legislature = 17
 ): Promise<GovernmentProjectPositionDataset> {
   "use cache";
-  cacheTag("votes", "groupes");
+  cacheTag("votes", "groupes", "dossiers");
   cacheLife("synced");
 
   const [scrutins, organes] = await Promise.all([
@@ -123,7 +122,6 @@ export async function getGovernmentProjectPositionDataset(
             title: true,
             sourceUrl: true,
             origin: true,
-            timeline: true,
           },
         },
       },
@@ -160,6 +158,25 @@ export async function getGovernmentProjectPositionDataset(
     officialDossiers.map((dossier) => [dossier.externalId, dossier])
   );
 
+  // A voteRef only anchors a dossier when no other dossier timeline carries it: the shared
+  // resolver fails closed on duplicates, so the published figures must too.
+  const fallbackVoteRefs = scrutins
+    .filter((scrutin) => scrutin.officialDossierRef === null && scrutin.dossierLegislatif !== null)
+    .map((scrutin) => scrutin.externalId);
+  const voteRefOwners = new Map<string, Set<string>>();
+  if (fallbackVoteRefs.length > 0) {
+    const owners = await db.$queryRaw<Array<{ externalId: string; ref: string }>>`
+      SELECT d."externalId" AS "externalId", r.ref AS ref
+      FROM "LegislativeDossier" d
+      JOIN unnest(${fallbackVoteRefs}::text[]) AS r(ref)
+        ON d."timeline"::text LIKE '%"' || r.ref || '"%'`;
+    for (const { externalId, ref } of owners) {
+      const set = voteRefOwners.get(ref) ?? new Set<string>();
+      set.add(externalId);
+      voteRefOwners.set(ref, set);
+    }
+  }
+
   const prepared = scrutins.map((scrutin) => {
     const hasDeclaredOfficialRef = scrutin.officialDossierRef !== null;
     const officialDossier = scrutin.officialDossierRef
@@ -171,7 +188,8 @@ export async function getGovernmentProjectPositionDataset(
     const hasVoteRefLink =
       !hasDeclaredOfficialRef &&
       scrutin.dossierLegislatif !== null &&
-      timelineContainsVoteRef(scrutin.dossierLegislatif.timeline, scrutin.externalId);
+      voteRefOwners.get(scrutin.externalId)?.size === 1 &&
+      voteRefOwners.get(scrutin.externalId)!.has(scrutin.dossierLegislatif.externalId);
     const resolution = hasOfficialLink
       ? "OFFICIAL_DOSSIER_REF"
       : hasVoteRefLink
