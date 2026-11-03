@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SupportPageDonation } from "@/components/donation/SupportPageDonation";
 import { SecondaryPlatforms } from "@/components/donation/SecondaryPlatforms";
 import { MISSION_ITEMS, taxReceiptMessage, totalMonthlyEuros } from "@/config/donation";
+import { YOUTUBE_CHANNEL_URL } from "@/config/youtube";
 
 export const metadata: Metadata = {
   title: "Soutenez Poligraph",
@@ -76,6 +77,27 @@ export default function SoutenirPage() {
               <p className="text-sm text-muted-foreground">
                 Parlez de Poligraph autour de vous et sur les réseaux. Plus nous sommes nombreux,
                 plus notre voix porte.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Abonnez-vous à la chaîne</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Poligraph a une{" "}
+                <a
+                  href={YOUTUBE_CHANNEL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  chaîne YouTube
+                  <span className="sr-only"> (ouvre un nouvel onglet)</span>
+                </a>
+                . S&apos;abonner, mettre un like ou commenter une vidéo aide aussi le projet. Le «
+                sans publicité » concerne le site, pas la chaîne.
               </p>
             </CardContent>
           </Card>

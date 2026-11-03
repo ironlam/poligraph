@@ -7,6 +7,11 @@ describe("security headers", () => {
       "frame-src 'self' https://www.helloasso.com"
     );
   });
+  it("autorise youtube-nocookie en frame-src, sans youtube.com", () => {
+    const csp = buildContentSecurityPolicy(false);
+    expect(csp).toMatch(/frame-src[^;]*https:\/\/www\.youtube-nocookie\.com/);
+    expect(csp).not.toMatch(/frame-src[^;]*https:\/\/www\.youtube\.com/);
+  });
   it("a exactement une directive frame-ancestors 'none' sans source parasite", () => {
     const csp = buildContentSecurityPolicy(false);
     expect(csp.match(/frame-ancestors/g)).toHaveLength(1);

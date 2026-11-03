@@ -148,6 +148,23 @@ export default function ConfidentialitePage() {
         </section>
 
         <section>
+          <h2 className="mb-4 text-xl font-semibold">Vidéos YouTube</h2>
+          <div className="space-y-3 text-muted-foreground">
+            <p>
+              Les vidéos de la chaîne Poligraph sont chargées uniquement lorsque l&apos;utilisateur
+              clique sur « Lire la vidéo ». Avant ce clic, aucune requête n&apos;est envoyée à
+              YouTube. Le lecteur utilise le domaine youtube-nocookie.com : YouTube (Google) traite
+              ensuite les données de lecture selon ses propres conditions.
+            </p>
+            <p>
+              Le bandeau qui invite à s&apos;abonner à la chaîne retient sa fermeture dans le
+              stockage local du navigateur de l&apos;utilisateur. Cette information reste sur son
+              appareil et n&apos;est transmise à personne.
+            </p>
+          </div>
+        </section>
+
+        <section>
           <h2 className="mb-4 text-xl font-semibold">Finalités et bases légales</h2>
           <ul className="list-disc space-y-3 pl-6 text-muted-foreground">
             <li>
@@ -199,6 +216,10 @@ export default function ConfidentialitePage() {
             <li>
               <strong>HelloAsso :</strong> traitement du don lorsqu&apos;un utilisateur choisit
               d&apos;ouvrir le formulaire correspondant.
+            </li>
+            <li>
+              <strong>YouTube (Google) :</strong> lecture des vidéos de la chaîne lorsqu&apos;un
+              utilisateur clique sur « Lire la vidéo ».
             </li>
           </ul>
           <p className="mt-3 text-muted-foreground">

@@ -10,6 +10,7 @@ import { HomeIntentGrid } from "@/components/home/HomeIntentGrid";
 import { WeekFeed } from "@/components/home/WeekFeed";
 import { TrustStrip } from "@/components/home/TrustStrip";
 import { SupportCampaign } from "@/components/home/SupportCampaign";
+import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
 
 export const revalidate = 300;
 
@@ -34,6 +35,8 @@ export default async function HomePage() {
   return (
     <div className="container mx-auto px-4 py-8 space-y-10">
       <HomeHero />
+
+      <YoutubeBanner />
 
       {/* The banner derives its own temporal state: a day count computed here was the duplication
           that kept the other four states invisible from this page. */}

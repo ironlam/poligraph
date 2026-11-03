@@ -10,7 +10,7 @@ export function buildContentSecurityPolicy(isDev: boolean): string {
     "font-src 'self'",
     "worker-src 'self'",
     "connect-src 'self' https://cloud.umami.is https://api-gateway.umami.dev https://gateway.umami.is https://vercel.live https://api.anthropic.com https://geo.api.gouv.fr",
-    "frame-src 'self' https://www.helloasso.com",
+    "frame-src 'self' https://www.helloasso.com https://www.youtube-nocookie.com",
     "frame-ancestors 'none'",
   ];
   return directives.join("; ");
