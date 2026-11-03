@@ -61,7 +61,8 @@ export default function SoutenirPage() {
       <section className="mt-12">
         <h2 className="mb-1 text-2xl font-bold">Autres façons de soutenir financièrement</h2>
         <p className="mb-6 text-muted-foreground">
-          HelloAsso reste notre canal principal (don à l&apos;association). {taxReceiptMessage()}
+          Un don par HelloAsso soutient l&apos;association Sankofa. {taxReceiptMessage()} Tipeee
+          soutient le projet Poligraph : l&apos;hébergement et le développement de nouveaux projets.
         </p>
         <SecondaryPlatforms />
       </section>
