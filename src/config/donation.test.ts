@@ -83,6 +83,14 @@ describe("donation config v2", () => {
     expect(ids).not.toContain("github-sponsors"); // désactivée, sans url
     expect(ids).not.toContain("helloasso"); // plateforme primaire
   });
+  it("Tipeee finance le projet (hébergement, nouveaux développements), pas l'association", () => {
+    const tipeee = SUPPORT_PLATFORMS.find((p) => p.id === "tipeee");
+    expect(tipeee).toBeDefined();
+    expect(tipeee!.description).toMatch(/hébergement/i);
+    expect(tipeee!.description).toMatch(/Poligraph/);
+    expect(tipeee!.description).not.toMatch(/association|Sankofa/i);
+    expect(tipeee!.beneficiaryLabel).not.toMatch(/Sankofa/i);
+  });
   it("DONATION_PREFILL_MODE est une valeur autorisée", () => {
     expect(["unsupported", "verified"]).toContain(DONATION_PREFILL_MODE);
   });

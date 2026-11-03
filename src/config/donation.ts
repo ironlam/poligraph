@@ -134,10 +134,11 @@ export const SUPPORT_PLATFORMS = [
   {
     id: "tipeee",
     displayName: "Tipeee",
-    description: "Soutien récurrent, versé à l'association.",
+    description:
+      "Soutenez le projet Poligraph : l'hébergement et le développement de nouveaux projets.",
     url: "https://fr.tipeee.com/poligraph",
     enabled: true,
-    beneficiaryLabel: "Association Sankofa",
+    beneficiaryLabel: "Projet Poligraph",
     taxReceiptChannel: "unavailable",
     primary: false,
   },
