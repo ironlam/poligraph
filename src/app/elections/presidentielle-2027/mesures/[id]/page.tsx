@@ -32,6 +32,7 @@ import {
 } from "@/lib/presidentielle/reader-guide-paths";
 import { formatDate } from "@/lib/utils";
 import { PresidentialSubtopicLink } from "../../_components/PresidentialSubtopicLink";
+import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
 
 const ELECTION_SLUG = "presidentielle-2027";
 
@@ -137,6 +138,10 @@ export default async function PresidentialMeasurePage({ params }: PageProps) {
             </span>
           </div>
         </header>
+
+        <div className="py-6">
+          <YoutubeBanner />
+        </div>
 
         {measure.details !== null && (
           <section aria-labelledby="details-title" className="border-b border-border py-8">

@@ -29,6 +29,7 @@ import { HubTopics } from "./_components/HubTopics";
 import { HubReaderGuides } from "./_components/HubReaderGuides";
 import { PresidentialHubNav } from "./_components/PresidentialHubNav";
 import { PresidentialCorpusSearch } from "./_components/PresidentialCorpusSearch";
+import { YoutubeBanner } from "@/components/youtube/YoutubeBanner";
 
 // ISR: 24h backstop. Real changes propagate on demand: a measure write busts election-measures:<id>.
 export const revalidate = 86400;
@@ -134,6 +135,8 @@ export default async function PresidentialHubPage() {
 
       <div className="container mx-auto space-y-8 px-4 pt-4 pb-8">
         <PresidentialHubNav active="overview" />
+
+        <YoutubeBanner />
 
         <div className={activityLayout}>
           <HubLatestMeasures measures={latestMeasures} lastReviewedAt={context.lastReviewedAt} />

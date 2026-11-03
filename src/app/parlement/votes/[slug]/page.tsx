@@ -50,6 +50,8 @@ import { toPublicTitleView } from "@/lib/votes/to-public-title-view";
 import { formatLegislature } from "@/lib/votes/legislature";
 import { isVoteDateArchiveSlug, voteDateArchiveRobotsMetadata } from "@/lib/seo/parliament-robots";
 import { scrutinRobotsMetadata } from "@/lib/seo/scrutin-robots";
+import { getScrutinVideoId } from "@/config/youtube";
+import { ScrutinVideoLayout } from "@/components/youtube/ScrutinVideoLayout";
 
 /** Parse externalId into human-readable label: "VTANR5L17V5729" → "Vote n°5729" */
 function formatExternalId(externalId: string, chamber: string): string {
@@ -336,6 +338,7 @@ export default async function ScrutinPage({ params }: PageProps) {
   // Motion de censure: special threshold-based display. Detected against the OFFICIAL title
   // (logic, not display).
   const isMotionDeCensure = /motion\s+de\s+censure/i.test(scrutin.title);
+  const videoId = getScrutinVideoId(scrutin.slug);
 
   return (
     <>
@@ -364,116 +367,123 @@ export default async function ScrutinPage({ params }: PageProps) {
           ]}
         />
 
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <h1 className="text-2xl font-display font-extrabold tracking-tight">
-              <span className="block text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                {extractScrutinNumber(scrutin.externalId)
-                  ? `Scrutin n° ${extractScrutinNumber(scrutin.externalId)}`
-                  : formatExternalId(scrutin.externalId, scrutin.chamber)}
-                {" · "}
-                {scrutin.chamber === "AN" ? "Assemblée nationale" : "Sénat"}
-              </span>
-              <span className="inline-flex flex-wrap items-center gap-2 align-middle">
-                {displayTitle}
-                {view.mode === "policy" ? (
-                  <Badge variant="accent" className="align-middle text-xs font-medium">
-                    Titre explicatif
-                  </Badge>
-                ) : null}
-              </span>
-            </h1>
-            <VotingResultBadge result={scrutin.result} />
-          </div>
+        <ScrutinVideoLayout
+          videoId={videoId}
+          videoTitle={displayTitle}
+          header={
+            <div className="mb-8">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <h1 className="text-2xl font-display font-extrabold tracking-tight">
+                  <span className="block text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    {extractScrutinNumber(scrutin.externalId)
+                      ? `Scrutin n° ${extractScrutinNumber(scrutin.externalId)}`
+                      : formatExternalId(scrutin.externalId, scrutin.chamber)}
+                    {" · "}
+                    {scrutin.chamber === "AN" ? "Assemblée nationale" : "Sénat"}
+                  </span>
+                  <span className="inline-flex flex-wrap items-center gap-2 align-middle">
+                    {displayTitle}
+                    {view.mode === "policy" ? (
+                      <Badge variant="accent" className="align-middle text-xs font-medium">
+                        Titre explicatif
+                      </Badge>
+                    ) : null}
+                  </span>
+                </h1>
+                <VotingResultBadge result={scrutin.result} />
+              </div>
 
-          {view.mode === "policy" ? (
-            <div className="mb-4">
-              {view.policySubtitle ? (
-                <p className="text-base text-muted-foreground">{view.policySubtitle}</p>
+              {view.mode === "policy" ? (
+                <div className="mb-4">
+                  {view.policySubtitle ? (
+                    <p className="text-base text-muted-foreground">{view.policySubtitle}</p>
+                  ) : null}
+                  <details className="mt-2 text-sm">
+                    <summary className="cursor-pointer text-muted-foreground">
+                      Titre officiel
+                    </summary>
+                    <p className="mt-1">{view.officialTitle}</p>
+                  </details>
+                </div>
               ) : null}
-              <details className="mt-2 text-sm">
-                <summary className="cursor-pointer text-muted-foreground">Titre officiel</summary>
-                <p className="mt-1">{view.officialTitle}</p>
-              </details>
-            </div>
-          ) : null}
 
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            {scrutin.type && scrutin.type !== "AUTRE" && (
-              <span
-                className={`px-2 py-0.5 rounded text-xs font-medium ${SCRUTIN_TYPE_COLORS[scrutin.type]}`}
-              >
-                {SCRUTIN_TYPE_LABELS[scrutin.type]}
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              {formatDate(scrutin.votingDate)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              {total} votants
-            </span>
-            <Badge variant="outline">{formatLegislature(scrutin.legislature)}</Badge>
-            {scrutin.theme && (
-              <Link
-                href={`/parlement/votes/themes/${scrutin.theme.toLowerCase().replace(/_/g, "-")}`}
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors hover:opacity-80 ${THEME_CATEGORY_COLORS[scrutin.theme]}`}
-              >
-                {THEME_CATEGORY_LABELS[scrutin.theme]}
-              </Link>
-            )}
-            {scrutin.sourceUrl && (
-              <a
-                href={scrutin.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-primary hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" />
-                {scrutin.sourceUrl.includes("assemblee-nationale.fr")
-                  ? "Voir sur Assemblée nationale"
-                  : scrutin.sourceUrl.includes("nosdeputes.fr")
-                    ? "Voir sur NosDéputés.fr"
-                    : "Voir la source"}
-              </a>
-            )}
-          </div>
-        </div>
-
-        {/* Dossier législatif lié */}
-        {scrutin.dossierLegislatif && (
-          <Link
-            href={`/parlement/dossiers/${scrutin.dossierLegislatif.slug}`}
-            className="flex items-center gap-3 mb-8 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group"
-          >
-            <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-muted-foreground">Dossier législatif</p>
-              <p className="font-medium group-hover:underline">
-                {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
-              </p>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                {scrutin.type && scrutin.type !== "AUTRE" && (
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${SCRUTIN_TYPE_COLORS[scrutin.type]}`}
+                  >
+                    {SCRUTIN_TYPE_LABELS[scrutin.type]}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  {formatDate(scrutin.votingDate)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  {total} votants
+                </span>
+                <Badge variant="outline">{formatLegislature(scrutin.legislature)}</Badge>
+                {scrutin.theme && (
+                  <Link
+                    href={`/parlement/votes/themes/${scrutin.theme.toLowerCase().replace(/_/g, "-")}`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors hover:opacity-80 ${THEME_CATEGORY_COLORS[scrutin.theme]}`}
+                  >
+                    {THEME_CATEGORY_LABELS[scrutin.theme]}
+                  </Link>
+                )}
+                {scrutin.sourceUrl && (
+                  <a
+                    href={scrutin.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    {scrutin.sourceUrl.includes("assemblee-nationale.fr")
+                      ? "Voir sur Assemblée nationale"
+                      : scrutin.sourceUrl.includes("nosdeputes.fr")
+                        ? "Voir sur NosDéputés.fr"
+                        : "Voir la source"}
+                  </a>
+                )}
+              </div>
             </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {scrutin.dossierLegislatif.number && (
-                <Badge variant="secondary" className="font-mono text-xs">
-                  {scrutin.dossierLegislatif.number}
-                </Badge>
-              )}
-              <StatusBadge status={scrutin.dossierLegislatif.status} />
-            </div>
-          </Link>
-        )}
+          }
+        >
+          {/* Dossier législatif lié */}
+          {scrutin.dossierLegislatif && (
+            <Link
+              href={`/parlement/dossiers/${scrutin.dossierLegislatif.slug}`}
+              className="flex items-center gap-3 mb-8 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group"
+            >
+              <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-muted-foreground">Dossier législatif</p>
+                <p className="font-medium group-hover:underline">
+                  {scrutin.dossierLegislatif.shortTitle || scrutin.dossierLegislatif.title}
+                </p>
+              </div>
+              <div className="shrink-0 flex items-center gap-2">
+                {scrutin.dossierLegislatif.number && (
+                  <Badge variant="secondary" className="font-mono text-xs">
+                    {scrutin.dossierLegislatif.number}
+                  </Badge>
+                )}
+                <StatusBadge status={scrutin.dossierLegislatif.status} />
+              </div>
+            </Link>
+          )}
 
-        {/* A. Résultat officiel */}
-        <ScrutinResultCard
-          votesFor={scrutin.votesFor}
-          votesAgainst={scrutin.votesAgainst}
-          votesAbstain={scrutin.votesAbstain}
-          source={source}
-          isMotionDeCensure={isMotionDeCensure}
-        />
+          {/* A. Résultat officiel */}
+          <ScrutinResultCard
+            votesFor={scrutin.votesFor}
+            votesAgainst={scrutin.votesAgainst}
+            votesAbstain={scrutin.votesAbstain}
+            source={source}
+            isMotionDeCensure={isMotionDeCensure}
+          />
+        </ScrutinVideoLayout>
 
         {/* Synthèse PoliGraph, enjeux et B. Votes individuels (tabbed) */}
         <ScrutinContext
