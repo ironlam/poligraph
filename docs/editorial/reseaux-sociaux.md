@@ -147,3 +147,40 @@ classer des personnes en marge lui fait dire autre chose que ce qu'elle démontr
 
 Quand un terme désignant des personnes est nécessaire, il vit dans une phrase, avec sa source, et il
 énonce ce qu'il recouvre plutôt que de servir de rubrique.
+
+## 12. Du site vers la chaîne YouTube
+
+Le site invite à suivre la chaîne `@poligraph_fr`. C'est un appel posé en bordure de page, pas une
+publicité, et il suit ses propres règles. Le « sans publicité » de `/soutenir` vaut pour le site :
+la chaîne est monétisée, et la page le dit.
+
+**Où l'appel apparaît.** Le bandeau (`YoutubeBanner`) figure sur l'accueil, le dossier présidentielle
+2027 et les pages de mesure. Sur la page d'un scrutin, il cède la place à la vidéo quand elle existe.
+Il n'apparaît jamais à côté d'une affaire judiciaire, sur `/soutenir` ni sur les pages juridiques :
+une demande d'abonnement n'a rien à faire là où le lecteur lit une procédure ou ce que devient sa
+donnée. Pour l'étendre à une page, on ajoute le composant dans cette page, pas dans le layout
+partagé.
+
+**Ce que le texte dit.** Il énonce ce que l'abonnement, le like et le commentaire apportent au projet.
+Il ne promet aucun résultat, n'emprunte pas les formules d'un influenceur et ne cite pas
+l'algorithme.
+
+**Rien ne part avant le clic.** Le lecteur ne crée l'iframe `youtube-nocookie.com` qu'après un clic
+sur « Lire la vidéo », et n'affiche aucune image tirée de YouTube. Un changement qui ferait contacter
+YouTube plus tôt modifie aussi la page de confidentialité et la directive `frame-src` de la CSP.
+
+**Ajouter une vidéo à un scrutin.**
+
+1. Publier la vidéo sur la chaîne, puis vérifier qu'elle traite bien le scrutin visé : titre, date et
+   décompte des voix.
+2. Retrouver le slug exact du scrutin en base, sans le déduire de l'URL à la main. Il est coupé à 80
+   caractères, parfois en plein mot. Une requête en lecture seule (`startsWith` sur le début du slug)
+   doit renvoyer un seul scrutin, dont la date et le résultat correspondent à la vidéo.
+3. Ajouter une ligne à `SCRUTIN_VIDEOS` dans `src/config/youtube.ts` : le slug en clé, l'identifiant
+   de la vidéo en valeur (11 caractères, jamais l'URL), avec un commentaire d'une ligne.
+4. Lancer `npx vitest run src/config/youtube.test.ts`, qui refuse un identifiant mal formé.
+5. Passer par une PR. Sans déploiement manuel depuis le dashboard Vercel, la page garde le bandeau.
+
+Les pages de mesure n'ont pas encore de table équivalente. On la crée sur le même modèle le jour où
+une vidéo s'y rattache. Quand un déploiement par vidéo devient pesant, la suite prévue est un champ
+en base avec saisie en admin, ce qui demande un changement de schéma.
