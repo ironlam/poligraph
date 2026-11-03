@@ -147,6 +147,13 @@ describe("findUngroundedNames", () => {
       expect(found).toContain("Mayotte");
     });
 
+    it("does not take an article 73 of another text for the Constitution", () => {
+      const found = findUngroundedNames(text, [
+        "Il est inséré à l'article 73 du code de commerce un alinéa.",
+      ]);
+      expect(found).toContain("Guadeloupe");
+    });
+
     it("does not exempt another name from the same text", () => {
       const found = findUngroundedNames("Les employeurs ultramarins (Guadeloupe) et Edenred.", [
         "Les collectivités d'outre-mer.",

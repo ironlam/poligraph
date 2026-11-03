@@ -110,7 +110,7 @@ const OVERSEAS_TERRITORIES = new Set(
 );
 
 const OVERSEAS_CONTEXT_RE =
-  /outre-mer|outremer|ultramarin|\bdrom\b|\bdrom-com\b|\blodeom\b|articles?\s+7[34]\b/;
+  /outre-mer|outremer|ultramarin|\bdrom\b|\bdrom-com\b|\blodeom\b|articles?\s+7[34]\b[^.]{0,80}constitution|constitution[^.]{0,80}articles?\s+7[34]\b/;
 
 // Apostrophes split words: "L'Assemblée" is the word "Assemblée" after an elision.
 const WORD_RE = /[\p{L}][\p{L}-]*/gu;
