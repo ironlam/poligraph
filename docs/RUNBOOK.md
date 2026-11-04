@@ -272,3 +272,69 @@ Supprimer le label associé (`sync-*-failure`) fait taire les futures issues jus
 - Base de dev isolée de la production (actuellement `.env` pointe vers la prod).
 
 Ces chantiers sont suivis séparément et ne sont pas couverts par ce runbook.
+
+## Synthèses des débats AN
+
+### Mise en service après la migration additive
+
+Appliquer la migration Prisma avec la procédure habituelle de l'environnement,
+puis générer le client avant de déployer le code. La PR n'exécute aucune migration
+ni génération sur la production. La migration ajoute des colonnes nullables et
+`commonDiscussion=false`, sans modifier les votes ni les textes existants.
+
+Après le déploiement :
+
+```bash
+# Références de séance sur les scrutins existants. Ce mode actualise aussi leurs
+# décomptes officiels de groupe, mais ne réécrit aucun vote nominatif.
+npm run sync:scrutins-an -- --leg=17 --official-groups-only
+
+# Premier passage : mise à niveau du parseur et des sources existantes.
+# Les passages suivants utilisent HTTP conditionnel et empreintes.
+npm run sync:debate-transcripts
+
+# Audit sans écriture ni appel à un modèle.
+node --import tsx --env-file=.env scripts/audit-scrutin-debate-mapping.ts
+
+# Lot borné : dix appels modèle au maximum, selon l'éligibilité des sources.
+npm run sync:scrutin-analysis
+
+# Invalider les pages votes si l'opération a été lancée hors Inngest.
+npm run cache:revalidate -- votes
+```
+
+Les nouveaux scrutins enregistrent automatiquement leur `officialSeanceRef` lors
+des syncs ordinaires. Le lancement manuel de reprise ci-dessus est nécessaire
+pour les anciens scrutins qui n'ont pas encore cette référence. Ne pas remplacer
+ce lien par une recherche fondée sur le seul jour du vote.
+
+Le premier import versionné actualise aussi les anciennes séances déjà en base.
+Une correction de source retire ses analyses traçables dans la transaction de
+mise à jour ; elles redeviennent candidates à la génération. Les analyses AN sans
+source traçable sont masquées et reprises progressivement par les lots. Cette
+protection peut temporairement réduire la couverture publique.
+
+### Diagnostic et limites
+
+- Une référence de séance ou de texte absente, un doublon de compte rendu ou une
+  portée incertaine implique « pas de génération », sans appel modèle.
+- Les discussions au-delà du budget sont refusées, sans découpage arbitraire.
+- Un `dryRun` de `generateScrutinAnalysis` effectue des appels modèle mais aucune
+  écriture. Utiliser les audits ci-dessus pour un contrôle sans coût d'IA.
+- Le curseur de scan est dans `SyncMetadata`, clé
+  `debate-analysis-scan:an-paragraph-evidence-v1`. Ne pas lancer deux générateurs
+  manuels en parallèle. La reprise ne nécessite pas de supprimer ce curseur.
+- La fenêtre d'import de nouvelles séances reste de 90 jours. Un backfill des
+  comptes rendus absents plus anciens est un chantier distinct.
+- Les arguments de commission, les votes sans amendement et les débats du Sénat
+  ne sont pas couverts par cette génération structurée.
+
+Tests ciblés, sans base ni clé IA :
+
+```bash
+npx vitest run src/services/scrutin-substance/__tests__ src/services/sync/__tests__/debate* src/services/sync/__tests__/scrutin-analysis*
+```
+
+La fixture `discussion-commune-2024-11-07.xml` provient du compte rendu officiel
+`CRSANR5L17S2025O1N040` (paragraphes 3558832 à 3558850). Elle teste la conservation
+des avis communs et l'exclusion des propositions propres à l'amendement voisin.

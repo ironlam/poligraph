@@ -307,101 +307,116 @@ Le champ `id_origine` est vide pour certains types de mandats (gouvernement, pr�
 
 ---
 
-## 9. Rattachement scrutin ↔ débat
+## 9. Rattachement scrutin, amendement et débat
 
-Le but : relier un scrutin (`Scrutin`) au bon extrait de compte rendu de séance
-(`DebateTranscript`), de façon **déterministe et auditable**, sans LLM. Ce
-rattachement conditionne la génération de `ScrutinAnalysis` (arguments POUR/CONTRE
-issus du débat). Il n'est volontairement **pas** branché sur la génération tant que
-l'audit ne prouve pas une qualité suffisante.
+La génération des arguments utilise une chaîne déterministe avant tout appel au
+modèle : séance officielle du scrutin, texte examiné, discussion structurée, puis
+paragraphes citables. Une coïncidence de date et de numéro ne suffit jamais.
 
-### Pourquoi le lien historique est fragile
+### Sources et périmètre
 
-`syncDebateTranscripts()` stocke **un transcript par séance** (clé `seanceRef`),
-tronqué à 5000 caractères, puis l'attache au **premier scrutin du jour sans débat**
-(`debate-transcripts.ts`, lien par date seule). Sur un jour à 100+ scrutins, la
-quasi-totalité reste sans débat et le rare scrutin lié peut l'être au mauvais.
+- Comptes rendus XML Syceron de l'Assemblée nationale, archivés par législature.
+- `Scrutin.officialSeanceRef` vient du `seanceRef` du scrutin officiel, sans
+  déduction à partir d'une date. Cela couvre un vote après minuit dans une séance
+  commencée la veille.
+- `Amendment.texteRef` identifie le texte et sa lecture. Son numéro `B...` doit
+  correspondre au texte examiné déclaré dans le compte rendu (`bibard`, sinon
+  numéro du point principal). Pour `I-` et `II-`, la partie budgétaire doit aussi
+  être explicitement reconnue. Une métadonnée absente entraîne une abstention.
+- La génération porte sur les votes clés de la 17e législature, liés à un
+  amendement principal ou à un sous-amendement AN. Le parent d'un sous-amendement
+  reste un contexte, jamais la mesure votée. Aucun nouveau traitement des débats
+  de commission, des autres types de vote ou du Sénat n'est ajouté ici.
 
-### Le matcher déterministe
+### Ingestion et identité des sources
 
-Pipeline pur, sans I/O ni modèle (`src/services/scrutin-substance/`) :
+`debate-transcript-parse.ts` conserve le texte complet et les paragraphes ordonnés :
+identifiant Syceron, orateur, référence acteur, rôle, article, amendements et
+sous-amendements. Le sommaire des métadonnées est exclu par son emplacement.
+**Ne pas filtrer les paragraphes du corps sur `sommaire="1"`** : cet attribut
+marque aussi les annonces prononcées et des avis réels de la commission et du
+Gouvernement. Une fixture officielle du 7 novembre 2024 couvre ce cas.
 
-1. `findAmendmentMention(text, refs)` (`debate-context.ts`) cherche dans le texte
-   une mention forte de l'amendement voté :
-   - `HIGH` : numéro d'amendement cité explicitement (« l'amendement no 2084 »).
-   - `MEDIUM` : auteur + article à proximité, sans numéro.
-   - `LOW` : auteur ou article seul. `NONE` : rien.
-   - `reinforced` : diagnostic, numéro **et** auteur/article proches (non requis).
-2. `resolveDebateContextForScrutin(id)` (`debate-context-resolver.ts`) rassemble
-   les transcripts **du même jour** (il ignore le lien `scrutinId` cassé), applique
-   le matcher, garde le meilleur. Ce sont des transcripts **same-day**, récupérés
-   par date seule : un transcript same-day n'est **pas** un rattachement prouvé. Le
-   resolver expose `candidateTranscriptCount` (> 1 = jour ambigu) et
-   `transcriptsMentioningAmendment` (= 1 = débat localisable à une seule séance).
+Chaque `DebateTranscript` conserve une empreinte SHA-256 du XML et une version du
+parseur. L'import utilise `If-None-Match`, puis l'empreinte de l'archive lorsque le
+serveur ne fournit pas d'ETag exploitable. Les fichiers modifiés ou les versions
+anciennes du parseur sont retraités. Les XML inchangés ne réécrivent pas la base.
+Une source actualisée invalide ses analyses traçables dans la même transaction.
+Les anciens liens arbitraires `DebateTranscript.scrutinId` sont retirés lors de
+ce retraitement ; la relation est désormais calculée depuis la référence officielle.
 
-   Seul `HIGH` (numéro d'amendement cité) est une référence explicite suffisante. Un
-   article seul ne suffit pas : le cas 2084 mentionne l'article 22 mais jamais
-   l'amendement 2084, il reste donc `unsafe`.
+Les nouvelles séances sont importées sur une fenêtre de 90 jours ; les séances
+historiques déjà présentes sont actualisées, sans promettre un backfill de toute
+la législature. Le téléchargement est borné à 128 Mio, 120 secondes par requête et
+3 redirections sur le domaine officiel. Une archive vide ou une erreur de
+traitement n'avance pas le curseur HTTP ; Inngest signale l'échec de cette étape.
 
-3. `classifyDebateMatch(...)` (`debate-mapping.ts`) rend un verdict strict :
+### Discussions communes et amendements identiques
 
-   | Classe      | Règle                                                         | Génération  |
-   | ----------- | ------------------------------------------------------------- | ----------- |
-   | `matched`   | `HIGH` **et** un seul transcript candidat le jour             | exploitable |
-   | `ambiguous` | `HIGH` multi-séances le même jour, **ou** `MEDIUM`            | skip        |
-   | `unsafe`    | transcript présent mais `LOW`/`NONE` (objet voté jamais cité) | skip        |
-   | `missing`   | aucun transcript candidat                                     | skip        |
+`debate-discussion.ts` reconnaît les annonces explicites de discussion commune,
+d'amendements identiques et de soutien. Une discussion conserve les interventions
+jusqu'aux décisions sur ses membres ou à une frontière explicite avec une autre
+discussion ou un autre texte. Elle n'est pas coupée à la première mention d'un
+amendement voisin. Une fin indéterminée, des épisodes concurrents, des identifiants
+dupliqués ou un passage trop long entraînent une abstention.
 
-### Le script d'audit (read-only)
+| Portée    | Utilisation                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| `target`  | Intervention rattachée à l'amendement cible.                                                   |
+| `shared`  | Argument portant explicitement sur les amendements du groupe, par exemple « ces amendements ». |
+| `other`   | Intervention rattachée à un amendement voisin, jamais transférée à la cible.                   |
+| `context` | Portée individuelle indéterminée dans une discussion commune, non citable.                     |
+
+Seules les interventions `target` et `shared` sont transmises au modèle. Le texte
+officiel de la mesure est fourni séparément. Le modèle doit identifier ses
+paragraphes sources et en citer des passages exacts ; une citation inventée, un
+identifiant inconnu ou une portée contradictoire interdit l'enregistrement. Les
+arguments communs reçoivent aussi une qualification visible ajoutée par le code.
+Un côté peut rester vide : l'interface indique alors qu'aucun argument de ce côté
+n'a été identifié dans le passage. Les positions de groupe ne sont pas fournies
+à cette génération et ne servent pas à inférer des motivations.
+
+La validation des citations et le contrôle lexical du sujet réduisent les erreurs,
+mais ne constituent pas une preuve automatique de fidélité sémantique. Les
+interventions sans portée certaine restent exclues. Le corpus de régression couvre
+la discussion réelle des amendements 2697 et 3652 sur le PLF 2025 ; il ne représente
+pas une mesure de qualité de toute la législature.
+
+### Coûts, provenance et publication
+
+Un passage est limité à 24 000 caractères, sans troncature des derniers orateurs.
+Le sujet officiel est limité à 12 000 caractères au total et 8 000 par bloc ; un
+dépassement entraîne une abstention plutôt qu'une coupe du dispositif. Il n'y a
+qu'un appel Mistral par tentative, sans second modèle de rattachement ou de résumé.
+
+Chaque lancement scanne au plus `min(1000, max(100, limit * 20))` votes et effectue
+au plus `limit` appels modèle. Un curseur persistant `(votingDate, id)` fait avancer
+les lots au-delà des refus ; à la fin du corpus, il revient au début pour réessayer
+les données complétées. Les exécutions ciblées, forcées et `dryRun` ne déplacent pas
+ce curseur. Un cache local au lancement garde au plus quatre séances structurées ;
+aucun cache global ne conserve les comptes rendus.
+
+`ScrutinAnalysis.evidence` conserve le passage, les citations, l'empreinte source,
+le prompt exact et son empreinte, ainsi que la version de méthode. Ce contenu ne
+traverse pas la frontière client. `sourceUrl` et `commonDiscussion`, seuls champs
+supplémentaires lus pour la page, donnent accès au compte rendu et à l'indication
+de discussion commune. Les anciennes analyses AN sans source traçable sont retenues
+à la lecture et éligibles à une régénération contrôlée ; aucun texte ancien n'est
+présumé vérifié par la seule présence d'une ligne en base.
+
+### Diagnostics
+
+`findAmendmentMention`, `classifyDebateMatch` et
+`classifyDebateMatchBySeance` restent des diagnostics sur mentions textuelles. Ils
+ne sont pas une autorisation de génération. Seul le résolveur structuré peut
+retourner `usableForGeneration=true`. Les audits signalent `matched` seulement
+lorsque cette chaîne complète réussit.
 
 ```bash
-npx dotenv -e .env -- npx tsx scripts/audit-scrutin-debate-mapping.ts
+node --import tsx --env-file=.env scripts/audit-scrutin-debate-mapping.ts
+node --import tsx --env-file=.env scripts/audit-debate-context.ts
 ```
 
-Portée : key votes liés à un amendement (seul périmètre où le matcher par numéro
-prouve un lien). Sortie : périmètre, métriques par classe, exemples bons/ambigus/
-mauvais, et le cas sentinelle `VTANR5L17V7183` / amendement 2084 (qui doit rester
-`unsafe`). Aucune écriture, aucun appel modèle, aucun backfill.
-
-### Limite structurelle connue
-
-L'AN siège en 2-3 séances par jour, chacune étant un `DebateTranscript` distinct.
-Sous la règle stricte, tout numéro cité tombe donc sur un jour multi-transcripts et
-finit `ambiguous` : `matched` est quasi inatteignable.
-
-La métrique `uniquelyLocalizable` (numéro présent dans **une seule** séance du jour)
-est un **potentiel, pas une promesse** : elle dit « ces cas semblent localisables de
-façon unique », et non « autant d'analyses générables ». Un scoping **par séance**
-(et non par jour) côté ingestion pourrait les promouvoir en `matched` ; ils
-resteraient ensuite soumis aux garde-fous de génération. C'est le prérequis avant
-tout branchement sur `ScrutinAnalysis`.
-
-### Ingestion séance-scoped (corrige la limite ci-dessus)
-
-L'ingestion (`debate-transcripts.ts` + `debate-transcript-parse.ts`) stocke
-désormais :
-
-- le **contenu complet** de la séance (fin de la troncature à 5000 caractères : un
-  numéro d'amendement est souvent cité bien au-delà) ;
-- `startTime` (heure de début, parsée du timestamp `<dateSeance>`) et `seanceOrder`
-  (depuis `<numSeanceJour>`), pour distinguer les 2-3 séances d'une même journée.
-
-Le **rattachement naïf au premier scrutin du jour est supprimé** : les nouveaux
-`DebateTranscript` restent `scrutinId = null` (pas de faux lien). Le lien fiable
-reste calculé read-only ; il sera écrit dans une PR ultérieure, après quoi seulement
-la génération pourra être branchée.
-
-Le classifieur `classifyDebateMatchBySeance` compte les **séances qui citent**
-l'amendement : `matched` si exactement une, `ambiguous` si plusieurs (débattu sur
-plusieurs séances) ou MEDIUM seul, `unsafe` si aucune, `missing` si pas de séance.
-
-Audit avant/après (read-only, sans écriture) :
-
-```bash
-npx dotenv -e .env -- npx tsx scripts/audit-debate-ingestion.ts --xml <dir-xml-extrait>
-```
-
-Mesure sur 261 key votes + amendement : `matched` passe de **0 à 174**, `unsafe` de
-**105 à 1** (97 dus à la seule troncature), 77 ambiguïtés levées par le scoping
-séance. Le cas 2084 passe `unsafe -> matched` (mention explicite révélée dans
-l'unique séance du jour). Chiffres calculés hors base, sans backfill.
+Le script historique `audit-debate-ingestion.ts` compare les mentions textuelles
+avec le corpus XML complet. Ses classes « après » restent des diagnostics de
+couverture et ne mesurent pas l'éligibilité à la génération structurée.
