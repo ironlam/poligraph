@@ -137,6 +137,7 @@ it("preserves the real suspension and resumed speech of amendment 3 on 20 Februa
     new URL("../../sync/__tests__/fixtures/discussion-suspendue-2025-02-20.xml", import.meta.url),
     "utf8"
   );
+  expect(xml).toMatch(/bibard="\s*\(n\[\[o\]\]\s*930\)"/);
   const seance = extractSeanceFromXml(xml)!;
   const result = inspectAmendmentDiscussion(seance.paragraphs, {
     number: "3",

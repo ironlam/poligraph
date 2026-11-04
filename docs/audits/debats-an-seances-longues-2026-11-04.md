@@ -49,3 +49,31 @@ Total : 238 candidats examinés, 155 passages retenus.
 ## Autre défaut découvert pendant l’audit
 
 Le champ `bibard` peut contenir `(n[[o]] 930)` au lieu de `930`. Le parseur utilisait cette valeur brute et refusait alors un texte pourtant identifié. La version 3 normalise uniquement les formes explicites autorisées et ajoute une régression sur ce cas. Les comptes rendus déjà stockés seront retraités par la sync versionnée avant la reprise des générations.
+
+## Vérification complémentaire des formats `bibard`
+
+Le retour signalant 24 684 paragraphes avec un `bibard` non numérique est confirmé
+par une lecture des attributs bruts de toute l’archive locale. Ce comptage séparé
+ne relance ni la segmentation complète, ni une requête en base, ni un modèle.
+
+| Forme brute non vide                                    | Paragraphes | Décision de cette PR                                                                |
+| ------------------------------------------------------- | ----------: | ----------------------------------------------------------------------------------- |
+| Numéro numérique simple                                 |       2 904 | Accepté.                                                                            |
+| `(n[[o]] 1364)` ou forme équivalente sans qualification |      18 857 | Normalisé par le parseur v3.                                                        |
+| Mention « rectifié » ou « rectification »               |       5 658 | Référence non exploitable pour la génération tant que la version n’est pas établie. |
+| Autre forme, notamment `(n[[o]] 2146-A0)`               |         169 | Refusée, sans extraction arbitraire du premier nombre.                              |
+
+Les trois dernières lignes totalisent bien 24 684 paragraphes. Ce sont des
+attributs du XML officiel, pas des chaînes introduites par le parseur. Les comptes
+rendus témoins sont `CRSANR5L17S2025O1N037`, paragraphe 3555772 (forme simple),
+`CRSANR5L17S2025E1N011`, paragraphe 3842021 (deuxième rectification), et
+`CRSANR5L17S2026O1N075`, paragraphe 3949363 (suffixe A0).
+
+La proposition d’extraire simplement le premier groupe de trois à cinq chiffres
+n’est pas retenue : elle écarterait les petits numéros de texte et ferait disparaître
+une qualification de version potentiellement significative. Cette PR corrige les
+formes simples avec une règle ancrée, et teste explicitement le refus des formes
+qualifiées. Elle ne prétend pas résoudre toute la couverture : établir la version
+des textes rectifiés reste un travail distinct, avant toute fusion de ces références.
+La fixture réelle de suspension du 20 février contient aussi les `bibard` entourés
+de marqueurs ; le test vérifie leur présence et l’extraction complète du débat.

@@ -332,6 +332,9 @@ protection peut temporairement réduire la couverture publique.
 
 ### Diagnostic et limites
 
+- Une référence de texte qualifiée « rectifié », « rectification » ou avec un
+  suffixe non pris en charge reste inexploitable. Le parseur ne supprime pas cette
+  information pour forcer une correspondance.
 - Une référence de séance ou de texte absente, un doublon de compte rendu ou une
   portée incertaine implique « pas de génération », sans appel modèle.
 - Les discussions au-delà du budget sont refusées, sans découpage arbitraire.

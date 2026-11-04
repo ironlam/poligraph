@@ -162,5 +162,14 @@ describe("official bibard formatting", () => {
     expect(extractSeanceFromXml(raw("930"))!.paragraphs[0]!.textNumber).toBe("930");
     expect(extractSeanceFromXml(raw(""))!.paragraphs[0]!.textNumber).toBe("324");
     expect(extractSeanceFromXml(raw("article 930"))!.paragraphs[0]!.textNumber).toBeNull();
+    // Real official bibard variants: their version semantics are not proven by
+    // a bare text UID, so do not silently strip the qualification or suffix.
+    expect(
+      extractSeanceFromXml(raw("(n[[o]] 2915 rectifié)"))!.paragraphs[0]!.textNumber
+    ).toBeNull();
+    expect(
+      extractSeanceFromXml(raw("(n[[o]] 1603 deuxième rectification)"))!.paragraphs[0]!.textNumber
+    ).toBeNull();
+    expect(extractSeanceFromXml(raw("(n[[o]] 2146-A0)"))!.paragraphs[0]!.textNumber).toBeNull();
   });
 });
