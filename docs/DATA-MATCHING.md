@@ -340,7 +340,9 @@ Gouvernement. Une fixture officielle du 7 novembre 2024 couvre ce cas.
 Chaque `DebateTranscript` conserve une empreinte SHA-256 du XML et une version du
 parseur. L'import utilise `If-None-Match`, puis l'empreinte de l'archive lorsque le
 serveur ne fournit pas d'ETag exploitable. Les fichiers modifiés ou les versions
-anciennes du parseur sont retraités. Les XML inchangés ne réécrivent pas la base.
+anciennes du parseur sont retraités. Les XML inchangés ne réécrivent pas la base. La version 3 du parseur normalise
+aussi les numéros `bibard` comme `(n[[o]] 930)` en `930`, avec refus des formes
+ambiguës.
 Une source actualisée invalide ses analyses traçables dans la même transaction.
 Les anciens liens arbitraires `DebateTranscript.scrutinId` sont retirés lors de
 ce retraitement ; la relation est désormais calculée depuis la référence officielle.
@@ -357,7 +359,9 @@ traitement n'avance pas le curseur HTTP ; Inngest signale l'échec de cette éta
 d'amendements identiques et de soutien. Une discussion conserve les interventions
 jusqu'aux décisions sur ses membres ou à une frontière explicite avec une autre
 discussion ou un autre texte. Elle n'est pas coupée à la première mention d'un
-amendement voisin. Une fin indéterminée, des épisodes concurrents, des identifiants
+amendement voisin. Une suspension dans le même texte peut rester dans le même épisode, tandis que
+les reprises distinctes ne sont pas fusionnées automatiquement. Une fin
+indéterminée, des épisodes concurrents (même si l’un est trop long ou inachevé), des identifiants
 dupliqués ou un passage trop long entraînent une abstention.
 
 | Portée    | Utilisation                                                                                    |
@@ -372,6 +376,12 @@ officiel de la mesure est fourni séparément. Le modèle doit identifier ses
 paragraphes sources et en citer des passages exacts ; une citation inventée, un
 identifiant inconnu ou une portée contradictoire interdit l'enregistrement. Les
 arguments communs reçoivent aussi une qualification visible ajoutée par le code.
+Le même sélecteur protège `context` pour les consommateurs en texte brut, dont
+les impacts citoyens : les paragraphes voisins et de portée incertaine y sont
+également absents. Les arguments communs gardent une étiquette explicite. Le prompt
+d'impact n'ampute plus le passage à 8 000 caractères : il conserve le passage
+complet sous le plafond commun, ou omet entièrement la section en cas de dépassement.
+
 Un côté peut rester vide : l'interface indique alors qu'aucun argument de ce côté
 n'a été identifié dans le passage. Les positions de groupe ne sont pas fournies
 à cette génération et ne servent pas à inférer des motivations.

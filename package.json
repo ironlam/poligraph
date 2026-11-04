@@ -171,6 +171,7 @@
     "audit:parties": "tsx scripts/audit-parties.ts",
     "audit:parties:clean": "tsx scripts/audit-parties.ts --clean --confirm",
     "audit:parties:stats": "tsx scripts/audit-parties.ts --stats",
+    "audit:debate-discussions": "node --import tsx scripts/audit-debate-discussions.ts",
     "audit:careers": "tsx scripts/audit-careers.ts",
     "audit:careers:export": "tsx scripts/audit-careers.ts --export",
     "audit:bio-quality": "tsx scripts/audit-bio-quality.ts",
