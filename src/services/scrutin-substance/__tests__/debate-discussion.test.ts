@@ -2,7 +2,12 @@
 import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { extractSeanceFromXml } from "@/services/sync/debate-transcript-parse";
-import { extractAmendmentDiscussion, validateArgumentCitations } from "../debate-discussion";
+import {
+  extractAmendmentDiscussion,
+  inspectAmendmentDiscussion,
+  renderDiscussionContext,
+  validateArgumentCitations,
+} from "../debate-discussion";
 
 const xml = readFileSync(
   new URL("../../sync/__tests__/fixtures/discussion-commune-2024-11-07.xml", import.meta.url),
@@ -94,4 +99,55 @@ describe("official common discussion, 2697 and 3652", () => {
       validateArgumentCitations("Argument propre", [{ ...cite, scope: "target" }], discussion)
     ).toBeNull();
   });
+});
+
+describe("interruptions and refusals", () => {
+  it("keeps a suspension inside the same episode when the examined text is unchanged", () => {
+    const pause = {
+      ...seance.paragraphs[0]!,
+      id: "pause",
+      text: "La séance est suspendue.",
+      role: "president",
+    };
+    const resumed = { ...pause, id: "resume", text: "La séance est reprise après minuit." };
+    const rows = [...seance.paragraphs.slice(0, 2), pause, resumed, ...seance.paragraphs.slice(2)];
+    const inspected = inspectAmendmentDiscussion(rows, target);
+    expect(inspected.exclusion).toBeNull();
+    expect(inspected.discussion?.paragraphs.some((p) => p.id === "resume")).toBe(true);
+    expect(renderDiscussionContext(inspected.discussion!)).not.toContain("suspendue");
+  });
+  it("reports repeated episodes, including an incomplete resumed tail", () => {
+    const repeated = [
+      ...seance.paragraphs,
+      ...seance.paragraphs.slice(0, 2).map((p) => ({ ...p, id: p.id + "-later" })),
+    ];
+    expect(inspectAmendmentDiscussion(repeated, target).exclusion).toBe("multiple_episodes");
+  });
+  it("refuses an unknown-text gap instead of passing a partial early episode", () => {
+    const rows = [
+      ...seance.paragraphs.slice(0, 2),
+      { ...seance.paragraphs[2]!, id: "unknown", textNumber: null },
+    ];
+    expect(inspectAmendmentDiscussion(rows, target).exclusion).toBe("unterminated_discussion");
+  });
+});
+
+it("preserves the real suspension and resumed speech of amendment 3 on 20 February 2025", () => {
+  const xml = readFileSync(
+    new URL("../../sync/__tests__/fixtures/discussion-suspendue-2025-02-20.xml", import.meta.url),
+    "utf8"
+  );
+  const seance = extractSeanceFromXml(xml)!;
+  const result = inspectAmendmentDiscussion(seance.paragraphs, {
+    number: "3",
+    texteRef: "PIONANR5L17B0930",
+  });
+  expect(result.exclusion).toBeNull();
+  const paragraphs = result.discussion!.paragraphs;
+  const pause = paragraphs.findIndex((p) => /La séance est suspendue/.test(p.text));
+  const resume = paragraphs.findIndex((p) => /La séance est reprise/.test(p.text));
+  expect(pause).toBeGreaterThan(0);
+  expect(resume).toBeGreaterThan(pause);
+  expect(paragraphs.at(-1)?.text).toMatch(/amendement.*3.*adopté/);
+  expect(renderDiscussionContext(result.discussion!)).not.toContain("La séance est suspendue");
 });

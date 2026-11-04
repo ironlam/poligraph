@@ -4,7 +4,7 @@ import { syncMetadata } from "@/lib/sync/sync-metadata";
 import {
   DEBATE_PROMPT_VERSION,
   MAX_DISCUSSION_CHARS,
-  isCitableDebateParagraph,
+  generationDiscussionParagraphs,
   validateArgumentCitations,
   type AmendmentDiscussion,
 } from "@/services/scrutin-substance/debate-discussion";
@@ -108,10 +108,7 @@ export function buildAnalysisPrompt(input: PromptInput): string {
     : "";
   const discussion = input.discussion
     ? `\n<discussion-commune amendements="${esc(input.discussion.amendmentNumbers.join(", "))}" />\n` +
-      input.discussion.paragraphs
-        .filter(
-          (p) => (p.scope === "target" || p.scope === "shared") && isCitableDebateParagraph(p)
-        )
+      generationDiscussionParagraphs(input.discussion)
         .map(
           (p) =>
             `<intervention id="${esc(p.id)}" portee="${p.scope}" orateur="${esc(p.speaker ?? "")}">${esc(p.text, MAX_DISCUSSION_CHARS)}</intervention>`

@@ -4,7 +4,12 @@
 import type { DebateTranscript } from "@/generated/prisma";
 import { z } from "zod";
 import { DEBATE_PARSER_VERSION } from "@/services/sync/debate-transcript-parse";
-import { extractAmendmentDiscussion, type AmendmentDiscussion } from "./debate-discussion";
+import {
+  inspectAmendmentDiscussion,
+  renderDiscussionContext,
+  type DiscussionExclusion,
+  type AmendmentDiscussion,
+} from "./debate-discussion";
 import { db } from "@/lib/db";
 import {
   applyAmbiguity,
@@ -21,6 +26,7 @@ export type CandidateScope = "same-day" | "official-seance";
 
 export interface DebateContextResult extends AmendmentMention {
   discussion?: AmendmentDiscussion | null;
+  exclusionReason?: DiscussionExclusion;
   sourceUrl?: string | null;
   sourceHash?: string | null;
   scrutinId: string;
@@ -205,12 +211,18 @@ export async function resolveDebateContextForScrutin(
     return best;
   const parsed = paragraphSchema.safeParse(t.paragraphs);
   if (!parsed.success) return best;
-  const discussion = extractAmendmentDiscussion(parsed.data, {
+  const inspected = inspectAmendmentDiscussion(parsed.data, {
     number: target.number,
     texteRef: target.texteRef,
     subAmendment: targetLink?.role === "SUB_AMENDMENT",
   });
-  if (!discussion) return best;
+  if (!inspected.discussion)
+    return {
+      ...best,
+      exclusionReason: inspected.exclusion,
+      reason: `Discussion exclue : ${inspected.exclusion}.`,
+    };
+  const discussion = inspected.discussion;
   return {
     ...best,
     confidence: "HIGH",
@@ -221,12 +233,13 @@ export async function resolveDebateContextForScrutin(
     discussion,
     sourceUrl: t.sourceUrl,
     sourceHash: t.sourceHash,
-    context: discussion.paragraphs.map((p) => `${p.speaker ?? ""} : ${p.text}`).join("\n\n"),
+    context: renderDiscussionContext(discussion),
     matchedAmendmentNumber: target.number,
   };
 }
 
 export interface DebateContextAuditRow {
+  exclusionReason?: DiscussionExclusion;
   scrutinId: string;
   slug: string | null;
   amendment: string;
@@ -286,6 +299,7 @@ export async function auditDebateContextForAmendmentAnalyses(options?: {
       confidence: ctx.confidence,
       usableForGeneration: ctx.usableForGeneration,
       reason: ctx.reason,
+      exclusionReason: ctx.exclusionReason,
       excerpt: ctx.excerpt,
     });
   }

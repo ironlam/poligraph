@@ -48,21 +48,71 @@ function matches(n: string, target: string): boolean {
   return core(n) === core(target) || core(n) === core(target).replace(/^ii?-/, "");
 }
 
-/** Exact séance + exact examined text number are required by the caller.
- * No fallback to a same-day transcript or unstructured legacy text.
- */
+export type DiscussionExclusion =
+  | "missing_text_reference"
+  | "duplicate_paragraphs"
+  | "multiple_episodes"
+  | "unterminated_discussion"
+  | "over_budget"
+  | "no_discussion"
+  | "missing_subamendment_reference"
+  | "no_target_speech";
+export type DiscussionInspection =
+  | { discussion: AmendmentDiscussion; exclusion: null }
+  | { discussion: null; exclusion: DiscussionExclusion };
+
+/** Shared selection contract for every model consuming an amendment discussion. */
+export function generationDiscussionParagraphs(
+  discussion: AmendmentDiscussion
+): DiscussionParagraph[] {
+  return discussion.paragraphs.filter(
+    (p) => (p.scope === "target" || p.scope === "shared") && isCitableDebateParagraph(p)
+  );
+}
+
+/** Plain-text consumers receive scope labels too. Refuse an oversized complete
+ * passage instead of truncating the last speakers downstream. */
+export function renderDiscussionContext(discussion: AmendmentDiscussion): string | null {
+  const passage = generationDiscussionParagraphs(discussion)
+    .map(
+      (p) =>
+        `[${p.scope === "shared" ? "Argument commun à la discussion" : "Intervention sur l’amendement cible"}] ${p.speaker} : ${p.text}`
+    )
+    .join("\n\n");
+  return passage && passage.length <= MAX_DISCUSSION_CHARS ? passage : null;
+}
+
+/** Extract the passage when diagnostics are not needed. Both entry points use
+ * the same segmentation and refusal rules. */
 export function extractAmendmentDiscussion(
   paragraphs: DebateParagraph[],
   target: { number: string; texteRef: string; subAmendment?: boolean }
 ): AmendmentDiscussion | null {
+  return inspectAmendmentDiscussion(paragraphs, target).discussion;
+}
+
+/** Exact séance + exact examined text number are required by the caller.
+ * No fallback to a same-day transcript or unstructured legacy text.
+ */
+export function inspectAmendmentDiscussion(
+  paragraphs: DebateParagraph[],
+  target: { number: string; texteRef: string; subAmendment?: boolean }
+): DiscussionInspection {
   const textNumber = /B(\d+)$/.exec(target.texteRef)?.[1];
-  if (!textNumber || new Set(paragraphs.map((p) => p.id)).size !== paragraphs.length) return null;
+  if (!textNumber) return { discussion: null, exclusion: "missing_text_reference" };
+  if (new Set(paragraphs.map((p) => p.id)).size !== paragraphs.length)
+    return { discussion: null, exclusion: "duplicate_paragraphs" };
   const budgetPart = /^(II?)-/.exec(target.number)?.[1];
   const episodes: AmendmentDiscussion[] = [];
+  let episodeCount = 0;
+  let incomplete = false;
+  let overBudget = false;
   let active: { numbers: string[]; rows: DebateParagraph[]; closed: Set<string> } | null = null;
-  const finish = () => {
+  const finish = (bounded = true) => {
     if (!active) return;
     if (active.numbers.some((n) => matches(n, target.number))) {
+      episodeCount++;
+      if (!bounded) incomplete = true;
       const numbers = active.numbers;
       const rows = active.rows.map((p) => {
         const declared = target.subAmendment ? p.subAmendments : p.amendments;
@@ -81,7 +131,8 @@ export function extractAmendmentDiscussion(
                   : "context";
         return { ...p, scope };
       });
-      if (rows.reduce((n, p) => n + p.text.length, 0) <= MAX_DISCUSSION_CHARS) {
+      if (rows.reduce((n, p) => n + p.text.length, 0) > MAX_DISCUSSION_CHARS) overBudget = true;
+      else if (bounded) {
         episodes.push({ amendmentNumbers: numbers, paragraphs: rows, common: numbers.length > 1 });
       }
     }
@@ -92,7 +143,7 @@ export function extractAmendmentDiscussion(
       p.textNumber?.replace(/^0+/, "") !== textNumber.replace(/^0+/, "") ||
       (budgetPart && p.budgetPart !== budgetPart)
     ) {
-      finish();
+      finish(Boolean(p.textNumber) && (!budgetPart || Boolean(p.budgetPart)));
       continue;
     }
     const refs = mentionedAmendments(p.text);
@@ -116,17 +167,22 @@ export function extractAmendmentDiscussion(
       if (active.numbers.every((n) => active!.closed.has(n))) finish();
     }
   }
-  // Do not emit an unterminated tail, which may include unrelated business.
-  if (episodes.length !== 1) return null;
+  // Count unclosed/repeated target episodes as well as bounded ones: never
+  // select a short earlier episode while silently discarding its resumed tail.
+  finish(false);
+  if (episodeCount > 1) return { discussion: null, exclusion: "multiple_episodes" };
+  if (incomplete) return { discussion: null, exclusion: "unterminated_discussion" };
+  if (overBudget) return { discussion: null, exclusion: "over_budget" };
+  if (episodes.length !== 1) return { discussion: null, exclusion: "no_discussion" };
   const discussion = episodes[0]!;
   if (
     target.subAmendment &&
     !discussion.paragraphs.some((p) => p.subAmendments.some((n) => matches(n, target.number)))
   )
-    return null;
-  if (!discussion.paragraphs.some((p) => p.scope === "target" && isCitableDebateParagraph(p)))
-    return null;
-  return discussion;
+    return { discussion: null, exclusion: "missing_subamendment_reference" };
+  if (!generationDiscussionParagraphs(discussion).some((p) => p.scope === "target"))
+    return { discussion: null, exclusion: "no_target_speech" };
+  return { discussion, exclusion: null };
 }
 
 export interface ArgumentCitation {
