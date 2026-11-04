@@ -27,15 +27,24 @@ async function main(): Promise<void> {
 
   const report = await auditDebateContextForAmendmentAnalyses(limit ? { limit } : {});
 
-  log("candidate transcript scope = same-day only, not yet dossier/session-disambiguated.\n");
+  log(
+    "Les correspondances par date restent diagnostiques ; seule la chaîne structurée autorise une génération.\n"
+  );
   log(`scanned : ${report.scanned}`);
   log(
     `HIGH=${report.byConfidence.HIGH}  MEDIUM=${report.byConfidence.MEDIUM}  LOW=${report.byConfidence.LOW}  NONE=${report.byConfidence.NONE}`
   );
   const usable = report.rows.filter((r) => r.usableForGeneration).length;
   const ambiguousDay = report.rows.filter((r) => r.candidateTranscriptCount > 1).length;
-  log(`usableForGeneration (HIGH only) : ${usable}`);
-  log(`jours ambigus (plusieurs transcripts candidats le même jour) : ${ambiguousDay}\n`);
+  log(`usableForGeneration (séance, texte et discussion vérifiés) : ${usable}`);
+  log(`sélections ambiguës (plusieurs comptes rendus candidats) : ${ambiguousDay}\n`);
+
+  const excluded: Record<string, number> = {};
+  for (const row of report.rows) {
+    if (row.exclusionReason)
+      excluded[row.exclusionReason] = (excluded[row.exclusionReason] ?? 0) + 1;
+  }
+  log(`Discussions exclues : ${JSON.stringify(excluded)}`);
 
   // Show the HIGH matches (the only ones a future generation could trust).
   for (const r of report.rows.filter((r) => r.confidence === "HIGH")) {

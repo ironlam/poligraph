@@ -304,3 +304,15 @@ describe("neutralizeReaderAsVoter", () => {
     ).toBe("La proposition de loi qu'examinent les sénateurs porte sur la santé.");
   });
 });
+
+describe("complete debate input", () => {
+  it("keeps the final speaker beyond 8,000 characters", () => {
+    const excerpt = "Intervention sur la cible. ".repeat(350) + "DERNIER_ORATEUR_CONTRADICTOIRE";
+    const msg = buildUserMessage(baseInput({ debateExcerpt: excerpt }));
+    expect(msg).toContain("DERNIER_ORATEUR_CONTRADICTOIRE");
+  });
+  it("omits an oversized passage entirely rather than silently truncate the opposition", () => {
+    const msg = buildUserMessage(baseInput({ debateExcerpt: "x".repeat(24001) }));
+    expect(msg).not.toContain("<debat>");
+  });
+});

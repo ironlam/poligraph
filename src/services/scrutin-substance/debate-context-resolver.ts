@@ -1,17 +1,15 @@
-/**
- * READ-ONLY resolver around the pure `findAmendmentMention` matcher. For a
- * scrutin, it gathers the SAME-DAY candidate transcripts and returns the best
- * mention with a bounded excerpt and a confidence. NO model call, NO DB write.
- *
- * CANDIDATE SCOPE = same-day only, NOT yet dossier/session-disambiguated. A HIGH
- * therefore proves the amendment number appears in a same-day transcript, NOT
- * that this transcript is the right one when several debates/dossiers coexist on
- * the same day. `candidateTranscriptCount > 1` flags that ambiguity.
- *
- * PROVISIONAL: depends on the per-séance transcript linkage (a transcript is
- * stored per day) and on the matcher's regex, both still to be hardened. Use for
- * read-only audit only; do NOT wire into generation yet.
+/** Resolves an amendment discussion only inside the official AN séance and
+ * examined text. Date-only matches remain diagnostics and cannot generate.
  */
+import type { DebateTranscript } from "@/generated/prisma";
+import { z } from "zod";
+import { DEBATE_PARSER_VERSION } from "@/services/sync/debate-transcript-parse";
+import {
+  inspectAmendmentDiscussion,
+  renderDiscussionContext,
+  type DiscussionExclusion,
+  type AmendmentDiscussion,
+} from "./debate-discussion";
 import { db } from "@/lib/db";
 import {
   applyAmbiguity,
@@ -20,25 +18,44 @@ import {
   type AmendmentMention,
   type DebateContextConfidence,
 } from "./debate-context";
-import { classifyDebateMatch, type DebateMatchClass } from "./debate-mapping";
+import { type DebateMatchVerdict, type DebateMatchClass } from "./debate-mapping";
 
-/** How candidate transcripts were gathered. Only "same-day" exists today;
- *  a future PR may add dossier/session disambiguation. */
-export type CandidateScope = "same-day";
+/** Date-only candidates are diagnostics; official séance candidates can
+ * qualify through the structured text and discussion checks. */
+export type CandidateScope = "same-day" | "official-seance";
 
 export interface DebateContextResult extends AmendmentMention {
+  discussion?: AmendmentDiscussion | null;
+  exclusionReason?: DiscussionExclusion;
+  sourceUrl?: string | null;
+  sourceHash?: string | null;
   scrutinId: string;
   transcriptSeanceRef: string | null;
   hasCandidateTranscript: boolean;
-  /** Always "same-day" for now — see module header. Never a definitive linkage. */
+  /** The official meeting reference takes precedence over calendar dates. */
   candidateScope: CandidateScope;
-  /** Number of same-day candidate transcripts considered. > 1 => ambiguous day. */
+  /** More than one record for an official séance is ambiguous. */
   candidateTranscriptCount: number;
   /** How many of those candidates explicitly mention the amendment (HIGH). === 1
    *  means the debate is uniquely localizable to a single séance, even on a
    *  multi-séance day — the key signal for a future per-séance scoping. */
   transcriptsMentioningAmendment: number;
 }
+
+const paragraphSchema = z.array(
+  z.object({
+    id: z.string(),
+    speaker: z.string().nullable(),
+    actorRef: z.string().nullable(),
+    role: z.string().nullable(),
+    article: z.string().nullable(),
+    amendments: z.array(z.string()),
+    subAmendments: z.array(z.string()),
+    textNumber: z.string().nullable(),
+    budgetPart: z.enum(["I", "II"]).nullable().optional(),
+    text: z.string(),
+  })
+);
 
 const RANK: Record<DebateContextConfidence, number> = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 };
 
@@ -57,21 +74,45 @@ export function extractAuthorSurname(authorName: string | null | undefined): str
 
 function dayBounds(d: Date): { start: Date; end: Date } {
   const start = new Date(d);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);
   const end = new Date(d);
-  end.setHours(23, 59, 59, 999);
+  end.setUTCHours(23, 59, 59, 999);
   return { start, end };
 }
 
+export type DebateTranscriptCache = Map<
+  string,
+  Pick<
+    DebateTranscript,
+    "seanceRef" | "content" | "paragraphs" | "sourceHash" | "parserVersion" | "sourceUrl"
+  >[]
+>;
+
 export async function resolveDebateContextForScrutin(
-  scrutinId: string
+  scrutinId: string,
+  cache?: DebateTranscriptCache
 ): Promise<DebateContextResult> {
   const scrutin = await db.scrutin.findUnique({
     where: { id: scrutinId },
     select: {
       votingDate: true,
+      chamber: true,
+      legislature: true,
+      officialSeanceRef: true,
       amendmentLinks: {
-        select: { amendment: { select: { number: true, authorName: true, article: true } } },
+        select: {
+          role: true,
+          amendment: {
+            select: {
+              number: true,
+              authorName: true,
+              article: true,
+              texteRef: true,
+              chamber: true,
+              legislature: true,
+            },
+          },
+        },
       },
     },
   });
@@ -92,9 +133,10 @@ export async function resolveDebateContextForScrutin(
     transcriptsMentioningAmendment: 0,
   };
 
-  if (!scrutin) return base;
+  if (!scrutin || scrutin.chamber !== "AN" || scrutin.legislature !== 17) return base;
 
-  const refs: AmendmentRef[] = scrutin.amendmentLinks.map((l) => ({
+  const links = scrutin.amendmentLinks.filter((l) => l.role !== "PARENT_AMENDMENT");
+  const refs: AmendmentRef[] = links.map((l) => ({
     number: l.amendment.number,
     authorSurname: extractAuthorSurname(l.amendment.authorName),
     article: l.amendment.article,
@@ -102,33 +144,107 @@ export async function resolveDebateContextForScrutin(
   if (refs.length === 0) return base;
 
   const { start, end } = dayBounds(scrutin.votingDate);
-  const candidates = await db.debateTranscript.findMany({
-    where: { date: { gte: start, lte: end } },
-    select: { seanceRef: true, content: true },
-  });
+  const key = scrutin.officialSeanceRef;
+  const candidates =
+    (key && cache?.get(key)) ||
+    (await db.debateTranscript.findMany({
+      where: scrutin.officialSeanceRef
+        ? { seanceRef: scrutin.officialSeanceRef }
+        : { date: { gte: start, lte: end } },
+      select: {
+        seanceRef: true,
+        content: !scrutin.officialSeanceRef,
+        paragraphs: true,
+        sourceHash: true,
+        parserVersion: true,
+        sourceUrl: true,
+      },
+    }));
 
+  if (key && cache) {
+    if (cache.size >= 4) cache.clear();
+    cache.set(key, candidates);
+  }
   base.hasCandidateTranscript = candidates.length > 0;
   base.candidateTranscriptCount = candidates.length;
+  base.candidateScope = scrutin.officialSeanceRef ? "official-seance" : "same-day";
 
   let best = base;
   let mentioning = 0;
   for (const t of candidates) {
-    const m = findAmendmentMention(t.content, refs);
+    const m = findAmendmentMention(t.content ?? "", refs);
     if (m.confidence === "HIGH") mentioning++;
     if (RANK[m.confidence] > RANK[best.confidence]) {
-      best = { ...base, ...m, transcriptSeanceRef: t.seanceRef };
+      best = {
+        ...base,
+        ...m,
+        usableForGeneration: false,
+        context: null,
+        transcriptSeanceRef: t.seanceRef,
+      };
     }
   }
   best.transcriptsMentioningAmendment = mentioning;
-  return applyAmbiguity(best, mentioning);
+  // Multiple records for a séance (including legacy duplicates) are ambiguous.
+  if (!scrutin.officialSeanceRef)
+    return {
+      ...best,
+      reason:
+        "Référence officielle de séance absente : correspondance par date réservée au diagnostic.",
+    };
+  if (candidates.length !== 1)
+    return {
+      ...applyAmbiguity(best, mentioning),
+      reason: "Compte rendu de la séance officielle absent ou dupliqué.",
+    };
+  const t = candidates[0]!;
+  const targetLink = links.find((l) => l.role === "PRINCIPAL" || l.role === "SUB_AMENDMENT");
+  const target = targetLink?.amendment;
+  if (
+    !target?.texteRef ||
+    target.chamber !== "AN" ||
+    target.legislature !== scrutin.legislature ||
+    !t.sourceHash ||
+    !t.sourceUrl ||
+    t.parserVersion !== DEBATE_PARSER_VERSION
+  )
+    return best;
+  const parsed = paragraphSchema.safeParse(t.paragraphs);
+  if (!parsed.success) return best;
+  const inspected = inspectAmendmentDiscussion(parsed.data, {
+    number: target.number,
+    texteRef: target.texteRef,
+    subAmendment: targetLink?.role === "SUB_AMENDMENT",
+  });
+  if (!inspected.discussion)
+    return {
+      ...best,
+      exclusionReason: inspected.exclusion,
+      reason: `Discussion exclue : ${inspected.exclusion}.`,
+    };
+  const discussion = inspected.discussion;
+  return {
+    ...best,
+    confidence: "HIGH",
+    reinforced: true,
+    usableForGeneration: true,
+    reason: "Séance officielle et texte examiné concordants, discussion structurée identifiée.",
+    transcriptSeanceRef: t.seanceRef,
+    discussion,
+    sourceUrl: t.sourceUrl,
+    sourceHash: t.sourceHash,
+    context: renderDiscussionContext(discussion),
+    matchedAmendmentNumber: target.number,
+  };
 }
 
 export interface DebateContextAuditRow {
+  exclusionReason?: DiscussionExclusion;
   scrutinId: string;
   slug: string | null;
   amendment: string;
   hasCandidateTranscript: boolean;
-  /** Always "same-day": candidates are not yet dossier/session-disambiguated. */
+  /** Candidate lookup used by the resolver. */
   candidateScope: CandidateScope;
   candidateTranscriptCount: number;
   confidence: DebateContextConfidence;
@@ -183,6 +299,7 @@ export async function auditDebateContextForAmendmentAnalyses(options?: {
       confidence: ctx.confidence,
       usableForGeneration: ctx.usableForGeneration,
       reason: ctx.reason,
+      exclusionReason: ctx.exclusionReason,
       excerpt: ctx.excerpt,
     });
   }
@@ -252,11 +369,17 @@ export async function mapScrutinDebate(scrutin: {
   amendmentNumber: string;
 }): Promise<KeyScrutinMappingRow> {
   const ctx = await resolveDebateContextForScrutin(scrutin.id);
-  const verdict = classifyDebateMatch({
-    hasCandidateTranscript: ctx.hasCandidateTranscript,
-    candidateTranscriptCount: ctx.candidateTranscriptCount,
-    confidence: ctx.confidence,
-  });
+  const verdict: DebateMatchVerdict = ctx.usableForGeneration
+    ? { class: "matched", reason: ctx.reason, exploitable: true }
+    : {
+        class: !ctx.hasCandidateTranscript
+          ? "missing"
+          : ctx.confidence === "HIGH" || ctx.confidence === "MEDIUM"
+            ? "ambiguous"
+            : "unsafe",
+        reason: ctx.reason,
+        exploitable: false,
+      };
   return {
     scrutinId: scrutin.id,
     externalId: scrutin.externalId,

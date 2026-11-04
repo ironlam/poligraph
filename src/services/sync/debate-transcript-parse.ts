@@ -16,9 +16,25 @@
 
 const LEGISLATURE = 17;
 
-import { removeTags } from "@/lib/parsing/html-utils";
+import { decodeHtmlEntities, removeTags } from "@/lib/parsing/html-utils";
+
+export const DEBATE_PARSER_VERSION = 3;
+
+export interface DebateParagraph {
+  id: string;
+  speaker: string | null;
+  actorRef: string | null;
+  role: string | null;
+  article: string | null;
+  amendments: string[];
+  subAmendments: string[];
+  textNumber: string | null;
+  budgetPart?: "I" | "II" | null;
+  text: string;
+}
 
 export interface ParsedSeance {
+  paragraphs: DebateParagraph[];
   seanceRef: string;
   /** UTC midnight of the séance calendar day (matches Scrutin.votingDate). */
   date: Date;
@@ -43,10 +59,12 @@ export function parseSeanceTimestamp(raw: string): { date: Date; startTime: Date
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (Number.isNaN(date.getTime())) return null;
+  if (Number.isNaN(date.getTime()) || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
+    return null;
 
   let startTime: Date | null = null;
   if (m[4] !== undefined) {
+    if (Number(m[4]) > 23 || Number(m[5]) > 59 || Number(m[6]) > 59) return null;
     startTime = new Date(Date.UTC(year, month - 1, day, Number(m[4]), Number(m[5]), Number(m[6])));
   }
   return { date, startTime };
@@ -62,9 +80,15 @@ export function parseSeanceOrder(numSeanceJour: string | null | undefined): numb
 }
 
 function stripTags(xml: string): string {
-  return removeTags(xml.replace(/<br\/>/g, " "))
+  return decodeHtmlEntities(removeTags(xml.replace(/<br\s*\/?>/g, " ")))
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Syceron uses both `930` and `(n[[o]] 930)` in bibard. Accept only
+ * these explicit forms, never an arbitrary number found in surrounding prose. */
+function parseTextNumber(value: string): string | null {
+  return /^\d+$/.test(value) ? value : (/^\(n\[\[os?\]\]\s*(\d+)\)$/.exec(value)?.[1] ?? null);
 }
 
 /** Extract a full séance record from one compte-rendu XML document. */
@@ -82,34 +106,63 @@ export function extractSeanceFromXml(xml: string): ParsedSeance | null {
   const seanceRef = seanceRefMatch?.[1] ?? uid;
   const seanceOrder = parseSeanceOrder(numSeanceJourMatch?.[1] ?? null);
 
-  // Concatenate every spoken paragraphe. No truncation. In the real files only the
-  // president's paragraphes carry roledebat="president"; every other speaker has no
-  // such attribute, so filtering on it kept about a tenth of the debate. Table of
-  // contents entries are flagged sommaire="1" and are not speech.
-  const texts: string[] = [];
-  const paragrapheRegex = /<paragraphe\b[^>]*>[\s\S]*?<\/paragraphe>/g;
-  let match: RegExpExecArray | null;
-  while ((match = paragrapheRegex.exec(xml)) !== null) {
-    const block = match[0];
-    if (/^<paragraphe\b[^>]*\bsommaire="1"/.test(block)) continue;
-    const nameMatch = block.match(/<nom>([^<]+)<\/nom>/);
-    const texteMatch = block.match(/<texte[^>]*>([\s\S]*?)<\/texte>/);
-    if (texteMatch) {
-      const speaker = nameMatch ? `${nameMatch[1]} : ` : "";
-      const text = stripTags(texteMatch[1]!);
-      if (text && text.length > 20) texts.push(speaker + text);
+  // sommaire=1 also marks real spoken announcements inside <contenu>.
+  // Exclude the metadata table of contents by location, never by that attribute.
+  const body = xml.match(/<contenu>([\s\S]*?)<\/contenu>/)?.[1] ?? "";
+  const paragraphs: DebateParagraph[] = [];
+  let textNumber: string | null = null;
+  let budgetPart: "I" | "II" | null = null;
+  for (const match of body.matchAll(
+    /<point\b([^>]*)>|<paragraphe\b([^>]*)>([\s\S]*?)<\/paragraphe>/g
+  )) {
+    if (match[1] !== undefined) {
+      if (/\bnivpoint=["']1["']/.test(match[1])) {
+        budgetPart = null;
+        textNumber = match[1].match(/\bvaleur=["'][^"']*?n\[\[os?\]\]\s*(\d+)/)?.[1] ?? null;
+      }
+      if (/\bnivpoint=["']2["']/.test(match[1])) {
+        const heading = stripTags(
+          body.slice(match.index!, match.index! + 1500).split("</texte>")[0]!
+        ).toLowerCase();
+        if (/première partie/.test(heading)) budgetPart = "I";
+        else if (/seconde partie|deuxième partie/.test(heading)) budgetPart = "II";
+      }
+      continue;
     }
+    const attrs = match[2]!;
+    const block = match[3]!;
+    const attr = (name: string) => {
+      const value = attrs.match(new RegExp(`\\b${name}=["']([^"']*)["']`))?.[1]?.trim();
+      return value || null;
+    };
+    const rawText = block.match(/<texte\b[^>]*>([\s\S]*?)<\/texte>/)?.[1];
+    const text = rawText ? stripTags(rawText) : "";
+    if (!text) continue;
+    paragraphs.push({
+      id: attr("id_syceron") ?? `p${paragraphs.length + 1}`,
+      speaker: block.match(/<nom>([^<]+)<\/nom>/)?.[1] ?? null,
+      actorRef: attr("id_acteur"),
+      role: attr("roledebat"),
+      article: attr("art"),
+      amendments: (attr("adt") ?? "").split(/[,;\s]+/).filter(Boolean),
+      subAmendments: (attr("ssadt") ?? "").split(/[,;\s]+/).filter(Boolean),
+      textNumber: attr("bibard") ? parseTextNumber(attr("bibard")!) : textNumber,
+      budgetPart,
+      text,
+    });
   }
-
-  const content = texts.join("\n\n");
+  const content = paragraphs
+    .map((p) => `${p.speaker ? p.speaker + " : " : ""}${p.text}`)
+    .join("\n\n");
   if (!content) return null;
 
   return {
     seanceRef,
+    paragraphs,
     date: ts.date,
     startTime: ts.startTime,
     seanceOrder,
     content,
-    sourceUrl: `https://www.assemblee-nationale.fr/dyn/${LEGISLATURE}/comptes-rendus/seance/${uid}`,
+    sourceUrl: `https://www.assemblee-nationale.fr/dyn/${xml.match(/<legislature>(\d+)<\/legislature>/)?.[1] ?? LEGISLATURE}/comptes-rendus/seance/${uid}`,
   };
 }

@@ -1,62 +1,105 @@
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { Readable } from "stream";
+// @vitest-environment node
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 const h = vi.hoisted(() => ({
-  get: vi.fn(),
+  download: vi.fn(),
   extractZip: vi.fn(),
   findMany: vi.fn(),
+  create: vi.fn(),
+  updateMany: vi.fn(),
+  get: vi.fn(),
+  completed: vi.fn(),
+  parse: vi.fn(),
 }));
-
-vi.mock("https", () => ({ get: h.get }));
+vi.mock("../debate-transcript-download", () => ({ downloadDebateArchive: h.download }));
+vi.mock("@/lib/sync/hash", () => ({ hashFile: vi.fn(async () => "zip-hash") }));
 vi.mock("@/lib/parsing/unzip", () => ({ extractZip: h.extractZip }));
-vi.mock("@/lib/db", () => ({
-  db: { debateTranscript: { findMany: h.findMany, create: vi.fn() } },
+vi.mock("@/lib/sync/sync-metadata", () => ({
+  syncMetadata: { get: h.get, markCompleted: h.completed },
 }));
-vi.mock("@/services/sync/debate-transcript-parse", () => ({ extractSeanceFromXml: () => null }));
-
-import { syncDebateTranscripts } from "@/services/sync/debate-transcripts";
-
-function serveArchive() {
-  h.get.mockImplementation((_url: string, callback: (response: Readable) => void) => {
-    const response = Object.assign(Readable.from([Buffer.from("not-a-real-zip")]), {
-      statusCode: 200,
-      headers: {},
-    });
-    callback(response);
-    return { on: vi.fn().mockReturnThis() };
+vi.mock("@/lib/db", () => ({
+  db: {
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        debateTranscript: { updateMany: h.updateMany },
+        scrutinAnalysis: { deleteMany: vi.fn() },
+      }),
+    debateTranscript: { findMany: h.findMany, create: h.create, updateMany: h.updateMany },
+  },
+}));
+vi.mock("../debate-transcript-parse", () => ({
+  DEBATE_PARSER_VERSION: 2,
+  extractSeanceFromXml: h.parse,
+}));
+import { syncDebateTranscripts } from "../debate-transcripts";
+const seance = {
+  seanceRef: "RU1",
+  date: new Date(),
+  startTime: null,
+  seanceOrder: 1,
+  content: "An actual speech",
+  paragraphs: [],
+  sourceUrl: "https://www.assemblee-nationale.fr/source",
+};
+beforeEach(() => {
+  vi.resetAllMocks();
+  h.get.mockResolvedValue(null);
+  h.download.mockResolvedValue({ notModified: false, etag: "etag" });
+  h.findMany.mockResolvedValue([]);
+  h.parse.mockReturnValue(seance);
+  h.updateMany.mockResolvedValue({ count: 1 });
+  h.extractZip.mockImplementation((_zip: string, dest: string) => {
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(join(dest, "seance.xml"), "<xml>source</xml>");
   });
-}
-
-describe("syncDebateTranscripts temp directory", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    serveArchive();
-    h.findMany.mockResolvedValue([]);
-    h.extractZip.mockImplementation((_zip: string, destination: string) => {
-      mkdirSync(destination, { recursive: true });
-      writeFileSync(join(destination, "seance.xml"), "<x/>");
-    });
-  });
-
-  // A fixed /tmp path let one run delete the archive another was still reading.
-  it("extracts each run into its own directory and removes it", async () => {
+});
+describe("debate ingestion", () => {
+  it("isolates concurrent runs and cleans both directories", async () => {
     await Promise.all([syncDebateTranscripts(), syncDebateTranscripts()]);
-    const runDirs = h.extractZip.mock.calls.map((call) => dirname(call[1] as string));
-    expect(new Set(runDirs).size).toBe(2);
-    for (const dir of runDirs) expect(existsSync(dir)).toBe(false);
+    const dirs = h.extractZip.mock.calls.map((c) => dirname(c[1]));
+    expect(new Set(dirs).size).toBe(2);
+    for (const dir of dirs) expect(existsSync(dir)).toBe(false);
   });
-
-  it("removes its directory when the archive cannot be extracted", async () => {
-    let runDir = "";
-    h.extractZip.mockImplementation((_zip: string, destination: string) => {
-      runDir = dirname(destination);
-      throw new Error("corrupt archive");
+  it("reports unzip failure, cleans up and never advances the HTTP cursor", async () => {
+    let dir = "";
+    h.extractZip.mockImplementation((_zip: string, dest: string) => {
+      dir = dirname(dest);
+      throw Error("corrupt");
     });
-    const result = await syncDebateTranscripts();
-    expect(result.errors[0]).toContain("Unzip failed");
-    expect(runDir).not.toBe("");
-    expect(existsSync(runDir)).toBe(false);
+    expect((await syncDebateTranscripts()).errors[0]).toContain("Unzip failed");
+    expect(existsSync(dir)).toBe(false);
+    expect(h.completed).not.toHaveBeenCalled();
+  });
+  it("does no database scan or XML work after 304", async () => {
+    h.download.mockResolvedValue({ notModified: true, etag: "etag" });
+    await syncDebateTranscripts();
+    expect(h.findMany).not.toHaveBeenCalled();
+    expect(h.extractZip).not.toHaveBeenCalled();
+  });
+  it("refreshes existing legacy text and removes its arbitrary scrutin linkage", async () => {
+    h.findMany.mockResolvedValue([{ seanceRef: "RU1", sourceHash: null, parserVersion: null }]);
+    expect((await syncDebateTranscripts()).refreshed).toBe(1);
+    expect(h.updateMany.mock.calls[0]![0].data).toMatchObject({
+      scrutinId: null,
+      parserVersion: 2,
+      content: seance.content,
+    });
+  });
+  it("does not rewrite unchanged source content", async () => {
+    await syncDebateTranscripts();
+    const data = h.create.mock.calls[0]![0].data;
+    h.findMany.mockResolvedValue([
+      { seanceRef: "RU1", sourceHash: data.sourceHash, parserVersion: 2 },
+    ]);
+    await syncDebateTranscripts();
+    expect(h.updateMany).not.toHaveBeenCalled();
+  });
+  it("reports an empty archive as a failure", async () => {
+    h.extractZip.mockImplementation((_zip: string, dest: string) =>
+      mkdirSync(dest, { recursive: true })
+    );
+    expect((await syncDebateTranscripts()).errors).not.toHaveLength(0);
+    expect(h.completed).not.toHaveBeenCalled();
   });
 });

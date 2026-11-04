@@ -441,6 +441,21 @@ npm run sync:legislation:content -- --limit=20
 
 ---
 
+### Comptes rendus de séance AN et synthèses par amendement
+
+Source primaire : [Débats en séance publique](https://data.assemblee-nationale.fr/travaux-parlementaires/debats),
+archive `17/vp/syceronbrut/syseron.xml.zip` au format XML. Les jeux d'amendements
+et de comptes rendus sont distincts ; aucune API « débat par amendement » n'est
+supposée. La DILA diffuse également les comptes rendus intégraux au format XML
+via [data.gouv.fr](https://www.data.gouv.fr/datasets/comptes-rendus-des-debats-de-l-assemblee-nationale),
+mais n'est pas une seconde ingestion de ce pipeline.
+
+Le résumé court d'un scrutin décrit le texte officiel de l'amendement et son
+résultat. La synthèse des arguments utilise les interventions de la discussion,
+avec des citations vérifiées et une qualification des arguments communs.
+Voir [le contrat de rattachement](DATA-MATCHING.md#9-rattachement-scrutin-amendement-et-débat)
+et [la procédure de mise en service](RUNBOOK.md#synthèses-des-débats-an).
+
 ## 12. Presse (RSS)
 
 - **Type d'accès** : Flux RSS/XML parsés avec `fast-xml-parser`

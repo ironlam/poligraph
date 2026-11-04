@@ -110,6 +110,7 @@ describe("positions de groupe : pas d'attribution anachronique", () => {
       argumentsFor: "Le groupe SOC soutient le texte.",
       argumentsAgainst: "",
       sourceType: "DEBATE_TRANSCRIPT",
+      sourceUrl: "https://www.assemblee-nationale.fr/source",
       modelVersion: "m",
       scrutin: { chamber: "AN", legislature: 16 },
     });
@@ -117,11 +118,24 @@ describe("positions de groupe : pas d'attribution anachronique", () => {
     expect(await getScrutinAnalysis("s16")).toBeNull();
   });
 
+  it("retient une ancienne analyse AN sans source traçable", async () => {
+    dbMock.scrutinAnalysis.findUnique.mockResolvedValue({
+      argumentsFor: "Une ancienne analyse",
+      argumentsAgainst: "",
+      sourceType: "DEBATE_TRANSCRIPT",
+      modelVersion: "m",
+      sourceUrl: null,
+      scrutin: { chamber: "AN", legislature: 17 },
+    });
+    expect(await getScrutinAnalysis("legacy")).toBeNull();
+  });
+
   it("publie l'analyse d'un scrutin de la 17e sans exposer le scrutin", async () => {
     dbMock.scrutinAnalysis.findUnique.mockResolvedValue({
       argumentsFor: "a",
       argumentsAgainst: "b",
       sourceType: "STRUCTURED_DATA",
+      sourceUrl: "https://www.assemblee-nationale.fr/source",
       modelVersion: "m",
       scrutin: { chamber: "AN", legislature: 17 },
     });

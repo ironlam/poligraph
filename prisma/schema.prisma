@@ -1326,6 +1326,7 @@ model Scrutin {
   publicId    String?  @unique // "SC-000542" — stable public identifier (poligraphId, see /docs/api)
   title       String   @db.Text
   description String?  @db.Text
+  officialSeanceRef String? // Official AN meeting UID, never inferred from a date
   votingDate  DateTime
   sequence    Int      @default(0) // numéro final de l'externalId : départage les scrutins d'un même jour
   legislature Int
@@ -1534,6 +1535,9 @@ model ScrutinAnalysis {
   argumentsAgainst String             @db.Text
   sourceType       AnalysisSourceType
   modelVersion     String
+  sourceUrl String?
+  commonDiscussion Boolean @default(false)
+  evidence Json? // Exact input passage, source hash, paragraph citations and prompt version
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -1551,8 +1555,10 @@ model DebateTranscript {
   startTime   DateTime?
   // Sitting order within the day, from AN <numSeanceJour> (Unique -> 1, else the int).
   seanceOrder Int?
-  // Full séance text (NOT truncated). Never index this column and never select it by
-  // default — load it explicitly only when a matcher needs it.
+  paragraphs Json? // Ordered Syceron paragraphs with source IDs and amendment metadata
+  sourceHash String? // SHA-256 of the source XML
+  parserVersion Int?
+  // Full séance text. Load explicitly only for diagnostics, never by default.
   content     String    @db.Text
   sourceUrl   String?
   createdAt   DateTime  @default(now())

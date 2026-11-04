@@ -124,6 +124,8 @@ export async function getScrutinGroupPositionsBatch(
 }
 
 export interface ScrutinAnalysisData {
+  sourceUrl?: string | null;
+  commonDiscussion?: boolean;
   argumentsFor: string;
   argumentsAgainst: string;
   sourceType: string;
@@ -142,6 +144,8 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
       argumentsAgainst: true,
       sourceType: true,
       modelVersion: true,
+      sourceUrl: true,
+      commonDiscussion: true,
       scrutin: { select: { chamber: true, legislature: true } },
     },
   });
@@ -150,6 +154,7 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
   // Une analyse peut citer des groupes : on ne la publie pas pour une législature dont les
   // groupes ne sont pas attestés (group-attribution.ts).
   const { scrutin, ...analysis } = row;
+  if (scrutin.chamber === "AN" && !analysis.sourceUrl) return null;
   return isAnalysisPublishable(scrutin, CURRENT_LEGISLATURE) ? analysis : null;
 }
 

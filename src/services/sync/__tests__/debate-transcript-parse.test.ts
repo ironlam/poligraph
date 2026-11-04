@@ -30,7 +30,9 @@ describe("parseSeanceTimestamp", () => {
   it("returns null on garbage", () => {
     expect(parseSeanceTimestamp("")).toBeNull();
     expect(parseSeanceTimestamp("nope")).toBeNull();
-    expect(parseSeanceTimestamp("20261332")).toBeNull(); // month 13, day 32
+    expect(parseSeanceTimestamp("20261332")).toBeNull();
+    expect(parseSeanceTimestamp("20260230")).toBeNull();
+    expect(parseSeanceTimestamp("20260530250000000")).toBeNull(); // month 13, day 32
   });
 });
 
@@ -127,8 +129,8 @@ describe("extractSeanceFromXml, structure réelle des fichiers", () => {
   <uid>CRSANR5L17S2027O1N047</uid>
   <seanceRef>RUANR5L17S2027IDS31006</seanceRef>
   <metadonnees><dateSeance>20261030090000000</dateSeance><numSeanceJour>1</numSeanceJour></metadonnees>
+  <metadonnees><sommaire><para>Amendement no 1358 entree de la table des matieres.</para></sommaire></metadonnees>
   <contenu>
-    <paragraphe sommaire="1" valeur=""><orateurs><orateur><nom>M. Table</nom></orateur></orateurs><texte>Amendement no 1358 entree de la table des matieres.</texte></paragraphe>
     <paragraphe roledebat="president" sommaire="0" valeur="">
       <orateurs><orateur><nom>Mme la présidente</nom></orateur></orateurs>
       <texte>La parole est à M. Laurent Lhardit, pour soutenir l'amendement no 1358.</texte>
@@ -149,5 +151,25 @@ describe("extractSeanceFromXml, structure réelle des fichiers", () => {
   it("écarte les entrées de table des matières (sommaire=1)", () => {
     const r = extractSeanceFromXml(xml);
     expect(r!.content).not.toContain("table des matieres");
+  });
+});
+
+describe("official bibard formatting", () => {
+  it("normalises the marked-up text number without accepting an unrelated number", () => {
+    const raw = (bibard: string) =>
+      `<compteRendu><uid>CR1</uid><dateSeance>20261104</dateSeance><contenu><point nivpoint="1" valeur=" (n[[o]] 324)"><paragraphe bibard="${bibard}" id_syceron="p1"><texte>Une intervention sur le texte examiné.</texte></paragraphe></point></contenu></compteRendu>`;
+    expect(extractSeanceFromXml(raw(" (n[[o]] 930)"))!.paragraphs[0]!.textNumber).toBe("930");
+    expect(extractSeanceFromXml(raw("930"))!.paragraphs[0]!.textNumber).toBe("930");
+    expect(extractSeanceFromXml(raw(""))!.paragraphs[0]!.textNumber).toBe("324");
+    expect(extractSeanceFromXml(raw("article 930"))!.paragraphs[0]!.textNumber).toBeNull();
+    // Real official bibard variants: their version semantics are not proven by
+    // a bare text UID, so do not silently strip the qualification or suffix.
+    expect(
+      extractSeanceFromXml(raw("(n[[o]] 2915 rectifié)"))!.paragraphs[0]!.textNumber
+    ).toBeNull();
+    expect(
+      extractSeanceFromXml(raw("(n[[o]] 1603 deuxième rectification)"))!.paragraphs[0]!.textNumber
+    ).toBeNull();
+    expect(extractSeanceFromXml(raw("(n[[o]] 2146-A0)"))!.paragraphs[0]!.textNumber).toBeNull();
   });
 });

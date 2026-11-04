@@ -1,3 +1,4 @@
+import { MAX_DISCUSSION_CHARS } from "@/services/scrutin-substance/debate-discussion";
 /**
  * AI generation of citizen-facing impact explanations for parliamentary votes.
  *
@@ -125,6 +126,7 @@ SOURCES OFFICIELLES - RÈGLES PRIORITAIRES :
 20. Si un bloc <sources-officielles> est fourni, la section "Ce qui était proposé" doit décrire UNIQUEMENT la mesure contenue dans ce bloc (c'est le texte exact de l'amendement voté). C'est ta seule source pour la mesure.
 21. Dans ce cas, le CONTEXTE GÉNÉRAL (résumé du scrutin, résumé du dossier, titre) ne sert qu'à poser le décor de la loi. Il est INTERDIT de t'en servir pour décrire ce que l'amendement proposait : ces textes parlent de la loi entière, pas de cet amendement précis.
 22. Si <sources-officielles> ne permet pas d'identifier une mesure concrète, ne l'invente pas à partir du contexte général : confidence < 40.
+24. Dans <debat>, les arguments marqués « Argument commun à la discussion » concernent plusieurs amendements : présente-les explicitement comme communs, sans les attribuer au seul amendement cible. Les raisons d’un vote ne se déduisent jamais des seuls compteurs.
 23. Une source type="parentAmendment" est l'amendement que le sous-amendement voté modifie : elle sert UNIQUEMENT à expliquer ce qui est modifié. Le vote porte sur la modification (type="subAmendment"). Ne présente jamais le résultat du vote comme l'adoption ou le rejet de l'amendement modifié.
 
 RÉPONSE : Tu DOIS répondre en JSON avec exactement deux champs :
@@ -329,13 +331,13 @@ export function buildUserMessage(input: CitizenImpactInput): string {
   sections.push(`Date : ${input.votingDate}`);
   if (input.theme) sections.push(`Thème : ${input.theme}`);
 
-  if (input.debateExcerpt) {
+  if (input.debateExcerpt && input.debateExcerpt.length <= MAX_DISCUSSION_CHARS) {
     sections.push("");
     sections.push(
       'EXTRAIT DU DÉBAT (compte rendu officiel de la séance, SEULE base pour la section "Le débat") :'
     );
     sections.push("<debat>");
-    sections.push(escapeXmlText(input.debateExcerpt));
+    sections.push(escapeXmlText(input.debateExcerpt, MAX_DISCUSSION_CHARS));
     sections.push("</debat>");
   } else {
     sections.push("");
