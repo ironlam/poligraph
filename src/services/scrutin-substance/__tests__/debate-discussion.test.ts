@@ -36,6 +36,20 @@ describe("official common discussion, 2697 and 3652", () => {
     const missingPart = seance.paragraphs.map((p) => ({ ...p, budgetPart: null }));
     expect(extractAmendmentDiscussion(missingPart, target)).toBeNull();
   });
+  it("does not mistake vote announcements for a debate with arguments", () => {
+    const noSpeech = seance.paragraphs.filter(
+      (p) => p.role === "president" || /^\s*\(/.test(p.text)
+    );
+    expect(extractAmendmentDiscussion(noSpeech, target)).toBeNull();
+    const result = discussion.paragraphs.find((p) => p.id === "3558846")!;
+    expect(
+      validateArgumentCitations(
+        "Un argument",
+        [{ paragraphId: result.id, quote: result.text, scope: "target" }],
+        discussion
+      )
+    ).toBeNull();
+  });
   it("refuses an unclosed discussion rather than include an unknown tail", () => {
     expect(extractAmendmentDiscussion(seance.paragraphs.slice(0, 10), target)).toBeNull();
   });

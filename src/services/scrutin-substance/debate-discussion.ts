@@ -16,6 +16,11 @@ export interface AmendmentDiscussion {
   common: boolean;
 }
 
+/** Stage directions and vote announcements are context, not arguments. */
+export function isCitableDebateParagraph(p: DebateParagraph): boolean {
+  return Boolean(p.speaker && p.actorRef && p.role !== "president" && !/^\s*\(/.test(p.text));
+}
+
 function fold(s: string): string {
   return s
     .toLowerCase()
@@ -119,7 +124,7 @@ export function extractAmendmentDiscussion(
     !discussion.paragraphs.some((p) => p.subAmendments.some((n) => matches(n, target.number)))
   )
     return null;
-  if (!discussion.paragraphs.some((p) => p.scope === "target" && p.role !== "president"))
+  if (!discussion.paragraphs.some((p) => p.scope === "target" && isCitableDebateParagraph(p)))
     return null;
   return discussion;
 }
@@ -153,7 +158,7 @@ export function validateArgumentCitations(
     const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
     if (
       !p ||
-      p.role === "president" ||
+      !isCitableDebateParagraph(p) ||
       p.scope !== c.scope ||
       c.quote.trim().length < 20 ||
       c.quote.length > 600 ||
