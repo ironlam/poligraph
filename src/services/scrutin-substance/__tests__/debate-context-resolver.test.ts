@@ -38,6 +38,9 @@ describe("resolveDebateContextForScrutin — same-day candidate scope (diagnosti
 
   it("finds a HIGH across several same-day candidates but flags scope=same-day (NOT a definitive linkage)", async () => {
     scrutinFindUnique.mockResolvedValue({
+      chamber: "AN",
+      legislature: 17,
+      officialSeanceRef: null,
       votingDate: new Date("2026-05-30"),
       amendmentLinks: [
         { amendment: { number: "2084", authorName: "Mme Lechon", article: "APRÈS L'ARTICLE 22" } },
@@ -63,11 +66,14 @@ describe("resolveDebateContextForScrutin — same-day candidate scope (diagnosti
     // disambiguated linkage, only a diagnostic candidate.
     expect(r.candidateScope).toBe("same-day");
     expect(r.candidateTranscriptCount).toBe(2);
-    expect(r.usableForGeneration).toBe(true); // HIGH, but still "à valider avant branchement"
+    expect(r.usableForGeneration).toBe(false); // Date-only matches can never generate.
   });
 
   it("counts how many same-day transcripts mention the amendment (uniquely localizable when exactly 1)", async () => {
     scrutinFindUnique.mockResolvedValue({
+      chamber: "AN",
+      legislature: 17,
+      officialSeanceRef: null,
       votingDate: new Date("2026-05-30"),
       amendmentLinks: [{ amendment: { number: "2084", authorName: "Mme Lechon", article: "22" } }],
     });
@@ -91,6 +97,9 @@ describe("resolveDebateContextForScrutin — same-day candidate scope (diagnosti
 
   it("keeps scope=same-day and reports NONE when no same-day candidate mentions the amendment", async () => {
     scrutinFindUnique.mockResolvedValue({
+      chamber: "AN",
+      legislature: 17,
+      officialSeanceRef: null,
       votingDate: new Date("2026-05-30"),
       amendmentLinks: [{ amendment: { number: "2084", authorName: "Mme Lechon", article: "22" } }],
     });
@@ -109,5 +118,98 @@ describe("resolveDebateContextForScrutin — same-day candidate scope (diagnosti
     expect(r.candidateScope).toBe("same-day");
     expect(r.candidateTranscriptCount).toBe(2);
     expect(r.hasCandidateTranscript).toBe(true);
+  });
+});
+
+describe("official séance and examined text", () => {
+  const paragraph = (id: string, text: string, role: string | null = null) => ({
+    id,
+    text,
+    role,
+    speaker: "Mme Test",
+    actorRef: "PA1",
+    article: "22",
+    amendments: ["2084"],
+    subAmendments: [],
+    textNumber: "123",
+  });
+  const transcript = {
+    seanceRef: "RUANR5L17S2026IDS1",
+    content: "",
+    parserVersion: 2,
+    sourceHash: "hash",
+    sourceUrl: "https://www.assemblee-nationale.fr/source",
+    paragraphs: [
+      paragraph("p1", "La parole est à Mme Test pour soutenir l'amendement no 2084.", "president"),
+      paragraph(
+        "p2",
+        "La publication des revenus des coopératives permettrait davantage de transparence."
+      ),
+      paragraph("p3", "(L'amendement no 2084 est adopté.)"),
+    ],
+  };
+  const vote = {
+    chamber: "AN",
+    legislature: 17,
+    votingDate: new Date("2026-05-31"),
+    officialSeanceRef: transcript.seanceRef,
+    amendmentLinks: [
+      {
+        role: "PRINCIPAL",
+        amendment: {
+          number: "2084",
+          authorName: "Mme Test",
+          article: "22",
+          chamber: "AN",
+          legislature: 17,
+          texteRef: "PRJLANR5L17B0123",
+        },
+      },
+    ],
+  };
+  beforeEach(() => {
+    scrutinFindUnique.mockReset();
+    transcriptFindMany.mockReset();
+    scrutinFindUnique.mockResolvedValue(vote);
+    transcriptFindMany.mockResolvedValue([transcript]);
+  });
+  it("uses the official meeting even for a vote after midnight, never a same-day join", async () => {
+    const r = await resolveDebateContextForScrutin("s1");
+    expect(r.usableForGeneration).toBe(true);
+    expect(r.candidateScope).toBe("official-seance");
+    expect(transcriptFindMany.mock.calls[0]![0].where).toEqual({ seanceRef: transcript.seanceRef });
+    expect(transcriptFindMany.mock.calls[0]![0].select.content).toBe(false);
+  });
+  it("does not mistake an AN debate for a Senate amendment with the same number", async () => {
+    scrutinFindUnique.mockResolvedValue({ ...vote, chamber: "SENAT" });
+    expect((await resolveDebateContextForScrutin("s1")).usableForGeneration).toBe(false);
+    expect(transcriptFindMany).not.toHaveBeenCalled();
+  });
+  it.each([null, "PRJLANR5L17B0999"])(
+    "refuses missing or conflicting examined text %s",
+    async (texteRef) => {
+      scrutinFindUnique.mockResolvedValue({
+        ...vote,
+        amendmentLinks: [
+          {
+            ...vote.amendmentLinks[0],
+            amendment: { ...vote.amendmentLinks[0]!.amendment, texteRef },
+          },
+        ],
+      });
+      expect((await resolveDebateContextForScrutin("s1")).usableForGeneration).toBe(false);
+    }
+  );
+  it("refuses duplicate meeting records and legacy parsing", async () => {
+    transcriptFindMany.mockResolvedValueOnce([transcript, transcript]);
+    expect((await resolveDebateContextForScrutin("s1")).usableForGeneration).toBe(false);
+    transcriptFindMany.mockResolvedValueOnce([{ ...transcript, parserVersion: null }]);
+    expect((await resolveDebateContextForScrutin("s1")).usableForGeneration).toBe(false);
+  });
+  it("reuses the structured meeting for several votes in the same run", async () => {
+    const cache = new Map();
+    await resolveDebateContextForScrutin("s1", cache);
+    await resolveDebateContextForScrutin("s2", cache);
+    expect(transcriptFindMany).toHaveBeenCalledTimes(1);
   });
 });

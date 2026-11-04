@@ -99,6 +99,17 @@ async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncR
     try {
       const raw = readFileSync(file, "utf-8");
       const sourceHash = createHash("sha256").update(raw).digest("hex");
+      const sourceRef =
+        raw.match(/<seanceRef>([^<]+)<\/seanceRef>/)?.[1] ?? raw.match(/<uid>([^<]+)<\/uid>/)?.[1];
+      const previous = sourceRef ? existingRefs.get(sourceRef) : null;
+      if (
+        !refresh &&
+        previous?.sourceHash === sourceHash &&
+        previous.parserVersion === DEBATE_PARSER_VERSION
+      ) {
+        parsedCount++;
+        continue;
+      }
       const extracted = extractSeanceFromXml(raw);
       if (!extracted) continue;
       parsedCount++;
