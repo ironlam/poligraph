@@ -1,12 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+// @vitest-environment node
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 
 // Controlled DB + Mistral + substance-resolver mocks: no real database, no network.
 const scrutinFindMany = vi.fn();
+const markCompleted = vi.fn();
+vi.mock("@/lib/sync/sync-metadata", () => ({
+  syncMetadata: {
+    get: vi.fn(async () => null),
+    markCompleted: (...a: unknown[]) => markCompleted(...a),
+  },
+}));
 const analysisUpsert = vi.fn();
+const sourceLock = vi.fn();
 const analysisFindMany = vi.fn();
 vi.mock("@/lib/db", () => ({
   db: {
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({ $queryRaw: sourceLock, scrutinAnalysis: { upsert: analysisUpsert } }),
     scrutin: { findMany: (...a: unknown[]) => scrutinFindMany(...a) },
     scrutinAnalysis: {
       upsert: (...a: unknown[]) => analysisUpsert(...a),
@@ -77,6 +88,7 @@ function keyVoteScrutin(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
   return {
+    votingDate: new Date("2026-05-30"),
     id: "s1",
     type: null,
     title: opts?.title ?? "l'amendement n° 2084 de Mme Lechon après l'article 22 ...",
@@ -101,14 +113,56 @@ function keyVoteScrutin(
   };
 }
 
+const discussion = {
+  common: false,
+  amendmentNumbers: ["2084"],
+  paragraphs: [
+    {
+      id: "p1",
+      speaker: "Mme Léchon",
+      actorRef: "PA1",
+      role: null,
+      article: "22",
+      amendments: ["2084"],
+      subAmendments: [],
+      textNumber: "123",
+      scope: "target",
+      text: "La publication de la répartition des revenus des coopératives donne plus de transparence.",
+    },
+    {
+      id: "p2",
+      speaker: "M. Y",
+      actorRef: "PA2",
+      role: null,
+      article: "22",
+      amendments: ["2084"],
+      subAmendments: [],
+      textNumber: "123",
+      scope: "target",
+      text: "Cette publication des revenus représente une charge pour les petites coopératives.",
+    },
+  ],
+};
 function setMistral(args: { argumentsFor: string; argumentsAgainst: string }) {
   callMistral.mockResolvedValue({});
   extractMistralText.mockReturnValue("{}");
-  parseMistralJSON.mockReturnValue(args);
+  parseMistralJSON.mockReturnValue({
+    ...args,
+    evidenceFor: args.argumentsFor
+      ? [{ paragraphId: "p1", quote: discussion.paragraphs[0]!.text, scope: "target" }]
+      : [],
+    evidenceAgainst: args.argumentsAgainst
+      ? [{ paragraphId: "p2", quote: discussion.paragraphs[1]!.text, scope: "target" }]
+      : [],
+  });
 }
 
 beforeEach(() => {
   scrutinFindMany.mockReset();
+  scrutinFindMany.mockResolvedValue([]);
+  markCompleted.mockReset();
+  sourceLock.mockReset();
+  sourceLock.mockResolvedValue([{ id: "transcript1" }]);
   analysisUpsert.mockReset();
   analysisFindMany.mockReset();
   callMistral.mockReset();
@@ -119,6 +173,10 @@ beforeEach(() => {
   // Default: the resolver finds an explicit, corroborated passage on the amendment.
   resolveDebate.mockResolvedValue({
     usableForGeneration: true,
+    discussion,
+    sourceHash: "hash",
+    sourceUrl: "https://www.assemblee-nationale.fr/source",
+    transcriptSeanceRef: "RU1",
     reinforced: true,
     context: "Passage de débat sur l'amendement : M. X défend, Mme Y s'oppose.",
   });
@@ -136,7 +194,7 @@ describe("generateScrutinAnalysis — no-debate guard", () => {
       reinforced: false,
       context: null,
     });
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
 
     const res = await generateScrutinAnalysis({ limit: 10 });
 
@@ -147,7 +205,7 @@ describe("generateScrutinAnalysis — no-debate guard", () => {
 
   it("skips an uncorroborated match even when the resolver calls it usable", async () => {
     resolveDebate.mockResolvedValue({ usableForGeneration: true, reinforced: false, context: "x" });
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
 
     await generateScrutinAnalysis({ limit: 10 });
 
@@ -155,18 +213,18 @@ describe("generateScrutinAnalysis — no-debate guard", () => {
   });
 
   it("feeds an amendment vote the passage on that amendment, not the start of the séance", async () => {
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("DEBUT_DE_SEANCE sans rapport")]);
     setMistral(COHERENT_ARGS);
 
     await generateScrutinAnalysis({ limit: 10 });
 
     const prompt = (callMistral.mock.calls[0]![0] as { content: string }[])[0]!.content;
-    expect(prompt).toContain("M. X défend");
+    expect(prompt).toContain("publication de la répartition");
     expect(prompt).not.toContain("DEBUT_DE_SEANCE");
   });
 
   it("skips a scrutin with no usable debate transcript: no resolver, no model, no write", async () => {
-    scrutinFindMany.mockResolvedValue([
+    scrutinFindMany.mockResolvedValueOnce([
       keyVoteScrutin(null, {
         amendmentLinked: false,
         title: "l'ensemble du projet de loi (première lecture).",
@@ -185,7 +243,7 @@ describe("generateScrutinAnalysis — no-debate guard", () => {
 
 describe("generateScrutinAnalysis — substance anchoring", () => {
   it("feeds the official amendment substance into the prompt (sujet-officiel)", async () => {
-    scrutinFindMany.mockResolvedValue([
+    scrutinFindMany.mockResolvedValueOnce([
       keyVoteScrutin("M. X a défendu la transparence ; Mme Y s'y est opposée."),
     ]);
     setMistral(COHERENT_ARGS);
@@ -199,7 +257,7 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
   });
 
   it("persists when the generated arguments are coherent with the amendment", async () => {
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("Débat réel sur la transparence.")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat réel sur la transparence.")]);
     setMistral(COHERENT_ARGS);
 
     const res = await generateScrutinAnalysis({ limit: 10 });
@@ -208,8 +266,8 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
     expect(res.generated).toBe(1);
   });
 
-  it("generates a non-amendment-linked vote from the debate alone (no substance, no coherence gate)", async () => {
-    scrutinFindMany.mockResolvedValue([
+  it("does not fall back to a legacy whole-séance transcript for a non-amendment vote", async () => {
+    scrutinFindMany.mockResolvedValueOnce([
       keyVoteScrutin("Débat réel en séance sur l'ensemble du texte.", {
         amendmentLinked: false,
         title: "l'ensemble du projet de loi d'urgence agricole (première lecture).",
@@ -220,13 +278,13 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
 
     const res = await generateScrutinAnalysis({ limit: 10 });
 
-    expect(analysisUpsert).toHaveBeenCalledTimes(1);
-    expect(res.generated).toBe(1);
+    resolveDebate.mockResolvedValueOnce({ usableForGeneration: false });
+    // Real DB candidates exclude non-amendment votes; a legacy link alone has no authority.
     expect(res.skippedIncoherent).toBe(0);
   });
 
   it("never calls the model for an amendment vote whose amendment is not linked (V9336)", async () => {
-    scrutinFindMany.mockResolvedValue([
+    scrutinFindMany.mockResolvedValueOnce([
       keyVoteScrutin("Débat de séance sur la loi de finances.", { amendmentLinked: false }),
     ]);
     resolveSubstanceSources.mockResolvedValue({
@@ -246,7 +304,7 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
 
 describe("generateScrutinAnalysis — coherence guard (scrutin 2084 regression)", () => {
   it("does NOT persist arguments incoherent with the amendment (import-ban vs cooperatives)", async () => {
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("Débat de séance, sujets variés.")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat de séance, sujets variés.")]);
     setMistral(INCOHERENT_ARGS);
 
     const res = await generateScrutinAnalysis({ limit: 10 });
@@ -257,7 +315,7 @@ describe("generateScrutinAnalysis — coherence guard (scrutin 2084 regression)"
   });
 
   it("dryRun never writes", async () => {
-    scrutinFindMany.mockResolvedValue([keyVoteScrutin("Débat réel sur la transparence.")]);
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat réel sur la transparence.")]);
     setMistral(COHERENT_ARGS);
 
     await generateScrutinAnalysis({ limit: 10, dryRun: true });
@@ -294,11 +352,88 @@ describe("auditScrutinAnalysisCoherence — read-only report", () => {
   });
 
   it("keeps refused article votes out of the candidate query, so they cannot fill every batch", async () => {
-    scrutinFindMany.mockResolvedValue([]);
+    scrutinFindMany.mockResolvedValueOnce([]);
 
     await generateScrutinAnalysis({ limit: 5 });
 
     const where = scrutinFindMany.mock.calls[0]![0].where;
     expect(where.AND).toContainEqual(AMENDMENT_VOTE_LINKED_OR_OTHER_WHERE);
   });
+});
+
+describe("evidence and bounded scan", () => {
+  it("gets past newer refusals to an older usable debate without spending an extra model call", async () => {
+    const first = keyVoteScrutin(null);
+    const second = { ...keyVoteScrutin(null), id: "s2" };
+    scrutinFindMany.mockResolvedValueOnce([first, second]);
+    resolveDebate.mockResolvedValueOnce({ usableForGeneration: false });
+    setMistral(COHERENT_ARGS);
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(1);
+    expect(callMistral).toHaveBeenCalledTimes(1);
+    expect(markCompleted).toHaveBeenCalledWith(expect.any(String), {
+      cursor: expect.stringContaining("s2"),
+    });
+    expect(analysisUpsert.mock.calls[0]![0].create.evidence).toMatchObject({
+      sourceHash: "hash",
+      seanceRef: "RU1",
+      for: [{ paragraphId: "p1", quote: expect.any(String), scope: "target" }],
+    });
+  });
+  it("never persists invented citations", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    setMistral(COHERENT_ARGS);
+    parseMistralJSON.mockReturnValue({
+      ...COHERENT_ARGS,
+      evidenceFor: [
+        { paragraphId: "p1", quote: "Une citation inventée sans aucun rapport", scope: "target" },
+      ],
+      evidenceAgainst: [],
+    });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(0);
+    expect(analysisUpsert).not.toHaveBeenCalled();
+  });
+  it("allows one documented side without inventing an opposing argument", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    setMistral({ argumentsFor: COHERENT_ARGS.argumentsFor, argumentsAgainst: "" });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(1);
+    expect(analysisUpsert.mock.calls[0]![0].create.argumentsAgainst).toBe("");
+  });
+  it("qualifies shared arguments visibly", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    resolveDebate.mockResolvedValue({
+      usableForGeneration: true,
+      sourceHash: "hash",
+      sourceUrl: "https://www.assemblee-nationale.fr/source",
+      discussion: {
+        ...discussion,
+        common: true,
+        paragraphs: discussion.paragraphs.map((p) => ({ ...p, scope: "shared" })),
+      },
+    });
+    setMistral(COHERENT_ARGS);
+    parseMistralJSON.mockReturnValue({
+      ...COHERENT_ARGS,
+      evidenceFor: [{ paragraphId: "p1", quote: discussion.paragraphs[0]!.text, scope: "shared" }],
+      evidenceAgainst: [
+        { paragraphId: "p2", quote: discussion.paragraphs[1]!.text, scope: "shared" },
+      ],
+    });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(1);
+    expect(analysisUpsert.mock.calls[0]![0].create.argumentsFor).toMatch(
+      /^Dans la discussion commune/
+    );
+  });
+});
+
+it("does not persist if the source changed while the model was running", async () => {
+  scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+  setMistral(COHERENT_ARGS);
+  sourceLock.mockResolvedValue([]);
+  const result = await generateScrutinAnalysis({ limit: 1 });
+  expect(result.generated).toBe(0);
+  expect(analysisUpsert).not.toHaveBeenCalled();
 });

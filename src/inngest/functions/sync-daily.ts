@@ -308,7 +308,10 @@ const DAILY_STEPS: DailyStep[] = [
     name: "sync-debate-transcripts",
     run: async () => {
       const { syncDebateTranscripts } = await import("@/services/sync/debate-transcripts");
-      return syncDebateTranscripts();
+      const result = await syncDebateTranscripts();
+      if (result.errors.length) throw new Error(result.errors.join("; "));
+      if (result.downloaded || result.refreshed) await revalidateTags(["votes"]);
+      return result;
     },
   },
   {
@@ -334,7 +337,9 @@ const DAILY_STEPS: DailyStep[] = [
     run: async () => {
       if (!process.env.MISTRAL_API_KEY) return { skipped: "no MISTRAL_API_KEY" };
       const { generateScrutinAnalysis } = await import("@/services/sync/scrutin-analysis");
-      return generateScrutinAnalysis({ limit: 5 });
+      const result = await generateScrutinAnalysis({ limit: 5 });
+      if (result.generated) await revalidateTags(["votes"]);
+      return result;
     },
   },
   {

@@ -131,6 +131,12 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
         </div>
       </CardHeader>
       <CardContent>
+        {analysis.commonDiscussion && (
+          <p className="text-sm text-muted-foreground mb-4">
+            Cet amendement a été discuté avec d’autres amendements. Les arguments communs sont
+            signalés dans la synthèse.
+          </p>
+        )}
         {/* Desktop: 2 columns */}
         <div className="hidden md:grid md:grid-cols-2 md:gap-6 md:divide-x">
           <div className="pr-6">
@@ -141,7 +147,7 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
               </h4>
             </div>
             <MarkdownText className="text-sm text-purple-700 dark:text-purple-300">
-              {analysis.argumentsFor}
+              {analysis.argumentsFor || "Aucun argument en faveur identifié dans ce passage."}
             </MarkdownText>
           </div>
           <div className="pl-6">
@@ -152,7 +158,7 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
               </h4>
             </div>
             <MarkdownText className="text-sm text-purple-700 dark:text-purple-300">
-              {analysis.argumentsAgainst}
+              {analysis.argumentsAgainst || "Aucun argument contre identifié dans ce passage."}
             </MarkdownText>
           </div>
         </div>
@@ -164,7 +170,7 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
               Arguments pour
             </h4>
             <MarkdownText className="text-sm text-purple-700 dark:text-purple-300">
-              {analysis.argumentsFor}
+              {analysis.argumentsFor || "Aucun argument en faveur identifié dans ce passage."}
             </MarkdownText>
           </div>
           <div className="border-l-4 border-red-500 pl-3">
@@ -172,7 +178,7 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
               Arguments contre
             </h4>
             <MarkdownText className="text-sm text-purple-700 dark:text-purple-300">
-              {analysis.argumentsAgainst}
+              {analysis.argumentsAgainst || "Aucun argument contre identifié dans ce passage."}
             </MarkdownText>
           </div>
         </div>
@@ -180,12 +186,26 @@ function EnjeuxContent({ analysis }: { analysis: ScrutinAnalysisData }) {
         {/* Attribution */}
         <p className="text-xs text-purple-600 dark:text-purple-400 mt-4">
           Synthèse Mistral - Sources :{" "}
-          {ANALYSIS_SOURCE_TYPE_LABELS[analysis.sourceType as AnalysisSourceType]}
+          {analysis.sourceUrl ? (
+            <a
+              href={analysis.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Consulter le compte rendu sur le site de l’Assemblée nationale"
+              className="inline-flex min-h-11 items-center underline"
+            >
+              Compte rendu de l’Assemblée nationale
+            </a>
+          ) : (
+            ANALYSIS_SOURCE_TYPE_LABELS[analysis.sourceType as AnalysisSourceType]
+          )}
         </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Les groupes cités reposent sur l&apos;appartenance actuelle des députés, non datée au
-          moment du vote.
-        </p>
+        {!analysis.sourceUrl && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Les groupes cités reposent sur l&apos;appartenance actuelle des députés, non datée au
+            moment du vote.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
