@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractSeanceFromXml } from "../src/services/sync/debate-transcript-parse";
+import { extractText } from "../src/lib/parsing/html-utils";
 import { inspectAmendmentDiscussion } from "../src/services/scrutin-substance/debate-discussion";
 
 function option(name: string): string | undefined {
@@ -75,12 +76,7 @@ for (const file of xmlFiles(dir)) {
     }
   }
   const midnightStatements = [...xml.matchAll(/<texte\b[^>]*>([\s\S]*?)<\/texte>/g)]
-    .map((m) =>
-      m[1]!
-        .replace(/<[^>]*>/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
+    .map((m) => extractText(m[1]!))
     .filter(
       (t) => /^\(La séance/.test(t) && /à\s+(?:minuit|zéro heure|une heure|deux heures)/.test(t)
     );
