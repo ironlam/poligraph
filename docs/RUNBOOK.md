@@ -349,7 +349,7 @@ protection peut temporairement réduire la couverture publique.
 - Un `dryRun` de `generateScrutinAnalysis` effectue des appels modèle mais aucune
   écriture. Utiliser les audits ci-dessus pour un contrôle sans coût d'IA.
 - Le curseur de scan est dans `SyncMetadata`, clé
-  `debate-analysis-scan:an-paragraph-evidence-v1`. Ne pas lancer deux générateurs
+  `debate-analysis-scan:an-paragraph-evidence-v2`. Ne pas lancer deux générateurs
   manuels en parallèle. La reprise ne nécessite pas de supprimer ce curseur.
 - La fenêtre d'import de nouvelles séances reste de 90 jours. Un backfill des
   comptes rendus absents plus anciens est un chantier distinct.

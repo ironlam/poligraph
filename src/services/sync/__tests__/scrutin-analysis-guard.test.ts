@@ -62,10 +62,11 @@ const COOP_BLOCKS: SubstanceTextBlock[] = [
 const POLICY_TITLE = "Obliger les coopératives agricoles à publier la répartition de leurs revenus";
 
 const COHERENT_ARGS = {
+  // Each sentence stays on the cited paragraph (see the support check).
   argumentsFor:
-    "Les partisans voulaient obliger les coopératives agricoles à publier la répartition de leurs revenus, pour plus de transparence.",
+    "Mme Léchon estime que la publication de la répartition des revenus des coopératives donne plus de transparence.",
   argumentsAgainst:
-    "Les opposants jugeaient cette obligation de publication trop lourde pour les petites coopératives.",
+    "M. Y juge que cette publication des revenus représente une charge pour les petites coopératives.",
 };
 
 // scrutin-2084 failure mode: arguments about an import ban, absent from the amendment.
@@ -392,6 +393,19 @@ describe("evidence and bounded scan", () => {
     });
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(0);
+    expect(analysisUpsert).not.toHaveBeenCalled();
+  });
+  it("refuses sentences that go beyond their cited quotes (amendment 2127 failure)", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    // Real quotes, but the generated text adds claims the speakers never made.
+    setMistral({
+      argumentsFor:
+        "La publication de la répartition des revenus des coopératives réduirait les dépenses de santé et protégerait la biodiversité marine.",
+      argumentsAgainst: COHERENT_ARGS.argumentsAgainst,
+    });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(0);
+    expect(result.errors).toContain("s1: sentences not covered by their citations");
     expect(analysisUpsert).not.toHaveBeenCalled();
   });
   it("allows one documented side without inventing an opposing argument", async () => {
