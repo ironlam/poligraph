@@ -16,7 +16,8 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(process.cwd(), "src/services");
 const CALLS_MODEL = /\b(callMistral|callAnthropic|generateCitizenImpact)\(/;
-const WRITES_SCRUTIN_TEXT = /\bdb\.(scrutin|scrutinAnalysis)\.(update|updateMany|upsert|create)\(/;
+const WRITES_SCRUTIN_TEXT =
+  /\b(?:db|tx)\.(scrutin|scrutinAnalysis)\.(update|updateMany|upsert|create)\(/;
 const APPLIES_GUARD = /\bcanDescribeVotedMeasure\(/;
 
 function stripComments(source: string): string {
@@ -37,6 +38,11 @@ const writers = listSources(ROOT).filter((path) => {
 });
 
 describe("AI vote-text writers are grounded on the amendment text", () => {
+  it("also discovers transaction-scoped analysis writes", () => {
+    expect("await tx.scrutinAnalysis.upsert({ where: { scrutinId } })").toMatch(
+      WRITES_SCRUTIN_TEXT
+    );
+  });
   it("discovers the known writers", () => {
     const relative = writers.map((p) => p.slice(process.cwd().length + 1)).sort();
     expect(relative).toEqual(
