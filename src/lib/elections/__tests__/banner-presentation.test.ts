@@ -13,7 +13,11 @@ const ALL_TYPES: ElectionType[] = [
   "REFERENDUM",
 ];
 
-const CTX = { electionSlug: "presidentielle-2027", sourcedCandidacyCount: 25 };
+const CTX = {
+  electionSlug: "presidentielle-2027",
+  sourcedCandidacyCount: 25,
+  declaredCandidacyCount: 20,
+};
 
 describe("getBannerPresentation", () => {
   it("couvre les huit types d'élection", () => {
@@ -38,9 +42,9 @@ describe("getBannerPresentation", () => {
     });
   });
 
-  it("compte les candidatures « recensées » et non « documentées »", () => {
+  it("compte les candidatures « suivies » dont les déclarées, et non « documentées »", () => {
     const action = getBannerPresentation("PRESIDENTIELLE").secondaryAction("FAR", CTX);
-    expect(action?.label).toBe("25 candidatures recensées");
+    expect(action?.label).toBe("25 candidatures suivies, dont 20 déclarées");
     expect(action?.label).not.toContain("documentées");
   });
 
@@ -48,8 +52,9 @@ describe("getBannerPresentation", () => {
     const action = getBannerPresentation("PRESIDENTIELLE").secondaryAction("FAR", {
       ...CTX,
       sourcedCandidacyCount: 1,
+      declaredCandidacyCount: 1,
     });
-    expect(action?.label).toBe("1 candidature recensée");
+    expect(action?.label).toBe("1 candidature suivie, dont 1 déclarée");
   });
 
   it("envoie vers un service externe le jour du vote", () => {
@@ -81,7 +86,11 @@ describe("getBannerPresentation", () => {
   it("n'accorde aucun bouton présidentiel aux autres types", () => {
     for (const type of ALL_TYPES.filter((t) => t !== "PRESIDENTIELLE")) {
       const p = getBannerPresentation(type);
-      const ctx = { electionSlug: "municipales-2032", sourcedCandidacyCount: 0 };
+      const ctx = {
+        electionSlug: "municipales-2032",
+        sourcedCandidacyCount: 0,
+        declaredCandidacyCount: 0,
+      };
       expect(p.primaryAction("BETWEEN_ROUNDS", ctx).label).not.toContain("programmes");
       expect(p.primaryAction("AFTER", ctx).label).not.toContain("promesses");
       expect(p.showRound1Scores).toBe(false);
@@ -91,7 +100,11 @@ describe("getBannerPresentation", () => {
   });
 
   it("renvoie les autres types vers leur page d'élection générique", () => {
-    const ctx = { electionSlug: "municipales-2032", sourcedCandidacyCount: 0 };
+    const ctx = {
+      electionSlug: "municipales-2032",
+      sourcedCandidacyCount: 0,
+      declaredCandidacyCount: 0,
+    };
     expect(getBannerPresentation("MUNICIPALES").primaryAction("FAR", ctx).href).toBe(
       "/elections/municipales-2032"
     );

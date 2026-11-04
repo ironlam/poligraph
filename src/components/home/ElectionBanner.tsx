@@ -73,6 +73,7 @@ export function ElectionBanner({ election, now }: ElectionBannerProps) {
   const ctx = {
     electionSlug: election.slug,
     sourcedCandidacyCount: election.sourcedCandidacyCount,
+    declaredCandidacyCount: election.declaredCandidacyCount,
   };
   const primary = presentation.primaryAction(state.kind, ctx);
   const secondary = presentation.secondaryAction(state.kind, ctx);

@@ -17,6 +17,14 @@ export const PUBLIC_PRESIDENTIAL_EXTENSION_WHERE = {
   presidentialData: { is: { publicationStatus: "PUBLISHED" } },
 } satisfies Prisma.CandidacyWhereInput;
 
+/**
+ * Candidacies a reader can actually open: no presidential fiche at all (every non-presidential
+ * election), or a fiche that is published. A DRAFT, ARCHIVED, EXCLUDED or REJECTED fiche is out.
+ */
+export const PUBLIC_CANDIDACY_OPENABLE_WHERE = {
+  OR: [{ presidentialData: { is: null } }, PUBLIC_PRESIDENTIAL_EXTENSION_WHERE],
+} satisfies Prisma.CandidacyWhereInput;
+
 export function getPublicTrackedPresidentialCandidacyWhere(
   politicianSlug?: string
 ): Prisma.CandidacyWhereInput {

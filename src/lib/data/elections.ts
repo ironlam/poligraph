@@ -3,6 +3,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { Prisma, ElectionType as ElectionTypeEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
+import { PUBLIC_CANDIDACY_OPENABLE_WHERE } from "@/lib/data/presidential-candidacy-policy";
 import type { ElectionType } from "@/types";
 import type { ElectionRoundScore } from "@/lib/elections/banner-state";
 import { isElectionOver } from "@/lib/elections/status";
@@ -592,8 +593,14 @@ export type FeaturedElection = {
   dateConfirmed: boolean;
   round1Scores: ElectionRoundScore[];
   winner: ElectionRoundScore | null;
-  /** Candidacies with a status AND both source fields. The number the banner is allowed to show. */
+  /**
+   * Candidacies with a status AND both source fields, whose presidential fiche is either absent
+   * (non-presidential elections) or PUBLISHED. The number the banner is allowed to show: it only
+   * counts what a reader can open, so a DRAFT fiche is not counted.
+   */
   sourcedCandidacyCount: number;
+  /** Subset of `sourcedCandidacyCount` whose status is DECLARE. */
+  declaredCandidacyCount: number;
   hasResults: boolean;
   communesDepouillees: number;
 };
@@ -632,37 +639,40 @@ export async function loadFeaturedElection(): Promise<FeaturedElection | null> {
   });
   if (!election) return null;
 
-  const [sourcedCandidacyCount, qualified, elected, resultatsSnapshot] = await Promise.all([
-    db.candidacy.count({
-      where: {
-        electionId: election.id,
-        status: { not: null },
-        sourceUrl: { not: null },
-        sourceLabel: { not: null },
-      },
-    }),
-    db.candidacy.findMany({
-      where: { electionId: election.id, round1Qualified: true },
-      select: {
-        candidateName: true,
-        partyLabel: true,
-        round1Pct: true,
-        politician: { select: { slug: true } },
-      },
-      orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
-      take: 2,
-    }),
-    db.candidacy.findFirst({
-      where: { electionId: election.id, isElected: true },
-      select: {
-        candidateName: true,
-        partyLabel: true,
-        round2Pct: true,
-        politician: { select: { slug: true } },
-      },
-    }),
-    db.statsSnapshot.findUnique({ where: { key: `${election.slug}-resultats` } }),
-  ]);
+  const sourcedWhere: Prisma.CandidacyWhereInput = {
+    electionId: election.id,
+    status: { not: null },
+    sourceUrl: { not: null },
+    sourceLabel: { not: null },
+    ...PUBLIC_CANDIDACY_OPENABLE_WHERE,
+  };
+
+  const [sourcedCandidacyCount, declaredCandidacyCount, qualified, elected, resultatsSnapshot] =
+    await Promise.all([
+      db.candidacy.count({ where: sourcedWhere }),
+      db.candidacy.count({ where: { ...sourcedWhere, status: "DECLARE" } }),
+      db.candidacy.findMany({
+        where: { electionId: election.id, round1Qualified: true },
+        select: {
+          candidateName: true,
+          partyLabel: true,
+          round1Pct: true,
+          politician: { select: { slug: true } },
+        },
+        orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
+        take: 2,
+      }),
+      db.candidacy.findFirst({
+        where: { electionId: election.id, isElected: true },
+        select: {
+          candidateName: true,
+          partyLabel: true,
+          round2Pct: true,
+          politician: { select: { slug: true } },
+        },
+      }),
+      db.statsSnapshot.findUnique({ where: { key: `${election.slug}-resultats` } }),
+    ]);
 
   const resultats = resultatsSnapshot?.data as { communesDepouillees?: number } | null;
 
@@ -697,6 +707,7 @@ export async function loadFeaturedElection(): Promise<FeaturedElection | null> {
           }
         : null,
     sourcedCandidacyCount,
+    declaredCandidacyCount,
     hasResults: (resultats?.communesDepouillees ?? 0) > 0,
     communesDepouillees: resultats?.communesDepouillees ?? 0,
   };

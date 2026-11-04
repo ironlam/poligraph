@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { assertDisposableTestDb, describeIfDisposableDb } from "@/test/db-guard";
 
 // Deferred: these modules import @/lib/db as a value, which throws at load without DATABASE_URL.
@@ -118,6 +118,76 @@ describeIfDisposableDb("loadFeaturedElection", () => {
     });
     const found = await loadFeaturedElection();
     expect(found?.sourcedCandidacyCount).toBe(1);
+  });
+
+  describe("fiches présidentielles", () => {
+    async function candidacy(
+      electionId: string,
+      name: string,
+      status: "DECLARE" | "PRESSENTI",
+      fiche: "DRAFT" | "PUBLISHED" | null
+    ) {
+      const c = await db.candidacy.create({
+        data: {
+          electionId,
+          candidateName: name,
+          status,
+          sourceUrl: `https://example.org/${name}`,
+          sourceLabel: "Source",
+        },
+      });
+      if (fiche) {
+        await db.candidacyPresidential.create({
+          data: { candidacyId: c.id, publicationStatus: fiche },
+        });
+      }
+    }
+
+    it("ne compte pas une candidature dont la fiche est en DRAFT", async () => {
+      const e = await election({
+        suffix: "draft",
+        round1: daysAhead(100),
+        round2: daysAhead(114),
+        featured: true,
+      });
+      await candidacy(e.id, "publiee", "DECLARE", "PUBLISHED");
+      await candidacy(e.id, "brouillon", "DECLARE", "DRAFT");
+      const found = await loadFeaturedElection();
+      expect(found?.sourcedCandidacyCount).toBe(1);
+      expect(found?.declaredCandidacyCount).toBe(1);
+    });
+
+    it("garde une candidature sans fiche présidentielle (municipales)", async () => {
+      const e = await db.election.create({
+        data: {
+          slug: `${PREFIX}-muni`,
+          type: "MUNICIPALES",
+          scope: "NATIONAL",
+          title: "Municipales de test",
+          round1Date: daysAhead(100),
+          round2Date: daysAhead(107),
+          featured: true,
+        },
+      });
+      await candidacy(e.id, "sans-fiche", "DECLARE", null);
+      const found = await loadFeaturedElection();
+      expect(found?.sourcedCandidacyCount).toBe(1);
+    });
+
+    it("reproduit la répartition de l'accueil : 35 suivies dont 30 déclarées", async () => {
+      const e = await election({
+        suffix: "repartition",
+        round1: daysAhead(100),
+        round2: daysAhead(114),
+        featured: true,
+      });
+      for (let i = 0; i < 30; i++) await candidacy(e.id, `decl-${i}`, "DECLARE", "PUBLISHED");
+      for (let i = 0; i < 5; i++) await candidacy(e.id, `pres-${i}`, "PRESSENTI", "PUBLISHED");
+      for (let i = 0; i < 4; i++) await candidacy(e.id, `draft-${i}`, "DECLARE", "DRAFT");
+      const found = await loadFeaturedElection();
+      expect(found?.sourcedCandidacyCount).toBe(35);
+      expect(found?.declaredCandidacyCount).toBe(30);
+    });
   });
 
   it("expose round2Date et dateConfirmed, que le bandeau exigeait sans les recevoir", async () => {
