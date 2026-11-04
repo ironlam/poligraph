@@ -30,7 +30,9 @@ describe("parseSeanceTimestamp", () => {
   it("returns null on garbage", () => {
     expect(parseSeanceTimestamp("")).toBeNull();
     expect(parseSeanceTimestamp("nope")).toBeNull();
-    expect(parseSeanceTimestamp("20261332")).toBeNull(); // month 13, day 32
+    expect(parseSeanceTimestamp("20261332")).toBeNull();
+    expect(parseSeanceTimestamp("20260230")).toBeNull();
+    expect(parseSeanceTimestamp("20260530250000000")).toBeNull(); // month 13, day 32
   });
 });
 
@@ -127,8 +129,8 @@ describe("extractSeanceFromXml, structure réelle des fichiers", () => {
   <uid>CRSANR5L17S2027O1N047</uid>
   <seanceRef>RUANR5L17S2027IDS31006</seanceRef>
   <metadonnees><dateSeance>20261030090000000</dateSeance><numSeanceJour>1</numSeanceJour></metadonnees>
+  <metadonnees><sommaire><para>Amendement no 1358 entree de la table des matieres.</para></sommaire></metadonnees>
   <contenu>
-    <paragraphe sommaire="1" valeur=""><orateurs><orateur><nom>M. Table</nom></orateur></orateurs><texte>Amendement no 1358 entree de la table des matieres.</texte></paragraphe>
     <paragraphe roledebat="president" sommaire="0" valeur="">
       <orateurs><orateur><nom>Mme la présidente</nom></orateur></orateurs>
       <texte>La parole est à M. Laurent Lhardit, pour soutenir l'amendement no 1358.</texte>

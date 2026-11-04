@@ -1,10 +1,13 @@
 import { db } from "@/lib/db";
-import * as https from "https";
-import { mkdtempSync, rmSync, readdirSync, readFileSync, createWriteStream } from "fs";
+import { createHash } from "node:crypto";
+import { hashFile } from "@/lib/sync/hash";
+import { syncMetadata } from "@/lib/sync/sync-metadata";
+import { downloadDebateArchive } from "./debate-transcript-download";
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { extractZip } from "@/lib/parsing/unzip";
-import { extractSeanceFromXml } from "./debate-transcript-parse";
+import { DEBATE_PARSER_VERSION, extractSeanceFromXml } from "./debate-transcript-parse";
 
 const LEGISLATURE = 17;
 // Each run extracts into its own directory: a fixed path let one run delete the
@@ -19,31 +22,9 @@ interface SyncResult {
   errors: string[];
 }
 
-function downloadFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(dest);
-    https
-      .get(url, (resp) => {
-        if (resp.statusCode === 301 || resp.statusCode === 302) {
-          const location = resp.headers.location;
-          if (location) {
-            downloadFile(location, dest).then(resolve).catch(reject);
-            return;
-          }
-        }
-        resp.pipe(file);
-        file.on("finish", () => {
-          file.close();
-          resolve();
-        });
-      })
-      .on("error", reject);
-  });
-}
-
 /**
- * `refresh` rewrites the text of séances already stored. The import skips them
- * otherwise, so a séance parsed with an older, lossier parser keeps its truncated text.
+ * Source hashes avoid rewriting unchanged séances. Parser versions force a
+ * reparse of existing records. `refresh` also bypasses conditional HTTP.
  */
 export async function syncDebateTranscripts(opts?: { refresh?: boolean }): Promise<SyncResult> {
   const tempDir = mkdtempSync(join(tmpdir(), TEMP_DIR_PREFIX));
@@ -58,8 +39,17 @@ async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncR
   const errors: string[] = [];
   const zipPath = `${tempDir}/cr.zip`;
 
+  const sourceKey = `debates-an:${LEGISLATURE}:parser-${DEBATE_PARSER_VERSION}`;
+  const state = refresh ? null : await syncMetadata.get(sourceKey);
+  let etag: string | null = null;
+  let archiveHash: string | null = null;
   try {
-    await downloadFile(SYSERON_ZIP_URL, zipPath);
+    const download = await downloadDebateArchive(SYSERON_ZIP_URL, zipPath, state?.etag);
+    if (download.notModified) return { downloaded: 0, refreshed: 0, errors: [] };
+    etag = download.etag;
+    archiveHash = await hashFile(zipPath);
+    if (!refresh && state?.contentHash === archiveHash)
+      return { downloaded: 0, refreshed: 0, errors: [] };
   } catch (e) {
     return { downloaded: 0, refreshed: 0, errors: [`Download failed: ${e}`] };
   }
@@ -84,10 +74,12 @@ async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncR
       return results;
     };
     files = walk(extractDir);
-  } catch {
-    // ignore
+  } catch (e) {
+    return { downloaded: 0, refreshed: 0, errors: [`Archive listing failed: ${e}`] };
   }
+  if (files.length === 0) return { downloaded: 0, refreshed: 0, errors: ["Empty debate archive"] };
 
+  let parsedCount = 0;
   let downloaded = 0;
   let refreshed = 0;
 
@@ -95,48 +87,64 @@ async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncR
   cutoff.setDate(cutoff.getDate() - 90);
 
   // Pre-load existing seanceRefs to avoid N+1 queries
-  const existingRefs = new Set(
+  const existingRefs = new Map(
     (
       await db.debateTranscript.findMany({
-        select: { seanceRef: true },
+        select: { seanceRef: true, sourceHash: true, parserVersion: true },
       })
-    ).map((t) => t.seanceRef)
+    ).map((t) => [t.seanceRef, t] as const)
   );
 
   for (const file of files) {
     try {
       const raw = readFileSync(file, "utf-8");
+      const sourceHash = createHash("sha256").update(raw).digest("hex");
       const extracted = extractSeanceFromXml(raw);
       if (!extracted) continue;
+      parsedCount++;
 
-      const exists = existingRefs.has(extracted.seanceRef);
-      if (exists) {
-        if (!refresh) continue;
-        const r = await db.debateTranscript.updateMany({
-          where: { seanceRef: extracted.seanceRef },
-          data: {
-            content: extracted.content,
-            startTime: extracted.startTime,
-            seanceOrder: extracted.seanceOrder,
-            sourceUrl: extracted.sourceUrl,
-          },
+      const existing = existingRefs.get(extracted.seanceRef);
+      if (existing) {
+        if (
+          !refresh &&
+          existing.sourceHash === sourceHash &&
+          existing.parserVersion === DEBATE_PARSER_VERSION
+        )
+          continue;
+        const r = await db.$transaction(async (tx) => {
+          const r = await tx.debateTranscript.updateMany({
+            where: { seanceRef: extracted.seanceRef },
+            data: {
+              content: extracted.content,
+              date: extracted.date,
+              paragraphs: extracted.paragraphs,
+              sourceHash,
+              parserVersion: DEBATE_PARSER_VERSION,
+              scrutinId: null,
+              startTime: extracted.startTime,
+              seanceOrder: extracted.seanceOrder,
+              sourceUrl: extracted.sourceUrl,
+            },
+          });
+          if (extracted.sourceUrl)
+            await tx.scrutinAnalysis.deleteMany({
+              where: { sourceUrl: extracted.sourceUrl, sourceType: "DEBATE_TRANSCRIPT" },
+            });
+          return r;
         });
         refreshed += r.count;
         continue;
       }
       if (extracted.date < cutoff) continue;
 
-      // Store the FULL séance text (no truncation) plus the metadata needed for
-      // séance-scoped matching: start time and sitting order in the day.
-      //
-      // We deliberately DO NOT set scrutinId here. The old "first scrutin of the
-      // day" linkage was wrong (it attached a séance to an arbitrary same-day
-      // scrutin). A reliable séance↔scrutin link is computed read-only by the
-      // resolver/audit (scrutin-substance) and will be wired in a later PR; until
-      // then new transcripts stay unlinked rather than carry a false link.
+      // A séance can contain many scrutins. Its official meeting UID is the
+      // join key; the legacy single-scrutin foreign key stays empty.
       await db.debateTranscript.create({
         data: {
           seanceRef: extracted.seanceRef,
+          paragraphs: extracted.paragraphs,
+          sourceHash,
+          parserVersion: DEBATE_PARSER_VERSION,
           date: extracted.date,
           startTime: extracted.startTime,
           seanceOrder: extracted.seanceOrder,
@@ -144,12 +152,24 @@ async function syncFromArchive(tempDir: string, refresh: boolean): Promise<SyncR
           sourceUrl: extracted.sourceUrl,
         },
       });
-      existingRefs.add(extracted.seanceRef);
+      existingRefs.set(extracted.seanceRef, {
+        seanceRef: extracted.seanceRef,
+        sourceHash,
+        parserVersion: DEBATE_PARSER_VERSION,
+      });
       downloaded++;
     } catch (e) {
       errors.push(`Error processing ${file}: ${e}`);
     }
   }
 
+  if (parsedCount === 0) errors.push("No readable séance in debate archive");
+  if (errors.length === 0) {
+    await syncMetadata.markCompleted(sourceKey, {
+      etag,
+      contentHash: archiveHash,
+      itemCount: downloaded + refreshed,
+    });
+  }
   return { downloaded, refreshed, errors: errors.slice(0, 10) };
 }
