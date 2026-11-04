@@ -287,6 +287,25 @@ describe("syncScrutinsAN official group metadata", () => {
     expect(rows.every((row: { organeRef: string }) => row.organeRef === "PO845401")).toBe(true);
   });
 
+  it("backfills the official séance ref without writing nominative votes", async () => {
+    const withSeance = structuredClone(rawScrutin);
+    Reflect.set(withSeance.scrutin, "seanceRef", "RUANR5L17S2025IDS1");
+    extractZipMock.mockImplementation((_zipPath: string, destination: string) => {
+      const jsonDir = join(destination, "json");
+      mkdirSync(jsonDir, { recursive: true });
+      writeFileSync(join(jsonDir, "VTANR5L17V9000.json"), JSON.stringify(withSeance));
+    });
+    dbMock.scrutin.findUnique.mockResolvedValue({ id: "scrutin-1", officialSeanceRef: null });
+    const result = await syncScrutinsAN(17, false, false, false, true);
+    expect(result.errors).toEqual([]);
+    expect(transactionMock.scrutin.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ officialSeanceRef: "RUANR5L17S2025IDS1" }),
+      })
+    );
+    expect(writeVotesMock).not.toHaveBeenCalled();
+  });
+
   it("propagates force to rebuild rows even when both hashes match", async () => {
     const content = JSON.stringify(rawScrutin);
     const sourceHash = createHash("sha256").update(content).digest("hex");

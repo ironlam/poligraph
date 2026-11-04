@@ -54,6 +54,7 @@ interface ANScrutin {
     numero: string;
     legislature: string;
     dateScrutin: string;
+    seanceRef?: string | null;
     titre: string;
     objet?: {
       dossierLegislatif?: {
@@ -148,12 +149,14 @@ export interface OfficialGroupSnapshot {
 }
 
 interface OfficialVoteMetadata {
+  officialSeanceRef?: string | null;
   officialDossierRef?: string | null;
   codeTypeVote: string | null;
   libelleTypeVote: string | null;
 }
 
 interface ExistingOfficialGroupSnapshot {
+  officialSeanceRef?: string | null;
   id: string;
   officialGroupsHash: string | null;
   officialGroupsSourceHash: string | null;
@@ -362,6 +365,8 @@ function getOfficialGroupSnapshotChanges(
       existing.officialGroupsSourceHash !== snapshot.sourceHash ||
       existing.officialGroupsSourceUrl !== snapshot.sourceUrl,
     metadataChanged:
+      (metadata.officialSeanceRef !== undefined &&
+        existing.officialSeanceRef !== metadata.officialSeanceRef) ||
       (metadata.officialDossierRef !== undefined &&
         existing.officialDossierRef !== metadata.officialDossierRef) ||
       existing.codeTypeVote !== metadata.codeTypeVote ||
@@ -402,6 +407,9 @@ async function persistOfficialGroupSnapshot(
       data: {
         ...(metadata.officialDossierRef !== undefined
           ? { officialDossierRef: metadata.officialDossierRef }
+          : {}),
+        ...(metadata.officialSeanceRef !== undefined
+          ? { officialSeanceRef: metadata.officialSeanceRef }
           : {}),
         codeTypeVote: metadata.codeTypeVote,
         libelleTypeVote: metadata.libelleTypeVote,
@@ -595,6 +603,7 @@ export async function syncScrutinsAN(
         const individualVotes = officialGroupsOnly ? [] : extractVotes(data);
         const officialDossierRef = readOfficialDossierRef(s);
         const officialMetadata: OfficialVoteMetadata = {
+          ...(s.seanceRef !== undefined ? { officialSeanceRef: s.seanceRef?.trim() || null } : {}),
           ...(officialDossierRef !== undefined ? { officialDossierRef } : {}),
           codeTypeVote: s.typeVote?.codeTypeVote?.trim() || null,
           libelleTypeVote: s.typeVote?.libelleTypeVote?.trim() || null,
@@ -634,6 +643,9 @@ export async function syncScrutinsAN(
 
             const scrutinData = {
               externalId,
+              ...(officialMetadata.officialSeanceRef !== undefined
+                ? { officialSeanceRef: officialMetadata.officialSeanceRef }
+                : {}),
               title: s.titre,
               description: null,
               votingDate,
