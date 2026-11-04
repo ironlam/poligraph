@@ -153,3 +153,14 @@ describe("extractSeanceFromXml, structure réelle des fichiers", () => {
     expect(r!.content).not.toContain("table des matieres");
   });
 });
+
+describe("official bibard formatting", () => {
+  it("normalises the marked-up text number without accepting an unrelated number", () => {
+    const raw = (bibard: string) =>
+      `<compteRendu><uid>CR1</uid><dateSeance>20261104</dateSeance><contenu><point nivpoint="1" valeur=" (n[[o]] 324)"><paragraphe bibard="${bibard}" id_syceron="p1"><texte>Une intervention sur le texte examiné.</texte></paragraphe></point></contenu></compteRendu>`;
+    expect(extractSeanceFromXml(raw(" (n[[o]] 930)"))!.paragraphs[0]!.textNumber).toBe("930");
+    expect(extractSeanceFromXml(raw("930"))!.paragraphs[0]!.textNumber).toBe("930");
+    expect(extractSeanceFromXml(raw(""))!.paragraphs[0]!.textNumber).toBe("324");
+    expect(extractSeanceFromXml(raw("article 930"))!.paragraphs[0]!.textNumber).toBeNull();
+  });
+});

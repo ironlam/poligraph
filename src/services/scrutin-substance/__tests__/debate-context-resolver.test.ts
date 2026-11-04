@@ -1,3 +1,4 @@
+import { DEBATE_PARSER_VERSION } from "@/services/sync/debate-transcript-parse";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const scrutinFindUnique = vi.fn();
@@ -136,7 +137,7 @@ describe("official séance and examined text", () => {
   const transcript = {
     seanceRef: "RUANR5L17S2026IDS1",
     content: "",
-    parserVersion: 2,
+    parserVersion: DEBATE_PARSER_VERSION,
     sourceHash: "hash",
     sourceUrl: "https://www.assemblee-nationale.fr/source",
     paragraphs: [

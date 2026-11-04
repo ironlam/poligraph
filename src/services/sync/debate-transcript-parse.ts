@@ -18,7 +18,7 @@ const LEGISLATURE = 17;
 
 import { decodeHtmlEntities, removeTags } from "@/lib/parsing/html-utils";
 
-export const DEBATE_PARSER_VERSION = 2;
+export const DEBATE_PARSER_VERSION = 3;
 
 export interface DebateParagraph {
   id: string;
@@ -85,6 +85,12 @@ function stripTags(xml: string): string {
     .trim();
 }
 
+/** Syceron uses both `930` and `(n[[o]] 930)` in bibard. Accept only
+ * these explicit forms, never an arbitrary number found in surrounding prose. */
+function parseTextNumber(value: string): string | null {
+  return /^\d+$/.test(value) ? value : (/^\(n\[\[os?\]\]\s*(\d+)\)$/.exec(value)?.[1] ?? null);
+}
+
 /** Extract a full séance record from one compte-rendu XML document. */
 export function extractSeanceFromXml(xml: string): ParsedSeance | null {
   const uidMatch = xml.match(/<uid>([^<]+)<\/uid>/);
@@ -140,7 +146,7 @@ export function extractSeanceFromXml(xml: string): ParsedSeance | null {
       article: attr("art"),
       amendments: (attr("adt") ?? "").split(/[,;\s]+/).filter(Boolean),
       subAmendments: (attr("ssadt") ?? "").split(/[,;\s]+/).filter(Boolean),
-      textNumber: attr("bibard") ?? textNumber,
+      textNumber: attr("bibard") ? parseTextNumber(attr("bibard")!) : textNumber,
       budgetPart,
       text,
     });
