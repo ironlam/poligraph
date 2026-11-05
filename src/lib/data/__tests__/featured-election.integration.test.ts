@@ -27,6 +27,7 @@ describeIfDisposableDb("loadFeaturedElection", () => {
   afterEach(async () => {
     await db.candidacy.deleteMany({ where: { election: { slug: { startsWith: PREFIX } } } });
     await db.election.deleteMany({ where: { slug: { startsWith: PREFIX } } });
+    await db.politician.deleteMany({ where: { slug: { startsWith: PREFIX } } });
   });
 
   afterAll(async () => {
@@ -96,9 +97,19 @@ describeIfDisposableDb("loadFeaturedElection", () => {
       round2: daysAhead(114),
       featured: true,
     });
+    const pol = await db.politician.create({
+      data: {
+        slug: `${PREFIX}-p-sourcee`,
+        firstName: "Sou",
+        lastName: "Rcee",
+        fullName: "Sou Rcee",
+        publicationStatus: "PUBLISHED",
+      },
+    });
     await db.candidacy.create({
       data: {
         electionId: e.id,
+        politicianId: pol.id,
         candidateName: "Sourcée",
         status: "DECLARE",
         sourceUrl: "https://example.org/a",
@@ -120,44 +131,97 @@ describeIfDisposableDb("loadFeaturedElection", () => {
     expect(found?.sourcedCandidacyCount).toBe(1);
   });
 
-  describe("fiches présidentielles", () => {
+  describe("candidatures présidentielles", () => {
+    let seq = 0;
     async function candidacy(
       electionId: string,
       name: string,
       status: "DECLARE" | "PRESSENTI",
-      fiche: "DRAFT" | "PUBLISHED" | null
+      options: { fiche?: "DRAFT" | "PUBLISHED"; politician?: "public" | "draft" | "none" } = {}
     ) {
+      const kind = options.politician ?? "public";
+      const politician =
+        kind === "none"
+          ? null
+          : await db.politician.create({
+              data: {
+                slug: `${PREFIX}-p-${++seq}`,
+                firstName: "Test",
+                lastName: name,
+                fullName: `Test ${name}`,
+                publicationStatus: kind === "public" ? "PUBLISHED" : "DRAFT",
+              },
+            });
       const c = await db.candidacy.create({
         data: {
           electionId,
+          politicianId: politician?.id ?? null,
           candidateName: name,
           status,
           sourceUrl: `https://example.org/${name}`,
           sourceLabel: "Source",
         },
       });
-      if (fiche) {
+      if (options.fiche) {
         await db.candidacyPresidential.create({
-          data: { candidacyId: c.id, publicationStatus: fiche },
+          data: { candidacyId: c.id, publicationStatus: options.fiche },
         });
       }
     }
 
-    it("ne compte pas une candidature dont la fiche est en DRAFT", async () => {
+    it("compte une candidature accessible même si sa fiche est en DRAFT", async () => {
       const e = await election({
         suffix: "draft",
         round1: daysAhead(100),
         round2: daysAhead(114),
         featured: true,
       });
-      await candidacy(e.id, "publiee", "DECLARE", "PUBLISHED");
-      await candidacy(e.id, "brouillon", "DECLARE", "DRAFT");
+      await candidacy(e.id, "publiee", "DECLARE", { fiche: "PUBLISHED" });
+      await candidacy(e.id, "brouillon", "DECLARE", { fiche: "DRAFT" });
+      await candidacy(e.id, "sans-fiche", "PRESSENTI");
+      const found = await loadFeaturedElection();
+      expect(found?.sourcedCandidacyCount).toBe(3);
+      expect(found?.declaredCandidacyCount).toBe(2);
+    });
+
+    it("ne compte pas une candidature sans politicien public", async () => {
+      const e = await election({
+        suffix: "private",
+        round1: daysAhead(100),
+        round2: daysAhead(114),
+        featured: true,
+      });
+      await candidacy(e.id, "visible", "DECLARE");
+      await candidacy(e.id, "politicien-brouillon", "DECLARE", { politician: "draft" });
+      await candidacy(e.id, "sans-politicien", "DECLARE", { politician: "none" });
       const found = await loadFeaturedElection();
       expect(found?.sourcedCandidacyCount).toBe(1);
       expect(found?.declaredCandidacyCount).toBe(1);
     });
 
-    it("garde une candidature sans fiche présidentielle (municipales)", async () => {
+    it("reproduit la répartition de l'accueil : 35 suivies dont 30 déclarées", async () => {
+      const e = await election({
+        suffix: "repartition",
+        round1: daysAhead(100),
+        round2: daysAhead(114),
+        featured: true,
+      });
+      for (let i = 0; i < 26; i++) {
+        await candidacy(e.id, `decl-${i}`, "DECLARE", { fiche: "PUBLISHED" });
+      }
+      for (let i = 0; i < 4; i++) {
+        await candidacy(e.id, `decl-draft-${i}`, "DECLARE", { fiche: "DRAFT" });
+      }
+      for (let i = 0; i < 5; i++) await candidacy(e.id, `pres-${i}`, "PRESSENTI");
+      for (let i = 0; i < 4; i++) {
+        await candidacy(e.id, `prive-${i}`, "DECLARE", { politician: "draft" });
+      }
+      const found = await loadFeaturedElection();
+      expect(found?.sourcedCandidacyCount).toBe(35);
+      expect(found?.declaredCandidacyCount).toBe(30);
+    });
+
+    it("garde la règle de sourçage seule hors présidentielle", async () => {
       const e = await db.election.create({
         data: {
           slug: `${PREFIX}-muni`,
@@ -169,24 +233,9 @@ describeIfDisposableDb("loadFeaturedElection", () => {
           featured: true,
         },
       });
-      await candidacy(e.id, "sans-fiche", "DECLARE", null);
+      await candidacy(e.id, "sans-politicien", "DECLARE", { politician: "none" });
       const found = await loadFeaturedElection();
       expect(found?.sourcedCandidacyCount).toBe(1);
-    });
-
-    it("reproduit la répartition de l'accueil : 35 suivies dont 30 déclarées", async () => {
-      const e = await election({
-        suffix: "repartition",
-        round1: daysAhead(100),
-        round2: daysAhead(114),
-        featured: true,
-      });
-      for (let i = 0; i < 30; i++) await candidacy(e.id, `decl-${i}`, "DECLARE", "PUBLISHED");
-      for (let i = 0; i < 5; i++) await candidacy(e.id, `pres-${i}`, "PRESSENTI", "PUBLISHED");
-      for (let i = 0; i < 4; i++) await candidacy(e.id, `draft-${i}`, "DECLARE", "DRAFT");
-      const found = await loadFeaturedElection();
-      expect(found?.sourcedCandidacyCount).toBe(35);
-      expect(found?.declaredCandidacyCount).toBe(30);
     });
   });
 
