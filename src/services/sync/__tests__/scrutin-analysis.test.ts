@@ -36,6 +36,12 @@ describe("buildAnalysisPrompt", () => {
     dossierContext: "Projet de loi d'urgence pour la protection et la souveraineté agricoles",
   });
 
+  it("asks for each side as a string, never a list (the model answered with arrays)", () => {
+    expect(prompt).toContain("CHAÎNE de texte continu");
+    expect(prompt).toContain("jamais une liste ni un tableau");
+    expect(prompt).toContain('"argumentsFor":"');
+  });
+
   it("anchors the measure in <sujet-officiel> with the amendment text", () => {
     expect(prompt).toContain("<sujet-officiel>");
     expect(prompt).toContain("coopératives agricoles");

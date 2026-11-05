@@ -140,8 +140,8 @@ ${groupLines}
 ${debat}</données>
 
 Analyse ce scrutin parlementaire. Produis un JSON avec deux champs :
-- "argumentsFor": les arguments exprimés en faveur de la mesure votée (2-3 phrases max)
-- "argumentsAgainst": les arguments exprimés contre la mesure votée (2-3 phrases max)
+- "argumentsFor": une CHAÎNE de texte continu (jamais une liste ni un tableau) avec les arguments exprimés en faveur de la mesure votée (2-3 phrases max)
+- "argumentsAgainst": une CHAÎNE de texte continu (jamais une liste ni un tableau) avec les arguments exprimés contre la mesure votée (2-3 phrases max)
 
 Règles strictes :
 ${mesureRule}
@@ -155,6 +155,7 @@ ${mesureRule}
 5. Vulgarisation : explique en français simple, sans jargon non expliqué.
 6. Concision : 2-3 phrases maximum par camp. Pas de statistiques (l'interface affiche les chiffres).
 
+Format attendu : {"argumentsFor":"Phrase une. Phrase deux.","argumentsAgainst":"","evidenceFor":[...],"evidenceAgainst":[]}
 Réponds UNIQUEMENT avec le JSON, sans markdown.`;
 }
 
