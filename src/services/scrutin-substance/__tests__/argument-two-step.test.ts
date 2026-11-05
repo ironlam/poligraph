@@ -56,6 +56,18 @@ describe("splitSentences", () => {
   });
 });
 
+describe("splitSentences abbreviations", () => {
+  it("does not cut after M., Mme or n°", () => {
+    expect(
+      splitSentences("Comme l'a mentionné M. Bazin, c'est clair. Voir l'amendement n° 12 ensuite.")
+    ).toEqual(["Comme l'a mentionné M. Bazin, c'est clair.", "Voir l'amendement n° 12 ensuite."]);
+    expect(splitSentences("Mme Sas l'a dit. Puis M. Juvin.")).toEqual([
+      "Mme Sas l'a dit.",
+      "Puis M. Juvin.",
+    ]);
+  });
+});
+
 describe("parseSelection", () => {
   it("extracts the exact sentence, never text written by the model", () => {
     const sel = parseSelection(
