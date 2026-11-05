@@ -3,6 +3,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import { Prisma, ElectionType as ElectionTypeEnum } from "@/generated/prisma";
 import { pickEnumValue } from "@/lib/data/enum-guards";
 import { db } from "@/lib/db";
+import { PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE } from "@/lib/data/presidential-candidacy-policy";
 import type { ElectionType } from "@/types";
 import type { ElectionRoundScore } from "@/lib/elections/banner-state";
 import { isElectionOver } from "@/lib/elections/status";
@@ -592,8 +593,14 @@ export type FeaturedElection = {
   dateConfirmed: boolean;
   round1Scores: ElectionRoundScore[];
   winner: ElectionRoundScore | null;
-  /** Candidacies with a status AND both source fields. The number the banner is allowed to show. */
+  /**
+   * Candidacies a reader can reach: status AND both source fields, plus, for the presidential
+   * election, a public politician (same population as the public candidacy directory). The
+   * editorial extension's publication status is not a condition.
+   */
   sourcedCandidacyCount: number;
+  /** Subset of `sourcedCandidacyCount` whose status is DECLARE. */
+  declaredCandidacyCount: number;
   hasResults: boolean;
   communesDepouillees: number;
 };
@@ -632,37 +639,46 @@ export async function loadFeaturedElection(): Promise<FeaturedElection | null> {
   });
   if (!election) return null;
 
-  const [sourcedCandidacyCount, qualified, elected, resultatsSnapshot] = await Promise.all([
-    db.candidacy.count({
-      where: {
-        electionId: election.id,
-        status: { not: null },
-        sourceUrl: { not: null },
-        sourceLabel: { not: null },
-      },
-    }),
-    db.candidacy.findMany({
-      where: { electionId: election.id, round1Qualified: true },
-      select: {
-        candidateName: true,
-        partyLabel: true,
-        round1Pct: true,
-        politician: { select: { slug: true } },
-      },
-      orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
-      take: 2,
-    }),
-    db.candidacy.findFirst({
-      where: { electionId: election.id, isElected: true },
-      select: {
-        candidateName: true,
-        partyLabel: true,
-        round2Pct: true,
-        politician: { select: { slug: true } },
-      },
-    }),
-    db.statsSnapshot.findUnique({ where: { key: `${election.slug}-resultats` } }),
-  ]);
+  // Presidential: the population of the public candidacy directory the banner links to, so the
+  // number matches the list (a DRAFT editorial extension does not hide a sourced candidacy).
+  // Other elections keep the plain sourcing rule.
+  const sourcedWhere: Prisma.CandidacyWhereInput = {
+    electionId: election.id,
+    ...(election.type === "PRESIDENTIELLE"
+      ? PUBLIC_TRACKED_PRESIDENTIAL_CANDIDACY_WHERE
+      : {
+          status: { not: null },
+          sourceUrl: { not: null },
+          sourceLabel: { not: null },
+        }),
+  };
+
+  const [sourcedCandidacyCount, declaredCandidacyCount, qualified, elected, resultatsSnapshot] =
+    await Promise.all([
+      db.candidacy.count({ where: sourcedWhere }),
+      db.candidacy.count({ where: { ...sourcedWhere, status: "DECLARE" } }),
+      db.candidacy.findMany({
+        where: { electionId: election.id, round1Qualified: true },
+        select: {
+          candidateName: true,
+          partyLabel: true,
+          round1Pct: true,
+          politician: { select: { slug: true } },
+        },
+        orderBy: { round1Pct: { sort: "desc", nulls: "last" } },
+        take: 2,
+      }),
+      db.candidacy.findFirst({
+        where: { electionId: election.id, isElected: true },
+        select: {
+          candidateName: true,
+          partyLabel: true,
+          round2Pct: true,
+          politician: { select: { slug: true } },
+        },
+      }),
+      db.statsSnapshot.findUnique({ where: { key: `${election.slug}-resultats` } }),
+    ]);
 
   const resultats = resultatsSnapshot?.data as { communesDepouillees?: number } | null;
 
@@ -697,6 +713,7 @@ export async function loadFeaturedElection(): Promise<FeaturedElection | null> {
           }
         : null,
     sourcedCandidacyCount,
+    declaredCandidacyCount,
     hasResults: (resultats?.communesDepouillees ?? 0) > 0,
     communesDepouillees: resultats?.communesDepouillees ?? 0,
   };

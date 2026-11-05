@@ -22,8 +22,10 @@ export type BannerAction = {
 
 export type BannerActionContext = {
   electionSlug: string;
-  /** Candidacies with a status AND both source fields. Never the count of published fiches. */
+  /** Sourced candidacies whose fiche is published or absent: what a reader can open. */
   sourcedCandidacyCount: number;
+  /** Subset of `sourcedCandidacyCount` with the DECLARE status. */
+  declaredCandidacyCount: number;
 };
 
 export type BannerPresentation = {
@@ -97,10 +99,11 @@ const presidentiellePresentation: BannerPresentation = {
     // the link would point at the page carrying it.
     if (state === "AFTER") return null;
     const plural = ctx.sourcedCandidacyCount > 1 ? "s" : "";
+    const declaredPlural = ctx.declaredCandidacyCount > 1 ? "s" : "";
     return {
-      // "recensées" and not "documentées": this counts sourced candidacies, not candidacies whose
+      // "suivies" and not "documentées": this counts tracked candidacies, not candidacies whose
       // programme is published. "Documentée" would read as "we have their measures".
-      label: `${ctx.sourcedCandidacyCount} candidature${plural} recensée${plural}`,
+      label: `${ctx.sourcedCandidacyCount} candidature${plural} suivie${plural}, dont ${ctx.declaredCandidacyCount} déclarée${declaredPlural}`,
       href: `/elections/${ctx.electionSlug}#candidatures`,
       external: false,
     };

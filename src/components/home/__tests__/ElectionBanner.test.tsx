@@ -13,7 +13,8 @@ const presidentielle: FeaturedElection = {
   dateConfirmed: false,
   round1Scores: [],
   winner: null,
-  sourcedCandidacyCount: 25,
+  sourcedCandidacyCount: 35,
+  declaredCandidacyCount: 30,
   hasResults: false,
   communesDepouillees: 0,
 };
@@ -47,10 +48,12 @@ describe("ElectionBanner", () => {
     expect(screen.queryByText("Dates provisoires")).not.toBeInTheDocument();
   });
 
-  it("compte les candidatures recensées et jamais « documentées »", () => {
+  it("compte les candidatures suivies et déclarées, jamais « documentées »", () => {
     render(<ElectionBanner election={presidentielle} now={new Date("2026-08-07T10:00:00.000Z")} />);
 
-    expect(screen.getByRole("link", { name: /25 candidatures recensées/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /35 candidatures suivies, dont 30 déclarées/ })
+    ).toBeInTheDocument();
     expect(screen.queryByText(/candidatures documentées/)).not.toBeInTheDocument();
   });
 
