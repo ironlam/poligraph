@@ -267,6 +267,18 @@ export async function generateScrutinAnalysis(
           continue;
         }
 
+        // A speaker on both sides (e.g. the Government explaining its own proposal, then
+        // asking for withdrawal) makes the classification ambiguous: refuse rather than guess.
+        const speakerOf = new Map(
+          discussion.paragraphs.map((p) => [p.id, p.actorRef ?? p.speaker])
+        );
+        const forSpeakers = new Set(selection.for.map((c) => speakerOf.get(c.paragraphId)));
+        if (selection.against.some((c) => forSpeakers.has(speakerOf.get(c.paragraphId)))) {
+          skipped++;
+          errors.push(`${s.id}: a speaker appears on both sides`);
+          continue;
+        }
+
         // Step 2: the model writes each side from the selected quotes alone.
         const prompt = buildWritingPrompt({ selection, discussion });
         const response = await callMistral([{ role: "user", content: prompt }], {

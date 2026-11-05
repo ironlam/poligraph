@@ -452,6 +452,19 @@ describe("evidence and bounded scan", () => {
     expect(result.errors).toContain("s1: sentences not covered by their citations");
     expect(analysisUpsert).not.toHaveBeenCalled();
   });
+  it("refuses a vote where the same speaker is classified on both sides", async () => {
+    scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
+    callMistral.mockResolvedValue({});
+    extractMistralText.mockReturnValue("{}");
+    parseMistralJSON.mockReturnValue({
+      pour: [{ id: "p1", phrases: [1] }],
+      contre: [{ id: "p1", phrases: [1] }],
+    });
+    const result = await generateScrutinAnalysis({ limit: 1 });
+    expect(result.generated).toBe(0);
+    expect(callMistral).toHaveBeenCalledTimes(1);
+    expect(result.errors).toContain("s1: a speaker appears on both sides");
+  });
   it("allows one documented side without inventing an opposing argument", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
     setMistral({ argumentsFor: COHERENT_ARGS.argumentsFor, argumentsAgainst: "" });
