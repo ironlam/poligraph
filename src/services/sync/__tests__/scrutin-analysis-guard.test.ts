@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 // @vitest-environment node
+import { splitSentences } from "@/services/scrutin-substance/argument-two-step";
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 
 // Controlled DB + Mistral + substance-resolver mocks: no real database, no network.
@@ -144,19 +145,35 @@ const discussion = {
     },
   ],
 };
-function setMistral(args: { argumentsFor: string; argumentsAgainst: string }) {
+/** Three calls per vote: selection (pointers), writing, then the sentence-by-sentence
+ * verification. `supported: false` makes the verifier reject every sentence. */
+function setMistral(args: { argumentsFor: string; argumentsAgainst: string }, supported = true) {
   callMistral.mockResolvedValue({});
   extractMistralText.mockReturnValue("{}");
-  // Two calls per vote: first the selection (pointers), then the writing.
   let call = 0;
-  parseMistralJSON.mockImplementation(() =>
-    call++ % 2 === 0
-      ? {
-          pour: args.argumentsFor ? [{ id: "p1", phrases: [1] }] : [],
-          contre: args.argumentsAgainst ? [{ id: "p2", phrases: [1] }] : [],
-        }
-      : args
-  );
+  parseMistralJSON.mockImplementation(() => {
+    const step = call++ % 3;
+    if (step === 0)
+      return {
+        pour: args.argumentsFor ? [{ id: "p1", phrases: [1] }] : [],
+        contre: args.argumentsAgainst ? [{ id: "p2", phrases: [1] }] : [],
+      };
+    if (step === 1) return args;
+    return {
+      verdicts: [
+        ...splitSentences(args.argumentsFor).map((_, i) => ({
+          camp: "pour",
+          phrase: i + 1,
+          soutenue: supported,
+        })),
+        ...splitSentences(args.argumentsAgainst).map((_, i) => ({
+          camp: "contre",
+          phrase: i + 1,
+          soutenue: supported,
+        })),
+      ],
+    };
+  });
 }
 
 beforeEach(() => {
@@ -252,7 +269,7 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
 
     await generateScrutinAnalysis({ limit: 10 });
 
-    expect(callMistral).toHaveBeenCalledTimes(2);
+    expect(callMistral).toHaveBeenCalledTimes(3);
     const selection = (callMistral.mock.calls[0]![0] as { content: string }[])[0]!.content;
     const writing = (callMistral.mock.calls[1]![0] as { content: string }[])[0]!.content;
     expect(selection).toContain("<sujet-officiel>");
@@ -337,13 +354,13 @@ describe("generateScrutinAnalysis — coherence guard (scrutin 2084 regression)"
 
   it("does NOT persist arguments that drift from the cited quotes (import-ban vs cooperatives)", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin("Débat de séance, sujets variés.")]);
-    setMistral(INCOHERENT_ARGS);
+    setMistral(INCOHERENT_ARGS, false);
 
     const res = await generateScrutinAnalysis({ limit: 10 });
 
     expect(analysisUpsert).not.toHaveBeenCalled();
     expect(res.generated).toBe(0);
-    expect(res.errors.some((e) => e.includes("not covered by their citations"))).toBe(true);
+    expect(res.errors.some((e) => e.includes("not supported by their citations"))).toBe(true);
   });
 
   it("persists a faithful summary that does not repeat the measure's vocabulary", async () => {
@@ -416,7 +433,7 @@ describe("evidence and bounded scan", () => {
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(1);
     // Selection + writing for the one usable debate, nothing for the refused one.
-    expect(callMistral).toHaveBeenCalledTimes(2);
+    expect(callMistral).toHaveBeenCalledTimes(3);
     expect(markCompleted).toHaveBeenCalledWith(expect.any(String), {
       cursor: expect.stringContaining("s2"),
     });
@@ -442,14 +459,17 @@ describe("evidence and bounded scan", () => {
   it("refuses sentences that go beyond their cited quotes (amendment 2127 failure)", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
     // Real quotes, but the generated text adds claims the speakers never made.
-    setMistral({
-      argumentsFor:
-        "La publication de la répartition des revenus des coopératives réduirait les dépenses de santé et protégerait la biodiversité marine.",
-      argumentsAgainst: COHERENT_ARGS.argumentsAgainst,
-    });
+    setMistral(
+      {
+        argumentsFor:
+          "La publication de la répartition des revenus des coopératives réduirait les dépenses de santé et protégerait la biodiversité marine.",
+        argumentsAgainst: COHERENT_ARGS.argumentsAgainst,
+      },
+      false
+    );
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(0);
-    expect(result.errors).toContain("s1: sentences not covered by their citations");
+    expect(result.errors).toContain("s1: sentences not supported by their citations");
     expect(analysisUpsert).not.toHaveBeenCalled();
   });
   it("refuses a vote where the same speaker is classified on both sides", async () => {

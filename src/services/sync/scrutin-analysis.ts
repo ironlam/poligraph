@@ -5,14 +5,15 @@ import {
   DEBATE_PROMPT_VERSION,
   validateArgumentCitations,
 } from "@/services/scrutin-substance/debate-discussion";
-import { findUnsupportedSentences } from "@/services/scrutin-substance/argument-support";
 import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
 import { callMistral, extractMistralText, parseMistralJSON } from "@/lib/api/mistral";
 import { escapeXmlText } from "@/lib/text/escape-xml";
 import {
   buildSelectionPrompt,
+  buildVerificationPrompt,
   buildWritingPrompt,
+  checkVerification,
   parseSelection,
 } from "@/services/scrutin-substance/argument-two-step";
 import {
@@ -320,16 +321,30 @@ export async function generateScrutinAnalysis(
           errors.push(`${s.id}: missing or invalid paragraph citations`);
           continue;
         }
-        // Every sentence must rest on the quotes cited for its side: no borrowing from the
-        // amendment's statement of reasons, no claim the speaker did not make.
-        const speakerById = new Map(discussion.paragraphs.map((p) => [p.id, p.speaker ?? ""]));
-        const unsupported = [
-          ...findUnsupportedSentences(parsed.argumentsFor, evidenceFor, speakerById),
-          ...findUnsupportedSentences(parsed.argumentsAgainst, evidenceAgainst, speakerById),
-        ];
-        if (unsupported.length > 0) {
+        // Step 3: a second call checks every sentence against the quotes of its side.
+        const verificationPrompt = buildVerificationPrompt({
+          selection,
+          discussion,
+          argumentsFor: parsed.argumentsFor,
+          argumentsAgainst: parsed.argumentsAgainst,
+        });
+        const verificationResponse = await callMistral(
+          [{ role: "user", content: verificationPrompt }],
+          {
+            model: MISTRAL_MODEL,
+            maxTokens: 1500,
+            temperature: 0,
+            responseFormat: { type: "json_object" },
+          }
+        );
+        const verification = checkVerification(
+          parseMistralJSON<Record<string, unknown>>(extractMistralText(verificationResponse)),
+          parsed.argumentsFor,
+          parsed.argumentsAgainst
+        );
+        if (!verification.ok) {
           skipped++;
-          errors.push(`${s.id}: sentences not covered by their citations`);
+          errors.push(`${s.id}: sentences not supported by their citations`);
           continue;
         }
         // A visible qualification survives even if the model omits it.
@@ -343,11 +358,12 @@ export async function generateScrutinAnalysis(
           sourceUrl: debate.sourceUrl,
           sourceHash: debate.sourceHash,
           promptHash: createHash("sha256")
-            .update(selectionPrompt + "\n---\n" + prompt)
+            .update([selectionPrompt, prompt, verificationPrompt].join("\n---\n"))
             .digest("hex"),
           // Kept server-side for reproducibility; public data only reads sourceUrl.
           selectionPrompt,
           prompt,
+          verificationPrompt,
           discussion,
           for: evidenceFor,
           against: evidenceAgainst,
