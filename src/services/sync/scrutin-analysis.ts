@@ -311,6 +311,29 @@ export async function generateScrutinAnalysis(
           errors.push(`${s.id}: official subject exceeds input budget`);
           continue;
         }
+        // Guard 2: the debate must be about the official measure. The reference is compared
+        // with what was said on the target, not with the model's summary: a faithful summary
+        // reports the speakers' words and rarely repeats the measure's own vocabulary.
+        if ((s.amendmentLinks.length > 0 || isAmendmentVote(s)) && resolved.blocks.length > 0) {
+          const verdict = assessCoherence({
+            text: discussion.paragraphs
+              .filter((p) => p.scope === "target" || p.scope === "shared")
+              .map((p) => p.text)
+              .join(" "),
+            policyTitle: s.policyTitle?.policyTitle ?? null,
+            policySubtitle: s.policyTitle?.policySubtitle ?? null,
+            blocks: resolved.blocks,
+          });
+          if (!verdict.coherent) {
+            skippedIncoherent++;
+            console.warn(
+              `[scrutin-analysis] debate not on the official measure for ${s.id} ` +
+                `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed}), no model call`
+            );
+            continue;
+          }
+        }
+
         const prompt = buildAnalysisPrompt({
           title: s.title,
           result: s.result,
@@ -349,25 +372,6 @@ export async function generateScrutinAnalysis(
           errors.push(`${s.id}: validation failed (${validation.errors.join(", ")})`);
           skipped++;
           continue;
-        }
-
-        // Guard 2: arguments must echo the official measure (amendment), not drift
-        // onto a different measure from the broad séance debate.
-        if ((s.amendmentLinks.length > 0 || isAmendmentVote(s)) && resolved.blocks.length > 0) {
-          const verdict = assessCoherence({
-            text: `${parsed.argumentsFor} ${parsed.argumentsAgainst}`,
-            policyTitle: s.policyTitle?.policyTitle ?? null,
-            policySubtitle: s.policyTitle?.policySubtitle ?? null,
-            blocks: resolved.blocks,
-          });
-          if (!verdict.coherent) {
-            skippedIncoherent++;
-            console.warn(
-              `[scrutin-analysis] INCOHERENT analysis for ${s.id} ` +
-                `(coverage ${verdict.coverage.toFixed(2)}, ref=${verdict.referenceUsed}) — not persisted`
-            );
-            continue;
-          }
         }
 
         const evidenceFor = validateArgumentCitations(
