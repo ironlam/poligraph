@@ -147,15 +147,16 @@ const discussion = {
 function setMistral(args: { argumentsFor: string; argumentsAgainst: string }) {
   callMistral.mockResolvedValue({});
   extractMistralText.mockReturnValue("{}");
-  parseMistralJSON.mockReturnValue({
-    ...args,
-    evidenceFor: args.argumentsFor
-      ? [{ paragraphId: "p1", quote: discussion.paragraphs[0]!.text, scope: "target" }]
-      : [],
-    evidenceAgainst: args.argumentsAgainst
-      ? [{ paragraphId: "p2", quote: discussion.paragraphs[1]!.text, scope: "target" }]
-      : [],
-  });
+  // Two calls per vote: first the selection (pointers), then the writing.
+  let call = 0;
+  parseMistralJSON.mockImplementation(() =>
+    call++ % 2 === 0
+      ? {
+          pour: args.argumentsFor ? [{ id: "p1", phrases: [1] }] : [],
+          contre: args.argumentsAgainst ? [{ id: "p2", phrases: [1] }] : [],
+        }
+      : args
+  );
 }
 
 beforeEach(() => {
@@ -251,10 +252,14 @@ describe("generateScrutinAnalysis — substance anchoring", () => {
 
     await generateScrutinAnalysis({ limit: 10 });
 
-    expect(callMistral).toHaveBeenCalledTimes(1);
-    const prompt = (callMistral.mock.calls[0]![0] as { content: string }[])[0]!.content;
-    expect(prompt).toContain("<sujet-officiel>");
-    expect(prompt).toContain("coopératives agricoles");
+    expect(callMistral).toHaveBeenCalledTimes(2);
+    const selection = (callMistral.mock.calls[0]![0] as { content: string }[])[0]!.content;
+    const writing = (callMistral.mock.calls[1]![0] as { content: string }[])[0]!.content;
+    expect(selection).toContain("<sujet-officiel>");
+    expect(selection).toContain("coopératives agricoles");
+    // The writing step sees only the selected quotes: no official text to borrow from.
+    expect(writing).not.toContain("<sujet-officiel>");
+    expect(writing).toContain("<citations-pour>");
   });
 
   it("persists when the generated arguments are coherent with the amendment", async () => {
@@ -410,7 +415,8 @@ describe("evidence and bounded scan", () => {
     setMistral(COHERENT_ARGS);
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(1);
-    expect(callMistral).toHaveBeenCalledTimes(1);
+    // Selection + writing for the one usable debate, nothing for the refused one.
+    expect(callMistral).toHaveBeenCalledTimes(2);
     expect(markCompleted).toHaveBeenCalledWith(expect.any(String), {
       cursor: expect.stringContaining("s2"),
     });
@@ -420,18 +426,17 @@ describe("evidence and bounded scan", () => {
       for: [{ paragraphId: "p1", quote: expect.any(String), scope: "target" }],
     });
   });
-  it("never persists invented citations", async () => {
+  it("cannot persist an invented citation: the model only points, the code quotes", async () => {
     scrutinFindMany.mockResolvedValueOnce([keyVoteScrutin(null)]);
-    setMistral(COHERENT_ARGS);
+    callMistral.mockResolvedValue({});
+    extractMistralText.mockReturnValue("{}");
     parseMistralJSON.mockReturnValue({
-      ...COHERENT_ARGS,
-      evidenceFor: [
-        { paragraphId: "p1", quote: "Une citation inventée sans aucun rapport", scope: "target" },
-      ],
-      evidenceAgainst: [],
+      pour: [{ id: "p-inconnu", phrases: [1] }],
+      contre: [{ id: "p1", phrases: [42] }],
     });
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(0);
+    expect(callMistral).toHaveBeenCalledTimes(1);
     expect(analysisUpsert).not.toHaveBeenCalled();
   });
   it("refuses sentences that go beyond their cited quotes (amendment 2127 failure)", async () => {
@@ -467,13 +472,6 @@ describe("evidence and bounded scan", () => {
       },
     });
     setMistral(COHERENT_ARGS);
-    parseMistralJSON.mockReturnValue({
-      ...COHERENT_ARGS,
-      evidenceFor: [{ paragraphId: "p1", quote: discussion.paragraphs[0]!.text, scope: "shared" }],
-      evidenceAgainst: [
-        { paragraphId: "p2", quote: discussion.paragraphs[1]!.text, scope: "shared" },
-      ],
-    });
     const result = await generateScrutinAnalysis({ limit: 1 });
     expect(result.generated).toBe(1);
     expect(analysisUpsert.mock.calls[0]![0].create.argumentsFor).toMatch(
