@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 // @vitest-environment node
-import { splitSentences } from "@/services/scrutin-substance/argument-two-step";
 import type { SubstanceTextBlock } from "@/services/scrutin-policy-title/types";
 
 // Controlled DB + Mistral + substance-resolver mocks: no real database, no network.
@@ -145,8 +144,8 @@ const discussion = {
     },
   ],
 };
-/** Three calls per vote: selection (pointers), writing, then the sentence-by-sentence
- * verification. `supported: false` makes the verifier reject every sentence. */
+/** Three calls per vote: selection (pointers), writing (reasons citing quote ids), then the
+ * verification of each reason. `supported: false` makes the verifier reject every reason. */
 function setMistral(args: { argumentsFor: string; argumentsAgainst: string }, supported = true) {
   callMistral.mockResolvedValue({});
   extractMistralText.mockReturnValue("{}");
@@ -158,19 +157,15 @@ function setMistral(args: { argumentsFor: string; argumentsAgainst: string }, su
         pour: args.argumentsFor ? [{ id: "p1", phrases: [1] }] : [],
         contre: args.argumentsAgainst ? [{ id: "p2", phrases: [1] }] : [],
       };
-    if (step === 1) return args;
+    if (step === 1)
+      return {
+        pour: args.argumentsFor ? [{ raison: args.argumentsFor, citations: ["P1"] }] : [],
+        contre: args.argumentsAgainst ? [{ raison: args.argumentsAgainst, citations: ["C1"] }] : [],
+      };
     return {
       verdicts: [
-        ...splitSentences(args.argumentsFor).map((_, i) => ({
-          camp: "pour",
-          phrase: i + 1,
-          soutenue: supported,
-        })),
-        ...splitSentences(args.argumentsAgainst).map((_, i) => ({
-          camp: "contre",
-          phrase: i + 1,
-          soutenue: supported,
-        })),
+        ...(args.argumentsFor ? [{ id: "pour-1", soutenue: supported }] : []),
+        ...(args.argumentsAgainst ? [{ id: "contre-1", soutenue: supported }] : []),
       ],
     };
   });

@@ -7,6 +7,12 @@ import {
   isGroupStatsPublishable,
 } from "@/lib/votes/group-attribution";
 import { CURRENT_LEGISLATURE } from "@/config/scrutin-importance";
+import {
+  parseReasons,
+  type Reason,
+  type ReasonQuote,
+  type ReasonsPayload,
+} from "@/services/scrutin-substance/reasons";
 import type { GroupPosition, Chamber } from "@/generated/prisma";
 import { getParliamentaryGroupConfig } from "@/config/parliamentaryGroups";
 import {
@@ -123,6 +129,28 @@ export async function getScrutinGroupPositionsBatch(
   return groupPositionsByScrutinId(toPublicGroupPositions(rows));
 }
 
+export interface ReasonSpeakerView {
+  name: string;
+  /** Slug of the public politician sheet, when the speaker is matched to one. */
+  slug: string | null;
+  /** Current parliamentary group (not dated to the vote). Null for ministers. */
+  groupCode: string | null;
+  groupName: string | null;
+  /** Speaking as a member of the Government (the role comes from the transcript). */
+  government: boolean;
+  role: string | null;
+}
+export interface ReasonView {
+  text: string;
+  shared: boolean;
+  speakers: ReasonSpeakerView[];
+  quotes: ReasonQuote[];
+}
+export interface ReasonsView {
+  for: ReasonView[];
+  against: ReasonView[];
+}
+
 export interface ScrutinAnalysisData {
   sourceUrl?: string | null;
   commonDiscussion?: boolean;
@@ -130,6 +158,55 @@ export interface ScrutinAnalysisData {
   argumentsAgainst: string;
   sourceType: string;
   modelVersion: string;
+  /** Structured reasons, absent on analyses written before they existed. */
+  reasons?: ReasonsView | null;
+}
+
+const GOVERNMENT_ROLE = /ministre|secr[ée]taire d['’]état|garde des sceaux|premier ministre/i;
+
+/** Find the public politician sheet and current group of each speaker, by the official
+ * actor id. A speaker without a public sheet stays listed, without a link. */
+async function resolveReasons(payload: ReasonsPayload): Promise<ReasonsView> {
+  const refs = [...payload.for, ...payload.against].flatMap((r) =>
+    r.speakers.flatMap((sp) => (sp.actorRef ? [sp.actorRef] : []))
+  );
+  const rows = refs.length
+    ? await db.externalId.findMany({
+        where: {
+          source: "ASSEMBLEE_NATIONALE",
+          externalId: { in: [...new Set(refs)] },
+          politician: PUBLIC_POLITICIAN_WHERE,
+        },
+        select: {
+          externalId: true,
+          politician: {
+            select: {
+              slug: true,
+              participation: { select: { groupCode: true, groupName: true } },
+            },
+          },
+        },
+      })
+    : [];
+  const byRef = new Map(rows.flatMap((r) => (r.politician ? [[r.externalId, r.politician]] : [])));
+  const view = (r: Reason): ReasonView => ({
+    text: r.text,
+    shared: r.shared,
+    quotes: r.quotes,
+    speakers: r.speakers.map((sp) => {
+      const pol = sp.actorRef ? byRef.get(sp.actorRef) : undefined;
+      const government = !!sp.role && GOVERNMENT_ROLE.test(sp.role);
+      return {
+        name: sp.name,
+        slug: pol?.slug ?? null,
+        groupCode: government ? null : (pol?.participation?.groupCode ?? null),
+        groupName: government ? null : (pol?.participation?.groupName ?? null),
+        government,
+        role: sp.role,
+      };
+    }),
+  });
+  return { for: payload.for.map(view), against: payload.against.map(view) };
 }
 
 export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnalysisData | null> {
@@ -142,6 +219,7 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
     select: {
       argumentsFor: true,
       argumentsAgainst: true,
+      reasons: true,
       sourceType: true,
       modelVersion: true,
       sourceUrl: true,
@@ -153,9 +231,11 @@ export async function getScrutinAnalysis(scrutinId: string): Promise<ScrutinAnal
 
   // Une analyse peut citer des groupes : on ne la publie pas pour une législature dont les
   // groupes ne sont pas attestés (group-attribution.ts).
-  const { scrutin, ...analysis } = row;
+  const { scrutin, reasons: storedReasons, ...analysis } = row;
   if (scrutin.chamber === "AN" && !analysis.sourceUrl) return null;
-  return isAnalysisPublishable(scrutin, CURRENT_LEGISLATURE) ? analysis : null;
+  if (!isAnalysisPublishable(scrutin, CURRENT_LEGISLATURE)) return null;
+  const parsed = parseReasons(storedReasons);
+  return { ...analysis, reasons: parsed ? await resolveReasons(parsed) : null };
 }
 
 export interface GroupListingItem {

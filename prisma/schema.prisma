@@ -1538,6 +1538,7 @@ model ScrutinAnalysis {
   sourceUrl String?
   commonDiscussion Boolean @default(false)
   evidence Json? // Exact input passage, source hash, paragraph citations and prompt version
+  reasons Json? // Public: reasons of each side { v, for[], against[] }, speakers and exact quotes (never read from evidence)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
