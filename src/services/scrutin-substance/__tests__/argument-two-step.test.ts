@@ -184,7 +184,7 @@ describe("buildWritingPrompt", () => {
   it("asks for reasons that cite quote ids, and for nothing added", () => {
     expect(prompt).toContain('"citations":["P1","P2"]');
     expect(prompt).toContain("N'ajoute aucun chiffre");
-    expect(prompt).toContain("sans « il » ni « elle »");
+    expect(prompt).toContain("jamais un titre ni un groupe nominal");
   });
 });
 
