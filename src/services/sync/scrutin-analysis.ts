@@ -14,6 +14,7 @@ import {
   buildVerificationPrompt,
   buildWritingPrompt,
   checkVerification,
+  findAddedConnectors,
   parseSelection,
 } from "@/services/scrutin-substance/argument-two-step";
 import {
@@ -319,6 +320,16 @@ export async function generateScrutinAnalysis(
         if (!evidenceFor || !evidenceAgainst) {
           skipped++;
           errors.push(`${s.id}: missing or invalid paragraph citations`);
+          continue;
+        }
+        // A logical link ("donc", "mais"...) the speakers did not use changes the argument.
+        const addedConnectors = [
+          ...findAddedConnectors(parsed.argumentsFor, evidenceFor),
+          ...findAddedConnectors(parsed.argumentsAgainst, evidenceAgainst),
+        ];
+        if (addedConnectors.length > 0) {
+          skipped++;
+          errors.push(`${s.id}: logical link not in the quotes (${addedConnectors.join(", ")})`);
           continue;
         }
         // Step 3: a second call checks every sentence against the quotes of its side.

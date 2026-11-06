@@ -237,3 +237,23 @@ export function checkVerification(
   }
   return { ok: failures.length === 0, failures };
 }
+
+/** Logical links the writer may not introduce: each must already be in the quotes of
+ * its side. "ainsi que" only lists things, so it is not a link. */
+const CONNECTORS =
+  /\b(mais|donc|car|pourtant|cependant|toutefois|n[ée]anmoins|puisque|parce que|en effet|par cons[ée]quent|c'est pourquoi|en revanche|ainsi(?! que))\b/gi;
+const foldText = (t: string) =>
+  t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘]/g, "'");
+export function findAddedConnectors(text: string, citations: ArgumentCitation[]): string[] {
+  const source = foldText(citations.map((c) => c.quote).join(" "));
+  const found = new Set<string>();
+  for (const m of foldText(text).matchAll(CONNECTORS)) {
+    const word = m[1]!;
+    if (!new RegExp(`\\b${word.replace(/[()?]/g, "\\$&")}\\b`).test(source)) found.add(word);
+  }
+  return [...found];
+}

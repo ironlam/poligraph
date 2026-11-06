@@ -5,6 +5,7 @@ import {
   buildVerificationPrompt,
   buildWritingPrompt,
   checkVerification,
+  findAddedConnectors,
   isBareOpinion,
   parseSelection,
   splitSentences,
@@ -249,5 +250,31 @@ describe("bare opinions", () => {
     };
     const sel = parseSelection({ contre: [{ id: "q1", phrases: [1, 2] }] }, d);
     expect(sel?.against.map((c) => c.quote)).toEqual(["Cette mesure coûterait très cher."]);
+  });
+});
+
+describe("added connectors", () => {
+  const cit = (quote: string) => [{ paragraphId: "p1", quote, scope: "target" as const }];
+  it("flags a link absent from the quotes", () => {
+    expect(
+      findAddedConnectors(
+        "M. X estime que A, donc que B.",
+        cit("Nous estimons que A. Nous proposons B pour la suite.")
+      )
+    ).toEqual(["donc"]);
+  });
+  it("accepts a link the speaker used", () => {
+    expect(
+      findAddedConnectors(
+        "M. X propose donc de revenir en arrière.",
+        cit("Nous proposons donc de revenir à la situation antérieure.")
+      )
+    ).toEqual([]);
+  });
+  it("ignores 'ainsi que' and accents", () => {
+    expect(
+      findAddedConnectors("Les gîtes ainsi que les hôtels.", cit("Les gîtes et les hôtels."))
+    ).toEqual([]);
+    expect(findAddedConnectors("Néanmoins, B.", cit("Neanmoins, B."))).toEqual([]);
   });
 });
