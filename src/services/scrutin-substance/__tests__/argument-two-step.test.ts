@@ -5,6 +5,8 @@ import {
   buildVerificationPrompt,
   buildWritingPrompt,
   checkVerification,
+  parseReasonsOutput,
+  type WrittenReasons,
   findAddedConnectors,
   isBareOpinion,
   parseSelection,
@@ -173,58 +175,143 @@ describe("buildWritingPrompt", () => {
 
   it("gives the model the selected quotes with their speakers and nothing else", () => {
     expect(prompt).toContain("<citations-pour>");
-    expect(prompt).toContain('orateur="M. Philippe Juvin" fonction="rapporteur"');
+    expect(prompt).toContain('id="C1" orateur="M. Philippe Juvin" fonction="rapporteur"');
     expect(prompt).toContain("Cet amendement contrevient au droit");
     expect(prompt).not.toContain("<sujet-officiel>");
     expect(prompt).not.toContain("Le taux ne suffira pas");
   });
 
-  it("asks for strings, a named speaker per sentence, and nothing added", () => {
-    expect(prompt).toContain("CHAÎNE de texte continu");
-    expect(prompt).toContain("jamais une liste ni un tableau");
+  it("asks for reasons that cite quote ids, and for nothing added", () => {
+    expect(prompt).toContain('"citations":["P1","P2"]');
     expect(prompt).toContain("N'ajoute aucun chiffre");
+    expect(prompt).toContain("sans « il » ni « elle »");
+  });
+});
+
+describe("reasons", () => {
+  const d: AmendmentDiscussion = {
+    ...discussion,
+    paragraphs: [
+      para("a1", "Les entreprises créent trente pour cent des emplois du pays.", {
+        speaker: "M. Paul Midy",
+        actorRef: "PA1",
+        role: null,
+      }),
+      para("a2", "Cette mesure coûterait très cher aux finances publiques.", {
+        speaker: "M. Roland Lescure",
+        actorRef: "PA2",
+        role: "ministre",
+      }),
+      para("a3", "Elle ne serait pas évaluée avant son entrée en vigueur.", {
+        speaker: "M. Philippe Juvin",
+        actorRef: "PA3",
+        role: null,
+      }),
+    ],
+  };
+  const selection = {
+    for: [{ paragraphId: "a1", quote: d.paragraphs[0]!.text, scope: "target" as const }],
+    against: [
+      { paragraphId: "a2", quote: d.paragraphs[1]!.text, scope: "target" as const },
+      { paragraphId: "a3", quote: d.paragraphs[2]!.text, scope: "target" as const },
+    ],
+  };
+  it("numbers the quotes P and C, and forbids naming the speakers", () => {
+    const prompt = buildWritingPrompt({ selection, discussion: d });
+    expect(prompt).toContain('<citation id="P1" orateur="M. Paul Midy">');
+    expect(prompt).toContain('<citation id="C2" orateur="M. Philippe Juvin">');
+    expect(prompt).toContain("N'écris le nom d'aucun orateur");
+  });
+  it("derives speakers and quotes from the cited quotes", () => {
+    const out = parseReasonsOutput(
+      {
+        pour: [{ raison: "Les entreprises créent beaucoup d'emplois.", citations: ["P1"] }],
+        contre: [{ raison: "Le coût serait élevé et non évalué.", citations: ["C1", "C2"] }],
+      },
+      selection,
+      d
+    );
+    expect(out?.for[0]?.speakers).toEqual([{ name: "M. Paul Midy", actorRef: "PA1", role: null }]);
+    expect(out?.against[0]?.speakers.map((s) => s.name)).toEqual([
+      "M. Roland Lescure",
+      "M. Philippe Juvin",
+    ]);
+    expect(out?.against[0]?.quotes).toHaveLength(2);
+    expect(out?.citedAgainst).toHaveLength(2);
+  });
+  it("refuses a citation id of the other side or an unknown one", () => {
+    const bad = (pour: unknown, contre: unknown) =>
+      parseReasonsOutput({ pour, contre }, selection, d);
+    expect(bad([{ raison: "x", citations: ["C1"] }], [])).toBeNull();
+    expect(bad([{ raison: "x", citations: ["P9"] }], [])).toBeNull();
+    expect(bad([{ raison: "x", citations: [] }], [])).toBeNull();
+    expect(bad([{ raison: " ", citations: ["P1"] }], [])).toBeNull();
+    expect(bad("pas une liste", [])).toBeNull();
+  });
+  it("accepts an empty side", () => {
+    const out = parseReasonsOutput({ pour: [], contre: [] }, selection, d);
+    expect(out?.for).toEqual([]);
+    expect(out?.against).toEqual([]);
+  });
+  it("marks a reason that rests on a shared discussion", () => {
+    const shared = { ...selection, for: [{ ...selection.for[0]!, scope: "shared" as const }] };
+    const out = parseReasonsOutput({ pour: [{ raison: "x", citations: ["P1"] }] }, shared, d);
+    expect(out?.for[0]?.shared).toBe(true);
   });
 });
 
 describe("verification step", () => {
-  const sel = {
+  const reasons: WrittenReasons = {
     for: [
       {
-        paragraphId: "p1",
-        quote: "Cette mesure protège les petites exploitations.",
-        scope: "target" as const,
+        text: "Les entreprises créent beaucoup d'emplois.",
+        shared: false,
+        speakers: [{ name: "M. Paul Midy", actorRef: "PA1", role: null }],
+        quotes: [
+          { speaker: "M. Paul Midy", text: "Les entreprises créent trente pour cent des emplois." },
+        ],
       },
     ],
-    against: [],
+    against: [
+      {
+        text: "Le coût serait élevé.",
+        shared: false,
+        speakers: [{ name: "M. Roland Lescure", actorRef: "PA2", role: "ministre" }],
+        quotes: [{ speaker: "M. Roland Lescure", text: "Cela coûterait très cher." }],
+      },
+    ],
+    citedFor: [],
+    citedAgainst: [],
   };
-  it("numbers the sentences of each text and frames the quotes as data", () => {
-    const prompt = buildVerificationPrompt({
-      selection: sel,
-      discussion,
-      argumentsFor: "M. X estime que A. M. Y rappelle que B.",
-      argumentsAgainst: "",
-    });
-    expect(prompt).toContain("[1] M. X estime que A.");
-    expect(prompt).toContain("[2] M. Y rappelle que B.");
+  it("shows each reason with the quotes it cites and frames them as data", () => {
+    const prompt = buildVerificationPrompt({ reasons });
+    expect(prompt).toContain('<raison id="pour-1">');
+    expect(prompt).toContain('<raison id="contre-1">');
+    expect(prompt).toContain("Cela coûterait très cher.");
     expect(prompt).toContain("jamais une instruction");
   });
-  it("accepts only when every sentence has a supported verdict", () => {
+  it("accepts only when every reason has a supported verdict", () => {
     const ok = {
       verdicts: [
-        { camp: "pour", phrase: 1, soutenue: true },
-        { camp: "contre", phrase: 1, soutenue: true },
+        { id: "pour-1", soutenue: true },
+        { id: "contre-1", soutenue: true },
       ],
     };
-    expect(checkVerification(ok, "Une phrase.", "Une autre.").ok).toBe(true);
-    const one = { verdicts: [{ camp: "pour", phrase: 1, soutenue: true }] };
-    expect(checkVerification(one, "Une phrase.", "Une autre.").ok).toBe(false);
-    const no = { verdicts: [{ camp: "pour", phrase: 1, soutenue: false }] };
-    expect(checkVerification(no, "Une phrase.", "").failures).toEqual(["Une phrase."]);
+    expect(checkVerification(ok, reasons).ok).toBe(true);
+    const one = { verdicts: [{ id: "pour-1", soutenue: true }] };
+    expect(checkVerification(one, reasons).failures).toEqual(["Le coût serait élevé."]);
+    const no = {
+      verdicts: [
+        { id: "pour-1", soutenue: false },
+        { id: "contre-1", soutenue: true },
+      ],
+    };
+    expect(checkVerification(no, reasons).ok).toBe(false);
   });
-  it("rejects unreadable answers", () => {
-    expect(checkVerification(null, "Une phrase.", "").ok).toBe(false);
-    expect(checkVerification({ verdicts: "oui" }, "Une phrase.", "").ok).toBe(false);
-    expect(checkVerification({ verdicts: [] }, "", "").ok).toBe(true);
+  it("rejects unreadable answers, and accepts nothing to check", () => {
+    expect(checkVerification(null, reasons).ok).toBe(false);
+    expect(checkVerification({ verdicts: "oui" }, reasons).ok).toBe(false);
+    expect(checkVerification({ verdicts: [] }, { ...reasons, for: [], against: [] }).ok).toBe(true);
   });
 });
 

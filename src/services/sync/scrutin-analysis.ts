@@ -15,6 +15,7 @@ import {
   buildWritingPrompt,
   checkVerification,
   findAddedConnectors,
+  parseReasonsOutput,
   parseSelection,
 } from "@/services/scrutin-substance/argument-two-step";
 import {
@@ -281,23 +282,29 @@ export async function generateScrutinAnalysis(
           continue;
         }
 
-        // Step 2: the model writes each side from the selected quotes alone.
+        // Step 2: the model writes the reasons of each side from the selected quotes alone.
+        // Speakers and quotes of a reason come from the quotes it cites, not from the model.
         const prompt = buildWritingPrompt({ selection, discussion });
         const response = await callMistral([{ role: "user", content: prompt }], {
           model: MISTRAL_MODEL,
-          maxTokens: 1000,
+          maxTokens: 1800,
           temperature: 0.2,
           responseFormat: { type: "json_object" },
         });
-        const raw = parseMistralJSON<Record<string, unknown>>(extractMistralText(response));
-        if (typeof raw.argumentsFor !== "string" || typeof raw.argumentsAgainst !== "string") {
+        const written = parseReasonsOutput(
+          parseMistralJSON<Record<string, unknown>>(extractMistralText(response)),
+          selection,
+          discussion
+        );
+        if (!written) {
           skipped++;
-          errors.push(`${s.id}: argument fields must be strings`);
+          errors.push(`${s.id}: unreadable reasons`);
           continue;
         }
+        // The plain-text fields stay filled for older readers: the reasons, end to end.
         const parsed: AnalysisOutput = {
-          argumentsFor: raw.argumentsFor,
-          argumentsAgainst: raw.argumentsAgainst,
+          argumentsFor: written.for.map((r) => r.text).join(" "),
+          argumentsAgainst: written.against.map((r) => r.text).join(" "),
         };
 
         const validation = validateAnalysisOutput(parsed);
@@ -309,12 +316,12 @@ export async function generateScrutinAnalysis(
 
         const evidenceFor = validateArgumentCitations(
           parsed.argumentsFor,
-          selection.for,
+          written.citedFor,
           discussion
         );
         const evidenceAgainst = validateArgumentCitations(
           parsed.argumentsAgainst,
-          selection.against,
+          written.citedAgainst,
           discussion
         );
         if (!evidenceFor || !evidenceAgainst) {
@@ -323,22 +330,19 @@ export async function generateScrutinAnalysis(
           continue;
         }
         // A logical link ("donc", "mais"...) the speakers did not use changes the argument.
-        const addedConnectors = [
-          ...findAddedConnectors(parsed.argumentsFor, evidenceFor),
-          ...findAddedConnectors(parsed.argumentsAgainst, evidenceAgainst),
-        ];
+        const addedConnectors = [...written.for, ...written.against].flatMap((r) =>
+          findAddedConnectors(
+            r.text,
+            r.quotes.map((q) => ({ quote: q.text }))
+          )
+        );
         if (addedConnectors.length > 0) {
           skipped++;
           errors.push(`${s.id}: logical link not in the quotes (${addedConnectors.join(", ")})`);
           continue;
         }
-        // Step 3: a second call checks every sentence against the quotes of its side.
-        const verificationPrompt = buildVerificationPrompt({
-          selection,
-          discussion,
-          argumentsFor: parsed.argumentsFor,
-          argumentsAgainst: parsed.argumentsAgainst,
-        });
+        // Step 3: a second call checks every reason against the quotes it cites.
+        const verificationPrompt = buildVerificationPrompt({ reasons: written });
         const verificationResponse = await callMistral(
           [{ role: "user", content: verificationPrompt }],
           {
@@ -350,8 +354,7 @@ export async function generateScrutinAnalysis(
         );
         const verification = checkVerification(
           parseMistralJSON<Record<string, unknown>>(extractMistralText(verificationResponse)),
-          parsed.argumentsFor,
-          parsed.argumentsAgainst
+          written
         );
         if (!verification.ok) {
           skipped++;
@@ -363,6 +366,11 @@ export async function generateScrutinAnalysis(
           parsed.argumentsFor = `Dans la discussion commune : ${parsed.argumentsFor}`;
         if (evidenceAgainst.some((c) => c.scope === "shared"))
           parsed.argumentsAgainst = `Dans la discussion commune : ${parsed.argumentsAgainst}`;
+        const reasons = {
+          v: 1,
+          for: written.for,
+          against: written.against,
+        } as unknown as Prisma.InputJsonValue;
         const evidence = {
           version: DEBATE_PROMPT_VERSION,
           seanceRef: debate.transcriptSeanceRef,
@@ -396,6 +404,7 @@ export async function generateScrutinAnalysis(
                 scrutinId: s.id,
                 argumentsFor: parsed.argumentsFor,
                 argumentsAgainst: parsed.argumentsAgainst,
+                reasons,
                 evidence,
                 sourceUrl: debate.sourceUrl,
                 commonDiscussion: discussion.common,
@@ -405,6 +414,7 @@ export async function generateScrutinAnalysis(
               update: {
                 argumentsFor: parsed.argumentsFor,
                 argumentsAgainst: parsed.argumentsAgainst,
+                reasons,
                 evidence,
                 sourceUrl: debate.sourceUrl,
                 commonDiscussion: discussion.common,
