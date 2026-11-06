@@ -5,6 +5,7 @@ import {
   buildVerificationPrompt,
   buildWritingPrompt,
   checkVerification,
+  isBareOpinion,
   parseSelection,
   splitSentences,
 } from "../argument-two-step";
@@ -223,5 +224,30 @@ describe("verification step", () => {
     expect(checkVerification(null, "Une phrase.", "").ok).toBe(false);
     expect(checkVerification({ verdicts: "oui" }, "Une phrase.", "").ok).toBe(false);
     expect(checkVerification({ verdicts: [] }, "", "").ok).toBe(true);
+  });
+});
+
+describe("bare opinions", () => {
+  it("recognises an opinion that gives no reason", () => {
+    expect(isBareOpinion("Avis défavorable sur tous les amendements.")).toBe(true);
+    expect(isBareOpinion("Le Gouvernement s'en remet à la sagesse de l'Assemblée.")).toBe(true);
+  });
+  it("keeps a longer sentence that carries its motive", () => {
+    expect(
+      isBareOpinion(
+        "Avis défavorable, car cette mesure coûterait plusieurs centaines de millions d'euros par an sans effet démontré sur l'emploi."
+      )
+    ).toBe(false);
+    expect(isBareOpinion("Cette mesure coûterait très cher aux finances publiques.")).toBe(false);
+  });
+  it("never selects a bare opinion", () => {
+    const d: AmendmentDiscussion = {
+      ...discussion,
+      paragraphs: [
+        para("q1", "Avis défavorable sur tous les amendements. Cette mesure coûterait très cher."),
+      ],
+    };
+    const sel = parseSelection({ contre: [{ id: "q1", phrases: [1, 2] }] }, d);
+    expect(sel?.against.map((c) => c.quote)).toEqual(["Cette mesure coûterait très cher."]);
   });
 });
