@@ -5,7 +5,7 @@
 import type { DebateParagraph } from "@/services/sync/debate-transcript-parse";
 
 export const MAX_DISCUSSION_CHARS = 24000;
-export const DEBATE_PROMPT_VERSION = "an-paragraph-evidence-v2";
+export const DEBATE_PROMPT_VERSION = "an-paragraph-evidence-v3";
 export type DiscussionScope = "target" | "shared" | "other" | "context";
 export interface DiscussionParagraph extends DebateParagraph {
   scope: DiscussionScope;
