@@ -94,6 +94,10 @@ describe("reasons of the debate", () => {
     expect(screen.getByText("EPR")).toBeInTheDocument();
     expect(screen.getByText(/Les ETI totalisent 30 % des emplois\./)).toBeInTheDocument();
   });
+  it("says the list of reasons is not exhaustive", () => {
+    render(<ScrutinContext summary={null} citizenImpact={null} isKeyVote analysis={withReasons} />);
+    expect(screen.getByText(/ce n’est pas une liste complète du\s+débat/)).toBeInTheDocument();
+  });
   it("tags a minister as Government and keeps an unlinked speaker as plain text", () => {
     render(<ScrutinContext summary={null} citizenImpact={null} isKeyVote analysis={withReasons} />);
     expect(screen.getByText("Gouvernement")).toBeInTheDocument();
