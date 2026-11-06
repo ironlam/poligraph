@@ -4,6 +4,7 @@ const dbMock = vi.hoisted(() => ({
   parliamentaryGroup: { findUnique: vi.fn(), findMany: vi.fn() },
   scrutinGroupPosition: { findMany: vi.fn() },
   scrutinAnalysis: { findUnique: vi.fn() },
+  externalId: { findMany: vi.fn() },
   governmentProjects: vi.fn(),
 }));
 
@@ -128,6 +129,87 @@ describe("positions de groupe : pas d'attribution anachronique", () => {
       scrutin: { chamber: "AN", legislature: 17 },
     });
     expect(await getScrutinAnalysis("legacy")).toBeNull();
+  });
+
+  describe("raisons structurées", () => {
+    const reasons = {
+      v: 1,
+      for: [
+        {
+          text: "Les ETI créent des emplois.",
+          shared: false,
+          speakers: [{ name: "M. Paul Midy", actorRef: "PA1", role: null }],
+          quotes: [{ speaker: "M. Paul Midy", text: "Les ETI totalisent 30 % des emplois." }],
+        },
+      ],
+      against: [
+        {
+          text: "La mesure coûterait cher.",
+          shared: true,
+          speakers: [
+            { name: "M. Roland Lescure", actorRef: "PA2", role: "ministre" },
+            { name: "M. Inconnu", actorRef: "PA9", role: null },
+          ],
+          quotes: [{ speaker: "M. Roland Lescure", text: "Cela coûterait très cher." }],
+        },
+      ],
+    };
+    const base = {
+      argumentsFor: "a",
+      argumentsAgainst: "b",
+      sourceType: "DEBATE_TRANSCRIPT",
+      sourceUrl: "https://www.assemblee-nationale.fr/source",
+      modelVersion: "m",
+      scrutin: { chamber: "AN", legislature: 17 },
+    };
+    it("résout la fiche et le groupe de chaque orateur, et marque les ministres", async () => {
+      dbMock.scrutinAnalysis.findUnique.mockResolvedValue({ ...base, reasons });
+      dbMock.externalId.findMany.mockResolvedValue([
+        {
+          externalId: "PA1",
+          politician: { slug: "paul-midy", participation: { groupCode: "EPR", groupName: "EPR" } },
+        },
+        {
+          externalId: "PA2",
+          politician: {
+            slug: "roland-lescure",
+            participation: { groupCode: "EPR", groupName: "EPR" },
+          },
+        },
+      ]);
+
+      const analysis = await getScrutinAnalysis("s17-reasons");
+
+      expect(analysis?.reasons?.for[0]?.speakers[0]).toMatchObject({
+        slug: "paul-midy",
+        groupCode: "EPR",
+        government: false,
+      });
+      const [minister, unknown] = analysis!.reasons!.against[0]!.speakers;
+      expect(minister).toMatchObject({ slug: "roland-lescure", government: true, groupCode: null });
+      expect(unknown).toMatchObject({ slug: null, groupCode: null, government: false });
+      expect(analysis?.reasons?.against[0]?.shared).toBe(true);
+      expect(dbMock.externalId.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            source: "ASSEMBLEE_NATIONALE",
+            politician: { publicationStatus: "PUBLISHED" },
+          }),
+        })
+      );
+    });
+    it("ignore un JSON de raisons mal formé et garde le texte", async () => {
+      dbMock.scrutinAnalysis.findUnique.mockResolvedValue({ ...base, reasons: { v: 2 } });
+      const analysis = await getScrutinAnalysis("s17-bad");
+      expect(analysis?.reasons).toBeNull();
+      expect(analysis?.argumentsFor).toBe("a");
+    });
+    it("n'interroge pas les fiches pour une analyse sans raisons", async () => {
+      dbMock.externalId.findMany.mockClear();
+      dbMock.scrutinAnalysis.findUnique.mockResolvedValue({ ...base, reasons: null });
+      await getScrutinAnalysis("s17-old");
+      expect(dbMock.externalId.findMany).not.toHaveBeenCalled();
+    });
   });
 
   it("publie l'analyse d'un scrutin de la 17e sans exposer le scrutin", async () => {
