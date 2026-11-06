@@ -301,7 +301,8 @@ export function findAddedConnectors(text: string, citations: { quote: string }[]
   const found = new Set<string>();
   for (const m of foldText(text).matchAll(CONNECTORS)) {
     const word = m[1]!;
-    if (!new RegExp(`\\b${word.replace(/[()?]/g, "\\$&")}\\b`).test(source)) found.add(word);
+    const escaped = word.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+    if (!new RegExp(`\\b${escaped}\\b`).test(source)) found.add(word);
   }
   return [...found];
 }
