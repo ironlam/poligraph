@@ -110,7 +110,9 @@ describe("reasons of the debate", () => {
         analysis={{ ...withReasons, reasons: { ...withReasons.reasons, against: [] } }}
       />
     );
-    expect(screen.getByText(/Aucun orateur ne s’y est opposé/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Aucune raison contre la mesure n’a pu être identifiée/)
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Consulter le compte rendu/ })).toHaveAttribute(
       "href",
       analysis.sourceUrl

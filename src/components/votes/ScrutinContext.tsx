@@ -153,7 +153,7 @@ function ReasonItem({ reason }: { reason: ReasonView }) {
         )}
       </div>
       <details className="text-sm text-muted-foreground">
-        <summary className="inline-flex min-h-8 cursor-pointer items-center">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center">
           Voir ce qui a été dit
         </summary>
         {reason.quotes.map((q) => (
@@ -242,13 +242,13 @@ function DebateCard({
             side="pour"
             label="Pourquoi pour"
             reasons={reasons.for}
-            empty="Aucun orateur n’a défendu cette mesure dans ce passage du débat."
+            empty="Aucune raison en faveur de la mesure n’a pu être identifiée dans ce passage du débat."
           />
           <ReasonsSide
             side="contre"
             label="Pourquoi contre"
             reasons={reasons.against}
-            empty="Aucun orateur ne s’y est opposé avec une raison dans ce passage du débat."
+            empty="Aucune raison contre la mesure n’a pu être identifiée dans ce passage du débat."
           />
         </div>
         <div className="space-y-1 text-xs text-muted-foreground">
